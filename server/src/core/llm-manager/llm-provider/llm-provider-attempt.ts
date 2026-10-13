@@ -610,6 +610,7 @@ export async function runCompletionAttempt(
         LLMProviders.ZAI,
         LLMProviders.DeepSeek,
         LLMProviders.MiniMax,
+        LLMProviders.AIMLAPI,
         LLMProviders.Anthropic,
         LLMProviders.MoonshotAI,
         LLMProviders.Cerebras,

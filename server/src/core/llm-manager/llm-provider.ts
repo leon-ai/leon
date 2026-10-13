@@ -44,6 +44,7 @@ const LLM_PROVIDERS_MAP = {
   [LLMProviders.ZAI]: 'z-ai-llm-provider',
   [LLMProviders.DeepSeek]: 'deepseek-llm-provider',
   [LLMProviders.MiniMax]: 'minimax-llm-provider',
+  [LLMProviders.AIMLAPI]: 'aimlapi-llm-provider',
   [LLMProviders.OpenAI]: 'openai-llm-provider',
   [LLMProviders.Anthropic]: 'anthropic-llm-provider',
   [LLMProviders.MoonshotAI]: 'moonshotai-llm-provider',

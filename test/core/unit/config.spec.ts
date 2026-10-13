@@ -203,6 +203,12 @@ describe('ConfigManager', () => {
               env: 'LEON_MINIMAX_API_KEY'
             }
           },
+          aimlapi: {
+            base_url: 'https://api.aimlapi.com/v1',
+            api_key: {
+              env: 'LEON_AIMLAPI_API_KEY'
+            }
+          },
           openai: {
             api_key: {
               env: 'LEON_OPENAI_API_KEY'
@@ -310,6 +316,9 @@ describe('ConfigManager', () => {
     )
     expect(configManager.getProviderBaseURL('minimax')).toBe(
       'https://api.minimaxi.com/anthropic'
+    )
+    expect(configManager.getProviderBaseURL('aimlapi')).toBe(
+      'https://api.aimlapi.com/v1'
     )
   })
 })
