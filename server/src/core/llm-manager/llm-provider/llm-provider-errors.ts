@@ -11,6 +11,7 @@ import type {
 } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   LLMProviders,
+  CompletionFailureKind,
   type CompletionParams,
   type LLMPromptAbortReason
 } from '@/core/llm-manager/types'
@@ -36,6 +37,47 @@ const CONNECTION_ERROR_CODES = new Set([
 ])
 
 const TIMEOUT_RETRY_INCREMENT_MS = 30_000
+const CONTEXT_ERROR_CODES = new Set([
+  'context_length_exceeded',
+  'context_window_exceeded',
+  'prompt_too_long'
+])
+const COMPACTION_PARAMETER = 'context_management'
+
+/**
+ * Preserve structured provider failures so recovery does not confuse availability with context.
+ */
+export function getCompletionFailureKind(error: unknown): CompletionFailureKind {
+  if (isTimeoutLikeError(error)) {
+    return CompletionFailureKind.Timeout
+  }
+
+  const pending: unknown[] = [error]
+  const visited = new Set<object>()
+
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (!current || typeof current !== 'object' || visited.has(current)) {
+      continue
+    }
+
+    visited.add(current)
+    const details = current as Record<string, unknown>
+    const status = details['statusCode'] ?? details['status']
+
+    if (typeof status === 'number' && (status >= 500 || status === 429)) {
+      return CompletionFailureKind.Unavailable
+    }
+    if (CONTEXT_ERROR_CODES.has(String(details['code'])) ||
+      details['param'] === COMPACTION_PARAMETER) {
+      return CompletionFailureKind.Context
+    }
+
+    pending.push(details['cause'], details['error'], details['data'], details['response'])
+  }
+
+  return CompletionFailureKind.Provider
+}
 
 /**
  * Serialize diagnostic values with a fallback for circular objects.

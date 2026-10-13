@@ -12,8 +12,8 @@ import {
   createPromptAbortError,
   formatPromptErrorForLog,
   getConnectionErrorCode,
+  getCompletionFailureKind,
   isPromptAbortReason,
-  isTimeoutLikeError,
   prepareCompletionRetry,
   safeSerialize,
   truncateForLog,
@@ -38,7 +38,6 @@ import type {
 } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   LLMProviders,
-  CompletionFailureKind,
   type CompletionParams,
   type CompletionStreamEvent,
   type CompletionAttemptTiming,
@@ -132,9 +131,7 @@ export async function runCompletionAttempt(
       transport,
       outcome,
       ...(error ? {
-        failureKind: isTimeoutLikeError(error)
-          ? CompletionFailureKind.Timeout
-          : CompletionFailureKind.Provider
+        failureKind: getCompletionFailureKind(error)
       } : {}),
       connectionErrorCode: getConnectionErrorCode(error),
       requestId,

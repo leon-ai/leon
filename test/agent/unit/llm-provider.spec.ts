@@ -10,7 +10,7 @@ import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 import LLMProvider from '@/core/llm-manager/llm-provider'
 import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
 import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
-import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { CompletionFailureKind, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 import { appendInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
 
 vi.mock('@/core/llm-manager/llm-usage/usage-ledger', () => ({
@@ -80,6 +80,36 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it.each([
+    { metadata: { statusCode: 503 }, kind: CompletionFailureKind.Unavailable },
+    { metadata: { response: { status: 429 } }, kind: CompletionFailureKind.Unavailable },
+    { metadata: { statusCode: 400, data: { error: { code: 'context_length_exceeded' } } }, kind: CompletionFailureKind.Context },
+    { metadata: { statusCode: 400, data: { error: { param: 'context_management' } } }, kind: CompletionFailureKind.Context },
+    { metadata: { statusCode: 401 }, kind: CompletionFailureKind.Provider }
+  ])('preserves structured $kind failures through provider wrappers', async ({ metadata, kind }) => {
+    const onAttempt = vi.fn()
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    state.agentLLMProvider = {
+      modelName: 'celeris-1',
+      runChatCompletion: vi.fn().mockRejectedValue(new Error('Request failed', {
+        cause: metadata
+      }))
+    }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    const result = await manager.prompt('Continue the task.', {
+      dutyType: LLMDuties.ReAct,
+      maxRetries: 0,
+      remoteProviderErrorRetries: 0,
+      onAttempt
+    })
+
+    expect(result).toBeNull()
+    expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({ failureKind: kind })
+    expect(state.agentLLMProvider.runChatCompletion).toHaveBeenCalledOnce()
+  })
+
   it('releases cancellation after bounded cleanup when the provider ignores abort', async () => {
     vi.useFakeTimers()
 

@@ -188,6 +188,8 @@ export interface CompletionStreamEvent {
 
 export enum CompletionFailureKind {
   Timeout = 'timeout',
+  Context = 'context',
+  Unavailable = 'unavailable',
   Provider = 'provider'
 }
 
