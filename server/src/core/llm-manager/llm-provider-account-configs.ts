@@ -106,6 +106,7 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
     {
       label: 'aimlapi.com',
       value: LLMProviders.AIMLAPI,
+      baseURL: 'https://api.aimlapi.com/v1',
       apiKeyEnv: 'LEON_AIMLAPI_API_KEY',
       apiKeyURL: 'https://aimlapi.com/app/keys'
     },
