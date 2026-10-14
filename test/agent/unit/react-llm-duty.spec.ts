@@ -2209,7 +2209,7 @@ describe('continuous agent loop', () => {
     expect(result.answer).toContain('May I continue with that next step?')
   })
 
-  it('builds context-recovery failure details from the saved run state', async () => {
+  it('preserves the current provider failure after context recovery', async () => {
     const callModel = vi
       .fn()
       .mockRejectedValueOnce(
@@ -2239,14 +2239,16 @@ describe('continuous agent loop', () => {
       loadAgentSkill: async () => null
     })
 
-    expect(result.intent).toBe('clarification')
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('model provider failed')
+    expect(result.answer).not.toContain('task context')
     expect(result.answer).toContain('Prepare the security report.')
     expect(result.answer).toContain('TLS configuration verified.')
     expect(result.answer).toContain(
       'Review unresolved findings (in_progress)'
     )
     expect(result.answer).toContain(
-      'Next, I will: Review unresolved findings.'
+      'Next unfinished step: Review unresolved findings.'
     )
   })
 
@@ -3350,7 +3352,10 @@ describe('agent automatic compaction', () => {
     vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({ provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
     vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({ reasoning: 'on', speed: 'auto' })
     const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Keep exact evidence.' }]
-    coreMocks.prompt.mockResolvedValueOnce(null)
+    coreMocks.prompt.mockImplementationOnce(async (_history, params) => {
+      params.onAttempt?.({ failureKind: CompletionFailureKind.Context, outcome: 'Error' })
+      return null
+    })
     coreMocks.consumeLastProviderErrorMessage.mockReturnValueOnce('Unsupported context_management')
     const duty = new ReActLLMDuty({ input: 'Continue.' })
     Object.assign(duty, { writeAgentPromptLog: vi.fn() })

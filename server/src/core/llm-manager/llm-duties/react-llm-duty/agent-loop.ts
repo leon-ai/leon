@@ -8,12 +8,13 @@ import {
   redactConnectionSetupCall
 } from '@/core/connections/connection-tool'
 import { LogHelper } from '@/helpers/log-helper'
-import type {
-  AgentToolTranscriptMessage,
-  ProviderReasoningItem,
-  ProviderCompactionContext,
-  OpenAITool,
-  OpenAIToolCall
+import {
+  CompletionFailureKind,
+  type AgentToolTranscriptMessage,
+  type ProviderReasoningItem,
+  type ProviderCompactionContext,
+  type OpenAITool,
+  type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import type { MessageLog } from '@/types'
 
@@ -206,7 +207,13 @@ The runtime supplies remaining_operational_iterations: the actual number of furt
 export class AgentModelProviderError extends Error {
   public readonly canRetryWithCompaction: boolean
 
-  constructor(message: string, canRetryWithCompaction: boolean) {
+  constructor(
+    message: string,
+    canRetryWithCompaction: boolean,
+    public readonly failureKind = canRetryWithCompaction
+      ? CompletionFailureKind.Context
+      : CompletionFailureKind.Provider
+  ) {
     super(message)
     this.name = 'AgentModelProviderError'
     this.canRetryWithCompaction = canRetryWithCompaction
@@ -921,7 +928,7 @@ export async function runAgentLoop(
 
         if (error instanceof AgentModelResponseTimeoutError) {
           return createResumableAgentResult(
-            'timeout', transcript, executionHistory, trackedSteps
+            CompletionFailureKind.Timeout, transcript, executionHistory, trackedSteps
           )
         }
         if (
@@ -936,27 +943,19 @@ export async function runAgentLoop(
           continue
         }
 
-        if (hasUsedContextRecovery) {
-          return createResumableAgentResult(
-            'context',
-            transcript,
-            executionHistory,
-            trackedSteps
-          )
-        }
-
-        return {
-          answer: `I could not continue because the model provider failed: ${String(error)}`,
-          intent: 'error',
+        return createResumableAgentResult(
+          error instanceof AgentModelProviderError
+            ? error.failureKind
+            : CompletionFailureKind.Provider,
           transcript,
           executionHistory,
           trackedSteps
-        }
+        )
       }
       if (!modelResult) {
         if (hasUsedContextRecovery) {
           return createResumableAgentResult(
-            'context',
+            'synthesis',
             transcript,
             executionHistory,
             trackedSteps
@@ -1315,7 +1314,7 @@ async function reviewAgentCompletion(
         return {
           status: AgentCompletionStatus.Blocked,
           reason: buildResumableAgentAnswer(
-            'timeout', transcript, state.executionHistory, state.trackedSteps
+            CompletionFailureKind.Timeout, transcript, state.executionHistory, state.trackedSteps
           )
         }
       }
@@ -1521,7 +1520,7 @@ async function attemptAgentLimitFinalization(
       if (error instanceof AgentModelResponseTimeoutError) {
         return {
           answer: buildResumableAgentAnswer(
-            'timeout', modelTranscript, executionHistory, trackedSteps
+            CompletionFailureKind.Timeout, modelTranscript, executionHistory, trackedSteps
           ),
           intent: 'error',
           messages: []
@@ -1614,7 +1613,7 @@ async function attemptAgentLimitFinalization(
 }
 
 function createResumableAgentResult(
-  failureKind: 'context' | 'synthesis' | 'timeout',
+  failureKind: CompletionFailureKind | 'synthesis',
   transcript: AgentToolTranscriptMessage[],
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
@@ -1627,7 +1626,9 @@ function createResumableAgentResult(
   )
   return {
     answer,
-    intent: failureKind === 'timeout' ? 'error' : 'clarification',
+    intent: failureKind === CompletionFailureKind.Context || failureKind === 'synthesis'
+      ? 'clarification'
+      : 'error',
     transcript,
     executionHistory,
     trackedSteps
@@ -1635,16 +1636,19 @@ function createResumableAgentResult(
 }
 
 function buildResumableAgentAnswer(
-  failureKind: 'context' | 'synthesis' | 'timeout',
+  failureKind: CompletionFailureKind | 'synthesis',
   transcript: AgentToolTranscriptMessage[],
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
 ): string {
-  const explanation = failureKind === 'timeout'
-    ? new AgentModelResponseTimeoutError().message
-    : failureKind === 'context'
-    ? 'I could not finish because the model could not process the collected information. The task is incomplete; the session retains the work done so far.'
-    : 'I could not finish because the model failed to produce the final response. I cannot confirm that the task is complete. The session retains the work done so far.'
+  const explanations: Record<CompletionFailureKind | 'synthesis', string> = {
+    [CompletionFailureKind.Timeout]: 'The model response exceeded its time limit.',
+    [CompletionFailureKind.Context]: 'The model could not process the task context.',
+    [CompletionFailureKind.Unavailable]: 'The model provider is temporarily unavailable or rate limited.',
+    [CompletionFailureKind.Provider]: 'The model provider failed to return a usable response.',
+    synthesis: 'The model did not finish the final response.'
+  }
+  const explanation = `${explanations[failureKind]} The task is incomplete; progress is saved in this session.`
   const originalRequest = transcript.find(
     (message) => message.role === 'user'
   )?.content
@@ -1669,7 +1673,7 @@ function buildResumableAgentAnswer(
     ...(reportedPlan.length > 0
       ? [['Reported plan:', ...reportedPlan].join('\n')]
       : []),
-    ...(failureKind === 'timeout'
+    ...(failureKind !== CompletionFailureKind.Context && failureKind !== 'synthesis'
       ? [`Next unfinished step: ${nextAction}.`]
       : [`Next, I will: ${nextAction}.`, 'May I continue with that next step?'])
   ].join('\n\n')

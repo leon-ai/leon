@@ -1529,10 +1529,9 @@ export class ReActLLMDuty extends LLMDuty {
       if (providerError) {
         throw new AgentModelProviderError(
           providerError,
-          !options.isContextRecoveryAttempt && (
-            providerManagesContext || preparedContext.estimatedInputTokens >=
-              resolveAgentContextRecoveryTriggerTokens(providerName)
-          )
+          !options.isContextRecoveryAttempt &&
+            lastAttemptFailureKind === CompletionFailureKind.Context,
+          lastAttemptFailureKind ?? CompletionFailureKind.Provider
         )
       }
       return null
