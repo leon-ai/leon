@@ -205,10 +205,9 @@ export class OpenAIResponsesTransport {
             boundary = SSE_EVENT_BOUNDARY.exec(pending)
           }
         },
-        flush(controller): void {
-          if (pending) {
-            controller.enqueue(pending)
-          }
+        flush(): void {
+          // EOF without a terminal event must not turn a partial draft into success.
+          throw new Error('The provider stream ended before terminal completion.')
         }
       }))
       .pipeThrough(new TextEncoderStream())

@@ -279,7 +279,12 @@ describe('AISDKRemoteLLMProvider', () => {
   })
 
   it.each(['connection', 'legacy endpoint', 'workspace'])('restores source evidence when compaction belongs to a different %s', async (difference) => {
-    websocketMocks.fetch.mockImplementation(async () => new Response('data: [DONE]\n\n', {
+    websocketMocks.fetch.mockImplementation(async () => new Response(`data: ${JSON.stringify({
+      type: 'response.completed', response: {
+        id: 'resp_empty', created_at: 1, model: 'gpt-6.1-sol', status: 'completed', output: [],
+        usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 }
+      }
+    })}\n\n`, {
       headers: { 'content-type': 'text/event-stream' }
     }))
     const credentials = {
@@ -1036,7 +1041,7 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   }, 2_000)
 
-  it('keeps text-end provisional until terminal completion arrives', async () => {
+  it.each(['complete', 'disconnect'])('requires terminal completion after text-end (ending=%s)', async (ending) => {
     let controller!: ReadableStreamDefaultController<Uint8Array>
     websocketMocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream({
       start(streamController): void {
@@ -1076,8 +1081,14 @@ describe('AISDKRemoteLLMProvider', () => {
       expect(settled).toBe(false)
       expect(onStreamEvent).not.toHaveBeenCalledWith({ type: 'finish' })
 
-      send({ type: 'response.completed', response })
-      expect((await pending).data.choices[0].message.content).toBe('Provisional.')
+      if (ending === 'complete') {
+        send({ type: 'response.completed', response })
+        expect((await pending).data.choices[0].message.content).toBe('Provisional.')
+      } else {
+        controller.close()
+        await expect(pending).rejects.toThrow()
+        expect(onStreamEvent).not.toHaveBeenCalledWith({ type: 'finish' })
+      }
     } finally {
       provider.dispose()
     }
