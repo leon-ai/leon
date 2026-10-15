@@ -2095,7 +2095,7 @@ describe('continuous agent loop', () => {
       .mockResolvedValueOnce(null)
 
     const result = await runAgentLoop({
-      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      transcript: [{ role: 'user', content: '<user_request>Finish this request.</user_request><context_manifest>CONTEXT_CANARY_7812</context_manifest>' }],
       catalog: createCatalog(),
       maxIterations: 1,
       callModel,
@@ -2110,14 +2110,17 @@ describe('continuous agent loop', () => {
       loadAgentSkill: async () => null
     })
 
-    expect(result.intent).toBe('clarification')
+    expect(result.intent).toBe('error')
     expect(callModel).toHaveBeenCalledTimes(3)
-    expect(result.answer).toContain('Finish this request.')
-    expect(result.answer).toContain('Partial progress saved.')
+    expect(result.answer).not.toContain('CONTEXT_CANARY_7812')
+    expect(result.answer).not.toContain('context_manifest')
+    expect(result.answer).not.toContain('Partial progress saved.')
+    expect(result.executionHistory[0]?.observation).toBe('Partial progress saved.')
+    expect(result.transcript[0]?.content).toContain('CONTEXT_CANARY_7812')
     expect(result.answer).toContain(
       'Produce the final answer from the verified findings'
     )
-    expect(result.answer).toContain('May I continue with that next step?')
+    expect(result.answer).not.toContain('May I continue')
   })
 
   it('retries failed finalization from a bounded evidence-only transcript', async () => {
@@ -2204,12 +2207,13 @@ describe('continuous agent loop', () => {
 
     expect(executeFunction).toHaveBeenCalledTimes(1)
     expect(callModel).toHaveBeenCalledTimes(3)
-    expect(result.intent).toBe('clarification')
-    expect(result.answer).toContain('Unexpected execution.')
-    expect(result.answer).toContain('May I continue with that next step?')
+    expect(result.intent).toBe('error')
+    expect(result.answer).not.toContain('Unexpected execution.')
+    expect(result.executionHistory[0]?.observation).toBe('Unexpected execution.')
+    expect(result.answer).not.toContain('May I continue')
   })
 
-  it('preserves the current provider failure after context recovery', async () => {
+  it('preserves progress and reports the current provider failure after context recovery', async () => {
     const callModel = vi
       .fn()
       .mockRejectedValueOnce(
@@ -2242,13 +2246,12 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('error')
     expect(result.answer).toContain('model provider failed')
     expect(result.answer).not.toContain('task context')
-    expect(result.answer).toContain('Prepare the security report.')
-    expect(result.answer).toContain('TLS configuration verified.')
+    expect(result.executionHistory[0]?.observation).toBe('TLS configuration verified.')
     expect(result.answer).toContain(
-      'Review unresolved findings (in_progress)'
+      'Reported progress: 1/2 steps completed.'
     )
     expect(result.answer).toContain(
-      'Next unfinished step: Review unresolved findings.'
+      'Remaining: Review unresolved findings.'
     )
   })
 

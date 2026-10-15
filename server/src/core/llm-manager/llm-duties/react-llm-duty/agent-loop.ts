@@ -1314,7 +1314,7 @@ async function reviewAgentCompletion(
         return {
           status: AgentCompletionStatus.Blocked,
           reason: buildResumableAgentAnswer(
-            CompletionFailureKind.Timeout, transcript, state.executionHistory, state.trackedSteps
+            CompletionFailureKind.Timeout, state.trackedSteps
           )
         }
       }
@@ -1520,7 +1520,7 @@ async function attemptAgentLimitFinalization(
       if (error instanceof AgentModelResponseTimeoutError) {
         return {
           answer: buildResumableAgentAnswer(
-            CompletionFailureKind.Timeout, modelTranscript, executionHistory, trackedSteps
+            CompletionFailureKind.Timeout, trackedSteps
           ),
           intent: 'error',
           messages: []
@@ -1620,15 +1620,11 @@ function createResumableAgentResult(
 ): AgentLoopResult {
   const answer = buildResumableAgentAnswer(
     failureKind,
-    transcript,
-    executionHistory,
     trackedSteps
   )
   return {
     answer,
-    intent: failureKind === CompletionFailureKind.Context || failureKind === 'synthesis'
-      ? 'clarification'
-      : 'error',
+    intent: 'error',
     transcript,
     executionHistory,
     trackedSteps
@@ -1637,8 +1633,6 @@ function createResumableAgentResult(
 
 function buildResumableAgentAnswer(
   failureKind: CompletionFailureKind | 'synthesis',
-  transcript: AgentToolTranscriptMessage[],
-  executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
 ): string {
   const explanations: Record<CompletionFailureKind | 'synthesis', string> = {
@@ -1648,34 +1642,20 @@ function buildResumableAgentAnswer(
     [CompletionFailureKind.Provider]: 'The model provider failed to return a usable response.',
     synthesis: 'The model did not finish the final response.'
   }
-  const explanation = `${explanations[failureKind]} The task is incomplete; progress is saved in this session.`
-  const originalRequest = transcript.find(
-    (message) => message.role === 'user'
-  )?.content
-  const progress = executionHistory
-    .slice(-AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT)
-    .map((execution) => `- ${createAgentTextPreview(
-      execution.observation,
-      AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS
-    )}`)
-  const reportedPlan = trackedSteps.map(
-    (step) => `- ${step.label} (${step.status})`
-  )
+  const completedSteps = trackedSteps.filter(
+    (step) => step.status === 'completed'
+  ).length
   const nextStep = trackedSteps.find((step) => step.status === 'in_progress') ||
     trackedSteps.find((step) => step.status === 'pending')
   const nextAction = nextStep?.label ||
     'Produce the final answer from the verified findings'
 
   return [
-    explanation,
-    ...(originalRequest ? [`Original request: ${originalRequest}`] : []),
-    ...(progress.length > 0 ? [['Saved progress:', ...progress].join('\n')] : []),
-    ...(reportedPlan.length > 0
-      ? [['Reported plan:', ...reportedPlan].join('\n')]
+    `${explanations[failureKind]} The task is incomplete; progress is saved in this session.`,
+    ...(trackedSteps.length > 0
+      ? [`Reported progress: ${completedSteps}/${trackedSteps.length} steps completed.`]
       : []),
-    ...(failureKind !== CompletionFailureKind.Context && failureKind !== 'synthesis'
-      ? [`Next unfinished step: ${nextAction}.`]
-      : [`Next, I will: ${nextAction}.`, 'May I continue with that next step?'])
+    `Remaining: ${nextAction}.`
   ].join('\n\n')
 }
 
