@@ -1318,6 +1318,15 @@ async function reviewAgentCompletion(
           )
         }
       }
+      if (error instanceof AgentModelProviderError && (
+        error.failureKind === CompletionFailureKind.Unavailable ||
+        attempt === AGENT_COMPLETION_REVIEW_ATTEMPTS - 1
+      )) {
+        return {
+          status: AgentCompletionStatus.Blocked,
+          reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps)
+        }
+      }
       LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
     }
     if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
@@ -1526,7 +1535,14 @@ async function attemptAgentLimitFinalization(
           messages: []
         }
       }
-      if (!(error instanceof AgentModelProviderError) || !error.canRetryWithCompaction) {
+      if (error instanceof AgentModelProviderError && !error.canRetryWithCompaction) {
+        return {
+          answer: buildResumableAgentAnswer(error.failureKind, trackedSteps),
+          intent: 'error',
+          messages: []
+        }
+      }
+      if (!(error instanceof AgentModelProviderError)) {
         return null
       }
       options.isRecoveryAttempt = true

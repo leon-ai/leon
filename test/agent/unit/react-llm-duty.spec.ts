@@ -1,5 +1,7 @@
 import { ToolConcurrency } from '@/types'
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { saveConnection } from '@/core/connections/connection-service'
 import { ConnectionStatus } from '@/core/connections/connection-store'
@@ -3323,6 +3325,78 @@ describe('agent automatic compaction', () => {
 
   afterEach(() => {
     coreMocks.prompt.mockReset()
+  })
+
+  it.each([false, true])('preserves completed writes through provider overload (recovers=%s)', async (recovers) => {
+    vi.useFakeTimers()
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'leon-recovery-'))
+    const outputPath = path.join(directory, 'audit.csv')
+    const catalog = createCatalog()
+    let failures = 0
+    const runChatCompletion = vi.fn(async (messages: AgentToolTranscriptMessage[]) => {
+      const hasWritten = messages.some((message) => message.role === 'tool')
+
+      if (hasWritten && (!recovers || failures === 0)) {
+        failures += 1
+        throw Object.assign(new Error('Provider is overloaded'), { statusCode: 503 })
+      }
+
+      return { data: {
+        choices: [{ message: hasWritten
+          ? { content: 'One audit row was saved.' }
+          : { content: '', tool_calls: [toolCall('write-audit', CALLABLE_TOOL_NAME, { query: outputPath })] },
+        finish_reason: hasWritten ? 'stop' : 'tool_calls' }],
+        usage: { prompt_tokens: 100, completion_tokens: 10 }
+      } }
+    })
+    coreMocks.prompt.mockImplementation((history, params) => runCompletionAttempt(
+      { modelName: 'test-model', runChatCompletion }, LLMProviders.OpenAI, history,
+      { ...params, data: null, remoteProviderErrorRetries: params.remoteProviderErrorRetries ?? 1 } as PreparedCompletionParams,
+      'overload-test', (retryParams) => coreMocks.prompt(history, retryParams),
+      () => coreMocks.consumeLastProviderErrorMessage.mockReturnValue('Provider is overloaded')
+    ))
+    const duty = new ReActLLMDuty({ input: 'Append one audit row and report the count.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const executeFunction = vi.fn(async () => {
+      fs.appendFileSync(outputPath, 'probe-001,ready\n')
+
+      return { execution: {
+        function: callable.qualifiedName,
+        status: 'success',
+        observation: 'One matching audit row exists.',
+        requestedToolInput: JSON.stringify({ query: outputPath })
+      } }
+    })
+
+    try {
+      const pending = runAgentLoop({
+        transcript: [{ role: 'user', content: 'Append one audit row and report the count.' }],
+        catalog,
+        callModel: (messages, tools, options, checkpoint) => duty['callAgentModel'](
+          messages, 'Complete the authorized task.', tools, options, checkpoint
+        ),
+        executeFunction,
+        loadAgentSkill: async () => null
+      })
+      await vi.advanceTimersByTimeAsync(4_999)
+      expect(runChatCompletion).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      const result = await pending
+
+      expect(fs.readFileSync(outputPath, 'utf8')).toBe('probe-001,ready\n')
+      expect(executeFunction).toHaveBeenCalledOnce()
+      expect(runChatCompletion).toHaveBeenCalledTimes(3)
+      expect(result.executionHistory).toHaveLength(1)
+      expect(result.transcript.some((message) => message.role === 'tool')).toBe(true)
+      expect(result.intent).toBe(recovers ? 'answer' : 'error')
+      expect(result.answer).toContain(recovers ? 'One audit row was saved.' : 'temporarily unavailable')
+      expect(result.answer).not.toContain('task context')
+      expect(result.answer).not.toContain('May I continue')
+      expect(duty['automaticCompactionFailed']).toBe(false)
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true })
+      vi.useRealTimers()
+    }
   })
 
   it('lets OpenAI decide when to compact and passes returned context to the loop', async () => {
