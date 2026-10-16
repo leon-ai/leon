@@ -1,13 +1,7 @@
 import type { Tool } from './sdk/base-tool'
-import type { ToolExecutionContext, ToolRuntimeProgress, ToolRuntimeResult } from './sdk/tool-runtime-types'
+import type { ToolRuntimeLifetime } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
-/**
- * Internal worker retention policy; ordinary SDK tools run once by default.
- */
-export enum ToolRuntimeLifetime {
-  Call = 'call',
-  Persistent = 'persistent'
-}
+export { ToolRuntimeLifetime, type ToolWorkerRequest, type ToolWorkerResponse } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 /**
  * Optional process hooks for tools that own resources beyond a single call.
@@ -17,13 +11,3 @@ export interface ManagedTool extends Tool {
   readonly runtimeLifetime?: ToolRuntimeLifetime
   dispose?: () => Promise<void>
 }
-
-export type ToolWorkerRequest =
-  | { type: 'execute', requestId: string, context: Omit<ToolExecutionContext, 'onProgress' | 'signal'>, args: unknown[] }
-  | { type: 'shutdown' }
-
-export type ToolWorkerResponse = {
-  type: 'result'
-  lifetime: ToolRuntimeLifetime
-  result: ToolRuntimeResult
-} | { type: 'progress', requestId: string, progress: ToolRuntimeProgress }

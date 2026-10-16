@@ -13,8 +13,13 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ToolConcurrency } from '@/types'
-import type { ToolExecutionContext, ToolRuntimeProgress, ToolRuntimeResult } from '@sdk/tool-runtime-types'
-import { ToolRuntimeLifetime, type ToolWorkerResponse } from '@bridge/tool-runtime-types'
+import {
+  ToolRuntimeLifetime,
+  type ToolExecutionContext,
+  type ToolRuntimeProgress,
+  type ToolRuntimeResult,
+  type ToolWorkerResponse
+} from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
 const DIAGNOSTIC_LIMIT = 16_000

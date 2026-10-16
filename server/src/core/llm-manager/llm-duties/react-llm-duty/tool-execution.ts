@@ -14,7 +14,7 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { LEON_HOME_PATH } from '@/leon-roots'
-import type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
+import type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 import { DUTY_NAME } from './agent-constants'
 import { buildBoundedToolObservation } from './agent-context-budget'

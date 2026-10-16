@@ -1,4 +1,5 @@
-import type { ToolExecutionContext } from './tool-runtime-types'
+import type { ToolExecutionContext, ToolModelFile } from './tool-runtime-types'
+export type { ToolModelFile } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -33,16 +34,6 @@ import {
 
 const COMMAND_OUTPUT_PROGRESS_INTERVAL_MS = 2_000
 const COMMAND_OUTPUT_MAX_CHARS = 4_000
-
-/**
- * A tool-produced attachment made available to the agent model.
- */
-export interface ToolModelFile {
-  dataBase64: string
-  mediaType: string
-  filename?: string
-  visualDetail?: 'auto' | 'low' | 'high'
-}
 
 // Progress callback type for reporting tool progress
 export type ProgressCallback = (progress: {

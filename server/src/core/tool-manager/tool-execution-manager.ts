@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { TOOL_EXECUTION_WAIT_MS, TOOL_EXECUTION_MAX_WAIT_MS } from '@/constants'
 
 import type { ToolExecutionResult } from './tool-executor'
-import type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
+import type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const RETENTION_MS = 15 * 60_000
 const MAX_EXECUTIONS_PER_PROFILE = 32

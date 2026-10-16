@@ -32,7 +32,7 @@ import type { LongLanguageCode } from '@/types'
 import type {
   ToolModelFile,
   ToolRuntimeProgress
-} from '@sdk/tool-runtime-types'
+} from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
@@ -70,7 +70,7 @@ export interface ToolExecutionResult {
   toolLabel?: string | undefined
 }
 
-export type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
+export type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 export default class ToolExecutor {
   private readonly globalAnswersCache = new Map<
