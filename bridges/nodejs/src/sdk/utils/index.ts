@@ -172,7 +172,7 @@ export function formatETA(eta: string | number): string {
 }
 
 /**
- * Extract archive file using native system commands
+ * Extract archives using native commands, with a ZIP fallback on minimal hosts.
  * Supports .zip, .tar, .tar.gz, .tar.xz, .tgz formats across all platforms
  * @param archivePath The path to the archive file
  * @param targetPath The path to extract to
@@ -197,16 +197,26 @@ export async function extractArchive(
 
   try {
     if (ZIP_ARCHIVE_EXTENSIONS.has(ext)) {
-      if (isWindows()) {
-        execFileSync('tar', ['-xf', archivePath, '-C', targetPath], {
-          stdio: 'inherit',
-          windowsHide: true
-        })
-      } else {
-        execFileSync('unzip', ['-o', '-q', archivePath, '-d', targetPath], {
-          stdio: 'inherit',
-          windowsHide: true
-        })
+      try {
+        if (isWindows()) {
+          execFileSync('tar', ['-xf', archivePath, '-C', targetPath], {
+            stdio: 'inherit',
+            windowsHide: true
+          })
+        } else {
+          execFileSync('unzip', ['-o', '-q', archivePath, '-d', targetPath], {
+            stdio: 'inherit',
+            windowsHide: true
+          })
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
+        }
+
+        // Load optional archive support only when native extraction is unavailable.
+        const { extractZipArchive } = await import('./archive')
+        await extractZipArchive(archivePath, targetPath)
       }
     } else if (
       basename.endsWith('.tar.gz') ||

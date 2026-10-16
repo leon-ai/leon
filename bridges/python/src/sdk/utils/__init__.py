@@ -267,7 +267,7 @@ def extract_archive(
     target_path: str,
     strip_components: Optional[int] = 0
 ) -> None:
-    """Extract archive file using native system commands
+    """Extract archives using native commands, with a ZIP fallback on minimal hosts.
     
     Supports .zip, .tar, .tar.gz, .tar.xz, .tgz formats across all platforms
     
@@ -288,18 +288,23 @@ def extract_archive(
     
     try:
         if ext in ZIP_ARCHIVE_EXTENSIONS:
-            if is_windows():
-                subprocess.run(
-                    ['tar', '-xf', archive_path, '-C', target_path],
-                    check=True,
-                    capture_output=True
-                )
-            else:
-                subprocess.run(
-                    ['unzip', '-o', '-q', archive_path, '-d', target_path],
-                    check=True,
-                    capture_output=True
-                )
+            try:
+                if is_windows():
+                    subprocess.run(
+                        ['tar', '-xf', archive_path, '-C', target_path],
+                        check=True,
+                        capture_output=True
+                    )
+                else:
+                    subprocess.run(
+                        ['unzip', '-o', '-q', archive_path, '-d', target_path],
+                        check=True,
+                        capture_output=True
+                    )
+            except FileNotFoundError:
+                from .archive import extract_zip_archive
+
+                extract_zip_archive(archive_path, target_path)
         elif (basename.endswith('.tar.gz') or 
               basename.endswith('.tar.xz') or 
               basename.endswith('.tgz') or 
