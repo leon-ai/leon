@@ -11,7 +11,7 @@ import {
   type SkillToolExecutionInput,
   type SkillToolExecutionResult,
   type SkillToolResponse
-} from '@/core/skill-tool-bridge'
+} from '@@/bridges/runtime/contracts/skill-tool-protocol'
 
 interface PendingToolRequest {
   resolve: (result: SkillToolExecutionResult) => void

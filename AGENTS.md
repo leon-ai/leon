@@ -36,10 +36,11 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 ## Bridge SDKs
 
-- Organize generic helpers under `sdk/utils/`. Preserve existing public utility imports when reorganizing modules.
-- Add small generic SDK capabilities when they serve shared infrastructure needs and avoid repeated dependencies or meaningful duplication. Keep application-specific behavior in its tool and avoid speculative shared APIs.
-- Declare SDK helper dependencies in the corresponding bridge's own manifest. Bridges must not rely on Core's `node_modules` or import Core helpers for dependency reuse. Compatible package versions can share pnpm's store without sharing runtime ownership; prefer standard-library equivalents where available.
-- Any shared SDK change must have equivalent behavior in both Node.js and Python, following each language's conventions. Keep host-specific transport internals outside the public SDK.
+- Core must not import SDK/tool runtime implementations; SDKs must not import Core services/helpers. Allow type-only imports and explicit dependency-free host contracts.
+- Put shared contracts in `bridges/runtime/contracts/` and Node.js capabilities in `bridges/runtime/nodejs/`: small standard-library leaves without Core/SDK/toolkit imports. Reuse persistence/transport through thin adapters; keep paths/context, logging and authentication host-owned.
+- Keep SDK helpers in `sdk/utils/`, preserve public imports and equivalent, idiomatic Node.js/Python behavior. Add helpers only for shared infrastructure that avoids repeated dependencies or meaningful duplication; keep application behavior in tools and host transport outside the public SDK.
+- Declare SDK dependencies in their bridge manifest, never Core's `node_modules`. Prefer standard-library equivalents; compatible versions may share pnpm's store, not runtime ownership.
+- Use narrow imports: platform/path/settings must not load archives/downloaders/integrations. Lazy loading only defers optional work. Verify boundary changes with built import graphs and isolated startup without bridge-only dependencies available to Core; source tests alone are insufficient.
 
 ## Skills
 

@@ -14,6 +14,7 @@ const globs = [
   // '"hotword/index.{ts,js}"',
   'skills/**/*.{ts,js}',
   'scripts/**/*.{ts,js}',
+  'bridges/runtime/**/*.ts',
   'server/src/**/*.{ts,js}',
   'test/**/*.{ts,js}',
   'tools/**/*.ts'

@@ -86,5 +86,40 @@ export default [
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'error'
     }
+  },
+  {
+    files: ['server/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['@sdk/*', '@bridge/sdk/*', '**/bridges/nodejs/src/sdk/**'],
+          allowTypeImports: true,
+          message: 'Core must use host services or dependency-free shared contracts, not SDK implementations.'
+        }]
+      }]
+    }
+  },
+  {
+    files: ['bridges/nodejs/src/sdk/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['@/core/*', '@/helpers/*'],
+          allowTypeImports: true,
+          message: 'SDK implementations must use SDK facilities or dependency-free shared capabilities, not Core services.'
+        }]
+      }]
+    }
+  },
+  {
+    files: ['bridges/runtime/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['@/*', '@sdk/*', '@bridge/*', '**/server/src/**', '**/bridges/nodejs/**', '**/bridges/python/**'],
+          message: 'Shared capabilities must not depend on a Core, SDK or bridge runtime.'
+        }]
+      }]
+    }
   }
 ]
