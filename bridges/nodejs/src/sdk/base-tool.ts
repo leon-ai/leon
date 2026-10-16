@@ -8,9 +8,9 @@ import { spawn, execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import {
-  NetworkHelper,
+  FileDownloader,
   type DownloadFileProgress
-} from '@/helpers/network-helper'
+} from '@@/bridges/runtime/nodejs/file-downloader'
 
 import {
   LEON_TOOLKITS_PATH,
@@ -976,7 +976,7 @@ export abstract class Tool {
 
       try {
         await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-        await NetworkHelper.downloadFile(adjustedUrl, filePath, {
+        await FileDownloader.downloadFile(adjustedUrl, filePath, {
           cliProgress: false,
           parallelStreams: 3,
           skipExisting: false,
@@ -1429,7 +1429,7 @@ export abstract class Tool {
         downloadPath = outputPath + archiveExt
       }
 
-      await NetworkHelper.downloadFile(url, downloadPath, {
+      await FileDownloader.downloadFile(url, downloadPath, {
         cliProgress: false,
         parallelStreams: 3,
         skipExisting: false,
