@@ -562,6 +562,7 @@ export default class ContextManager {
         cwd: CODEBASE_PATH,
         env: {
           ...process.env,
+          LEON_WORKSPACE_PATH: process.cwd(),
           LEON_PROFILE: this.profilePaths.name
         },
         maxBuffer: CONTEXT_REFRESH_WORKER_MAX_BUFFER,
