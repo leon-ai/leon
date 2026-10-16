@@ -1355,17 +1355,18 @@ describe('continuous agent loop', () => {
     )
 
     expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Handle coding directly. Load the coding Agent Skill when enabled.'
+      'Handle coding directly. Before repository edits, load the coding Agent Skill when enabled'
     )
+    expect(AGENT_SYSTEM_PROMPT).toContain('run their required baseline checks')
     expect(AGENT_SYSTEM_PROMPT).toContain(
       'Delegate only when the owner requests or prefers an external coding agent'
     )
-    expect(skill).toContain('submitting a prompt is not completion')
+    expect(skill).toContain('inspect and verify results, not just prompt submission')
     expect(skill).toContain(
-      'If delegation is unavailable, explain briefly and continue directly'
+      'If unavailable, explain briefly and continue directly within scope'
     )
     expect(skill).toContain(
-      'analysis is not authorization to edit, commit, push or publish'
+      'analysis does not authorize edits, commits, pushes or publication'
     )
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Codex')
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')

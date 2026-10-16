@@ -8,16 +8,16 @@ metadata:
 
 # Coding
 
-Use Leon's existing agent loop and tools to complete coding tasks directly. Respect the owner's requested scope: analysis is not authorization to edit, commit, push or publish. Delegate only when the owner asks or has an applicable preference.
+Code directly with Leon's existing loop and tools. Respect scope: analysis does not authorize edits, commits, pushes or publication. Delegate only on owner request or applicable preference.
 
-For requested delegation, use the owner's preferred available agent and interface. Pass the repository, task, applicable instructions and authorized scope. Inspect and verify the actual result; submitting a prompt is not completion. If delegation is unavailable, explain briefly and continue directly within the authorized scope.
+For delegation, use the owner's preferred available agent/interface. Pass the repository, task, instructions and authorized scope; inspect and verify results, not just prompt submission. If unavailable, explain briefly and continue directly within scope.
 
 ## Repository and instructions
 
-1. Establish the exact workspace and working directory from the request and live observations. Read relevant manifests and nearby implementations; use existing helpers before adding abstractions.
-2. Before editing, discover and read applicable `AGENTS.md` files from the repository root through each target directory. Deeper instructions apply only within their directory and take precedence over broader project rules. For a non-Git workspace, use the owner-selected workspace boundary; do not inherit unrelated parent-directory instructions.
-3. Record the workspace, applicable instruction paths, constraints and acceptance criteria from the request and supplied references in plan details. Pair each criterion with its required check. Before editing a new directory, discover its nested instructions. After compaction or continuation, reload applicable instruction files before further edits; summaries are not substitutes for their full current content.
-4. Inspect Git status and existing staged/unstaged diffs. Record unrelated changed and untracked files and preserve their content. Do not reset, clean, stage or commit owner work without authorization. Use an isolated worktree when concurrent work or the requested workflow warrants it.
+1. Establish the exact workspace/cwd from the request and live observations. Read relevant manifests and nearby code; reuse helpers before adding abstractions.
+2. Before editing, inspect applicable `AGENTS.md` files from repository root through each target directory. `file.read` includes them in `repositoryInstructions` with source reads; read missing instructions explicitly. Confirm full returned text, since shell success alone does not prove a file was read. Deeper rules override broader ones only in their subtree. For non-Git work, use the owner-selected boundary, excluding unrelated parent instructions.
+3. In plan details, record workspace, instruction paths, constraints, and acceptance criteria with required checks from the request/references. Discover nested instructions before editing new directories. After compaction/continuation, reread applicable files in full before editing; summaries cannot replace current instructions.
+4. Inspect Git status and staged/unstaged diffs; record and preserve unrelated changed/untracked content. Never reset, clean, stage or commit owner work without authorization. Use an isolated worktree when concurrency or the requested workflow warrants it.
 
 ## Investigate and change
 

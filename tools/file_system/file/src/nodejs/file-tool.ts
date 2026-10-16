@@ -13,6 +13,13 @@ import { contentHash, patchTextFile, type TextChange, type PatchOptions } from '
 const DEFAULT_MAX_CHARS = 80_000
 const MAX_CHARS = 250_000
 const BINARY_SAMPLE_BYTES = 8_192
+const REPOSITORY_MARKER = '.git'
+const REPOSITORY_INSTRUCTIONS_FILE = 'AGENTS.md'
+
+interface RepositoryInstructions {
+  path: string
+  content: string
+}
 
 interface ReadOptions {
   head?: number
@@ -171,6 +178,7 @@ export default class FileTool extends Tool {
       truncated: boolean
       offsetChars: number
       nextOffsetChars: number | null
+      repositoryInstructions?: RepositoryInstructions[]
     }
     error?: string
   }> {
@@ -215,6 +223,7 @@ export default class FileTool extends Tool {
     const nextOffsetChars = offsetChars + returnedContent.length
     const truncated =
       returnedContent.length < selectedContent.length || nextOffsetChars < totalChars
+    const repositoryInstructions = await this.readRepositoryInstructions(resolvedPath)
 
     return {
       success: true,
@@ -227,7 +236,8 @@ export default class FileTool extends Tool {
         totalChars,
         truncated,
         offsetChars,
-        nextOffsetChars: truncated ? nextOffsetChars : null
+        nextOffsetChars: truncated ? nextOffsetChars : null,
+        ...(repositoryInstructions.length > 0 ? { repositoryInstructions } : {})
       }
     }
   }
@@ -424,6 +434,56 @@ export default class FileTool extends Tool {
     }
 
     return path.resolve(trimmedPath)
+  }
+
+  /**
+   * Deliver current repository rules with source text before an agent edits it.
+   */
+  private async readRepositoryInstructions(targetPath: string): Promise<RepositoryInstructions[]> {
+    const directories: string[] = []
+    let directory = path.dirname(targetPath)
+
+    // The nearest repository owns its subtree; unrelated parent rules do not.
+    while (true) {
+      directories.push(directory)
+
+      if (await this.safeLstat(path.join(directory, REPOSITORY_MARKER))) {
+        break
+      }
+
+      const parent = path.dirname(directory)
+
+      if (parent === directory) {
+        return []
+      }
+
+      directory = parent
+    }
+
+    const instructions = await Promise.all(directories.reverse().map(async (ancestor) => {
+      const instructionPath = path.join(ancestor, REPOSITORY_INSTRUCTIONS_FILE)
+
+      if (instructionPath === targetPath) {
+        return null
+      }
+
+      const readable = await this.assertReadableTextFile(instructionPath)
+
+      if (!readable.success) {
+        if (await this.safeLstat(instructionPath)) {
+          throw new Error(readable.error)
+        }
+
+        return null
+      }
+
+      return {
+        path: instructionPath,
+        content: await fs.promises.readFile(instructionPath, 'utf8')
+      }
+    }))
+
+    return instructions.filter((entry): entry is RepositoryInstructions => entry !== null)
   }
 
   private async assertReadableTextFile(targetPath: string): Promise<{

@@ -123,7 +123,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </agent_loop>
 
 <coding>
-- Handle coding directly. Load the coding Agent Skill when enabled. Delegate only when the owner requests or prefers an external coding agent.
+- Handle coding directly. Before repository edits, load the coding Agent Skill when enabled, read applicable repository rules and run their required baseline checks; an interactive reproduction does not replace a required failing test. Delegate only when the owner requests or prefers an external coding agent.
 </coding>
 
 <tool_policy>
