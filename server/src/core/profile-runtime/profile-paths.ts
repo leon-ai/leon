@@ -1,9 +1,9 @@
 import path from 'node:path'
 
-import { LEON_PROFILES_PATH } from '@/leon-roots'
-import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { LEON_PROFILES_PATH, isValidProfileName } from '@/leon-roots'
 
-export const PROFILE_TOKEN_SEPARATOR = ':'
+export { PROFILE_TOKEN_SEPARATOR, isValidProfileName } from '@/leon-roots'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 
 export interface ProfilePaths {
   name: string
@@ -19,22 +19,6 @@ export interface ProfilePaths {
   tools: string
   connections: string
   sessions: string
-}
-
-/**
- * Validate a profile name before using it as a filesystem segment.
- */
-export function isValidProfileName(profileName: string): boolean {
-  const normalizedProfileName = profileName.trim()
-
-  return Boolean(
-    normalizedProfileName &&
-      normalizedProfileName !== '.' &&
-      normalizedProfileName !== '..' &&
-      !normalizedProfileName.includes(PROFILE_TOKEN_SEPARATOR) &&
-      path.posix.basename(normalizedProfileName) === normalizedProfileName &&
-      path.win32.basename(normalizedProfileName) === normalizedProfileName
-  )
 }
 
 /**

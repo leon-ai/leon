@@ -5,11 +5,13 @@ import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 export class ContextStateStore<T> {
   private readonly stateFilePath: string
-  private readonly contextPath: string
 
-  public constructor(stateFilename: string, private readonly fallback: T) {
-    this.contextPath = getProfilePaths().context
-    this.stateFilePath = path.join(this.contextPath, stateFilename)
+  public constructor(
+    stateFilename: string,
+    private readonly fallback: T,
+    private readonly directoryPath = getProfilePaths().context
+  ) {
+    this.stateFilePath = path.join(this.directoryPath, stateFilename)
   }
 
   public load(): T {
@@ -27,7 +29,7 @@ export class ContextStateStore<T> {
 
   public save(state: T): void {
     try {
-      fs.mkdirSync(this.contextPath, { recursive: true })
+      fs.mkdirSync(this.directoryPath, { recursive: true })
       fs.writeFileSync(this.stateFilePath, JSON.stringify(state, null, 2), 'utf8')
     } catch {
       // Ignore state persistence failures.

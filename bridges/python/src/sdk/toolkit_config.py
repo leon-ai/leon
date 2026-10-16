@@ -155,8 +155,7 @@ class ToolkitConfig:
             should_write = tool_settings != merged_settings
 
         if should_write:
-            with open(settings_path, "w", encoding="utf-8") as f:
-                json.dump(merged_settings, f, indent=2)
+            cls._persist_settings(settings_path, merged_settings)
 
         cls._settings_cache[cache_key] = merged_settings
         return merged_settings
@@ -178,6 +177,13 @@ class ToolkitConfig:
         settings_path = os.path.join(
             LEON_PROFILES_PATH, profile_name, "tools", toolkit_name, tool_name, "settings.json"
         )
+        cls._persist_settings(settings_path, settings)
+        cls._settings_cache[f"{profile_name}:{toolkit_name}:{tool_name}"] = settings
+
+    @staticmethod
+    def _persist_settings(settings_path: str, settings: Dict[str, Any]) -> None:
+        """Replace settings privately without exposing a partially written file."""
+        os.makedirs(os.path.dirname(settings_path), exist_ok=True)
         descriptor, temporary_path = tempfile.mkstemp(dir=os.path.dirname(settings_path))
 
         try:
@@ -188,8 +194,6 @@ class ToolkitConfig:
         finally:
             if os.path.exists(temporary_path):
                 os.unlink(temporary_path)
-
-        cls._settings_cache[f"{profile_name}:{toolkit_name}:{tool_name}"] = settings
 
     @classmethod
     def get_binary_url(cls, config: Dict[str, Any]) -> Optional[str]:
