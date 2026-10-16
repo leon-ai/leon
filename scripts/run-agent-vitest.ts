@@ -43,6 +43,10 @@ if (suiteArg !== 'unit' && suiteArg !== 'e2e') {
 
 const suite = suiteArg as AgentSuite
 const forwardedArgs = process.argv.slice(3)
+if (forwardedArgs[0] === '--') {
+  forwardedArgs.shift()
+}
+
 const testNamePattern = extractTestNamePattern(forwardedArgs)
 const vitestEntrypoint = path.join(
   process.cwd(),

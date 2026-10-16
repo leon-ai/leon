@@ -1,11 +1,13 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 import execa from 'execa'
-import type { CodingEvidence } from './coding-fixture'
+import { CODING_INSTRUCTIONS, type CodingEvidence } from './coding-fixture'
 import { describe, expect, it } from 'vitest'
 
 import { PROFILE_CONFIG_PATH } from '@/leon-roots'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 import { PROVIDER_MATRIX } from './provider-matrix'
 import {
@@ -38,6 +40,7 @@ interface ProviderScenarioResult {
   skipped: boolean
   reason?: string
   assetPath?: string
+  evidencePath?: string
   coding?: CodingEvidence
   turn?: {
     input: string
@@ -119,6 +122,7 @@ function summarizeScenarioResult(result: ProviderScenarioResult): string {
       skipped: result.skipped,
       reason: result.reason,
       assetPath: result.assetPath,
+      evidencePath: result.evidencePath,
       coding: result.coding,
       turn: result.turn
         ? {
@@ -198,7 +202,8 @@ async function runProviderScenario(
         LEON_LLM:
           PROVIDER_MATRIX.find((item) => item.provider === provider)?.llmTarget ||
           provider,
-        LEON_AGENT_E2E_SOURCE_CONFIG_PATH: PROFILE_CONFIG_PATH
+        LEON_AGENT_E2E_SOURCE_CONFIG_PATH: PROFILE_CONFIG_PATH,
+        LEON_AGENT_E2E_SOURCE_JQ_PATH: RuntimeHelper.getJQBinPath()
       },
       all: true,
       reject: false,
@@ -249,6 +254,17 @@ async function runProviderScenario(
   const result = JSON.parse(
     resultLine.slice(RESULT_PREFIX.length)
   ) as ProviderScenarioResult
+
+  const evidenceDirectory = path.join(ROOT_DIR, 'tmp', 'agent-e2e')
+  result.evidencePath = path.join(
+    evidenceDirectory,
+    `${provider}-${scenarioId}-${Date.now()}.json`
+  )
+  // Fixture homes are disposable; retain complete observations for verification.
+  await fs.mkdir(evidenceDirectory, { recursive: true })
+  await fs.writeFile(result.evidencePath, JSON.stringify(result, null, 2), {
+    mode: 0o600
+  })
 
   if (exitCode !== 0 && !result.skipped) {
     throw new Error(
@@ -311,6 +327,12 @@ function expectProviderScenarioResult(
   scenario: ProviderScenario,
   result: ProviderScenarioResult
 ): void {
+  for (const call of result.turn!.toolCalls) {
+    if (call.toolId === 'tool_executions') {
+      expect(JSON.parse(call.toolOutput || '{}').status).toBe('success')
+    }
+  }
+
   if (scenario.id.startsWith('coding_')) {
     expectCodingScenario(scenario.id, result)
     return
@@ -349,25 +371,66 @@ function expectCodingScenario(id: ProviderScenarioId, result: ProviderScenarioRe
   const patchIndex = turn.toolCalls.findIndex((call) => call.functionName === 'patch')
   expect(patchIndex).toBeGreaterThanOrEqual(0)
   const before = turn.toolCalls.slice(0, patchIndex)
-  const reads = before.filter((call) => call.toolId === 'file' && call.functionName === 'read')
-  const readPaths = reads.map((call) => String(call.parsedInput?.['path'] || '').replaceAll('\\', '/'))
-  expect(readPaths.some((value) => value.endsWith('/AGENTS.md') && !value.endsWith('/src/AGENTS.md'))).toBe(true)
-  expect(readPaths.some((value) => value.endsWith('/src/AGENTS.md'))).toBe(true)
-  // Finite commands are transported as temporary scripts. The history retains
-  // the requested command and its observation, so assess those together.
+  // Dedicated reads and shell output can both provide instruction evidence.
+  // Require the complete observed text before editing, rather than a tool name.
+  const inspected = before.map((call) => {
+    const result = shellResult(call)
+
+    if (result['success'] !== true) {
+      return ''
+    }
+
+    const data = result['data'] as Record<string, unknown> | undefined
+
+    if (typeof data?.['content'] === 'string') {
+      const instructions = data['repositoryInstructions'] as
+        { content: string }[] | undefined
+
+      return [
+        data['content'],
+        ...(instructions || []).map((entry) => entry.content)
+      ].join('\n')
+    }
+
+    if (call.functionName === 'readSession' && typeof data?.['output'] === 'string') {
+      return data['output']
+    }
+
+    return result['commandSucceeded'] === true
+      ? String(result['stdout'] || '')
+      : ''
+  }).join('\n')
+
+  for (const instructions of Object.values(CODING_INSTRUCTIONS)) {
+    expect(inspected).toContain(instructions.trim())
+  }
+  // Verify observed test exits before and after edits, whether the agent uses
+  // finite commands or reads a completed retained command session.
   const firstPatch = turn.executionHistory.findIndex((item) => item.function === 'file_system.file.patch')
   const lastPatch = turn.executionHistory.findLastIndex((item) => item.function === 'file_system.file.patch')
-  const isProjectTest = (item: typeof turn.executionHistory[number]): boolean => {
+  const isProjectTestResult = (
+    item: typeof turn.executionHistory[number],
+    succeeded: boolean
+  ): boolean => {
     const input = JSON.parse(item.requestedToolInput || '{}') as Record<string, unknown>
-    const command = String(input['command'] || '')
-    return item.function === 'operating_system_control.shell.executeCommand'
-      && command.includes('pnpm') && command.includes('test')
+    const result = shellResult({ toolOutput: item.observation })
+    const isSession = item.function === 'operating_system_control.shell.readSession'
+    if (!isSession && item.function !== 'operating_system_control.shell.executeCommand') {
+      return false
+    }
+
+    const data = isSession ? result['data'] as Record<string, unknown> | undefined : result
+    const command = String(isSession ? data?.['command'] || '' : input['command'] || '')
+    return command.includes('pnpm') && command.includes('test') &&
+      data?.['commandSucceeded'] === succeeded &&
+      (!isSession || (data['running'] === false && data['hasMore'] === false &&
+        data['outputLost'] !== true))
   }
   expect(firstPatch).toBeGreaterThanOrEqual(0)
-  expect(turn.executionHistory.slice(0, firstPatch).some((item) => isProjectTest(item)
-    && shellResult({ toolOutput: item.observation })['commandSucceeded'] === false)).toBe(true)
-  expect(turn.executionHistory.slice(lastPatch + 1).some((item) => isProjectTest(item)
-    && shellResult({ toolOutput: item.observation })['commandSucceeded'] === true)).toBe(true)
+  expect(turn.executionHistory.slice(0, firstPatch).some((item) =>
+    isProjectTestResult(item, false))).toBe(true)
+  expect(turn.executionHistory.slice(lastPatch + 1).some((item) =>
+    isProjectTestResult(item, true))).toBe(true)
 
   if (id === 'coding_session') {
     expect(result.coding!.sessionsStopped).toBe(true)
