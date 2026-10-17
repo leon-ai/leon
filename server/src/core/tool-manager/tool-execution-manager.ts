@@ -51,39 +51,10 @@ export class ToolExecutionManager {
     signal?: AbortSignal
   ): string {
     signal?.throwIfAborted()
-    this.prune()
-    const owned = [...this.executions.values()].filter((execution) =>
-      execution.profileName === profileName
-    )
-
-    if (owned.filter((execution) => execution.state === ToolExecutionState.Running).length >=
-        MAX_ACTIVE_EXECUTIONS_PER_PROFILE) {
-      throw new Error('Too many active tool executions; wait for or cancel an existing execution.')
-    }
-
-    if (owned.length >= MAX_EXECUTIONS_PER_PROFILE) {
-      const completed = owned.find((execution) => execution.completedAt !== undefined)
-      if (!completed) {
-        throw new Error('Too many active tool executions; wait for or cancel an existing execution.')
-      }
-
-      this.executions.delete(completed.id)
-    }
-
-    const controller = new AbortController()
-    const execution: ToolExecution = {
-      id: randomUUID(),
-      profileName,
-      sessionId,
-      tool,
-      state: ToolExecutionState.Running,
-      startedAt: Date.now(),
-      controller,
-      settled: Promise.resolve()
-    }
+    const execution = this.create(profileName, sessionId, tool)
+    const { controller } = execution
     const abort = (): void => controller.abort(signal?.reason)
     signal?.addEventListener('abort', abort, { once: true })
-    this.executions.set(execution.id, execution)
     execution.settled = Promise.resolve().then(async () => {
       try {
         execution.result = await execute(controller.signal, (progress) => {
@@ -106,6 +77,67 @@ export class ToolExecutionManager {
     })
 
     return execution.id
+  }
+
+  /**
+   * Keep synchronous results queryable through the same owned execution reader.
+   */
+  public retain(
+    profileName: string,
+    sessionId: string,
+    tool: string,
+    result: ToolExecutionResult
+  ): ReturnType<ToolExecutionManager['read']> {
+    const execution = this.create(profileName, sessionId, tool, ToolExecutionState.Completed)
+    execution.result = result
+    execution.completedAt = Date.now()
+    execution.state = result.status === 'success'
+      ? ToolExecutionState.Completed
+      : ToolExecutionState.Failed
+
+    return this.read(profileName, sessionId, execution.id)
+  }
+
+  private create(
+    profileName: string,
+    sessionId: string,
+    tool: string,
+    state = ToolExecutionState.Running
+  ): ToolExecution {
+    this.prune()
+    const owned = [...this.executions.values()].filter((execution) =>
+      execution.profileName === profileName
+    )
+
+    if (state === ToolExecutionState.Running &&
+        owned.filter((execution) => execution.state === ToolExecutionState.Running).length >=
+        MAX_ACTIVE_EXECUTIONS_PER_PROFILE) {
+      throw new Error('Too many active tool executions; wait for or cancel an existing execution.')
+    }
+
+    if (owned.length >= MAX_EXECUTIONS_PER_PROFILE) {
+      const completed = owned.find((execution) => execution.completedAt !== undefined)
+      if (!completed) {
+        throw new Error('Too many active tool executions; wait for or cancel an existing execution.')
+      }
+
+      this.executions.delete(completed.id)
+    }
+
+    const controller = new AbortController()
+    const execution: ToolExecution = {
+      id: randomUUID(),
+      profileName,
+      sessionId,
+      tool,
+      state,
+      startedAt: Date.now(),
+      controller,
+      settled: Promise.resolve()
+    }
+    this.executions.set(execution.id, execution)
+
+    return execution
   }
 
   /**

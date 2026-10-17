@@ -10,7 +10,7 @@ import path from 'node:path'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 import { LogHelper } from '@/helpers/log-helper'
-import { GLOBAL_DATA_PATH, API_VERSION } from '@/constants'
+import { GLOBAL_DATA_PATH, API_VERSION, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
 import {
   TOOLKIT_REGISTRY,
@@ -291,7 +291,27 @@ export default class ToolExecutor {
       }
     }
 
-    const result = await this.executeToolInternal(input)
+    let result = await this.executeToolInternal(input)
+
+    if (
+      input.retainExecution && sessionId &&
+      JSON.stringify(result.data.output).length > TOOL_RESULT_INLINE_MAX_CHARS
+    ) {
+      const snapshot = TOOL_EXECUTION_MANAGER.retain(
+        getActiveProfileName(),
+        sessionId,
+        `${input.toolkitId}.${input.toolId}.${input.functionName}`,
+        result
+      )
+
+      result = {
+        ...result,
+        data: {
+          ...result.data,
+          output: { ...result.data.output, execution: snapshot.execution }
+        }
+      }
+    }
 
     if (input.deferArtifactDelivery) {
       return result

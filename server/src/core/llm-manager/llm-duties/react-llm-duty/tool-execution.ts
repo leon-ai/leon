@@ -907,6 +907,7 @@ export async function runToolExecution(
     ...(outputLogPath
       ? { output_log_path: outputLogPath }
       : {}),
+    ...(toolOutput['execution'] ? { execution: toolOutput['execution'] } : {}),
     message: effectiveMessage,
     data: observationData,
     ...(hasObservedToolFailure

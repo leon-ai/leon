@@ -4,6 +4,7 @@ import type {
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
   isLocalLLMProvider
@@ -18,7 +19,6 @@ import {
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
-  AGENT_TOOL_OBSERVATION_MAX_CHARS,
   CHARS_PER_TOKEN
 } from './agent-constants'
 
@@ -27,6 +27,7 @@ const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
 const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
+const RETAINED_RESULT_PREVIEW_MAX_CHARS = 4_096
 
 interface AgentModelContextParams {
   transcript: AgentToolTranscriptMessage[]
@@ -275,7 +276,7 @@ function readRecord(value: unknown): Record<string, unknown> | null {
  */
 export function buildBoundedToolObservation(
   observation: Record<string, unknown>,
-  maxChars = AGENT_TOOL_OBSERVATION_MAX_CHARS
+  maxChars = TOOL_RESULT_INLINE_MAX_CHARS
 ): string {
   const serialized = JSON.stringify(observation)
   if (serialized.length <= maxChars) {
@@ -283,22 +284,35 @@ export function buildBoundedToolObservation(
   }
 
   const outputLogPath = observation['output_log_path']
+  const retainedExecution = readRecord(observation['execution']) ||
+    readRecord(readRecord(readRecord(observation['data'])?.['output'])?.['execution'])
+  const execution = typeof retainedExecution?.['id'] === 'string'
+    ? { id: retainedExecution['id'], state: retainedExecution['state'] }
+    : null
+  const previewMaxChars = Math.max(Math.floor(maxChars * 0.7), 1)
   const compacted = {
     status: observation['status'],
     ...(observation['raw_status'] !== undefined
       ? { raw_status: observation['raw_status'] }
       : {}),
     message: observation['message'],
+    ...(execution ? {
+      execution,
+      result_note: 'Query the full retained JSON with system_utilities.tool_executions.read using execution.id and options.jq. Do not parse diagnostic logs or rerun completed work.'
+    } : {}),
     ...(typeof outputLogPath === 'string' && outputLogPath
       ? {
           output_log_path: outputLogPath,
-          artifact_note:
-            'The complete tool result is stored at output_log_path. Read only the needed section if the preview is insufficient.'
+          artifact_note: execution
+            ? 'output_log_path is a diagnostic log; use the retained execution to query structured output.'
+            : 'The complete tool result is stored at output_log_path. Read only the needed section if the preview is insufficient.'
         }
       : {}),
     data_preview: createAgentTextPreview(
       JSON.stringify(observation['data'] ?? null),
-      Math.max(Math.floor(maxChars * 0.7), 1)
+      execution
+        ? Math.min(previewMaxChars, RETAINED_RESULT_PREVIEW_MAX_CHARS)
+        : previewMaxChars
     ),
     ...(observation['observed_tool_failure'] !== undefined
       ? { observed_tool_failure: observation['observed_tool_failure'] }

@@ -3208,10 +3208,15 @@ describe('continuous agent loop', () => {
       status: 'success',
       message: 'Subtitles loaded.',
       output_log_path: '/tmp/tool-output.log',
+      execution: { id: 'retained-subtitles', state: 'completed' },
       data: { output: 'subtitle '.repeat(2_000) }
-    })
+    }, 6_000)
     expect(largeObservation.length).toBeLessThanOrEqual(6_000)
     expect(largeObservation).toContain('/tmp/tool-output.log')
+    expect(JSON.parse(largeObservation)).toMatchObject({
+      execution: { id: 'retained-subtitles', state: 'completed' },
+      result_note: expect.stringContaining('system_utilities.tool_executions.read')
+    })
 
     const oldToolkitTool = {
       type: 'function' as const,
