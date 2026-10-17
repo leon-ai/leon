@@ -790,7 +790,7 @@ export class ReActLLMDuty extends LLMDuty {
    * Records user-visible progress before forwarding it to an optional host.
    */
   private reportProgressEvent(event: AgentRunProgressEvent): void {
-    // Argument previews and interrupted proposals can end before dispatch.
+    // Argument previews can end before dispatch.
     // Give those traces the same registry labels as executed calls.
     if (
       event.type === 'tool_call' &&

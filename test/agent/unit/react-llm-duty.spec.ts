@@ -1424,10 +1424,11 @@ describe('continuous agent loop', () => {
 
     expect(turn).toBe(2)
     expect(AGENT_PLAN_GUIDANCE).toContain(
-      'Immediately after a milestone is verified, call update_plan'
+      'when work remains, set the next in_progress and include its operational call in the same response'
     )
+    expect(AGENT_PLAN_GUIDANCE).toContain('At the final milestone, reconcile the plan without inventing another action')
     expect(AGENT_PLAN_GUIDANCE).toContain(
-      'never defer multiple historical completions until final reconciliation'
+      'Do not start/report later work with a stale plan or batch historical completions at final reconciliation'
     )
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Enumerate stable source identities')
   })

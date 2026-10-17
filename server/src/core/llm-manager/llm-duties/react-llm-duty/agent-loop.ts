@@ -144,8 +144,9 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </tool_policy>
 
 <collection_work>
-- Track input eligibility and outcomes with source and version references. Deliver only items within requested scope; save verified outputs progressively in the required layout. Unresolved items must not block independent work.
-- Record visual findings before further inspection; revisit verified items only if evidence conflicts. Reserve time to assemble and verify all deliverables.
+- Track eligibility and outcomes with source/version references. Deliver only in-scope items in the required layout. Unresolved items must not block independent work.
+- Record visual findings before further inspection; revisit verified items only if evidence conflicts.
+- Save verified outputs progressively, covering required scope before expanding detail. Mark unresolved gaps and prioritize missing coverage. Preserve unrelated owner content and reserve time for assembly and verification within supplied deadlines.
 </collection_work>
 
 <safety>
@@ -886,7 +887,7 @@ export async function runAgentLoop(
       transcript.push({
         role: 'user',
         content:
-          '<execution_finishing_pass>Continue the already authorized task from the existing evidence and active skill. Finish and verify the requested deliverable; do not restart, broaden the task, or substitute a different workflow. Stop on a genuine blocker. This is the final bounded finishing pass.</execution_finishing_pass>'
+          '<execution_finishing_pass>Finish the authorized deliverable from existing evidence and the active skill. Stop optional discovery and expansion; perform pending writes and required verification, reconcile the plan and answer. Reuse current verified results; do not repeat checks unless their inputs changed. Never invent completion or skip mandatory checks. If time runs out, preserve unfinished work and state what remains.</execution_finishing_pass>'
       })
     }
     let modelResult: AgentModelResult | null

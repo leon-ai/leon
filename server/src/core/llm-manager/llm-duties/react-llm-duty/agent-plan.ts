@@ -7,10 +7,12 @@ const PLAN_STATUSES = ['pending', 'in_progress', 'completed', 'error'] as const
 // Keep collection workflow details out of unrelated requests. The first plan
 // update activates these instructions before the next operational turn.
 export const AGENT_PLAN_GUIDANCE = `<planning>
-- Use update_plan for complex tasks and requests covering a collection; simple tasks do not need a plan. Before execution, record the authoritative source, requested boundaries, navigation and acceptance criteria from the request and supplied references in step details, with the check needed for each criterion. Start with one step in_progress and keep later actionable steps pending. Inspect the relevant list/pages first, not unrelated areas of the application.
-- For collection work, create a collection on a plan step before processing items. Enumerate stable source identities, pagination/scroll coverage and the observed end condition. A filtered snippet is not the complete list. Mark enumeration completed only once the relevant scope is covered; explicitly record empty ranges. Keep its plan step in_progress until every item is verified, even after enumeration ends. Record verified exclusions and reasons as completed outcomes; omit them from deliverables unless requested. For an unbounded source, use an explicit justified boundary rather than scanning forever.
-- Match metadata to the supplied source version unless the owner requests the latest version. For exact exports, use the export offered by the selected source page and preserve its format and fields; do not substitute another source or reconstruct it.
-- Execute from that worklist. Immediately after a milestone is verified, call update_plan in the same response as the next operational call: complete the current step and set the next step in_progress. Never start or report progress on a later step while the visible plan is stale, and never defer multiple historical completions until final reconciliation. Step updates merge by stable label and item updates merge by id: send only changes and omit unchanged steps or collections. Omitted steps retain their state and order; new steps append to the plan. UI input success alone does not complete an item. Revisit discovery only if new evidence changes scope; preserve completed outcomes. Before answering, reconcile the final active step and each criterion with evidence from the final source; unmet or unverified criteria remain unfinished work.
+- Before complex or collection work, call update_plan; simple tasks need none. Record authoritative source pointers, boundaries, navigation, acceptance criteria and checks concisely in step details; reference existing artifacts instead of repeating source summaries or drafting outputs there. Start one step in_progress and later actionable steps pending. Inspect relevant lists/pages before unrelated app areas.
+- Before processing a collection, attach it to a plan step. Record stable source identities, pagination/scroll coverage and the observed end condition; filtered snippets are not full lists. Complete enumeration only after covering scope, recording empty ranges explicitly. Keep the step in_progress until every item is verified, even after enumeration ends. Record verified exclusions and reasons as completed outcomes; omit them from deliverables unless requested. Bound unbounded sources explicitly and justify the boundary.
+- Use the supplied source's metadata/version unless the owner requests latest. For exact exports, use that page's native export and preserve format/fields; never substitute sources or reconstruct it.
+- For research, record questions, authoritative source boundaries and evidence gaps in step details. Inspect the bounded source inventory before selecting examples. Broaden or change methods when inspection adds no relevant evidence; distinguish runtime behavior from written guidance. Resolve each question with evidence or a precise limitation.
+- Save verified outputs progressively. For files, cover all requested sections concisely before expanding detail; mark unresolved gaps and fill them in small writes. Reserve time for assembly/checks and prioritize unmet criteria over settled questions. Use elapsed time to meet supplied deadlines; diagnostic observation times are not task limits.
+- Execute the worklist. On each verified milestone, call update_plan: complete the current step and, when work remains, set the next in_progress and include its operational call in the same response. At the final milestone, reconcile the plan without inventing another action. Do not start/report later work with a stale plan or batch historical completions at final reconciliation. Updates merge steps by stable label and items by id; send changes only. Omitted steps/collections retain state/order; new steps append. Plans and UI input success are not completion evidence. Revisit discovery only when new evidence changes scope; preserve completed outcomes and observed empty ranges. Before answering, reconcile the active step and every criterion against final-source evidence; unmet or unverified criteria remain unfinished.
 </planning>`
 
 /**
@@ -187,7 +189,7 @@ export function createAgentPlanTool(
     function: {
       name,
       description: includeCollection
-        ? 'Update milestones and collection coverage with observed criterion evidence in step details. Steps merge by stable label; items by stable id. Omit unchanged steps or collections to preserve state.'
+        ? 'Send concise status/evidence deltas, referencing existing sources or artifacts instead of repeating their content. Steps merge by stable label; items by stable id. Omit unchanged steps, details and collections.'
         : 'Initialize complex or collection work before execution: put acceptance criteria and required checks in step details, start one step in_progress and later steps pending. Loads planning guidance and the collection schema for the next turn.',
       parameters: {
         type: 'object',
@@ -209,7 +211,7 @@ export function createAgentPlanTool(
                 },
                 details: {
                   type: 'string',
-                  description: 'Acceptance criteria and required checks; observed verification evidence, decisions and remaining work for this milestone.'
+                  description: 'Concise criteria/checks and observed outcomes or remaining gaps. Reference evidence by path/id; do not draft deliverables or repeat source summaries. Omit unchanged details.'
                 },
                 ...(includeCollection
                   ? {
