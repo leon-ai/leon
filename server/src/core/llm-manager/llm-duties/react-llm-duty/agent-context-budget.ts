@@ -278,6 +278,26 @@ export function buildBoundedToolObservation(
   observation: Record<string, unknown>,
   maxChars = TOOL_RESULT_INLINE_MAX_CHARS
 ): string {
+  const data = readRecord(observation['data'])
+  const output = readRecord(data?.['output'])
+  const page = readRecord(output?.['result'])
+
+  // Complete projections need one lossless representation in the model context.
+  // Keep both forms when serialization differs, including unsafe JSON numbers.
+  if (
+    data && output && page &&
+    typeof readRecord(page['execution'])?.['id'] === 'string' &&
+    typeof page['content'] === 'string' && page['truncated'] === false &&
+    page['content'].trim() === JSON.stringify(page['value'])
+  ) {
+    const projectedPage = { ...page }
+    delete projectedPage['content']
+    observation = {
+      ...observation,
+      data: { ...data, output: { ...output, result: projectedPage } }
+    }
+  }
+
   const serialized = JSON.stringify(observation)
   if (serialized.length <= maxChars) {
     return serialized

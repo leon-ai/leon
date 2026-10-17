@@ -113,6 +113,10 @@ export const toolExecutionsPlugin: FastifyPluginAsync<APIOptions> = async (
       const coverage = source && typeof source === 'object' && !Array.isArray(source)
         ? source as Record<string, unknown>
         : output
+      const details = coverage['data'] && typeof coverage['data'] === 'object' &&
+        !Array.isArray(coverage['data'])
+        ? coverage['data'] as Record<string, unknown>
+        : undefined
       const filename = await resolveRetainedOutput(
         coverage['retainedOutput'],
         profileName,
@@ -141,6 +145,16 @@ export const toolExecutionsPlugin: FastifyPluginAsync<APIOptions> = async (
         }
       }
 
+      let value: unknown
+
+      if (projection.jq && offset === 0 && !page.truncated) {
+        try {
+          value = JSON.parse(page.content)
+        } catch {
+          // jq can emit several JSON values; keep that stream as paged text.
+        }
+      }
+
       return {
         execution: snapshot.execution,
         status: snapshot.result.status,
@@ -149,11 +163,12 @@ export const toolExecutionsPlugin: FastifyPluginAsync<APIOptions> = async (
         // Projections may reduce an incomplete scan to a scalar. Retain its
         // coverage separately so that a count cannot imply a complete search.
         sourceCoverage: {
-          truncated: coverage['truncated'],
+          truncated: coverage['truncated'] ?? details?.['truncated'],
           reason: coverage['reason'],
           summary: coverage['summary']
         },
         ...page,
+        ...(value !== undefined ? { value } : {}),
         ...(snapshot.result.data.model_files
           ? { modelFiles: snapshot.result.data.model_files }
           : {})

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildBoundedToolObservation,
   prepareAgentModelContext,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
@@ -9,6 +10,7 @@ import {
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
 import type {
   AgentToolTranscriptMessage,
+  OpenAITool,
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
@@ -56,6 +58,60 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('keeps a default retained-result page complete in the model observation', () => {
+    const content = 'x'.repeat(8_000)
+    const observation = {
+      status: 'success',
+      data: { output: { result: {
+        execution: { id: 'original-result', state: 'completed' },
+        content: JSON.stringify(content), value: content, truncated: false
+      } } }
+    }
+
+    const result = JSON.parse(buildBoundedToolObservation(observation))
+
+    expect(result.data.output.result).toEqual({
+      execution: { id: 'original-result', state: 'completed' },
+      value: content, truncated: false
+    })
+    expect(observation.data.output.result.content).toBe(JSON.stringify(content))
+  })
+
+  it('preserves projection text when decoding cannot retain its exact number', () => {
+    const content = '9007199254740993'
+    const observation = { data: { output: { result: {
+      execution: { id: 'original-result', state: 'completed' },
+      content, value: JSON.parse(content), truncated: false
+    } } } }
+
+    expect(JSON.parse(buildBoundedToolObservation(observation))).toEqual(observation)
+  })
+
+  it('retains complete review capabilities while exposing context pressure', () => {
+    const tools: OpenAITool[] = [
+      'load_toolkit',
+      'file_system__file__read',
+      'weather__openmeteo__getWeather'
+    ].map((name) => ({
+      type: 'function',
+      function: { name, description: name, parameters: { type: 'object' } }
+    }))
+    const params = {
+      transcript: [{ role: 'user' as const, content: 'Review the evidence.' }],
+      systemPrompt: 'Review completion.',
+      tools,
+      compactionTriggerTokens: 1,
+      forceCompaction: true
+    }
+
+    expect(prepareAgentModelContext(params).tools.length).toBeLessThan(tools.length)
+
+    const review = prepareAgentModelContext({ ...params, preserveToolSchemas: true })
+
+    expect(review.tools).toEqual(tools)
+    expect(review.estimatedInputTokens).toBeGreaterThan(params.compactionTriggerTokens)
+  })
+
   it('budgets native context tokens without counting ciphertext or source snapshots', () => {
     const context = {
       provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
