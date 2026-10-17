@@ -418,7 +418,7 @@ export class ReActLLMDuty extends LLMDuty {
         )
         const candidateToolkitContext = [
           `<preloaded_toolkit toolkit_id="${matchedToolkitId}">`,
-          'Use available function schemas directly. For functions still listed in load_toolkit, select their schemas before constructing calls.',
+          'Use available function schemas directly. Call load_toolkit to discover and select additional functions before constructing calls.',
           buildToolkitContextSection(caller, matchedToolkitId),
           '</preloaded_toolkit>'
         ].join('\n')

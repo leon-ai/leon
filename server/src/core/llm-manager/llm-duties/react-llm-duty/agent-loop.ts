@@ -448,12 +448,8 @@ export function buildAgentToolCatalog(
     })
   }
 
-  const discoverableToolkits = new Map([...availableToolkitsById].filter(
-    ([toolkitId, toolkit]) => !loadedToolkitIds.has(toolkitId) ||
-      toolkit.tools.some((tool) => Boolean(describeToolkitFunctions(toolkitId, tool.id, catalog)))
-  ))
-  if (progressiveToolkitLoading && discoverableToolkits.size > 0) {
-    tools.unshift(createToolkitLoaderTool(discoverableToolkits, catalog))
+  if (progressiveToolkitLoading && availableToolkitsById.size > 0) {
+    tools.unshift(createToolkitLoaderTool(availableToolkitsById))
   }
   tools.push(
     createAgentPlanTool(AGENT_PLAN_TOOL_NAME, previous?.planTracking),
@@ -1852,7 +1848,11 @@ async function executeAgentToolCall(
     if (names !== undefined && (!Array.isArray(names) || names.length === 0 ||
       !names.every((name) => typeof name === 'string' && availableFunctions.has(name)))) {
       return {
-        content: 'Toolkit load rejected: functions must be a non-empty array of exact tool_id.function_name entries from this toolkit.',
+        // Reject the selection while supplying enough metadata to correct it.
+        content: [
+          'Toolkit load rejected: functions must be a non-empty array of exact tool_id.function_name entries from this toolkit.',
+          ...selectedTools.map((tool) => describeToolkitFunctions(toolkitId, tool.id, params.catalog)).filter(Boolean)
+        ].join('\n'),
         trackedSteps
       }
     }
@@ -1866,10 +1866,6 @@ async function executeAgentToolCall(
         ? { discover: true }
         : { functionNames: new Set((names as string[]).map((name) => `${toolkitId}.${name}`)) }
     )
-    const loader = params.catalog.tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)
-    if (loader) {
-      loader.function = createToolkitLoaderTool(params.catalog.availableToolkitsById, params.catalog).function
-    }
 
     // Selecting more functions must not repeatedly append full context files.
     const toolkitContext = !wasToolkitLoaded
@@ -1878,7 +1874,11 @@ async function executeAgentToolCall(
     return {
       content: [
         `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} new function schema(s) are available on the next model turn.`,
-        'Reuse loaded functions. Remaining function summaries are in load_toolkit; select needed functions together before constructing their calls.',
+        'Reuse loaded functions. Select needed functions together from these discovery summaries before constructing their calls.',
+        ...selectedTools.flatMap((tool) => [
+          `${tool.id}: ${tool.description}`,
+          describeToolkitFunctions(toolkitId, tool.id, params.catalog)
+        ]).filter(Boolean),
         ...(toolkitContext ? ['', toolkitContext] : [])
       ].join('\n'),
       trackedSteps
@@ -2230,30 +2230,13 @@ function enableAgentPlanTracking(catalog: AgentToolCatalog): void {
 }
 
 function createToolkitLoaderTool(
-  toolkitsById: Map<string, AgentToolkitSummary>,
-  catalog: AgentToolCatalog
+  toolkitsById: Map<string, AgentToolkitSummary>
 ): OpenAITool {
   // Keep loaded toolkits addressable: context compaction can hide their schemas
   // temporarily, and a loader call makes that toolkit recent again.
   const toolkits = [...toolkitsById.values()]
-  const discoveredFunctions = [...new Set(toolkits
-    .filter((toolkit) => catalog.loadedToolkitIds.has(toolkit.id))
-    .flatMap((toolkit) => toolkit.tools.flatMap((tool) =>
-      Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkit.id, tool.id) || {})
-        .map((name) => `${tool.id}.${name}`)
-    )))].sort()
   const toolkitCatalog = toolkits
-    .map((toolkit) => {
-      const tools = toolkit.tools
-        .map((tool) => [
-          `${tool.id}: ${tool.description}`,
-          ...(catalog.loadedToolkitIds.has(toolkit.id)
-            ? [describeToolkitFunctions(toolkit.id, tool.id, catalog)]
-            : [])
-        ].filter(Boolean).join('\n'))
-        .join('; ')
-      return `${toolkit.id}: ${toolkit.name} - ${toolkit.description} Tools: ${tools}`
-    })
+    .map((toolkit) => `${toolkit.id}: ${toolkit.name} - ${toolkit.description}`)
     .join('\n')
 
   return {
@@ -2261,7 +2244,7 @@ function createToolkitLoaderTool(
     function: {
       name: AGENT_TOOLKIT_LOADER_NAME,
       description: [
-        'Discover a relevant toolkit, then select needed functions together using their exact tool_id.function_name identifiers. Their schemas and guidance become available on the next turn, before constructing calls. Tools without function guidance load directly.',
+        'Discover a relevant toolkit, then select needed functions together using exact tool_id.function_name identifiers from the discovery result. Their schemas and guidance become available on the next turn, before constructing calls. Tools without function guidance load directly.',
         'Choose the most specific toolkit for the requested capability; use a general operating-system toolkit only when no dedicated toolkit fits.',
         'Available toolkits:',
         toolkitCatalog
@@ -2278,13 +2261,13 @@ function createToolkitLoaderTool(
             type: 'string',
             description: 'Optional tool id to limit discovery to one tool in the toolkit.'
           },
-          ...(discoveredFunctions.length > 0 ? { functions: {
+          functions: {
             type: 'array',
             minItems: 1,
             uniqueItems: true,
-            items: { type: 'string', enum: discoveredFunctions },
+            items: { type: 'string' },
             description: 'Exact tool_id.function_name entries to load together. Omit to discover short summaries before choosing.'
-          } } : {})
+          }
         },
         required: ['toolkit_id'],
         additionalProperties: false

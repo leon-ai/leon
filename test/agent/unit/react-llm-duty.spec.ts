@@ -2752,6 +2752,9 @@ describe('continuous agent loop', () => {
       parameters: { type: 'object', properties: {}, additionalProperties: false }
     }])))
     const catalog = buildAgentToolCatalog()
+    const initialLoader = structuredClone(catalog.tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME))
+    expect(JSON.stringify(initialLoader)).not.toContain('first.read')
+    expect(JSON.stringify(initialLoader)).not.toContain('Tool routing summary.')
     expect(JSON.stringify(catalog.tools)).not.toContain('Detailed')
     expect(JSON.stringify(catalog.tools)).not.toContain('Summary for read')
     let turn = 0
@@ -2766,11 +2769,11 @@ describe('continuous agent loop', () => {
         if (turn === 2) {
           expect(catalog.functionsByToolName.size).toBe(0)
           const loader = tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)
-          expect(loader?.function.parameters).toMatchObject({
-            properties: { functions: { items: { enum: expect.arrayContaining(['first.read', 'first.inspect']) } } }
-          })
-          expect(JSON.stringify(loader?.function.parameters)).not.toContain('first.first')
-          expect(JSON.stringify(tools)).toContain('first.read: Summary for read.')
+          expect(loader).toEqual(initialLoader)
+          expect(messages.at(-1)?.content).toContain('first: Tool routing summary.')
+          expect(messages.at(-1)?.content).toContain('first.read: Summary for read.')
+          expect(messages.at(-1)?.content).toContain('first.inspect: Summary for inspect.')
+          expect(JSON.stringify(tools)).not.toContain('Summary for read.')
           expect(JSON.stringify(tools)).not.toContain('Detailed')
           expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain('Shared first instructions.')
           expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Shared other instructions.')
@@ -2783,12 +2786,16 @@ describe('continuous agent loop', () => {
         }
         if (turn === 3) {
           expect(messages.at(-1)?.content).toContain('rejected')
+          expect(messages.at(-1)?.content).toContain('first.read: Summary for read.')
+          expect(messages.at(-1)?.content).toContain('first.inspect: Summary for inspect.')
+          expect(messages.at(-1)?.content).not.toContain('Detailed')
           expect(catalog.functionsByToolName.size).toBe(0)
           return { toolCalls: [toolCall('select', AGENT_TOOLKIT_LOADER_NAME, {
             toolkit_id: 'test', functions: ['first.read', 'first.inspect']
           })] }
         }
         expect(catalog.functionsByToolName.size).toBe(2)
+        expect(tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)).toEqual(initialLoader)
         expect(JSON.stringify(tools)).toContain('Detailed read instructions.')
         expect(JSON.stringify(tools)).toContain('Detailed inspect instructions.')
         expect(JSON.stringify(tools)).not.toContain('Detailed write instructions.')
@@ -2887,7 +2894,7 @@ describe('continuous agent loop', () => {
     expect(findHighConfidenceAgentToolkitId('深圳今天天气如何？')).toBeNull()
   })
 
-  it('omits a preloaded toolkit from the discovery catalog', () => {
+  it('keeps discovery contracts stable when a toolkit is preloaded', () => {
     coreMocks.getFlattenedTools.mockReturnValue([
       {
         toolkitId: 'weather',
@@ -2929,11 +2936,13 @@ describe('continuous agent loop', () => {
     expect(loader?.function.parameters).toMatchObject({
       properties: {
         toolkit_id: {
-          enum: ['search_web']
+          enum: ['weather', 'search_web']
         }
       }
     })
-    expect(loader?.function.description).not.toContain('weather: Weather')
+    expect(loader).toEqual(buildAgentToolCatalog().tools.find(
+      (tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME
+    ))
   })
 
   it('preloads only when the toolkit payload fits the routing budget', () => {
@@ -3067,7 +3076,7 @@ describe('continuous agent loop', () => {
           expect(tools.map((tool) => tool.function.name)).toContain(
             'weather__openmeteo__getWeather'
           )
-          expect(tools.map((tool) => tool.function.name)).not.toContain(
+          expect(tools.map((tool) => tool.function.name)).toContain(
             AGENT_TOOLKIT_LOADER_NAME
           )
           return {
