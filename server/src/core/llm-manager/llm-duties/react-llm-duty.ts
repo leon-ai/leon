@@ -115,7 +115,7 @@ import {
   runAgentLoop
 } from './react-llm-duty/agent-loop'
 import type { AgentCallableFunction } from './react-llm-duty/agent-loop'
-import { buildToolkitContextSection } from './react-llm-duty/agent-helpers'
+import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import {
   type AccumulatedLLMMetricsState,
   type FinalAnswerMetricsSnapshot,
@@ -253,6 +253,7 @@ export class ReActLLMDuty extends LLMDuty {
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
         includePersonality: false,
         includeMood: false,
+        includeRuntimeContext: false,
         cacheFriendly: true
       })
     )
@@ -449,6 +450,7 @@ export class ReActLLMDuty extends LLMDuty {
           {
             includePersonality: true,
             includeMood: true,
+            includeRuntimeContext: false,
             cacheFriendly: true
           }
         )
@@ -553,42 +555,34 @@ export class ReActLLMDuty extends LLMDuty {
           const progressiveGuidance =
             buildAgentProgressiveGuidanceSystemPrompt(catalog)
 
-          // Reviewers need task-specific constraints and evidence, not the acting
-          // agent's persona and general workflow. Keep the clock for relative
-          // dates and preserve trusted integration guidance.
-          const baseSystemPrompt = options.isCompletionReview
-            ? this.appendAdditionalInstructions(PERSONA.getContextInfo())
-            : agentSystemPrompt
-          const prompt = [
-            baseSystemPrompt,
-            progressiveGuidance,
-            buildAgentConnectionGuidance(state.executionHistory),
-            ...(state.trackedSteps.length ? [
-              AGENT_PLAN_GUIDANCE,
-              '<current_plan>',
-              JSON.stringify(state.trackedSteps),
-              'This is the latest reported plan, not proof of completion. Reconcile it with tool evidence as milestones change; use collection scope, coverage and item outcomes to choose remaining work. Do not reopen verified items or infer missing items in an observed empty range.',
-              ...(options.requiresPlanReconciliation ? [
-                'Several operational turns have passed without an accepted plan update. Compare this plan with existing tool evidence now. Use update_plan to record verified milestones and item outcomes, the actual active step, and unresolved mappings or blockers. Do not infer completion from successful input, repeat completed work, or mark work complete merely to satisfy this reminder. If the same step is genuinely still active, retain it and briefly record why; ask the owner only for missing information or access.'
-              ] : []),
-              '</current_plan>'
-            ] : []),
-            ...(activeSkill
-              ? [
-                  '<active_agent_skill>',
-                  `Name: ${activeSkill.name}`,
-                  `Path: ${activeSkill.skillPath}`,
-                  activeSkill.instructions,
-                  '</active_agent_skill>'
-                ]
-              : [])
-          ]
-            .filter(Boolean)
-            .join('\n')
+          // Reviewers use task constraints and evidence. Current clock and mood
+          // stay outside the reusable prefix for both acting and review calls.
+          const baseSystemPrompt = agentSystemPrompt
+          // Keep changing task state after the conversation prefix. Rewriting
+          // the system prompt prevents reuse of the history that follows it.
+          appendAgentRuntimeContext(messages, {
+            persona: options.isCompletionReview
+              ? PERSONA.getContextInfo()
+              : PERSONA.getDutyRuntimeContext({ includeMood: true }),
+            tool_guidance: progressiveGuidance,
+            connection_guidance: buildAgentConnectionGuidance(state.executionHistory),
+            reported_plan: state.trackedSteps,
+            planning_guidance: state.trackedSteps.length ? AGENT_PLAN_GUIDANCE : null,
+            plan_reconciliation: options.requiresPlanReconciliation
+              ? 'Reconcile the plan with tool evidence now using update_plan: record verified milestones, the actual active step and unresolved mappings/blockers. Preserve completed work; never infer completion from successful input or invent work for this reminder. If the same step remains active, record why. Ask the owner only for missing information or access.'
+              : null,
+            active_skill: activeSkill
+              ? {
+                  name: activeSkill.name,
+                  path: activeSkill.skillPath,
+                  instructions: activeSkill.instructions
+                }
+              : null
+          })
 
           return this.callAgentModel(
             messages,
-            prompt,
+            baseSystemPrompt,
             tools,
             options,
             {

@@ -98,6 +98,8 @@ export type AgentToolTranscriptMessage =
       role: 'user'
       content: string
       files?: AgentModelFile[]
+      // Host-owned state deltas preserve append-only provider history.
+      runtimeContext?: Record<string, unknown>
     }
   | {
       role: 'assistant'

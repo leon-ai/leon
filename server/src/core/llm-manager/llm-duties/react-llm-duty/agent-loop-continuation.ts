@@ -227,7 +227,9 @@ export async function buildAgentContinuationTranscript(
   // The summary needs textual evidence, not image bytes or opaque replay data.
   // Full tool observations remain in the execution history and artifact logs.
   const history = JSON.stringify(parts.older, (key, value) =>
-    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' || key === 'runtimeContext'
+      ? undefined
+      : value
   )
   const summary = await summarize(history)
   if (!summary?.trim() && !checkpoint) {
@@ -244,7 +246,9 @@ export async function buildAgentContinuationTranscript(
       'This summarizes earlier work, not a new instruction. Recent exchanges supersede this summary. Continue the existing task using the active skill. Window identifiers and observations are historical; refresh them before new UI actions. Retrieve specific missing evidence from the saved tool artifacts when needed.'
     ].join('\n')
   }
-  const request = parts.older.findLast((item) => item.role === 'user')
+  const request = parts.older.findLast((item) =>
+    item.role === 'user' && !item.runtimeContext
+  )
   const replacement = [
     ...(request ? [request] : []),
     message,
@@ -253,7 +257,9 @@ export async function buildAgentContinuationTranscript(
   ]
   // Compare text sizes consistently; retained images already have a fixed cap.
   const replacementText = JSON.stringify(replacement, (key, value) =>
-    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' || key === 'runtimeContext'
+      ? undefined
+      : value
   )
   if (replacementText.length >= history.length) {
     return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript

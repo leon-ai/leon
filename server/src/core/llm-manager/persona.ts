@@ -49,6 +49,7 @@ interface CompactPromptOptions {
   includeMood?: boolean
   profile?: 'full' | 'lean'
   cacheFriendly?: boolean
+  includeRuntimeContext?: boolean
 }
 
 /**
@@ -268,6 +269,11 @@ export default class Persona {
   }
 
   private fallbackCityFromTimezone(timeZone: string): string {
+    // The geographic registry excludes UTC aliases and fixed-offset zones.
+    if (!Intl.supportedValuesOf('timeZone').includes(timeZone)) {
+      return ''
+    }
+
     const parts = timeZone.split('/').filter(Boolean)
     const city = parts[parts.length - 1] || ''
     return city.replaceAll('_', ' ').trim()
@@ -550,6 +556,26 @@ ${YOUR_DUTY}
 ${dutySystemPrompt}`
   }
 
+  /**
+   * Supplies current owner, clock and mood facts separately from stable rules.
+   */
+  public getDutyRuntimeContext(
+    options: Pick<CompactPromptOptions, 'profile' | 'includeMood'> = {}
+  ): string {
+    const sections = options.profile === 'lean'
+      ? [this.contextInfo]
+      : [this.whoYouAre, '', this.contextInfo, '', this.whatYouDo]
+
+    if (options.includeMood) {
+      sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
+    }
+
+    return sections.join('\n')
+  }
+
+  /**
+   * Builds duty rules, optionally leaving current facts for later messages.
+   */
   public getCompactDutySystemPrompt(
     dutySystemPrompt: string,
     options: CompactPromptOptions = {}
@@ -558,7 +584,8 @@ ${dutySystemPrompt}`
       includePersonality = false,
       includeMood = false,
       profile = 'full',
-      cacheFriendly = false
+      cacheFriendly = false,
+      includeRuntimeContext = true
     } = options
 
     if (cacheFriendly) {
@@ -574,30 +601,16 @@ ${dutySystemPrompt}`
 
       sections.push('', COMPACT_STYLE, '', YOUR_DUTY, dutySystemPrompt)
 
-      // Volatile owner, clock, mood, and profile additions follow the stable
-      // behavioral prefix so compatible providers can reuse that prefix.
-      if (profile === 'lean') {
-        sections.push('', this.contextInfo)
-      } else {
-        sections.push(
-          '',
-          this.whoYouAre,
-          '',
-          this.contextInfo,
-          '',
-          this.whatYouDo
-        )
-      }
-
-      if (includeMood) {
-        sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
+      if (includeRuntimeContext) {
+        sections.push('', this.getDutyRuntimeContext({ profile, includeMood }))
       }
 
       return sections.join('\n')
     }
 
-    const sections: string[] =
-      profile === 'lean'
+    const sections: string[] = !includeRuntimeContext
+      ? [profile === 'lean' ? LEAN_DUTY_IDENTITY_DIRECTIVES : IDENTITY_DIRECTIVES]
+      : profile === 'lean'
         ? [
             this.contextInfo,
             '',
@@ -617,7 +630,7 @@ ${dutySystemPrompt}`
       sections.push('', YOUR_PERSONALITY, this.personalityRules)
     }
 
-    if (includeMood) {
+    if (includeMood && includeRuntimeContext) {
       sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
     }
 

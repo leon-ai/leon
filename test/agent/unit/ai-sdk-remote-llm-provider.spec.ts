@@ -828,7 +828,11 @@ describe('AISDKRemoteLLMProvider', () => {
       { role: 'tool', toolCallId: 'tool_or', toolName: 'check', content: 'Checked.' }
     ], params)
     const body = JSON.parse(fetch.mock.calls[1]![1].body)
-    expect(body).toMatchObject({ provider: { sort: 'throughput' }, session_id: 'media-session' })
+    expect(body).toMatchObject({
+      provider: { sort: 'throughput' },
+      session_id: 'media-session',
+      cache_control: { type: 'ephemeral' }
+    })
     expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' })
     expect(body.messages[2].reasoning_details).toEqual(reasoningDetails)
   })

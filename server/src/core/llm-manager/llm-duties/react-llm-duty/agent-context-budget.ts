@@ -134,6 +134,9 @@ function estimateAgentInputTokens(
   let imageCount = 0
   let compactionTokens = 0
   const serializedTranscript = JSON.stringify(transcript, (key, value) => {
+    if (key === 'runtimeContext') {
+      return undefined
+    }
     if (value?.role === 'assistant' && value.compactionContext) {
       compactionTokens += value.compactionContext.estimatedTokens
       return { role: 'assistant', content: '' }
@@ -365,7 +368,9 @@ export function splitAgentTranscriptForSummary(
 
   let boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
   // Keep the latest user correction verbatim, even if that enlarges the tail.
-  const lastUserIndex = transcript.findLastIndex((message) => message.role === 'user')
+  const lastUserIndex = transcript.findLastIndex((message) =>
+    message.role === 'user' && !message.runtimeContext
+  )
   if (lastUserIndex > exchanges[0]!.startIndex) {
     boundary = Math.min(boundary, lastUserIndex)
   }

@@ -7,6 +7,7 @@ import type {
   LLMCaller
 } from './agent-types'
 import { parseToolCallArguments } from './agent-utils'
+import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 
 const TOOLKIT_CONTEXT_SUMMARY_MAX_CHARS = 180
 const ARTIFACT_PATH_INPUT_FIELD = 'outputLogPath'
@@ -46,6 +47,35 @@ function stableSerialize(value: unknown): string {
   }
 
   return JSON.stringify(value)
+}
+
+/**
+ * Appends changed host state while preserving earlier cacheable messages.
+ * Missing state after compaction naturally restores the complete snapshot.
+ */
+export function appendAgentRuntimeContext(
+  transcript: AgentToolTranscriptMessage[],
+  context: Record<string, unknown>
+): void {
+  const previous: Record<string, unknown> = {}
+
+  for (const message of transcript) {
+    if (message.role === 'user' && message.runtimeContext) {
+      Object.assign(previous, message.runtimeContext)
+    }
+  }
+
+  const changes = Object.fromEntries(Object.entries(context).filter(([key, value]) =>
+    stableSerialize(previous[key]) !== stableSerialize(value)
+  ))
+
+  if (Object.keys(changes).length > 0) {
+    transcript.push({
+      role: 'user',
+      content: `<agent_runtime_context>\n${JSON.stringify(changes)}\n</agent_runtime_context>`,
+      runtimeContext: structuredClone(changes)
+    })
+  }
 }
 
 function normalizeToolInputForComparison(toolInput: string): string {

@@ -1408,7 +1408,7 @@ function buildAgentLimitRecoveryTranscript(
   trackedSteps: TrackedPlanStep[]
 ): AgentToolTranscriptMessage[] {
   const originalRequest = transcript.find(
-    (message) => message.role === 'user'
+    (message) => message.role === 'user' && !message.runtimeContext
   )?.content || ''
   const checkpoint = {
     original_owner_request: originalRequest,
@@ -1440,7 +1440,7 @@ function buildAgentLimitRecoveryTranscript(
     },
     // Keep later instructions and their attachments authoritative when tool
     // evidence is reduced for a synthesis retry.
-    ...transcript.filter((message) => message.role === 'user').slice(1)
+    ...transcript.filter((message) => message.role === 'user' && !message.runtimeContext).slice(1)
   ]
 }
 

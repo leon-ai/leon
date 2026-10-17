@@ -1363,11 +1363,32 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'openrouter') {
       const sessionId = getActiveConversationSessionId()
+
+      // Cache the growing conversation as well as the stable system prefix.
+      if (completionParams.promptCacheKey) {
+        providerOptions['openrouter'] = {
+          ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
+          cacheControl: { type: 'ephemeral' }
+        }
+      }
+
       if (sessionId) {
         // Stable session routing lets gateway providers reuse their prompt cache.
         providerOptions['openrouter'] = {
           ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
           session_id: sessionId
+        }
+      }
+    }
+
+    if (this.config.flavor === 'cerebras' && completionParams.promptCacheKey) {
+      const sessionId = getActiveConversationSessionId()
+
+      // Routing hints belong to one conversation, not the shared agent prefix.
+      if (sessionId) {
+        providerOptions['cerebras'] = {
+          ...(providerOptions['cerebras'] as Record<string, unknown> | undefined),
+          promptCacheKey: sessionId
         }
       }
     }
