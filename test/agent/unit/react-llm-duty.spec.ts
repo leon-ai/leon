@@ -13,6 +13,11 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ConversationSessionManager } from '@/core/session-manager'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import Persona from '@/core/llm-manager/persona'
+import { AgentHistoryManager } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-history-manager'
+import { AgentSessionState, createEmptyHistoryCompactionProviderState, type AgentConversationState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
+import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import type { MessageLog } from '@/types'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import type {
@@ -41,7 +46,7 @@ import {
   parseAgentPlan,
   isAgentPlanComplete
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-plan'
-import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
+import { appendAgentRuntimeContext, findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import { runToolExecution } from '@/core/llm-manager/llm-duties/react-llm-duty/tool-execution'
 import { emitPlanWidget } from '@/core/llm-manager/llm-duties/react-llm-duty/plan-widget'
 import {
@@ -80,6 +85,7 @@ const coreMocks = vi.hoisted(() => ({
   emitAnswerToChatClients: vi.fn(),
   emitToChatClients: vi.fn(),
   prompt: vi.fn(),
+  loadConversationLogs: vi.fn(),
   consumeLastProviderErrorMessage: vi.fn(),
   prepareAgentTranscript: vi.fn(async (transcript: AgentToolTranscriptMessage[]) => transcript)
 }))
@@ -90,6 +96,7 @@ vi.mock('@/core/connections/connection-service', () => ({
 }))
 
 vi.mock('@/core', () => ({
+  CONVERSATION_LOGGER: { loadAll: coreMocks.loadConversationLogs },
   PERSONA: {
     getCompactDutySystemPrompt: (prompt: string): string => prompt
   },
@@ -2800,7 +2807,11 @@ describe('continuous agent loop', () => {
     expect(turn).toBe(5)
     expect(loadToolkitContext).toHaveBeenCalledTimes(1)
     const selected = [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName)
-    const resumed = buildAgentToolCatalog(null, catalog.loadedToolkitIds, true, selected, catalog.loadedToolNames)
+    catalog.tools.reverse()
+    const resumed = buildAgentToolCatalog(null, catalog.loadedToolkitIds, true, selected, catalog.loadedToolNames, {
+      toolOrder: catalog.tools.map((tool) => tool.function.name), planTracking: false
+    })
+    expect(resumed.tools).toEqual(catalog.tools)
     expect([...resumed.functionsByToolName.keys()]).toEqual([...catalog.functionsByToolName.keys()])
     expect(buildAgentProgressiveGuidanceSystemPrompt(resumed)).toBe(buildAgentProgressiveGuidanceSystemPrompt(catalog))
     expect(JSON.stringify(resumed.tools)).not.toContain('Detailed write instructions.')
@@ -3319,6 +3330,106 @@ describe('continuous agent loop', () => {
 })
 
 
+describe('conversation protocol history', () => {
+  let directory: string
+  let manager: AgentHistoryManager
+  let store: ContextStateStore<AgentConversationState | null>
+  const owner: MessageLog = {
+    who: 'owner',
+    message: 'Inspect the project.',
+    sentAt: 1,
+    isAddedToHistory: true
+  }
+  const answer: MessageLog = {
+    who: 'leon',
+    message: 'Inspection verified.',
+    sentAt: 2,
+    isAddedToHistory: true
+  }
+  const transcript: AgentToolTranscriptMessage[] = [
+    { role: 'user', content: '<user_request>Inspect the project.</user_request>' },
+    {
+      role: 'assistant',
+      content: '',
+      toolCalls: [toolCall('inspect', CALLABLE_TOOL_NAME, { query: 'project' })]
+    },
+    {
+      role: 'tool',
+      toolCallId: 'inspect',
+      toolName: CALLABLE_TOOL_NAME,
+      content: 'Verified source evidence.'
+    },
+    { role: 'assistant', content: 'Inspection verified.' }
+  ]
+  const snapshot = {
+    transcript,
+    loadedToolkitIds: ['test'],
+    loadedToolNames: ['test.lookup'],
+    loadedFunctionNames: ['test.lookup.run'],
+    toolOrder: [CALLABLE_TOOL_NAME],
+    planTracking: true
+  }
+
+  beforeEach(() => {
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), 'leon-conversation-history-'))
+    const sessionState = new AgentSessionState()
+    store = new ContextStateStore<AgentConversationState | null>(
+      'conversation.json', null, directory
+    )
+    vi.spyOn(sessionState, 'getConversationStore').mockReturnValue(store)
+    vi.spyOn(sessionState, 'getHistoryCompactionStore').mockReturnValue(
+      new ContextStateStore('history.json', {
+        version: 1,
+        local: createEmptyHistoryCompactionProviderState(),
+        remote: createEmptyHistoryCompactionProviderState()
+      }, directory)
+    )
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
+    manager = new AgentHistoryManager('Test history', sessionState)
+    coreMocks.loadConversationLogs.mockResolvedValue([owner])
+  })
+
+  afterEach(() => {
+    fs.rmSync(directory, { recursive: true, force: true })
+  })
+
+  it('reuses completed tool exchanges and catalog order while appending unseen chat', async () => {
+    await manager.saveConversationState(snapshot, answer.message)
+    coreMocks.loadConversationLogs.mockResolvedValue([
+      owner,
+      answer,
+      { who: 'owner', message: 'Use CSV.', sentAt: 3, isAddedToHistory: true },
+      { who: 'owner', message: 'Continue.', sentAt: 4, isAddedToHistory: true }
+    ])
+    const restored = (await manager.loadPreparedHistory('Continue.')).conversationState
+
+    expect(restored?.transcript.slice(0, transcript.length)).toEqual(transcript)
+    expect(restored?.transcript.at(-1)).toEqual({ role: 'user', content: 'Use CSV.' })
+    expect(restored?.toolOrder).toEqual(snapshot.toolOrder)
+    expect(restored?.loadedFunctionNames).toEqual(snapshot.loadedFunctionNames)
+    expect(restored?.planTracking).toBe(true)
+    expect(restored).not.toHaveProperty('trackedSteps')
+    expect(restored).not.toHaveProperty('executionHistory')
+    expect(new AgentSessionState().getConversationStore()).toBeNull()
+  })
+
+  it('invalidates cached protocol history when visible messages are edited or removed', async () => {
+    const changedHistories = [
+      [{ ...owner, message: 'Inspect another project.' }, answer],
+      [answer]
+    ]
+
+    for (const history of changedHistories) {
+      coreMocks.loadConversationLogs.mockResolvedValue([owner])
+      await manager.saveConversationState(snapshot, answer.message)
+      coreMocks.loadConversationLogs.mockResolvedValue(history)
+
+      expect((await manager.loadPreparedHistory()).conversationState).toBeNull()
+      expect(store.load()).toBeNull()
+    }
+  })
+})
+
 describe('agent automatic compaction', () => {
   beforeEach(() => {
     coreMocks.prompt.mockReset()
@@ -3326,6 +3437,48 @@ describe('agent automatic compaction', () => {
 
   afterEach(() => {
     coreMocks.prompt.mockReset()
+  })
+
+  it('keeps clock and mood changes outside reusable duty rules', () => {
+    const persona = Object.assign(Object.create(Persona.prototype), {
+      contextInfo: 'Clock one', whoYouAre: 'Owner facts', whatYouDo: 'Profile facts',
+      personalityRules: 'Style rules', _mood: { description: 'Calm' }
+    }) as Persona
+    const options = {
+      cacheFriendly: true, includeRuntimeContext: false, includeMood: true
+    }
+    const rules = persona.getCompactDutySystemPrompt('Complete the request.', options)
+    const context = persona.getDutyRuntimeContext({ includeMood: true })
+    Object.assign(persona, { contextInfo: 'Clock two', _mood: { description: 'Curious' } })
+
+    expect(persona.getCompactDutySystemPrompt('Complete the request.', options)).toBe(rules)
+    expect(rules).not.toContain('Clock one')
+    expect(rules).not.toContain('Calm')
+    expect(context).toContain('Clock one')
+    expect(persona.getDutyRuntimeContext({ includeMood: true })).toContain('Clock two')
+    expect(persona.getDutyRuntimeContext({ includeMood: true })).toContain('Curious')
+  })
+
+  it('appends only changed runtime state while preserving the complete reusable history', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Review the sources.' }
+    ]
+    const state = { guidance: 'Inspect authoritative sources.', plan: ['Inspect'], elapsedMs: 0 }
+    appendAgentRuntimeContext(transcript, state)
+    const prefix = structuredClone(transcript)
+    appendAgentRuntimeContext(transcript, state)
+    expect(transcript).toEqual(prefix)
+
+    appendAgentRuntimeContext(transcript, { ...state, plan: ['Verify'], elapsedMs: 100 })
+    expect(transcript.slice(0, prefix.length)).toEqual(prefix)
+    expect(transcript.at(-1)).toMatchObject({
+      runtimeContext: { plan: ['Verify'], elapsedMs: 100 }
+    })
+    expect(transcript.at(-1)?.content).not.toContain(state.guidance)
+
+    const compacted: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Retained summary.' }]
+    appendAgentRuntimeContext(compacted, state)
+    expect(compacted.at(-1)).toMatchObject({ runtimeContext: state })
   })
 
   it.each([false, true])('preserves completed writes through provider overload (recovers=%s)', async (recovers) => {

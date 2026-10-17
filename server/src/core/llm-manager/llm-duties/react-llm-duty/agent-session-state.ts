@@ -1,6 +1,9 @@
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import path from 'node:path'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import type { MessageLog } from '@/types'
 
 import type { AgentLoopContinuationState } from './agent-loop-continuation'
@@ -10,6 +13,19 @@ const AGENT_CONTINUATION_STATE_FILENAME = '.agent-loop-continuation-state.json'
 const AGENT_HISTORY_COMPACTION_STATE_FILENAME =
   '.react-history-compaction-state.json'
 const AGENT_SESSION_STATE_FILENAME_SEPARATOR = '--'
+const AGENT_CONVERSATION_STATE_FILENAME = '.agent-conversation-state.json'
+
+export interface AgentConversationState {
+  version: 1
+  historyHash: string
+  historyLength: number
+  transcript: AgentToolTranscriptMessage[]
+  loadedToolkitIds: string[]
+  loadedFunctionNames: string[]
+  loadedToolNames: string[]
+  toolOrder: string[]
+  planTracking: boolean
+}
 
 export type AgentHistoryCompactionScope = 'local' | 'remote'
 
@@ -54,6 +70,23 @@ export class AgentSessionState {
     new Map<string, ContextStateStore<AgentLoopContinuationState | null>>()
   private readonly historyCompactionStores =
     new Map<string, ContextStateStore<AgentHistoryCompactionState>>()
+
+  /**
+   * Stores reusable transcripts with their conversation so deletion removes both.
+   * Unbound background duties must not reuse the currently selected chat.
+   */
+  public getConversationStore(): ContextStateStore<AgentConversationState | null> | null {
+    const sessionId = getActiveConversationSessionId()
+    if (!sessionId || !CONVERSATION_SESSION_MANAGER.getSession(sessionId)) {
+      return null
+    }
+
+    return new ContextStateStore<AgentConversationState | null>(
+      AGENT_CONVERSATION_STATE_FILENAME,
+      null,
+      path.dirname(CONVERSATION_SESSION_MANAGER.resolveConversationLogPath(sessionId))
+    )
+  }
 
   public getContinuationStore(): ContextStateStore<AgentLoopContinuationState | null> {
     const filename = this.getSessionFilename(AGENT_CONTINUATION_STATE_FILENAME)

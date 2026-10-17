@@ -9,6 +9,7 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
+import { appendAgentRuntimeContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
 
@@ -87,12 +88,19 @@ describe('agent loop continuation', () => {
     const state = createAgentLoopContinuationState({
       ...checkpoint,
       transcript,
+      toolOrder: ['load_toolkit', 'release__builder__run'],
+      planTracking: true,
       clarificationQuestion: 'Which registry?',
       planWidgetId: 'release-plan'
     })
     const restored: typeof state = JSON.parse(JSON.stringify(state))
 
     expect(isAgentLoopContinuationStateValid(restored)).toBe(true)
+    expect(restored.toolOrder).toEqual(['load_toolkit', 'release__builder__run'])
+    expect(restored.planTracking).toBe(true)
+    expect(isAgentLoopContinuationStateValid({
+      ...restored, toolOrder: undefined, planTracking: undefined
+    })).toBe(true)
     expect(restored.trackedSteps).toEqual(checkpoint.trackedSteps)
     expect(restored.executionHistory).toEqual(checkpoint.executionHistory)
     expect(restored.transcript.map((message) => ({ ...message, files: undefined })))
@@ -168,6 +176,7 @@ describe('agent loop continuation', () => {
     ]
     for (let index = 1; index <= 16; index += 1) {
       appendToolExchange(transcript, index)
+      appendAgentRuntimeContext(transcript, { elapsedMs: index * 1_000 })
     }
     for (const message of transcript) {
       if (message.role === 'assistant') {
@@ -189,6 +198,7 @@ describe('agent loop continuation', () => {
     )
 
     expect(summarize).toHaveBeenCalledOnce()
+    expect(result[0]).toEqual({ role: 'user', content: 'Prepare the release.' })
     expect(summarize.mock.calls[0]?.[0]).not.toContain('opaque-replay-data')
     expect(result.find((message) =>
       message.role === 'assistant' && message.toolCalls?.[0]?.id === 'call-16'

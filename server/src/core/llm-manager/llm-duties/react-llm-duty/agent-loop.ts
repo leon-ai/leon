@@ -247,6 +247,7 @@ export interface AgentToolCatalog {
   loadedToolkitIds: Set<string>
   loadedToolNames: Set<string>
   loadedProgressiveGuidance: Map<string, AgentProgressiveGuidance>
+  planTracking?: boolean
 }
 
 export interface AgentToolkitPreloadCostEvaluation {
@@ -387,7 +388,8 @@ export function buildAgentToolCatalog(
   initiallyLoadedToolkitIds: Iterable<string> = [],
   progressiveToolkitLoading = true,
   initiallyLoadedFunctionNames?: Iterable<string>,
-  initiallyLoadedToolNames?: Iterable<string>
+  initiallyLoadedToolNames?: Iterable<string>,
+  previous?: { toolOrder: string[], planTracking: boolean }
 ): AgentToolCatalog {
   const tools: OpenAITool[] = []
   const functionsByToolName = new Map<string, AgentCallableFunction>()
@@ -454,11 +456,23 @@ export function buildAgentToolCatalog(
     tools.unshift(createToolkitLoaderTool(discoverableToolkits, catalog))
   }
   tools.push(
-    createAgentPlanTool(AGENT_PLAN_TOOL_NAME),
+    createAgentPlanTool(AGENT_PLAN_TOOL_NAME, previous?.planTracking),
     createClarificationTool(),
     createCancellationTool(),
     createAgentSkillTool()
   )
+
+  if (previous) {
+    const order = new Map(previous.toolOrder.map((name, index) => [name, index]))
+
+    // Rebuild callable contracts from the current registry while retaining their
+    // conversation order. New capabilities append; removed ones stay unavailable.
+    tools.sort((left, right) =>
+      (order.get(left.function.name) ?? previous.toolOrder.length) -
+      (order.get(right.function.name) ?? previous.toolOrder.length)
+    )
+    catalog.planTracking = previous.planTracking
+  }
 
   return catalog
 }
@@ -2211,6 +2225,7 @@ function enableAgentPlanTracking(catalog: AgentToolCatalog): void {
 
   if (planTool) {
     planTool.function = createAgentPlanTool(AGENT_PLAN_TOOL_NAME, true).function
+    catalog.planTracking = true
   }
 }
 

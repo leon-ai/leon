@@ -133,6 +133,7 @@ import {
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import {
   prepareAgentModelContext,
+  retainRecentToolImages,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
   resolveAgentMaxOutputTokens
@@ -326,11 +327,11 @@ export class ReActLLMDuty extends LLMDuty {
     this.agentTurnSignal = agentTurn?.signal
 
     try {
-      const { messageLogs: history } =
-        await ReActLLMDuty.historyManager.loadPreparedHistory()
-
       const ownerInput = this.getInputAsText(this.input)
+      const { messageLogs: history, conversationState } =
+        await ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput)
       const continuation = this.consumeAgentLoopContinuation()
+      const loadedState = continuation ?? conversationState
       const originalInput = continuation?.originalInput || ownerInput
       const planWidgetIdValue =
         continuation?.planWidgetId || widgetId('plan')
@@ -388,6 +389,7 @@ export class ReActLLMDuty extends LLMDuty {
         CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
       const matchedToolkitId =
         !continuation &&
+        !conversationState &&
         !this.activeForcedToolName &&
         !caller.agentSkillContext &&
         progressiveToolkitLoading
@@ -395,10 +397,16 @@ export class ReActLLMDuty extends LLMDuty {
           : null
       let catalog = buildAgentToolCatalog(
         this.activeForcedToolName,
-        continuation?.loadedToolkitIds,
+        loadedState?.loadedToolkitIds,
         progressiveToolkitLoading,
-        continuation?.loadedFunctionNames,
-        continuation?.loadedToolNames
+        loadedState?.loadedFunctionNames,
+        loadedState?.loadedToolNames,
+        loadedState?.toolOrder
+          ? {
+              toolOrder: loadedState.toolOrder,
+              planTracking: loadedState.planTracking ?? false
+            }
+          : undefined
       )
 
       let preloadedToolkitContext = ''
@@ -459,7 +467,9 @@ export class ReActLLMDuty extends LLMDuty {
 
       const transcript = continuation
         ? structuredClone(continuation.transcript)
-        : buildAgentTranscriptHistory(history, ownerInput)
+        : conversationState
+          ? structuredClone(conversationState.transcript)
+          : buildAgentTranscriptHistory(history, ownerInput)
 
       if (continuation) {
         // Refresh setup facts after owner interaction without putting credentials in the transcript.
@@ -703,9 +713,25 @@ export class ReActLLMDuty extends LLMDuty {
             loadedToolNames: catalog.loadedToolNames,
             loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
             // Persist pause state directly; resumed inference compacts it when needed.
+            toolOrder: catalog.tools.map((tool) => tool.function.name),
+            planTracking: catalog.planTracking === true,
             transcript: result.transcript,
             activeSkillId: caller.agentSkillContext?.id ?? null
           })
+        )
+      } else {
+        await ReActLLMDuty.historyManager.saveConversationState(
+          {
+            transcript: retainRecentToolImages(result.transcript),
+            loadedToolkitIds: [...catalog.loadedToolkitIds],
+            loadedToolNames: [...catalog.loadedToolNames],
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map(
+              (fn) => fn.qualifiedName
+            ),
+            toolOrder: catalog.tools.map((tool) => tool.function.name),
+            planTracking: catalog.planTracking === true
+          },
+          StringHelper.normalizeUserFacingText(result.answer)
         )
       }
 

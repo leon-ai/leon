@@ -29,6 +29,8 @@ export interface AgentLoopContinuationState {
   loadedToolkitIds: string[]
   loadedFunctionNames?: string[]
   loadedToolNames?: string[]
+  toolOrder?: string[]
+  planTracking?: boolean
   transcript: AgentToolTranscriptMessage[]
   activeSkillId: string | null
 }
@@ -274,6 +276,8 @@ export function createAgentLoopContinuationState(
   params: ContinuationInput & {
     clarificationQuestion: string
     planWidgetId: string
+    toolOrder?: string[]
+    planTracking?: boolean
   }
 ): AgentLoopContinuationState {
   const loadedToolkitIds = [...params.loadedToolkitIds]
@@ -286,6 +290,10 @@ export function createAgentLoopContinuationState(
     trackedSteps: structuredClone(params.trackedSteps),
     executionHistory: structuredClone(params.executionHistory),
     loadedToolkitIds,
+    ...(params.toolOrder ? { toolOrder: [...params.toolOrder] } : {}),
+    ...(params.planTracking !== undefined
+      ? { planTracking: params.planTracking }
+      : {}),
     ...(params.loadedToolNames ? { loadedToolNames: [...params.loadedToolNames] } : {}),
     ...(params.loadedFunctionNames
       ? { loadedFunctionNames: [...params.loadedFunctionNames] }
@@ -312,6 +320,10 @@ export function isAgentLoopContinuationStateValid(
     Array.isArray(state.executionHistory) &&
     Array.isArray(state.loadedToolkitIds) &&
     state.loadedToolkitIds.every((toolkitId) => typeof toolkitId === 'string') &&
+    (state.toolOrder === undefined ||
+      (Array.isArray(state.toolOrder) &&
+        state.toolOrder.every((name) => typeof name === 'string'))) &&
+    (state.planTracking === undefined || typeof state.planTracking === 'boolean') &&
     (state.loadedToolNames === undefined ||
       (Array.isArray(state.loadedToolNames) &&
         state.loadedToolNames.every((name) => typeof name === 'string'))) &&
