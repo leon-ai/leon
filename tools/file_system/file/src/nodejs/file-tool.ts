@@ -10,7 +10,8 @@ import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
 import { contentHash, patchTextFile, type TextChange, type PatchOptions } from './lib/text-patch'
 
-const DEFAULT_MAX_CHARS = 80_000
+// Leave room for metadata and JSON escaping in inline tool observations.
+const DEFAULT_MAX_CHARS = 20_000
 const MAX_CHARS = 250_000
 const BINARY_SAMPLE_BYTES = 8_192
 const REPOSITORY_MARKER = '.git'
