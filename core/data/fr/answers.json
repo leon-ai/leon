@@ -1,6 +1,9 @@
 {
   "$schema": "../../../schemas/global-data/global-answers.json",
   "answers": {
+    "bridges.tools.output_delta": [
+      "{{ output }}"
+    ],
     "success": {},
     "errors": {
       "not_found": "Désolé, il semblerait que je n'arrive pas à trouver ça",

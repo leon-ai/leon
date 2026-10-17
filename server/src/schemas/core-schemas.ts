@@ -116,6 +116,9 @@ export const configSchemaObject = strictObject({
     ])
   }),
   runtime: strictObject({
+    agent_execution_timeout_seconds: Type.Optional(
+      Type.Number({ exclusiveMinimum: 0 })
+    ),
     agent_max_iterations: Type.Optional(
       Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })
     ),

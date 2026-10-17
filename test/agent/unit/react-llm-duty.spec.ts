@@ -15,6 +15,7 @@ import { ConversationSessionManager } from '@/core/session-manager'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
 import Persona from '@/core/llm-manager/persona'
 import { AgentHistoryManager } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-history-manager'
+import { AgentRunBudget, AgentRunDeadlineError } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-run-budget'
 import { AgentSessionState, createEmptyHistoryCompactionProviderState, type AgentConversationState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import type { MessageLog } from '@/types'
@@ -1773,9 +1774,11 @@ describe('continuous agent loop', () => {
 
     expect(callModel).toHaveBeenCalledTimes(2)
     expect(callModel.mock.calls[0]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: false
     })
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: true
     })
     expect(result.answer).toBe('Recovered answer.')
@@ -1847,9 +1850,11 @@ describe('continuous agent loop', () => {
     })
 
     expect(callModel.mock.calls[0]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: 9,
       isRecoveryAttempt: false
     })
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: 8,
       isRecoveryAttempt: false
     })
   })
@@ -1885,10 +1890,12 @@ describe('continuous agent loop', () => {
     })
 
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: true,
       isContextRecoveryAttempt: true
     })
     expect(callModel.mock.calls[2]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: false,
       isContextRecoveryAttempt: true
     })
@@ -1917,6 +1924,7 @@ describe('continuous agent loop', () => {
 
     expect(callModel).toHaveBeenCalledTimes(2)
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: true,
       isOutputRecoveryAttempt: true
     })
@@ -3678,6 +3686,104 @@ describe('model response status', () => {
   const statuses = (): ModelResponseStatus[] => coreMocks.emitToChatClients.mock.calls
     .filter(([event]) => event === 'model-response-status')
     .map(([, status]) => status)
+
+  it('lets productive tool generation finish after the finishing reserve begins', async () => {
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const budget = new AgentRunBudget(Date.now() + 180_000)
+    let params!: CompletionParams
+    let finish!: (result: { output: string }) => void
+    coreMocks.prompt.mockImplementationOnce((_messages, input: CompletionParams) => {
+      params = input
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    })
+    const duty = new ReActLLMDuty({ input: 'Finish the deliverable.' })
+    const catalog = createCatalog()
+    Object.assign(duty, { runBudget: budget, writeAgentPromptLog: vi.fn() })
+    const pending = runWithConversationSession({ sessionId: 'productive-generation' }, () =>
+      duty['callAgentModel']([], 'Follow the request.', catalog.tools, {
+        isRecoveryAttempt: false
+      }, undefined, catalog.functionsByToolName)
+    )
+
+    try {
+      for (let elapsed = 0; elapsed < 120_000; elapsed += 20_000) {
+        params.onStreamEvent?.({ type: 'tool-input-delta' })
+        params.onToolCall?.(toolCall('draft', CALLABLE_TOOL_NAME, {
+          query: `Partial content at ${elapsed}`
+        }))
+        await vi.advanceTimersByTimeAsync(20_000)
+      }
+
+      expect(budget.isFinishing).toBe(true)
+      expect(budget.remainingMs).toBe(60_000)
+      expect(params.cancellationSignal?.aborted).toBe(false)
+      finish({ output: 'Done.' })
+      expect(await pending).toMatchObject({ textContent: 'Done.' })
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it('uses monotonic remaining time and imposes no deadline when omitted', () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const unlimited = new AgentRunBudget()
+    const budget = new AgentRunBudget(Date.now() + 180_000)
+
+    try {
+      vi.setSystemTime(Date.now() - 3_600_000)
+      clock.mockReturnValue(125_000)
+      expect(budget.remainingMs).toBe(55_000)
+      expect(budget.isFinishing).toBe(true)
+      expect(budget.capTimeout(120_000)).toBe(55_000)
+      expect(unlimited.signal).toBeUndefined()
+      expect(unlimited.remainingMs).toBeUndefined()
+      expect(unlimited.isFinishing).toBe(false)
+
+      clock.mockReturnValue(180_000)
+      expect(() => budget.throwIfExpired()).toThrow(AgentRunDeadlineError)
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it.each([false, true])('does not renew the run deadline for productive generation (review=%s)', async (review) => {
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const budget = new AgentRunBudget(Date.now() + 30_000)
+    let params!: CompletionParams
+    coreMocks.prompt.mockImplementationOnce((_messages, input: CompletionParams) => {
+      params = input
+      return new Promise((_resolve, reject) => {
+        input.cancellationSignal?.addEventListener('abort', () => {
+          reject(input.cancellationSignal?.reason)
+        }, { once: true })
+      })
+    })
+    const duty = new ReActLLMDuty({ input: 'Finish the deliverable.' })
+    Object.assign(duty, { runBudget: budget, writeAgentPromptLog: vi.fn() })
+    const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+      isRecoveryAttempt: false, isCompletionReview: review
+    }).then(() => null, (error) => error)
+
+    try {
+      for (let elapsed = 0; elapsed < 30_000; elapsed += 5_000) {
+        params.onReasoningToken?.('Working.')
+        await vi.advanceTimersByTimeAsync(5_000)
+      }
+
+      expect(await pending).toBeInstanceOf(AgentRunDeadlineError)
+      expect(params.cancellationSignal?.aborted).toBe(true)
+      expect(params.timeout).toBeLessThanOrEqual(15_000)
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
 
   it('retains the prepared prompt estimate when an adapter reports no input usage', async () => {
     coreMocks.prompt.mockResolvedValueOnce({

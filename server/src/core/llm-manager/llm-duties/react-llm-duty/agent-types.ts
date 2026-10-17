@@ -35,6 +35,10 @@ export type AgentRunProgressEvent =
 export interface ReactLLMDutyParams extends LLMDutyParams {
   files?: AgentModelFile[]
   signal?: AbortSignal
+  /**
+   * Optional absolute run deadline, shared by tools, inference and completion review.
+   */
+  deadlineAt?: number
   agentSkill?: AgentSkillContext | null
   forcedToolName?: string | null
   allowDirectAnswerHandoff?: boolean

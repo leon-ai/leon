@@ -41,6 +41,7 @@ import {
 } from './computer-use-convergence'
 import { createAgentTextPreview } from './agent-context-budget'
 import { parseToolCallArguments, validateToolInput } from './agent-utils'
+import { AgentRunDeadlineError, type AgentRunBudget } from './agent-run-budget'
 
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
 export const AGENT_CLARIFICATION_TOOL_NAME = 'request_clarification'
@@ -119,6 +120,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - Running execution handles are unfinished work. Use system_utilities.tool_executions to wait, query or cancel; wait timeouts leave work running. Resolve required executions before finalizing. Filter and aggregate retained data instead of repeating discovery or copying inventories into shell.
 - Treat tool errors as observations: correct the arguments, choose another available tool, or explain the blocker.
 - Continue until the requested deliverable is complete and verified. When complete, return the final user-facing answer as plain text with no tool call.
+- An execution_budget is a fixed caller deadline, not a renewable model wait. Use its finishing reserve for pending writes, required checks and the answer; stop optional exploration in the finishing phase. Report unfinished work honestly if the deadline prevents completion.
 - Call request_clarification with one concise question only for required information, authorization, or owner action that available tools cannot resolve.
 </agent_loop>
 
@@ -332,12 +334,15 @@ interface AgentModelCallOptions {
   requiresToolAction?: boolean
   requiresPlanReconciliation?: boolean
   isContextRecoveryAttempt?: boolean
+  elapsedMs?: number
+  remainingIterations?: number
 }
 
 type AgentFunctionExecutionResult = ToolExecutionResult
 
 export interface AgentLoopParams {
   signal?: AbortSignal
+  runBudget?: AgentRunBudget
   transcript: AgentToolTranscriptMessage[]
   catalog: AgentToolCatalog
   callModel: (
@@ -855,6 +860,7 @@ export async function runAgentLoop(
   )
   let trackedSteps = structuredClone(params.initialTrackedSteps || [])
   const iterationLimit = params.maxIterations ?? AGENT_MAX_ITERATIONS
+  const startedAt = Date.now()
   // Reserve finishing turns inside the owner's cap, leaving a main turn even
   // when the configured budget is smaller than the usual finishing reserve.
   const finishingIterations = Math.min(params.finishingIterations ?? 0, Math.max(0, iterationLimit - 1))
@@ -868,15 +874,23 @@ export async function runAgentLoop(
     enableAgentPlanTracking(params.catalog)
   }
 
+  let hasEnteredFinishing = false
+
   agentIterations: for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
+    if (params.runBudget?.isExpired) {
+      return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
+    }
     if (await appendPendingOwnerMessages(params, transcript)) {
       requiresToolAction = false
     }
     // Continue an unfinished authorized run once, with bounded resume context.
     // This is a bounded finishing pass, not a new task or a renewed permission.
-    if (iteration === mainIterations && finishingIterations > 0) {
-      if (params.prepareContinuation) {
+    if (!hasEnteredFinishing && (params.runBudget?.isFinishing ||
+        (iteration === mainIterations && finishingIterations > 0))) {
+      hasEnteredFinishing = true
+
+      if (params.prepareContinuation && !params.runBudget?.isFinishing) {
         const checkpoint = await params.prepareContinuation({
           transcript,
           executionHistory,
@@ -906,6 +920,9 @@ export async function runAgentLoop(
     while (true) {
       try {
         params.signal?.throwIfAborted()
+        if (params.runBudget?.isExpired) {
+          return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
+        }
         // Keep setup out of ordinary turns and narrow it to the blocked providers.
         const setupIndex = params.catalog.tools.findIndex(
           (tool) => tool.function.name === CONNECTION_SETUP_TOOL_NAME
@@ -922,6 +939,8 @@ export async function runAgentLoop(
           params.catalog.tools,
           {
             isRecoveryAttempt,
+            elapsedMs: Date.now() - startedAt,
+            remainingIterations,
             ...(requiresToolAction ? { requiresToolAction: true } : {}),
             ...(remindPlan ? { requiresPlanReconciliation: true } : {}),
             ...(isOutputRecoveryAttempt ? { isOutputRecoveryAttempt: true } : {}),
@@ -932,8 +951,12 @@ export async function runAgentLoop(
           { executionHistory, trackedSteps }
         )
         params.signal?.throwIfAborted()
+        params.runBudget?.throwIfExpired()
       } catch (error) {
         params.signal?.throwIfAborted()
+        if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
+          return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
+        }
         if (await appendPendingOwnerMessages(params, transcript)) {
           requiresToolAction = false
           continue agentIterations
@@ -988,7 +1011,7 @@ export async function runAgentLoop(
         Boolean(modelResult.textContent?.trim()) ||
         Boolean(modelResult.toolCalls?.length)
       const shouldRecover = modelResult.isTruncated || !hasUsableOutput
-      if (!shouldRecover || hasUsedOutputRecovery) {
+      if (!shouldRecover || hasUsedOutputRecovery || params.runBudget?.isFinishing) {
         break
       }
 
@@ -1141,6 +1164,19 @@ export async function runAgentLoop(
     let planUpdated = false
     let wasSteered = false
     for (let callIndex = 0; callIndex < toolCalls.length;) {
+      if (params.runBudget?.isExpired) {
+        for (const call of toolCalls.slice(callIndex)) {
+          transcript.push({
+            role: 'tool',
+            toolCallId: call.id,
+            toolName: call.function.name,
+            content: 'Tool call skipped because the task reached its run deadline.'
+          })
+        }
+
+        break
+      }
+
       if (await appendPendingOwnerMessages(
         params,
         transcript,
@@ -1203,6 +1239,10 @@ export async function runAgentLoop(
     else if (trackedSteps.length > 0 && toolCalls.some((call) =>
       params.catalog.functionsByToolName.has(call.function.name))) {
       operationalTurnsSincePlanUpdate += 1
+    }
+
+    if (params.runBudget?.isExpired && terminalSignal?.intent !== 'cancelled') {
+      return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
     }
 
     if (terminalSignal) {
@@ -1298,6 +1338,7 @@ async function reviewAgentCompletion(
   for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
     try {
       params.signal?.throwIfAborted()
+      params.runBudget?.throwIfExpired()
       const response = await params.callModel(messages, [], {
         isRecoveryAttempt: false, isCompletionReview: true,
         // Some agent models reject structured output. Reuse the existing retry
@@ -1306,6 +1347,7 @@ async function reviewAgentCompletion(
         ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
       }, state)
       params.signal?.throwIfAborted()
+      params.runBudget?.throwIfExpired()
       const review = response && !response.isTruncated && !response.toolCalls?.length
         ? parseToolCallArguments(response.textContent || '')
         : null
@@ -1319,6 +1361,12 @@ async function reviewAgentCompletion(
       LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
     } catch (error) {
       params.signal?.throwIfAborted()
+      if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
+        return {
+          status: AgentCompletionStatus.Blocked,
+          reason: buildResumableAgentAnswer('deadline', state.trackedSteps)
+        }
+      }
       if (params.getOwnerMessageSignal?.().aborted) {
         return null
       }
@@ -1519,6 +1567,7 @@ async function attemptAgentLimitFinalization(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       params.signal?.throwIfAborted()
+      params.runBudget?.throwIfExpired()
       modelResult = await params.callModel(
         currentTranscript,
         [createClarificationTool(), createCancellationTool()],
@@ -1526,6 +1575,7 @@ async function attemptAgentLimitFinalization(
         { executionHistory, trackedSteps }
       )
       params.signal?.throwIfAborted()
+      params.runBudget?.throwIfExpired()
       if (await appendPendingOwnerMessages(params, modelTranscript)) {
         modelResult = null
         currentTranscript = modelTranscript
@@ -1533,6 +1583,13 @@ async function attemptAgentLimitFinalization(
       }
     } catch (error) {
       params.signal?.throwIfAborted()
+      if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
+        return {
+          answer: buildResumableAgentAnswer('deadline', trackedSteps),
+          intent: 'error',
+          messages: []
+        }
+      }
       if (await appendPendingOwnerMessages(params, modelTranscript)) {
         modelResult = null
         currentTranscript = modelTranscript
@@ -1642,7 +1699,7 @@ async function attemptAgentLimitFinalization(
 }
 
 function createResumableAgentResult(
-  failureKind: CompletionFailureKind | 'synthesis',
+  failureKind: CompletionFailureKind | 'synthesis' | 'deadline',
   transcript: AgentToolTranscriptMessage[],
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
@@ -1661,10 +1718,11 @@ function createResumableAgentResult(
 }
 
 function buildResumableAgentAnswer(
-  failureKind: CompletionFailureKind | 'synthesis',
+  failureKind: CompletionFailureKind | 'synthesis' | 'deadline',
   trackedSteps: TrackedPlanStep[]
 ): string {
-  const explanations: Record<CompletionFailureKind | 'synthesis', string> = {
+  const explanations: Record<CompletionFailureKind | 'synthesis' | 'deadline', string> = {
+    deadline: 'The task reached its run deadline.',
     [CompletionFailureKind.Timeout]: 'The model response exceeded its time limit.',
     [CompletionFailureKind.Context]: 'The model could not process the task context.',
     [CompletionFailureKind.Unavailable]: 'The model provider is temporarily unavailable or rate limited.',

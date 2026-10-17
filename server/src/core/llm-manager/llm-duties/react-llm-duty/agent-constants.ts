@@ -21,6 +21,7 @@ Rules:
 // The default total includes the finishing pass, rather than adding it on top.
 export const AGENT_MAX_ITERATIONS = 256
 export const AGENT_FINISHING_ITERATIONS = 16
+export const AGENT_RUN_FINISHING_RESERVE_MS = 60_000
 export const AGENT_CONTINUATION_SUMMARY_MAX_TOKENS = 4_096
 export const AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS = 60_000
 export const AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT = `Summarize earlier agent work so the same task can continue without repeating it.

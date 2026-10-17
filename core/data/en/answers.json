@@ -244,6 +244,9 @@
       "Successfully executed command in {{ execution_time }}.",
       "Command finished successfully after {{ execution_time }}."
     ],
+    "bridges.tools.output_delta": [
+      "{{ output }}"
+    ],
     "bridges.tools.command_output": [
       "Output from {{ command }}:\n```\n{{ output }}\n```"
     ],

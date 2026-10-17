@@ -386,6 +386,12 @@ class ConfigManager {
       throw new Error('runtime.agent_max_iterations must be a positive safe integer.')
     }
 
+    const executionTimeoutSeconds = mergedConfig.runtime.agent_execution_timeout_seconds
+    if (executionTimeoutSeconds !== undefined && (typeof executionTimeoutSeconds !== 'number' ||
+        !Number.isFinite(executionTimeoutSeconds) || executionTimeoutSeconds <= 0)) {
+      throw new Error('runtime.agent_execution_timeout_seconds must be a positive finite number.')
+    }
+
     return mergedConfig
   }
 

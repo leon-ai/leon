@@ -113,6 +113,23 @@ describe('ConfigManager', () => {
     expect(configManager.reload().runtime.agent_max_iterations).toBe(1)
   })
 
+  it('keeps the execution timeout optional and reloads a positive seconds value', async () => {
+    const manager = await loadConfigManager()
+    expect(manager.getConfig().runtime.agent_execution_timeout_seconds).toBeUndefined()
+
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+      runtime: { agent_execution_timeout_seconds: 180 }
+    }))
+    expect(manager.reload().runtime.agent_execution_timeout_seconds).toBe(180)
+  })
+
+  it.each([0, -1, '180', null])('rejects invalid execution timeout %s', async (timeout) => {
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+      runtime: { agent_execution_timeout_seconds: timeout }
+    }))
+    await expect(loadConfigManager()).rejects.toThrow('runtime.agent_execution_timeout_seconds')
+  })
+
   it.each([0, -1, 1.5, '256', null, Number.MAX_SAFE_INTEGER + 1])(
     'rejects invalid iteration limit %s', async (limit) => {
       fs.writeFileSync(profilePaths.configPath, YAML.stringify({

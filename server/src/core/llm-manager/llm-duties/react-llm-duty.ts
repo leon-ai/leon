@@ -116,6 +116,7 @@ import {
 } from './react-llm-duty/agent-loop'
 import type { AgentCallableFunction } from './react-llm-duty/agent-loop'
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
+import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
 import {
   type AccumulatedLLMMetricsState,
   type FinalAnswerMetricsSnapshot,
@@ -226,6 +227,8 @@ export class ReActLLMDuty extends LLMDuty {
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
   private readonly signal: AbortSignal | undefined
+  private readonly deadlineAt: number | undefined
+  private runBudget: AgentRunBudget | undefined
   private getOwnerMessageSignal: (() => AbortSignal) | undefined
   private agentTurnSignal: AbortSignal | undefined
   private readonly files: ReactLLMDutyParams['files']
@@ -245,6 +248,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.input = params.input
     this.files = params.files
     this.signal = params.signal
+    this.deadlineAt = params.deadlineAt
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
@@ -279,6 +283,12 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.info('Executing...')
 
     this.executionStartedAt = Date.now()
+    const executionTimeoutSeconds = CONFIG_MANAGER.getConfig().runtime.agent_execution_timeout_seconds
+    this.runBudget = new AgentRunBudget(
+      this.deadlineAt ?? (executionTimeoutSeconds === undefined
+        ? undefined
+        : this.executionStartedAt + executionTimeoutSeconds * 1_000)
+    )
     this.firstOutputAt = null
     this.completionCount = 0
     this.continuationSummaryFailed = false
@@ -537,6 +547,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.closeStreamedToolCalls()
         },
         ...(this.signal ? { signal: this.signal } : {}),
+        runBudget: this.runBudget,
         transcript,
         catalog,
         maxIterations: CONFIG_MANAGER.getConfig().runtime.agent_max_iterations ?? AGENT_MAX_ITERATIONS,
@@ -568,6 +579,7 @@ export class ReActLLMDuty extends LLMDuty {
           // Reviewers use task constraints and evidence. Current clock and mood
           // stay outside the reusable prefix for both acting and review calls.
           const baseSystemPrompt = agentSystemPrompt
+          const remainingMs = this.runBudget?.remainingMs
           // Keep changing task state after the conversation prefix. Rewriting
           // the system prompt prevents reuse of the history that follows it.
           appendAgentRuntimeContext(messages, {
@@ -576,6 +588,14 @@ export class ReActLLMDuty extends LLMDuty {
               : PERSONA.getDutyRuntimeContext({ includeMood: true }),
             tool_guidance: progressiveGuidance,
             connection_guidance: buildAgentConnectionGuidance(state.executionHistory),
+            elapsed_ms: options.elapsedMs,
+            remaining_operational_iterations: options.remainingIterations,
+            execution_budget: this.runBudget?.deadlineAt === undefined ? null : {
+              deadline_at: new Date(this.runBudget.deadlineAt).toISOString(),
+              remaining_ms: remainingMs,
+              finishing_reserve_ms: this.runBudget.finishingReserveMs,
+              phase: this.runBudget.isFinishing ? 'finishing' : 'working'
+            },
             reported_plan: state.trackedSteps,
             planning_guidance: state.trackedSteps.length ? AGENT_PLAN_GUIDANCE : null,
             plan_reconciliation: options.requiresPlanReconciliation
@@ -745,6 +765,7 @@ export class ReActLLMDuty extends LLMDuty {
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
     } finally {
+      this.runBudget?.dispose()
       agentTurn?.close()
       this.getOwnerMessageSignal = undefined
       this.agentTurnSignal = undefined
@@ -773,10 +794,10 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   /**
-   * Interrupts stale work for owner steering without canceling the conversation turn.
+   * Shares owner interruptions and the run deadline with every in-flight operation.
    */
   private getExecutionSignal(): AbortSignal | undefined {
-    const signals = [this.signal, this.agentTurnSignal, this.getOwnerMessageSignal?.()]
+    const signals = [this.signal, this.agentTurnSignal, this.getOwnerMessageSignal?.(), this.runBudget?.signal]
       .filter((signal): signal is AbortSignal => Boolean(signal))
 
     if (signals.length > 1) {
@@ -1021,17 +1042,18 @@ export class ReActLLMDuty extends LLMDuty {
 
     return buildAgentContinuationTranscript(transcript, async (history) => {
       // A failed summary must not cause an auxiliary retry on every tool turn.
-      if (this.continuationSummaryFailed) return null
+      if (this.continuationSummaryFailed || this.runBudget?.isFinishing) return null
       const startedAt = Date.now()
       try {
+        const cancellationSignal = this.getExecutionSignal()
         const result = await LLM_PROVIDER.prompt(history, {
-          ...(this.signal ? { cancellationSignal: this.signal } : {}),
+          ...(cancellationSignal ? { cancellationSignal } : {}),
           dutyType: LLMDuties.ReAct,
           systemPrompt: AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT,
           usagePurpose: InferencePurpose.ContextCompaction,
           temperature: 0,
           maxTokens: AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
-          timeout: AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
+          timeout: this.runBudget?.capTimeout(AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS) ?? AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
           maxRetries: 0,
           remoteProviderErrorRetries: 0,
           shouldStream: false,
@@ -1090,6 +1112,7 @@ export class ReActLLMDuty extends LLMDuty {
     compactionContext?: ProviderCompactionContext
     isTruncated?: boolean
   } | null> {
+    this.runBudget?.throwIfExpired()
     const executionSignal = this.getExecutionSignal()
     executionSignal?.throwIfAborted()
     if (transcript.some((message) =>
@@ -1251,7 +1274,8 @@ export class ReActLLMDuty extends LLMDuty {
     const toolCallAbortController = new AbortController()
 
     const modelResponseStartedAt = Date.now()
-    const modelResponseMaximumDeadlineAt = modelResponseStartedAt + AGENT_MODEL_RESPONSE_MAX_DURATION_MS
+    const modelResponseMaximumDeadlineAt = modelResponseStartedAt +
+      (this.runBudget?.capTimeout(AGENT_MODEL_RESPONSE_MAX_DURATION_MS) ?? AGENT_MODEL_RESPONSE_MAX_DURATION_MS)
     const contextWindowTokens = resolveModelContextWindowTokens(
       agentTarget.provider,
       agentTarget.model
@@ -1262,6 +1286,10 @@ export class ReActLLMDuty extends LLMDuty {
       estimatedInputTokens: preparedContext.estimatedInputTokens,
       contextWindowTokens
     })
+    const initialResponseDeadlineAt = Math.min(
+      modelResponseMaximumDeadlineAt,
+      modelResponseStartedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    )
     const modelStatus: ModelResponseStatus = {
       contextUsage: this.contextUsage,
       requestId: randomUUID(),
@@ -1269,7 +1297,7 @@ export class ReActLLMDuty extends LLMDuty {
       startedAt: modelResponseStartedAt,
       state: ModelResponseState.Waiting,
       attempt: 1,
-      deadlineAt: modelResponseStartedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
+      deadlineAt: initialResponseDeadlineAt
     }
     let modelAttempt = 0
     let lastAttemptFailureKind: CompletionFailureKind | undefined
@@ -1283,7 +1311,7 @@ export class ReActLLMDuty extends LLMDuty {
     const abortModelResponse = (): void => {
       responseAbortController.abort(new AgentModelResponseTimeoutError())
     }
-    let responseDeadlineTimer = setTimeout(abortModelResponse, AGENT_MODEL_RESPONSE_TIMEOUT_MS)
+    let responseDeadlineTimer = setTimeout(abortModelResponse, Math.max(0, initialResponseDeadlineAt - Date.now()))
     const renewModelResponseDeadline = (
       timeout = AGENT_MODEL_RESPONSE_TIMEOUT_MS
     ): void => {
@@ -1359,8 +1387,13 @@ export class ReActLLMDuty extends LLMDuty {
           ? { data: AGENT_COMPLETION_REVIEW_SCHEMA }
           : {}),
         temperature: AGENT_TEMPERATURE,
-        timeout: AGENT_INFERENCE_TIMEOUT_MS,
-        maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
+        // A silent call must leave room to recover; active output still renews
+        // the provider's stall timer, within the fixed run deadline.
+        timeout: this.runBudget?.remainingMs === undefined
+          ? AGENT_INFERENCE_TIMEOUT_MS
+          : Math.min(AGENT_INFERENCE_TIMEOUT_MS, this.runBudget.remainingMs / 2),
+        maxRetries: this.runBudget?.isFinishing ? 0 : AGENT_TIMEOUT_MAX_RETRIES,
+        ...(this.runBudget?.isFinishing ? { remoteProviderErrorRetries: 0 } : {}),
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
         onAttempt: (timing): void => {
@@ -1460,6 +1493,10 @@ export class ReActLLMDuty extends LLMDuty {
         ...(!options.isCompletionReview
           ? {
               onToolCall: (call): void => {
+                if (cancellationSignal.aborted) {
+                  return
+                }
+
                 clearModelStatus()
                 const callable = functionsByToolName?.get(call.function.name)
                 if (!callable) {
@@ -1527,6 +1564,7 @@ export class ReActLLMDuty extends LLMDuty {
         throw new AgentModelResponseTimeoutError()
       }
     } catch (error) {
+      executionSignal?.throwIfAborted()
       if (error instanceof AgentModelResponseTimeoutError) {
         // Preserve the checkpoint without another request to the unavailable model.
         this.continuationSummaryFailed = true
