@@ -11,7 +11,7 @@
   },
   "functions": {
     "getWeather": {
-      "description": "Get current conditions plus today's daily and hourly forecast for a location. Optional dates return the complete forecast for that interval. Includes temperature ranges, rain probabilities and amounts, wind, units, and local timestamps.",
+      "description": "Get current conditions and today's daily forecast by omitting dates. Use detail=hourly for intraday timing or changes. Supply dates only for another forecast interval; a missing boundary uses the supplied date.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -25,13 +25,23 @@
           "end_date": {
             "type": "string",
             "description": "End date in YYYY-MM-DD format. Provide it with start_date; for one day, use the same date for both. A missing boundary is normalized to the supplied boundary."
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "hourly"
+            ],
+            "description": "Summary returns current conditions and daily forecasts. Hourly also returns hourly series and units.",
+            "default": "summary"
           }
         },
         "required": [
           "location"
         ],
         "additionalProperties": false
-      }
+      },
+      "completion_review": "optional"
     }
   }
 }

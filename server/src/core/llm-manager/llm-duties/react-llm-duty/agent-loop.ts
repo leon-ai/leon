@@ -1,4 +1,4 @@
-import { ToolConcurrency } from '@/types'
+import { ToolCompletionReview, ToolConcurrency } from '@/types'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
 import {
@@ -868,6 +868,7 @@ export async function runAgentLoop(
   const mainIterations = iterationLimit - finishingIterations
   let hasUsedOutputRecovery = false
   let hasUsedContextRecovery = false
+  let hasOwnerUpdates = false
   let requiresToolAction = false
   let operationalTurnsSincePlanUpdate = 0
 
@@ -883,6 +884,7 @@ export async function runAgentLoop(
       return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
     }
     if (await appendPendingOwnerMessages(params, transcript)) {
+      hasOwnerUpdates = true
       requiresToolAction = false
     }
     // Continue an unfinished authorized run once, with bounded resume context.
@@ -959,6 +961,7 @@ export async function runAgentLoop(
           return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
         }
         if (await appendPendingOwnerMessages(params, transcript)) {
+          hasOwnerUpdates = true
           requiresToolAction = false
           continue agentIterations
         }
@@ -1026,6 +1029,7 @@ export async function runAgentLoop(
     // A response selected without the newest owner instructions must not dispatch
     // tools or publish a final answer. Reconsider it through the existing loop.
     if (await appendPendingOwnerMessages(params, transcript)) {
+      hasOwnerUpdates = true
       requiresToolAction = false
       continue
     }
@@ -1060,7 +1064,12 @@ export async function runAgentLoop(
 
     if (toolCalls.length === 0) {
       if (textContent) {
-        if (executionHistory.length > 0 || trackedSteps.length > 0) {
+        const canSkipReview = iteration === 1 && !hasOwnerUpdates &&
+          !hasUsedOutputRecovery && !hasUsedContextRecovery && !hasEnteredFinishing &&
+          params.initialExecutionHistory === undefined &&
+          params.initialTrackedSteps === undefined && trackedSteps.length === 0 &&
+          isCompleteOptionalLookup(params.catalog, executionHistory)
+        if ((executionHistory.length > 0 || trackedSteps.length > 0) && !canSkipReview) {
           // Review only a proposed ending, not every action. Reuse the same
           // provider, budget and evidence; the check cannot execute tools.
           const review = await reviewAgentCompletion(
@@ -1068,6 +1077,7 @@ export async function runAgentLoop(
             { executionHistory, trackedSteps }, hasUsedContextRecovery
           )
           if (await appendPendingOwnerMessages(params, transcript)) {
+            hasOwnerUpdates = true
             requiresToolAction = false
             continue
           }
@@ -1183,6 +1193,7 @@ export async function runAgentLoop(
         transcript,
         toolCalls.slice(callIndex)
       )) {
+        hasOwnerUpdates = true
         wasSteered = true
         requiresToolAction = false
         break
@@ -1248,6 +1259,7 @@ export async function runAgentLoop(
 
     if (terminalSignal) {
       if (wasSteered || await appendPendingOwnerMessages(params, transcript)) {
+        hasOwnerUpdates = true
         requiresToolAction = false
         continue
       }
@@ -1303,6 +1315,49 @@ async function appendPendingOwnerMessages(
   params.onOwnerMessagesApplied?.()
 
   return true
+}
+
+/**
+ * Only explicitly opted-in, complete synchronous lookups can avoid review.
+ */
+function isCompleteOptionalLookup(
+  catalog: AgentToolCatalog,
+  executions: ExecutionRecord[]
+): boolean {
+  if (executions.length !== 1) {
+    return false
+  }
+
+  const execution = executions[0]!
+  const callable = [...catalog.functionsByToolName.values()].find(
+    (entry) => entry.qualifiedName === execution.function
+  )
+  if (execution.status !== 'success' ||
+      callable?.functionConfig.completion_review !== ToolCompletionReview.Optional) {
+    return false
+  }
+
+  // Non-default options may request broader coverage than a basic lookup.
+  const input = parseToolCallArguments(execution.requestedToolInput || '')
+  const required = callable.functionConfig.parameters['required'] as string[] | undefined
+  const properties = callable.functionConfig.parameters['properties'] as
+    Record<string, { default?: unknown }> | undefined
+  if (!input || Object.entries(input).some(([name, value]) =>
+    !required?.includes(name) && !Object.is(properties?.[name]?.default, value)
+  )) {
+    return false
+  }
+
+  const observation = parseToolCallArguments(execution.observation)
+  const data = observation?.['data'] as {
+    output?: { result?: { success?: unknown, truncated?: unknown } }
+  } | undefined
+  const result = data?.output?.result
+
+  return observation?.['status'] === 'success' &&
+    observation['observation_compacted'] !== true && !observation['execution'] &&
+    !observation['observed_tool_failure'] && result?.success === true &&
+    result.truncated !== true
 }
 
 /**

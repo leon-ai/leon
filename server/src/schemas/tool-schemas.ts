@@ -1,6 +1,6 @@
 import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
-import { ToolConcurrency } from '@/types'
+import { ToolCompletionReview, ToolConcurrency } from '@/types'
 
 import {
   PROGRESSIVE_GUIDANCE_MAX_LENGTH,
@@ -76,6 +76,12 @@ const toolFunctionSchemaObject = Type.Strict(
         Type.Boolean({
           description:
             'Allow agent calls to yield a retained execution handle after a bounded wait. Execution keeps its original deadline and can be waited on, queried or canceled.'
+        })
+      ),
+      completion_review: Type.Optional(
+        Type.Enum(ToolCompletionReview, {
+          description:
+            'Required by default. Optional is only for complete, low-risk read-only lookups; the agent still reviews plans, failures, recovery, partial or retained results and multiple calls.'
         })
       ),
       concurrency: Type.Optional(

@@ -1,4 +1,4 @@
-import { ToolConcurrency } from '@/types'
+import { ToolCompletionReview, ToolConcurrency } from '@/types'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -438,6 +438,187 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it.each([
+    'optional', 'default', 'nondefault', 'required', 'failed', 'compacted', 'partial', 'retained',
+    'planned', 'resumed', 'recovered', 'steered', 'multiple'
+  ])('keeps completion review conservative for a %s lookup', async (scenario) => {
+    const catalog = createCatalog()
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable,
+      functionConfig: {
+        ...callable.functionConfig,
+        parameters: {
+          ...callable.functionConfig.parameters,
+          properties: { query: { type: 'string' }, detail: { default: 'summary' } }
+        },
+        ...(scenario !== 'required'
+          ? { completion_review: ToolCompletionReview.Optional }
+          : {})
+      }
+    })
+    const observation = {
+      status: scenario === 'failed' ? 'error' : 'success',
+      data: { output: { result: {
+        success: scenario !== 'failed',
+        ...(scenario === 'partial' ? { truncated: true } : {})
+      } } },
+      ...(scenario === 'compacted' ? { observation_compacted: true } : {}),
+      ...(scenario === 'retained' ? { execution: { id: 'lookup', state: 'running' } } : {})
+    }
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName,
+      status: observation.status,
+      observation: JSON.stringify(observation),
+      requestedToolInput: JSON.stringify({
+        query: 'first',
+        ...(['default', 'nondefault'].includes(scenario)
+          ? { detail: scenario === 'default' ? 'summary' : 'hourly' }
+          : {})
+      })
+    } }))
+    const calls = [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'first' })]
+    if (scenario === 'multiple') {
+      calls.push(toolCall('second', CALLABLE_TOOL_NAME, { query: 'second' }))
+    }
+
+    const callModel = vi.fn()
+    if (scenario === 'recovered') {
+      callModel.mockResolvedValueOnce({ textContent: '' })
+    }
+    callModel.mockResolvedValueOnce({ toolCalls: calls })
+      .mockResolvedValueOnce({ textContent: 'The requested result.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete', reason: 'The result supports the answer.'
+      }) })
+    let delivered = false
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Look up the value.' }],
+      catalog, callModel, executeFunction,
+      ...(scenario === 'planned' ? { initialTrackedSteps: [
+        { label: 'Look up the value', status: 'completed' as const }
+      ] } : {}),
+      ...(scenario === 'resumed' ? { initialExecutionHistory: [] } : {}),
+      drainOwnerMessages: async () => {
+        if (scenario === 'steered' && executeFunction.mock.calls.length && !delivered) {
+          delivered = true
+          return [{ role: 'user' as const, content: 'Use the revised scope.' }]
+        }
+
+        return []
+      },
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(callModel.mock.calls.some(([, , options]) => options.isCompletionReview))
+      .toBe(!['optional', 'default'].includes(scenario))
+  })
+
+  it('does not accept or retry a completion review that outlives the run deadline', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const runBudget = new AgentRunBudget(Date.now() + 180_000)
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [
+        toolCall('inspect', CALLABLE_TOOL_NAME, { query: 'inspect' })
+      ] })
+      .mockResolvedValueOnce({ textContent: 'Inspection completed.' })
+      .mockImplementationOnce(async () => {
+        clock.mockReturnValue(180_000)
+        return { textContent: JSON.stringify({ status: 'complete', reason: 'Complete.' }) }
+      })
+
+    try {
+      const result = await runAgentLoopWithCompletionReview({
+        transcript: [{ role: 'user', content: 'Inspect the source.' }],
+        catalog: createCatalog(), runBudget, callModel,
+        executeFunction: async () => ({ output: 'Source inspected.' }),
+        loadAgentSkill: async () => null
+      })
+
+      expect(result.intent).toBe('blocked')
+      expect(result.answer).toContain('run deadline')
+      expect(callModel).toHaveBeenCalledTimes(3)
+    } finally {
+      runBudget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it('retains completed tool receipts when the shared deadline expires', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const runBudget = new AgentRunBudget(Date.now() + 180_000)
+    const callModel = vi.fn(async () => ({ toolCalls: [
+      toolCall('completed-work', CALLABLE_TOOL_NAME, { query: 'inspect' }),
+      toolCall('unstarted-plan', AGENT_PLAN_TOOL_NAME, {
+        steps: [{ label: 'Inspect and verify', status: 'completed' }]
+      }),
+      toolCall('unstarted-work', CALLABLE_TOOL_NAME, { query: 'verify' })
+    ] }))
+
+    try {
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Inspect the source.' }],
+        catalog: createCatalog(),
+        initialTrackedSteps: [{ label: 'Inspect and verify', status: 'in_progress' }],
+        runBudget,
+        callModel,
+        executeFunction: async () => {
+          clock.mockReturnValue(180_000)
+          return { output: 'Inspection completed.' }
+        },
+        loadAgentSkill: async () => null
+      })
+
+      expect(result.intent).toBe('error')
+      expect(result.answer).toContain('run deadline')
+      expect(result.trackedSteps[0]?.status).toBe('in_progress')
+      expect(result.transcript).toContainEqual(expect.objectContaining({
+        role: 'tool', toolCallId: 'completed-work'
+      }))
+      expect(result.transcript.filter((message) => message.role === 'tool')
+        .map((message) => message.toolCallId)).toEqual([
+        'completed-work', 'unstarted-plan', 'unstarted-work'
+      ])
+      expect(callModel).toHaveBeenCalledOnce()
+    } finally {
+      runBudget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it('enters finishing once without spending its reserve on auxiliary compaction', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const runBudget = new AgentRunBudget(Date.now() + 180_000)
+    clock.mockReturnValue(125_000)
+    const prepareContinuation = vi.fn()
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [
+        toolCall('required-check', CALLABLE_TOOL_NAME, { query: 'verify' })
+      ] })
+      .mockResolvedValueOnce({ textContent: 'Verified the result.' })
+
+    try {
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Finish and verify.' }],
+        catalog: createCatalog(), runBudget, callModel, prepareContinuation,
+        executeFunction: async () => ({ output: 'Required check passed.' }),
+        loadAgentSkill: async () => null
+      })
+
+      expect(result.intent).toBe('answer')
+      expect(prepareContinuation).not.toHaveBeenCalled()
+      expect(callModel).toHaveBeenCalledTimes(2)
+      expect(result.transcript.filter((message) => message.role === 'user'
+        && message.content.includes('<execution_finishing_pass>'))).toHaveLength(1)
+      expect(result.transcript).toContainEqual(expect.objectContaining({
+        role: 'tool', toolCallId: 'required-check'
+      }))
+    } finally {
+      runBudget.dispose()
+      clock.mockRestore()
+    }
+  })
+
   it.each(['model', 'tool', 'review'])(
     'interrupts %s work for owner cancellation and ends without reviewing unfinished plans',
     async (phase) => {

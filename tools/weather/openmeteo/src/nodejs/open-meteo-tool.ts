@@ -6,6 +6,14 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
 
 const DEFAULT_FORECAST_DAYS = 1
+
+/**
+ * Include hourly series only when the requested forecast needs intraday detail.
+ */
+export enum WeatherDetail {
+  Summary = 'summary',
+  Hourly = 'hourly'
+}
 const CURRENT_WEATHER_VARIABLES = [
   'temperature_2m', 'relative_humidity_2m', 'apparent_temperature',
   'weather_code', 'wind_speed_10m', 'wind_direction_10m'
@@ -87,9 +95,9 @@ export interface WeatherData {
   utcOffsetSeconds: number | undefined
   current?: WeatherConditions
   dailyUnits: Record<string, string> | undefined
-  hourlyUnits: Record<string, string> | undefined
+  hourlyUnits?: Record<string, string> | undefined
   daily: ForecastSeries
-  hourly: ForecastSeries
+  hourly?: ForecastSeries
 }
 
 /**
@@ -247,10 +255,15 @@ export default class OpenMeteoTool extends Tool {
   async getWeather(
     location: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    detail: WeatherDetail = WeatherDetail.Summary
   ): Promise<WeatherResponseResult> {
     if (!location?.trim()) {
       return { success: false, error: 'Location is required.' }
+    }
+
+    if (!Object.values(WeatherDetail).includes(detail)) {
+      return { success: false, error: 'Unsupported forecast detail.' }
     }
 
     try {
@@ -262,9 +275,11 @@ export default class OpenMeteoTool extends Tool {
         geocoding.latitude,
         geocoding.longitude,
         startDate,
-        endDate
+        endDate,
+        detail
       )
-      if (!weather.daily?.time?.length || !weather.hourly?.time?.length) {
+      if (!weather.daily?.time?.length ||
+          (detail === WeatherDetail.Hourly && !weather.hourly?.time?.length)) {
         return { success: false, error: 'No forecast data available for this location.' }
       }
 
@@ -283,15 +298,19 @@ export default class OpenMeteoTool extends Tool {
               }
             : {}),
           dailyUnits: weather.daily_units,
-          hourlyUnits: weather.hourly_units,
           daily: {
             ...weather.daily,
             description: weather.daily.weather_code.map(getWeatherDescription)
           },
-          hourly: {
-            ...weather.hourly,
-            description: weather.hourly.weather_code.map(getWeatherDescription)
-          }
+          ...(detail === WeatherDetail.Hourly && weather.hourly
+            ? {
+                hourlyUnits: weather.hourly_units,
+                hourly: {
+                  ...weather.hourly,
+                  description: weather.hourly.weather_code.map(getWeatherDescription)
+                }
+              }
+            : {})
         }
       }
     } catch (error) {
@@ -341,7 +360,8 @@ export default class OpenMeteoTool extends Tool {
     latitude: number,
     longitude: number,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    detail: WeatherDetail = WeatherDetail.Summary
   ): Promise<WeatherResponse> {
     const normalizedDateRange = normalizeWeatherDateRange(startDate, endDate)
     const queryParams = new URLSearchParams({
@@ -352,7 +372,9 @@ export default class OpenMeteoTool extends Tool {
       timezone: 'auto'
     })
 
-    queryParams.set('hourly', HOURLY_FORECAST_VARIABLES.join(','))
+    if (detail === WeatherDetail.Hourly) {
+      queryParams.set('hourly', HOURLY_FORECAST_VARIABLES.join(','))
+    }
     queryParams.set('daily', DAILY_FORECAST_VARIABLES.join(','))
     if (normalizedDateRange.startDate && normalizedDateRange.endDate) {
       queryParams.set('start_date', normalizedDateRange.startDate)

@@ -49,6 +49,14 @@ export enum ToolConcurrency {
 }
 
 /**
+ * Review is required unless a function opts into the single-lookup fast path.
+ */
+export enum ToolCompletionReview {
+  Required = 'required',
+  Optional = 'optional'
+}
+
+/**
  * Routing mode
  */
 export enum RoutingMode {
