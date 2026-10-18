@@ -1,7 +1,7 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Structured Knowledge",
-  "description": "Tools for structured data, knowledge, and facts.",
+  "description": "Recall personal memories, read owner/device context, search prior conversations, and query structured data.",
   "icon_name": "database-2-line",
   "context_files": [
     "LEON.md",

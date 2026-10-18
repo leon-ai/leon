@@ -142,6 +142,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - For complex or collection tasks, initialize update_plan before execution to load planning guidance and collection tracking. Start one step in_progress and later steps pending; simple tasks need no plan.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
 - Context and memory tools provide external knowledge. They are not substitutes for the agent transcript.
+- For personal recall, load structured_knowledge and use memory.read before filesystem discovery; use sessions.searchSessions for exact prior conversation evidence.
 - Read an explicitly supplied memory file before broad discovery, resolving its path in the established task workspace across conversations. Keep workspace, Leon codebase and profile memory paths distinct.
 </tool_policy>
 
