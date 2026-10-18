@@ -228,6 +228,27 @@
         "additionalProperties": false
       }
     },
+    "copyText": {
+      "description": "Copy existing UTF-8 text by path without regenerating it; return source and destination hashes. Existing destinations require overwrite=true and preserve original bytes in a backup.",
+      "progressive_guidance": "Inspect source context before copying same-host text. Matching hashes verify the copy, not content accuracy or completeness. Replacement follows write's backup and alias safeguards.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sourcePath": { "type": "string" },
+          "path": { "type": "string" },
+          "options": {
+            "type": "object",
+            "properties": {
+              "overwrite": { "type": "boolean" },
+              "createParents": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["sourcePath", "path"],
+        "additionalProperties": false
+      }
+    },
     "write": {
       "description": "Create or fully replace a local text file; overwrite=true saves original bytes in a unique adjacent backup.",
       "progressive_guidance": "Verify the returned backupPath against backupContentHash. Full replacement rejects symbolic and hard-link aliases.",

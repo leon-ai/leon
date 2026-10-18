@@ -267,6 +267,50 @@ export default class FileTool extends Tool {
   }
 
   /**
+   * Reuse existing text by reference while retaining ordinary write safeguards.
+   */
+  public async copyText(
+    sourcePath: string,
+    targetPath: string,
+    options: WriteOptions = {}
+  ): Promise<Record<string, unknown>> {
+    const source = this.resolvePath(sourcePath)
+    const readable = await this.assertReadableTextFile(source)
+
+    if (!readable.success) {
+      return readable
+    }
+
+    const bytes = await fs.promises.readFile(source)
+    const content = bytes.toString('utf8')
+
+    if (!Buffer.from(content, 'utf8').equals(bytes)) {
+      return { success: false, error: 'Text copying requires valid UTF-8 bytes.' }
+    }
+
+    const result = await this.write(targetPath, content, options)
+
+    if (!result.success || !result.data) {
+      return result
+    }
+
+    const sourceContentHash = contentHash(bytes)
+    const destinationContentHash = contentHash(
+      await fs.promises.readFile(result.data.path)
+    )
+    const matches = sourceContentHash === destinationContentHash
+
+    return {
+      ...result,
+      success: matches,
+      sourcePath: source,
+      sourceContentHash,
+      destinationContentHash,
+      ...(!matches ? { error: 'Destination changed before copy verification.' } : {})
+    }
+  }
+
+  /**
    * Preserve the exact existing bytes before replacing a file's entire content.
    */
   public async write(
