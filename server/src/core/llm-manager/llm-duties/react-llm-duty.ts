@@ -913,6 +913,7 @@ export class ReActLLMDuty extends LLMDuty {
       '</local_workspace>',
       '',
       '<context_manifest>',
+      'Context filenames are identifiers, not workspace paths. Read them with structured_knowledge.context.readContextFile.',
       caller.getContextManifest(),
       '</context_manifest>',
       '',
