@@ -1377,14 +1377,14 @@ describe('continuous agent loop', () => {
       undefined,
       'remaining'
     )
-    expect(callModel.mock.calls[1]?.[1]).toEqual([])
+    expect(callModel.mock.calls[1]?.[1]).toEqual(catalog.tools)
     expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
     expect(
       callModel.mock.calls[1]?.[0].slice(0, transcript.length)
     ).toEqual(transcript)
     const review = JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)
 
-    expect(review.available_tool_contracts).toEqual([catalog.tools[0]!.function])
+    expect(review).not.toHaveProperty('available_tool_contracts')
     expect(callModel.mock.calls[2]?.[2]).toMatchObject({ requiresToolAction: true })
     expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
     expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')
@@ -1447,7 +1447,7 @@ describe('continuous agent loop', () => {
   it('retries an unusable completion review before rejecting the proposed answer', async () => {
     const callModel = vi.fn()
       .mockResolvedValueOnce({ textContent: 'The OCR text is LEON AI 42.' })
-      .mockRejectedValueOnce(new Error('Provider rejected structured output'))
+      .mockRejectedValueOnce(new Error('Provider temporarily unavailable'))
       .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The OCR result is included.' }) })
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Read the image text.' }], catalog: createCatalog(),
@@ -1459,8 +1459,8 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('The OCR text is LEON AI 42.')
     expect(callModel).toHaveBeenCalledTimes(3)
-    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ useReviewSchema: true })
-    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ useReviewSchema: false })
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
+    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ isCompletionReview: true })
     expect(callModel.mock.calls[2]?.[0].at(-1)?.content).toContain('previous completion review response was unusable')
   })
 
@@ -2191,11 +2191,22 @@ describe('continuous agent loop', () => {
           AGENT_CLARIFICATION_TOOL_NAME,
           AGENT_CANCELLATION_TOOL_NAME
         ])
-        return intent === 'cancelled'
+        const completion = intent === 'cancelled'
           ? { toolCalls: [toolCall('cancel-limit', AGENT_CANCELLATION_TOOL_NAME, {
               acknowledgment: 'Stopped.'
             })] }
-          : { textContent: 'Here is the complete supported answer.' }
+          : { output: 'Here is the complete supported answer.' }
+        coreMocks.prompt.mockResolvedValueOnce(completion)
+        const duty = new ReActLLMDuty({ input: 'Find the answer.' })
+        Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+        const result = await duty['callAgentModel'](
+          messages, AGENT_SYSTEM_PROMPT, tools, options
+        )
+        const request = coreMocks.prompt.mock.lastCall?.[1]
+        expect(request.toolChoice).toBe('auto')
+        expect(request.tools).toEqual(tools)
+
+        return result
       })
 
       const result = await runAgentLoop({
@@ -2226,7 +2237,7 @@ describe('continuous agent loop', () => {
     }
   )
 
-  it('offers alternatives and saves a continuation when work is incomplete', async () => {
+  it('preserves clarification for missing owner information at the iteration limit', async () => {
     const callModel = vi.fn(async (_messages, _tools, options) => {
       if (!options.isFinalizationAttempt) {
         return {
@@ -2240,13 +2251,13 @@ describe('continuous agent loop', () => {
 
       return {
         toolCalls: [
-          toolCall('continue-after-limit', AGENT_CLARIFICATION_TOOL_NAME, {
-            explanation: 'The remaining source could not be verified yet.',
+          toolCall('missing-source', AGENT_CLARIFICATION_TOOL_NAME, {
+            explanation: 'The remaining document has no supplied path.',
             alternatives: [
-              'Continue checking the remaining source.',
-              'Answer from the verified evidence only.'
+              'Provide its path.',
+              'Attach the document.'
             ],
-            question: 'May I continue from the saved state?'
+            question: 'Where is the remaining document?'
           })
         ]
       }
@@ -2270,12 +2281,13 @@ describe('continuous agent loop', () => {
 
     expect(result.intent).toBe('clarification')
     expect(result.answer).toContain(
-      'The remaining source could not be verified yet.'
+      'The remaining document has no supplied path.'
     )
     expect(result.answer).toContain(
-      '- Continue checking the remaining source.'
+      '- Provide its path.'
     )
-    expect(result.answer).toContain('May I continue from the saved state?')
+    expect(result.answer).toContain('Where is the remaining document?')
+    expect(result.answer).not.toContain('May I continue')
     expect(result.transcript.at(-1)).toMatchObject({
       role: 'tool',
       toolName: AGENT_CLARIFICATION_TOOL_NAME

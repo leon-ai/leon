@@ -35,6 +35,7 @@ interface AgentModelContextParams {
   tools: OpenAITool[]
   compactionTriggerTokens: number
   forceCompaction?: boolean
+  preserveToolSchemas?: boolean
 }
 
 export interface PreparedAgentModelContext {
@@ -515,8 +516,8 @@ export function prepareAgentModelContext(
   const boundedTranscript = boundOlderUIObservations(imageBoundedTranscript)
   // Only discard reloadable schemas here. The continuity summary owns text
   // reduction, so its trigger sees the real cost of the original evidence.
-  const tools = params.forceCompaction ||
-    estimatedInputTokensBeforePreparation > params.compactionTriggerTokens
+  const tools = !params.preserveToolSchemas && (params.forceCompaction ||
+    estimatedInputTokensBeforePreparation > params.compactionTriggerTokens)
     ? pruneInactiveToolkitSchemas(imageBoundedTranscript, params.tools)
     : params.tools
   return {

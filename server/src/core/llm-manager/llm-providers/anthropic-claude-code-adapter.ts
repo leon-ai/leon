@@ -157,7 +157,7 @@ export default class AnthropicClaudeCodeAdapter {
       await fs.writeFile(systemPromptFile, [
         params.systemPrompt,
         LEON_MODEL_INSTRUCTIONS,
-        JSON.stringify(allowedTools),
+        JSON.stringify(params.tools || []),
         ...(streamText ? [STREAM_OUTPUT_INSTRUCTIONS, JSON.stringify(schema)] : [])
       ].join('\n'))
 

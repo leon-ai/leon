@@ -101,8 +101,6 @@ import {
 } from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
-  AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
-  AGENT_COMPLETION_REVIEW_SCHEMA,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
   AgentModelResponseTimeoutError,
@@ -613,7 +611,11 @@ export class ReActLLMDuty extends LLMDuty {
           return this.callAgentModel(
             messages,
             baseSystemPrompt,
-            tools,
+            // Reviews retain the cacheable catalog with calls disabled.
+            // Finalization permits only the supplied clarification/cancel tools.
+            options.isCompletionReview
+              ? catalog.tools
+              : tools,
             options,
             {
               originalInput,
@@ -1099,7 +1101,6 @@ export class ReActLLMDuty extends LLMDuty {
       isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
       isCompletionReview?: boolean
-      useReviewSchema?: boolean
       requiresToolAction?: boolean
       isContextRecoveryAttempt?: boolean
     },
@@ -1131,8 +1132,7 @@ export class ReActLLMDuty extends LLMDuty {
       systemPrompt,
       ...(options.isFinalizationAttempt
         ? [AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT]
-        : []),
-      ...(options.isCompletionReview ? [AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT] : [])
+        : [])
     ].join('\n\n')
     const providerName = getLLMProviderName()
     if (providerName === LLMProviders.OpenAI && options.isContextRecoveryAttempt) {
@@ -1147,6 +1147,8 @@ export class ReActLLMDuty extends LLMDuty {
       transcript,
       systemPrompt: activeSystemPrompt,
       tools,
+      // Reviews need the complete capability contract even when text compacts.
+      preserveToolSchemas: options.isCompletionReview === true,
       // OpenAI measures actual request tokens and triggers compaction itself.
       compactionTriggerTokens: providerManagesContext
         ? Number.POSITIVE_INFINITY
@@ -1169,6 +1171,7 @@ export class ReActLLMDuty extends LLMDuty {
           transcript,
           systemPrompt: activeSystemPrompt,
           tools,
+          preserveToolSchemas: options.isCompletionReview === true,
           compactionTriggerTokens: contextCompactionTriggerTokens
         })
       }
@@ -1184,9 +1187,10 @@ export class ReActLLMDuty extends LLMDuty {
     }
     const preparedTranscript = preparedContext.transcript
     const preparedTools = preparedContext.tools
-    const toolChoice = options.isFinalizationAttempt || options.isCompletionReview
+    const toolChoice = options.isCompletionReview
       ? 'none'
-      : options.requiresToolAction ? 'required' : 'auto'
+      : options.isFinalizationAttempt ? 'auto'
+        : options.requiresToolAction ? 'required' : 'auto'
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
@@ -1384,9 +1388,6 @@ export class ReActLLMDuty extends LLMDuty {
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         systemPrompt: activeSystemPrompt,
-        ...(options.isCompletionReview && options.useReviewSchema !== false
-          ? { data: AGENT_COMPLETION_REVIEW_SCHEMA }
-          : {}),
         temperature: AGENT_TEMPERATURE,
         // A silent call must leave room to recover; active output still renews
         // the provider's stall timer, within the fixed run deadline.
