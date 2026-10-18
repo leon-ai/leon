@@ -14,6 +14,7 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { LEON_HOME_PATH } from '@/leon-roots'
+import { ToolExecutionOrigin } from '@/types'
 import type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 import { DUTY_NAME } from './agent-constants'
@@ -312,6 +313,7 @@ export async function runToolExecution(
   const requestedToolInput = toolInput
 
   const toolExecutionInput: {
+    origin: ToolExecutionOrigin
     signal?: AbortSignal
     toolId: string
     toolkitId: string
@@ -321,6 +323,7 @@ export async function runToolExecution(
     parsedInput?: Record<string, unknown>
     onProgress?: (progress: ToolRuntimeProgress) => void
   } = {
+    origin: ToolExecutionOrigin.Agent,
     ...(signal ? { signal } : {}),
     toolId,
     toolkitId,

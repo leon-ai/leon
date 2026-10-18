@@ -57,6 +57,14 @@ export enum ToolCompletionReview {
 }
 
 /**
+ * Identifies the caller so ambient activity is distinct from agent actions.
+ */
+export enum ToolExecutionOrigin {
+  Agent = 'agent',
+  Persona = 'persona'
+}
+
+/**
  * Routing mode
  */
 export enum RoutingMode {

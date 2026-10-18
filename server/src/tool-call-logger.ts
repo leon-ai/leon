@@ -7,8 +7,10 @@ import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import type { ToolExecutionOrigin } from '@/types'
 
 export interface ToolCallLogEntry {
+  origin?: ToolExecutionOrigin | undefined
   toolName: string
   params: Record<string, unknown> | null
   status?: string
@@ -31,6 +33,7 @@ interface ToolCallLoggerSettings {
 }
 
 interface ToolOutputLogInput {
+  origin?: ToolExecutionOrigin | undefined
   toolkitId: string | null
   toolId: string
   functionName: string | null
@@ -332,6 +335,7 @@ export class ToolCallLogger {
     const lines = [
       dateTime,
       `Status: ${input.status}`,
+      ...(input.origin ? [`Origin: ${input.origin}`] : []),
       `Message: ${StringHelper.redactSecrets(input.message)}`,
       `Toolkit ID: ${input.toolkitId || 'null'}`,
       `Tool ID: ${input.toolId}`,
@@ -396,13 +400,18 @@ export class ToolCallLogger {
     const toolName = this.getToolName(input)
     const target = [...record.toolCalls]
       .reverse()
-      .find((toolCall) => toolCall.toolName === toolName && !toolCall.outputLogPath)
+      .find((toolCall) =>
+        toolCall.toolName === toolName &&
+        toolCall.origin === input.origin &&
+        !toolCall.outputLogPath
+      )
 
     if (!target) {
       return
     }
 
     target.status = input.status
+    target.origin = input.origin
     target.message = StringHelper.redactSecrets(input.message)
     target.outputLogPath = outputLogPath
     target.outputPreview = this.buildOutputPreview(input.output)
@@ -434,6 +443,7 @@ export class ToolCallLogger {
   }
 
   public recordToolCall(input: {
+    origin?: ToolExecutionOrigin | undefined
     toolkitId: string
     toolId: string
     functionName: string
@@ -450,6 +460,7 @@ export class ToolCallLogger {
     }
 
     record.toolCalls.push({
+      ...(input.origin ? { origin: input.origin } : {}),
       toolName: `${input.toolkitId}.${input.toolId}.${input.functionName}`,
       params: this.redactLogRecordValue(input.params)
     })

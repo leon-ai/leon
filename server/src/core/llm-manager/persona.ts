@@ -15,7 +15,7 @@ import { StringHelper } from '@/helpers/string-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
-import { Moods } from '@/types'
+import { Moods, ToolExecutionOrigin } from '@/types'
 import {
   getActiveProfileName,
   runWithProfileContext
@@ -350,6 +350,7 @@ export default class Persona {
     }
 
     const toolExecution = await TOOL_EXECUTOR.executeTool({
+      origin: ToolExecutionOrigin.Persona,
       toolkitId: 'weather',
       toolId: 'openmeteo',
       functionName: 'getWeather',
