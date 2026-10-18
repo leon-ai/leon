@@ -116,7 +116,7 @@
     },
     "read": {
       "description": "Read a local text file. Rejects likely binary files. Use head, tail, or maxChars to limit output when needed.",
-      "progressive_guidance": "Use bounded reads and follow nextOffsetChars when needed. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
+      "progressive_guidance": "Use allowMissing=true for destination checks; exists=false means no file to preserve. Keep text pages at 20000 characters or less for inline observations; larger explicit reads may require retained-result retrieval. Follow nextOffsetChars for coverage; batch known independent unread ranges. Reuse inspected text. repositoryInstructions contains complete applicable AGENTS.md files in root-to-directory order; follow them before editing. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -126,6 +126,10 @@
           "options": {
             "type": "object",
             "properties": {
+              "allowMissing": {
+                "type": "boolean",
+                "description": "Treat a missing file as success with exists=false. Defaults to false; other filesystem errors still fail."
+              },
               "head": {
                 "type": "number",
                 "description": "Return only the first N lines."

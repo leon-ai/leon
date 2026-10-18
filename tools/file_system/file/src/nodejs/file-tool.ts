@@ -23,6 +23,7 @@ interface RepositoryInstructions {
 }
 
 interface ReadOptions {
+  allowMissing?: boolean
   head?: number
   tail?: number
   maxChars?: number
@@ -164,11 +165,15 @@ export default class FileTool extends Tool {
     return this.documentReader
   }
 
+  /**
+   * Read bounded text, optionally treating an absent file as an expected result.
+   */
   public async read(
     targetPath: string,
     options: ReadOptions = {}
   ): Promise<{
     success: boolean
+    exists?: boolean
     data?: {
       path: string
       content: string
@@ -184,17 +189,22 @@ export default class FileTool extends Tool {
     error?: string
   }> {
     const resolvedPath = this.resolvePath(targetPath)
-    const readable = await this.assertReadableTextFile(resolvedPath)
-
-    if (!readable.success) {
-      return readable
-    }
 
     if (options.head !== undefined && options.tail !== undefined) {
       return {
         success: false,
         error: 'Use either head or tail, not both.'
       }
+    }
+
+    const readable = await this.assertReadableTextFile(resolvedPath)
+
+    if (!readable.success) {
+      if (options.allowMissing === true && readable.exists === false) {
+        return { success: true, exists: false }
+      }
+
+      return readable
     }
 
     const bytes = await fs.promises.readFile(resolvedPath)
@@ -228,6 +238,7 @@ export default class FileTool extends Tool {
 
     return {
       success: true,
+      ...(options.allowMissing === true ? { exists: true } : {}),
       data: {
         path: resolvedPath,
         content: returnedContent,
@@ -533,6 +544,7 @@ export default class FileTool extends Tool {
 
   private async assertReadableTextFile(targetPath: string): Promise<{
     success: false
+    exists?: false
     error: string
     size?: never
   } | {
@@ -544,6 +556,7 @@ export default class FileTool extends Tool {
     if (!stat) {
       return {
         success: false,
+        exists: false,
         error: `File not found: ${targetPath}`
       }
     }
@@ -610,8 +623,13 @@ export default class FileTool extends Tool {
   private async safeLstat(targetPath: string): Promise<fs.Stats | null> {
     try {
       return await fs.promises.lstat(targetPath)
-    } catch {
-      return null
+    } catch (error) {
+      // Only absence is an expected lookup result; access and I/O errors must fail.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null
+      }
+
+      throw error
     }
   }
 
