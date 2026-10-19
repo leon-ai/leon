@@ -4069,6 +4069,9 @@ describe('model response status', () => {
     })
 
     try {
+      expect(params.toolChoice).toBe(review ? 'none' : 'auto')
+      expect(params.disableContextCompaction).toBe(review)
+      expect(params.systemPrompt).toBe('Follow the request.')
       expect(statuses().at(-1)?.state).toBe(ModelResponseState.Waiting)
       params.onStreamEvent?.({ type: 'stream-open' })
       params.onStreamEvent?.({ type: 'reasoning-start' })
@@ -4202,7 +4205,7 @@ describe('model response status', () => {
     }
   })
 
-  it.each(['text', 'reasoning', 'tool-input', 'review'])(
+  it.each(['text', 'reasoning', 'tool-input', 'review', 'compaction'])(
     'allows productive %s beyond the initial response deadline', async (output) => {
       let params!: CompletionParams
       let finish!: (result: { output: string }) => void
@@ -4226,7 +4229,13 @@ describe('model response status', () => {
           elapsed += 20_000
         ) {
           await vi.advanceTimersByTimeAsync(20_000)
-          if (output === 'tool-input') {
+          if (output === 'compaction') {
+            if (elapsed === 60_000) {
+              params.onStreamEvent?.({ type: 'compaction-start' })
+            } else if (elapsed === 140_000) {
+              params.onStreamEvent?.({ type: 'compaction-end' })
+            }
+          } else if (output === 'tool-input') {
             params.onStreamEvent?.({ type: 'tool-input-delta' })
           } else if (output === 'reasoning') {
             params.onReasoningToken?.('Planning the next step.')
@@ -4355,8 +4364,12 @@ describe('model response status', () => {
     expect(duty['responseTraceCollector'].snapshot({}).inferences?.at(-1)?.failureKind).toBe(CompletionFailureKind.Timeout)
   })
 
-  it.each(['review', 'finalization'])('retains task state without restarting exhausted %s recovery', async (phase) => {
-    const trackedSteps = [{ label: 'Verify the deliverable', status: 'in_progress' as const }]
+  it.each([
+    { phase: 'review', status: 'in_progress' as const },
+    { phase: 'review', status: 'completed' as const },
+    { phase: 'finalization', status: 'in_progress' as const }
+  ])('retains task state without restarting exhausted recovery (%j)', async ({ phase, status }) => {
+    const trackedSteps = [{ label: 'Verify the deliverable', status }]
     const callModel = vi.fn(async (_messages, _tools, options) => {
       if (!options.isCompletionReview && !options.isFinalizationAttempt) {
         return { textContent: 'Proposed result.' }
@@ -4371,6 +4384,13 @@ describe('model response status', () => {
     })
     expect(result.intent).not.toBe('answer')
     expect(result.answer).toContain('exceeded its time limit')
+    if (phase === 'review') {
+      expect(result.answer).toContain('The final answer was drafted, but completion could not be verified')
+      expect(result.answer).toContain(status === 'completed'
+        ? 'Remaining: Verify the drafted final answer.'
+        : 'Remaining: Verify the deliverable.')
+      expect(result.answer).not.toContain('Produce the final answer')
+    }
     expect(result.trackedSteps).toEqual(trackedSteps)
     expect(callModel).toHaveBeenCalledTimes(phase === 'review' ? 2 : 1)
   })

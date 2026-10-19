@@ -535,7 +535,7 @@ describe('LLMProvider', () => {
     }
   )
 
-  it.each(['reasoning', 'hosted tool'])('allows silent %s and reports actual text arrival', async (phase) => {
+  it.each(['reasoning', 'hosted tool', 'compaction'])('allows silent %s and reports actual text arrival', async (phase) => {
     vi.useFakeTimers()
 
     try {
@@ -562,18 +562,28 @@ describe('LLMProvider', () => {
       })
 
       await vi.advanceTimersByTimeAsync(0)
+      let firstTokenAt = Date.now()
+      if (phase === 'compaction') {
+        params!.onToken?.('Done')
+        params!.onStreamEvent?.({ type: 'text-end' })
+      }
       params!.onStreamEvent?.(phase === 'reasoning'
         ? { type: 'reasoning-start' }
-        : { type: 'tool-call', toolCallId: 'hosted', providerExecuted: true })
+        : phase === 'compaction'
+          ? { type: 'compaction-start' }
+          : { type: 'tool-call', toolCallId: 'hosted', providerExecuted: true })
       await vi.advanceTimersByTimeAsync(60_000)
       expect(params!.signal?.aborted).toBe(false)
       params!.onStreamEvent?.(phase === 'reasoning'
         ? { type: 'reasoning-end' }
-        : { type: 'tool-result', toolCallId: 'hosted' })
+        : phase === 'compaction'
+          ? { type: 'compaction-end' }
+          : { type: 'tool-result', toolCallId: 'hosted' })
 
-      const firstTokenAt = Date.now()
-
-      params!.onToken?.('Done')
+      if (phase !== 'compaction') {
+        firstTokenAt = Date.now()
+        params!.onToken?.('Done')
+      }
       params!.onStreamEvent?.({ type: 'finish' })
       await vi.advanceTimersByTimeAsync(120_000)
       expect(params!.signal?.aborted).toBe(false)
@@ -584,6 +594,43 @@ describe('LLMProvider', () => {
       } })
 
       expect((await pending)?.firstTokenAt).toBe(firstTokenAt)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds silent compaction even when transport heartbeats continue', async () => {
+    vi.useFakeTimers()
+
+    try {
+      let params!: CompletionParams
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = {
+        modelName: 'celeris-1',
+        runChatCompletion: vi.fn((_prompt, options: CompletionParams) => {
+          params = options
+          params.onToken?.('Drafted answer.')
+          params.onStreamEvent?.({ type: 'text-end' })
+          params.onStreamEvent?.({ type: 'compaction-start' })
+
+          return new Promise(() => {})
+        })
+      }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Answer the question.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 120_000, maxRetries: 0, remoteProviderErrorRetries: 0
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(params.signal?.aborted).toBe(false)
+      params.onStreamEvent?.({ type: 'transport-activity' })
+      await vi.advanceTimersByTimeAsync(60_001)
+
+      expect(await pending).toBeNull()
+      expect(params.signal?.aborted).toBe(true)
+      expect(state.agentLLMProvider.runChatCompletion).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }

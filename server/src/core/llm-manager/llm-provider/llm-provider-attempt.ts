@@ -108,6 +108,7 @@ export async function runCompletionAttempt(
   let requestId: string | undefined
   let responseId: string | undefined
   let isReasoning = false
+  let isCompacting = false
   const pendingHostedTools = new Set<string>()
   const attemptId = randomUUID()
   const idleTimeout = completionParams.streamIdleTimeout ?? (
@@ -199,7 +200,7 @@ export async function runCompletionAttempt(
     }
   }
   const resetStreamStallTimeout = (
-    delay = isReasoning || pendingHostedTools.size > 0
+    delay = isReasoning || isCompacting || pendingHostedTools.size > 0
       ? completionParams.timeout
       : idleTimeout
   ): void => {
@@ -314,6 +315,14 @@ export async function runCompletionAttempt(
         clearTimeout(timeoutHandle)
         timeoutHandle = null
       }
+    } else if (event.type === 'compaction-start') {
+      // Context maintenance may continue silently after the answer is drafted.
+      isCompacting = true
+      markStreamStarted()
+      resetStreamStallTimeout()
+    } else if (event.type === 'compaction-end') {
+      isCompacting = false
+      resetStreamStallTimeout()
     } else if (event.type === 'reasoning-start') {
       isReasoning = true
       markStreamStarted()

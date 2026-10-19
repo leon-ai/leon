@@ -227,7 +227,8 @@ describe('AISDKRemoteLLMProvider', () => {
     }
     const provider = new OpenAILLMProvider(target)
     const transcript: PromptOrChatHistory = [{ role: 'user', content: 'Read the file.' }]
-    const params = { ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream }
+    const onStreamEvent = vi.fn()
+    const params = { ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream, onStreamEvent }
     const result = await provider.runChatCompletion(transcript, params)
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
     const context = normalized.compactionContext!
@@ -238,6 +239,13 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(context.output).toEqual(output.slice(1))
     expect(context.sourceTranscript[0]).toEqual(transcript[0])
     expect(normalized.toolCalls?.[0]?.id).toBe('call-retained')
+    if (shouldStream) {
+      expect(onStreamEvent.mock.calls.map(([event]) => event.type).filter((type) =>
+        type === 'compaction-start' || type === 'compaction-end'
+      )).toEqual([
+        'compaction-start', 'compaction-end', 'compaction-start', 'compaction-end'
+      ])
+    }
     if (subscription) {
       expect(accountMocks.getCredentials).toHaveBeenCalledWith('account', undefined, true)
       expect(new Headers(websocketMocks.fetch.mock.calls.at(-1)![1].headers).get('authorization')).toBe('Bearer fresh-token')

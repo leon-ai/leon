@@ -1428,6 +1428,7 @@ export class ReActLLMDuty extends LLMDuty {
           } else if (
             event.type === 'tool-input-delta' || event.type === 'tool-call-delta' ||
             event.type === 'tool-call' || event.type === 'tool-result' ||
+            event.type === 'compaction-start' || event.type === 'compaction-end' ||
             event.type === 'file'
           ) {
             renewModelResponseDeadline()
@@ -1544,7 +1545,8 @@ export class ReActLLMDuty extends LLMDuty {
         ...(reasoningUseDefaultEffort ? { reasoningUseDefaultEffort: true } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),
-        disableContextCompaction: this.automaticCompactionFailed,
+        // Review verdicts do not retain provider context for subsequent calls.
+        disableContextCompaction: options.isCompletionReview || this.automaticCompactionFailed,
         tools: preparedTools,
         toolChoice,
         signal: toolCallAbortController.signal,

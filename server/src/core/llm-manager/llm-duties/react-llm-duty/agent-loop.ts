@@ -1402,7 +1402,7 @@ async function reviewAgentCompletion(
       if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
         return {
           status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer('deadline', state.trackedSteps)
+          reason: buildResumableAgentAnswer('deadline', state.trackedSteps, true)
         }
       }
       if (params.getOwnerMessageSignal?.().aborted) {
@@ -1413,7 +1413,7 @@ async function reviewAgentCompletion(
         return {
           status: AgentCompletionStatus.Blocked,
           reason: buildResumableAgentAnswer(
-            CompletionFailureKind.Timeout, state.trackedSteps
+            CompletionFailureKind.Timeout, state.trackedSteps, true
           )
         }
       }
@@ -1423,7 +1423,7 @@ async function reviewAgentCompletion(
       )) {
         return {
           status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps)
+          reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps, true)
         }
       }
       LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
@@ -1757,7 +1757,8 @@ function createResumableAgentResult(
 
 function buildResumableAgentAnswer(
   failureKind: CompletionFailureKind | 'synthesis' | 'deadline',
-  trackedSteps: TrackedPlanStep[]
+  trackedSteps: TrackedPlanStep[],
+  answerDrafted = false
 ): string {
   const explanations: Record<CompletionFailureKind | 'synthesis' | 'deadline', string> = {
     deadline: 'The task reached its run deadline.',
@@ -1773,10 +1774,15 @@ function buildResumableAgentAnswer(
   const nextStep = trackedSteps.find((step) => step.status === 'in_progress') ||
     trackedSteps.find((step) => step.status === 'pending')
   const nextAction = nextStep?.label ||
-    'Produce the final answer from the verified findings'
+    (answerDrafted
+      ? 'Verify the drafted final answer'
+      : 'Produce the final answer from the verified findings')
+  const taskState = answerDrafted
+    ? 'The final answer was drafted, but completion could not be verified; progress is saved in this session.'
+    : 'The task is incomplete; progress is saved in this session.'
 
   return [
-    `${explanations[failureKind]} The task is incomplete; progress is saved in this session.`,
+    `${explanations[failureKind]} ${taskState}`,
     ...(trackedSteps.length > 0
       ? [`Reported progress: ${completedSteps}/${trackedSteps.length} steps completed.`]
       : []),
