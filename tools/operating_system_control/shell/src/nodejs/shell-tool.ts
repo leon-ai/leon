@@ -352,14 +352,17 @@ export default class ShellTool extends Tool {
         invocation.args[commandIndex] = `${functions}\n${command}`
       }
 
+      const context = this.executionContext
+
       return this.sessions.start(
         owner,
         command,
         invocation.binaryName,
         invocation.args,
         options,
-        this.executionContext?.signal,
-        this.executionContext?.onProgress
+        context?.signal,
+        context?.onProgress,
+        (output, stream) => this.emitOutput(output, stream, context)
       )
     })
   }

@@ -27,7 +27,7 @@ const SCREENSHOT_MAX_DIMENSION = 1_800
 const CLI_ENVIRONMENT = {
   BU_NAME: 'default', BU_BROWSER_ID: '', BU_AUTOSPAWN: '',
   BH_RECORD: '0', BH_TAB_MARKER: '0', BH_DOMAIN_SKILLS: '0',
-  ANONYMIZED_TELEMETRY: 'false', PYTHONIOENCODING: 'utf-8'
+  ANONYMIZED_TELEMETRY: 'false', PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1'
 }
 
 enum BrowserSetupState {
@@ -284,6 +284,13 @@ export class BrowserUseTool extends Tool {
       env: { ...env, LEON_BROWSER_ARTIFACTS: directory, LEON_BROWSER_ACTIONS: actionsPath },
       timeout: COMMAND_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES, reject: false
     })
+    execution.stdout?.setEncoding('utf8').on('data', (output: string) => {
+      this.emitOutput(output)
+    })
+    execution.stderr?.setEncoding('utf8').on('data', (output: string) => {
+      this.emitOutput(output)
+    })
+
     const result = await execution
     let actions: Array<Record<string, unknown>> = []
     try {
