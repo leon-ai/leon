@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { CONVERSATION_LOGGER } from '@/core'
 
 const mocks = vi.hoisted(() => ({
   connectionRegistry: {
@@ -79,6 +80,9 @@ vi.mock('@/core', () => ({
     })
   },
   CONVERSATION_LOGGER: {
+    loadAll: vi.fn(async (params?: { sessionId?: string }) =>
+      CONVERSATION_LOGGER.load({ ...params, nbOfLogsToLoad: Number.MAX_SAFE_INTEGER })
+    ),
     load: vi.fn(
       async (params?: { sessionId?: string, nbOfLogsToLoad?: number }) =>
         mocks.persistedMessages
@@ -391,6 +395,26 @@ describe('HTTP plugin Leon services', () => {
       { who: 'owner', message: 'Start a timer for 15 minutes.' },
       { who: 'leon', message: 'Done — I’ve applied that.' }
     ])
+  })
+
+  it('selects recent model history without UI-only activity crowding it out', async () => {
+    mocks.sessions.set('owner-a', new Set(['history-session']))
+    const messages = Array.from({ length: 8 }, (_, index) => ({
+      profileId: 'owner-a', sessionId: 'history-session', who: 'owner',
+      message: `Request ${index}`, sentAt: index, isAddedToHistory: true
+    }))
+    mocks.persistedMessages.push(...messages, ...Array.from({ length: 12 }, (_, index) => ({
+      ...messages[0]!, who: 'leon', message: `UI activity ${index}`, isAddedToHistory: false
+    })))
+
+    await runControlledSkill({
+      profile_id: 'owner-a', session_id: 'history-session',
+      query: 'Continue', skill_name: 'timer_skill'
+    })
+
+    expect(mocks.controlledPrompt.mock.calls.at(-1)?.[1].history.map(
+      (message: { message: string }) => message.message
+    )).toEqual(messages.slice(-6).map((message) => message.message))
   })
 
   it('cancels controlled inference before action execution, history and completion', async () => {
@@ -724,7 +748,7 @@ describe('HTTP plugin Leon services', () => {
     unsubscribe()
     const progress = { id: 'progress-1', content: 'Inspecting the issue.', created_at: 1_000 }
     expect(events.find((event) => event['type'] === 'progress_message')).toMatchObject({
-      turn_id: 'turn-1', response_id: 'turn-1', data: { message: progress }
+      turn_id: 'turn-1', response_id: 'turn-1:leon', data: { message: progress }
     })
     expect(turn.response_trace.progress_messages).toEqual([progress])
     expect(turn.response_trace.inferences).toEqual(inferences)
@@ -768,6 +792,12 @@ describe('HTTP plugin Leon services', () => {
       session_id: turn.session_id || '',
       turn_id: 'turn-1',
       response_id: 'background:job-1',
+      persist: true,
+      response_trace: {
+        plan_steps: [],
+        tool_calls: [],
+        reasoning_summary: 'Inspecting the active application'
+      },
       type: 'reasoning_summary',
       data: { summary: 'Inspecting the active application' }
     })
@@ -783,6 +813,14 @@ describe('HTTP plugin Leon services', () => {
       data: { summary: 'Inspecting the active application' }
     })
     expect(published.sequence).toBeGreaterThan(0)
+    expect(CONVERSATION_LOGGER.upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messageId: 'background:job-1',
+        isAddedToHistory: false,
+        agentResponseTrace: expect.objectContaining({ reasoningSummary: 'Inspecting the active application' })
+      }),
+      { sessionId: turn.session_id, activity: true, refreshSentAt: true }
+    )
   })
 
   it('rejects an external message for another profile session', async () => {

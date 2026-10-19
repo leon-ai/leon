@@ -95,6 +95,7 @@ export async function getConversationHistory(
 
     const logs = await CONVERSATION_LOGGER.load({
       sessionId,
+      sortBySentAt: true,
       nbOfLogsToLoad: normalizeHistoryLimit(input.limit)
     })
     const messages: HTTPPluginConversationMessage[] =

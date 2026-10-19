@@ -77,8 +77,18 @@ export default class PhotoCraftTool extends Tool {
     }
 
     const output = await this.runCli(args)
+    const commands = JSON.parse(output.stdout) as Record<string, unknown>[]
 
-    return { commands: JSON.parse(output.stdout), diagnostics: output.stderr }
+    // CLI discovery has no open document. Its enablement flags describe that
+    // empty state, not whether an edit can run after opening the supplied file.
+    return {
+      commands: commands.map((command) => {
+        const capability = { ...command }
+        delete capability['enabled']
+        return capability
+      }),
+      diagnostics: output.stderr
+    }
   }
 
   /**

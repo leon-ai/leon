@@ -2,6 +2,7 @@ import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runt
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { CONVERSATION_LOGGER } from '@/core'
 
 import type {
   HTTPPluginAgentEvent,
@@ -14,6 +15,7 @@ import type {
 } from '../types'
 import { publishAgentEvent } from './agent-event-channel'
 import { normalizeConversationSession } from './normalizers'
+import { deserializeAgentTrace } from './agent-trace-serializer'
 
 function resolveProfileName(profileId?: string): string {
   const profileName = profileId?.trim() || getActiveProfileName()
@@ -118,6 +120,21 @@ export async function publishConversationEvent(
       throw new Error(
         `Conversation session "${sessionId}" does not exist in profile "${profileName}".`
       )
+    }
+
+    if (input.persist) {
+      const messageId = input.response_id?.trim()
+      if (!messageId || !input.response_trace) {
+        throw new Error('Persisted activity requires a response ID and trace snapshot.')
+      }
+
+      await CONVERSATION_LOGGER.upsert({
+        who: 'leon',
+        message: '',
+        messageId,
+        isAddedToHistory: false,
+        agentResponseTrace: deserializeAgentTrace(input.response_trace)
+      }, { sessionId, activity: true, refreshSentAt: true })
     }
 
     return publishAgentEvent(getActiveProfileName(), {
