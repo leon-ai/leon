@@ -3,10 +3,19 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 
+import execa from 'execa'
 import { afterEach, expect, it, vi } from 'vitest'
 import YAML from 'yaml'
 
-import { syncNodejsSourceDependencies } from '@@/scripts/setup/sync-source-dependencies'
+import {
+  syncNodejsSourceDependencies,
+  syncPythonSourceDependencies
+} from '@@/scripts/setup/sync-source-dependencies'
+import {
+  getProjectVenvPythonPath,
+  isPythonProjectSyncCurrent,
+  setupPythonProjectEnv
+} from '@@/scripts/setup/setup-python-project-env'
 
 const fixture = vi.hoisted(() => ({ codebase: '' }))
 
@@ -29,7 +38,7 @@ afterEach(async () => {
   }
 })
 
-it('applies source-local install hooks and resyncs when their content changes', async () => {
+it('applies source-local hooks and root release policy, and resyncs when they change', async () => {
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-source-pins-'))
   fixture.codebase = path.join(directory, 'codebase')
 
@@ -82,6 +91,14 @@ it('applies source-local install hooks and resyncs when their content changes', 
   expect(await fs.readFile(stamp, 'utf8')).not.toBe(firstStamp)
   await expect(fs.stat(path.join(fixture.codebase, 'node_modules'))).rejects.toThrow()
   await expect(fs.stat(path.join(source, 'pnpm-workspace.yaml'))).rejects.toThrow()
+
+  // A cutoff at the Unix epoch excludes every published registry version.
+  await fs.writeFile(workspace, YAML.stringify({
+    minimumReleaseAge: Math.ceil(Date.now() / 60_000),
+    minimumReleaseAgeStrict: true
+  }))
+  await expect(syncNodejsSourceDependencies(source)).rejects.toThrow('minimumReleaseAge')
+  await expect(fs.stat(stamp)).rejects.toThrow()
 })
 
 it('inherits root build permissions for standalone profile sources and invalidates sync when they change', async () => {
@@ -129,4 +146,62 @@ it('inherits root build permissions for standalone profile sources and invalidat
   }))
   await expect(syncNodejsSourceDependencies(source)).rejects.toThrow('ERR_PNPM_IGNORED_BUILDS')
   await expect(fs.stat(stamp)).rejects.toThrow()
+})
+
+it('enforces root Python release policy and scoped exceptions for project and standalone installs', async () => {
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-python-release-policy-'))
+  fixture.codebase = path.join(directory, 'codebase')
+
+  const policy = path.join(fixture.codebase, 'uv.toml')
+  const stampName = '.last-source-deps-sync'
+  const installers = [
+    syncPythonSourceDependencies,
+    async (projectPath: string): Promise<void> => {
+      await setupPythonProjectEnv({
+        name: 'Python project',
+        projectPath,
+        stampFileName: stampName
+      })
+    }
+  ]
+
+  await fs.mkdir(fixture.codebase, { recursive: true })
+
+  for (const [index, install] of installers.entries()) {
+    const source = path.join(directory, 'profile', `source-${index}`)
+    const stamp = path.join(source, stampName)
+
+    await fs.mkdir(source, { recursive: true })
+    await fs.writeFile(path.join(source, 'pyproject.toml'), `
+[project]
+name = "policy-fixture"
+version = "1.0.0"
+dependencies = ["idna==3.10"]
+
+[tool.uv]
+exclude-newer = false
+`)
+    await fs.writeFile(policy, 'exclude-newer = "36 hours"')
+    await install(source)
+
+    const { stdout } = await execa(getProjectVenvPythonPath(source), [
+      '-c',
+      'import idna; print(idna.__version__)'
+    ])
+
+    expect(stdout).toBe('3.10')
+    expect(await isPythonProjectSyncCurrent(source, stampName)).toBe(true)
+
+    // Existing environments must be rechecked when the shared cutoff changes.
+    await fs.writeFile(policy, 'exclude-newer = "1980-01-01T00:00:00Z"')
+    await expect(install(source)).rejects.toThrow('No solution found')
+    await expect(fs.stat(stamp)).rejects.toThrow()
+
+    await fs.writeFile(policy, `
+exclude-newer = "1980-01-01T00:00:00Z"
+exclude-newer-package = { idna = "2025-01-01T00:00:00Z" }
+`)
+    await install(source)
+    expect(await isPythonProjectSyncCurrent(source, stampName)).toBe(true)
+  }
 })

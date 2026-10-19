@@ -6,6 +6,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 - For a new goal, inspect the existing implementation and confirm the plan with the owner before changing code.
 - Use `pnpm`, never npm. Keep changes minimal; reuse existing SDK facilities and `server/src/helpers/` before adding abstractions. Remove superseded logic rather than maintaining parallel implementations.
+- Keep registry dependencies at least 36 hours old through root pnpm/uv policy, including standalone installs. Exceptions require explicit owner approval, exact version pins and package-scoped overrides; never disable the global cooldown.
 - Preserve unrelated working-tree changes and profile isolation. Use existing profile/path/runtime utilities instead of hardcoded owner paths, runtime versions, or global mutable owner state.
 - Run `pnpm lint`, fix warnings/errors, and run checks relevant to the change.
 - Test current behavior with minimal coverage; extend existing suites. Trivial changes need no new tests.

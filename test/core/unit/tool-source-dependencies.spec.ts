@@ -5,12 +5,30 @@ import path from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import setupToolsDependencies from '@@/scripts/setup/setup-tools-dependencies'
-import { getProjectVenvPythonPath, isPythonProjectSyncCurrent } from '@@/scripts/setup/setup-python-project-env'
+import {
+  getProjectVenvPythonPath,
+  getPythonProjectSyncFingerprint,
+  isPythonProjectSyncCurrent
+} from '@@/scripts/setup/setup-python-project-env'
 
-const fixture = vi.hoisted(() => ({ builtIn: '', profile: '', node: vi.fn(), python: vi.fn() }))
+const fixture = vi.hoisted(() => ({
+  codebase: '',
+  builtIn: '',
+  profile: '',
+  node: vi.fn(),
+  python: vi.fn()
+}))
+
 vi.mock('@/constants', () => ({
-  get TOOLS_PATH(): string { return fixture.builtIn },
-  get PROFILE_TOOLS_PATH(): string { return fixture.profile }
+  get CODEBASE_PATH(): string {
+    return fixture.codebase
+  },
+  get TOOLS_PATH(): string {
+    return fixture.builtIn
+  },
+  get PROFILE_TOOLS_PATH(): string {
+    return fixture.profile
+  }
 }))
 vi.mock('@@/scripts/setup/sync-source-dependencies', () => ({
   syncNodejsSourceDependencies: fixture.node,
@@ -19,19 +37,49 @@ vi.mock('@@/scripts/setup/sync-source-dependencies', () => ({
 
 let directory = ''
 afterEach(async () => {
-  if (directory) await fs.rm(directory, { recursive: true, force: true })
+  if (directory) {
+    await fs.rm(directory, { recursive: true, force: true })
+  }
 })
 
-it('invalidates Python dependency stamps after relocation or failed installation', async () => {
+it('invalidates Python dependency stamps after source, policy, location or installation changes', async () => {
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-python-dependencies-'))
+  fixture.codebase = directory
+
   const original = path.join(directory, 'original')
   const moved = path.join(directory, 'moved')
   const stamp = '.last-source-deps-sync'
   const python = getProjectVenvPythonPath(original)
+  const policy = path.join(directory, 'uv.toml')
+
+  await fs.writeFile(policy, 'exclude-newer = "36 hours"')
   await fs.mkdir(path.dirname(python), { recursive: true })
   await fs.writeFile(python, '')
   await fs.writeFile(path.join(original, 'pyproject.toml'), '')
-  await fs.writeFile(path.join(original, stamp), original)
+  await fs.writeFile(
+    path.join(original, stamp),
+    await getPythonProjectSyncFingerprint(original)
+  )
+  expect(await isPythonProjectSyncCurrent(original, stamp)).toBe(true)
+
+  const syncedAt = (await fs.stat(path.join(original, stamp))).mtime
+
+  await fs.writeFile(policy, 'exclude-newer = "48 hours"')
+  await fs.utimes(policy, syncedAt, syncedAt)
+  expect(await isPythonProjectSyncCurrent(original, stamp)).toBe(false)
+  await fs.writeFile(
+    path.join(original, stamp),
+    await getPythonProjectSyncFingerprint(original)
+  )
+  expect(await isPythonProjectSyncCurrent(original, stamp)).toBe(true)
+
+  await fs.writeFile(path.join(original, 'pyproject.toml'), '[project]')
+  await fs.utimes(path.join(original, 'pyproject.toml'), syncedAt, syncedAt)
+  expect(await isPythonProjectSyncCurrent(original, stamp)).toBe(false)
+  await fs.writeFile(
+    path.join(original, stamp),
+    await getPythonProjectSyncFingerprint(original)
+  )
   expect(await isPythonProjectSyncCurrent(original, stamp)).toBe(true)
 
   await fs.rename(original, moved)
