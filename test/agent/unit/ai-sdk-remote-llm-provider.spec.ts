@@ -517,19 +517,24 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   })
 
-  it.each(['anthropic', 'openai'])('preserves MiniMax %s connection media, reasoning controls and cache usage', async (protocol) => {
+  it.each([
+    { protocol: 'anthropic', model: 'MiniMax-M3' },
+    { protocol: 'openai', model: 'MiniMax-M3' },
+    { protocol: 'anthropic', model: 'MiniMax-M3.1-Flash' },
+    { protocol: 'openai', model: 'MiniMax-M3.1-Flash' }
+  ])('preserves MiniMax connection media, reasoning controls and cache usage (%j)', async ({ protocol, model }) => {
     const baseURL = protocol === 'anthropic'
       ? 'https://example.invalid/anthropic'
       : 'https://example.invalid/v1'
     const fetch = vi.fn().mockImplementation(async () => Response.json(
       protocol === 'anthropic'
         ? {
-            id: 'msg_minimax', type: 'message', role: 'assistant', model: 'MiniMax-M3',
+            id: 'msg_minimax', type: 'message', role: 'assistant', model,
             content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn', stop_sequence: null,
             usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 }
           }
         : {
-            id: 'chat_minimax', created: 1, model: 'MiniMax-M3',
+            id: 'chat_minimax', created: 1, model,
             choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
             usage: { prompt_tokens: 100, completion_tokens: 2,
               prompt_tokens_details: { cached_tokens: 80, cache_write_tokens: 10 } }
@@ -537,7 +542,7 @@ describe('AISDKRemoteLLMProvider', () => {
     ))
     vi.stubGlobal('fetch', fetch)
     const provider = new MiniMaxLLMProvider({
-      provider: LLMProviders.MiniMax, model: 'MiniMax-M3', label: 'MiniMax',
+      provider: LLMProviders.MiniMax, model, label: 'MiniMax',
       isEnabled: true, isLocal: false, isResolved: true,
       accountCredentials: { api_key: 'minimax-account-key', base_url: baseURL }
     })
@@ -545,7 +550,8 @@ describe('AISDKRemoteLLMProvider', () => {
       role: 'user', content: 'Look.', files: [{ mediaType: 'image/png', dataBase64: 'AA==' }]
     }]
     const params: CompletionParams = {
-      ...createCompletionParams(null), shouldStream: false, reasoningMode: 'on'
+      ...createCompletionParams(null), shouldStream: false, reasoningMode: 'on',
+      ...(model === 'MiniMax-M3.1-Flash' ? { reasoningEffort: 'xhigh' } : {})
     }
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
       await provider.runChatCompletion(prompt, params)
@@ -558,6 +564,10 @@ describe('AISDKRemoteLLMProvider', () => {
       accounting: { cachedInputTokens: 80, cacheWriteInputTokens: 10 }
     })
     expect(body.thinking).toEqual({ type: 'adaptive' })
+    if (model === 'MiniMax-M3.1-Flash') {
+      expect(protocol === 'anthropic' ? body.output_config.effort : body.reasoning_effort)
+        .toBe('xhigh')
+    }
     if (protocol === 'anthropic') {
       expect(String(fetch.mock.calls[0]![0])).toBe(`${baseURL}/v1/messages`)
       expect(content).toContainEqual({
@@ -571,7 +581,14 @@ describe('AISDKRemoteLLMProvider', () => {
     }
 
     await provider.runChatCompletion(prompt, { ...params, reasoningMode: 'off', disableThinking: true })
-    expect(JSON.parse(fetch.mock.calls[1]![1].body).thinking).toEqual({ type: 'disabled' })
+    const guardedBody = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(guardedBody.thinking).toEqual({
+      type: model === 'MiniMax-M3.1-Flash' ? 'adaptive' : 'disabled'
+    })
+    if (model === 'MiniMax-M3.1-Flash') {
+      expect(protocol === 'anthropic' ? guardedBody.output_config.effort : guardedBody.reasoning_effort)
+        .toBe('low')
+    }
   })
 
   it('distinguishes unavailable cache accounting from a reported zero', () => {
@@ -755,7 +772,7 @@ describe('AISDKRemoteLLMProvider', () => {
   )
 
   it.each([LLMProviders.Anthropic, LLMProviders.MiniMax])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
-    const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3'
+    const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3.1-Flash'
     const message = { id: 'msg_claude', type: 'message', role: 'assistant', model,
       content: [], stop_reason: null, stop_sequence: null,
       usage: { input_tokens: 100, output_tokens: 0, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 } }

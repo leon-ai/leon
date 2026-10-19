@@ -669,16 +669,15 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: IMAGE_INPUTS
   },
   /**
-   * @see https://openrouter.ai/minimax/minimax-m3 Model-specific reasoning support.
-   * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
+   * @see https://openrouter.ai/minimax/minimax-m3.1-flash:free
    */
   {
     provider: LLMProviders.OpenRouter,
-    model: 'minimax/minimax-m3',
-    contextWindowTokens: 1_048_576,
-    label: 'minimax/minimax-m3',
-    reasoning: TOGGLE_REASONING,
-    speed: ROUTABLE_SPEED,
+    model: 'minimax/minimax-m3.1-flash:free',
+    contextWindowTokens: 1_000_000,
+    label: 'minimax/minimax-m3.1-flash:free',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
     inputMediaTypes: VIDEO_INPUTS
   },
 
@@ -1048,15 +1047,27 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   },
 
   /**
-   * @see https://platform.minimax.io/docs/api-reference/text-openai-api Model-specific reasoning support.
-   * @see https://platform.minimax.io/docs/api-reference/text-openai-api Provider speed tier; not exposed by every supported AI SDK flavor.
+   * @see https://platform.minimax.io/docs/guides/text-generation
+   */
+  {
+    provider: LLMProviders.MiniMax,
+    model: 'MiniMax-M3.1-Flash',
+    contextWindowTokens: 1_000_000,
+    label: 'MiniMax-M3.1-Flash',
+    recommended: true,
+    defaultReasoningEffort: 'max',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://platform.minimax.io/docs/api-reference/text-openai-api
    */
   {
     provider: LLMProviders.MiniMax,
     model: 'MiniMax-M3',
     contextWindowTokens: 1_000_000,
     label: 'MiniMax-M3',
-    recommended: true,
     reasoning: TOGGLE_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: IMAGE_INPUTS

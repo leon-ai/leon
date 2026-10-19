@@ -20,8 +20,8 @@ describe('LLM model catalog', () => {
       .toBe(1_050_000)
     expect(resolveModelContextWindowTokens(LLMProviders.MiniMax, 'MiniMax-M3'))
       .toBe(1_000_000)
-    expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'minimax/minimax-m3'))
-      .toBe(1_048_576)
+    expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'minimax/minimax-m3.1-flash:free'))
+      .toBe(1_000_000)
     expect(resolveModelContextWindowTokens(LLMProviders.LlamaCPP, 'local.gguf'))
       .toBe(LOCAL_LLM_CONTEXT_WINDOW_TOKENS)
     expect(resolveModelContextWindowTokens(LLMProviders.SGLang, 'custom-model'))
@@ -115,6 +115,12 @@ describe('LLM model catalog', () => {
       LLMProviders.OpenRouter,
       'google/gemini-3.5-flash-lite'
     )).toBe(false)
+    expect(canDisableLLMModelReasoning(
+      LLMProviders.MiniMax, 'MiniMax-M3.1-Flash'
+    )).toBe(false)
+    expect(canDisableLLMModelReasoning(
+      LLMProviders.OpenRouter, 'minimax/minimax-m3.1-flash:free'
+    )).toBe(false)
   })
 
   it('preserves curated setup order and recommendations', () => {
@@ -132,6 +138,9 @@ describe('LLM model catalog', () => {
       LLMProviders.Anthropic,
       'claude-fable-5-1'
     )?.recommended).toBeUndefined()
+    expect(getLLMModelCatalogEntries(LLMProviders.MiniMax)[0]).toMatchObject({
+      model: 'MiniMax-M3.1-Flash', recommended: true, defaultReasoningEffort: 'max'
+    })
   })
 
   it.each([

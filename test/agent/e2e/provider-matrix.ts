@@ -50,8 +50,8 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'minimax',
     requiredEnv: 'LEON_MINIMAX_API_KEY',
-    llmTarget: 'minimax/MiniMax-M3',
-    reasoning: 'none'
+    llmTarget: 'minimax/MiniMax-M3.1-Flash',
+    reasoning: 'low'
   }
 ] as const
 

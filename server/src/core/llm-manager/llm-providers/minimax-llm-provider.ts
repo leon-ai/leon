@@ -10,6 +10,7 @@ import { LLMProviders } from '@/core/llm-manager/types'
 const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.MiniMax)
 
 const ADAPTIVE_THINKING_MODEL = 'MiniMax-M3'
+const MANDATORY_THINKING_MODEL = 'MiniMax-M3.1-Flash'
 
 type MiniMaxFlavor = 'minimax' | 'openai-compatible'
 
@@ -47,13 +48,20 @@ function buildMiniMaxProviderOptions(
 ): Record<string, unknown> {
   const disableThinking =
     completionParams.disableThinking === true ||
+    completionParams.reasoningEffort === 'none' ||
     reasoningMode === 'off' ||
     reasoningMode === 'guarded'
+  const mandatoryThinking = model === MANDATORY_THINKING_MODEL
 
-  const thinking = model === ADAPTIVE_THINKING_MODEL
+  // Mandatory thinking uses its lowest effort for short or reasoning-off duties.
+  const effort = mandatoryThinking
+    ? disableThinking ? 'low' : completionParams.reasoningEffort
+    : undefined
+
+  const thinking = model === ADAPTIVE_THINKING_MODEL || mandatoryThinking
     ? {
         thinking: {
-          type: disableThinking ? 'disabled' : 'adaptive'
+          type: disableThinking && !mandatoryThinking ? 'disabled' : 'adaptive'
         }
       }
     : {}
@@ -62,6 +70,7 @@ function buildMiniMaxProviderOptions(
     return {
       minimax: {
         ...thinking,
+        ...(effort ? { effort } : {}),
         sendReasoning: true
       }
     }
@@ -70,6 +79,7 @@ function buildMiniMaxProviderOptions(
   return {
     minimax: {
       reasoning_split: true,
+      ...(effort ? { reasoningEffort: effort } : {}),
       ...thinking
     }
   }
