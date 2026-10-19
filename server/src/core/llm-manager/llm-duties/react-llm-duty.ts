@@ -1182,7 +1182,8 @@ export class ReActLLMDuty extends LLMDuty {
     ) {
       throw new AgentModelProviderError(
         `Agent context remains above its ${contextCompactionTriggerTokens}-token target after compaction.`,
-        !options.isContextRecoveryAttempt
+        !options.isContextRecoveryAttempt,
+        CompletionFailureKind.Context
       )
     }
     const preparedTranscript = preparedContext.transcript

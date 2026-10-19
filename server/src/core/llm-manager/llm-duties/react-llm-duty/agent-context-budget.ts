@@ -401,14 +401,9 @@ export function splitAgentTranscriptForSummary(
   const exchanges = findCompletedToolExchanges(transcript)
   if (exchanges.length < SUMMARY_RECENT_EXCHANGES * 2) return null
 
-  let boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
-  // Keep the latest user correction verbatim, even if that enlarges the tail.
-  const lastUserIndex = transcript.findLastIndex((message) =>
-    message.role === 'user' && !message.runtimeContext
-  )
-  if (lastUserIndex > exchanges[0]!.startIndex) {
-    boundary = Math.min(boundary, lastUserIndex)
-  }
+  // The continuation retains the latest owner message separately. Anchoring the
+  // tail to that message would retain all subsequent work in a long task.
+  const boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
   if (boundary <= 0) return null
 
   // Keep a bounded visual reference even when the recent tail is text-only.

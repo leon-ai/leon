@@ -221,6 +221,35 @@ describe('agent loop continuation', () => {
     )).toBe(false)
   })
 
+  it('summarizes long follow-up work while retaining the owner request and recent exchanges', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+    appendToolExchange(transcript, 1)
+
+    const followUp: AgentToolTranscriptMessage = {
+      role: 'user',
+      content: 'Publish to staging, not production.'
+    }
+    transcript.push(followUp)
+    for (let index = 2; index <= 24; index += 1) {
+      appendToolExchange(transcript, index)
+    }
+
+    const summarize = vi.fn().mockResolvedValue('Earlier release work verified.')
+    const result = await buildAgentContinuationTranscript(transcript, summarize)
+
+    expect(result[0]).toEqual(followUp)
+    expect(summarize.mock.calls[0]?.[0]).toContain('Result 16:')
+    expect(result.some((message) =>
+      message.role === 'tool' && message.toolCallId === 'call-16'
+    )).toBe(false)
+    expect(result.slice(-16)).toEqual(transcript.slice(-16))
+    expect(JSON.stringify(result).length).toBeLessThan(
+      JSON.stringify(transcript).length / 2
+    )
+  })
+
   it('uses deterministic state when semantic summarization fails', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Prepare the release.' }
