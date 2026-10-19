@@ -18,6 +18,8 @@ const MAX_SEARCH_SOURCES = 50
 const KIMI_SEARCH_TIMEOUT_SECONDS = 30
 const ZAI_SEARCH_ENDPOINT = '/chat/completions'
 const KIMI_SEARCH_ENDPOINT = '/tools/search_pro'
+const DEEPSEEK_SEARCH_ENDPOINT = '/tools/search'
+const DEEPSEEK_MAX_QUERY_CHARS = 128
 const SEARCH_SYSTEM_PROMPT =
   'Search the web to answer the user request. Base the answer on retrieved sources and cite their URLs. Return a concise, direct answer.'
 const MAX_CONTENT_CHARS = 40_000
@@ -93,6 +95,16 @@ interface KimiSearchResponse {
     date?: string
     snippet?: string
     chunks?: Array<{ text: string }>
+  }>
+}
+
+interface DeepSeekSearchResponse {
+  results: Array<{
+    title: string
+    url: string
+    summary: string
+    snippet: string
+    date?: string | null
   }>
 }
 
@@ -182,15 +194,18 @@ export default class HostedTool extends Tool {
       throw new Error(`max_chars must be an integer between 1 and ${MAX_CONTENT_CHARS}.`)
     }
     const { provider, model } = await this.resolveTarget('auto')
-    if (provider === 'deepseek') {
-      throw new Error('DeepSeek supports hosted search but has no verified native URL fetch. Use the browser tool to read this URL.')
-    }
     const signal = this.createWebSignal()
     let content = ''
     let title: string | undefined
     let contentKind: HostedFetchResult['content_kind'] = 'extracted_text'
 
-    if (provider === 'moonshotai') {
+    if (provider === 'deepseek') {
+      const data = await this.postWebRequest<{ content: string, title: string }>(
+        provider, '/tools/fetch', { url }, signal
+      )
+      content = data.content || ''
+      title = data.title
+    } else if (provider === 'moonshotai') {
       const data = await this.postWebRequest<{ markdown?: string, title?: string }>(
         provider, '/tools/fetch', { url }, signal
       )
@@ -319,6 +334,9 @@ export default class HostedTool extends Tool {
     }
     if (target.provider === 'moonshotai') {
       return this.searchKimi(query, target)
+    }
+    if (target.provider === 'deepseek') {
+      return this.searchDeepSeek(query, target)
     }
 
     const signal = this.executionContext?.timeout && this.executionContext.signal
@@ -451,7 +469,6 @@ export default class HostedTool extends Tool {
       return createOpenAI(options).responses(target.model)
     }
 
-    // DeepSeek's hosted search uses its Anthropic-compatible request format.
     return createAnthropic(options)(target.model)
   }
 
@@ -487,8 +504,7 @@ export default class HostedTool extends Tool {
           provider,
           endpoint,
           payload: JSON.parse(String(init?.body || '{}')),
-          headers: Object.fromEntries(new Headers(init?.headers)),
-          ...(provider === 'deepseek' ? { anthropicCompatibility: true } : {})
+          headers: Object.fromEntries(new Headers(init?.headers))
         }),
         signal: init?.signal || this.createWebSignal()
       })
@@ -602,6 +618,41 @@ export default class HostedTool extends Tool {
     ].filter(Boolean).join('\n')).join('\n\n')
 
     return { ...target, content: content || 'No web search results were found.' }
+  }
+
+  /**
+   * Returns ranked DeepSeek passages without an additional model inference.
+   */
+  private async searchDeepSeek(
+    query: string,
+    target: ResolvedTarget
+  ): Promise<HostedSearchResult> {
+    if (!query.trim() || Array.from(query).length > DEEPSEEK_MAX_QUERY_CHARS) {
+      throw new Error(`DeepSeek search requires a nonblank query of at most ${DEEPSEEK_MAX_QUERY_CHARS} characters.`)
+    }
+
+    const data = await this.postWebRequest<DeepSeekSearchResponse>(
+      target.provider,
+      DEEPSEEK_SEARCH_ENDPOINT,
+      { query, count: SEARCH_RESULT_LIMIT, need_content: false }
+    )
+    if (!Array.isArray(data.results)) {
+      throw new Error('DeepSeek search returned an invalid search response.')
+    }
+
+    const content = data.results.map((source) => [
+      source.title, source.url, source.date, source.summary || source.snippet
+    ].filter(Boolean).join('\n')).join('\n\n')
+
+    return {
+      ...target,
+      content: content.slice(0, MAX_CONTENT_CHARS) || 'No web search results were found.',
+      success: true,
+      complete: true,
+      sources: data.results.map(({ url, title }) => ({ url, title })),
+      completed_search_calls: 1,
+      truncated: content.length > MAX_CONTENT_CHARS
+    }
   }
 
   /**
