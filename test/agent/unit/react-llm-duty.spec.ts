@@ -172,7 +172,7 @@ it.each(['success', 'error', 'background', 'throw'])(
       input.onProgress({ message: 'Working.' })
       input.onProgress({ key: 'bridges.tools.command_started', message: 'Executing command.' })
       input.onProgress({
-        key: 'bridges.tools.command_output_delta', message: 'First line\n',
+        key: 'bridges.tools.output_delta', message: 'First line\n',
         data: { output: 'First line\n' }
       })
       input.onProgress({

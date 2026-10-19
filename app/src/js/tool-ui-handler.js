@@ -525,7 +525,7 @@ export default class ToolUIHandler {
 
       if (outputDelta) {
         toolGroupContainer.lastOutputAt = data.lastOutputAt ?? Date.now()
-        toolGroupContainer.summary.textContent = 'Receiving command output...'
+        toolGroupContainer.summary.textContent = 'Receiving tool output...'
         toolGroupContainer.commandOutputText = this.mergeCommandOutput(
           toolGroupContainer.commandOutputText,
           outputDelta

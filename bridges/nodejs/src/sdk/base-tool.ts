@@ -1,4 +1,8 @@
-import type { ToolExecutionContext, ToolModelFile } from './tool-runtime-types'
+import type {
+  ToolExecutionContext,
+  ToolModelFile,
+  ToolRuntimeProgress
+} from './tool-runtime-types'
 export type { ToolModelFile } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -33,7 +37,7 @@ import {
 } from '@sdk/utils'
 
 const COMMAND_OUTPUT_PROGRESS_INTERVAL_MS = 2_000
-const COMMAND_OUTPUT_MAX_CHARS = 4_000
+const OUTPUT_CHUNK_MAX_CHARS = 4_000
 
 // Progress callback type for reporting tool progress
 export type ProgressCallback = (progress: {
@@ -75,6 +79,55 @@ export abstract class Tool {
   public async prepareExecution(context: ToolExecutionContext): Promise<void> {
     this.executionContext = context
     this.modelFiles.length = 0
+  }
+
+  /**
+   * Emit bounded text chunks, retaining the original call context for background work.
+   */
+  protected emitOutput(
+    output: string,
+    stream?: ToolRuntimeProgress['stream'],
+    context = this.executionContext
+  ): void {
+    if (!output) {
+      return
+    }
+
+    for (let offset = 0; offset < output.length; offset += OUTPUT_CHUNK_MAX_CHARS) {
+      if (context?.signal?.aborted) {
+        return
+      }
+
+      const chunk = output.slice(offset, offset + OUTPUT_CHUNK_MAX_CHARS)
+
+      if (context?.onProgress) {
+        context.onProgress({
+          source: 'report',
+          activity: true,
+          key: 'bridges.tools.output_delta',
+          message: chunk,
+          data: { output: chunk },
+          ...(stream ? { stream } : {})
+        })
+      } else {
+        void this.report('bridges.tools.output_delta', { output: chunk })
+      }
+    }
+  }
+
+  /**
+   * Report advancing work without fabricating text output or exposing private data.
+   */
+  protected emitProgress(message: string, context = this.executionContext): void {
+    if (context?.signal?.aborted) {
+      return
+    }
+
+    if (context?.onProgress) {
+      context.onProgress({ source: 'report', message, activity: true })
+    } else {
+      this.log(message)
+    }
   }
 
   /**
@@ -558,7 +611,7 @@ export abstract class Tool {
 
         const output = pendingOutput
         pendingOutput = ''
-        await this.reportCommandOutputDelta(output, commandString, toolGroupId)
+        this.emitOutput(output)
       }
       const scheduleOutputDelta = (output: string): void => {
         pendingOutput += output
@@ -840,17 +893,14 @@ export abstract class Tool {
     return binaryPath
   }
 
-  private formatCommandOutput(
-    output: string,
-    options: { preserveWhitespace?: boolean } = {}
-  ): string | null {
+  private formatCommandOutput(output: string): string | null {
     const trimmed = output.trim()
     if (!trimmed) {
       return null
     }
 
-    const value = options.preserveWhitespace ? output : trimmed
-    const maxLength = COMMAND_OUTPUT_MAX_CHARS
+    const value = trimmed
+    const maxLength = OUTPUT_CHUNK_MAX_CHARS
     if (value.length <= maxLength) {
       return value
     }
@@ -870,28 +920,6 @@ export abstract class Tool {
 
     await this.report(
       'bridges.tools.command_output',
-      {
-        command,
-        output: formatted
-      },
-      toolGroupId
-    )
-  }
-
-  private async reportCommandOutputDelta(
-    output: string,
-    command: string,
-    toolGroupId: string
-  ): Promise<void> {
-    const formatted = this.formatCommandOutput(output, {
-      preserveWhitespace: true
-    })
-    if (!formatted) {
-      return
-    }
-
-    await this.report(
-      'bridges.tools.command_output_delta',
       {
         command,
         output: formatted

@@ -506,7 +506,8 @@ export async function runToolExecution(
     }
 
 
-    const isOutputDelta = progress.key === 'bridges.tools.command_output_delta'
+    const isOutputDelta = progress.key === 'bridges.tools.command_output_delta' ||
+      progress.key === 'bridges.tools.output_delta'
     const outputDelta = isOutputDelta
       ? typeof progress.data?.['output'] === 'string'
         ? progress.data['output']
@@ -533,7 +534,7 @@ export async function runToolExecution(
       input: requestedToolInput,
       output: progress.data || progress.message,
       ...(outputDelta
-        ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving command output...' }
+        ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving tool output...' }
         : { progressMessage: progress.message }),
       ...(stepLabel ? { stepLabel } : {})
     })
