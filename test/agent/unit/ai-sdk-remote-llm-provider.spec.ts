@@ -473,10 +473,11 @@ describe('AISDKRemoteLLMProvider', () => {
       { id: 'test', choices: [{ index: 0, delta: { content: 'Yes ' } }] },
       { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage, x_groq: { usage } }
     ]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    const fetch = vi.fn().mockResolvedValue(new Response(
       events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n',
       { headers: { 'content-type': 'text/event-stream' } }
-    )))
+    ))
+    vi.stubGlobal('fetch', fetch)
     const provider = new AISDKRemoteLLMProvider({
       name, providerName: name, model, flavor, apiKeyEnv: 'TEST_KEY', baseURL: 'https://example.invalid/v1'
     })
@@ -485,13 +486,27 @@ describe('AISDKRemoteLLMProvider', () => {
       ...createCompletionParams(null),
       shouldStream: true,
       onToken,
-      ...(name === LLMProviders.Groq ? { seed: 7 } : {})
+      promptCacheKey: 'agent',
+      ...(name === LLMProviders.Groq
+        ? { seed: 7, reasoningMode: 'off' as const }
+        : {})
     })
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(response)
     expect(onToken.mock.calls.map(([chunk]) => chunk).join('')).toBe('Yes Yes ')
     expect(normalized).toMatchObject({
       usedInputTokens: 100, usedOutputTokens: 20, accounting: { cachedInputTokens: 80 }
     })
+
+    if (name === LLMProviders.Cerebras) {
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      expect(body.prompt_cache_key).toBe('media-session')
+    }
+
+    if (name === LLMProviders.Groq) {
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      expect(body.reasoning_effort).toBeUndefined()
+      expect(body.reasoning_format).toBe('hidden')
+    }
   })
 
   it.each(['anthropic', 'openai'])('preserves MiniMax %s connection media, reasoning controls and cache usage', async (protocol) => {

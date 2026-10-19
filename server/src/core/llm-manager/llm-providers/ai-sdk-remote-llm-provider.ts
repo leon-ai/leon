@@ -1153,9 +1153,17 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'groq') {
       if (reasoningMode === 'off') {
+        const entry = getLLMModelCatalogEntry(LLMProviders.Groq, this.model)
+
+        // Hiding reasoning is supported without inventing an effort value for
+        // an uncataloged model whose reasoning may be mandatory.
         return {
           groq: {
-            reasoningEffort: 'none',
+            ...(entry?.reasoning.includes('none')
+              ? { reasoningEffort: 'none' }
+              : entry?.reasoning.includes('low')
+                ? { reasoningEffort: 'low' }
+                : {}),
             reasoningFormat: 'hidden'
           }
         }
@@ -1341,15 +1349,13 @@ export default class AISDKRemoteLLMProvider {
             reasoningEffort: 'high'
           }
     } else if (this.config.flavor === 'groq') {
-      providerOptions['groq'] = completionParams.disableThinking === true
-        ? {
-            reasoningEffort: 'none',
-            reasoningFormat: 'hidden'
-          }
-        : {
-            reasoningEffort: 'medium',
-            reasoningFormat: 'parsed'
-          }
+      Object.assign(
+        providerOptions,
+        this.buildManagedProviderOptions(
+          completionParams.disableThinking === true ? 'off' : 'on',
+          completionParams
+        )
+      )
     }
 
     // OpenRouter's SDK omits tool_choice when the tool list is empty. Preserve
