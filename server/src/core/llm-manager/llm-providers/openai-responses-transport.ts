@@ -163,7 +163,17 @@ export class OpenAIResponsesTransport {
    * Let the SDK flush terminal usage without waiting for a remote connection to close.
    */
   private finishResponseStream(response: Response): Response {
-    if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+    if (!response.body) {
+      return response
+    }
+
+    // Native Responses requests use SSE even when a subscription omits its header.
+    const headers = new Headers(response.headers)
+
+    if (response.ok && !headers.has('content-type')) {
+      headers.set('content-type', 'text/event-stream')
+    }
+    if (!headers.get('content-type')?.includes('text/event-stream')) {
       return response
     }
 
@@ -215,7 +225,7 @@ export class OpenAIResponsesTransport {
     return new Response(body, {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers
+      headers
     })
   }
 

@@ -77,6 +77,10 @@ export const providerRequestsPlugin: FastifyPluginAsync<APIOptions> = async (
         }
       }
       reply.raw.once('close', abort)
+      reply.raw.once('finish', () => {
+        reply.raw.removeListener('close', abort)
+      })
+
       try {
         const response = await requestProvider(
           request.body.provider,
@@ -90,9 +94,20 @@ export const providerRequestsPlugin: FastifyPluginAsync<APIOptions> = async (
               : {})
           }
         )
-        return await response.json()
-      } finally {
+
+        if (response.headers.get('content-type')?.includes('text/event-stream')) {
+          // Fastify forwards the body with backpressure and cancels on disconnect.
+          return reply
+            .type('text/event-stream')
+            .header('cache-control', 'no-cache')
+            .send(response.body)
+        }
+
         reply.raw.removeListener('close', abort)
+        return await response.json()
+      } catch (error) {
+        reply.raw.removeListener('close', abort)
+        throw error
       }
     }
   )

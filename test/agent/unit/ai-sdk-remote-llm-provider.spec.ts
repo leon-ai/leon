@@ -993,7 +993,11 @@ describe('AISDKRemoteLLMProvider', () => {
     provider.dispose()
   })
 
-  it.each([false, true])('finishes terminal responses on open connections and retains usage (subscription=%s)', async (subscription) => {
+  it.each([
+    { subscription: false, contentType: 'text/event-stream' },
+    { subscription: true, contentType: 'text/event-stream' },
+    { subscription: true, contentType: null }
+  ])('finishes terminal responses on open connections and retains usage (%j)', async ({ subscription, contentType }) => {
     if (subscription) {
       vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
       accountMocks.getCredentials.mockResolvedValue({
@@ -1032,7 +1036,7 @@ describe('AISDKRemoteLLMProvider', () => {
         }
       },
       cancel
-    }), { headers: { 'content-type': 'text/event-stream' } }))
+    }), { headers: contentType ? { 'content-type': contentType } : {} }))
     const provider = new OpenAILLMProvider({
       ...TARGET, provider: LLMProviders.OpenAI, model: response.model,
       ...(subscription ? { accountCredentials: {

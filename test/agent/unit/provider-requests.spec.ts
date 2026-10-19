@@ -67,8 +67,8 @@ vi.mock('@/core/artifacts/artifact-store', () => ({ readArtifact: mocks.artifact
 vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
   createWebSocketFetch: mocks.create
 }))
-vi.mock('@sdk/toolkit-config', () => ({
-  ToolkitConfig: {
+vi.mock('@/core/tool-manager/tool-settings', () => ({
+  ToolSettings: {
     load: (): object => ({ description: 'Hosted search' }),
     loadToolSettings: (): object => ({})
   }
@@ -167,6 +167,76 @@ describe('profile provider requests', () => {
       model: 'gpt-6', input: 'Search.'
     })).rejects.toThrow('Reconnect bound account')
     expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('forwards provider deltas and reserves the transport until consumed (content type: %s)', async (hasContentType) => {
+    let upstream!: ReadableStreamDefaultController<Uint8Array>
+    const encoder = new TextEncoder()
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(mocks.fetch)
+    mocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+      start(controller): void {
+        upstream = controller
+      }
+    }), { headers: hasContentType ? { 'content-type': 'text/event-stream' } : {} }))
+    mocks.fetch.mockImplementationOnce(async () => responseStream({
+      type: 'response.completed', response: { status: 'completed', output: [] }
+    }))
+
+    const response = await requestProvider(LLMProviders.OpenAI, '/responses', {
+      model: 'gpt-6', input: 'Stream a response.', stream: true
+    })
+    const reader = response.body!.getReader()
+
+    expect(response.headers.get('content-type')).toBe('text/event-stream')
+    upstream.enqueue(encoder.encode('data: {"type":"response.output_text.delta","delta":"Available now"}\n\n'))
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain('Available now')
+
+    const queued = requestProvider(LLMProviders.OpenAI, '/responses', {
+      model: 'gpt-6', input: 'A following request.'
+    })
+
+    await Promise.resolve()
+    expect(mocks.fetch).toHaveBeenCalledOnce()
+    upstream.enqueue(encoder.encode('data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'))
+    upstream.close()
+    await reader.read()
+    expect((await reader.read()).done).toBe(true)
+    expect(await (await queued).json()).toMatchObject({ status: 'completed' })
+    expect(mocks.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['cancel', 'error'])('releases streamed provider requests after %s', async (outcome) => {
+    let upstream!: ReadableStreamDefaultController<Uint8Array>
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(mocks.fetch)
+    mocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+      start(controller): void {
+        upstream = controller
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+
+    const response = await requestProvider(LLMProviders.OpenAI, '/responses', {
+      model: 'gpt-6', input: 'Stream a response.', stream: true
+    })
+    const reader = response.body!.getReader()
+
+    if (outcome === 'cancel') {
+      await reader.cancel()
+    } else {
+      upstream.error(new Error('Provider stream interrupted'))
+      await expect(reader.read()).rejects.toThrow('Provider stream interrupted')
+    }
+
+    mocks.fetch.mockResolvedValueOnce(responseStream({
+      type: 'response.completed', response: { status: 'completed', output: [] }
+    }))
+    const following = await requestProvider(LLMProviders.OpenAI, '/responses', {
+      model: 'gpt-6', input: 'A following request.'
+    })
+
+    expect(await following.json()).toMatchObject({ status: 'completed' })
+    expect(mocks.fetch).toHaveBeenCalledTimes(2)
   })
 
   it('uses the bound media endpoint before normalizing its provider path', async () => {

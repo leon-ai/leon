@@ -147,7 +147,7 @@ class ProviderRequests {
   }
 
   /**
-   * Uses the same transport as chat, returning a complete native provider response.
+   * Uses the profile transport for streamed or complete native provider responses.
    */
   public async responses(
     connection: ProviderConnection,
@@ -172,6 +172,11 @@ class ProviderRequests {
       transport.close()
     }
     signal.addEventListener('abort', abort, { once: true })
+    let streaming = false
+    const finish = (): void => {
+      signal.removeEventListener('abort', abort)
+      release()
+    }
 
     try {
       signal.throwIfAborted()
@@ -188,6 +193,44 @@ class ProviderRequests {
       if (!response.ok) {
         return response
       }
+
+      if (body['stream'] === true && response.body) {
+        const reader = response.body.getReader()
+
+        streaming = true
+
+        // Keep the profile's transport reserved until its stream settles.
+        return new Response(new ReadableStream<Uint8Array>({
+          async pull(controller): Promise<void> {
+            try {
+              const { done, value } = await reader.read()
+
+              if (done) {
+                finish()
+                controller.close()
+              } else {
+                controller.enqueue(value)
+              }
+            } catch (error) {
+              transport.close()
+              finish()
+              controller.error(error)
+            }
+          },
+          async cancel(reason): Promise<void> {
+            try {
+              await reader.cancel(reason)
+            } finally {
+              transport.close()
+              finish()
+            }
+          }
+        }), {
+          status: response.status,
+          headers: response.headers
+        })
+      }
+
       const data = await readResponsesJSON(response)
       if (data['status'] === 'failed' || data['error']) {
         this.close()
@@ -199,8 +242,9 @@ class ProviderRequests {
       this.close()
       throw error
     } finally {
-      signal.removeEventListener('abort', abort)
-      release()
+      if (!streaming) {
+        finish()
+      }
     }
   }
 }

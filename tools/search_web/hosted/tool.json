@@ -15,7 +15,7 @@
       "description": "Search the web using the active supported provider and its selected profile connection. Prefer this for ordinary web searches. OpenRouter selects native search or its external fallback; Kimi returns ranked source passages for you to synthesize.",
       "hooks": {
         "post_execution": {
-          "response_jq": ".result.content"
+          "response_jq": ".result"
         }
       },
       "parameters": {
@@ -56,13 +56,13 @@
           "query"
         ]
       },
-      "progressive_guidance": "Kimi uses provider moonshotai and the standalone search API. Its model, temperature, and max_output_tokens options do not affect retrieval. Other providers use the selected model for a search-backed answer. If the provider/model rejects search, report the concrete error before choosing another search tool."
+      "progressive_guidance": "Partial results have complete=false; do not treat them as finished or repeat a search the owner limited. Kimi uses provider moonshotai and the standalone search API. Its model, temperature, and max_output_tokens options do not affect retrieval. Other providers use the selected model for a search-backed answer. If the provider/model rejects search, report the concrete error before choosing another search tool."
     },
     "searchOpenAI": {
       "description": "Search the web using OpenAI's native hosted web search and the selected OpenAI profile connection.",
       "hooks": {
         "post_execution": {
-          "response_jq": ".result.content"
+          "response_jq": ".result"
         }
       },
       "parameters": {
@@ -96,7 +96,7 @@
       "description": "Search the web using Anthropic's native hosted web search and the selected Anthropic profile connection.",
       "hooks": {
         "post_execution": {
-          "response_jq": ".result.content"
+          "response_jq": ".result"
         }
       },
       "parameters": {
