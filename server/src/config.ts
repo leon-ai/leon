@@ -139,6 +139,16 @@ const DEFAULT_CONFIG: LeonConfig = {
           ).apiKeyEnv
         }
       },
+      aimlapi: {
+        base_url: getRequiredLLMProviderAccountConfig(
+          LLMProviders.AIMLAPI
+        ).baseURL,
+        api_key: {
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.AIMLAPI
+          ).apiKeyEnv
+        }
+      },
       openai: {
         api_key: {
           env: getRequiredLLMProviderAccountConfig(

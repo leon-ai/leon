@@ -96,6 +96,7 @@ export const configSchemaObject = strictObject({
       zai: llmProvider,
       deepseek: llmProvider,
       minimax: llmProviderWithBaseURL,
+      aimlapi: llmProviderWithBaseURL,
       openai: llmProvider,
       anthropic: llmProvider,
       moonshotai: llmProvider,
