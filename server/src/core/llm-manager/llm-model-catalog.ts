@@ -168,7 +168,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     provider: LLMProviders.DeepSeek,
     model: 'deepseek-flash',
     contextWindowTokens: 1_048_576,
-    label: 'DeepSeek-V4.1-Flash',
+    label: 'DeepSeek-V4.1-Flash-1017',
     recommended: true,
     defaultReasoningEffort: 'high',
     reasoning: DEEPSEEK_REASONING,
@@ -665,6 +665,18 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     contextWindowTokens: 262_144,
     label: 'moonshotai/kimi-k2.6',
     reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://openrouter.ai/deepseek/deepseek-v4.1-flash-1017
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'deepseek/deepseek-v4.1-flash-1017',
+    contextWindowTokens: 1_048_576,
+    label: 'deepseek/deepseek-v4.1-flash-1017',
+    reasoning: DEEPSEEK_REASONING,
     speed: ROUTABLE_SPEED,
     inputMediaTypes: IMAGE_INPUTS
   },

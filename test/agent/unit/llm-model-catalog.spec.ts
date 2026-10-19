@@ -22,6 +22,8 @@ describe('LLM model catalog', () => {
       .toBe(1_000_000)
     expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'minimax/minimax-m3.1-flash:free'))
       .toBe(1_000_000)
+    expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'deepseek/deepseek-v4.1-flash-1017'))
+      .toBe(1_048_576)
     expect(resolveModelContextWindowTokens(LLMProviders.LlamaCPP, 'local.gguf'))
       .toBe(LOCAL_LLM_CONTEXT_WINDOW_TOKENS)
     expect(resolveModelContextWindowTokens(LLMProviders.SGLang, 'custom-model'))
