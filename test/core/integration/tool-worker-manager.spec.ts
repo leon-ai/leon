@@ -825,7 +825,7 @@ export default class Fixture extends Tool {
     if (crash) process.exit(7)
     this.count++
     if (attach) this.attachModelFiles([{ dataBase64: 'eA==', mediaType: 'text/plain' }])
-    return { count: this.count, profile: this.executionContext.profileName,
+    return { count: this.count, cwd: process.cwd(), profile: this.executionContext.profileName,
       session: this.executionContext.conversationSessionId, pid: process.pid }
   }
   async hold() {
@@ -866,11 +866,15 @@ async function next(profile: string, session: string, attach = false, crash = fa
 
 it('retains per-profile state, refreshes session context, clears attachments and disposes workers', async () => {
   await fixture(true)
+  const workspace = path.join(home, 'workspace')
+  await fs.mkdir(workspace)
+  vi.spyOn(process, 'cwd').mockReturnValue(workspace)
   const first = await next('a', 'one', true)
   expect(first.success).toBe(true)
+  expect(first.output['result']).toMatchObject({ cwd: workspace })
   expect(first.modelFiles).toHaveLength(1)
   const second = await next('a', 'two')
-  expect(second.output['result']).toMatchObject({ count: 2, profile: 'a', session: 'two' })
+  expect(second.output['result']).toMatchObject({ count: 2, profile: 'a', session: 'two', cwd: workspace })
   expect(second.modelFiles).toBeUndefined()
   expect((await next('b', 'three')).output['result']).toMatchObject({ count: 1, profile: 'b' })
   await manager.dispose()

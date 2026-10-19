@@ -634,6 +634,11 @@ export default class ToolExecutor {
       })
     }
 
+    const timeout = TOOLKIT_REGISTRY.getToolFunctions(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )?.[functionName]?.timeout
+
     const executeTool = (): ReturnType<typeof TOOL_WORKER_MANAGER.execute> =>
       TOOL_WORKER_MANAGER.execute(
         {
@@ -649,6 +654,7 @@ export default class ToolExecutor {
           },
           ...(Object.keys(connections).length ? { connections } : {}),
           ...(input.signal ? { signal: input.signal } : {}),
+          ...(timeout ? { timeout } : {}),
           ...(input.onProgress ? { onProgress: input.onProgress } : {})
         },
         argsArray,

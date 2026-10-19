@@ -27,6 +27,14 @@ class ToolRuntimeProgress(TypedDict):
     key: NotRequired[str]
     data: NotRequired[dict[str, Any]]
     stream: NotRequired[ToolProgressStream]
+    activity: NotRequired[bool]
+
+
+class ToolTimeoutPolicy(TypedDict, total=False):
+    """Optional per-function limits; progress renews idleMs, never totalMs."""
+
+    idleMs: int
+    totalMs: int
 
 
 @dataclass
@@ -47,6 +55,7 @@ class ToolExecutionContext:
     leon_service: dict[str, str] | None = None
     signal: Event | None = None
     on_progress: Callable[[ToolRuntimeProgress], None] | None = None
+    timeout: ToolTimeoutPolicy | None = None
 
 
 class ToolRuntimeResult(TypedDict):

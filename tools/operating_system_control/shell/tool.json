@@ -66,7 +66,8 @@
               "timeoutMs": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 86400000
+                "maximum": 86400000,
+                "description": "Total command lifetime, not a launch or read wait. Omit for the default 24-hour lifetime of persistent/interactive commands; stop the session when finished."
               }
             },
             "additionalProperties": false

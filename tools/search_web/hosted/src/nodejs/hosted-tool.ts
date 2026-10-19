@@ -321,7 +321,9 @@ export default class HostedTool extends Tool {
       return this.searchKimi(query, target)
     }
 
-    const signal = this.createWebSignal()
+    const signal = this.executionContext?.timeout && this.executionContext.signal
+      ? this.executionContext.signal
+      : this.createWebSignal()
     const sources = new Map<string, { url: string, title?: string }>()
     let content = ''
     let completedSearchCalls = 0

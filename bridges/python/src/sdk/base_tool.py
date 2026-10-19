@@ -1012,7 +1012,9 @@ class BaseTool(ABC):
                 # Use pypdl to download the file properly
                 dl = Pypdl()
 
-                if self.cli_progress:
+                if self.cli_progress or (
+                    self.execution_context and self.execution_context.on_progress
+                ):
                     # Start download without blocking and with custom progress tracking
                     dl.start(
                         url=adjusted_url,
@@ -1302,7 +1304,9 @@ class BaseTool(ABC):
             # Use pypdl to download the file
             dl = Pypdl()
 
-            if self.cli_progress:
+            if self.cli_progress or (
+                self.execution_context and self.execution_context.on_progress
+            ):
                 # Start download without blocking and with custom progress tracking
                 dl.start(url=url, file_path=download_path, display=False, block=False)
 
@@ -1400,6 +1404,8 @@ class BaseTool(ABC):
         """
         last_logged_percentage = -1
         last_log_time = 0
+        last_reported_bytes = 0
+        context = self.execution_context
         LOG_INTERVAL_MS = 2000  # Log every 2 seconds at most
         PERCENTAGE_THRESHOLD = 5  # Log every 5% progress
 
@@ -1417,6 +1423,14 @@ class BaseTool(ABC):
             )
 
             if should_log:
+                downloaded_bytes = float(getattr(dl_any, "doneMB", 0) or 0) * 1_024 * 1_024
+                last_reported_bytes = min(last_reported_bytes, downloaded_bytes)
+                if downloaded_bytes > last_reported_bytes:
+                    self.emit_progress(
+                        f"Downloading {file_name}: {format_bytes(downloaded_bytes)}", context
+                    )
+                    last_reported_bytes = downloaded_bytes
+
                 speed_info = ""
                 speed_value = getattr(dl_any, "speed", None)
                 if speed_value and speed_value > 0:
@@ -1441,7 +1455,8 @@ class BaseTool(ABC):
                     )
 
                 progress_line = f"Downloading {file_name}: {current_progress}%{speed_info}{eta_info}{size_info}"
-                self.log(progress_line)
+                if self.cli_progress:
+                    self.log(progress_line)
 
                 last_logged_percentage = current_progress
                 last_log_time = current_time
@@ -1451,7 +1466,8 @@ class BaseTool(ABC):
             failed = bool(getattr(dl_any, "Failed", False))
 
         # Log completion
-        self.log(f"Download completed: {file_name}")
+        if self.cli_progress:
+            self.log(f"Download completed: {file_name}")
 
         if bool(getattr(dl_any, "Failed", False)):
             raise Exception("Download failed")

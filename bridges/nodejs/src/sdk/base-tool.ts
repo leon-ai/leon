@@ -1558,12 +1558,14 @@ export abstract class Tool {
   private createDownloadProgressListener(
     fileName: string
   ): (progress: DownloadFileProgress) => void {
-    if (!this.cliProgress) {
+    if (!this.cliProgress && !this.executionContext?.onProgress) {
       return (): void => {}
     }
 
     let lastLoggedPercentage = -1
     let lastLogTime = 0
+    let lastReportedBytes = 0
+    const context = this.executionContext
     const LOG_INTERVAL_MS = 2_000 // Log every 2 seconds at most
     const PERCENTAGE_THRESHOLD = 5 // Log every 5% progress
 
@@ -1578,6 +1580,18 @@ export abstract class Tool {
         percentage === 100
 
       if (!shouldLog) {
+        return
+      }
+
+      lastReportedBytes = Math.min(lastReportedBytes, progress.downloadedBytes)
+      if (progress.downloadedBytes > lastReportedBytes) {
+        this.emitProgress(`Downloading ${fileName}: ${formatBytes(progress.downloadedBytes)}`, context)
+        lastReportedBytes = progress.downloadedBytes
+      }
+      lastLoggedPercentage = percentage
+      lastLogTime = currentTime
+
+      if (!this.cliProgress) {
         return
       }
 
@@ -1627,9 +1641,6 @@ export abstract class Tool {
           file_name: fileName
         })
       }
-
-      lastLoggedPercentage = percentage
-      lastLogTime = currentTime
     }
   }
 

@@ -18,7 +18,7 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import { getSatelliteArtifactRoot, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
 import { parseSatelliteContext, SATELLITE_CONTEXT_MAX_AGE_MS, type SatelliteContextSnapshot } from '@/core/satellite/satellite-context'
 
-const SATELLITE_TOOL_TIMEOUT_MS = 15 * 60 * 1_000
+const SATELLITE_TOOL_IDLE_TIMEOUT_MS = 15 * 60 * 1_000
 
 export interface SatelliteTransport {
   emit: (eventName: string, payload: unknown) => void
@@ -144,8 +144,8 @@ class SatelliteRegistry {
 
     return new Promise<ToolExecutionResult>((resolve, reject) => {
       const timeout = setTimeout(() => this.cancelInvocation(invocationId,
-        new Error(`Satellite tool call timed out on "${input.deviceId}".`)
-      ), SATELLITE_TOOL_TIMEOUT_MS)
+        new Error(`Satellite tool call stalled on "${input.deviceId}".`)
+      ), SATELLITE_TOOL_IDLE_TIMEOUT_MS)
       const onAbort = (): void => this.cancelInvocation(invocationId,
         new Error('Satellite tool call canceled; already-delivered input may have executed.')
       )
@@ -187,6 +187,12 @@ class SatelliteRegistry {
       (transport && pending.transport !== transport)
     ) {
       return
+    }
+
+    // Device-side execution owns function limits; this guard detects a silent
+    // transport without cutting off downloads that keep making progress.
+    if (!pending.returned && payload.progress.activity) {
+      pending.timeout.refresh()
     }
 
     if (payload.progress.stream) {

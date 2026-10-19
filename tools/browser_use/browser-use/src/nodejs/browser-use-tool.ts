@@ -282,7 +282,8 @@ export class BrowserUseTool extends Tool {
     const execution = this.command([], {
       input: `${workflow}\n_leon_execute(${JSON.stringify(code)})`, cwd: directory,
       env: { ...env, LEON_BROWSER_ARTIFACTS: directory, LEON_BROWSER_ACTIONS: actionsPath },
-      timeout: COMMAND_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES, reject: false
+      timeout: this.executionContext?.timeout ? 0 : COMMAND_TIMEOUT_MS,
+      maxBuffer: MAX_OUTPUT_BYTES, reject: false
     })
     execution.stdout?.setEncoding('utf8').on('data', (output: string) => {
       this.emitOutput(output)

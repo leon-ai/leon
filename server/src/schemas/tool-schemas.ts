@@ -1,6 +1,7 @@
 import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
 import { ToolCompletionReview, ToolConcurrency } from '@/types'
+import { MAX_TOOL_TIMEOUT_MS } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 import {
   PROGRESSIVE_GUIDANCE_MAX_LENGTH,
@@ -76,6 +77,16 @@ const toolFunctionSchemaObject = Type.Strict(
         Type.Boolean({
           description:
             'Allow agent calls to yield a retained execution handle after a bounded wait. Execution keeps its original deadline and can be waited on, queried or canceled.'
+        })
+      ),
+      timeout: Type.Optional(
+        Type.Object({
+          idleMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_TIMEOUT_MS })),
+          totalMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_TIMEOUT_MS }))
+        }, {
+          additionalProperties: false,
+          minProperties: 1,
+          description: 'Execution limits in milliseconds. Actual output or advancing progress renews idleMs; totalMs is optional and never renewed. Task deadlines still apply.'
         })
       ),
       completion_review: Type.Optional(

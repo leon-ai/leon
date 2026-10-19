@@ -56,7 +56,11 @@
           "query"
         ]
       },
-      "progressive_guidance": "Partial results have complete=false; do not treat them as finished or repeat a search the owner limited. Kimi uses provider moonshotai and the standalone search API. Its model, temperature, and max_output_tokens options do not affect retrieval. Other providers use the selected model for a search-backed answer. If the provider/model rejects search, report the concrete error before choosing another search tool."
+      "progressive_guidance": "Partial results have complete=false; do not treat them as finished or repeat a search the owner limited. Kimi uses provider moonshotai and the standalone search API. Its model, temperature, and max_output_tokens options do not affect retrieval. Other providers use the selected model for a search-backed answer. If the provider/model rejects search, report the concrete error before choosing another search tool.",
+      "timeout": {
+        "idleMs": 90000,
+        "totalMs": 300000
+      }
     },
     "searchOpenAI": {
       "description": "Search the web using OpenAI's native hosted web search and the selected OpenAI profile connection.",
@@ -90,6 +94,10 @@
         "required": [
           "query"
         ]
+      },
+      "timeout": {
+        "idleMs": 90000,
+        "totalMs": 300000
       }
     },
     "searchAnthropic": {
@@ -124,6 +132,10 @@
         "required": [
           "query"
         ]
+      },
+      "timeout": {
+        "idleMs": 90000,
+        "totalMs": 300000
       }
     },
     "fetchUrl": {
