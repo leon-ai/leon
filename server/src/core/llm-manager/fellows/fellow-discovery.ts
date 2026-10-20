@@ -17,7 +17,7 @@ import {
   type FellowEnvironment,
   type FellowDefinition
 } from './fellow-catalog'
-import { getLLMModelCatalogEntries, getLLMModelCatalogProviders } from '../llm-model-catalog'
+import { getLLMModelCatalogEntries, getLLMModelCatalogEntry, getLLMModelCatalogProviders } from '../llm-model-catalog'
 import { LLMProviders } from '../types'
 import {
   LLM_PROVIDER_ACCOUNT_CONFIGS,
@@ -303,8 +303,7 @@ export async function discoverFellows(
         return ''
       }
       // A key for another service must not inherit the fellow's selected model.
-      if (!configuredProvider && !getLLMModelCatalogEntries(selectedProvider)
-        .some((entry) => entry.model === configuredModel)) {
+      if (!configuredProvider && !getLLMModelCatalogEntry(selectedProvider, configuredModel)) {
         return ''
       }
       return configuredModel

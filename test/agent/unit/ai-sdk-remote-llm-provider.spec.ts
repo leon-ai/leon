@@ -11,6 +11,8 @@ import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-l
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
+import { getLLMModelCatalogEntries } from '@/core/llm-manager/llm-model-catalog'
+import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import ZAILLMProvider from '@/core/llm-manager/llm-providers/z-ai-llm-provider'
 import GroqLLMProvider from '@/core/llm-manager/llm-providers/groq-llm-provider'
 import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-provider'
@@ -136,6 +138,14 @@ function createCompletionParams(
     data
   }
 }
+
+vi.mock('@/core/config-states/config-state', () => ({
+  CONFIG_STATE: {
+    getModelSettingsState: (): { getSettings: () => { reasoning: string, speed: string } } => ({
+      getSettings: () => ({ reasoning: 'auto', speed: 'auto' })
+    })
+  }
+}))
 
 const TOOL = {
   type: 'function' as const,
@@ -588,6 +598,65 @@ describe('AISDKRemoteLLMProvider', () => {
     if (model === 'MiniMax-M3.1-Flash') {
       expect(protocol === 'anthropic' ? guardedBody.output_config.effort : guardedBody.reasoning_effort)
         .toBe('low')
+    }
+  })
+
+  it.each(['https://api.minimax.io', 'https://api.minimaxi.com'])(
+    'sends current, saved and custom MiniMax IDs unchanged through %s', async (host) => {
+    const models = [
+      getLLMModelCatalogEntries(LLMProviders.MiniMax)[0]!.model,
+      'MiniMax-M3', 'MiniMax-M2.7', 'my-custom-model'
+    ]
+    for (const protocol of ['openai', 'anthropic']) {
+      for (const model of models) {
+        const fetch = vi.fn().mockImplementation(async () => Response.json(
+          protocol === 'anthropic'
+            ? {
+                id: 'msg_minimax', type: 'message', role: 'assistant', model,
+                content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn', stop_sequence: null,
+                usage: { input_tokens: 10, output_tokens: 2 }
+              }
+            : {
+                id: 'chat_minimax', created: 1, model,
+                choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 10, completion_tokens: 2 }
+              }
+        ))
+        vi.stubGlobal('fetch', fetch)
+        const target = {
+          provider: LLMProviders.MiniMax, model, label: 'MiniMax',
+          isEnabled: true, isLocal: false, isResolved: true,
+          accountCredentials: {
+            api_key: 'fixture-key',
+            base_url: `${host}/${protocol === 'anthropic' ? 'anthropic' : 'v1'}`
+          }
+        }
+        const provider = new MiniMaxLLMProvider(target)
+        const params: CompletionParams = {
+          ...createCompletionParams(null), shouldStream: false, tools: [TOOL],
+          toolChoice: 'auto', reasoningMode: 'on'
+        }
+        prepareCompletionRequest(params, LLMProviders.MiniMax, target)
+        await provider.runChatCompletion('Continue.', params)
+        const [url, request] = fetch.mock.calls[0]!
+        const body = JSON.parse(request.body)
+        expect(String(url)).toBe(`${host}/${protocol === 'anthropic' ? 'anthropic/v1/messages' : 'v1/chat/completions'}`)
+        expect(body.model).toBe(model)
+        expect(body.tools).toHaveLength(1)
+        expect(body.service_tier).toBeUndefined()
+        const headers = new Headers(request.headers)
+        expect(headers.get(protocol === 'anthropic' ? 'x-api-key' : 'authorization'))
+          .toBe(protocol === 'anthropic' ? 'fixture-key' : 'Bearer fixture-key')
+        if (model === 'MiniMax-M3.1-Flash') {
+          expect(body.thinking).toEqual({ type: 'adaptive' })
+          expect(protocol === 'anthropic' ? body.output_config.effort : body.reasoning_effort).toBe('max')
+        } else if (model === 'MiniMax-M2.7' || model === 'my-custom-model') {
+          expect(body.thinking).toBeUndefined()
+          expect(body.reasoning_effort).toBeUndefined()
+          expect(body.output_config).toBeUndefined()
+        }
+        provider.dispose()
+      }
     }
   })
 

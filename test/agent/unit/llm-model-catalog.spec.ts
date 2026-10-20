@@ -140,8 +140,16 @@ describe('LLM model catalog', () => {
       LLMProviders.Anthropic,
       'claude-fable-5-1'
     )?.recommended).toBeUndefined()
-    expect(getLLMModelCatalogEntries(LLMProviders.MiniMax)[0]).toMatchObject({
+    const miniMaxModels = getLLMModelCatalogEntries(LLMProviders.MiniMax)
+    expect(miniMaxModels.map((entry) => entry.model)).toEqual([
+      'MiniMax-M3.1-Flash', 'MiniMax-M3'
+    ])
+    expect(miniMaxModels[0]).toMatchObject({
       model: 'MiniMax-M3.1-Flash', recommended: true, defaultReasoningEffort: 'max'
+    })
+    expect(getLLMModelCatalogEntry(LLMProviders.MiniMax, 'MiniMax-M2.7')).toMatchObject({
+      model: 'MiniMax-M2.7', hiddenFromSuggestions: true,
+      contextWindowTokens: 204_800, reasoning: ['auto'], inputMediaTypes: []
     })
   })
 
