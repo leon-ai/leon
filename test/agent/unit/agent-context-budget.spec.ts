@@ -6,6 +6,7 @@ import {
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
   resolveAgentMaxOutputTokens,
+  retainRecentToolImages,
   reuseToolContext
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
@@ -123,6 +124,34 @@ describe('agent context budget', () => {
     expect(prepared.transcript[0]!.content).not.toBe(observation)
     expect(prepared.transcript.at(-1)!.content).toBe(observation)
     expect(transcript[0]!.content).toBe(observation)
+  })
+
+  it('batches image removals while preserving the request prefix between removals', () => {
+    const transcript: AgentToolTranscriptMessage[] = []
+    const image = { dataBase64: 'image', mediaType: 'image/png' }
+    const appendImage = (id: string): void => {
+      appendToolExchange(transcript, id, 'Inspected image.')
+      const message = transcript.at(-1)!
+      if (message.role === 'tool') {
+        message.files = [image]
+      }
+    }
+
+    appendImage('one')
+    appendImage('two')
+    appendImage('three')
+    expect(retainRecentToolImages(transcript)).toEqual(transcript)
+
+    appendImage('four')
+    const removed = retainRecentToolImages(transcript)
+    expect(removed[1]).not.toHaveProperty('files')
+    expect(removed[3]).not.toHaveProperty('files')
+    expect(removed[5]).toHaveProperty('files')
+    expect(removed[7]).toHaveProperty('files')
+
+    appendImage('five')
+    expect(retainRecentToolImages(transcript).slice(0, removed.length)).toEqual(removed)
+    expect(transcript[1]).toHaveProperty('files')
   })
 
   it('keeps a default retained-result page complete in the model observation', () => {

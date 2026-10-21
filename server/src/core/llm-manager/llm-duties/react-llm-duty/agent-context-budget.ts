@@ -16,6 +16,7 @@ import {
   AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
   AGENT_RECENT_TOOL_IMAGE_LIMIT,
+  AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
@@ -162,24 +163,26 @@ function estimateAgentInputTokens(
 
 /**
  * Keeps recent tool images and the latest inspection batch without changing
- * saved evidence, textual results, or owner attachments.
+ * saved evidence, textual results, or owner attachments. Older results leave
+ * in batches, preserving the prefix between removals with bounded headroom.
  */
 export function retainRecentToolImages(
   transcript: AgentToolTranscriptMessage[]
 ): AgentToolTranscriptMessage[] {
   const retainedImageIndexes = new Set<number>()
-  for (
-    let index = transcript.length - 1;
-    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_TOOL_IMAGE_LIMIT;
-    index -= 1
-  ) {
-    const message = transcript[index]
-    if (
-      message?.role === 'tool' &&
-      message.files?.some((file) => file.mediaType.startsWith('image/'))
-    ) {
-      retainedImageIndexes.add(index)
-    }
+  const imageIndexes = transcript.flatMap((message, index) =>
+    message.role === 'tool' &&
+    message.files?.some((file) => file.mediaType.startsWith('image/'))
+      ? [index]
+      : []
+  )
+  const removedCount = Math.floor(
+    Math.max(0, imageIndexes.length - AGENT_RECENT_TOOL_IMAGE_LIMIT) /
+      AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+  ) * AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+
+  for (const index of imageIndexes.slice(removedCount)) {
+    retainedImageIndexes.add(index)
   }
 
   // Parallel inspections must reach the model together, even when their batch
