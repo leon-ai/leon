@@ -1,6 +1,7 @@
 import {
   LLMDuties,
   type CompletionParams,
+  type CompletionAttemptTiming,
   type LLMPromptAbortReason,
   type OpenAIToolCall,
   type ProviderReasoningItem,
@@ -69,6 +70,7 @@ export interface PromptAbortError extends Error {
  */
 export interface Provider {
   modelName?: string
+  transport?: CompletionAttemptTiming['transport']
   compactionBinding?: string
   runChatCompletion: (
     promptOrChatHistory: PromptOrChatHistory,

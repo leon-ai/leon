@@ -92,19 +92,21 @@ export async function runCompletionAttempt(
   const completionStartedAt = Date.now()
   let generationStartedAt: number | null = null
   let firstTokenAt: number | undefined
+  let firstReasoningTokenAt: number | undefined
   let firstToolInputAt: number | undefined
   let accounting: CompletionAccounting | undefined
   let firstEventAt: number | undefined
   let streamOpenedAt: number | undefined
+  let requestDispatchedAt: number | undefined
+  let responseHeadersAt: number | undefined
+  let firstByteAt: number | undefined
   let lastEventAt: number | undefined
   let lastTransportActivityAt: number | undefined
   let lastOutputAt: number | undefined
   let lastEvent = 'dispatched'
-  let transport: CompletionAttemptTiming['transport'] = isRemoteProvider
-    ? providerName === LLMProviders.OpenAI && shouldStreamOutput
-      ? 'websocket'
-      : 'http'
-    : 'local'
+  let transport: CompletionAttemptTiming['transport'] = provider.transport ?? (
+    isRemoteProvider ? 'http' : 'local'
+  )
   let requestId: string | undefined
   let responseId: string | undefined
   let isReasoning = false
@@ -143,6 +145,15 @@ export async function runCompletionAttempt(
       generationStartMs: generationStartedAt === null
         ? undefined
         : generationStartedAt - completionStartedAt,
+      requestDispatchMs: requestDispatchedAt === undefined
+        ? undefined
+        : requestDispatchedAt - completionStartedAt,
+      responseHeadersMs: responseHeadersAt === undefined
+        ? undefined
+        : responseHeadersAt - completionStartedAt,
+      firstByteMs: firstByteAt === undefined
+        ? undefined
+        : firstByteAt - completionStartedAt,
       streamOpenMs: streamOpenedAt === undefined
         ? undefined
         : streamOpenedAt - completionStartedAt,
@@ -152,6 +163,9 @@ export async function runCompletionAttempt(
       firstTokenMs: firstTokenAt === undefined
         ? undefined
         : firstTokenAt - completionStartedAt,
+      firstReasoningTokenMs: firstReasoningTokenAt === undefined
+        ? undefined
+        : firstReasoningTokenAt - completionStartedAt,
       firstToolInputMs: firstToolInputAt === undefined
         ? undefined
         : firstToolInputAt - completionStartedAt,
@@ -263,6 +277,7 @@ export async function runCompletionAttempt(
     }
 
     if (reasoningChunk.length > 0) {
+      firstReasoningTokenAt ??= Date.now()
       recordActivity('reasoning-delta')
       lastOutputAt = Date.now()
       markStreamStarted()
@@ -288,10 +303,15 @@ export async function runCompletionAttempt(
       firstToolInputAt ??= Date.now()
     }
 
-    if (event.type === 'transport-activity') {
+    if (event.type === 'request-dispatched') {
+      requestDispatchedAt ??= Date.now()
+    } else if (event.type === 'response-headers') {
+      responseHeadersAt ??= Date.now()
+    } else if (event.type === 'transport-activity') {
       // Heartbeats prove connection activity, not model progress. They must not
       // keep an unproductive inference alive indefinitely.
       lastTransportActivityAt = Date.now()
+      firstByteAt ??= lastTransportActivityAt
     } else if (event.type === 'stream-open') {
       streamOpenedAt = Date.now()
     } else if (event.type !== 'stream-start') {

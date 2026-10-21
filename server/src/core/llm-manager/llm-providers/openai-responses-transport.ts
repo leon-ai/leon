@@ -1,5 +1,6 @@
 import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
 import { requestChatGPTAccount } from '../llm-accounts/chatgpt-account-request'
+import type { CompletionParams } from '@/core/llm-manager/types'
 
 const CHATGPT_UNSUPPORTED_FIELDS = [
   'background',
@@ -47,13 +48,22 @@ export class OpenAIResponsesTransport {
    */
   public async fetch(
     input: Parameters<typeof globalThis.fetch>[0],
-    init?: RequestInit
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<Response> {
     const response = await (this.accountId
-      ? this.fetchChatGPT(input, init)
-      : this.fetchOpenAI(input, init))
+      ? this.fetchChatGPT(input, init, onStreamEvent)
+      : this.fetchOpenAI(input, init, onStreamEvent))
 
-    return this.finishResponseStream(response)
+    onStreamEvent?.({
+      type: 'response-headers',
+      transport: this.accountId ? 'http' : 'websocket',
+      ...(response.headers.get('x-request-id')
+        ? { requestId: response.headers.get('x-request-id')! }
+        : {})
+    })
+
+    return this.finishResponseStream(response, onStreamEvent)
   }
 
   /**
@@ -69,7 +79,8 @@ export class OpenAIResponsesTransport {
    */
   private async fetchChatGPT(
     input: Parameters<typeof globalThis.fetch>[0],
-    init?: RequestInit
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<Response> {
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
     for (const field of CHATGPT_UNSUPPORTED_FIELDS) {
@@ -107,6 +118,7 @@ export class OpenAIResponsesTransport {
       // header on the handshake, so use its native HTTP/SSE transport here.
       init?.signal?.throwIfAborted()
       this.onDispatch?.(String(input))
+      onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
 
       return globalThis.fetch(input, {
         ...init,
@@ -122,7 +134,8 @@ export class OpenAIResponsesTransport {
    */
   private async fetchOpenAI(
     input: Parameters<typeof globalThis.fetch>[0],
-    init?: RequestInit
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<Response> {
     init?.signal?.throwIfAborted()
     const authorization = new Headers(init?.headers).get('authorization') || ''
@@ -135,6 +148,7 @@ export class OpenAIResponsesTransport {
     const transport = this.getOpenAIWebSocketFetch()
     try {
       this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
+      onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
       const response = await transport(input, init)
       if (init?.signal?.aborted) {
         transport.close()
@@ -162,7 +176,10 @@ export class OpenAIResponsesTransport {
   /**
    * Let the SDK flush terminal usage without waiting for a remote connection to close.
    */
-  private finishResponseStream(response: Response): Response {
+  private finishResponseStream(
+    response: Response,
+    onStreamEvent?: CompletionParams['onStreamEvent']
+  ): Response {
     if (!response.body) {
       return response
     }
@@ -179,6 +196,19 @@ export class OpenAIResponsesTransport {
 
     let pending = ''
     const body = response.body
+      // Observe bytes before framing or SDK lookahead can delay parsed events.
+      .pipeThrough(new TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>({
+        transform: (chunk, controller): void => {
+          if (chunk.byteLength > 0) {
+            onStreamEvent?.({
+              type: 'transport-activity',
+              transport: this.accountId ? 'http' : 'websocket'
+            })
+          }
+
+          controller.enqueue(chunk)
+        }
+      }))
       .pipeThrough(new TextDecoderStream())
       .pipeThrough(new TransformStream<string, string>({
         transform: (chunk, controller): void => {

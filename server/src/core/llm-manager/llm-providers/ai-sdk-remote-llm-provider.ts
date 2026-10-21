@@ -185,6 +185,16 @@ export default class AISDKRemoteLLMProvider {
   }
 
   /**
+   * Identifies the selected transport even when a request fails before streaming.
+   */
+  public get transport(): 'http' | 'websocket' {
+    return this.config.flavor === 'openai-responses' &&
+      this.config.credentials?.['auth_kind'] !== 'chatgpt'
+      ? 'websocket'
+      : 'http'
+  }
+
+  /**
    * Binds opaque context to a model and credential without persisting secrets.
    */
   public get compactionBinding(): string {
@@ -273,13 +283,22 @@ export default class AISDKRemoteLLMProvider {
           init = { ...init, body: JSON.stringify(body) }
         }
 
-        response = await this.getOpenAITransport().fetch(input, init)
+        return this.getOpenAITransport().fetch(input, init, onStreamEvent)
       } else {
         init?.signal?.throwIfAborted()
         this.recordInference(input instanceof Request ? input.url : String(input))
+        onStreamEvent?.({ type: 'request-dispatched', transport: this.transport })
 
         response = await globalThis.fetch(input, init)
       }
+
+      onStreamEvent?.({
+        type: 'response-headers',
+        transport: this.transport,
+        ...(response.headers.get('x-request-id')
+          ? { requestId: response.headers.get('x-request-id')! }
+          : {})
+      })
 
       if (!onStreamEvent || !response.body || !response.ok) {
         return response
@@ -292,10 +311,7 @@ export default class AISDKRemoteLLMProvider {
           if (chunk.byteLength > 0 && !init?.signal?.aborted) {
             onStreamEvent({
               type: 'transport-activity',
-              transport: this.config.flavor === 'openai-responses' &&
-                this.config.credentials?.['auth_kind'] !== 'chatgpt'
-                ? 'websocket'
-                : 'http'
+              transport: this.transport
             })
           }
 
@@ -1858,7 +1874,11 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel(completionParams, prompt)
+    const languageModel = this.getLanguageModel(
+      completionParams,
+      prompt,
+      completionParams.onStreamEvent
+    )
     const result = await languageModel.doGenerate(callOptions)
     this.captureCompactionOutput(
       state,
@@ -1868,7 +1888,7 @@ export default class AISDKRemoteLLMProvider {
 
     completionParams.onStreamEvent?.({
       type: 'response-metadata',
-      transport: 'http',
+      transport: this.transport,
       ...(result.response?.id ? { responseId: result.response.id } : {}),
       ...(result.response?.headers?.['x-request-id']
         ? { requestId: result.response.headers['x-request-id'] }
@@ -1945,10 +1965,7 @@ export default class AISDKRemoteLLMProvider {
     completionParams.onToken?.('')
     completionParams.onStreamEvent?.({
       type: 'stream-open',
-      transport: this.config.flavor === 'openai-responses' &&
-        this.config.credentials?.['auth_kind'] !== 'chatgpt'
-        ? 'websocket'
-        : 'http',
+      transport: this.transport,
       ...(result.response?.headers?.['x-request-id']
         ? { requestId: result.response.headers['x-request-id'] }
         : {})

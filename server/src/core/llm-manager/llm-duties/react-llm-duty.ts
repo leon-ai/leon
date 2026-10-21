@@ -1306,6 +1306,7 @@ export class ReActLLMDuty extends LLMDuty {
       deadlineAt: initialResponseDeadlineAt
     }
     let modelAttempt = 0
+    let lastModelProgressAt = modelResponseStartedAt
     let lastAttemptFailureKind: CompletionFailureKind | undefined
     let lastActivityUpdateAt = 0
     const responseAbortController = new AbortController()
@@ -1318,6 +1319,11 @@ export class ReActLLMDuty extends LLMDuty {
       responseAbortController.abort(new AgentModelResponseTimeoutError())
     }
     let responseDeadlineTimer = setTimeout(abortModelResponse, Math.max(0, initialResponseDeadlineAt - Date.now()))
+    const refreshWaitDiagnostics = (): void => {
+      lastModelProgressAt = Date.now()
+      waitNoticeTimer?.refresh()
+      diagnosisTimer?.refresh()
+    }
     const renewModelResponseDeadline = (
       timeout = AGENT_MODEL_RESPONSE_TIMEOUT_MS
     ): void => {
@@ -1325,6 +1331,7 @@ export class ReActLLMDuty extends LLMDuty {
         return
       }
 
+      refreshWaitDiagnostics()
       modelStatus.deadlineAt = Math.min(
         modelResponseMaximumDeadlineAt,
         Date.now() + Math.max(AGENT_MODEL_RESPONSE_TIMEOUT_MS, timeout)
@@ -1356,29 +1363,48 @@ export class ReActLLMDuty extends LLMDuty {
     executionSignal?.addEventListener('abort', clearModelStatus, { once: true })
     emitModelStatus(ModelResponseState.Waiting)
 
-    waitNoticeTimer = setTimeout(() => {
-      if (completed || cancellationSignal.aborted) {
-        return
+    const clearWaitDiagnostics = (): void => {
+      if (waitNoticeTimer) {
+        clearTimeout(waitNoticeTimer)
+        waitNoticeTimer = null
       }
-      this.logTitle(phase)
-      LogHelper.warning(
-        `callAgentModel: pending > ${AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
-      )
-    }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
-
-    diagnosisTimer = setTimeout(() => {
-      if (completed || cancellationSignal.aborted) {
-        return
+      if (diagnosisTimer) {
+        clearTimeout(diagnosisTimer)
+        diagnosisTimer = null
       }
+    }
+    const startWaitDiagnostics = (): void => {
+      clearWaitDiagnostics()
+      lastModelProgressAt = Date.now()
 
-      this.logLongToolCallDiagnosis(
-        promptForLog,
-        activeSystemPrompt,
-        preparedTools,
-        phase,
-        toolChoice
-      )
-    }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
+      // Heartbeats keep transport alive but must not hide missing model output.
+      waitNoticeTimer = setTimeout(() => {
+        if (completed || cancellationSignal.aborted) {
+          return
+        }
+
+        this.logTitle(phase)
+        LogHelper.warning(
+          `callAgentModel: no model progress for ${Date.now() - lastModelProgressAt}ms`
+        )
+      }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
+
+      diagnosisTimer = setTimeout(() => {
+        if (completed || cancellationSignal.aborted) {
+          return
+        }
+
+        this.logLongToolCallDiagnosis(
+          promptForLog,
+          activeSystemPrompt,
+          preparedTools,
+          phase,
+          toolChoice
+        )
+      }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
+    }
+
+    startWaitDiagnostics()
 
     try {
       // Reviews must neither expose their text nor replace the proposed answer.
@@ -1406,14 +1432,17 @@ export class ReActLLMDuty extends LLMDuty {
             lastAttemptFailureKind = timing.failureKind
           }
           if (timing.outcome === 'started') {
+            startWaitDiagnostics()
             renewModelResponseDeadline(timing.inferenceTimeoutMs)
             modelAttempt += 1
             modelStatus.attempt = modelAttempt
             modelStatus.lastActivityAt = null
             emitModelStatus(ModelResponseState.Waiting)
           } else if (timing.outcome === 'completed') {
+            clearWaitDiagnostics()
             clearModelStatus()
           } else {
+            clearWaitDiagnostics()
             modelStatus.retryReason = timing.failureKind
             emitModelStatus(ModelResponseState.Retrying)
           }
@@ -1426,6 +1455,7 @@ export class ReActLLMDuty extends LLMDuty {
           if (event.type === 'finish') {
             // Provider generation is done; local artifact work has its own lifecycle.
             clearTimeout(responseDeadlineTimer)
+            clearWaitDiagnostics()
           } else if (
             event.type === 'tool-input-delta' || event.type === 'tool-call-delta' ||
             event.type === 'tool-call' || event.type === 'tool-result' ||
@@ -1433,6 +1463,8 @@ export class ReActLLMDuty extends LLMDuty {
             event.type === 'file'
           ) {
             renewModelResponseDeadline()
+          } else if (event.type === 'reasoning-start' || event.type === 'reasoning-end') {
+            refreshWaitDiagnostics()
           }
           if (event.type === 'stream-open' && !options.isCompletionReview) {
             // A retry replaces any unfinished previews from its predecessor.
@@ -1501,6 +1533,7 @@ export class ReActLLMDuty extends LLMDuty {
                   return
                 }
 
+                refreshWaitDiagnostics()
                 clearModelStatus()
                 const callable = functionsByToolName?.get(call.function.name)
                 if (!callable) {
@@ -1582,12 +1615,7 @@ export class ReActLLMDuty extends LLMDuty {
       clearTimeout(responseDeadlineTimer)
       executionSignal?.removeEventListener('abort', clearModelStatus)
       clearModelStatus()
-      if (waitNoticeTimer) {
-        clearTimeout(waitNoticeTimer)
-      }
-      if (diagnosisTimer) {
-        clearTimeout(diagnosisTimer)
-      }
+      clearWaitDiagnostics()
     }
 
     executionSignal?.throwIfAborted()
@@ -2002,7 +2030,7 @@ export class ReActLLMDuty extends LLMDuty {
 
     this.logTitle('execution')
     LogHelper.warning(
-      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): provider=${getLLMProviderName()}, phase=${phase}, tool choice=${toolChoice}, tools=${tools.length}, approximate input tokens=${totalEstimatedTokens} (prompt=${promptTokens}, tool schemas=${toolSchemaTokens}).`
+      `Model progress stalled (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): provider=${getLLMProviderName()}, phase=${phase}, tool choice=${toolChoice}, tools=${tools.length}, approximate input tokens=${totalEstimatedTokens} (prompt=${promptTokens}, tool schemas=${toolSchemaTokens}).`
     )
   }
 

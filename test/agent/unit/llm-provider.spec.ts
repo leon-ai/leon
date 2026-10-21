@@ -74,12 +74,49 @@ vi.mock('@/helpers/log-helper', () => ({
 interface LLMProviderTestState {
   agentLLMProvider: {
     modelName: string
+    transport?: 'http' | 'websocket'
     runChatCompletion: ReturnType<typeof vi.fn>
   }
   agentLLMProviderTargetLabel: string
 }
 
 describe('LLMProvider', () => {
+  it.each(['http', 'websocket'] as const)(
+    'reports the selected %s transport before a connection opens',
+    async (transport) => {
+      const onAttempt = vi.fn()
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = {
+        modelName: 'test-model',
+        transport,
+        runChatCompletion: vi.fn().mockRejectedValue(new Error('Connection failed'))
+      }
+      celerisTarget.provider = LLMProviders.OpenAI
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      await manager.prompt('Continue.', {
+        dutyType: LLMDuties.ReAct,
+        shouldStream: true,
+        maxRetries: 0,
+        remoteProviderErrorRetries: 0,
+        onAttempt
+      })
+
+      expect(onAttempt.mock.calls.map(([timing]) => timing.transport)).toEqual([
+        transport,
+        transport
+      ])
+      expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+        outcome: 'Error',
+        requestDispatchMs: undefined,
+        responseHeadersMs: undefined,
+        firstByteMs: undefined
+      })
+    }
+  )
+
   it.each([
     { metadata: { statusCode: 503 }, kind: CompletionFailureKind.Unavailable },
     { metadata: { response: { status: 429 } }, kind: CompletionFailureKind.Unavailable },
@@ -452,7 +489,7 @@ describe('LLMProvider', () => {
         const onAttempt = vi.fn()
         const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
           attempts.push(params)
-          params.onStreamEvent?.({ type: 'stream-open', transport: 'http', requestId: 'req-test' })
+          params.onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
 
           if (attempts.length === 2) {
             params.onToken?.('Recovered')
@@ -488,7 +525,13 @@ describe('LLMProvider', () => {
 
         // Opening a connection, or an empty token, is not model output.
         attempts[0]!.onToken?.('')
-        await vi.advanceTimersByTimeAsync(40_000)
+        await vi.advanceTimersByTimeAsync(10)
+        attempts[0]!.onStreamEvent?.({ type: 'response-headers', requestId: 'req-test' })
+        await vi.advanceTimersByTimeAsync(10)
+        attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
+        await vi.advanceTimersByTimeAsync(10)
+        attempts[0]!.onStreamEvent?.({ type: 'stream-open', transport: 'http' })
+        await vi.advanceTimersByTimeAsync(39_970)
         expect(attempts[0]!.signal?.aborted).toBe(false)
 
         const progress = (): void => {
@@ -522,7 +565,10 @@ describe('LLMProvider', () => {
         ])
         expect(timings[1]).toMatchObject({
           attemptId: timings[0].attemptId,
-          streamOpenMs: 0,
+          requestDispatchMs: 0,
+          responseHeadersMs: 10,
+          firstByteMs: 20,
+          streamOpenMs: 30,
           generationStartMs: 40_000,
           transportIdleMs: 1_000,
           outputIdleMs: 30_000,
@@ -540,6 +586,7 @@ describe('LLMProvider', () => {
 
     try {
       let params: CompletionParams | undefined
+      const onAttempt = vi.fn()
       let complete: (value: unknown) => void = () => {}
       const runChatCompletion = vi.fn((_prompt, options: CompletionParams) => {
         params = options
@@ -558,6 +605,7 @@ describe('LLMProvider', () => {
         dutyType: LLMDuties.ReAct,
         systemPrompt: '',
         shouldStream: true,
+        onAttempt,
         maxRetries: 0
       })
 
@@ -582,6 +630,9 @@ describe('LLMProvider', () => {
 
       if (phase !== 'compaction') {
         firstTokenAt = Date.now()
+        if (phase === 'reasoning') {
+          params!.onReasoningToken?.('Verified the result.')
+        }
         params!.onToken?.('Done')
       }
       params!.onStreamEvent?.({ type: 'finish' })
@@ -594,6 +645,9 @@ describe('LLMProvider', () => {
       } })
 
       expect((await pending)?.firstTokenAt).toBe(firstTokenAt)
+      expect(onAttempt.mock.calls.at(-1)?.[0].firstReasoningTokenMs).toBe(
+        phase === 'reasoning' ? 60_000 : undefined
+      )
     } finally {
       vi.useRealTimers()
     }

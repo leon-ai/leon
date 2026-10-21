@@ -4205,6 +4205,66 @@ describe('model response status', () => {
     }
   })
 
+  it.each(['text', 'reasoning', 'tool-input'])(
+    'warns only when %s progress stops, independently of transport heartbeats',
+    async (output) => {
+      let params!: CompletionParams
+      let finish!: (result: { output: string }) => void
+      coreMocks.prompt.mockImplementationOnce((_messages, input) => {
+        params = input
+
+        return new Promise((resolve) => {
+          finish = resolve
+        })
+      })
+      const duty = new ReActLLMDuty({ input: 'Inspect the files.' })
+      Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+      const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+        isRecoveryAttempt: false
+      })
+
+      try {
+        for (let chunk = 0; chunk < 4; chunk += 1) {
+          await vi.advanceTimersByTimeAsync(15_000)
+          if (output === 'text') {
+            params.onToken?.('Generated content.')
+          } else if (output === 'reasoning') {
+            params.onReasoningToken?.('Checking the files.')
+          } else {
+            params.onStreamEvent?.({ type: 'tool-input-delta' })
+          }
+        }
+
+        expect(LogHelper.warning).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS - 1)
+        params.onToken?.('')
+        params.onStreamEvent?.({ type: 'transport-activity', transport: 'http' })
+        expect(LogHelper.warning).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1)
+        expect(LogHelper.warning).toHaveBeenCalledWith(
+          'callAgentModel: no model progress for 20000ms'
+        )
+        await vi.advanceTimersByTimeAsync(
+          AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS - AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS
+        )
+        expect(LogHelper.warning).toHaveBeenCalledWith(
+          expect.stringContaining('Model progress stalled')
+        )
+
+        params.onToken?.('Done.')
+        params.onStreamEvent?.({ type: 'finish' })
+        vi.mocked(LogHelper.warning).mockClear()
+        await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
+        expect(LogHelper.warning).not.toHaveBeenCalled()
+      } finally {
+        finish({ output: 'Done.' })
+        await pending
+      }
+
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
   it.each(['text', 'reasoning', 'tool-input', 'review', 'compaction'])(
     'allows productive %s beyond the initial response deadline', async (output) => {
       let params!: CompletionParams

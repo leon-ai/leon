@@ -991,6 +991,12 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
     expect(onReasoningToken).toHaveBeenCalledWith('Checking the note.')
+    expect(provider.transport).toBe('http')
+    expect(onStreamEvent.mock.calls.slice(0, 3).map(([event]) => event)).toEqual([
+      { type: 'request-dispatched', transport: 'http' },
+      { type: 'response-headers', transport: 'http' },
+      { type: 'transport-activity', transport: 'http' }
+    ])
     expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'stream-open', transport: 'http'
     }))
@@ -1119,6 +1125,18 @@ describe('AISDKRemoteLLMProvider', () => {
     }
 
     try {
+      controller.enqueue(new TextEncoder().encode(': keep-alive'))
+      await vi.waitFor(() => expect(onStreamEvent).toHaveBeenCalledWith({
+        type: 'transport-activity', transport: 'websocket'
+      }))
+      expect(onStreamEvent).toHaveBeenCalledWith({
+        type: 'response-headers', transport: 'websocket'
+      })
+      expect(onStreamEvent).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'stream-open' })
+      )
+      controller.enqueue(new TextEncoder().encode('\n\n'))
+
       send({ type: 'response.created', response: { ...response, status: 'in_progress', output: [] } })
       send({ type: 'response.output_item.added', output_index: 0, item: { ...item, content: [] } })
       send({ type: 'response.output_text.delta', item_id: item.id, output_index: 0, content_index: 0, delta: 'Provisional.' })

@@ -216,9 +216,16 @@ export interface CompletionAttemptTiming {
   inferenceTimeoutMs: number
   streamIdleTimeoutMs: number
   generationStartMs?: number | undefined
+  requestDispatchMs?: number | undefined
+  responseHeadersMs?: number | undefined
+  firstByteMs?: number | undefined
+  /**
+   * The SDK has opened its parsed stream; response bytes may arrive earlier.
+   */
   streamOpenMs?: number | undefined
   firstEventMs?: number | undefined
   firstTokenMs?: number | undefined
+  firstReasoningTokenMs?: number | undefined
   firstToolInputMs?: number | undefined
   lastEvent: string
   idleMs?: number | undefined
