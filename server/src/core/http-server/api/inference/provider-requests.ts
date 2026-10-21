@@ -10,6 +10,7 @@ import { LLMProviders } from '@/core/llm-manager/types'
 import { DateHelper } from '@/helpers/date-helper'
 
 interface ProviderRequestBody {
+  session_id?: string
   provider: LLMProviders
   endpoint: string
   payload: Record<string, unknown>
@@ -61,6 +62,7 @@ export const providerRequestsPlugin: FastifyPluginAsync<APIOptions> = async (
     {
       schema: {
         body: Type.Object({
+          session_id: Type.Optional(Type.String({ minLength: 1 })),
           provider: Type.Enum(LLMProviders),
           endpoint: Type.String({ minLength: 1 }),
           payload: Type.Record(Type.String(), Type.Unknown()),
@@ -70,6 +72,15 @@ export const providerRequestsPlugin: FastifyPluginAsync<APIOptions> = async (
       }
     },
     async (request, reply) => {
+      const sessionId = request.body.session_id
+      const session = sessionId
+        ? CONVERSATION_SESSION_MANAGER.getSession(sessionId)
+        : null
+
+      if (sessionId && !session) {
+        throw new Error('Conversation session does not exist.')
+      }
+
       const controller = new AbortController()
       const abort = (): void => {
         if (!reply.raw.writableEnded) {
@@ -82,7 +93,10 @@ export const providerRequestsPlugin: FastifyPluginAsync<APIOptions> = async (
       })
 
       try {
-        const response = await requestProvider(
+        const response = await runWithConversationSession({
+          sessionId: sessionId || '',
+          ...(session?.modelTarget ? { modelTarget: session.modelTarget } : {})
+        }, () => requestProvider(
           request.body.provider,
           request.body.endpoint,
           request.body.payload,
@@ -93,7 +107,7 @@ export const providerRequestsPlugin: FastifyPluginAsync<APIOptions> = async (
               ? { anthropicCompatibility: true }
               : {})
           }
-        )
+        ))
 
         if (response.headers.get('content-type')?.includes('text/event-stream')) {
           // Fastify forwards the body with backpressure and cancels on disconnect.

@@ -501,6 +501,9 @@ export default class HostedTool extends Tool {
           'x-leon-profile-token': service.token
         },
         body: JSON.stringify({
+          ...(this.executionContext?.conversationSessionId
+            ? { session_id: this.executionContext.conversationSessionId }
+            : {}),
           provider,
           endpoint,
           payload: JSON.parse(String(init?.body || '{}')),

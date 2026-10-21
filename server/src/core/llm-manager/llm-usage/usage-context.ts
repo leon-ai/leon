@@ -91,6 +91,16 @@ export function readProviderUsage(value: unknown): InferenceUsage {
     }
   }
 
+  // Native Anthropic counters exclude cache reads and writes from input_tokens.
+  // SDK totals already include them, so only expand an unnormalized payload.
+  if (!('raw' in usage) && usage['inputTokens'] === undefined &&
+    usage['promptTokens'] === undefined && inputTokens !== undefined &&
+    (usage['cache_read_input_tokens'] !== undefined ||
+      usage['cache_creation_input_tokens'] !== undefined)) {
+    inputTokens += (tokenCount(usage['cache_read_input_tokens']) ?? 0) +
+      (tokenCount(usage['cache_creation_input_tokens']) ?? 0)
+  }
+
   return {
     ...readCompletionAccounting(value),
     ...(inputTokens !== undefined ? { inputTokens } : {}),

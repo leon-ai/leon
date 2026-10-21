@@ -21,6 +21,7 @@ export enum LLMDuties {
 }
 
 export enum InferencePurpose {
+  ProviderTool = 'provider-tool',
   SessionTitle = 'session-title',
   Memory = 'memory',
   OwnerProfile = 'owner-profile',
