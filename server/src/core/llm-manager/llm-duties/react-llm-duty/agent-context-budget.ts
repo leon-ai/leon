@@ -508,11 +508,17 @@ export function prepareAgentModelContext(
     params.systemPrompt,
     params.tools
   )
-  const boundedTranscript = boundOlderUIObservations(imageBoundedTranscript)
+  // Keep reusable text unchanged until context pressure requires reduction.
+  // Aging alone must not rewrite the prefix on every successive request.
+  const shouldReduceContext = params.forceCompaction ||
+    estimatedInputTokensBeforePreparation > params.compactionTriggerTokens
+  const reducedTranscript = shouldReduceContext
+    ? boundOlderUIObservations(imageBoundedTranscript)
+    : imageBoundedTranscript
+  const boundedTranscript = reducedTranscript
   // Only discard reloadable schemas here. The continuity summary owns text
   // reduction, so its trigger sees the real cost of the original evidence.
-  const tools = !params.preserveToolSchemas && (params.forceCompaction ||
-    estimatedInputTokensBeforePreparation > params.compactionTriggerTokens)
+  const tools = !params.preserveToolSchemas && shouldReduceContext
     ? pruneInactiveToolkitSchemas(imageBoundedTranscript, params.tools)
     : params.tools
   return {
@@ -522,7 +528,7 @@ export function prepareAgentModelContext(
     estimatedInputTokens: estimateAgentInputTokens(
       boundedTranscript, params.systemPrompt, tools
     ),
-    wasCompacted: tools.length < params.tools.length || boundedTranscript.some(
+    wasCompacted: tools.length < params.tools.length || reducedTranscript.some(
       (message, index) => message !== imageBoundedTranscript[index]
     )
   }

@@ -133,7 +133,7 @@ describe('agent context budget', () => {
     expect(prepared.transcript[0]).toEqual(transcript[0])
   })
 
-  it('bounds older successful UI evidence only when the full artifact is available', () => {
+  it('preserves UI text until context pressure requires reloadable evidence to shrink', () => {
     const transcript: AgentToolTranscriptMessage[] = []
     for (let index = 0; index < 12; index += 1) {
       transcript.push({ role: 'tool', toolCallId: String(index),
@@ -143,7 +143,16 @@ describe('agent context budget', () => {
           data: { output: { elements: 'Old screen '.repeat(400) } } }) })
     }
     const original = JSON.stringify(transcript)
-    const result = prepareAgentModelContext({ transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 96_000 })
+    const normal = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 96_000
+    })
+
+    expect(normal.transcript).toEqual(transcript)
+    expect(normal.wasCompacted).toBe(false)
+
+    const result = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 1
+    })
     expect(result.transcript[0]!.content.length).toBeLessThan(1_500)
     expect(result.transcript[0]!.content).toContain('/logs/0.json')
     expect(result.transcript[1]).toEqual(transcript[1])

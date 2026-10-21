@@ -1561,12 +1561,13 @@ describe('continuous agent loop', () => {
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')
   })
 
-  it('loads collection tracking after plan initialization', async () => {
+  it('keeps collection tracking available through one stable planning contract', async () => {
     const catalog = createCatalog()
     const steps = [{ label: 'Inspect requested collection', status: 'in_progress' }]
     let turn = 0
 
     catalog.tools.push(createAgentPlanTool(AGENT_PLAN_TOOL_NAME))
+    const initialSchema = JSON.stringify(catalog.tools)
 
     await runAgentLoop({
       transcript: [{ role: 'user', content: 'Retrieve the requested documents.' }],
@@ -1580,7 +1581,8 @@ describe('continuous agent loop', () => {
         turn += 1
 
         if (turn === 1) {
-          expect(schema).not.toContain('"collection"')
+          expect(schema).toContain('"collection"')
+          expect(JSON.stringify(tools)).toBe(initialSchema)
 
           return {
             toolCalls: [
@@ -1591,6 +1593,7 @@ describe('continuous agent loop', () => {
 
         expect(schema).toContain('"collection"')
         expect(schema).toContain('"enumeration"')
+        expect(JSON.stringify(tools)).toBe(initialSchema)
 
         return {
           toolCalls: [
@@ -1639,7 +1642,7 @@ describe('continuous agent loop', () => {
           )
           const schema = JSON.stringify(planTool?.function.parameters)
 
-          expect(schema.includes('"collection"')).toBe(state !== 'absent')
+          expect(schema).toContain('"collection"')
 
           turn += 1
           if (options.requiresPlanReconciliation) {
@@ -3679,7 +3682,7 @@ describe('agent automatic compaction', () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Review the sources.' }
     ]
-    const state = { guidance: 'Inspect authoritative sources.', plan: ['Inspect'], elapsedMs: 0 }
+    const state = { guidance: { first: 'Inspect authoritative sources.' }, plan: ['Inspect'], elapsedMs: 0 }
     appendAgentRuntimeContext(transcript, state)
     const prefix = structuredClone(transcript)
     appendAgentRuntimeContext(transcript, state)
@@ -3690,7 +3693,20 @@ describe('agent automatic compaction', () => {
     expect(transcript.at(-1)).toMatchObject({
       runtimeContext: { plan: ['Verify'], elapsedMs: 100 }
     })
-    expect(transcript.at(-1)?.content).not.toContain(state.guidance)
+    expect(transcript.at(-1)?.content).not.toContain(state.guidance.first)
+
+    appendAgentRuntimeContext(transcript, {
+      ...state, guidance: { ...state.guidance, second: 'Verify the requested output.' }
+    })
+    expect(transcript.at(-1)).toMatchObject({
+      runtimeContext: { guidance: { second: 'Verify the requested output.' } }
+    })
+    expect(transcript.at(-1)?.content).not.toContain(state.guidance.first)
+    const updated = structuredClone(transcript)
+    appendAgentRuntimeContext(transcript, {
+      ...state, guidance: { ...state.guidance, second: 'Verify the requested output.' }
+    })
+    expect(transcript).toEqual(updated)
 
     const compacted: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Retained summary.' }]
     appendAgentRuntimeContext(compacted, state)

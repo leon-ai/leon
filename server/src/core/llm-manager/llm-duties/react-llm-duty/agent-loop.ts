@@ -453,7 +453,7 @@ export function buildAgentToolCatalog(
     tools.unshift(createToolkitLoaderTool(availableToolkitsById))
   }
   tools.push(
-    createAgentPlanTool(AGENT_PLAN_TOOL_NAME, previous?.planTracking),
+    createAgentPlanTool(AGENT_PLAN_TOOL_NAME),
     createClarificationTool(),
     createCancellationTool(),
     createAgentSkillTool()
@@ -2323,7 +2323,7 @@ function describeToolkitFunctions(
 }
 
 /**
- * Expose collection tracking after initialization, including resumed plans.
+ * Tracks plan activation without changing the cacheable function contract.
  */
 function enableAgentPlanTracking(catalog: AgentToolCatalog): void {
   const planTool = catalog.tools.find(
@@ -2331,7 +2331,6 @@ function enableAgentPlanTracking(catalog: AgentToolCatalog): void {
   )
 
   if (planTool) {
-    planTool.function = createAgentPlanTool(AGENT_PLAN_TOOL_NAME, true).function
     catalog.planTracking = true
   }
 }

@@ -105,7 +105,6 @@ import {
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
   AgentModelResponseTimeoutError,
-  buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentConnectionGuidance,
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
@@ -572,8 +571,9 @@ export class ReActLLMDuty extends LLMDuty {
         callModel: async (messages, tools, options, state) => {
           // Loaded guidance and skills must survive compaction and pauses.
           const activeSkill = caller.agentSkillContext
-          const progressiveGuidance =
-            buildAgentProgressiveGuidanceSystemPrompt(catalog)
+          const progressiveGuidance = Object.fromEntries(
+            catalog.loadedProgressiveGuidance
+          )
 
           // Reviewers use task constraints and evidence. Current clock and mood
           // stay outside the reusable prefix for both acting and review calls.
@@ -595,7 +595,9 @@ export class ReActLLMDuty extends LLMDuty {
               finishing_reserve_ms: this.runBudget.finishingReserveMs,
               phase: this.runBudget.isFinishing ? 'finishing' : 'working'
             },
-            reported_plan: state.trackedSteps,
+            reported_plan: Object.fromEntries(
+              state.trackedSteps.map((step) => [step.label, step])
+            ),
             planning_guidance: state.trackedSteps.length ? AGENT_PLAN_GUIDANCE : null,
             plan_reconciliation: options.requiresPlanReconciliation
               ? 'Reconcile the plan with tool evidence now using update_plan: record verified milestones, the actual active step and unresolved mappings/blockers. Preserve completed work; never infer completion from successful input or invent work for this reminder. If the same step remains active, record why. Ask the owner only for missing information or access.'

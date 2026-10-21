@@ -4,10 +4,10 @@ import type { PlanStepStatus, TrackedPlanCollection, TrackedPlanStep } from './a
 
 const PLAN_STATUSES = ['pending', 'in_progress', 'completed', 'error'] as const
 
-// Keep collection workflow details out of unrelated requests. The first plan
-// update activates these instructions before the next operational turn.
+// Planning guidance follows activation; the function schema stays stable so
+// starting a plan does not invalidate the provider's conversation prefix.
 export const AGENT_PLAN_GUIDANCE = `<planning>
-- Before complex or collection work, call update_plan; simple tasks need none. Record authoritative source pointers, boundaries, navigation, acceptance criteria and checks concisely in step details; reference existing artifacts instead of repeating source summaries or drafting outputs there. Start one step in_progress and later actionable steps pending. Inspect relevant lists/pages before unrelated app areas.
+- Before complex or collection work, call update_plan alongside independent discovery or operational calls; simple tasks need none. Record authoritative source pointers, boundaries, navigation, acceptance criteria and checks concisely in step details; reference existing artifacts instead of repeating source summaries or drafting outputs there. Start one step in_progress and later actionable steps pending. Inspect relevant lists/pages before unrelated app areas.
 - Before processing a collection, attach it to a plan step. Record stable source identities, pagination/scroll coverage and the observed end condition; filtered snippets are not full lists. Complete enumeration only after covering scope, recording empty ranges explicitly. Keep the step in_progress until every item is verified, even after enumeration ends. Record verified exclusions and reasons as completed outcomes; omit them from deliverables unless requested. Bound unbounded sources explicitly and justify the boundary.
 - Use the supplied source's metadata/version unless the owner requests latest. For exact exports, use that page's native export and preserve format/fields; never substitute sources or reconstruct it.
 - For research, record questions, authoritative source boundaries and evidence gaps in step details. Inspect the bounded source inventory before selecting examples. Broaden or change methods when inspection adds no relevant evidence; distinguish runtime behavior from written guidance. Resolve each question with evidence or a precise limitation.
@@ -178,19 +178,16 @@ export function parseAgentPlan(
 }
 
 /**
- * Uses the existing plan tool for both visible milestones and durable collection state.
+ * Exposes one stable contract for visible milestones and collection coverage.
  */
 export function createAgentPlanTool(
-  name: string,
-  includeCollection = false
+  name: string
 ): OpenAITool {
   return {
     type: 'function',
     function: {
       name,
-      description: includeCollection
-        ? 'Send concise status/evidence deltas, referencing existing sources or artifacts instead of repeating their content. Steps merge by stable label; items by stable id. Omit unchanged steps, details and collections.'
-        : 'Initialize complex or collection work before execution: put acceptance criteria and required checks in step details, start one step in_progress and later steps pending. Loads planning guidance and the collection schema for the next turn.',
+      description: 'Track complex or collection work with concise status/evidence deltas. Start one step in_progress and later steps pending; simple tasks need no plan. Batch initialization and updates with independent tool calls. Steps merge by stable label; collection items by stable id. Omit unchanged state and reference evidence instead of repeating it.',
       parameters: {
         type: 'object',
         properties: {
@@ -213,56 +210,52 @@ export function createAgentPlanTool(
                   type: 'string',
                   description: 'Concise criteria/checks and observed outcomes or remaining gaps. Reference evidence by path/id; do not draft deliverables or repeat source summaries. Omit unchanged details.'
                 },
-                ...(includeCollection
-                  ? {
-                      collection: {
+                collection: {
+                  type: 'object',
+                  description: 'Attach to the end-to-end collection work step, which stays active until its items are verified. Omission preserves previous state. Items merge by stable source id, not list position or temporary UI handles.',
+                  properties: {
+                    scope: {
+                      type: 'string',
+                      description: 'Requested boundaries, authoritative source and desired outcome.'
+                    },
+                    enumeration: {
+                      type: 'string',
+                      enum: ['in_progress', 'completed']
+                    },
+                    evidence: {
+                      type: 'string',
+                      description: 'Observed coverage: relevant filters, pages/cursors and end condition. Record empty ranges explicitly; do not invent missing items.'
+                    },
+                    cursor: {
+                      type: 'string',
+                      description: 'Current source/list position or continuation; empty when no continuation remains.'
+                    },
+                    items: {
+                      type: 'array',
+                      items: {
                         type: 'object',
-                        description: 'Attach to the end-to-end collection work step, which stays active until its items are verified. Omission preserves previous state. Items merge by stable source id, not list position or temporary UI handles.',
                         properties: {
-                          scope: {
+                          id: {
                             type: 'string',
-                            description: 'Requested boundaries, authoritative source and desired outcome.'
+                            description: 'Stable source identity; retain the same id across revisits.'
                           },
-                          enumeration: {
+                          status: {
                             type: 'string',
-                            enum: ['in_progress', 'completed']
+                            enum: [...PLAN_STATUSES]
                           },
-                          evidence: {
+                          details: {
                             type: 'string',
-                            description: 'Observed coverage: relevant filters, pages/cursors and end condition. Record empty ranges explicitly; do not invent missing items.'
-                          },
-                          cursor: {
-                            type: 'string',
-                            description: 'Current source/list position or continuation; empty when no continuation remains.'
-                          },
-                          items: {
-                            type: 'array',
-                            items: {
-                              type: 'object',
-                              properties: {
-                                id: {
-                                  type: 'string',
-                                  description: 'Stable source identity; retain the same id across revisits.'
-                                },
-                                status: {
-                                  type: 'string',
-                                  enum: [...PLAN_STATUSES]
-                                },
-                                details: {
-                                  type: 'string',
-                                  description: 'Observed identity/location, or verified outcome and artifact path when completed.'
-                                }
-                              },
-                              required: ['id', 'status'],
-                              additionalProperties: false
-                            }
+                            description: 'Observed identity/location, or verified outcome and artifact path when completed.'
                           }
                         },
-                        required: ['scope', 'enumeration', 'evidence', 'items'],
+                        required: ['id', 'status'],
                         additionalProperties: false
                       }
                     }
-                  : {})
+                  },
+                  required: ['scope', 'enumeration', 'evidence', 'items'],
+                  additionalProperties: false
+                }
               },
               required: ['label', 'status'],
               additionalProperties: false

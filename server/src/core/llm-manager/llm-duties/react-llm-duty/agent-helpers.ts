@@ -49,9 +49,14 @@ function stableSerialize(value: unknown): string {
   return JSON.stringify(value)
 }
 
+function isContextRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 /**
  * Appends changed host state while preserving earlier cacheable messages.
  * Missing state after compaction naturally restores the complete snapshot.
+ * Object fields carry shallow keyed deltas; arrays and scalars replace a field.
  */
 export function appendAgentRuntimeContext(
   transcript: AgentToolTranscriptMessage[],
@@ -61,13 +66,32 @@ export function appendAgentRuntimeContext(
 
   for (const message of transcript) {
     if (message.role === 'user' && message.runtimeContext) {
-      Object.assign(previous, message.runtimeContext)
+      for (const [key, value] of Object.entries(message.runtimeContext)) {
+        previous[key] = isContextRecord(value) && isContextRecord(previous[key])
+          ? { ...previous[key], ...value }
+          : value
+      }
     }
   }
 
-  const changes = Object.fromEntries(Object.entries(context).filter(([key, value]) =>
-    stableSerialize(previous[key]) !== stableSerialize(value)
-  ))
+  const changes: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(context)) {
+    if (isContextRecord(value) && isContextRecord(previous[key])) {
+      // Guidance is keyed by source, so discovering one capability appends only
+      // that capability's instructions instead of the entire loaded catalog.
+      const prior = previous[key]
+      const delta = Object.fromEntries(Object.entries(value).filter(([name, entry]) =>
+        stableSerialize(prior[name]) !== stableSerialize(entry)
+      ))
+
+      if (Object.keys(delta).length > 0) {
+        changes[key] = delta
+      }
+    } else if (stableSerialize(previous[key]) !== stableSerialize(value)) {
+      changes[key] = value
+    }
+  }
 
   if (Object.keys(changes).length > 0) {
     transcript.push({
