@@ -474,6 +474,86 @@ function findRecentToolkitIds(
   return toolkitIds
 }
 
+/**
+ * References identical tool-owned context only when its latest full version is
+ * still in this request. Rebuilding from raw history restores it after compaction
+ * without sharing state across conversations or changing saved evidence.
+ */
+export function reuseToolContext(
+  transcript: AgentToolTranscriptMessage[]
+): AgentToolTranscriptMessage[] {
+  let visible = new Map<string, { content: string, callId: string }>()
+
+  return transcript.map((message) => {
+    if (message.role !== 'tool' || !message.content.includes('"modelContextId"')) {
+      return message
+    }
+
+    let changed = false
+    const nextVisible = new Map(visible)
+    const project = (value: unknown): unknown => {
+      if (Array.isArray(value)) {
+        return value.map(project)
+      }
+
+      const record = readRecord(value)
+      if (!record) {
+        return value
+      }
+
+      if (typeof record['modelContextId'] === 'string' &&
+          typeof record['content'] === 'string') {
+        const key = JSON.stringify([message.toolName, record['modelContextId']])
+        const previous = nextVisible.get(key)
+
+        if (previous?.content === record['content']) {
+          const reference = { ...record }
+          delete reference['content']
+          changed = true
+          return {
+            ...reference,
+            contentReference: `Unchanged context; complete content is in tool call ${previous.callId}.`
+          }
+        }
+
+        nextVisible.set(key, {
+          content: record['content'],
+          callId: message.toolCallId
+        })
+        return record
+      }
+
+      return Object.fromEntries(Object.entries(record).map(([key, child]) =>
+        [key, project(child)]
+      ))
+    }
+
+    try {
+      const observation = readRecord(JSON.parse(message.content))
+      const data = readRecord(observation?.['data'])
+      const output = readRecord(data?.['output'])
+
+      if (!observation || !data || !output) {
+        return message
+      }
+
+      // Only tool-owned output opts in. Echoed model arguments are not context.
+      const projectedOutput = project(output)
+      const projected = changed
+        ? { ...message, content: JSON.stringify({
+            ...observation,
+            data: { ...data, output: projectedOutput }
+          }) }
+        : message
+      visible = nextVisible
+      return projected
+    } catch {
+      // Plain text and incomplete observations remain available verbatim.
+      return message
+    }
+  })
+}
+
 function pruneInactiveToolkitSchemas(
   transcript: AgentToolTranscriptMessage[],
   tools: OpenAITool[]
@@ -503,8 +583,9 @@ export function prepareAgentModelContext(
   const imageBoundedTranscript = retainRecentToolImages(
     params.transcript
   )
+  const reusedTranscript = reuseToolContext(imageBoundedTranscript)
   const estimatedInputTokensBeforePreparation = estimateAgentInputTokens(
-    imageBoundedTranscript,
+    reusedTranscript,
     params.systemPrompt,
     params.tools
   )
@@ -512,10 +593,14 @@ export function prepareAgentModelContext(
   // Aging alone must not rewrite the prefix on every successive request.
   const shouldReduceContext = params.forceCompaction ||
     estimatedInputTokensBeforePreparation > params.compactionTriggerTokens
+  // Reduction may remove a context source. Resolve references from the final
+  // view so every reference still has its complete content in this request.
   const reducedTranscript = shouldReduceContext
     ? boundOlderUIObservations(imageBoundedTranscript)
     : imageBoundedTranscript
-  const boundedTranscript = reducedTranscript
+  const boundedTranscript = shouldReduceContext
+    ? reuseToolContext(reducedTranscript)
+    : reusedTranscript
   // Only discard reloadable schemas here. The continuity summary owns text
   // reduction, so its trigger sees the real cost of the original evidence.
   const tools = !params.preserveToolSchemas && shouldReduceContext

@@ -5,7 +5,8 @@ import {
   prepareAgentModelContext,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
-  resolveAgentMaxOutputTokens
+  resolveAgentMaxOutputTokens,
+  reuseToolContext
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
 import type {
@@ -58,6 +59,72 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('reuses visible context, refreshes changed content and restores it after compaction', () => {
+    const result = (id: string, content: string): AgentToolTranscriptMessage => ({
+      role: 'tool', toolCallId: id, toolName: 'source',
+      content: JSON.stringify({ data: { output: {
+        instructions: [{ modelContextId: 'workspace/rules', content }]
+      } } })
+    })
+    const transcript = [
+      result('first', 'Follow these rules.'),
+      result('repeat', 'Follow these rules.'),
+      result('changed', 'Follow the current rules.'),
+      result('reverted', 'Follow these rules.')
+    ]
+    const original = JSON.stringify(transcript)
+    const projected = reuseToolContext(transcript)
+
+    expect(projected[0]).toBe(transcript[0])
+    expect(JSON.parse(projected[1]!.content).data.output.instructions[0]).toEqual({
+      modelContextId: 'workspace/rules',
+      contentReference: 'Unchanged context; complete content is in tool call first.'
+    })
+    expect(projected[2]).toBe(transcript[2])
+    expect(projected[3]).toBe(transcript[3])
+    expect(reuseToolContext(transcript.slice(1))[0]).toBe(transcript[1])
+    expect(JSON.stringify(transcript)).toBe(original)
+  })
+
+  it('keeps reusable context isolated by tool and leaves ordinary evidence intact', () => {
+    const content = JSON.stringify({ data: {
+      parsed_input: { modelContextId: 'rules', content: 'Read me.' },
+      output: { modelContextId: 'rules', content: 'Read me.' }
+    } })
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'tool', toolCallId: 'a', toolName: 'first', content },
+      { role: 'tool', toolCallId: 'b', toolName: 'second', content },
+      { role: 'tool', toolCallId: 'c', toolName: 'first', content: 'Read me.' }
+    ]
+
+    expect(reuseToolContext(transcript)).toEqual(transcript)
+  })
+
+  it('restores full context when pressure removes the earlier complete source', () => {
+    const context = { modelContextId: 'workspace', content: 'Required context. '.repeat(300) }
+    const observation = JSON.stringify({
+      status: 'success', output_log_path: '/logs/source.json',
+      data: { output: { result: context } }
+    })
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'tool', toolCallId: 'source',
+      toolName: 'computer_use__cua__get_window_state', content: observation
+    }]
+    for (let index = 0; index < 8; index += 1) {
+      appendToolExchange(transcript, `read-${index}`, 'Observed evidence.')
+    }
+    transcript.push({ ...transcript[0]!, toolCallId: 'latest' } as AgentToolTranscriptMessage)
+
+    const prepared = prepareAgentModelContext({
+      transcript, systemPrompt: 'Inspect context.', tools: [],
+      compactionTriggerTokens: 100_000, forceCompaction: true
+    })
+
+    expect(prepared.transcript[0]!.content).not.toBe(observation)
+    expect(prepared.transcript.at(-1)!.content).toBe(observation)
+    expect(transcript[0]!.content).toBe(observation)
+  })
+
   it('keeps a default retained-result page complete in the model observation', () => {
     const content = 'x'.repeat(8_000)
     const observation = {

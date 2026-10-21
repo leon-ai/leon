@@ -8,6 +8,15 @@ export interface ToolModelFile {
   visualDetail?: 'auto' | 'low' | 'high'
 }
 
+/**
+ * Tool-owned context that may be referenced again while its complete content
+ * remains visible in the model transcript. Raw tool results retain the text.
+ */
+export interface ReusableToolContext {
+  modelContextId: string
+  content: string
+}
+
 export const MAX_TOOL_TIMEOUT_MS = 2_147_483_647
 
 /**

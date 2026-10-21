@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
+import type { ReusableToolContext } from '@bridge/tool-runtime-types'
 import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
 import { contentHash, patchTextFile, type TextChange, type PatchOptions } from './lib/text-patch'
@@ -17,9 +18,8 @@ const BINARY_SAMPLE_BYTES = 8_192
 const REPOSITORY_MARKER = '.git'
 const REPOSITORY_INSTRUCTIONS_FILE = 'AGENTS.md'
 
-interface RepositoryInstructions {
+interface RepositoryInstructions extends ReusableToolContext {
   path: string
-  content: string
 }
 
 interface ReadOptions {
@@ -535,6 +535,7 @@ export default class FileTool extends Tool {
 
       return {
         path: instructionPath,
+        modelContextId: instructionPath,
         content: await fs.promises.readFile(instructionPath, 'utf8')
       }
     }))
