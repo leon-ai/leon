@@ -15,13 +15,14 @@ For delegation, use the owner's preferred available agent/interface. Pass the re
 ## Repository and instructions
 
 1. Establish the exact workspace/cwd from the request and live observations. Read relevant manifests and nearby code; reuse helpers before adding abstractions.
-2. Before editing, inspect applicable `AGENTS.md` files from repository root through each target directory. `file.read` includes them in `repositoryInstructions` with source reads; read missing instructions explicitly. Confirm full returned text, since shell success alone does not prove a file was read. Deeper rules override broader ones only in their subtree. For non-Git work, use the owner-selected boundary, excluding unrelated parent instructions.
+2. Before project commands or edits, inspect applicable `AGENTS.md` files from repository root through each target directory. `file.read` includes them in `repositoryInstructions` with source reads; read missing instructions explicitly. Confirm full returned text, since shell success alone does not prove a file was read. Reuse complete returned instructions, including unchanged content referenced in earlier visible tool results, instead of rediscovering the same files. Apply their package manager and test commands to the baseline as well as final checks. Deeper rules override broader ones only in their subtree. For non-Git work, use the owner-selected boundary, excluding unrelated parent instructions.
 3. In plan details, record workspace, instruction paths, constraints, and acceptance criteria with required checks from the request/references. Discover nested instructions before editing new directories. After compaction/continuation, reread applicable files in full before editing; summaries cannot replace current instructions.
 4. Inspect Git status and staged/unstaged diffs; record and preserve unrelated changed/untracked content. Never reset, clean, stage or commit owner work without authorization. Use an isolated worktree when concurrency or the requested workflow warrants it.
 
 ## Investigate and change
 
-- Use bounded reads, ripgrep and available structural search. Trace definitions/callers and check installed dependencies; never invent symbols/APIs. Batch independent discovery.
+- Select the functions needed for inspection, authorized edits and verification together from the tool index; reuse their schemas throughout the task. Expand discovery only when evidence requires another capability. Use bounded reads, ripgrep and available structural search. Trace definitions/callers and check installed dependencies; never invent symbols/APIs.
+- Batch independent reads of known files, searches and edits to different files in one response. Combine independent commands/checks when each result and exit status remains visible; keep dependent checks after their inputs exist. Include plan updates supported by prior evidence alongside the next independent action. Do not weaken verification or bypass dedicated tool safeguards to reduce call counts.
 - Reproduce bugs before editing; run repository-required baseline checks even when an interactive reproduction already shows the bug. Inspect existing tests, extend only meaningful coverage, and never weaken tests for a pass.
 - Prefer `file.patch` with the current read's hash when available, unique exact context and unrelated changes preserved. For stale/ambiguous matches, reread and revise; never repeat unchanged patches or overwrite from partial views.
 - Use `file.write` for new files; overwriting requires complete current content. Follow project formatting and dependency rules.
@@ -30,7 +31,7 @@ For delegation, use the owner's preferred available agent/interface. Pass the re
 
 ## Verify and finish
 
-1. Run project-required and relevant checks with existing tests/installed parsers. Preserve each check's exit status when batching; inspect diagnostics and record criterion outcomes/evidence in plan details. Changes invalidate affected checks; rerun them.
+1. Run project-required and relevant checks with existing tests/installed parsers. Scale verification to the change: a mechanical edit can use an exact diff, syntax checks and the existing relevant tests. Do not invent a separate smoke-test suite to restate an already checked transformation. Preserve each check's exit status when batching; inspect diagnostics and record criterion outcomes/evidence in plan details. Changes invalidate affected checks; rerun them.
 2. For UI work, visually compare references and final render at requested viewports: layout, typography, assets and content; exercise affected interactions. Builds/screenshot files alone do not prove conformance. Fix mismatches and reinspect. Derive checks from the brief/references, not assumed templates.
 3. Review the final diff against the original task and initial owner changes. Remove accidental edits while preserving unrelated staged, unstaged and untracked content.
 4. Stop only task-owned sessions unless the owner requests otherwise. Inspect termination status; clean up on failures too.

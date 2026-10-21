@@ -55,6 +55,8 @@ const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
 const AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS = 1_000
 const AGENT_COMPLETION_REVIEW_ATTEMPTS = 2
 const AGENT_PLAN_REMINDER_INTERVAL = 4
+const AGENT_DIRECT_TOOL_LOAD_MAX_CHARS = 8_000
+const AGENT_FUNCTION_INDEX_MAX_CHARS = 8_000
 const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: 'word'
 })
@@ -132,15 +134,15 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 <tool_policy>
 - Use only the provided tools.
 - For every executable toolkit call, set ${AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME} to a very short, action-specific title that explains the immediate goal and includes the key target when useful.
-- Load the most specific relevant toolkit before acting. Prefer a dedicated toolkit over a general operating-system toolkit when both could perform the task.
+- Select the small set of functions needed for the expected workflow, including output and verification, together in the first load for each relevant toolkit. Batch independent toolkit and skill loads. Expand discovery when new evidence requires another capability; do not load unrelated functions. Prefer a dedicated toolkit over a general operating-system toolkit when both could perform the task.
 - Prefer dedicated/API tools, then direct browser inspection and browser actions for web interfaces, then semantic OS tools. Use screenshots for visual questions, unsupported controls or a concrete inspection limitation. Use bounded shell commands for non-visual work without a dedicated tool, and computer use for graphical interaction. Observe before acting. Accept low-risk tool success unless the effect is unverified, failure is reported, or consequences require verification; follow the toolkit's verification rules.
 - For local file discovery and text-content searches, prefer the file_system.ripgrep tool over shell commands.
 - Read supplied local sources directly in the established workspace; discover files only if the path fails or dependencies need discovery. Prefer direct-source tools over secondary search, using search when the source is inaccessible or lacks needed evidence.
 - Read only needed text: search for specific questions, use non-overlapping pages for full-source coverage, and aggregate structured data in tools instead of sending every row to the model. Calculate reusable values once; derive output and checks from that result. Return concise verification evidence and reuse it while inputs are unchanged.
 - Use the exact observed values from earlier tool results when chaining calls.
-- Batch independent tool calls in one turn. Ordinary tools run concurrently by default; wait for results before calling anything that depends on them. Shared-session tools and bookkeeping remain ordered.
+- Batch independent tool calls in one turn, including reads of known files, edits to different files and plan updates supported by existing evidence. Combine independent checks in one execution when their individual results and exit statuses remain visible. Wait for results before dependent calls; never mark pending work verified. Ordinary tools run concurrently by default; shared-session tools and bookkeeping remain ordered.
 - Reuse prior results unless state may have changed or a failed call has a concrete recovery reason. Fresh UI observations are allowed when needed to ground the next action.
-- For complex or collection tasks, initialize update_plan before execution to load planning guidance and collection tracking. Start one step in_progress and later steps pending; simple tasks need no plan.
+- For complex or collection tasks, initialize update_plan alongside the first independent operational or discovery calls. Start one step in_progress and later steps pending; simple tasks need no plan. Batch later plan updates with the next action whenever possible.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
 - Context and memory tools provide external knowledge. They are not substitutes for the agent transcript.
 - For personal recall, load structured_knowledge and use memory.read before filesystem discovery; use sessions.searchSessions for exact prior conversation evidence.
@@ -535,7 +537,10 @@ function getToolkitRoutingLabels(toolkit: AgentToolkitSummary): string[][] {
  * Descriptive, multi-toolkit, and cross-language requests retain model-led
  * discovery instead of trusting local semantic guesses.
  */
-export function findHighConfidenceAgentToolkitId(input: string): string | null {
+export function findHighConfidenceAgentToolSelection(input: string): {
+  toolkitId: string
+  toolIds?: string[]
+} | null {
   const inputTokens = tokenizeAgentToolkitRoutingText(input)
   if (inputTokens.length === 0) {
     return null
@@ -572,9 +577,19 @@ export function findHighConfidenceAgentToolkitId(input: string): string | null {
     }
   }
 
-  return exactMatches.size === 1
-    ? exactMatches.values().next().value || null
-    : null
+  if (exactMatches.size !== 1) {
+    return null
+  }
+
+  const toolkitId = exactMatches.values().next().value!
+  const toolkit = toolkits.find((entry) => entry.id === toolkitId)!
+  const toolIds = toolkit.tools.filter((tool) =>
+    [tool.id, tool.name].some((label) =>
+      containsTokenSequence(inputTokens, tokenizeAgentToolkitRoutingText(label))
+    )
+  ).map((tool) => tool.id)
+
+  return { toolkitId, ...(toolIds.length > 0 ? { toolIds } : {}) }
 }
 
 /**
@@ -659,6 +674,7 @@ function loadToolkitFunctions(
   options: { discover?: boolean, functionNames?: Set<string>, toolNames?: Set<string> } = {}
 ): number {
   let loadedFunctionCount = 0
+  let remainingDirectLoadChars = AGENT_DIRECT_TOOL_LOAD_MAX_CHARS
   const loadedToolIds = new Set<string>()
 
   for (const tool of TOOLKIT_REGISTRY.getFlattenedTools({
@@ -689,11 +705,19 @@ function loadToolkitFunctions(
     }
     loadedToolIds.add(tool.toolId)
     catalog.loadedToolNames.add(`${toolkitId}.${tool.toolId}`)
-    // Function guidance opts a tool into selective discovery. Legacy manifests
-    // retain their existing behavior; eager/forced loading still loads all.
+    // Small tools cost less to expose once than a second discovery round trip.
+    // Large contracts retain selective loading to bound the request prefix.
+    const contractChars = JSON.stringify([functions, tool.toolProgressiveGuidance]).length +
+      Object.values(functions).reduce((total, config) =>
+        total + JSON.stringify(addToolCallTitleParameter(config.parameters)).length,
+      0)
     const discoverOnly = options.discover && Object.values(functions).some(
       (config) => Boolean(config.progressive_guidance)
-    )
+    ) && contractChars > remainingDirectLoadChars
+
+    if (!discoverOnly) {
+      remainingDirectLoadChars -= contractChars
+    }
     for (const [functionName, functionConfig] of Object.entries(functions)) {
       const qualifiedName = `${tool.toolkitId}.${tool.toolId}.${functionName}`
       if (discoverOnly || (options.functionNames && !options.functionNames.has(qualifiedName))) {
@@ -1981,11 +2005,20 @@ async function executeAgentToolCall(
     return {
       content: [
         `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} new function schema(s) are available on the next model turn.`,
-        'Reuse loaded functions. Select needed functions together from these discovery summaries before constructing their calls.',
-        ...selectedTools.flatMap((tool) => [
-          `${tool.id}: ${tool.description}`,
-          describeToolkitFunctions(toolkitId, tool.id, params.catalog)
-        ]).filter(Boolean),
+        // Explicit selections already have full schemas on the next turn.
+        // Keep broad summaries available for discovery without repeating them
+        // after every selected load into the growing conversation prefix.
+        ...(names === undefined
+          ? [
+              'Select needed functions together from these discovery summaries before constructing their calls.',
+              ...selectedTools.flatMap((tool) => [
+                `${tool.id}: ${tool.description}`,
+                describeToolkitFunctions(toolkitId, tool.id, params.catalog)
+              ]).filter(Boolean)
+            ]
+          : [
+              `Selected functions: ${(names as string[]).join(', ')}. Reuse loaded schemas; call load_toolkit without functions when more discovery is needed.`
+            ]),
         ...(toolkitContext ? ['', toolkitContext] : [])
       ].join('\n'),
       trackedSteps
@@ -2351,16 +2384,36 @@ function createToolkitLoaderTool(
   const toolkitCatalog = toolkits
     .map((toolkit) => `${toolkit.id}: ${toolkit.name} - ${toolkit.description}`)
     .join('\n')
+  let remainingIndexChars = AGENT_FUNCTION_INDEX_MAX_CHARS
+  // Function identifiers let the model select exact contracts in its first
+  // load, without exposing every schema or changing the index as tools load.
+  const functionIndex = toolkits.flatMap((toolkit) =>
+    toolkit.tools.flatMap((tool) => {
+      const names = Object.keys(
+        TOOLKIT_REGISTRY.getToolFunctions(toolkit.id, tool.id) || {}
+      ).map((name) => `${tool.id}.${name}`)
+      const entry = `${toolkit.id}: ${names.join(', ')}`
+
+      if (names.length === 0 || entry.length + 1 > remainingIndexChars) {
+        return []
+      }
+
+      remainingIndexChars -= entry.length + 1
+      return [entry]
+    })
+  ).join('\n')
 
   return {
     type: 'function',
     function: {
       name: AGENT_TOOLKIT_LOADER_NAME,
       description: [
-        'Discover a relevant toolkit, then select needed functions together using exact tool_id.function_name identifiers from the discovery result. Their schemas and guidance become available on the next turn, before constructing calls. Tools without function guidance load directly.',
+        'Select the functions needed for the expected workflow, including output and verification, together using indexed tool_id.function_name identifiers in your first load. Batch independent toolkit loads with skill loading, work or plan updates. Omit functions only when discovery is needed: small tools load directly, while large tools return summaries. Newly loaded schemas and guidance are available on the next turn, before constructing calls.',
         'Choose the most specific toolkit for the requested capability; use a general operating-system toolkit only when no dedicated toolkit fits.',
         'Available toolkits:',
-        toolkitCatalog
+        toolkitCatalog,
+        'Function index (identifiers only; omitted functions remain discoverable):',
+        functionIndex
       ].join('\n'),
       parameters: {
         type: 'object',
@@ -2379,7 +2432,7 @@ function createToolkitLoaderTool(
             minItems: 1,
             uniqueItems: true,
             items: { type: 'string' },
-            description: 'Exact tool_id.function_name entries to load together. Omit to discover short summaries before choosing.'
+            description: 'Exact tool_id.function_name entries from the index or discovery results to load together. Prefer selecting known functions in the first load.'
           }
         },
         required: ['toolkit_id'],

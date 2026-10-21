@@ -38,7 +38,7 @@ import {
   buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
   evaluateAgentToolkitPreloadCost,
-  findHighConfidenceAgentToolkitId,
+  findHighConfidenceAgentToolSelection,
   runAgentLoop as runAgentLoopWithCompletionReview
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
 import {
@@ -2979,6 +2979,7 @@ describe('continuous agent loop', () => {
     expect(loader?.function.description).not.toContain(
       'exact subtitle timestamps'
     )
+    expect(loader?.function.description).toContain('downloadSubtitles')
     expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toBe('')
     let modelTurn = 0
 
@@ -3023,7 +3024,52 @@ describe('continuous agent loop', () => {
     )
   })
 
-  it('discovers function summaries before selectively loading guidance and preserves the selection on resume', async () => {
+  it('loads small tool contracts with their guidance in one discovery round trip', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([{
+      toolkitId: 'test', toolkitName: 'Test', toolkitDescription: 'Source inspection.',
+      toolId: 'source', toolName: 'Source', toolDescription: 'Inspect a source.',
+      toolProgressiveGuidance: 'Use the supplied source identity.'
+    }])
+    coreMocks.getToolFunctions.mockReturnValue({
+      inspect: {
+        description: 'Inspect a source.', progressive_guidance: 'Return verified evidence.',
+        parameters: { type: 'object', properties: {}, additionalProperties: false }
+      }
+    })
+    const catalog = buildAgentToolCatalog()
+    let turn = 0
+
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Inspect the source.' }], catalog,
+      callModel: async (_messages, tools) => {
+        turn += 1
+
+        if (turn === 1) {
+          return { toolCalls: [toolCall('load', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test'
+          })] }
+        }
+
+        expect(tools).toContainEqual(expect.objectContaining({
+          function: expect.objectContaining({
+            name: 'test__source__inspect',
+            description: expect.stringContaining('Return verified evidence.')
+          })
+        }))
+        expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain(
+          'Use the supplied source identity.'
+        )
+
+        return { textContent: 'Capability loaded.' }
+      },
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => null
+    })
+
+    expect(turn).toBe(2)
+  })
+
+  it('selectively loads large function contracts and preserves the selection on resume', async () => {
     coreMocks.getFlattenedTools.mockReturnValue(['first', 'other'].map((toolId) => ({
       toolkitId: 'test', toolkitName: 'Test', toolkitDescription: 'Test discovery.',
       toolkitProgressiveGuidance: 'Shared toolkit instructions.', toolId,
@@ -3032,12 +3078,12 @@ describe('continuous agent loop', () => {
     })))
     coreMocks.getToolFunctions.mockReturnValue(Object.fromEntries(['read', 'write', 'inspect'].map((name) => [name, {
       description: `Summary for ${name}.`,
-      progressive_guidance: `Detailed ${name} instructions.`,
+      progressive_guidance: `Detailed ${name} instructions. `.repeat(200),
       parameters: { type: 'object', properties: {}, additionalProperties: false }
     }])))
     const catalog = buildAgentToolCatalog()
     const initialLoader = structuredClone(catalog.tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME))
-    expect(JSON.stringify(initialLoader)).not.toContain('first.read')
+    expect(initialLoader?.function.description).toContain('first.read')
     expect(JSON.stringify(initialLoader)).not.toContain('Tool routing summary.')
     expect(JSON.stringify(catalog.tools)).not.toContain('Detailed')
     expect(JSON.stringify(catalog.tools)).not.toContain('Summary for read')
@@ -3085,9 +3131,16 @@ describe('continuous agent loop', () => {
         expect(JSON.stringify(tools)).not.toContain('Detailed write instructions.')
         expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Detailed read instructions.')
         expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Shared other instructions.')
-        if (turn === 4) return { toolCalls: [toolCall('reuse', AGENT_TOOLKIT_LOADER_NAME, {
-          toolkit_id: 'test', functions: ['first.read']
-        })] }
+        if (turn === 4) {
+          expect(messages.at(-1)?.content).toContain(
+            'Selected functions: first.read, first.inspect.'
+          )
+          expect(messages.at(-1)?.content).not.toContain('Summary for write.')
+
+          return { toolCalls: [toolCall('reuse', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test', functions: ['first.read']
+          })] }
+        }
         expect(tools.filter((tool) => tool.function.name === 'test__first__read')).toHaveLength(1)
         return { textContent: 'Ready.' }
       },
@@ -3133,10 +3186,13 @@ describe('continuous agent loop', () => {
     ])
 
     expect(
-      findHighConfidenceAgentToolkitId(
+      findHighConfidenceAgentToolSelection(
         'What is the weather like in Shenzhen?'
       )
-    ).toBe('weather')
+    ).toEqual({ toolkitId: 'weather' })
+
+    expect(findHighConfidenceAgentToolSelection('Use Open-Meteo for Shenzhen.'))
+      .toEqual({ toolkitId: 'weather', toolIds: ['openmeteo'] })
   })
 
   it('keeps model-led discovery when registry metadata is ambiguous', () => {
@@ -3159,8 +3215,8 @@ describe('continuous agent loop', () => {
       }
     ])
 
-    expect(findHighConfidenceAgentToolkitId('Open a local file.')).toBeNull()
-    expect(findHighConfidenceAgentToolkitId('Tell me a joke.')).toBeNull()
+    expect(findHighConfidenceAgentToolSelection('Open a local file.')).toBeNull()
+    expect(findHighConfidenceAgentToolSelection('Tell me a joke.')).toBeNull()
   })
 
   it('keeps model-led discovery for translated descriptive wording', () => {
@@ -3175,7 +3231,7 @@ describe('continuous agent loop', () => {
       }
     ])
 
-    expect(findHighConfidenceAgentToolkitId('深圳今天天气如何？')).toBeNull()
+    expect(findHighConfidenceAgentToolSelection('深圳今天天气如何？')).toBeNull()
   })
 
   it('keeps discovery contracts stable when a toolkit is preloaded', () => {
@@ -3224,6 +3280,8 @@ describe('continuous agent loop', () => {
         }
       }
     })
+    expect(loader?.function.description).toContain('weather: openmeteo.run')
+    expect(loader?.function.description).toContain('search_web: hosted.run')
     expect(loader).toEqual(buildAgentToolCatalog().tools.find(
       (tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME
     ))

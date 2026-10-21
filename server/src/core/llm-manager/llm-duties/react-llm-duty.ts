@@ -109,7 +109,7 @@ import {
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
   evaluateAgentToolkitPreloadCost,
-  findHighConfidenceAgentToolkitId,
+  findHighConfidenceAgentToolSelection,
   runAgentLoop
 } from './react-llm-duty/agent-loop'
 import type { AgentCallableFunction } from './react-llm-duty/agent-loop'
@@ -395,13 +395,13 @@ export class ReActLLMDuty extends LLMDuty {
 
       const progressiveToolkitLoading =
         CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
-      const matchedToolkitId =
+      const matchedSelection =
         !continuation &&
         !conversationState &&
         !this.activeForcedToolName &&
         !caller.agentSkillContext &&
         progressiveToolkitLoading
-          ? findHighConfidenceAgentToolkitId(originalInput)
+          ? findHighConfidenceAgentToolSelection(originalInput)
           : null
       let catalog = buildAgentToolCatalog(
         this.activeForcedToolName,
@@ -418,11 +418,19 @@ export class ReActLLMDuty extends LLMDuty {
       )
 
       let preloadedToolkitContext = ''
-      if (matchedToolkitId) {
+      if (matchedSelection) {
+        const { toolkitId: matchedToolkitId, toolIds } = matchedSelection
+        // A tool label selects that tool's contract, never its toolkit siblings.
+        // Oversized selections fall back to ordinary progressive discovery.
+        const selectedFunctions = toolIds?.flatMap((toolId) =>
+          Object.keys(TOOLKIT_REGISTRY.getToolFunctions(matchedToolkitId, toolId) || {})
+            .map((name) => `${matchedToolkitId}.${toolId}.${name}`)
+        )
         const candidateCatalog = buildAgentToolCatalog(
           this.activeForcedToolName,
           [matchedToolkitId],
-          progressiveToolkitLoading
+          progressiveToolkitLoading,
+          selectedFunctions
         )
         const candidateToolkitContext = [
           `<preloaded_toolkit toolkit_id="${matchedToolkitId}">`,
@@ -439,6 +447,7 @@ export class ReActLLMDuty extends LLMDuty {
 
         if (
           cost.shouldPreload &&
+          candidateCatalog.functionsByToolName.size > catalog.functionsByToolName.size &&
           candidateCatalog.loadedToolkitIds.has(matchedToolkitId)
         ) {
           catalog = candidateCatalog

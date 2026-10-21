@@ -371,10 +371,38 @@ function expectCodingScenario(id: ProviderScenarioId, result: ProviderScenarioRe
   const patchIndex = turn.toolCalls.findIndex((call) => call.functionName === 'patch')
   expect(patchIndex).toBeGreaterThanOrEqual(0)
   const before = turn.toolCalls.slice(0, patchIndex)
-  // Dedicated reads and shell output can both provide instruction evidence.
+  // Reads, complete search results and shell output can provide instruction evidence.
   // Require the complete observed text before editing, rather than a tool name.
   const inspected = before.map((call) => {
     const result = shellResult(call)
+
+    if (call.toolId === 'ripgrep' && call.functionName === 'search' &&
+      result['truncated'] === false && Array.isArray(result['matches'])) {
+      const files = new Map<string, Map<number, string>>()
+
+      for (const match of result['matches']) {
+        const filename = match.path?.text
+        const text = match.lines?.text
+        const line = match.line_number
+
+        if (typeof filename === 'string' && typeof text === 'string' &&
+          Number.isInteger(line) && line > 0) {
+          const lines = files.get(filename) || new Map<number, string>()
+          lines.set(line, text)
+          files.set(filename, lines)
+        }
+      }
+
+      // Search evidence must cover consecutive lines from the file's start;
+      // scattered matches cannot stand in for the complete instruction text.
+      return [...files.values()].map((lines) => {
+        const ordered = [...lines].sort(([left], [right]) => left - right)
+
+        return ordered.every(([line], index) => line === index + 1)
+          ? ordered.map(([, text]) => text).join('')
+          : ''
+      }).join('\n')
+    }
 
     if (result['success'] !== true) {
       return ''
