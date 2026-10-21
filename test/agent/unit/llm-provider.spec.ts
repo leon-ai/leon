@@ -442,6 +442,47 @@ describe('LLMProvider', () => {
     }
   })
 
+  it.each([0, 20_000])('preserves the caller finishing reserve when the retry budget is %sms', async (retryBudget) => {
+    vi.useFakeTimers()
+
+    try {
+      const attempts: CompletionParams[] = []
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = {
+        modelName: 'celeris-1',
+        runChatCompletion: vi.fn((_prompt, params: CompletionParams) => {
+          attempts.push(params)
+          return new Promise(() => {})
+        })
+      }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const retryDeadline = Date.now() + 30_000 + retryBudget
+      const result = manager.prompt('Finish the deliverable.', {
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        shouldStream: false,
+        timeout: 30_000,
+        maxRetries: 2,
+        remoteProviderErrorRetries: 0,
+        getRetryTimeout: (timeout) => Math.min(timeout, Math.max(0, retryDeadline - Date.now()))
+      })
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      if (retryBudget > 0) {
+        expect(attempts[1]?.timeout).toBe(retryBudget)
+        await vi.advanceTimersByTimeAsync(retryBudget)
+      }
+
+      expect(await result).toBeNull()
+      expect(attempts).toHaveLength(retryBudget > 0 ? 2 : 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('still extends the deadline after a genuine inference timeout', async () => {
     vi.useFakeTimers()
 

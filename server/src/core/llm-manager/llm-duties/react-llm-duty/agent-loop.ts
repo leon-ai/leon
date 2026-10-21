@@ -57,6 +57,7 @@ const AGENT_COMPLETION_REVIEW_ATTEMPTS = 2
 const AGENT_PLAN_REMINDER_INTERVAL = 4
 const AGENT_DIRECT_TOOL_LOAD_MAX_CHARS = 8_000
 const AGENT_FUNCTION_INDEX_MAX_CHARS = 8_000
+const AGENT_RESUMABLE_STEP_LIMIT = 8
 const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: 'word'
 })
@@ -984,6 +985,12 @@ export async function runAgentLoop(
         }
 
         if (error instanceof AgentModelResponseTimeoutError) {
+          // An operational stall may consume the work budget. Use the existing
+          // reserve once to deliver from evidence without renewing the deadline.
+          if (params.runBudget?.isFinishing && !hasEnteredFinishing) {
+            continue agentIterations
+          }
+
           return createResumableAgentResult(
             CompletionFailureKind.Timeout, transcript, executionHistory, trackedSteps
           )
@@ -1797,7 +1804,7 @@ function buildResumableAgentAnswer(
   }
   const completedSteps = trackedSteps.filter(
     (step) => step.status === 'completed'
-  ).length
+  )
   const nextStep = trackedSteps.find((step) => step.status === 'in_progress') ||
     trackedSteps.find((step) => step.status === 'pending')
   const nextAction = nextStep?.label ||
@@ -1806,12 +1813,22 @@ function buildResumableAgentAnswer(
       : 'Produce the final answer from the verified findings')
   const taskState = answerDrafted
     ? 'The final answer was drafted, but completion could not be verified; progress is saved in this session.'
-    : 'The task is incomplete; progress is saved in this session.'
+    : trackedSteps.length > 0 && isAgentPlanComplete(trackedSteps)
+      ? 'All recorded plan steps are complete, but the final response and completion check could not finish; progress is saved in this session.'
+      : 'The task is incomplete; progress is saved in this session.'
 
   return [
     `${explanations[failureKind]} ${taskState}`,
     ...(trackedSteps.length > 0
-      ? [`Reported progress: ${completedSteps}/${trackedSteps.length} steps completed.`]
+      ? [`Reported progress: ${completedSteps.length}/${trackedSteps.length} steps completed.`]
+      : []),
+    ...(completedSteps.length > 0
+      ? [`Reported completed work:\n${completedSteps
+          .slice(-AGENT_RESUMABLE_STEP_LIMIT)
+          .map((step) => `- ${step.label}`).join('\n')}`]
+      : []),
+    ...(completedSteps.length > AGENT_RESUMABLE_STEP_LIMIT
+      ? ['Additional completed steps are saved in this session.']
       : []),
     `Remaining: ${nextAction}.`
   ].join('\n\n')

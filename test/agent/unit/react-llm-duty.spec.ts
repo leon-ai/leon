@@ -4074,6 +4074,33 @@ describe('model response status', () => {
     }
   })
 
+  it('enters the finishing pass once when operational recovery reaches the reserve', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const budget = new AgentRunBudget(Date.now() + 180_000)
+    const callModel = vi.fn()
+      .mockImplementationOnce(async () => {
+        clock.mockReturnValue(125_000)
+        throw new AgentModelResponseTimeoutError()
+      })
+      .mockResolvedValueOnce({ textContent: 'Delivered from verified evidence.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Verified.' }) })
+
+    try {
+      const result = await runAgentLoopWithCompletionReview({
+        transcript: [{ role: 'user', content: 'Deliver the verified results.' }],
+        catalog: createCatalog(), runBudget: budget,
+        callModel, executeFunction: vi.fn(), loadAgentSkill: async () => null
+      })
+
+      expect(result.answer).toBe('Delivered from verified evidence.')
+      expect(JSON.stringify(callModel.mock.calls[1]?.[0])).toContain('execution_finishing_pass')
+      expect(budget.remainingMs).toBe(55_000)
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
   it('uses monotonic remaining time and imposes no deadline when omitted', () => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
     const unlimited = new AgentRunBudget()
@@ -4123,7 +4150,11 @@ describe('model response status', () => {
 
       expect(await pending).toBeInstanceOf(AgentRunDeadlineError)
       expect(params.cancellationSignal?.aborted).toBe(true)
-      expect(params.timeout).toBeLessThanOrEqual(15_000)
+      expect(params.timeout).toBe(review ? 30_000 : 15_000)
+      if (review) {
+        expect(params.maxRetries).toBeGreaterThan(0)
+        expect(params.remoteProviderErrorRetries).toBe(0)
+      }
       expect(coreMocks.prompt).toHaveBeenCalledOnce()
     } finally {
       budget.dispose()
@@ -4580,7 +4611,8 @@ describe('model response status', () => {
   it.each([
     { phase: 'review', status: 'in_progress' as const },
     { phase: 'review', status: 'completed' as const },
-    { phase: 'finalization', status: 'in_progress' as const }
+    { phase: 'finalization', status: 'in_progress' as const },
+    { phase: 'finalization', status: 'completed' as const }
   ])('retains task state without restarting exhausted recovery (%j)', async ({ phase, status }) => {
     const trackedSteps = [{ label: 'Verify the deliverable', status }]
     const callModel = vi.fn(async (_messages, _tools, options) => {
@@ -4597,6 +4629,10 @@ describe('model response status', () => {
     })
     expect(result.intent).not.toBe('answer')
     expect(result.answer).toContain('exceeded its time limit')
+    if (status === 'completed') {
+      expect(result.answer).toContain('Reported completed work:\n- Verify the deliverable')
+      expect(result.answer).not.toContain('The task is incomplete')
+    }
     if (phase === 'review') {
       expect(result.answer).toContain('The final answer was drafted, but completion could not be verified')
       expect(result.answer).toContain(status === 'completed'

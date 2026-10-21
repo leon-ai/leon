@@ -346,6 +346,11 @@ export interface CompletionParams {
    */
   remoteProviderErrorRetries?: number
   /**
+   * Recomputes the retry wait from the caller's remaining work budget.
+   * Returning zero preserves time for delivery instead of dispatching a retry.
+   */
+  getRetryTimeout?: (timeoutMs: number) => number
+  /**
    * OpenAI-compatible tools for providers that support tool calling. When set,
    * the provider sends these as `tools`
    * in the API request instead of (or in addition to) JSON mode.

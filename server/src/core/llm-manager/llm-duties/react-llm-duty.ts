@@ -1419,6 +1419,16 @@ export class ReActLLMDuty extends LLMDuty {
 
     startWaitDiagnostics()
 
+    const isFinishingCall = options.isCompletionReview ||
+      options.isFinalizationAttempt || this.runBudget?.isFinishing
+    const remainingMs = this.runBudget?.remainingMs
+    const inferenceTimeout = remainingMs === undefined
+      ? AGENT_INFERENCE_TIMEOUT_MS
+      : Math.min(
+          AGENT_INFERENCE_TIMEOUT_MS,
+          isFinishingCall ? remainingMs : remainingMs / 2
+        )
+
     try {
       // Reviews must neither expose their text nor replace the proposed answer.
       // A subsequent operational call removes any ending rejected by review.
@@ -1429,13 +1439,21 @@ export class ReActLLMDuty extends LLMDuty {
         dutyType: LLMDuties.ReAct,
         systemPrompt: activeSystemPrompt,
         temperature: AGENT_TEMPERATURE,
-        // A silent call must leave room to recover; active output still renews
-        // the provider's stall timer, within the fixed run deadline.
-        timeout: this.runBudget?.remainingMs === undefined
-          ? AGENT_INFERENCE_TIMEOUT_MS
-          : Math.min(AGENT_INFERENCE_TIMEOUT_MS, this.runBudget.remainingMs / 2),
+        // Operational calls leave time for recovery. Finishing and review use
+        // the reserved time rather than repeatedly halving the final wait.
+        // Productive output still stays within the fixed run deadline.
+        timeout: this.runBudget?.capTimeout(inferenceTimeout) ?? inferenceTimeout,
+        // Keep provider compatibility retries before the finishing reserve;
+        // the shared cancellation signal still caps the entire request.
         maxRetries: this.runBudget?.isFinishing ? 0 : AGENT_TIMEOUT_MAX_RETRIES,
-        ...(this.runBudget?.isFinishing ? { remoteProviderErrorRetries: 0 } : {}),
+        getRetryTimeout: (timeoutMs): number => {
+          const remaining = this.runBudget?.remainingMs
+
+          return remaining === undefined
+            ? timeoutMs
+            : Math.min(timeoutMs, Math.max(0, remaining - (this.runBudget?.finishingReserveMs ?? 0)))
+        },
+        ...(isFinishingCall ? { remoteProviderErrorRetries: 0 } : {}),
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
         onAttempt: (timing): void => {

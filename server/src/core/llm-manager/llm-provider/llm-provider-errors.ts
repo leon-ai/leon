@@ -461,6 +461,24 @@ export async function prepareCompletionRetry(
   isRemoteProvider: boolean,
   abortController: AbortController
 ): Promise<CompletionParams | null> {
+  const budgetRetry = (params: CompletionParams): CompletionParams | null => {
+    completionParams.cancellationSignal?.throwIfAborted()
+    const timeout = completionParams.getRetryTimeout?.(params.timeout ?? 0) ?? params.timeout
+
+    if (timeout !== undefined && timeout <= 0) {
+      return null
+    }
+
+    return { ...params, ...(timeout !== undefined ? { timeout } : {}) }
+  }
+
+  completionParams.cancellationSignal?.throwIfAborted()
+  const retryWait = completionParams.getRetryTimeout?.(completionParams.timeout)
+
+  if (retryWait !== undefined && retryWait <= 0) {
+    return null
+  }
+
   const connectionErrorCode = getConnectionErrorCode(e)
   const isTimeoutError = isTimeoutLikeError(e)
   const isRetryableNonTimeoutError = isRetryablePromptError(e)
@@ -490,11 +508,11 @@ export async function prepareCompletionRetry(
         'Provider rejected forced tool_choice with thinking enabled; retrying with thinking disabled while keeping tool_choice'
       )
 
-      return {
+      return budgetRetry({
         ...completionParams,
         disableThinking: true,
         maxRetries: remainingRetries - 1
-      }
+      })
     }
 
     LogHelper.title('LLM Provider')
@@ -503,11 +521,11 @@ export async function prepareCompletionRetry(
     )
 
     const retryParams = withOmittedToolChoice(completionParams)
-    return {
+    return budgetRetry({
       ...retryParams,
       relaxForcedToolChoice: true,
       maxRetries: remainingRetries - 1
-    }
+    })
   }
 
   if (
@@ -522,11 +540,11 @@ export async function prepareCompletionRetry(
     )
 
     const retryParams = withOmittedToolChoice(completionParams)
-    return {
+    return budgetRetry({
       ...retryParams,
       relaxForcedToolChoice: true,
       maxRetries: remainingRetries - 1
-    }
+    })
   }
 
   if (
@@ -538,19 +556,27 @@ export async function prepareCompletionRetry(
       abortController.abort()
     }
 
-    await waitForRetry(REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS)
+    const delayMs = completionParams.getRetryTimeout?.(REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS)
+      ?? REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS
+
+    await waitForRetry(delayMs)
+    const retryParams = budgetRetry({
+      ...completionParams,
+      remoteProviderErrorRetries: remainingRemoteProviderErrorRetries - 1
+    })
+
+    if (!retryParams) {
+      return null
+    }
 
     LogHelper.title('LLM Provider')
     LogHelper.warning(
       connectionErrorCode
-        ? `Provider connection failed (${connectionErrorCode}); retrying after ${REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS}ms without increasing the inference timeout (${remainingRemoteProviderErrorRetries} retry left)`
-        : `Remote provider failed; retrying after ${REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS}ms (${remainingRemoteProviderErrorRetries} retry left)`
+        ? `Provider connection failed (${connectionErrorCode}); retrying after ${delayMs}ms without increasing the inference timeout (${remainingRemoteProviderErrorRetries} retry left)`
+        : `Remote provider failed; retrying after ${delayMs}ms (${remainingRemoteProviderErrorRetries} retry left)`
     )
 
-    return {
-      ...completionParams,
-      remoteProviderErrorRetries: remainingRemoteProviderErrorRetries - 1
-    }
+    return retryParams
   }
 
   if (
@@ -571,21 +597,30 @@ export async function prepareCompletionRetry(
       : completionParams
 
     if (!isTimeoutError) {
-      await waitForRetry(RETRYABLE_ERROR_RETRY_DELAY_MS)
+      await waitForRetry(
+        completionParams.getRetryTimeout?.(RETRYABLE_ERROR_RETRY_DELAY_MS)
+          ?? RETRYABLE_ERROR_RETRY_DELAY_MS
+      )
+    }
+
+    const boundedRetry = budgetRetry({
+      ...retryParams,
+      timeout: nextTimeout,
+      maxRetries: remainingRetries - 1
+    })
+
+    if (!boundedRetry) {
+      return null
     }
 
     LogHelper.title('LLM Provider')
     LogHelper.warning(
       isTimeoutError
-        ? `Prompt timed out. Previous inference canceled; retrying with timeout=${nextTimeout}ms (${remainingRetries} retry left)`
+        ? `Prompt timed out. Previous inference canceled; retrying with timeout=${boundedRetry.timeout}ms (${remainingRetries} retry left)`
         : `Prompt failed with a retryable provider/network error; retrying (${remainingRetries} retry left)`
     )
 
-    return {
-      ...retryParams,
-      timeout: nextTimeout,
-      maxRetries: remainingRetries - 1
-    }
+    return boundedRetry
   }
 
   return null
