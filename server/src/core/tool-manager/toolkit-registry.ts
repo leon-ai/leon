@@ -49,6 +49,7 @@ interface ToolkitToolDefinition {
       parameters: Record<string, unknown>
       output_schema?: Record<string, unknown>
       deduplicate_calls?: boolean
+      read_only?: boolean
       background?: boolean
       timeout?: ToolTimeoutPolicy
       completion_review?: ToolCompletionReview

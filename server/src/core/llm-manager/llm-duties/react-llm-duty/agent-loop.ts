@@ -2095,6 +2095,8 @@ async function executeAgentToolCall(
   if (retryBlocker) {
     return { content: retryBlocker, trackedSteps }
   }
+  // State changes expire read observations. Side-effect deduplication keeps
+  // the full history so intervening operations cannot authorize a repeat.
   const duplicate =
     callable.functionConfig.deduplicate_calls === false
       ? null
@@ -2102,7 +2104,12 @@ async function executeAgentToolCall(
           executionHistory,
           callable.qualifiedName,
           callable.qualifiedName,
-          validatedInput
+          validatedInput,
+          callable.functionConfig.read_only === true
+            ? (functionName: string): boolean => [...params.catalog.functionsByToolName.values()]
+                .find((entry) => entry.qualifiedName === functionName)
+                ?.functionConfig.read_only === true
+            : undefined
         )
   if (duplicate) {
     return {

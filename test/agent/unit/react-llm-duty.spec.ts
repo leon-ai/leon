@@ -2768,6 +2768,48 @@ describe('continuous agent loop', () => {
     expect(result.answer).toBe('Both state reads completed.')
   })
 
+  it('refreshes observations after mutations while blocking repeated side effects', async () => {
+    const catalog = createCatalog()
+    const mutationName = 'test__lookup__change'
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable,
+      functionConfig: { ...callable.functionConfig, read_only: true }
+    })
+    catalog.functionsByToolName.set(mutationName, {
+      ...callable, qualifiedName: 'test.lookup.change', functionName: 'change'
+    })
+    catalog.tools.push({
+      type: 'function',
+      function: { ...catalog.tools[0]!.function, name: mutationName }
+    })
+    const executeFunction = vi.fn(async (entry: AgentCallableFunction, input: string) => ({
+      execution: {
+        function: entry.qualifiedName, status: 'success',
+        observation: 'Current state.', requestedToolInput: input
+      }
+    }))
+    let turn = 0
+
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Observe, change and verify the state.' }],
+      catalog,
+      callModel: async () => {
+        turn += 1
+        if (turn <= 4) {
+          return { toolCalls: [toolCall(`state-${turn}`,
+            turn % 2 === 0 ? mutationName : CALLABLE_TOOL_NAME, { query: 'Leon' })] }
+        }
+
+        return { textContent: 'The changed state is verified.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction.mock.calls.map(([entry]) => entry.qualifiedName))
+      .toEqual(['test.lookup.run', 'test.lookup.change', 'test.lookup.run'])
+  })
+
   it('blocks overlapping reads of the same tool artifact', () => {
     const previousInput = JSON.stringify({
       outputLogPath: '/tmp/tool-output.log',
@@ -2813,6 +2855,43 @@ describe('continuous agent loop', () => {
         toolInput
       )
     ).toBeNull()
+  })
+
+  it('reuses observations across reads but refreshes them after state may change', () => {
+    const input = JSON.stringify({ path: 'source.ts' })
+    const read = {
+      function: 'files.read',
+      status: 'success',
+      observation: 'Current contents.',
+      requestedToolInput: input
+    }
+    const otherRead = { ...read, requestedToolInput: JSON.stringify({ path: 'other.ts' }) }
+    const isReadOnly = (name: string): boolean => name === read.function
+
+    expect(findDuplicateToolInputMatch(
+      [read, otherRead], read.function, '', input, isReadOnly
+    )).toMatchObject({ stepNumber: 1 })
+
+    for (const status of ['success', 'error']) {
+      expect(findDuplicateToolInputMatch(
+        [read, { function: 'files.patch', status, observation: 'May have changed state.' }],
+        read.function, '', input, isReadOnly
+      )).toBeNull()
+    }
+
+    expect(findDuplicateToolInputMatch(
+      [read, { function: 'files.patch', status: 'success', observation: 'Changed.' }, read],
+      read.function, '', input, isReadOnly
+    )).toMatchObject({ stepNumber: 3 })
+  })
+
+  it('refreshes reads that overlapped a mutation regardless of emitted order', () => {
+    const input = JSON.stringify({ path: 'source.ts' })
+
+    expect(findDuplicateToolInputMatch([
+      { function: 'files.patch', status: 'success', observation: 'Changed.', startedAt: 10, completedAt: 30 },
+      { function: 'files.read', status: 'success', observation: 'Old contents.', requestedToolInput: input, startedAt: 15, completedAt: 20 }
+    ], 'files.read', '', input, (name) => name === 'files.read')).toBeNull()
   })
 
   it('restores execution and plan state after clarification', async () => {

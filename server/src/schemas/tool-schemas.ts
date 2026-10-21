@@ -70,7 +70,13 @@ const toolFunctionSchemaObject = Type.Strict(
       deduplicate_calls: Type.Optional(
         Type.Boolean({
           description:
-            'Whether the agent should block repeated successful calls with the same input. Disable this for state reads whose result can change over time.'
+            'Block repeated successful inputs until an operation may change the observed state. Disable for reads that can change independently over time.'
+        })
+      ),
+      read_only: Type.Optional(
+        Type.Boolean({
+          description:
+            'Whether this function leaves observed state unchanged. Undeclared functions invalidate reuse of prior observations, including failures after partial execution.'
         })
       ),
       background: Type.Optional(

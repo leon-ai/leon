@@ -115,6 +115,7 @@
       }
     },
     "read": {
+      "read_only": true,
       "description": "Read a local text file. Rejects likely binary files. Use head, tail, or maxChars to limit output when needed.",
       "progressive_guidance": "Use allowMissing=true for destination checks; exists=false means no file to preserve. Keep text pages at 20000 characters or less for inline observations; larger explicit reads may require retained-result retrieval. Follow nextOffsetChars for coverage; batch known independent unread ranges. Reuse inspected text. repositoryInstructions supplies applicable AGENTS.md files in root-to-directory order; follow them before editing. A contentReference reuses complete unchanged text from an earlier visible tool result. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
       "parameters": {
@@ -206,6 +207,7 @@
       }
     },
     "readToolArtifact": {
+      "read_only": true,
       "description": "Read a previous tool output artifact from an outputLogPath listed in previous_tool_artifacts.",
       "parameters": {
         "type": "object",

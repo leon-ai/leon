@@ -197,7 +197,8 @@ export function findDuplicateToolInputMatch(
   history: ExecutionRecord[],
   functionName: string,
   currentStepLabel: string,
-  candidateToolInput: string
+  candidateToolInput: string,
+  isReadOnlyFunction?: (functionName: string) => boolean
 ): DuplicateInputMatch | null {
   const normalizedCandidate = normalizeToolInputForComparison(candidateToolInput)
   if (!normalizedCandidate) {
@@ -208,41 +209,42 @@ export function findDuplicateToolInputMatch(
 
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const execution = history[index]
-    if (
-      !execution ||
-      execution.status !== 'success' ||
-      execution.function !== functionName
-    ) {
+    if (!execution) {
       continue
     }
 
     const executionStepLabel = normalizeStepLabel(execution.stepLabel)
-    if (
-      normalizedCurrentStepLabel &&
-      executionStepLabel &&
-      executionStepLabel !== normalizedCurrentStepLabel
-    ) {
-      continue
-    }
+    const sameStep = !normalizedCurrentStepLabel || !executionStepLabel ||
+      executionStepLabel === normalizedCurrentStepLabel
+    if (execution.status === 'success' && execution.function === functionName && sameStep) {
+      const requestedInput = getExecutionRequestedToolInput(execution)
+      const normalizedRequested = requestedInput
+        ? normalizeToolInputForComparison(requestedInput)
+        : null
 
-    const requestedInput = getExecutionRequestedToolInput(execution)
-    if (!requestedInput) {
-      continue
-    }
+      if (normalizedRequested && (
+        normalizedRequested === normalizedCandidate ||
+        artifactReadRangesOverlap(requestedInput!, candidateToolInput)
+      )) {
+        // Concurrent results retain emitted order, not completion order. A read
+        // overlapping an earlier-emitted mutation is not a reusable snapshot.
+        const startedAt = execution.startedAt
+        if (isReadOnlyFunction && startedAt !== undefined &&
+            history.slice(0, index).some((earlier) =>
+              !isReadOnlyFunction(earlier.function) &&
+              earlier.completedAt !== undefined && earlier.completedAt >= startedAt
+            )) {
+          return null
+        }
 
-    const normalizedRequested = normalizeToolInputForComparison(requestedInput)
-    if (!normalizedRequested) {
-      continue
-    }
-
-    if (
-      normalizedRequested === normalizedCandidate ||
-      artifactReadRangesOverlap(requestedInput, candidateToolInput)
-    ) {
-      return {
-        stepNumber: index + 1,
-        stepLabel: execution.stepLabel ?? null
+        return { stepNumber: index + 1, stepLabel: execution.stepLabel ?? null }
       }
+    }
+
+    // Mutations and unknown operations can change previously observed state,
+    // even when they report failure after partially executing.
+    if (isReadOnlyFunction && !isReadOnlyFunction(execution.function)) {
+      return null
     }
   }
 

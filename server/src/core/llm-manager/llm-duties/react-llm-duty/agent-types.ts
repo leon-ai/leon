@@ -52,6 +52,7 @@ export interface FunctionConfig {
   parameters: Record<string, unknown>
   output_schema?: Record<string, unknown>
   deduplicate_calls?: boolean
+  read_only?: boolean
   background?: boolean
   completion_review?: ToolCompletionReview
   hooks?: {
