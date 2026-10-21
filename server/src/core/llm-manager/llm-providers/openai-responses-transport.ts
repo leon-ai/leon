@@ -1,6 +1,8 @@
 import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
 import { requestChatGPTAccount } from '../llm-accounts/chatgpt-account-request'
-import type { CompletionParams } from '@/core/llm-manager/types'
+import { ProviderPromptCache } from './prompt-cache'
+import { readProviderUsage } from '@/core/llm-manager/llm-usage/usage-context'
+import type { CompletionParams, PromptCacheObservation } from '@/core/llm-manager/types'
 
 const CHATGPT_UNSUPPORTED_FIELDS = [
   'background',
@@ -35,6 +37,7 @@ const SSE_LINE_BOUNDARY = /\r\n|\r|\n/
 export class OpenAIResponsesTransport {
   private openAIWebSocketFetch: ReturnType<typeof createWebSocketFetch> | undefined
   private openAIWebSocketAuthorization: string | undefined
+  private readonly promptCache = new ProviderPromptCache()
 
   constructor(
     private readonly baseURL: string,
@@ -51,9 +54,14 @@ export class OpenAIResponsesTransport {
     init?: RequestInit,
     onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<Response> {
+    let observation: PromptCacheObservation | undefined
+    const observe: CompletionParams['onStreamEvent'] = (event) => {
+      observation = event.promptCache ?? observation
+      onStreamEvent?.(event)
+    }
     const response = await (this.accountId
-      ? this.fetchChatGPT(input, init, onStreamEvent)
-      : this.fetchOpenAI(input, init, onStreamEvent))
+      ? this.fetchChatGPT(input, init, observe)
+      : this.fetchOpenAI(input, init, observe))
 
     onStreamEvent?.({
       type: 'response-headers',
@@ -63,7 +71,7 @@ export class OpenAIResponsesTransport {
         : {})
     })
 
-    return this.finishResponseStream(response, onStreamEvent)
+    return this.finishResponseStream(response, onStreamEvent, observation)
   }
 
   /**
@@ -107,11 +115,22 @@ export class OpenAIResponsesTransport {
       return item
     })
     body['instructions'] ??= ''
+    const { sessionId, observation } = this.promptCache.prepare(
+      body,
+      String(this.accountId)
+    )
 
     return requestChatGPTAccount(String(this.accountId), async (accountHeaders) => {
       const headers = new Headers(init?.headers)
       for (const [name, value] of Object.entries(accountHeaders)) {
         headers.set(name, value)
+      }
+      if (sessionId) {
+        headers.set('session_id', sessionId)
+      }
+      if (observation) {
+        headers.set('x-client-request-id', observation.key)
+        onStreamEvent?.({ type: 'prompt-cache', promptCache: observation })
       }
 
       // The WebSocket adapter drops custom headers. Codex needs its workspace
@@ -139,6 +158,16 @@ export class OpenAIResponsesTransport {
   ): Promise<Response> {
     init?.signal?.throwIfAborted()
     const authorization = new Headers(init?.headers).get('authorization') || ''
+    const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+    const { observation } = this.promptCache.prepare(
+      body,
+      JSON.stringify([this.baseURL, authorization])
+    )
+
+    if (observation) {
+      init = { ...init, body: JSON.stringify(body) }
+      onStreamEvent?.({ type: 'prompt-cache', promptCache: observation })
+    }
     if (this.openAIWebSocketAuthorization !== authorization) {
       this.openAIWebSocketFetch?.close()
       this.openAIWebSocketFetch = undefined
@@ -178,7 +207,8 @@ export class OpenAIResponsesTransport {
    */
   private finishResponseStream(
     response: Response,
-    onStreamEvent?: CompletionParams['onStreamEvent']
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    observation?: PromptCacheObservation
   ): Response {
     if (!response.body) {
       return response
@@ -234,6 +264,23 @@ export class OpenAIResponsesTransport {
             }
 
             if (event && OPENAI_TERMINAL_EVENTS.has(String(event['type']))) {
+              if (observation && event['type'] === 'response.completed') {
+                const result = event['response'] as Record<string, unknown> | undefined
+                const usage = readProviderUsage(result?.['usage'])
+
+                onStreamEvent?.({
+                  type: 'prompt-cache',
+                  promptCache: {
+                    ...observation,
+                    ...(usage.inputTokens !== undefined
+                      ? { inputTokens: usage.inputTokens }
+                      : {}),
+                    ...(usage.cachedInputTokens !== undefined
+                      ? { cachedInputTokens: usage.cachedInputTokens }
+                      : {})
+                  }
+                })
+              }
               if (event['type'] !== 'response.completed') {
                 this.close()
               }

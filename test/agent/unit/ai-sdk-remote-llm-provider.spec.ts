@@ -17,10 +17,13 @@ import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-p
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
+import { ProviderPromptCache } from '@/core/llm-manager/llm-providers/prompt-cache'
+import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { readCompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { CONFIG_MANAGER } from '@/config'
 import {
   getActiveTurnInference,
+  getActiveConversationSessionId,
   runWithConversationSession
 } from '@/core/session-manager/session-context'
 import {
@@ -59,7 +62,7 @@ vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
 }))
 vi.mock('@/core/session-manager/session-context', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/core/session-manager/session-context')>(),
-  getActiveConversationSessionId: (): string => 'media-session'
+  getActiveConversationSessionId: vi.fn((): string => 'media-session')
 }))
 
 const openRouterMocks = vi.hoisted(() => {
@@ -906,19 +909,106 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'minimax' })
   })
 
+  it('isolates cache identities and reports changes to the final request prefix without retaining content', () => {
+    const cache = new ProviderPromptCache()
+    const template = {
+      model: 'gpt-6.1-sol', prompt_cache_key: 'agent',
+      instructions: 'Private system instructions.',
+      tools: [{ type: 'function', name: 'read_note' }],
+      input: [{ role: 'user', content: 'Private owner request.' }]
+    }
+    const request = (): typeof template => structuredClone(template)
+    const initial = runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(request(), 'first-account')
+    )
+    const continued = request()
+    continued.input.push({ role: 'assistant', content: 'Verified result.' })
+    const warm = runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(continued, 'first-account')
+    )
+
+    expect(warm.observation).toMatchObject({
+      key: initial.observation!.key,
+      previousInputItems: 1, matchingPrefixItems: 1, changedInputs: []
+    })
+
+    continued.prompt_cache_key = 'agent'
+    continued.tools.push({ type: 'function', name: 'write_note' })
+    continued.input[0]!.content = 'Edited owner request.'
+    const changed = runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(continued, 'first-account')
+    )
+
+    expect(changed.observation).toMatchObject({
+      key: initial.observation!.key, matchingPrefixItems: 0,
+      changedInputs: ['tools', 'history']
+    })
+    expect(runWithProfileContext({ profileName: 'second' }, () =>
+      cache.prepare(request(), 'first-account').observation?.key
+    )).not.toBe(initial.observation!.key)
+    expect(runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(request(), 'second-account').observation?.key
+    )).not.toBe(initial.observation!.key)
+    vi.mocked(getActiveConversationSessionId).mockReturnValueOnce('another-session')
+    expect(runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(request(), 'first-account').observation?.key
+    )).not.toBe(initial.observation!.key)
+    expect(JSON.stringify(changed)).not.toContain('Private')
+    expect(JSON.stringify(changed)).not.toContain('first-account')
+  })
+
+  it.each(['messages', 'input'])('observes %s without mutating provider requests or misclassifying appended instructions', (field) => {
+    const cache = new ProviderPromptCache()
+    const body: Record<string, unknown> = {
+      model: 'model', system: 'Stable rules.',
+      tools: [
+        { type: 'function', function: { name: 'read', parameters: {} } },
+        { type: 'function', function: { name: 'write', parameters: {} } }
+      ],
+      [field]: [{ role: 'user', content: 'Inspect the workspace.' }]
+    }
+    const original = JSON.stringify(body)
+    const first = cache.prepare(body, 'account', true)
+    expect(JSON.stringify(body)).toBe(original)
+
+    const continued = structuredClone(body)
+    ;(continued[field] as unknown[]).push({ role: 'developer', content: 'Current runtime state.' })
+    expect(cache.prepare(continued, 'account', true).observation).toMatchObject({
+      systemHash: first.observation!.systemHash,
+      matchingPrefixItems: 1, changedInputs: []
+    })
+
+    ;(continued['tools'] as unknown[]).reverse()
+    expect(cache.prepare(continued, 'account', true).observation).toMatchObject({
+      changedInputs: ['tools'],
+      toolChanges: { added: 0, removed: 0, modified: 0, reordered: true }
+    })
+
+    continued['tools'] = [{ type: 'function', function: { name: 'read', parameters: { changed: true } } }]
+    expect(cache.prepare(continued, 'account', true).observation).toMatchObject({
+      toolChanges: { added: 0, removed: 1, modified: 1, reordered: false }
+    })
+    expect(JSON.stringify(first.observation)).not.toContain('Stable rules.')
+  })
+
   it('preserves subscription streaming, cache usage, summaries and encrypted reasoning for replay', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
     accountMocks.getCredentials.mockResolvedValue({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'fresh-chatgpt-token' })
     const call = { type: 'function_call', id: 'fc_test', call_id: 'call_test',
-      name: 'read_note', namespace: 'leon', arguments: '{"name":"todo"}', status: 'completed' }
+      name: 'read_note', namespace: 'leon', arguments: '{ "name": "todo" }', status: 'completed' }
     const reasoning = {
       type: 'reasoning',
       id: 'rs_test',
       encrypted_content: 'encrypted-test',
       summary: [{ type: 'summary_text', text: 'Checking the note.' }]
     }
+    const message = {
+      type: 'message', id: 'msg_progress', role: 'assistant', phase: 'commentary',
+      status: 'completed',
+      content: [{ type: 'output_text', text: 'Checking your note.', annotations: [] }]
+    }
     const response = { id: 'resp_test', created_at: 1, model: 'gpt-6.1-sol',
-      status: 'completed', output: [reasoning, call], usage: {
+      status: 'completed', output: [reasoning, message, call], usage: {
         input_tokens: 1_536, output_tokens: 24, total_tokens: 1_560,
         input_tokens_details: { cached_tokens: 1_024 }, output_tokens_details: { reasoning_tokens: 10 }
       } }
@@ -928,9 +1018,12 @@ describe('AISDKRemoteLLMProvider', () => {
       { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, output_index: 0,
         summary_index: 0, delta: 'Checking the note.' },
       { type: 'response.output_item.done', output_index: 0, item: reasoning },
-      { type: 'response.output_item.added', output_index: 1, item: { ...call, arguments: '', status: 'in_progress' } },
-      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 1, delta: call.arguments },
-      { type: 'response.output_item.done', output_index: 1, item: call },
+      { type: 'response.output_item.added', output_index: 1, item: { ...message, content: [] } },
+      { type: 'response.output_text.delta', item_id: message.id, output_index: 1, content_index: 0, delta: 'Checking your note.' },
+      { type: 'response.output_item.done', output_index: 1, item: message },
+      { type: 'response.output_item.added', output_index: 2, item: { ...call, arguments: '', status: 'in_progress' } },
+      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 2, delta: call.arguments },
+      { type: 'response.output_item.done', output_index: 2, item: call },
       { type: 'response.completed', response }
     ]
     websocketMocks.fetch.mockImplementation(async () => new Response(
@@ -987,12 +1080,12 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(body.input[0].role).toBe('developer')
     expect(body).toMatchObject({
       reasoning: { effort: 'medium', summary: 'auto' },
-      include: ['reasoning.encrypted_content'], prompt_cache_key: 'leon-test'
+      include: ['reasoning.encrypted_content'], prompt_cache_key: expect.stringMatching(/^leon-[a-f0-9]{48}$/)
     })
     expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
     expect(onReasoningToken).toHaveBeenCalledWith('Checking the note.')
     expect(provider.transport).toBe('http')
-    expect(onStreamEvent.mock.calls.slice(0, 3).map(([event]) => event)).toEqual([
+    expect(onStreamEvent.mock.calls.filter(([event]) => event.type !== 'prompt-cache').slice(0, 3).map(([event]) => event)).toEqual([
       { type: 'request-dispatched', transport: 'http' },
       { type: 'response-headers', transport: 'http' },
       { type: 'transport-activity', transport: 'http' }
@@ -1013,12 +1106,24 @@ describe('AISDKRemoteLLMProvider', () => {
 
     await provider.runChatCompletion([
       { role: 'user', content: 'Read my note.' },
-      { role: 'assistant', content: '', toolCalls: normalized.toolCalls,
-        reasoningItems: normalized.reasoningItems },
+      { role: 'assistant', content: normalized.rawResult, toolCalls: normalized.toolCalls,
+        reasoningItems: normalized.reasoningItems, providerMessage: normalized.providerMessage },
       { role: 'tool', toolName: 'read_note', toolCallId: 'call_test', content: 'Note contents.' }
     ], params)
     const replay = JSON.parse(websocketMocks.fetch.mock.calls[1]![1].body)
     expect(replay.input).toContainEqual(reasoning)
+    expect(replay.input).toContainEqual({ role: 'assistant', content: 'Checking your note.', phase: 'commentary' })
+    expect(replay.input).toContainEqual(expect.objectContaining({
+      type: 'function_call', call_id: call.call_id, arguments: call.arguments
+    }))
+    expect(replay.prompt_cache_key).toBe(body.prompt_cache_key)
+    expect(new Headers(request?.headers).get('session_id')).toBe('media-session')
+    expect(new Headers(request?.headers).get('x-client-request-id')).toBe(body.prompt_cache_key)
+    const cacheEvents = onStreamEvent.mock.calls.filter(([event]) => event.type === 'prompt-cache')
+    expect(cacheEvents.at(-1)?.[0].promptCache).toMatchObject({
+      previousInputItems: body.input.length, matchingPrefixItems: body.input.length,
+      changedInputs: [], inputTokens: 1_536, cachedInputTokens: 1_024
+    })
     expect(websocketMocks.create).not.toHaveBeenCalled()
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test')
     provider.dispose()
@@ -1843,18 +1948,22 @@ describe('AISDKRemoteLLMProvider', () => {
     vi.stubGlobal('fetch', fetch)
     const provider = new DeepSeekLLMProvider({ ...TARGET, provider: LLMProviders.DeepSeek, model: 'deepseek-flash' })
 
-    const response = await provider.runChatCompletion('Read README.md', PARAMS)
+    const onStreamEvent = vi.fn()
+    const response = await provider.runChatCompletion('Read README.md', { ...PARAMS, onStreamEvent })
     expect(fetch.mock.calls[0]![0]).toMatch(/\/chat\/completions$/)
     expect(response.data.choices[0].message.tool_calls[0].function.name).toBe('read_file')
     expect(response.data.usage.prompt_tokens).toBe(100)
 
     await provider.runChatCompletion('Is it done?', {
       ...PARAMS,
+      onStreamEvent,
       toolChoice: 'none',
       data: { done: { type: 'boolean' } }
     })
     expect(fetch.mock.calls[1]![0]).toMatch(/\/responses$/)
     expect(JSON.parse(fetch.mock.calls[1]![1].body).text.format.type).toBe('json_schema')
+    expect(onStreamEvent.mock.calls.filter(([event]) => event.type === 'prompt-cache')).toHaveLength(2)
+    expect(JSON.parse(fetch.mock.calls[0]![1].body)).not.toHaveProperty('prompt_cache_key')
   })
 
   it('uses Groq Responses while preserving native seed and hidden-reasoning controls', async () => {

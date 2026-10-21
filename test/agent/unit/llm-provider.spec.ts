@@ -527,6 +527,11 @@ describe('LLMProvider', () => {
         attempts[0]!.onToken?.('')
         await vi.advanceTimersByTimeAsync(10)
         attempts[0]!.onStreamEvent?.({ type: 'response-headers', requestId: 'req-test' })
+        const promptCache = {
+          key: 'opaque-session-key', systemHash: 'system-hash', toolsHash: 'tools-hash',
+          inputItems: 4, previousInputItems: 2, matchingPrefixItems: 2, changedInputs: []
+        }
+        attempts[0]!.onStreamEvent?.({ type: 'prompt-cache', promptCache })
         await vi.advanceTimersByTimeAsync(10)
         attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
         await vi.advanceTimersByTimeAsync(10)
@@ -565,6 +570,7 @@ describe('LLMProvider', () => {
         ])
         expect(timings[1]).toMatchObject({
           attemptId: timings[0].attemptId,
+          promptCache,
           requestDispatchMs: 0,
           responseHeadersMs: 10,
           firstByteMs: 20,

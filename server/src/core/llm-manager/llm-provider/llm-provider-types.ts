@@ -5,6 +5,7 @@ import {
   type LLMPromptAbortReason,
   type OpenAIToolCall,
   type ProviderReasoningItem,
+  type ProviderMessageMetadata,
   type PromptOrChatHistory,
   type ProviderCompactionContext
 } from '@/core/llm-manager/types'
@@ -31,6 +32,7 @@ export interface CompletionResult {
   temperature: number
   reasoning?: string
   reasoningItems?: ProviderReasoningItem[]
+  providerMessage?: ProviderMessageMetadata
   compactionContext?: ProviderCompactionContext
   finishReason?: string
   /**
@@ -54,6 +56,7 @@ export interface NormalizedCompletionResult {
   toolCalls?: OpenAIToolCall[]
   reasoning?: string
   reasoningItems?: ProviderReasoningItem[]
+  providerMessage?: ProviderMessageMetadata
   compactionContext?: ProviderCompactionContext
   finishReason?: string
 }

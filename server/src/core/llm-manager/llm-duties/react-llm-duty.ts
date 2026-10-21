@@ -36,7 +36,8 @@ import {
   type OpenAITool,
   type OpenAIToolCall,
   type ProviderReasoningItem,
-  type ProviderCompactionContext
+  type ProviderCompactionContext,
+  type ProviderMessageMetadata
 } from '@/core/llm-manager/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
@@ -1112,6 +1113,7 @@ export class ReActLLMDuty extends LLMDuty {
     reasoning?: string
     reasoningItems?: ProviderReasoningItem[]
     compactionContext?: ProviderCompactionContext
+    providerMessage?: ProviderMessageMetadata
     isTruncated?: boolean
   } | null> {
     this.runBudget?.throwIfExpired()
@@ -1690,6 +1692,9 @@ export class ReActLLMDuty extends LLMDuty {
         ...(completionResult.compactionContext
           ? { compactionContext: completionResult.compactionContext }
           : {}),
+        ...(completionResult.providerMessage
+          ? { providerMessage: completionResult.providerMessage }
+          : {}),
         ...(completionResult.reasoningItems?.length
           ? { reasoningItems: completionResult.reasoningItems }
           : {}),
@@ -1728,6 +1733,9 @@ export class ReActLLMDuty extends LLMDuty {
       textContent,
       ...(completionResult.compactionContext
         ? { compactionContext: completionResult.compactionContext }
+        : {}),
+      ...(completionResult.providerMessage
+        ? { providerMessage: completionResult.providerMessage }
         : {}),
       ...(completionResult.reasoningItems?.length
         ? { reasoningItems: completionResult.reasoningItems }

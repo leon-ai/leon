@@ -25,6 +25,7 @@ import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
 import { OpenAIResponsesTransport } from './openai-responses-transport'
+import { ProviderPromptCache } from './prompt-cache'
 import { CHATGPT_CODEX_BASE_URL } from '../llm-accounts/chatgpt-account-config'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
@@ -44,6 +45,7 @@ import type {
   OpenAIToolCall,
   OpenAIToolChoice,
   ProviderReasoningItem,
+  ProviderMessageMetadata,
   PromptOrChatHistory,
   ProviderCompactionContext
 } from '@/core/llm-manager/types'
@@ -123,6 +125,7 @@ interface CallState {
   usedOutputTokens: number | undefined
   finishReason?: string
   compactionOutput?: Record<string, unknown>[]
+  messageParts: ProviderMessageMetadata['parts']
 }
 
 
@@ -138,6 +141,7 @@ export default class AISDKRemoteLLMProvider {
   private languageModel: LanguageModelV4
   private responsesModel: LanguageModelV4 | undefined
   private openAITransport: OpenAIResponsesTransport | undefined
+  private readonly promptCache = new ProviderPromptCache()
 
   constructor(
     config: AISDKRemoteProviderConfig
@@ -266,26 +270,57 @@ export default class AISDKRemoteLLMProvider {
   private createLanguageModel(
     flavor = this.config.flavor,
     contexts: ProviderCompactionContext[] = [],
-    onStreamEvent?: CompletionParams['onStreamEvent']
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    toolCalls: OpenAIToolCall[] = [],
+    cacheScope?: string
   ): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
+    const originalCalls = new Map<string, OpenAIToolCall>()
+
+    for (const call of toolCalls) {
+      try {
+        JSON.parse(call.function.arguments)
+        originalCalls.set(call.id, call)
+      } catch {
+        // Invalid arguments keep the SDK's structured recovery representation.
+      }
+    }
     const fetch: typeof globalThis.fetch = async (input, init) => {
       let response: Response
 
       if (this.config.flavor === 'openai-responses') {
-        if (contexts.length > 0) {
+        if (contexts.length > 0 || originalCalls.size > 0) {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-          body['input'] = replayCompactionWindows(
-            body['input'] as Record<string, unknown>[],
-            contexts
-          )
+          const items = body['input'] as Record<string, unknown>[]
+
+          // SDK object conversion changes whitespace in accepted arguments.
+          // Replay the canonical transcript's bytes, including any host redaction.
+          body['input'] = replayCompactionWindows(items.map((item) => {
+            const call = originalCalls.get(String(item['call_id']))
+
+            return item['type'] === 'function_call' && call &&
+              call.function.name === item['name']
+              ? { ...item, arguments: call.function.arguments }
+              : item
+          }), contexts)
           init = { ...init, body: JSON.stringify(body) }
         }
 
         return this.getOpenAITransport().fetch(input, init, onStreamEvent)
       } else {
         init?.signal?.throwIfAborted()
+        if (onStreamEvent && typeof init?.body === 'string') {
+          const { observation } = this.promptCache.prepare(
+            JSON.parse(init.body) as Record<string, unknown>,
+            this.compactionBinding,
+            true,
+            cacheScope
+          )
+          if (observation) {
+            onStreamEvent({ type: 'prompt-cache', promptCache: observation })
+          }
+        }
         this.recordInference(input instanceof Request ? input.url : String(input))
         onStreamEvent?.({ type: 'request-dispatched', transport: this.transport })
 
@@ -484,8 +519,15 @@ export default class AISDKRemoteLLMProvider {
       ? this.getCompactionContexts(prompt)
       : []
 
-    if (contexts.length > 0 || onStreamEvent) {
-      return this.createLanguageModel(flavor, contexts, onStreamEvent)
+    const toolCalls = Array.isArray(prompt) && this.config.flavor === 'openai-responses'
+      ? prompt.flatMap((message) => message.role === 'assistant' ? message.toolCalls || [] : [])
+      : []
+
+    if (contexts.length > 0 || toolCalls.length > 0 || onStreamEvent) {
+      return this.createLanguageModel(
+        flavor, contexts, onStreamEvent, toolCalls,
+        completionParams.usagePurpose || completionParams.dutyType
+      )
     }
 
     if (flavor === 'open-responses') {
@@ -816,7 +858,22 @@ export default class AISDKRemoteLLMProvider {
         content.push({ type: 'reasoning', text: message.reasoning })
       }
       if (message.content.trim()) {
-        content.push({ type: 'text', text: message.content })
+        const metadata = message.providerMessage
+        const parts = metadata?.provider === this.config.providerName &&
+          metadata.binding === this.compactionBinding &&
+          metadata.parts.map((part) => part.text).join('').trim() === message.content.trim()
+          ? metadata.parts
+          : [{ text: message.content }]
+
+        for (const part of parts) {
+          content.push({
+            type: 'text',
+            text: part.text,
+            ...('phase' in part && part.phase ? {
+              providerOptions: { openai: { phase: part.phase } }
+            } : {})
+          })
+        }
       }
       for (const toolCall of message.toolCalls || []) {
         content.push({
@@ -1471,6 +1528,7 @@ export default class AISDKRemoteLLMProvider {
       text: '',
       reasoning: '',
       reasoningItems: new Map(),
+      messageParts: [],
       toolCallsById: {},
       toolCallOrder: [],
       usedInputTokens: undefined,
@@ -1479,12 +1537,29 @@ export default class AISDKRemoteLLMProvider {
   }
 
   /**
-   * Keeps the latest server compaction and all output after it in provider order.
+   * Retains assistant message boundaries and the latest server compaction window.
    */
-  private captureCompactionOutput(state: CallState, output: unknown): void {
+  private captureResponseOutput(state: CallState, output: unknown): void {
     if (this.config.flavor !== 'openai-responses' || !Array.isArray(output)) {
       return
     }
+
+    state.messageParts = output.flatMap((item) => {
+      if (item?.type !== 'message' || item.role !== 'assistant' || !Array.isArray(item.content)) {
+        return []
+      }
+
+      return item.content.flatMap((part: Record<string, unknown>) =>
+        part['type'] === 'output_text' && typeof part['text'] === 'string'
+          ? [{
+              text: part['text'],
+              ...(item.phase === 'commentary' || item.phase === 'final_answer'
+                ? { phase: item.phase as 'commentary' | 'final_answer' }
+                : {})
+            }]
+          : []
+      )
+    })
 
     const index = output.findLastIndex((item) =>
       item?.type === 'compaction' &&
@@ -1653,6 +1728,13 @@ export default class AISDKRemoteLLMProvider {
     state: CallState,
     prompt: PromptOrChatHistory
   ): Record<string, unknown> {
+    const providerMessage: ProviderMessageMetadata | undefined = state.messageParts.length > 0
+      ? {
+          provider: LLMProviders.OpenAI,
+          binding: this.compactionBinding,
+          parts: state.messageParts
+        }
+      : undefined
     const toolCalls: OpenAIToolCall[] = state.toolCallOrder
       .map((toolCallId, index) => {
         const call = state.toolCallsById[toolCallId]
@@ -1678,6 +1760,7 @@ export default class AISDKRemoteLLMProvider {
       role: 'assistant',
       content: state.text,
       ...(state.reasoning ? { reasoning: state.reasoning } : {}),
+      ...(providerMessage ? { providerMessage } : {}),
       ...(state.reasoningItems.size > 0
         ? { reasoningItems: [...state.reasoningItems.values()] }
         : {}),
@@ -1692,6 +1775,7 @@ export default class AISDKRemoteLLMProvider {
             : {}),
           message: {
             content: state.text,
+            ...(providerMessage ? { providerMessage } : {}),
             ...(compactionContext ? { compactionContext } : {}),
             ...(state.reasoning.length > 0
               ? { reasoning: state.reasoning }
@@ -1880,7 +1964,7 @@ export default class AISDKRemoteLLMProvider {
       completionParams.onStreamEvent
     )
     const result = await languageModel.doGenerate(callOptions)
-    this.captureCompactionOutput(
+    this.captureResponseOutput(
       state,
       (result.response?.body as Record<string, unknown> | undefined)?.['output']
     )
@@ -1960,6 +2044,7 @@ export default class AISDKRemoteLLMProvider {
     )
     const result = await languageModel.doStream(callOptions)
     const outputItems: Record<string, unknown>[] = []
+    let hasCompleteOutput = false
 
     // Clear a previous attempt's provisional text without claiming model output.
     completionParams.onToken?.('')
@@ -1996,7 +2081,8 @@ export default class AISDKRemoteLLMProvider {
         }
         if (raw?.['type'] === 'response.completed') {
           const response = raw['response'] as Record<string, unknown>
-          this.captureCompactionOutput(state, response['output'])
+          this.captureResponseOutput(state, response['output'])
+          hasCompleteOutput = Array.isArray(response['output']) && response['output'].length > 0
         }
         continue
       }
@@ -2172,9 +2258,9 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
-    if (!state.compactionOutput) {
+    if (!hasCompleteOutput) {
       // Some completed events omit output; item events retain the ordered window.
-      this.captureCompactionOutput(state, outputItems)
+      this.captureResponseOutput(state, outputItems)
     }
 
     await this.completeMediaOutput(state)

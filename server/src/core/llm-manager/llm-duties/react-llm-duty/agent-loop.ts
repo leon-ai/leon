@@ -12,6 +12,7 @@ import {
   CompletionFailureKind,
   type AgentToolTranscriptMessage,
   type ProviderReasoningItem,
+  type ProviderMessageMetadata,
   type ProviderCompactionContext,
   type OpenAITool,
   type OpenAIToolCall
@@ -279,6 +280,7 @@ interface AgentModelResult {
   reasoning?: string
   reasoningItems?: ProviderReasoningItem[]
   compactionContext?: ProviderCompactionContext
+  providerMessage?: ProviderMessageMetadata
   toolCalls?: OpenAIToolCall[]
   isTruncated?: boolean
 }
@@ -1033,6 +1035,7 @@ export async function runAgentLoop(
     const deferredToolCallCount = emittedToolCalls.length - toolCalls.length
     // Preserve provider reasoning with its response across tool calls and resumes.
     const reasoning = {
+      ...(modelResult.providerMessage ? { providerMessage: modelResult.providerMessage } : {}),
       ...(modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}),
       ...(modelResult.compactionContext
         ? { compactionContext: modelResult.compactionContext }

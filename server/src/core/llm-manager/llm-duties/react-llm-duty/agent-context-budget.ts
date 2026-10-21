@@ -136,7 +136,7 @@ function estimateAgentInputTokens(
   let imageCount = 0
   let compactionTokens = 0
   const serializedTranscript = JSON.stringify(transcript, (key, value) => {
-    if (key === 'runtimeContext') {
+    if (key === 'runtimeContext' || key === 'providerMessage') {
       return undefined
     }
     if (value?.role === 'assistant' && value.compactionContext) {

@@ -43,6 +43,8 @@ import {
   type CompletionAttemptTiming,
   type OpenAIToolCall,
   type ProviderReasoningItem,
+  type ProviderMessageMetadata,
+  type PromptCacheObservation,
   type ProviderCompactionContext,
   type PromptOrChatHistory
 } from '@/core/llm-manager/types'
@@ -109,6 +111,7 @@ export async function runCompletionAttempt(
   )
   let requestId: string | undefined
   let responseId: string | undefined
+  let promptCache: PromptCacheObservation | undefined
   let isReasoning = false
   let isCompacting = false
   const pendingHostedTools = new Set<string>()
@@ -139,6 +142,7 @@ export async function runCompletionAttempt(
       connectionErrorCode: getConnectionErrorCode(error),
       requestId,
       responseId,
+      ...(promptCache ? { promptCache } : {}),
       elapsedMs: Date.now() - completionStartedAt,
       inferenceTimeoutMs: completionParams.timeout,
       streamIdleTimeoutMs: idleTimeout,
@@ -289,6 +293,12 @@ export async function runCompletionAttempt(
   }
   const onStreamEvent = (event: CompletionStreamEvent): void => {
     if (abortController.signal.aborted) {
+      return
+    }
+
+    if (event.promptCache) {
+      promptCache = event.promptCache
+      completionParams.onStreamEvent?.(event)
       return
     }
 
@@ -563,6 +573,7 @@ export async function runCompletionAttempt(
   let reasoning: string | undefined
   let reasoningItems: ProviderReasoningItem[] | undefined
   let compactionContext: ProviderCompactionContext | undefined
+  let providerMessage: ProviderMessageMetadata | undefined
   let finishReason: string | undefined
 
   // Normalize the completion result according to the provider.
@@ -627,6 +638,7 @@ export async function runCompletionAttempt(
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
       compactionContext = normalized.compactionContext
+      providerMessage = normalized.providerMessage
       finishReason = normalized.finishReason
     } else if (
       [
@@ -661,6 +673,7 @@ export async function runCompletionAttempt(
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
       compactionContext = normalized.compactionContext
+      providerMessage = normalized.providerMessage
       finishReason = normalized.finishReason
     } else if (
       [LLMProviders.OpenAI, LLMProviders.OpenRouter].includes(
@@ -692,6 +705,7 @@ export async function runCompletionAttempt(
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
       compactionContext = normalized.compactionContext
+      providerMessage = normalized.providerMessage
       finishReason = normalized.finishReason
     } else {
       LogHelper.error(`The LLM provider "${providerName}" is not yet supported`)
@@ -740,6 +754,15 @@ export async function runCompletionAttempt(
   clearStreamStallTimeout()
   rejectStreamStall = null
 
+  if (promptCache && usedInputTokens > 0) {
+    promptCache = {
+      ...promptCache,
+      inputTokens: usedInputTokens,
+      ...(accounting?.cachedInputTokens !== undefined
+        ? { cachedInputTokens: accounting.cachedInputTokens }
+        : {})
+    }
+  }
   logAttempt('completed')
 
   // Guard against silent empty provider responses which otherwise trigger
@@ -813,6 +836,7 @@ export async function runCompletionAttempt(
     ...(reasoning ? { reasoning } : {}),
     ...(reasoningItems?.length ? { reasoningItems } : {}),
     ...(compactionContext ? { compactionContext } : {}),
+    ...(providerMessage ? { providerMessage } : {}),
     ...(finishReason ? { finishReason } : {}),
     ...(toolCalls ? { toolCalls } : {})
   }

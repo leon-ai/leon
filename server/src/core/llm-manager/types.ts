@@ -79,6 +79,15 @@ export interface ProviderReasoningItem {
 }
 
 /**
+ * Retains assistant text boundaries and phases for the issuing provider route.
+ */
+export interface ProviderMessageMetadata {
+  provider: LLMProviders
+  binding: string
+  parts: Array<{ text: string, phase?: 'commentary' | 'final_answer' }>
+}
+
+/**
  * Canonical provider window plus recoverable evidence for provider changes.
  */
 export interface ProviderCompactionContext {
@@ -107,6 +116,7 @@ export type AgentToolTranscriptMessage =
       content: string
       reasoning?: string
       reasoningItems?: ProviderReasoningItem[]
+      providerMessage?: ProviderMessageMetadata
       compactionContext?: ProviderCompactionContext
       toolCalls?: OpenAIToolCall[]
     }
@@ -187,6 +197,28 @@ export interface CompletionStreamEvent {
   toolCallId?: string
   providerExecuted?: boolean
   preliminary?: boolean
+  promptCache?: PromptCacheObservation
+}
+
+/**
+ * Describes consecutive wire requests using fingerprints, never prompt content.
+ */
+export interface PromptCacheObservation {
+  key: string
+  systemHash: string
+  toolsHash: string
+  inputItems: number
+  previousInputItems: number
+  matchingPrefixItems: number
+  changedInputs: string[]
+  toolChanges?: {
+    added: number
+    removed: number
+    modified: number
+    reordered: boolean
+  }
+  inputTokens?: number
+  cachedInputTokens?: number
 }
 
 export enum CompletionFailureKind {
@@ -213,6 +245,7 @@ export interface CompletionAttemptTiming {
   connectionErrorCode?: string | undefined
   requestId?: string | undefined
   responseId?: string | undefined
+  promptCache?: PromptCacheObservation | undefined
   elapsedMs: number
   inferenceTimeoutMs: number
   streamIdleTimeoutMs: number
