@@ -355,8 +355,9 @@ export default class HostedTool extends Tool {
       // Leave streamRetries unset: retry callback mode buffers native tool evidence.
       const result = streamText({
         model: this.createLanguageModel(target),
-        system: `${SEARCH_SYSTEM_PROMPT}\nCurrent date and time: ${this.currentDateTime}.`,
-        prompt: query,
+        system: SEARCH_SYSTEM_PROMPT,
+        // Fresh request data follows the reusable instructions and tool schemas.
+        prompt: `Current date and time: ${this.currentDateTime}.\n\n${query}`,
         maxOutputTokens: this.resolveMaxOutputTokens(options),
         ...(target.provider === 'openai'
           ? { providerOptions: { openai: { store: false } } }
@@ -548,9 +549,9 @@ export default class HostedTool extends Tool {
         messages: [
           {
             role: 'system',
-            content: `${SEARCH_SYSTEM_PROMPT}\nCurrent date and time: ${this.currentDateTime}.`
+            content: SEARCH_SYSTEM_PROMPT
           },
-          { role: 'user', content: query }
+          { role: 'user', content: `Current date and time: ${this.currentDateTime}.\n\n${query}` }
         ],
         max_tokens: this.resolveMaxOutputTokens(options),
         ...(typeof options?.temperature === 'number' &&
