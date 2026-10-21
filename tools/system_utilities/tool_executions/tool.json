@@ -35,7 +35,7 @@
               "jq": {
                 "type": "string",
                 "minLength": 1,
-                "description": "jq projection of retained tool output. Ripgrep records live at .result.files or .result.matches; e.g. .result.files | length. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
+                "description": "jq projection of saved JSON rooted at result and execution. Command text is at .result.stdout or .result.stderr; ripgrep records are at .result.files or .result.matches. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
               },
               "offsetChars": {
                 "type": "integer",
@@ -75,7 +75,7 @@
               "jq": {
                 "type": "string",
                 "minLength": 1,
-                "description": "jq projection of retained tool output. Ripgrep records live at .result.files or .result.matches; e.g. .result.files | length. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
+                "description": "jq projection of saved JSON rooted at result and execution. Command text is at .result.stdout or .result.stderr; ripgrep records are at .result.files or .result.matches. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
               },
               "offsetChars": {
                 "type": "integer",
