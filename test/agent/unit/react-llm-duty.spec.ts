@@ -5,6 +5,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { saveConnection } from '@/core/connections/connection-service'
 import { ConnectionStatus } from '@/core/connections/connection-store'
+import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -905,27 +906,44 @@ describe('continuous agent loop', () => {
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
-  it('exposes execution controls immediately after a retained handle is returned', async () => {
+  it.each([
+    { state: ToolExecutionState.Running, compacted: false, functions: ['wait', 'read', 'cancel'] },
+    { state: ToolExecutionState.Completed, compacted: false, functions: [] },
+    { state: ToolExecutionState.Completed, compacted: true, functions: ['read'] }
+  ])('loads only needed execution controls for $state output (compacted=$compacted)', async ({ state, compacted, functions }) => {
     coreMocks.getFlattenedTools.mockReturnValue([{
       toolkitId: 'system_utilities', toolkitName: 'System Utilities',
       toolkitDescription: 'Manage executions', toolId: 'tool_executions',
       toolName: 'Tool Executions', toolDescription: 'Read retained results'
     }])
-    coreMocks.getToolFunctions.mockReturnValue({
-      read: { description: 'Read saved results', parameters: {
-        type: 'object', properties: { executionId: { type: 'string' } },
-        required: ['executionId']
-      } }
-    })
+    coreMocks.getToolFunctions.mockReturnValue(Object.fromEntries(
+      ['wait', 'read', 'cancel'].map((name) => [name, {
+        description: `${name} retained execution`,
+        parameters: {
+          type: 'object', properties: { executionId: { type: 'string' } },
+          required: ['executionId']
+        }
+      }])
+    ))
     const executeFunction = vi.fn().mockResolvedValue({
-      executionHandle: { id: 'retained', state: 'completed' },
-      execution: { function: callable.qualifiedName, status: 'success', observation: 'Saved results' }
+      executionHandle: { id: 'retained', state },
+      execution: {
+        function: callable.qualifiedName, status: 'success',
+        observation: JSON.stringify({
+          status: 'success', observation_compacted: compacted,
+          execution: { id: 'retained', state },
+          ...(compacted ? { data_preview: 'Saved result preview' } : { data: 'Complete result' })
+        })
+      }
     })
     const callModel = vi.fn()
       .mockResolvedValueOnce({ toolCalls: [toolCall('scan', CALLABLE_TOOL_NAME, { query: 'files' })] })
       .mockImplementationOnce(async (_messages, tools) => {
         expect(tools.map((tool: { function: { name: string } }) => tool.function.name))
-          .toContain('system_utilities__tool_executions__read')
+          .toEqual([
+            CALLABLE_TOOL_NAME,
+            ...functions.map((name) => `system_utilities__tool_executions__${name}`)
+          ])
 
         return { textContent: 'Done.' }
       })

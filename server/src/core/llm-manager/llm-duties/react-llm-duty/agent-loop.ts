@@ -1,4 +1,5 @@
 import { ToolCompletionReview, ToolConcurrency } from '@/types'
+import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
 import {
@@ -2188,9 +2189,21 @@ async function executeAgentToolCall(
     params.signal?.throwIfAborted()
     const executionCompletedAt = Date.now()
     if (result.executionHandle) {
-      // Execution controls appear only once there is a handle to manage, so
-      // continuing long work does not require another toolkit-discovery turn.
-      loadToolkitFunctions(params.catalog, 'system_utilities', 'tool_executions')
+      // Keep inline results from changing the model's tool prefix. Active work
+      // needs controls immediately; compacted results need the retained reader.
+      const functions = result.executionHandle.state === ToolExecutionState.Running
+        ? ['wait', 'read', 'cancel']
+        : parseToolCallArguments(result.execution.observation)?.['observation_compacted'] === true
+          ? ['read']
+          : []
+
+      if (functions.length > 0) {
+        loadToolkitFunctions(params.catalog, 'system_utilities', 'tool_executions', {
+          functionNames: new Set(functions.map((name) =>
+            `system_utilities.tool_executions.${name}`
+          ))
+        })
+      }
     }
 
     execution = {
