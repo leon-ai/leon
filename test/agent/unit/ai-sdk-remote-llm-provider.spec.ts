@@ -54,8 +54,12 @@ const websocketMocks = vi.hoisted(() => ({
   close: vi.fn()
 }))
 
-vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
-  createWebSocketFetch: websocketMocks.create
+vi.mock('@/core/llm-manager/llm-providers/openai-responses-websocket', () => ({
+  OpenAIResponsesWebSocket: class {
+    constructor(url: string, headers: Record<string, string>) {
+      return websocketMocks.create({ url, headers })
+    }
+  }
 }))
 
 vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
@@ -1174,14 +1178,14 @@ describe('AISDKRemoteLLMProvider', () => {
       authMode: InferenceAuthMode.ChatGPTOAuth,
       credentialSource: InferenceCredentialSource.AccountBinding,
       connectionRef: expect.any(String),
-      endpoint: 'https://chatgpt.com/backend-api/codex/responses'
+      endpoint: 'wss://chatgpt.com/backend-api/codex/responses'
     })
     expect(JSON.stringify(inference)).not.toContain('openai.test')
     expect(JSON.stringify(inference)).not.toContain('chatgpt-token')
     expect(getActiveTurnInference()).toBeUndefined()
 
     const [url, request] = websocketMocks.fetch.mock.calls[0]!
-    expect(String(url)).toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(String(url)).toBe('wss://chatgpt.com/backend-api/codex/responses')
     expect(new Headers(request?.headers).get('authorization')).toBe('Bearer fresh-chatgpt-token')
     const body = JSON.parse(request?.body as string)
     expect(body).toMatchObject({ stream: true, store: false, tools: [{ type: 'function', name: 'read_note' }] })
@@ -1194,17 +1198,17 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
     expect(onReasoningToken).toHaveBeenCalledWith('Checking the note.')
-    expect(provider.transport).toBe('http')
+    expect(provider.transport).toBe('websocket')
     expect(onStreamEvent.mock.calls.filter(([event]) => event.type !== 'prompt-cache').slice(0, 3).map(([event]) => event)).toEqual([
-      { type: 'request-dispatched', transport: 'http' },
-      { type: 'response-headers', transport: 'http' },
-      { type: 'transport-activity', transport: 'http' }
+      { type: 'request-dispatched', transport: 'websocket' },
+      { type: 'response-headers', transport: 'websocket' },
+      { type: 'transport-activity', transport: 'websocket' }
     ])
     expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'stream-open', transport: 'http'
+      type: 'stream-open', transport: 'websocket'
     }))
     expect(onStreamEvent).toHaveBeenCalledWith({
-      type: 'transport-activity', transport: 'http'
+      type: 'transport-activity', transport: 'websocket'
     })
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
     expect(normalized.accounting?.cachedInputTokens).toBe(1_024)
@@ -1234,7 +1238,7 @@ describe('AISDKRemoteLLMProvider', () => {
       previousInputItems: body.input.length, matchingPrefixItems: body.input.length,
       changedInputs: [], inputTokens: 1_536, cachedInputTokens: 1_024
     })
-    expect(websocketMocks.create).not.toHaveBeenCalled()
+    expect(websocketMocks.create).toHaveBeenCalled()
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test')
     provider.dispose()
   })
@@ -1447,11 +1451,11 @@ describe('AISDKRemoteLLMProvider', () => {
     await provider.runChatCompletion('Hello again.', createCompletionParams(null))
 
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test', undefined, true)
-    expect(websocketMocks.create).not.toHaveBeenCalled()
+    expect(websocketMocks.create).toHaveBeenCalled()
     expect(websocketMocks.fetch.mock.calls.map(([, request]) =>
       new Headers(request.headers).get('authorization')
     )).toEqual(['Bearer expired-token', 'Bearer fresh-token', 'Bearer rotated-token'])
-    expect(websocketMocks.close).not.toHaveBeenCalled()
+    expect(websocketMocks.close).toHaveBeenCalled()
     expect(accountMocks.markNeedsAttention).not.toHaveBeenCalled()
     provider.dispose()
   })
@@ -1536,7 +1540,7 @@ describe('AISDKRemoteLLMProvider', () => {
       ...createCompletionParams(null),
       shouldStream: true
     })
-    expect(websocketMocks.create).toHaveBeenCalledTimes(2)
+    expect(websocketMocks.create).toHaveBeenCalledTimes(1)
     provider.dispose()
   })
 
@@ -1546,14 +1550,13 @@ describe('AISDKRemoteLLMProvider', () => {
       llm: { model_settings: {} }
     } as ReturnType<typeof CONFIG_MANAGER.getConfig>)
     websocketMocks.fetch.mockReset()
-    websocketMocks.create.mockImplementation(() => {
-      return Object.assign(
-        (...args: unknown[]) => {
-          return websocketMocks.fetch(...args)
-        },
-        { close: websocketMocks.close }
-      )
-    })
+    vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+    websocketMocks.create.mockImplementation(({ url, headers }) => ({
+      busy: false,
+      fetch: (body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> =>
+        websocketMocks.fetch(url, { headers, body: JSON.stringify(body), signal }),
+      close: websocketMocks.close
+    }))
     vi.stubEnv('LEON_OPENROUTER_API_KEY', 'test-openrouter-key')
   })
 

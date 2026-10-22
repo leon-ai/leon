@@ -19,7 +19,6 @@ import { providerRequestsPlugin } from '@/core/http-server/api/inference/provide
 const mocks = vi.hoisted(() => ({
   credentials: vi.fn(),
   fetch: vi.fn(),
-  create: vi.fn(),
   close: vi.fn(),
   artifact: vi.fn(),
   settings: vi.fn(),
@@ -75,8 +74,16 @@ vi.mock('@/core/llm-manager/media-generation/media-generation-settings', async (
   readGenerationSettings: mocks.settings
 }))
 vi.mock('@/core/artifacts/artifact-store', () => ({ readArtifact: mocks.artifact }))
-vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
-  createWebSocketFetch: mocks.create
+vi.mock('@/core/llm-manager/llm-providers/openai-responses-websocket', () => ({
+  OpenAIResponsesWebSocket: class {
+    public busy = false
+    public async fetch(): Promise<never> {
+      throw Object.assign(new Error('Unsupported handshake'), { statusCode: 426 })
+    }
+    public close(): void {
+      mocks.close()
+    }
+  }
 }))
 vi.mock('@/core/tool-manager/tool-settings', () => ({
   ToolSettings: {
@@ -97,7 +104,6 @@ describe('profile provider requests', () => {
     mocks.credentials.mockResolvedValue({
       auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', model: 'gpt-6.1-sol', account_id: 'bound-account', access_token: 'account-token'
     })
-    mocks.create.mockImplementation(() => Object.assign(mocks.fetch, { close: mocks.close }))
     mocks.settings.mockResolvedValue({ provider: 'inherit', model: 'auto', options: {} })
   })
 
@@ -210,7 +216,6 @@ describe('profile provider requests', () => {
     expect(await response.json()).toMatchObject({
       output: [{ type: 'image_generation_call', result: 'image-data' }]
     })
-    expect(mocks.create).not.toHaveBeenCalled()
   })
 
   it('rejects a broken selected account without using the spare API key', async () => {
@@ -285,7 +290,6 @@ describe('profile provider requests', () => {
     ))
     upstream[1]!.close()
     expect(await responses[1]!.text()).toContain('response.completed')
-    expect(mocks.create).not.toHaveBeenCalled()
   })
 
   it.each(['cancel', 'error'])('releases streamed provider requests after %s', async (outcome) => {
@@ -342,7 +346,6 @@ describe('profile provider requests', () => {
     await expect(requestProvider(LLMProviders.OpenAI, '/responses', {
       model: 'gpt-6', input: 'Search.', tools: [{ type: 'web_search' }]
     })).rejects.toThrow('unsupported_tool')
-    expect(mocks.close).not.toHaveBeenCalled()
   })
 
   it('generates a native Codex image using the selected workspace and refreshes only rejected authorization', async () => {

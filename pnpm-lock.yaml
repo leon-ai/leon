@@ -77,9 +77,6 @@ importers:
       '@tobilu/qmd':
         specifier: 2.8.3
         version: 2.8.3(@typescript/typescript6@6.0.2)(supports-color@5.5.0)
-      '@vercel/ai-sdk-openai-websocket-fetch':
-        specifier: 1.0.0
-        version: 1.0.0(@ai-sdk/openai@4.0.96(zod@4.2.1))
       ai:
         specifier: 7.0.143
         version: 7.0.143(zod@4.2.1)
@@ -158,6 +155,9 @@ importers:
       tree-kill:
         specifier: 1.2.2
         version: 1.2.2
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
       yaml:
         specifier: 2.8.3
         version: 2.8.3
@@ -195,6 +195,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.15)
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
       '@typescript-eslint/eslint-plugin':
         specifier: 8.64.0
         version: 8.64.0(@typescript-eslint/parser@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(supports-color@5.5.0))(supports-color@5.5.0))(@typescript/typescript6@6.0.2)(eslint@10.7.0(supports-color@5.5.0))(supports-color@5.5.0)
@@ -1461,6 +1464,9 @@ packages:
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
+  '@types/ws@8.18.2':
+    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
+
   '@typescript-eslint/eslint-plugin@8.64.0':
     resolution: {integrity: sha512-CGvQPBxN3wZLu6Rz2kFUpZeoCm78xUic92ck39KPePkO1NPOwjCqdQnm5Q87tpWw9vcBvW8XLrDXjH9PWYtJ3Q==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -1746,14 +1752,6 @@ packages:
     resolution: {integrity: sha512-lrW200hZdbfRtztbygyaq/6jP6AKE8qQN2KvPcJ+x7wiD038YtnYtZ82IMNJ69GJibV7bwL3y9FgK+5w/pYt6g==}
     cpu: [x64]
     os: [win32]
-
-  '@vercel/ai-sdk-openai-websocket-fetch@1.0.0':
-    resolution: {integrity: sha512-QTBex1bJogUTdh8lcmgxQhYkRZDVDMEdRyJjqy/Chnzv0i8UpLB2imFZvXORNUNdvu51aNPwgsclvx51F0Pc+A==}
-    peerDependencies:
-      '@ai-sdk/openai': '>=3'
-    peerDependenciesMeta:
-      '@ai-sdk/openai':
-        optional: true
 
   '@vercel/oidc@3.2.0':
     resolution: {integrity: sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==}
@@ -4173,6 +4171,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xmlhttprequest-ssl@2.1.2:
     resolution: {integrity: sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ==}
     engines: {node: '>=0.4.0'}
@@ -5161,6 +5171,10 @@ snapshots:
     dependencies:
       '@types/node': 25.6.0
 
+  '@types/ws@8.18.2':
+    dependencies:
+      '@types/node': 25.6.0
+
   '@typescript-eslint/eslint-plugin@8.64.0(@typescript-eslint/parser@8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(supports-color@5.5.0))(supports-color@5.5.0))(@typescript/typescript6@6.0.2)(eslint@10.7.0(supports-color@5.5.0))(supports-color@5.5.0)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
@@ -5374,15 +5388,6 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.11.1':
     optional: true
-
-  '@vercel/ai-sdk-openai-websocket-fetch@1.0.0(@ai-sdk/openai@4.0.96(zod@4.2.1))':
-    dependencies:
-      ws: 8.20.1
-    optionalDependencies:
-      '@ai-sdk/openai': 4.0.96(zod@4.2.1)
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   '@vercel/oidc@3.2.0': {}
 
@@ -8122,6 +8127,8 @@ snapshots:
   ws@8.17.1: {}
 
   ws@8.20.1: {}
+
+  ws@8.22.0: {}
 
   xmlhttprequest-ssl@2.1.2: {}
 

@@ -1,4 +1,8 @@
-import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
+import { createHash } from 'node:crypto'
+
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { OpenAIResponsesWebSocket } from './openai-responses-websocket'
 import { CONFIG_MANAGER } from '@/config'
 import { getLLMModelCatalogEntry } from '@/core/llm-manager/llm-model-catalog'
 import { AGENT_PROMPT_CACHE_KEY } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
@@ -26,6 +30,24 @@ const CHATGPT_UNSUPPORTED_FIELDS = [
   'user',
   'previous_response_id'
 ]
+const MAXIMUM_WEBSOCKET_SESSIONS = 32
+const UNSUPPORTED_WEBSOCKET_STATUSES = new Set([400, 404, 405, 426, 501])
+const CONNECTION_IDENTITY_HEADERS = [
+  'authorization', 'chatgpt-account-id', 'originator', 'session_id'
+]
+
+interface ResponsesConnection {
+  signature: string
+  socket: OpenAIResponsesWebSocket
+  http: boolean
+}
+
+interface TransportResponse {
+  response: Response
+  transport: 'http' | 'websocket'
+  socket?: OpenAIResponsesWebSocket
+}
+
 const OPENAI_TERMINAL_EVENTS = new Set([
   'response.completed',
   'response.failed',
@@ -39,8 +61,8 @@ const SSE_LINE_BOUNDARY = /\r\n|\r|\n/
  * Shares authenticated Responses transport between inference and auxiliary requests.
  */
 export class OpenAIResponsesTransport {
-  private openAIWebSocketFetch: ReturnType<typeof createWebSocketFetch> | undefined
-  private openAIWebSocketAuthorization: string | undefined
+  private readonly connections = new Map<string, ResponsesConnection>()
+  public transport: 'http' | 'websocket' = 'websocket'
   private readonly promptCache = new ProviderPromptCache()
 
   constructor(
@@ -63,27 +85,32 @@ export class OpenAIResponsesTransport {
       observation = event.promptCache ?? observation
       onStreamEvent?.(event)
     }
-    const response = await (this.accountId
+    const result = await (this.accountId
       ? this.fetchChatGPT(input, init, observe)
       : this.fetchOpenAI(input, init, observe))
 
+    const { response, transport, socket } = result
+    this.transport = transport
     onStreamEvent?.({
       type: 'response-headers',
-      transport: this.accountId ? 'http' : 'websocket',
+      transport,
       ...(response.headers.get('x-request-id')
         ? { requestId: response.headers.get('x-request-id')! }
         : {})
     })
 
-    return this.finishResponseStream(response, onStreamEvent, observation)
+    return this.finishResponseStream(response, transport, socket, onStreamEvent, observation)
   }
 
   /**
    * Retires in-flight or stale connections before they can be reused.
    */
   public close(): void {
-    this.openAIWebSocketFetch?.close()
-    this.openAIWebSocketFetch = undefined
+    for (const connection of this.connections.values()) {
+      connection.socket.close()
+    }
+
+    this.connections.clear()
   }
 
   /**
@@ -93,7 +120,7 @@ export class OpenAIResponsesTransport {
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit,
     onStreamEvent?: CompletionParams['onStreamEvent']
-  ): Promise<Response> {
+  ): Promise<TransportResponse> {
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
     for (const field of CHATGPT_UNSUPPORTED_FIELDS) {
       delete body[field]
@@ -124,7 +151,8 @@ export class OpenAIResponsesTransport {
       String(this.accountId)
     )
 
-    return requestChatGPTAccount(String(this.accountId), async (accountHeaders) => {
+    let result: TransportResponse | undefined
+    await requestChatGPTAccount(String(this.accountId), async (accountHeaders) => {
       const headers = new Headers(init?.headers)
       for (const [name, value] of Object.entries(accountHeaders)) {
         headers.set(name, value)
@@ -137,29 +165,27 @@ export class OpenAIResponsesTransport {
         onStreamEvent?.({ type: 'prompt-cache', promptCache: observation })
       }
 
-      // The WebSocket adapter drops custom headers. Codex needs its workspace
-      // header on the handshake, so use its native HTTP/SSE transport here.
-      init?.signal?.throwIfAborted()
-      this.onDispatch?.(String(input))
-      onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
-
-      return globalThis.fetch(input, {
+      result = await this.fetchAuthenticated(input, {
         ...init,
         headers,
         body: JSON.stringify(body),
         redirect: 'error'
-      })
+      }, onStreamEvent)
+
+      return result.response
     })
+
+    return result!
   }
 
   /**
-   * Rotates authenticated API-key sockets when their authorization changes.
+   * Applies API-key cache hints before selecting the authenticated transport.
    */
   private async fetchOpenAI(
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit,
     onStreamEvent?: CompletionParams['onStreamEvent']
-  ): Promise<Response> {
+  ): Promise<TransportResponse> {
     init?.signal?.throwIfAborted()
     const authorization = new Headers(init?.headers).get('authorization') || ''
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
@@ -176,38 +202,85 @@ export class OpenAIResponsesTransport {
       init = { ...init, body: JSON.stringify(body) }
       onStreamEvent?.({ type: 'prompt-cache', promptCache: observation })
     }
-    if (this.openAIWebSocketAuthorization !== authorization) {
-      this.openAIWebSocketFetch?.close()
-      this.openAIWebSocketFetch = undefined
-      this.openAIWebSocketAuthorization = authorization
+    return this.fetchAuthenticated(input, init, onStreamEvent)
+  }
+
+  /**
+   * Keeps sockets private to a profile, conversation and authenticated binding.
+   * HTTP fallback is allowed only before a WebSocket request was dispatched.
+   */
+  private async fetchAuthenticated(
+    input: Parameters<typeof globalThis.fetch>[0],
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
+  ): Promise<TransportResponse> {
+    init?.signal?.throwIfAborted()
+    const headers = Object.fromEntries(new Headers(init?.headers).entries())
+    // Per-request trace and cache hints must not rotate an authenticated socket.
+    const signature = createHash('sha256').update(JSON.stringify(
+      CONNECTION_IDENTITY_HEADERS.map((name) => headers[name])
+    )).digest('hex')
+    const scope = JSON.stringify([
+      getActiveProfileName(), getActiveConversationSessionId()
+    ])
+    let connection = this.connections.get(scope)
+
+    if (connection && connection.signature !== signature && !connection.socket.busy) {
+      connection.socket.close()
+      this.connections.delete(scope)
+      connection = undefined
+    }
+    if (!connection) {
+      if (this.connections.size >= MAXIMUM_WEBSOCKET_SESSIONS) {
+        const idle = [...this.connections].find(([, entry]) => !entry.socket.busy)
+
+        if (idle) {
+          idle[1].socket.close()
+          this.connections.delete(idle[0])
+        }
+      }
+
+      connection = {
+        signature,
+        socket: new OpenAIResponsesWebSocket(
+          this.toOpenAIResponsesWebSocketURL(this.baseURL), headers
+        ),
+        http: false
+      }
+      this.connections.set(scope, connection)
     }
 
-    const transport = this.getOpenAIWebSocketFetch()
-    try {
-      this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
-      onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
-      const response = await transport(input, init)
-      if (init?.signal?.aborted) {
-        transport.close()
-        await response.body?.cancel()
-        init.signal.throwIfAborted()
-      }
-      if (response.status === 401 || response.status === 403) {
-        await response.body?.cancel()
-        throw Object.assign(new Error('OpenAI authorization was rejected.'), {
-          statusCode: response.status
-        })
-      }
+    const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+    // Concurrent requests must not share one socket's event stream or lineage.
+    if (connection.signature === signature && !connection.http &&
+      !connection.socket.busy && body['stream'] === true) {
+      try {
+        this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
+        onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
+        const response = await connection.socket.fetch(body, init?.signal ?? undefined)
+        init?.signal?.throwIfAborted()
 
-      return response
-    } catch (error) {
-      // A rejected handshake or canceled opening must not leave reusable state.
-      transport.close()
-      if (this.openAIWebSocketFetch === transport) {
-        this.openAIWebSocketFetch = undefined
+        return { response, transport: 'websocket', socket: connection.socket }
+      } catch (error) {
+        connection.socket.close()
+        init?.signal?.throwIfAborted()
+        const status = (error as { statusCode?: number }).statusCode
+
+        // Authorization and provider overload keep the existing refresh/retry
+        // policy. A failed handshake cannot have produced an accepted answer.
+        if (status !== undefined && !UNSUPPORTED_WEBSOCKET_STATUSES.has(status)) {
+          throw error
+        }
+
+        connection.http = true
       }
-      throw error
     }
+
+    this.onDispatch?.(String(input))
+    onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
+    const response = await globalThis.fetch(input, init)
+
+    return { response, transport: 'http' }
   }
 
   /**
@@ -262,6 +335,8 @@ export class OpenAIResponsesTransport {
    */
   private finishResponseStream(
     response: Response,
+    transport: 'http' | 'websocket',
+    socket: OpenAIResponsesWebSocket | undefined,
     onStreamEvent?: CompletionParams['onStreamEvent'],
     observation?: PromptCacheObservation
   ): Response {
@@ -287,7 +362,7 @@ export class OpenAIResponsesTransport {
           if (chunk.byteLength > 0) {
             onStreamEvent?.({
               type: 'transport-activity',
-              transport: this.accountId ? 'http' : 'websocket'
+              transport
             })
           }
 
@@ -337,7 +412,7 @@ export class OpenAIResponsesTransport {
                 })
               }
               if (event['type'] !== 'response.completed') {
-                this.close()
+                socket?.close()
               }
 
               controller.terminate()
@@ -359,16 +434,6 @@ export class OpenAIResponsesTransport {
       statusText: response.statusText,
       headers
     })
-  }
-
-  private getOpenAIWebSocketFetch(): ReturnType<typeof createWebSocketFetch> {
-    if (!this.openAIWebSocketFetch) {
-      this.openAIWebSocketFetch = createWebSocketFetch({
-        url: this.toOpenAIResponsesWebSocketURL(this.baseURL)
-      })
-    }
-
-    return this.openAIWebSocketFetch
   }
 
   private toOpenAIResponsesWebSocketURL(baseURL: string): string {

@@ -192,9 +192,8 @@ export default class AISDKRemoteLLMProvider {
    * Identifies the selected transport even when a request fails before streaming.
    */
   public get transport(): 'http' | 'websocket' {
-    return this.config.flavor === 'openai-responses' &&
-      this.config.credentials?.['auth_kind'] !== 'chatgpt'
-      ? 'websocket'
+    return this.config.flavor === 'openai-responses'
+      ? this.openAITransport?.transport ?? 'websocket'
       : 'http'
   }
 
@@ -2037,10 +2036,20 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
+    // Concurrent conversations can use different transports after fallback.
+    let transport = this.transport
     const languageModel = this.getLanguageModel(
       completionParams,
       prompt,
-      completionParams.onStreamEvent
+      this.config.flavor === 'openai-responses' && completionParams.onStreamEvent
+        ? (event): void => {
+            if ('transport' in event && event.transport) {
+              transport = event.transport
+            }
+
+            completionParams.onStreamEvent?.(event)
+          }
+        : completionParams.onStreamEvent
     )
     const result = await languageModel.doStream(callOptions)
     const outputItems: Record<string, unknown>[] = []
@@ -2050,7 +2059,7 @@ export default class AISDKRemoteLLMProvider {
     completionParams.onToken?.('')
     completionParams.onStreamEvent?.({
       type: 'stream-open',
-      transport: this.transport,
+      transport,
       ...(result.response?.headers?.['x-request-id']
         ? { requestId: result.response.headers['x-request-id'] }
         : {})
@@ -2274,24 +2283,15 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<AxiosResponse> {
     completionParams.signal?.throwIfAborted()
     this.checkAPIKey()
-    const abort = (): void => {
-      // The WebSocket fetch adapter stops reading on abort but leaves the
-      // response in flight. Never reuse that socket for the next owner's turn.
-      this.openAITransport?.close()
-    }
-    completionParams.signal?.addEventListener('abort', abort, { once: true })
-    try {
-      const responseData = await (completionParams.shouldStream === true || this.config.credentials?.['auth_kind'] === 'chatgpt'
-        ? this.runStreamingCompletion(prompt, completionParams)
-        : this.runNonStreamingCompletion(prompt, completionParams))
-      completionParams.signal?.throwIfAborted()
-      return { data: responseData } as AxiosResponse
-    } finally {
-      completionParams.signal?.removeEventListener('abort', abort)
-      // Also close a connection that finished opening after cancellation.
-      if (completionParams.signal?.aborted) {
-        this.openAITransport?.close()
-      }
-    }
+
+    const shouldStream = completionParams.shouldStream === true ||
+      this.config.credentials?.['auth_kind'] === 'chatgpt'
+    const responseData = await (shouldStream
+      ? this.runStreamingCompletion(prompt, completionParams)
+      : this.runNonStreamingCompletion(prompt, completionParams))
+
+    completionParams.signal?.throwIfAborted()
+
+    return { data: responseData } as AxiosResponse
   }
 }

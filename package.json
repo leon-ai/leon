@@ -100,7 +100,6 @@
     "@tanstack/react-router": "1.170.10",
     "@tanstack/react-virtual": "3.14.2",
     "@tobilu/qmd": "2.8.3",
-    "@vercel/ai-sdk-openai-websocket-fetch": "1.0.0",
     "ai": "7.0.143",
     "ajv": "8.18.0",
     "ajv-formats": "2.1.1",
@@ -127,6 +126,7 @@
     "socket.io": "4.8.3",
     "socket.io-client": "4.8.3",
     "tree-kill": "1.2.2",
+    "ws": "8.22.0",
     "yaml": "2.8.3"
   },
   "devDependencies": {
@@ -141,6 +141,7 @@
     "@types/node": "25.6.0",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
+    "@types/ws": "8.18.2",
     "@typescript-eslint/eslint-plugin": "8.64.0",
     "@typescript-eslint/parser": "8.64.0",
     "@typescript/native": "npm:typescript@7.0.2",
