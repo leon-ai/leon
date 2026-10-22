@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
-import type { ReusableToolContext } from '@bridge/tool-runtime-types'
+import type { ReusableToolContext } from '@@/bridges/runtime/contracts/tool-runtime-types'
 import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
 import { contentHash, patchTextFile, type TextChange, type PatchOptions } from './lib/text-patch'
@@ -26,6 +26,8 @@ interface ReadOptions {
   allowMissing?: boolean
   head?: number
   tail?: number
+  startLine?: number
+  endLine?: number
   maxChars?: number
   offsetChars?: number
 }
@@ -197,6 +199,30 @@ export default class FileTool extends Tool {
       }
     }
 
+    const hasLineRange = options.startLine !== undefined || options.endLine !== undefined
+    const startLine = options.startLine ?? 1
+    const endLine = options.endLine ?? Number.MAX_SAFE_INTEGER
+
+    if (hasLineRange && (
+      !Number.isSafeInteger(startLine) || startLine < 1 ||
+      !Number.isSafeInteger(endLine) || endLine < startLine
+    )) {
+      return {
+        success: false,
+        error: 'Line numbers must be positive integers with endLine >= startLine.'
+      }
+    }
+
+    if (hasLineRange && (
+      options.head !== undefined || options.tail !== undefined ||
+      options.offsetChars !== undefined
+    )) {
+      return {
+        success: false,
+        error: 'Use line ranges separately from head, tail, or offsetChars.'
+      }
+    }
+
     const readable = await this.assertReadableTextFile(resolvedPath)
 
     if (!readable.success) {
@@ -225,6 +251,35 @@ export default class FileTool extends Tool {
         .slice(-this.clampNumber(options.tail, 0, Number.MAX_SAFE_INTEGER, 0))
         .join('\n')
       offsetChars = Math.max(0, totalChars - selectedContent.length)
+    } else if (hasLineRange) {
+      // Search locations are line numbers; preserve original separators and
+      // character offsets so bounded pages can still resume without gaps.
+      let line = 1
+      let lineOffset = 0
+      let endOffset = totalChars
+      offsetChars = totalChars
+
+      while (line <= endLine) {
+        if (line === startLine) {
+          offsetChars = lineOffset
+        }
+
+        const newlineOffset = content.indexOf('\n', lineOffset)
+
+        if (newlineOffset === -1) {
+          break
+        }
+
+        lineOffset = newlineOffset + 1
+        if (line === endLine) {
+          endOffset = lineOffset
+          break
+        }
+
+        line += 1
+      }
+
+      selectedContent = content.slice(offsetChars, endOffset)
     } else {
       selectedContent = content.slice(offsetChars)
     }

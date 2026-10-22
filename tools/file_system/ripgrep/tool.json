@@ -14,7 +14,7 @@
     "search": {
       "read_only": true,
       "description": "Search local file contents using ripgrep; return matching lines, 1-based line numbers, paths and byte-offset submatches.",
-      "progressive_guidance": "Choose files when only filenames are needed; rg stops after the first match in each file. Choose count for totals without collecting lines. Match records contain path, lines, line_number, absolute_offset and submatches. No multiline matching; recursively encountered binary content is skipped.",
+      "progressive_guidance": "Choose files when only filenames are needed; rg stops after the first match in each file. Choose count for totals without collecting lines. Match records contain path, lines, line_number, absolute_offset and submatches. Use line_number with file.read startLine/endLine for surrounding text; absolute_offset is a byte offset, not a character offset. No multiline matching; recursively encountered binary content is skipped.",
       "parameters": {
         "type": "object",
         "properties": {

@@ -116,8 +116,8 @@
     },
     "read": {
       "read_only": true,
-      "description": "Read a local text file. Rejects likely binary files. Use head, tail, or maxChars to limit output when needed.",
-      "progressive_guidance": "Use allowMissing=true for destination checks; exists=false means no file to preserve. Keep text pages at 20000 characters or less for inline observations; larger explicit reads may require retained-result retrieval. Follow nextOffsetChars for coverage; batch known independent unread ranges. Reuse inspected text. repositoryInstructions supplies applicable AGENTS.md files in root-to-directory order; follow them before editing. A contentReference reuses complete unchanged text from an earlier visible tool result. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
+      "description": "Read a local text file. Rejects likely binary files. Use startLine/endLine, head, tail, or maxChars to limit output when needed.",
+      "progressive_guidance": "Use allowMissing=true for destination checks; exists=false means no file to preserve. Use 1-based inclusive startLine/endLine around search line_number results instead of guessing character offsets. Keep text pages at 20000 characters or less for inline observations; larger explicit reads may require retained-result retrieval. Follow nextOffsetChars for coverage; batch known independent unread ranges. Reuse inspected text. repositoryInstructions supplies applicable AGENTS.md files in root-to-directory order; follow them before editing. A contentReference reuses complete unchanged text from an earlier visible tool result. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -138,6 +138,16 @@
               "tail": {
                 "type": "number",
                 "description": "Return only the last N lines."
+              },
+              "startLine": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "First line to read, 1-based and inclusive. Defaults to 1 when endLine is provided. Cannot combine line ranges with head, tail, or offsetChars."
+              },
+              "endLine": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Last line to read, inclusive. Defaults to end of file. maxChars still bounds the returned text."
               },
               "maxChars": {
                 "type": "number",
