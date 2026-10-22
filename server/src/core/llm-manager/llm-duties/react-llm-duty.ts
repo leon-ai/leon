@@ -72,6 +72,7 @@ import {
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_MAX_ITERATIONS,
   AGENT_FINISHING_ITERATIONS,
+  AGENT_PROMPT_CACHE_KEY,
   AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
   AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
   AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT
@@ -141,7 +142,6 @@ import { AgentHistoryManager } from './react-llm-duty/agent-history-manager'
 import { AgentResponseTraceCollector } from './react-llm-duty/agent-response-trace-collector'
 import { AgentSessionState } from './react-llm-duty/agent-session-state'
 
-const AGENT_PROMPT_CACHE_KEY = 'leon-agent'
 const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
   'length',
   'max_tokens',

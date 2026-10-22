@@ -50,6 +50,9 @@ const llmProviderWithBaseURL = strictObject({
   api_key: secretReference
 })
 const llmModelSetting = strictObject({
+  instructions_cache_ttl: Type.Optional(
+    Type.Union([Type.Literal('30m'), Type.Literal('12h')])
+  ),
   reasoning: Type.Optional(
     Type.Union(LLM_MODEL_REASONING_VALUES.map((value) => Type.Literal(value)))
   ),

@@ -26,13 +26,15 @@ export class ProviderPromptCache {
   private readonly snapshots = new Map<string, RequestSnapshot>()
 
   /**
-   * Keeps one conversation's cache identity stable across retries and compaction.
+   * Keeps cache identity stable across retries and compaction, with optional
+   * prefix reuse across conversations belonging to the same profile and binding.
    */
   public prepare(
     body: Record<string, unknown>,
     binding: string,
     observeOnly = false,
-    scope = 'agent'
+    scope = 'agent',
+    shareAcrossSessions = false
   ): { sessionId: string | null, observation?: PromptCacheObservation } {
     const sessionId = getActiveConversationSessionId()
     const hint = body['prompt_cache_key']
@@ -42,7 +44,8 @@ export class ProviderPromptCache {
     }
 
     const key = `leon-${fingerprint([
-      getActiveProfileName(), binding, sessionId, body['model'],
+      getActiveProfileName(), binding,
+      shareAcrossSessions ? null : sessionId, body['model'],
       typeof hint === 'string' ? hint : scope
     ]).slice(0, CACHE_KEY_HASH_LENGTH)}`
     if (!observeOnly) {
@@ -80,7 +83,9 @@ export class ProviderPromptCache {
       items: input.map(fingerprint),
       tools
     }
-    const previous = this.snapshots.get(key)
+    // Shared provider accounting must not compare unrelated conversation histories.
+    const snapshotKey = fingerprint([key, sessionId])
+    const previous = this.snapshots.get(snapshotKey)
     let matchingPrefixItems = 0
 
     while (previous && matchingPrefixItems < previous.items.length &&
@@ -107,8 +112,8 @@ export class ProviderPromptCache {
 
     // An unbound helper request must not become another conversation's baseline.
     if (sessionId) {
-      this.snapshots.delete(key)
-      this.snapshots.set(key, snapshot)
+      this.snapshots.delete(snapshotKey)
+      this.snapshots.set(snapshotKey, snapshot)
 
       if (this.snapshots.size > MAXIMUM_TRACKED_SCOPES) {
         this.snapshots.delete(this.snapshots.keys().next().value!)

@@ -259,7 +259,7 @@ describe('inference usage', () => {
   it('attributes streamed tool usage to its initiating profile and session without changing bytes', async () => {
     const text = [
       'data: {"type":"response.output_text.delta","delta":"private answer 世界"}\r\n\r\n',
-      'data: {"type":"response.completed","response":{"usage":{"input_tokens":120,"output_tokens":20,"input_tokens_details":{"cached_tokens":80}}}}\r\n\r\n'
+      'data: {"type":"response.completed","response":{"usage":{"input_tokens":120,"output_tokens":20,"input_tokens_details":{"cached_tokens":80,"cache_write_tokens":30,"cache_write_tokens_details":{"ttl_30m_tokens":10,"ttl_12h_tokens":20}}}}}\r\n\r\n'
     ].join('')
     const bytes = new TextEncoder().encode(text)
     const response = await runWithProfileContext({ profileName: 'tool-owner' }, () =>
@@ -288,7 +288,10 @@ describe('inference usage', () => {
     expect(saved).toHaveLength(1)
     expect(saved[0]).toMatchObject({
       sessionId: 'tool-session', purpose: 'provider-tool', outcome: 'completed',
-      usage: { inputTokens: 120, outputTokens: 20, cachedInputTokens: 80 }
+      usage: {
+        inputTokens: 120, outputTokens: 20, cachedInputTokens: 80,
+        cacheWriteInputTokens: 30, cacheWrite30mInputTokens: 10, cacheWrite12hInputTokens: 20
+      }
     })
     expect(JSON.stringify(saved)).not.toContain('private answer')
     expect(await records()).toEqual([])

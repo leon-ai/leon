@@ -18,6 +18,7 @@ import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import { ProviderPromptCache } from '@/core/llm-manager/llm-providers/prompt-cache'
+import { AGENT_PROMPT_CACHE_KEY } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { readCompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { CONFIG_MANAGER } from '@/config'
@@ -90,7 +91,8 @@ vi.mock('@/config', () => ({
   CONFIG_MANAGER: {
     getProviderAPIKeyEnv: vi.fn(() => null),
     getProviderAPIKey: vi.fn(() => 'test-openrouter-key'),
-    getProviderBaseURL: vi.fn(() => null)
+    getProviderBaseURL: vi.fn(() => null),
+    getConfig: vi.fn(() => ({ llm: { model_settings: {} } }))
   }
 }))
 
@@ -602,6 +604,87 @@ describe('AISDKRemoteLLMProvider', () => {
     } })).toEqual({ cachedInputTokens: 0 })
   })
 
+  it.each([
+    { ttl: undefined, model: 'gpt-6.1-sol', subscription: false, enabled: true },
+    { ttl: '30m', model: 'gpt-6.1-sol', subscription: false, enabled: false },
+    { ttl: '12h', model: 'gpt-6.1-sol', subscription: false, enabled: true },
+    { ttl: '12h', model: 'gpt-5.5', subscription: false, enabled: false },
+    { ttl: '12h', model: 'gpt-6.1-sol', subscription: true, enabled: false }
+  ] as const)('defaults to mixed caching for supported API agents and respects overrides (%j)', async ({ ttl, model, subscription, enabled }) => {
+    vi.mocked(CONFIG_MANAGER.getConfig).mockReturnValue({
+      llm: { model_settings: { [`openai/${model}`]: { instructions_cache_ttl: ttl } } }
+    } as ReturnType<typeof CONFIG_MANAGER.getConfig>)
+
+    if (subscription) {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+      accountMocks.getCredentials.mockResolvedValue({
+        auth_kind: 'chatgpt', auth_flow: 'codex',
+        access_token: 'fixture-token', chatgpt_account_id: 'workspace'
+      })
+    }
+
+    const usage = {
+      input_tokens: 12_000, output_tokens: 10,
+      input_tokens_details: {
+        cached_tokens: 4_000, cache_write_tokens: 7_000,
+        cache_write_tokens_details: { ttl_30m_tokens: 3_000, ttl_12h_tokens: 4_000 }
+      }
+    }
+    const response = {
+      id: 'resp-cache', created_at: 1, model, status: 'completed', output: [], usage
+    }
+    websocketMocks.fetch.mockImplementation(async () => new Response(
+      `data: ${JSON.stringify({ type: 'response.completed', response })}\n\n`,
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model,
+      ...(subscription ? { accountCredentials: {
+        auth_kind: 'chatgpt', account_id: 'account', access_token: 'fixture-token'
+      } } : {})
+    })
+    const transcript: PromptOrChatHistory = [
+      { role: 'user', content: 'Current owner request.' },
+      { role: 'user', content: 'Current clock and mood.' }
+    ]
+    const params = {
+      ...PARAMS, promptCacheKey: AGENT_PROMPT_CACHE_KEY, shouldStream: true
+    }
+    const result = await provider.runChatCompletion(transcript, params)
+    const body = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
+
+    expect(body.input.slice(1)).toEqual([
+      { role: 'user', content: [{ type: 'input_text', text: 'Current owner request.' }] },
+      { role: 'user', content: [{ type: 'input_text', text: 'Current clock and mood.' }] }
+    ])
+    expect(body.tools[0].name).toBe(TOOL.function.name)
+
+    if (enabled) {
+      expect(body.prompt_cache_options).toEqual({ mode: 'implicit', ttl: '30m' })
+      expect(body.input[0]).toEqual({
+        role: 'developer',
+        content: [{
+          type: 'input_text', text: PARAMS.systemPrompt,
+          prompt_cache_breakpoint: { mode: 'explicit', ttl: '12h' }
+        }]
+      })
+
+      await provider.runChatCompletion(transcript, { ...params, systemPrompt: 'Updated rules.' })
+      const updated = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
+      expect(updated.input[0].content[0].text).toBe('Updated rules.')
+      expect(updated.prompt_cache_key).toBe(body.prompt_cache_key)
+    } else {
+      expect(body.prompt_cache_options).toBeUndefined()
+      expect(JSON.stringify(body.input)).not.toContain('prompt_cache_breakpoint')
+    }
+
+    expect(normalizeCompletionResultForOpenAICompatibleProvider(result).accounting).toMatchObject({
+      cachedInputTokens: 4_000, cacheWriteInputTokens: 7_000,
+      cacheWrite30mInputTokens: 3_000, cacheWrite12hInputTokens: 4_000
+    })
+    provider.dispose()
+  })
+
   it('preserves reasoning, tool images and cache usage on DeepSeek schema Responses', async () => {
     const reasoning = { type: 'reasoning', id: 'rs_deepseek', summary: [],
       content: [{ type: 'reasoning_text', text: '  inspect inspect \n' }] }
@@ -955,6 +1038,33 @@ describe('AISDKRemoteLLMProvider', () => {
     )).not.toBe(initial.observation!.key)
     expect(JSON.stringify(changed)).not.toContain('Private')
     expect(JSON.stringify(changed)).not.toContain('first-account')
+  })
+
+  it('shares instruction prefixes across sessions while keeping profile, binding and observations isolated', () => {
+    const cache = new ProviderPromptCache()
+    const request = (): Record<string, unknown> => {
+      return {
+        model: 'gpt-6.1-sol', prompt_cache_key: AGENT_PROMPT_CACHE_KEY,
+        input: [{ role: 'developer', content: 'Stable instructions.' }]
+      }
+    }
+    const prepare = (
+      profile = 'owner',
+      binding = 'account'
+    ): ReturnType<ProviderPromptCache['prepare']> => {
+      return runWithProfileContext({ profileName: profile }, () =>
+        cache.prepare(request(), binding, false, 'agent', true)
+      )
+    }
+    const first = prepare()
+    vi.mocked(getActiveConversationSessionId).mockReturnValueOnce('another-session')
+    const otherSession = prepare()
+
+    expect(otherSession.observation?.key).toBe(first.observation?.key)
+    expect(otherSession.observation?.previousInputItems).toBe(0)
+    expect(prepare().observation?.previousInputItems).toBe(1)
+    expect(prepare('other-owner').observation?.key).not.toBe(first.observation?.key)
+    expect(prepare('owner', 'other-account').observation?.key).not.toBe(first.observation?.key)
   })
 
   it.each(['messages', 'input'])('observes %s without mutating provider requests or misclassifying appended instructions', (field) => {
@@ -1432,6 +1542,9 @@ describe('AISDKRemoteLLMProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(CONFIG_MANAGER.getConfig).mockReturnValue({
+      llm: { model_settings: {} }
+    } as ReturnType<typeof CONFIG_MANAGER.getConfig>)
     websocketMocks.fetch.mockReset()
     websocketMocks.create.mockImplementation(() => {
       return Object.assign(

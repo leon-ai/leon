@@ -42,6 +42,7 @@ export interface LLMModelCatalogEntry {
   recommended?: boolean
   supportsForcedToolChoice?: boolean
   supportsTemperature?: boolean
+  supportsPromptCacheOptions?: boolean
   // Verified endpoint capacity; omitted when the limit is unknown.
   contextWindowTokens?: number
   // Verified inline inputs supported by both this endpoint and Leon's adapter.
@@ -699,6 +700,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-6-astra',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6 Astra',
     recommended: true,
@@ -713,6 +715,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-6.1-sol',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6.1 Sol',
     defaultReasoningEffort: 'medium',
@@ -727,6 +730,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-6-sol',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6 Sol',
     reasoning: OPENAI_GPT_6_REASONING,
@@ -740,6 +744,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-6-luna',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6 Luna',
     reasoning: OPENAI_GPT_6_REASONING,
@@ -754,6 +759,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-5.6-sol',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.6 Sol',
     reasoning: OPENAI_GPT_56_REASONING,
@@ -767,6 +773,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-5.6-terra',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.6 Terra',
     reasoning: OPENAI_GPT_56_REASONING,
@@ -780,6 +787,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-5.6-luna',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.6 Luna',
     reasoning: OPENAI_GPT_56_REASONING,

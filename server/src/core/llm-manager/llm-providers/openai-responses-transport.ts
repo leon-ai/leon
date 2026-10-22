@@ -1,8 +1,12 @@
 import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
+import { CONFIG_MANAGER } from '@/config'
+import { getLLMModelCatalogEntry } from '@/core/llm-manager/llm-model-catalog'
+import { AGENT_PROMPT_CACHE_KEY } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import { requestChatGPTAccount } from '../llm-accounts/chatgpt-account-request'
 import { ProviderPromptCache } from './prompt-cache'
 import { readProviderUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import type { CompletionParams, PromptCacheObservation } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
 
 const CHATGPT_UNSUPPORTED_FIELDS = [
   'background',
@@ -159,9 +163,13 @@ export class OpenAIResponsesTransport {
     init?.signal?.throwIfAborted()
     const authorization = new Headers(init?.headers).get('authorization') || ''
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+    const shareAcrossSessions = this.prepareInstructionsCache(body)
     const { observation } = this.promptCache.prepare(
       body,
-      JSON.stringify([this.baseURL, authorization])
+      JSON.stringify([this.baseURL, authorization]),
+      false,
+      'agent',
+      shareAcrossSessions
     )
 
     if (observation) {
@@ -200,6 +208,53 @@ export class OpenAIResponsesTransport {
       }
       throw error
     }
+  }
+
+  /**
+   * Gives only the stable agent instruction prefix extended coverage. Apply
+   * wire options here so SDK validation cannot discard per-block lifetimes.
+   */
+  private prepareInstructionsCache(body: Record<string, unknown>): boolean {
+    const model = body['model']
+
+    if (body['prompt_cache_key'] !== AGENT_PROMPT_CACHE_KEY ||
+      typeof model !== 'string' ||
+      !getLLMModelCatalogEntry(LLMProviders.OpenAI, model)?.supportsPromptCacheOptions ||
+      (CONFIG_MANAGER.getConfig().llm.model_settings[`openai/${model}`]
+        ?.instructions_cache_ttl ?? '12h') !== '12h' ||
+      !Array.isArray(body['input'])) {
+      return false
+    }
+
+    const instructions = body['input'][0] as Record<string, unknown> | undefined
+
+    if (!instructions ||
+      (instructions['role'] !== 'developer' && instructions['role'] !== 'system')) {
+      return false
+    }
+
+    const content = typeof instructions['content'] === 'string'
+      ? [{ type: 'input_text', text: instructions['content'] }]
+      : instructions['content']
+
+    if (!Array.isArray(content)) {
+      return false
+    }
+
+    const index = content.findLastIndex((part) => part?.type === 'input_text')
+
+    if (index < 0) {
+      return false
+    }
+
+    // All later messages keep the short lifetime, including fresh host state.
+    instructions['content'] = content.map((part, partIndex) => partIndex === index
+      ? { ...part, prompt_cache_breakpoint: { mode: 'explicit', ttl: '12h' } }
+      : part)
+    body['prompt_cache_options'] = { mode: 'implicit', ttl: '30m' }
+    delete body['prompt_cache_retention']
+
+    return true
   }
 
   /**

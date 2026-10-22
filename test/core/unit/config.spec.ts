@@ -103,6 +103,20 @@ describe('ConfigManager', () => {
     }
   })
 
+  it('keeps cache overrides optional and reloads per-model lifetimes', async () => {
+    const manager = await loadConfigManager()
+    const key = 'openai/gpt-6.1-sol'
+
+    expect(manager.getConfig().llm.model_settings[key]).toBeUndefined()
+
+    for (const ttl of ['30m', '12h']) {
+      fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+        llm: { model_settings: { [key]: { instructions_cache_ttl: ttl } } }
+      }))
+      expect(manager.reload().llm.model_settings[key]?.instructions_cache_ttl).toBe(ttl)
+    }
+  })
+
   it('defaults an omitted iteration limit and reloads an owner override', async () => {
     fs.writeFileSync(profilePaths.configPath, 'runtime:\n  pulse_enabled: false\n')
     const configManager = await loadConfigManager()
