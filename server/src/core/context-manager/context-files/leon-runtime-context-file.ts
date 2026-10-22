@@ -87,7 +87,7 @@ export class LeonRuntimeContextFile extends ContextFile {
     )
 
     return [
-      `> Runtime versions, routing/providers, LLMs and bridge/toolchain availability. I am running Leon ${LEON_VERSION || 'unknown'} on Node ${runtime.nodeVersion}; routing mode ${routingMode}; ${llmDisplay.heading.toLowerCase()} ${llmDisplay.value}; local LLM ${localLlmName}; managed node ${nodeBinPath} ${this.probeHelper.formatCommandProbe(nodeProbe)}, managed python ${pythonBinPath} ${this.probeHelper.formatCommandProbe(pythonProbe)}, managed pnpm ${this.probeHelper.formatCommandProbe(pnpmProbe)}, git ${this.probeHelper.formatCommandProbe(gitProbe)}.`,
+      `> Runtime versions, routing/providers, LLMs and bridge/toolchain availability. My version is ${LEON_VERSION || 'unknown'}; I run on Node ${runtime.nodeVersion}; routing mode ${routingMode}; ${llmDisplay.heading.toLowerCase()} ${llmDisplay.value}; local LLM ${localLlmName}; managed node ${nodeBinPath} ${this.probeHelper.formatCommandProbe(nodeProbe)}, managed python ${pythonBinPath} ${this.probeHelper.formatCommandProbe(pythonProbe)}, managed pnpm ${this.probeHelper.formatCommandProbe(pnpmProbe)}, git ${this.probeHelper.formatCommandProbe(gitProbe)}.`,
       '# LEON_RUNTIME',
       `- Generated at: ${DateHelper.getDateTime()}`,
       `- Leon version: ${LEON_VERSION || 'unknown'}`,
@@ -107,7 +107,7 @@ export class LeonRuntimeContextFile extends ContextFile {
         : []),
       `- Local LLM: ${localLlmName}`,
       '## Managed Binaries',
-      '- In shell tools, invoke node directly (for example: node --version). Leon supplies the managed runtime to the tool environment.',
+      '- In shell tools, invoke node directly (for example: node --version). I supply the managed runtime to the tool environment.',
       '- Use the resolved executable paths below verbatim if an absolute path is needed; do not derive binary paths from the codebase directory.',
       `- Bin path: ${BIN_PATH}`,
       `- Node.js: ${nodeBinPath} (${this.probeHelper.formatCommandProbe(nodeProbe)})`,

@@ -30,7 +30,7 @@ export class HomeContextFile extends ContextFile {
     const serverSourcePath = path.join(codebasePath, 'server', 'src')
 
     return [
-      `> Codebase, profile and runtime directories. Leon codebase rooted at ${codebasePath}; task-relative files use the local working directory.`,
+      `> Codebase, profile and runtime directories. My codebase is at ${codebasePath}; task-relative files use the local working directory.`,
       '# HOME',
       `- Generated at: ${DateHelper.getDateTime()}`,
       `- Codebase path: ${codebasePath}`,
