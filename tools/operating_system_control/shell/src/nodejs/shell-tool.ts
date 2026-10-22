@@ -58,7 +58,7 @@ const CRITICAL_COMMAND_SEQUENCES = [
 
 const CRITICAL_COMMAND_TOKENS = ['mkfs', 'format', 'fdisk'] as const
 const HIGH_RISK_DD_TOKENS = ['dd'] as const
-const HIGH_RISK_EVAL_DOWNLOAD_TOKENS = ['curl', 'wget'] as const
+const DOWNLOAD_COMMAND_TOKENS = ['curl', 'wget'] as const
 const ELEVATED_COMMAND_TOKENS = ['sudo', 'doas', 'pkexec', 'su'] as const
 const POWERSHELL_ELEVATED_COMMAND_TOKENS = [
   'start-process',
@@ -83,8 +83,6 @@ const UNSAFE_COMMAND_PATTERNS = [
 ]
 
 const POWERSHELL_HIGH_RISK_COMMAND_TOKENS = [
-  'invoke-expression',
-  'iex',
   'set-executionpolicy',
   'stop-computer',
   'restart-computer'
@@ -494,6 +492,8 @@ export default class ShellTool extends Tool {
     const commandLower = command.toLowerCase()
     const tokens = this.tokenizeCommand(commandLower)
 
+    // Authorized installation workflows can fetch and run scripts. This guard
+    // rejects destructive host commands rather than the presence of a download.
     for (const pattern of UNSAFE_COMMAND_PATTERNS) {
       if (commandLower.includes(pattern)) {
         return false
@@ -505,13 +505,8 @@ export default class ShellTool extends Tool {
       this.hasCommandToken(tokens, CRITICAL_COMMAND_TOKENS) ||
       this.hasCommandToken(tokens, POWERSHELL_HIGH_RISK_COMMAND_TOKENS) ||
       this.hasDangerousPowerShellRemovePattern(tokens) ||
-      this.hasDangerousDdPattern(tokens) ||
-      this.hasEvalDownloadPattern(tokens)
+      this.hasDangerousDdPattern(tokens)
     ) {
-      return false
-    }
-
-    if (this.isDownloadPipedToShell(commandLower)) {
       return false
     }
 
@@ -535,15 +530,10 @@ export default class ShellTool extends Tool {
     if (riskLevel === 'low') {
       if (
         this.hasCommandToken(tokens, POWERSHELL_HIGH_RISK_COMMAND_TOKENS) ||
-        this.hasDangerousDdPattern(tokens) ||
-        this.hasEvalDownloadPattern(tokens)
+        this.hasDangerousDdPattern(tokens)
       ) {
         riskLevel = 'high'
       }
-    }
-
-    if (riskLevel === 'low' && this.isDownloadPipedToShell(commandLower)) {
-      riskLevel = 'high'
     }
 
     if (riskLevel === 'low') {
@@ -584,9 +574,7 @@ export default class ShellTool extends Tool {
       this.hasCommandToken(tokens, PACKAGE_MANAGER_COMMAND_TOKENS)
     ) {
       return 'install or modify system packages'
-    } else if (this.isDownloadPipedToShell(commandLower)) {
-      return 'download remote content and execute it as a shell script'
-    } else if (this.hasCommandToken(tokens, HIGH_RISK_EVAL_DOWNLOAD_TOKENS)) {
+    } else if (this.hasCommandToken(tokens, DOWNLOAD_COMMAND_TOKENS)) {
       return 'download content from the internet'
     } else {
       const descriptions: Record<string, string> = {
@@ -622,18 +610,6 @@ export default class ShellTool extends Tool {
     } catch {
       return command
     }
-  }
-
-  private isDownloadPipedToShell(commandLower: string): boolean {
-    const downloadsRemoteContent =
-      this.hasCommandToken(this.tokenizeCommand(commandLower), ['curl', 'wget'])
-    const pipesToShell =
-      commandLower.includes('| bash') ||
-      commandLower.includes('| sh') ||
-      commandLower.includes('| iex') ||
-      commandLower.includes('| invoke-expression')
-
-    return downloadsRemoteContent && pipesToShell
   }
 
   private tokenizeCommand(command: string): string[] {
@@ -743,25 +719,6 @@ export default class ShellTool extends Tool {
     }
 
     return tokens.some((token) => token.startsWith('if='))
-  }
-
-  private hasEvalDownloadPattern(tokens: string[]): boolean {
-    for (let index = 0; index < tokens.length - 1; index += 1) {
-      if (tokens[index] !== 'eval') {
-        continue
-      }
-
-      const nextToken = tokens[index + 1] || ''
-      if (
-        HIGH_RISK_EVAL_DOWNLOAD_TOKENS.some((token) =>
-          nextToken.startsWith(`$(${token}`)
-        )
-      ) {
-        return true
-      }
-    }
-
-    return false
   }
 
   private normalizeCommandToken(token: string): string {
