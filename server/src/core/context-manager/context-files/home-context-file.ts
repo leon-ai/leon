@@ -1,8 +1,10 @@
 import path from 'node:path'
 
 import {
+  BIN_PATH,
   CODEBASE_PATH,
   GLOBAL_DATA_PATH,
+  LEON_HOME_PATH,
   LEON_TOOLKITS_PATH,
   MODELS_PATH,
   SERVER_CORE_PATH,
@@ -28,23 +30,37 @@ export class HomeContextFile extends ContextFile {
     const workspacePath = path.resolve(process.env['LEON_WORKSPACE_PATH'] || process.cwd())
     const profilePaths = getProfilePaths()
     const serverSourcePath = path.join(codebasePath, 'server', 'src')
+    const toolAssetsPath = path.join(LEON_TOOLKITS_PATH, '<toolkit>', 'assets')
+    const toolManifestPath = path.join(TOOLS_PATH, '<toolkit>', '<tool>', 'tool.json')
 
     return [
-      `> Codebase, profile and runtime directories. My codebase is at ${codebasePath}; task-relative files use the local working directory.`,
+      `> My home: ${LEON_HOME_PATH} (${path.relative(LEON_HOME_PATH, BIN_PATH)}: managed runtimes; ${path.relative(LEON_HOME_PATH, toolAssetsPath)}: tool binaries/assets). My active profile: ${profilePaths.root} (context, memory, sessions, logs, tools and skills). My codebase: ${codebasePath} (${path.relative(codebasePath, toolManifestPath)}: built-in tool manifests); task-relative files use the local working directory.`,
       '# HOME',
       `- Generated at: ${DateHelper.getDateTime()}`,
-      `- Codebase path: ${codebasePath}`,
       `- Default local working directory: ${workspacePath}`,
-      `- Skills path: ${SKILLS_PATH}`,
-      `- Tools path: ${TOOLS_PATH}`,
-      `- Managed toolkit assets path: ${LEON_TOOLKITS_PATH}`,
-      `- Global data path: ${GLOBAL_DATA_PATH}`,
+      '## My Home',
+      `- Home path: ${LEON_HOME_PATH}`,
+      `- Managed runtimes path: ${BIN_PATH}`,
+      `- Managed tool binaries and assets: ${toolAssetsPath}`,
       `- Models path: ${MODELS_PATH}`,
+      `- Temp path: ${TMP_PATH}`,
+      '## My Active Profile',
+      `- Profile name: ${profilePaths.name}`,
+      `- Profile path: ${profilePaths.root}`,
       `- Context path: ${profilePaths.context}`,
-      `- Server source path: ${serverSourcePath}`,
-      `- Server core runtime path: ${SERVER_CORE_PATH}`,
+      `- Memory path: ${profilePaths.memory}`,
+      `- Sessions path: ${profilePaths.sessions}`,
       `- Logs path: ${profilePaths.logs}`,
-      `- Temp path: ${TMP_PATH}`
+      `- Profile tools path: ${profilePaths.tools}`,
+      `- Profile skills path: ${profilePaths.skills}`,
+      '## My Codebase',
+      `- Codebase path: ${codebasePath}`,
+      `- Built-in skills path: ${SKILLS_PATH}`,
+      `- Built-in tools path: ${TOOLS_PATH}`,
+      `- Built-in tool manifests: ${toolManifestPath}`,
+      `- Global data path: ${GLOBAL_DATA_PATH}`,
+      `- Server source path: ${serverSourcePath}`,
+      `- Server core runtime path: ${SERVER_CORE_PATH}`
     ].join('\n')
   }
 }
