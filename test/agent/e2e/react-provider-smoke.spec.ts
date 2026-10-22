@@ -465,20 +465,29 @@ function expectCodingScenario(id: ProviderScenarioId, result: ProviderScenarioRe
     expect(before.some((call) => call.functionName === 'startSession')).toBe(true)
     expect(before.some((call) => call.functionName === 'writeSession')).toBe(true)
     const sessionCalls = turn.toolCalls.filter((call) => call.toolId === 'shell')
-    const launches = sessionCalls.filter((call) => call.functionName === 'startSession')
+    // Verification commands can own separate sessions; the dev process must
+    // remain the same interactive process across the source edit.
+    const launches = sessionCalls.filter((call) =>
+      call.functionName === 'startSession' &&
+      call.parsedInput?.['command'] === 'pnpm run dev'
+    )
     expect(launches).toHaveLength(1)
     const started = shellResult(launches[0]!)['data'] as Record<string, unknown>
     const sessionId = started['sessionId']
     expect(typeof sessionId).toBe('string')
-    for (const call of sessionCalls.filter((item) => ['readSession', 'writeSession', 'stopSession'].includes(item.functionName || ''))) {
+    for (const call of sessionCalls.filter((item) => item.functionName === 'writeSession')) {
       expect(call.parsedInput?.['sessionId']).toBe(sessionId)
     }
+    const interactions = sessionCalls.filter((call) =>
+      call.parsedInput?.['sessionId'] === sessionId
+    )
     expect(before.some((call) => call.functionName === 'readSession'
+      && call.parsedInput?.['sessionId'] === sessionId
       && String((shellResult(call)['data'] as Record<string, unknown>)?.['output']).includes('HELLO Ada'))).toBe(true)
-    const corrected = sessionCalls.find((call) => call.functionName === 'readSession'
+    const corrected = interactions.find((call) => call.functionName === 'readSession'
       && String((shellResult(call)['data'] as Record<string, unknown>)?.['output']).includes('Hello, Ada!'))
     expect(corrected).toBeDefined()
-    const stopped = sessionCalls.find((call) => call.functionName === 'stopSession')
+    const stopped = interactions.find((call) => call.functionName === 'stopSession')
     expect(stopped).toBeDefined()
     expect(shellResult(stopped!)['data']).toMatchObject({ running: false, status: 'stopped' })
   }
