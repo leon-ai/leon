@@ -15,6 +15,7 @@ import {
   FileDownloader,
   type DownloadFileProgress
 } from '@@/bridges/runtime/nodejs/file-downloader'
+import { resolveToolBinaryPath } from '@@/bridges/runtime/nodejs/tool-binary'
 
 import {
   LEON_TOOLKITS_PATH,
@@ -828,26 +829,11 @@ export abstract class Tool {
       throw new Error(`No download URL found for binary '${binaryName}'`)
     }
 
-    // Extract the actual filename from the URL
-    const urlPath = new URL(binaryUrl).pathname
-    let actualFilename = path.basename(urlPath)
-
-    // Strip archive extensions to get the base binary name
-    const archiveExtensions = ['.tar.gz', '.tar.xz', '.tgz', '.zip', '.tar']
-    for (const ext of archiveExtensions) {
-      if (actualFilename.toLowerCase().endsWith(ext)) {
-        actualFilename = actualFilename.slice(0, -ext.length)
-        break
-      }
-    }
-
-    const executable =
-      isWindows() && !actualFilename.endsWith('.exe')
-        ? `${actualFilename}.exe`
-        : actualFilename
-
-    const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
-    const binaryPath = path.join(binsPath, executable)
+    const binaryPath = resolveToolBinaryPath(
+      LEON_TOOLKITS_PATH, this.toolkit, binaryUrl, isWindows()
+    )
+    const binsPath = path.dirname(binaryPath)
+    const executable = path.basename(binaryPath)
     const binaryExists = fs.existsSync(binaryPath)
 
     // Reusing an executable needs no preparation or repeated permission changes.

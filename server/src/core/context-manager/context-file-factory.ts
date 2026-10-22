@@ -6,7 +6,7 @@ import { GpuComputeContextFile } from '@/core/context-manager/context-files/gpu-
 import { StorageContextFile } from '@/core/context-manager/context-files/storage-context-file'
 import { SystemResourcesContextFile } from '@/core/context-manager/context-files/system-resources-context-file'
 import { BrowserHistoryContextFile } from '@/core/context-manager/context-files/browser-history-context-file'
-import { LeonRuntimeContextFile } from '@/core/context-manager/context-files/leon-runtime-context-file'
+import { LeonRuntimeContextFile, type LeonRuntimeContextResolvers } from '@/core/context-manager/context-files/leon-runtime-context-file'
 import { ActivityContextFile } from '@/core/context-manager/context-files/activity-context-file'
 import { LocalInventoryContextFile } from '@/core/context-manager/context-files/local-inventory-context-file'
 import { NetworkEcosystemContextFile } from '@/core/context-manager/context-files/network-ecosystem-context-file'
@@ -21,12 +21,6 @@ import {
 } from '@/core/context-manager/context-files/owner-context-file'
 
 export const DEFAULT_CONTEXT_REFRESH_TTL_MS = 10 * 60 * 1_000
-
-interface LeonRuntimeContextResolvers {
-  getWorkflowLLMName: () => string
-  getAgentLLMName: () => string
-  getLocalLLMName: () => string
-}
 
 export function createContextFiles(
   probeHelper: ContextProbeHelper,

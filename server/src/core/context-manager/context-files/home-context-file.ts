@@ -3,6 +3,7 @@ import path from 'node:path'
 import {
   CODEBASE_PATH,
   GLOBAL_DATA_PATH,
+  LEON_TOOLKITS_PATH,
   MODELS_PATH,
   SERVER_CORE_PATH,
   SKILLS_PATH,
@@ -36,6 +37,7 @@ export class HomeContextFile extends ContextFile {
       `- Default local working directory: ${workspacePath}`,
       `- Skills path: ${SKILLS_PATH}`,
       `- Tools path: ${TOOLS_PATH}`,
+      `- Managed toolkit assets path: ${LEON_TOOLKITS_PATH}`,
       `- Global data path: ${GLOBAL_DATA_PATH}`,
       `- Models path: ${MODELS_PATH}`,
       `- Context path: ${profilePaths.context}`,
