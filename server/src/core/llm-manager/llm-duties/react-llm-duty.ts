@@ -1113,7 +1113,6 @@ export class ReActLLMDuty extends LLMDuty {
       isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
       isCompletionReview?: boolean
-      requiresToolAction?: boolean
       isContextRecoveryAttempt?: boolean
     },
     checkpointInput?: AgentContinuityCheckpointInput,
@@ -1203,8 +1202,7 @@ export class ReActLLMDuty extends LLMDuty {
     const preparedTools = preparedContext.tools
     const toolChoice = options.isCompletionReview
       ? 'none'
-      : options.isFinalizationAttempt ? 'auto'
-        : options.requiresToolAction ? 'required' : 'auto'
+      : 'auto'
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()

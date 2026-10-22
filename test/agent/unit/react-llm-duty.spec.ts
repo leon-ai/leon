@@ -1385,8 +1385,6 @@ describe('continuous agent loop', () => {
     const review = JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)
 
     expect(review).not.toHaveProperty('available_tool_contracts')
-    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ requiresToolAction: true })
-    expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
     expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')
   })
 
@@ -1402,6 +1400,99 @@ describe('continuous agent loop', () => {
       executeFunction, loadAgentSkill: async () => null
     })
     expect(result.intent).toBe('blocked')
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it.each([0, 2])('completes the current request while preserving unrelated pending work with %i operational turns', async (maxIterations) => {
+    const steps = [
+      { label: 'Activate the installed runtime', status: 'pending' as const },
+      {
+        label: 'Save the requested revision',
+        status: 'completed' as const,
+        details: 'Revision saved; exact files and requested timestamps verified.'
+      }
+    ]
+    const answer = 'The requested revision is saved and verified.'
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: answer })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete',
+        reason: 'The current request is complete. Runtime activation is separate.',
+        out_of_scope_steps: ['Activate the installed runtime']
+      }) })
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Save the verified revision.' }],
+      catalog: createCatalog(), initialTrackedSteps: steps, maxIterations,
+      callModel, executeFunction, loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe(answer)
+    expect(result.trackedSteps).toEqual(steps)
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('allows an answer correction from existing evidence without another tool action', async () => {
+    const duty = new ReActLLMDuty({ input: 'What is the temperature?' })
+
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    coreMocks.prompt.mockResolvedValueOnce({ output: 'The temperature is 20 degrees.' })
+
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: 'The temperature is 30 degrees.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'continue', reason: 'The observed temperature is 20 degrees; correct the answer.'
+      }) })
+      .mockImplementationOnce(async (messages, tools, options) => duty['callAgentModel'](
+        messages, AGENT_SYSTEM_PROMPT, tools, options
+      ))
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete', reason: 'The answer matches the observation.'
+      }) })
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'What is the temperature?' }],
+      catalog: createCatalog(),
+      initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success',
+        observation: 'The temperature is 20 degrees.'
+      }],
+      callModel, executeFunction, loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('The temperature is 20 degrees.')
+    expect(coreMocks.prompt.mock.lastCall?.[1].toolChoice).toBe('auto')
+    expect(callModel).toHaveBeenCalledTimes(4)
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('retains concrete completed outcomes when the provider cannot continue', async () => {
+    const savedRevision = 'Saved revision abc123 with the requested timestamp; its exact two-file scope is verified.'
+    const steps = [
+      { label: 'Save the revision', status: 'completed' as const, details: savedRevision },
+      { label: 'Activate the installed runtime', status: 'pending' as const }
+    ]
+    const callModel = vi.fn().mockRejectedValue(new AgentModelProviderError(
+      'Provider unavailable', false, CompletionFailureKind.Unavailable
+    ))
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Finish the runtime update.' }],
+      catalog: createCatalog(), initialTrackedSteps: steps,
+      initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: savedRevision
+      }],
+      callModel, executeFunction, loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('temporarily unavailable')
+    expect(result.answer).toContain(savedRevision)
+    expect(result.answer).toContain('Remaining: Activate the installed runtime.')
+    expect(result.trackedSteps).toEqual(steps)
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
@@ -1426,6 +1517,8 @@ describe('continuous agent loop', () => {
   it.each([
     null,
     { textContent: 'not valid JSON' },
+    { textContent: JSON.stringify({ status: 'complete', reason: 'Done.', out_of_scope_steps: ['Unknown step'] }) },
+    { textContent: JSON.stringify({ status: 'complete', reason: 'Done.', out_of_scope_steps: 'All steps' }) },
     { textContent: '{"status":"complete","reason":"ok"}', isTruncated: true },
     { toolCalls: [toolCall('unexpected', CALLABLE_TOOL_NAME, { query: 'unexpected' })] }
   ])('does not accept an unavailable or invalid completion review: %j', async (review) => {
@@ -1433,6 +1526,9 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Do the task.' }], catalog: createCatalog(),
       initialExecutionHistory: [{ function: callable.qualifiedName, status: 'success', observation: 'Evidence.' }],
+      initialTrackedSteps: [{
+        label: 'Save the result', status: 'completed', details: 'Verified result at /tmp/result.txt.'
+      }],
       callModel: vi.fn()
         .mockResolvedValueOnce({ textContent: 'Done.' })
         .mockResolvedValueOnce(review)
@@ -1441,6 +1537,7 @@ describe('continuous agent loop', () => {
     })
     expect(result.intent).toBe('error')
     expect(result.answer).toContain('completion check failed')
+    expect(result.answer).toContain('Verified result at /tmp/result.txt.')
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
@@ -1493,7 +1590,6 @@ describe('continuous agent loop', () => {
     expect(JSON.parse(callModel.mock.calls[4]?.[0].at(-1).content)).toMatchObject({
       remaining_operational_iterations: 0
     })
-    expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
     expect(result.intent).toBe('answer')
     expect(result.trackedSteps).toEqual([
       completedStep,
@@ -4614,7 +4710,10 @@ describe('model response status', () => {
     { phase: 'finalization', status: 'in_progress' as const },
     { phase: 'finalization', status: 'completed' as const }
   ])('retains task state without restarting exhausted recovery (%j)', async ({ phase, status }) => {
-    const trackedSteps = [{ label: 'Verify the deliverable', status }]
+    const trackedSteps = [{
+      label: 'Verify the deliverable', status,
+      details: 'Saved artifact /tmp/verified-result.pdf; its contents match the requested export.'
+    }]
     const callModel = vi.fn(async (_messages, _tools, options) => {
       if (!options.isCompletionReview && !options.isFinalizationAttempt) {
         return { textContent: 'Proposed result.' }
@@ -4631,6 +4730,7 @@ describe('model response status', () => {
     expect(result.answer).toContain('exceeded its time limit')
     if (status === 'completed') {
       expect(result.answer).toContain('Reported completed work:\n- Verify the deliverable')
+      expect(result.answer).toContain(trackedSteps[0]!.details)
       expect(result.answer).not.toContain('The task is incomplete')
     }
     if (phase === 'review') {
@@ -4742,15 +4842,23 @@ describe('plan state', () => {
   })
 
   it('keeps an unfinished collection blocked at the limit even if the reviewer says complete', async () => {
+    const steps = [
+      ...plan,
+      { label: 'Activate the installed runtime', status: 'pending' as const }
+    ]
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Retrieve the requested documents.' }], catalog: createCatalog(),
-      initialTrackedSteps: plan, maxIterations: 0,
+      initialTrackedSteps: steps, maxIterations: 0,
       callModel: vi.fn()
         .mockResolvedValueOnce({ textContent: 'All done.' })
-        .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Done.' }) }),
+        .mockResolvedValueOnce({ textContent: JSON.stringify({
+          status: 'complete', reason: 'Runtime activation belongs to a separate request.',
+          out_of_scope_steps: ['Activate the installed runtime']
+        }) }),
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
     expect(result.intent).toBe('blocked')
-    expect(result.trackedSteps).toEqual(plan)
+    expect(result.answer).toContain('Retrieve documents')
+    expect(result.trackedSteps).toEqual(steps)
   })
 })
