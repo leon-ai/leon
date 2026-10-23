@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import os from 'node:os'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -214,8 +214,14 @@ async function main() {
     ? path.join(process.env.LEON_CODEBASE_PATH, 'package.json')
     : fileURLToPath(new URL('../../../../package.json', import.meta.url))
   const require = createRequire(packagePath)
-  const binary = require('ffmpeg-static')
-  if (!binary) throw new Error('Bundled ffmpeg-static is unavailable for this platform.')
+  const bridgePath = path.join(path.dirname(packagePath), 'bridges', 'nodejs')
+  // Standalone Node scripts load the same TypeScript SDK used by tool workers.
+  const { tsImport } = await import(pathToFileURL(require.resolve('tsx/esm/api')).href)
+  const { default: ToolManager } = await tsImport(
+    path.join(bridgePath, 'src', 'sdk', 'tool-manager.ts'),
+    { parentURL: import.meta.url, tsconfig: path.join(bridgePath, 'tsconfig.json') }
+  )
+  const binary = await ToolManager.getToolBinaryPath('video_streaming', 'ffmpeg')
   const root = path.join(process.env.LEON_HOME || path.join(os.homedir(), '.leon'),
     'profiles', profile, 'sessions', encodeURIComponent(session), 'artifacts', 'computer-use')
   const result = await renderTutorial(binary, root, manifest.outputDir, manifest.steps)
