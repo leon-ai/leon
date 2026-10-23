@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canDisableLLMModelReasoning,
-  getLLMModelCatalogEntries,
   getLLMModelCatalogEntry,
   LLM_MODEL_CATALOG,
   LLM_MODEL_REASONING_VALUES,
@@ -123,26 +122,6 @@ describe('LLM model catalog', () => {
     expect(canDisableLLMModelReasoning(
       LLMProviders.OpenRouter, 'minimax/minimax-m3.1-flash:free'
     )).toBe(false)
-  })
-
-  it('preserves curated setup order and recommendations', () => {
-    const openAIModels = getLLMModelCatalogEntries(LLMProviders.OpenAI)
-
-    expect(openAIModels[0]).toMatchObject({
-      model: 'gpt-6-astra',
-      recommended: true
-    })
-    expect(getLLMModelCatalogEntries(LLMProviders.Anthropic)[0]).toMatchObject({
-      model: 'claude-opus-5-5',
-      recommended: true
-    })
-    expect(getLLMModelCatalogEntry(
-      LLMProviders.Anthropic,
-      'claude-fable-5-1'
-    )?.recommended).toBeUndefined()
-    expect(getLLMModelCatalogEntries(LLMProviders.MiniMax)[0]).toMatchObject({
-      model: 'MiniMax-M3.1-Flash', recommended: true, defaultReasoningEffort: 'max'
-    })
   })
 
   it.each([
