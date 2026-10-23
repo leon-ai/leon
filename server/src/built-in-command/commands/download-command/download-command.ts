@@ -20,10 +20,20 @@ const DOWNLOAD_LOADING_MESSAGE =
 
 function getModelFileNameFromURL(rawURL: string): string {
   const parsedURL = new URL(rawURL)
-  const fileName = decodeURIComponent(path.basename(parsedURL.pathname))
+  // Decode only the last raw path segment: the model file name must never
+  // decode into a path separator or a parent-directory segment, otherwise
+  // the download destination could escape the llm models folder.
+  const rawLastSegment = parsedURL.pathname.split('/').pop() ?? ''
+  const fileName = decodeURIComponent(rawLastSegment)
 
-  if (!fileName) {
-    throw new Error('The model download URL does not include a file name.')
+  if (
+    !fileName ||
+    fileName === '.' ||
+    fileName === '..' ||
+    fileName.includes('/') ||
+    fileName.includes('\\')
+  ) {
+    throw new Error('The model download URL does not include a valid file name.')
   }
 
   return fileName
@@ -169,6 +179,15 @@ export class DownloadCommand extends BuiltInCommand {
     try {
       const fileName = getModelFileNameFromURL(assetValue)
       destinationPath = path.join(LLM_DIR_PATH, fileName)
+
+      // The download destination must always stay within the llm models folder.
+      const resolvedDestinationPath = path.resolve(destinationPath)
+      const resolvedLLMDirPath = path.resolve(LLM_DIR_PATH)
+      if (!resolvedDestinationPath.startsWith(resolvedLLMDirPath + path.sep)) {
+        throw new Error(
+          'The model download URL resolves outside of the llm models folder.'
+        )
+      }
 
       // Parallel ranges keep large GGUF downloads fast while NetworkHelper
       // resumes each interrupted range independently.
