@@ -50,36 +50,24 @@ describe('DownloadCommand', () => {
     )
   })
 
-  it('rejects encoded path traversal in the model download URL', async () => {
-    const downloadSpy = vi
-      .spyOn(FileHelper, 'downloadFile')
-      .mockResolvedValue(undefined)
-    const command = new DownloadCommand()
-    // The file name carries traversal segments that stay encoded until
-    // after the URL has been parsed.
-    const maliciousURL = `https://example.com/models/${encodeURIComponent(
-      '../../../evil.gguf'
-    )}`
+  it.each(['../../../evil.gguf', '..\\..\\..\\evil.gguf'])(
+    'rejects encoded path traversal in the model download URL: %s',
+    async (fileName) => {
+      const downloadSpy = vi
+        .spyOn(FileHelper, 'downloadFile')
+        .mockResolvedValue(undefined)
+      const command = new DownloadCommand()
+      // Encoding keeps path separators intact until the file name is decoded.
+      const maliciousURL = `https://example.com/models/${encodeURIComponent(
+        fileName
+      )}`
 
-    const result = await command.execute({
-      args: ['model', maliciousURL]
-    } as BuiltInCommandExecutionContext)
+      const result = await command.execute({
+        args: ['model', maliciousURL]
+      } as BuiltInCommandExecutionContext)
 
-    expect(result.status).toBe('error')
-    expect(downloadSpy).not.toHaveBeenCalled()
-  })
-
-  it('rejects a model download URL whose file name decodes to a parent directory', async () => {
-    const downloadSpy = vi
-      .spyOn(FileHelper, 'downloadFile')
-      .mockResolvedValue(undefined)
-    const command = new DownloadCommand()
-
-    const result = await command.execute({
-      args: ['model', 'https://example.com/models/%2e%2e']
-    } as BuiltInCommandExecutionContext)
-
-    expect(result.status).toBe('error')
-    expect(downloadSpy).not.toHaveBeenCalled()
-  })
+      expect(result.status).toBe('error')
+      expect(downloadSpy).not.toHaveBeenCalled()
+    }
+  )
 })
