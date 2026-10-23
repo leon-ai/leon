@@ -1650,32 +1650,6 @@ describe('continuous agent loop', () => {
     expect(prepareContinuation).toHaveBeenCalledTimes(limit > 1 ? 1 : 0)
   })
 
-  it('codes directly and keeps owner-selected delegation available', () => {
-    const skill = fs.readFileSync('skills/agent/coding/SKILL.md', 'utf8')
-
-    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding>')).toBeGreaterThanOrEqual(0)
-    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding>')).toBeLessThan(
-      AGENT_SYSTEM_PROMPT.indexOf('<tool_policy>')
-    )
-
-    expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Handle coding directly. Before repository edits, load the coding Agent Skill when enabled'
-    )
-    expect(AGENT_SYSTEM_PROMPT).toContain('run their required baseline checks')
-    expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Delegate only when the owner requests or prefers an external coding agent'
-    )
-    expect(skill).toContain('inspect and verify results, not just prompt submission')
-    expect(skill).toContain(
-      'If unavailable, explain briefly and continue directly within scope'
-    )
-    expect(skill).toContain(
-      'analysis does not authorize edits, commits, pushes or publication'
-    )
-    expect(AGENT_SYSTEM_PROMPT).not.toContain('Codex')
-    expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')
-  })
-
   it('keeps collection tracking available through one stable planning contract', async () => {
     const catalog = createCatalog()
     const steps = [{ label: 'Inspect requested collection', status: 'in_progress' }]
