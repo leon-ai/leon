@@ -1,7 +1,7 @@
 import { execa } from 'execa'
-import ffmpegStatic from 'ffmpeg-static'
 
 import { COMPUTER_USE_COORDINATE_FIELDS, COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE } from '../constants'
+import { getFfmpegBinaryPath } from '../ffmpeg'
 import type { ComputerUseDriver, CuaToolResult } from '../types'
 import { asRecord, hasCuaError, parseJsonRecord } from '../utils'
 
@@ -84,13 +84,13 @@ export async function normalizeGnomeCapture(
     throw new Error('The window is partly outside the captured desktop. Move it fully on screen and observe again.')
   }
   if (width === layout.width && height === layout.height && !crop && !output) return image
-  if (!ffmpegStatic) throw new Error('FFmpeg is required to normalize GNOME capture coordinates.')
+  const binary = await getFfmpegBinaryPath()
   const filters = [
     `scale=${layout.width}:${layout.height}:flags=lanczos`,
     ...(crop ? [`crop=${crop.width}:${crop.height}:${crop.x}:${crop.y}:exact=1`] : []),
     ...(output ? [`scale=${output.width}:${output.height}:flags=lanczos`] : [])
   ]
-  const result = await execa(ffmpegStatic, [
+  const result = await execa(binary, [
     '-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vf', filters.join(','),
     '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'
   ], {
