@@ -12,6 +12,10 @@ import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-ll
 import { appendAgentRuntimeContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import {
+  AGENT_RECENT_TOOL_IMAGE_LIMIT,
+  AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 
 function createCheckpointInput(): AgentContinuityCheckpointInput {
   return {
@@ -281,9 +285,12 @@ describe('agent loop continuation', () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Inspect the documents and save their metadata.' }
     ]
+    const imageCount =
+      AGENT_RECENT_TOOL_IMAGE_LIMIT + AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+
     for (let index = 1; index <= 20; index += 1) {
       appendToolExchange(transcript, index)
-      if (index <= 3) {
+      if (index <= imageCount) {
         const assistant = transcript.at(-2)!
         const tool = transcript.at(-1)!
         if (assistant.role === 'assistant' && assistant.toolCalls && tool.role === 'tool') {
@@ -305,7 +312,10 @@ describe('agent loop continuation', () => {
 
     expect(visualResults.map((message) =>
       message.role === 'tool' ? message.toolCallId : null
-    )).toEqual(['call-2', 'call-3'])
+    )).toEqual(Array.from(
+      { length: AGENT_RECENT_TOOL_IMAGE_LIMIT },
+      (_, index) => `call-${AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE + index + 1}`
+    ))
     for (const message of visualResults) {
       if (message.role === 'tool') {
         expect(result.some((candidate) =>
