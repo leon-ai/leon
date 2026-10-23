@@ -8,6 +8,7 @@ import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ASR from '@/core/asr/asr'
+import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { ASR_ENGINE } from '@/core'
 
 vi.mock('@/constants', () => ({ TMP_PATH: '' }))
@@ -22,6 +23,19 @@ vi.mock('@/helpers/log-helper', () => ({
     error: vi.fn()
   }
 }))
+
+class DurationReader extends TTSSynthesizerBase {
+  protected name = 'Duration reader'
+  protected lang = 'en-US' as const
+
+  public async synthesize(): Promise<null> {
+    return null
+  }
+
+  public duration(filename: string): Promise<number> {
+    return this.getAudioDuration(filename)
+  }
+}
 
 let root: string
 let webm: Buffer
@@ -89,5 +103,13 @@ describe('Voice media processing', () => {
 
     await expect(asr.encode(webm)).rejects.toThrow('The speech recognition is not ready yet')
     expect(ASR_ENGINE.transcribe).not.toHaveBeenCalled()
+  })
+
+  it('returns audio duration in milliseconds for filenames containing spaces', async () => {
+    await expect(new DurationReader().duration(source)).resolves.toBeCloseTo(250, 0)
+  })
+
+  it('preserves the duration failure contract for missing files', async () => {
+    await expect(new DurationReader().duration(path.join(root, 'missing.wav'))).rejects.toBe(0)
   })
 })

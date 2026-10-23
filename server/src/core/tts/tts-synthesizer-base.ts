@@ -1,5 +1,4 @@
-import ffmpegStatic from 'ffmpeg-static'
-import ffmpeg from 'fluent-ffmpeg'
+import { execa } from 'execa'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 
 import type { LongLanguageCode } from '@/types'
@@ -15,28 +14,27 @@ export abstract class TTSSynthesizerBase {
   ): Promise<SynthesizeResult | null>
 
   protected async getAudioDuration(audioFilePath: string): Promise<number> {
-    ffmpeg.setFfmpegPath(ffmpegStatic as string)
-    ffmpeg.setFfprobePath(ffprobePath)
+    try {
+      const { stdout } = await execa(ffprobePath, [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'json',
+        '-i', audioFilePath
+      ])
+      const metadata = JSON.parse(stdout) as {
+        format?: { duration?: string | number }
+      }
+      const duration = Number(metadata.format?.duration)
 
-    // Use ffprobe to get the duration of the audio file and return the duration in milliseconds
-    return new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(audioFilePath, (err, data) => {
-        if (err) {
-          LogHelper.error(`${this.name} - Failed to get audio duration: ${err}`)
+      if (!Number.isFinite(duration) || duration <= 0) {
+        throw new Error('Audio duration is undefined or invalid')
+      }
 
-          return reject(0)
-        }
+      return duration * 1_000
+    } catch (err) {
+      LogHelper.error(`${this.name} - Failed to get audio duration: ${err}`)
 
-        const { duration } = data.format
-
-        if (!duration) {
-          LogHelper.error(`${this.name} - Audio duration is undefined`)
-
-          return reject(0)
-        }
-
-        return resolve(duration * 1_000)
-      })
-    })
+      throw 0
+    }
   }
 }
