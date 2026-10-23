@@ -47,7 +47,10 @@ function applyConfiguredModelSettings(
   const settings = CONFIG_STATE.getModelSettingsState().getSettings(target)
   const hasDutyReasoningOverride =
     completionParams.disableThinking === true ||
-    completionParams.reasoningMode === 'off'
+    completionParams.reasoningMode === 'off' ||
+    completionParams.reasoningEffort !== undefined ||
+    completionParams.reasoningUseDefaultEffort === true ||
+    completionParams.thoughtTokensBudget !== undefined
 
   if (settings.reasoning !== 'auto' && !hasDutyReasoningOverride) {
     completionParams.reasoningMode = settings.reasoning === 'none'

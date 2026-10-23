@@ -50,6 +50,7 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 
 const TRACE_SAVE_INTERVAL_MS = 1_000
 const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
+const COMPLETION_REVIEW_REASONING_EFFORT = 'low'
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentTarget().provider
@@ -1210,7 +1211,17 @@ export class ReActLLMDuty extends LLMDuty {
     const modelSettings = CONFIG_STATE
       .getModelSettingsState()
       .getSettings(agentTarget)
-    const configuredReasoning = modelSettings.reasoning
+    const modelCapabilities = getLLMModelCatalogEntry(
+      agentTarget.provider,
+      agentTarget.model
+    )
+    // Review checks existing evidence with low effort where supported. Models
+    // without that effort retain their normal, provider-compatible settings.
+    const useReviewReasoning = options.isCompletionReview &&
+      modelCapabilities?.reasoning.includes(COMPLETION_REVIEW_REASONING_EFFORT)
+    const configuredReasoning = useReviewReasoning
+      ? COMPLETION_REVIEW_REASONING_EFFORT
+      : modelSettings.reasoning
     const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
     // Finalization is still a model request. Keep its configured reasoning:
     // providers with mandatory reasoning reject a forced reasoning-off retry.
@@ -1224,9 +1235,9 @@ export class ReActLLMDuty extends LLMDuty {
       configuredReasoning === 'auto'
         ? defaultReasoning.effort
         : configuredReasoning === 'on' ? undefined : configuredReasoning
-    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = configuredReasoning === 'auto'
-      ? defaultReasoning.source
-      : 'owner'
+    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = useReviewReasoning
+      ? 'review'
+      : configuredReasoning === 'auto' ? defaultReasoning.source : 'owner'
     // Auto may recover from reasoning-only exhaustion with less effort.
     // Never disable mandatory reasoning or override an explicit owner choice.
     if (options.isOutputRecoveryAttempt && configuredReasoning === 'auto' &&

@@ -10,7 +10,7 @@ import type {
 export interface AgentInferencePolicy {
   reasoningMode: LLMReasoningMode
   reasoningEffort?: LLMReasoningEffort
-  reasoningEffortSource?: LLMDefaultReasoningSource | 'owner' | 'recovery'
+  reasoningEffortSource?: LLMDefaultReasoningSource | 'owner' | 'recovery' | 'review'
   serviceTier?: LLMServiceTier
   streamToProvider: boolean
   emitReasoning: boolean

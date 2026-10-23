@@ -21,6 +21,7 @@ import { AgentSessionState, createEmptyHistoryCompactionProviderState, type Agen
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import type { MessageLog } from '@/types'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
+import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import type {
   AgentCallableFunction,
@@ -4350,6 +4351,97 @@ describe('model response status', () => {
     expect(second['contextUsage']?.contextUsagePercent).toBe(20)
     expect(coreMocks.prompt).toHaveBeenCalledTimes(3)
   })
+
+  it.each([
+    {
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6.1-sol',
+      taskReasoning: 'high',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.Anthropic,
+      model: 'claude-opus-5-5',
+      taskReasoning: 'high',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.Anthropic,
+      model: 'claude-opus-5-5',
+      taskReasoning: 'on',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.Anthropic,
+      model: 'claude-opus-5-5',
+      taskReasoning: 'auto',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6.1-sol',
+      taskReasoning: 'on',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.DeepSeek,
+      model: 'deepseek-flash',
+      taskReasoning: 'high',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.OpenRouter,
+      model: 'z-ai/glm-5-turbo',
+      taskReasoning: 'on',
+      reviewEffort: undefined
+    },
+    {
+      provider: LLMProviders.OpenAI,
+      model: 'uncatalogued-model',
+      taskReasoning: 'high',
+      reviewEffort: 'high'
+    }
+  ] as const)(
+    'defaults review to supported low effort with $taskReasoning task reasoning for $provider/$model', async ({ provider, model, taskReasoning, reviewEffort }) => {
+      vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+        provider, model
+      })
+      vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
+        reasoning: taskReasoning, speed: 'fast'
+      })
+      coreMocks.prompt.mockImplementation(async (_messages, params) => {
+        prepareCompletionRequest(
+          params,
+          provider,
+          CONFIG_STATE.getModelState().getAgentTarget()
+        )
+
+        return { output: 'Done.' }
+      })
+      const duty = new ReActLLMDuty({ input: 'Answer the question.' })
+      Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+      for (const review of [false, true]) {
+        await duty['callAgentModel']([], 'Follow the request.', [], {
+          isRecoveryAttempt: false, isCompletionReview: review
+        })
+      }
+
+      const taskParams = coreMocks.prompt.mock.calls[0]![1]
+      const reviewParams = coreMocks.prompt.mock.calls[1]![1]
+      expect(taskParams.reasoningEffort).toBe(
+        taskReasoning === 'on' ? undefined : taskReasoning === 'auto' ? 'medium' : 'high'
+      )
+      expect(reviewParams.reasoningEffort).toBe(reviewEffort)
+      expect(reviewParams.reasoningUseDefaultEffort).toBe(
+        reviewEffort === undefined ? true : undefined
+      )
+      expect(taskParams.serviceTier).toBe('priority')
+      expect(reviewParams.serviceTier).toBe('priority')
+      expect(reviewParams.toolChoice).toBe('none')
+      expect(reviewParams.disableThinking).not.toBe(true)
+    }
+  )
 
   it.each([false, true])('reports observed stream activity without adding chat history (review=%s)', async (review) => {
     let finish!: (result: { output: string }) => void
