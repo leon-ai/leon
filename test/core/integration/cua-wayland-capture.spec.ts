@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import execa from 'execa'
+import { execa } from 'execa'
 import ffmpegStatic from 'ffmpeg-static'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -24,8 +24,8 @@ beforeAll(async () => {
     '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
     '-i', 'color=red:s=800x600,drawbox=x=400:y=200:w=200:h=200:color=lime:t=fill,drawbox=x=544:y=288:w=8:h=8:color=blue:t=fill',
     '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'
-  ], { encoding: null })
-  desktop = result.stdout
+  ], { encoding: 'buffer' })
+  desktop = Buffer.from(result.stdout)
 })
 
 async function centerPixel(image: Buffer, x = 'iw/2', y = 'ih/2'): Promise<number[]> {
@@ -33,7 +33,7 @@ async function centerPixel(image: Buffer, x = 'iw/2', y = 'ih/2'): Promise<numbe
     '-hide_banner', '-loglevel', 'error', '-i', 'pipe:0',
     '-vf', `crop=1:1:${x}:${y}:exact=1`, '-frames:v', '1',
     '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'
-  ], { input: image, encoding: null })
+  ], { input: image, encoding: 'buffer' })
   return [...stdout]
 }
 

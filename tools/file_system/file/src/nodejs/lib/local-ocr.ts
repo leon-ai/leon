@@ -2,7 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface, type Interface } from 'node:readline'
 
-import execa, { type ExecaChildProcess } from 'execa'
+import { execa, type Subprocess } from 'execa'
 
 import type { DocumentLayout } from './document-layout'
 
@@ -20,7 +20,7 @@ const MAX_ERROR_CHARS = 4_096
  * Keep the tool-owned OCR model resident, without a separately managed service.
  */
 export class LocalOcr {
-  private process: ExecaChildProcess | undefined
+  private process: Subprocess<{ buffer: false }> | undefined
   private lines: Interface | undefined
   private stderr = ''
   private queue: Promise<unknown> = Promise.resolve()
@@ -57,7 +57,7 @@ export class LocalOcr {
     this.lines?.close()
     this.lines = undefined
     if (child) {
-      child.kill('SIGTERM', { forceKillAfterTimeout: 1_000 })
+      child.kill('SIGTERM')
       await child.catch(() => undefined)
     }
   }
@@ -68,7 +68,9 @@ export class LocalOcr {
       const resourceRoots = await this.resolveResources()
       this.stderr = ''
       this.process = execa(PYTHON, ['-u', path.join(DIRECTORY, 'ocr_worker.py'), ...resourceRoots], {
-        buffer: false, env: { PYTHONIOENCODING: 'utf-8', ORT_DISABLE_TELEMETRY: '1' }
+        buffer: false,
+        forceKillAfterDelay: 1_000,
+        env: { PYTHONIOENCODING: 'utf-8', ORT_DISABLE_TELEMETRY: '1' }
       })
       this.process.catch(() => undefined)
       this.process.stderr!.on('data', (chunk: Buffer) => {
@@ -83,8 +85,8 @@ export class LocalOcr {
         const cleanup = (): void => {
           clearTimeout(timer)
           lines.off('line', onLine)
-          child.off('error', onError)
-          child.off('close', onClose)
+          child.nodeChildProcess.off('error', onError)
+          child.nodeChildProcess.off('close', onClose)
         }
         const onError = (error: Error): void => { cleanup(); reject(error) }
         const onClose = (): void => onError(new Error(`Local OCR stopped. ${this.stderr}`))
@@ -101,8 +103,8 @@ export class LocalOcr {
         }
         const timer = setTimeout(() => onError(new Error('Local OCR timed out.')), TIMEOUT_MS)
         lines.once('line', onLine)
-        child.once('error', onError)
-        child.once('close', onClose)
+        child.nodeChildProcess.once('error', onError)
+        child.nodeChildProcess.once('close', onClose)
         child.stdin!.write(`${JSON.stringify({ image: image.toString('base64') })}\n`, (error) => {
           if (error) onError(error)
         })

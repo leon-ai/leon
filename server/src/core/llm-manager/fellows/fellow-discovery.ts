@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-import execa from 'execa'
+import { execa } from 'execa'
 import { parseJSON5 } from 'confbox/json5'
 import { parseTOML } from 'confbox/toml'
 import { parse as parseYAML } from 'yaml'

@@ -111,7 +111,7 @@
     "cross-env": "7.0.3",
     "dayjs": "1.11.20",
     "dotenv": "16.4.5",
-    "execa": "5.1.1",
+    "execa": "10.2.0",
     "fastify": "5.12.5",
     "ffmpeg-static": "5.2.0",
     "fluent-ffmpeg": "2.1.3",

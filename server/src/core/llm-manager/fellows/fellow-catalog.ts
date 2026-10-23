@@ -1,6 +1,6 @@
 import path from 'node:path'
 import os from 'node:os'
-import execa from 'execa'
+import { execa } from 'execa'
 
 import catalog from './fellows.json' with { type: 'json' }
 

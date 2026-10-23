@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-import execa, { type ExecaChildProcess } from 'execa'
+import { execa, type Options, type Subprocess } from 'execa'
 
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -43,6 +43,11 @@ interface BrowserSetupFacts {
   owner_steps: string[]
 }
 
+type BrowserCommandOptions = Pick<Options, 'input' | 'cwd' | 'timeout' | 'maxBuffer'> & {
+  env: NodeJS.ProcessEnv
+  reject: false
+}
+
 /**
  * Setup facts are returned to the agent so it can explain the next step naturally.
  */
@@ -66,7 +71,7 @@ class BrowserSetupRequiredError extends Error {
 export class BrowserUseTool extends Tool {
   private readonly config = ToolkitConfig.load(this.toolkit, this.toolName)
   private canceled = false
-  private readonly running = new Set<ExecaChildProcess<string>>()
+  private readonly running = new Set<Subprocess<BrowserCommandOptions>>()
 
   public constructor() {
     super()
@@ -394,12 +399,23 @@ export class BrowserUseTool extends Tool {
     }
   }
 
-  private command(args: string[], options: import('execa').Options<string>, cleanup = false): ExecaChildProcess<string> {
-    if (this.canceled && !cleanup) throw new Error('Browser execution canceled.')
-    const child = execa(CLI_PATH, args, { ...options,
-      env: { ...RuntimeHelper.getManagedNodeEnvironment(), ...options.env } })
+  private command(
+    args: string[],
+    options: BrowserCommandOptions,
+    cleanup = false
+  ): Subprocess<BrowserCommandOptions> {
+    if (this.canceled && !cleanup) {
+      throw new Error('Browser execution canceled.')
+    }
+
+    const child = execa<BrowserCommandOptions>(CLI_PATH, args, {
+      ...options,
+      env: { ...RuntimeHelper.getManagedNodeEnvironment(), ...options.env }
+    })
+
     this.running.add(child)
     void child.then(() => this.running.delete(child), () => this.running.delete(child))
+
     return child
   }
 }

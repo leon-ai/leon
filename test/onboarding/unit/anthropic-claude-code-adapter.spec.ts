@@ -7,7 +7,7 @@ import AnthropicClaudeCodeAdapter from '@/core/llm-manager/llm-providers/anthrop
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 
 const cli = vi.hoisted(() => vi.fn())
-vi.mock('execa', () => ({ default: cli }))
+vi.mock('execa', () => ({ execa: cli }))
 
 describe('Anthropic Claude Code adapter', () => {
   it('returns tool decisions for Core and disables executable CLI tools', async () => {
@@ -162,7 +162,7 @@ describe('Anthropic Claude Code adapter', () => {
   })
 
   it('stops a real streaming process on abort and removes its prompt file', async () => {
-    const { default: execa } = await vi.importActual<typeof import('execa')>('execa')
+    const { execa } = await vi.importActual<typeof import('execa')>('execa')
     const controller = new AbortController()
     const onToken = vi.fn()
     let directory = ''

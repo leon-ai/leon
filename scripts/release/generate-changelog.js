@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-import execa from 'execa'
+import { execa } from 'execa'
 
 import { LogHelper } from '@/helpers/log-helper'
 

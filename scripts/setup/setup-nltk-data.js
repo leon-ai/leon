@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
-import execa from 'execa'
+import { execa } from 'execa'
 
 import { PYTHON_TCP_SERVER_SRC_PATH } from '@/constants'
 

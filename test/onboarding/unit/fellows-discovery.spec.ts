@@ -10,7 +10,7 @@ import { discoverFellows, FellowAuthType, readFellowAPIKey } from '@/core/llm-ma
 
 const directories: string[] = []
 const cli = vi.hoisted(() => ({ status: vi.fn() }))
-vi.mock('execa', () => ({ default: cli.status }))
+vi.mock('execa', () => ({ execa: cli.status }))
 
 beforeEach(() => {
   cli.status.mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' })

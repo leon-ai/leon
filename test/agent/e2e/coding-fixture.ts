@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import execa from 'execa'
+import { execa, type Result } from 'execa'
 
 import type { ProviderScenarioId } from './provider-scenarios'
 
@@ -77,7 +77,10 @@ export async function createCodingFixture(
   await Promise.all(Object.entries(files).map(([name, content]) =>
     fs.writeFile(path.join(root, name), content)
   ))
-  const git = (args: string[]): Promise<execa.ExecaReturnValue<string>> => execa('git', args, { cwd: root })
+  const git = (args: string[]): Promise<Result<{ cwd: string }>> => {
+    return execa('git', args, { cwd: root })
+  }
+
   await git(['init', '--quiet'])
   await git(['add', '.'])
   await git([

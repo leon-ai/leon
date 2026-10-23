@@ -3,7 +3,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 
-import execa from 'execa'
+import { execa } from 'execa'
 import YAML from 'yaml'
 
 import {

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 
-import execa from 'execa'
+import { execa } from 'execa'
 import { afterEach, expect, it, vi } from 'vitest'
 import YAML from 'yaml'
 

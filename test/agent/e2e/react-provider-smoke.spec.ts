@@ -2,7 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
-import execa from 'execa'
+import { execa } from 'execa'
 import { CODING_INSTRUCTIONS, type CodingEvidence } from './coding-fixture'
 import { describe, expect, it } from 'vitest'
 

@@ -1,4 +1,4 @@
-import execa from 'execa'
+import { execa } from 'execa'
 import ffmpegStatic from 'ffmpeg-static'
 
 import { COMPUTER_USE_COORDINATE_FIELDS, COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE } from '../constants'
@@ -93,8 +93,14 @@ export async function normalizeGnomeCapture(
   const result = await execa(ffmpegStatic, [
     '-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vf', filters.join(','),
     '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'
-  ], { input: image, encoding: null, maxBuffer: IMAGE_BUFFER_LIMIT, timeout: COMMAND_TIMEOUT_MS })
-  return result.stdout
+  ], {
+    input: image,
+    encoding: 'buffer',
+    maxBuffer: IMAGE_BUFFER_LIMIT,
+    timeout: COMMAND_TIMEOUT_MS
+  })
+
+  return Buffer.from(result.stdout)
 }
 
 /**

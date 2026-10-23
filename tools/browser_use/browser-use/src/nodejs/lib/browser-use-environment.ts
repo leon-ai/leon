@@ -57,9 +57,9 @@ export async function prepareBrowserUseEnvironment(settingsPath: string): Promis
 export function describeBrowserUseReadinessFailure(result: {
   stdout: string
   stderr: string
-  exitCode?: number
-  code?: string
-  shortMessage?: string
+  exitCode?: number | undefined
+  code?: string | undefined
+  shortMessage?: string | undefined
   timedOut: boolean
 }, logPath: string): { requiresOwnerAction: boolean, message: string } {
   const diagnostic = [result.stderr, result.stdout, result.shortMessage].filter(Boolean).join('\n')

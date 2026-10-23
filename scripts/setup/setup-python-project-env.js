@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 
-import execa from 'execa'
+import { execa } from 'execa'
 
 import {
   CODEBASE_PATH,

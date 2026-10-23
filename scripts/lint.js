@@ -1,4 +1,4 @@
-import execa from 'execa'
+import { execa } from 'execa'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
