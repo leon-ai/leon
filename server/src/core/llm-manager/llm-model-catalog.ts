@@ -40,6 +40,8 @@ export interface LLMModelCatalogEntry {
   model: string
   label: string
   recommended?: boolean
+  // Keep compatibility metadata for saved models without suggesting them in setup.
+  hiddenFromSuggestions?: boolean
   supportsForcedToolChoice?: boolean
   supportsTemperature?: boolean
   supportsPromptCacheOptions?: boolean
@@ -1101,6 +1103,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     model: 'MiniMax-M2.7',
     contextWindowTokens: 204_800,
     label: 'MiniMax-M2.7',
+    hiddenFromSuggestions: true,
     reasoning: AUTO_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: []
@@ -1165,7 +1168,7 @@ export function getLLMModelCatalogEntries(
   provider: LLMProviders
 ): readonly LLMModelCatalogEntry[] {
   return LLM_MODEL_CATALOG
-    .filter((entry) => entry.provider === provider)
+    .filter((entry) => entry.provider === provider && !entry.hiddenFromSuggestions)
     .sort((first, second) => Number(Boolean(second.recommended)) - Number(Boolean(first.recommended)))
 }
 

@@ -13,7 +13,8 @@ vi.mock('@@/scripts/setup/setup-fellows', () => ({
 }))
 vi.mock('@@/scripts/setup/setup-remote-llm', () => ({ default: setup.remote }))
 vi.mock('@@/scripts/setup/setup-ui', () => ({
-  SetupUI: { info: setup.info }, setupConsola: { prompt: setup.prompt }
+  SetupUI: { info: setup.info, underlined: (text: string): string => text },
+  setupConsola: { prompt: setup.prompt }
 }))
 vi.mock('@@/scripts/setup/setup-status', () => ({
   createSetupStatus: (): { start: () => { succeed: ReturnType<typeof vi.fn> } } => ({
@@ -105,6 +106,21 @@ describe('setup preferences', () => {
       .toBeLessThan(setup.prompt.mock.invocationCallOrder.at(-1)!)
     expect(preferences.remoteLLMProvider).toBe('openai')
     expect(preferences.setupVoice).toBe(false)
+  })
+
+  it('defaults MiniMax setup to Flash and offers M3 without legacy suggestions', async () => {
+    const { default: setupRemoteLLM } = await vi.importActual<{
+      default: () => Promise<{ remoteLLMProvider: string, remoteLLMModel: string }>
+    }>('@@/scripts/setup/setup-remote-llm')
+    setup.prompt.mockResolvedValueOnce('minimax')
+      .mockImplementationOnce(async (_message, options) => options.initial)
+      .mockResolvedValueOnce('test-minimax-key')
+
+    expect(await setupRemoteLLM()).toMatchObject({
+      remoteLLMProvider: 'minimax', remoteLLMModel: 'MiniMax-M3.1-Flash'
+    })
+    const options = setup.prompt.mock.calls[1]![1].options as { value: string }[]
+    expect(options.map((option) => option.value)).toEqual(['MiniMax-M3.1-Flash', 'MiniMax-M3'])
   })
 
   it('links OpenRouter in manual setup without asking for a model or key', async () => {

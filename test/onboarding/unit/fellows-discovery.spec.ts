@@ -54,6 +54,23 @@ describe('fellow discovery', () => {
     expect(discovery.issues).toHaveLength(1)
   })
 
+  it.each([
+    ['', 'MiniMax-M3.1-Flash'],
+    ['MiniMax-M2.7', 'MiniMax-M2.7'],
+    ['minimax/my-custom-model', 'my-custom-model']
+  ])('preserves configured MiniMax model %s during discovery', async (configured, expected) => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-minimax-fellows-'))
+    directories.push(home)
+    await fs.mkdir(path.join(home, '.hermes'), { recursive: true })
+    await fs.writeFile(path.join(home, '.hermes', '.env'), 'MINIMAX_API_KEY=test-minimax-key\n')
+    await fs.writeFile(path.join(home, '.hermes', 'config.yaml'), `model: "${configured}"\n`)
+
+    const discovery = await discoverFellows({ home, platform: process.platform, env: {} })
+    expect(discovery.connections).toEqual([
+      expect.objectContaining({ provider: 'minimax', model: expected })
+    ])
+  })
+
   it('requires a confirmed Claude Code login instead of trusting stored subscription tokens', async () => {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-claude-fellows-'))
     directories.push(home)
