@@ -179,33 +179,37 @@ Every profile owns its settings, sessions and artifacts.
 
   expect(checked).toMatchObject({ ok: true, checkedStates: 3, findingCount: 0 })
 
-  for (const format of ['pdf', 'png', 'pptx', 'pptx-editable']) {
-    const exported = await run('export', [project, { format, withClicks: true }])
-    const artifacts = exported['artifacts'] as Array<{ path: string, filename: string }>
-    const primary = await fs.readFile(artifacts[0]!.path)
+  // Each export owns its workspace and artifact paths, so formats can render
+  // independently while still exercising the real worker and delivery contract.
+  await Promise.all(
+    ['pdf', 'png', 'pptx', 'pptx-editable'].map(async (format) => {
+      const exported = await run('export', [project, { format, withClicks: true }])
+      const artifacts = exported['artifacts'] as Array<{ path: string, filename: string }>
+      const primary = await fs.readFile(artifacts[0]!.path)
 
-    expect(exported['animated']).toBe(false)
-    expect(primary.length).toBeGreaterThan(100)
-    expect(artifacts.some((artifact) => artifact.filename === 'presentation-source.zip')).toBe(false)
+      expect(exported['animated']).toBe(false)
+      expect(primary.length).toBeGreaterThan(100)
+      expect(artifacts.some((artifact) => artifact.filename === 'presentation-source.zip')).toBe(false)
 
-    if (format === 'pdf') {
-      expect(primary.subarray(0, 4).toString()).toBe('%PDF')
-    } else if (format === 'png') {
-      expect(primary.subarray(1, 4).toString()).toBe('PNG')
-      expect(artifacts).toHaveLength(3)
-    } else {
-      const unpacked = path.join(home, format)
-      const archive = path.join(home, `${format}.zip`)
+      if (format === 'pdf') {
+        expect(primary.subarray(0, 4).toString()).toBe('%PDF')
+      } else if (format === 'png') {
+        expect(primary.subarray(1, 4).toString()).toBe('PNG')
+        expect(artifacts).toHaveLength(3)
+      } else {
+        const unpacked = path.join(home, format)
+        const archive = path.join(home, `${format}.zip`)
 
-      await fs.copyFile(artifacts[0]!.path, archive)
-      await extractArchive(archive, unpacked)
-      expect(await fs.readdir(path.join(unpacked, 'ppt', 'slides'))).toContain('slide3.xml')
+        await fs.copyFile(artifacts[0]!.path, archive)
+        await extractArchive(archive, unpacked)
+        expect(await fs.readdir(path.join(unpacked, 'ppt', 'slides'))).toContain('slide3.xml')
 
-      if (format === 'pptx-editable') {
-        expect(await fs.readFile(path.join(unpacked, 'ppt', 'slides', 'slide1.xml'), 'utf8')).toContain('Ground, act, verify')
+        if (format === 'pptx-editable') {
+          expect(await fs.readFile(path.join(unpacked, 'ppt', 'slides', 'slide1.xml'), 'utf8')).toContain('Ground, act, verify')
+        }
       }
-    }
-  }
+    })
+  )
 
   const web = await run('export', [project, { includeSource: true }])
   const artifacts = web['artifacts'] as Array<{ path: string, filename: string }>
