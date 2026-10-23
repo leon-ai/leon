@@ -1223,6 +1223,13 @@ export class ReActLLMDuty extends LLMDuty {
       ? COMPLETION_REVIEW_REASONING_EFFORT
       : modelSettings.reasoning
     const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
+    const reasoningEffortBaseline = useReviewReasoning &&
+      modelCapabilities?.supportsPerMessageReasoning &&
+      modelSettings.reasoning !== 'none'
+      ? modelSettings.reasoning === 'auto'
+        ? defaultReasoning.effort
+        : modelSettings.reasoning
+      : undefined
     // Finalization is still a model request. Keep its configured reasoning:
     // providers with mandatory reasoning reject a forced reasoning-off retry.
     const reasoningMode =
@@ -1616,6 +1623,7 @@ export class ReActLLMDuty extends LLMDuty {
           : {}),
         reasoningMode,
         ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(reasoningEffortBaseline ? { reasoningEffortBaseline } : {}),
         ...(reasoningUseDefaultEffort ? { reasoningUseDefaultEffort: true } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),

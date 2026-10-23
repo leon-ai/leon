@@ -4440,6 +4440,11 @@ describe('model response status', () => {
       expect(reviewParams.serviceTier).toBe('priority')
       expect(reviewParams.toolChoice).toBe('none')
       expect(reviewParams.disableThinking).not.toBe(true)
+      if (provider === LLMProviders.Anthropic) {
+        expect(reviewParams.reasoningEffortBaseline).toBe(
+          taskReasoning === 'auto' ? 'medium' : taskReasoning
+        )
+      }
     }
   )
 

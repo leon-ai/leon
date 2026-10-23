@@ -43,6 +43,7 @@ export interface LLMModelCatalogEntry {
   supportsForcedToolChoice?: boolean
   supportsTemperature?: boolean
   supportsPromptCacheOptions?: boolean
+  supportsPerMessageReasoning?: boolean
   // Verified endpoint capacity; omitted when the limit is unknown.
   contextWindowTokens?: number
   // Verified inline inputs supported by both this endpoint and Leon's adapter.
@@ -851,6 +852,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.Anthropic,
     model: 'claude-opus-5-5',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 5.5',
     recommended: true,
@@ -868,6 +870,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.Anthropic,
     model: 'claude-haiku-5-5',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Haiku 5.5',
     supportsForcedToolChoice: true,
@@ -883,6 +886,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.Anthropic,
     model: 'claude-fable-5-1',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Fable 5.1',
     defaultReasoningEffort: 'high',
@@ -898,6 +902,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.Anthropic,
     model: 'claude-mythos-5-1',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Mythos 5.1 (invite only)',
     defaultReasoningEffort: 'high',
@@ -927,6 +932,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.Anthropic,
     model: 'claude-opus-5',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 5',
     defaultReasoningEffort: 'high',

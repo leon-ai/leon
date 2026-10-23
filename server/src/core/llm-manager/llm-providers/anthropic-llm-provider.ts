@@ -1,14 +1,17 @@
 import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
+import type { LanguageModelV4CallOptions } from '@ai-sdk/provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
   CompletionParams,
-  LLMReasoningMode
+  LLMReasoningMode,
+  PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
-import { canDisableLLMModelReasoning } from '@/core/llm-manager/llm-model-catalog'
+import { canDisableLLMModelReasoning, getLLMModelCatalogEntry } from '@/core/llm-manager/llm-model-catalog'
 
 const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.Anthropic)
+const DEFAULT_ADAPTIVE_REASONING_EFFORT = 'high'
 
 type ClaudeModelFamily = 'fable' | 'mythos' | 'haiku' | 'opus' | 'sonnet'
 
@@ -232,8 +235,8 @@ function buildAnthropicProviderOptions(
         display: 'summarized'
       },
       effort: completionParams.reasoningEffort === 'none'
-        ? 'high'
-        : completionParams.reasoningEffort || 'high',
+        ? DEFAULT_ADAPTIVE_REASONING_EFFORT
+        : completionParams.reasoningEffort || DEFAULT_ADAPTIVE_REASONING_EFFORT,
       ...(speed ? { speed } : {}),
       sendReasoning: true
     }
@@ -241,6 +244,42 @@ function buildAnthropicProviderOptions(
 }
 
 export default class AnthropicLLMProvider extends AISDKRemoteLLMProvider {
+  /**
+   * Changes only the latest turn's effort so cached task history keeps its
+   * original request-level thinking configuration.
+   */
+  protected override buildCallOptions(
+    prompt: PromptOrChatHistory,
+    completionParams: CompletionParams
+  ): LanguageModelV4CallOptions {
+    const options = super.buildCallOptions(prompt, completionParams)
+    const entry = getLLMModelCatalogEntry(LLMProviders.Anthropic, this.model)
+    const baseline = completionParams.reasoningEffortBaseline === 'on'
+      ? DEFAULT_ADAPTIVE_REASONING_EFFORT
+      : completionParams.reasoningEffortBaseline
+    const effort = completionParams.reasoningEffort
+    const anthropic = options.providerOptions?.['anthropic']
+    const thinking = anthropic?.['thinking']
+
+    if (
+      entry?.supportsPerMessageReasoning && baseline && effort &&
+      entry.reasoning.includes(baseline) && entry.reasoning.includes(effort) &&
+      anthropic && thinking && typeof thinking === 'object' &&
+      'type' in thinking && thinking['type'] === 'adaptive'
+    ) {
+      // Effort-only system messages are serialized by the SDK with its
+      // required beta header. Keep this transient update out of task history.
+      anthropic['effort'] = baseline
+      options.prompt.push({
+        role: 'system',
+        content: '',
+        providerOptions: { anthropic: { effort } }
+      })
+    }
+
+    return options
+  }
+
   constructor(target: ResolvedLLMTarget) {
     super({
       credentials: target.accountCredentials,

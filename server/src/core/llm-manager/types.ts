@@ -317,6 +317,12 @@ export interface CompletionParams {
    */
   reasoningEffort?: LLMReasoningEffort
   /**
+   * Keeps the request's normal effort stable when an adapter can apply the
+   * requested effort to the latest turn without invalidating cached history.
+   * "on" retains the adapter's normal enabled-thinking default.
+   */
+  reasoningEffortBaseline?: LLMReasoningEffort | 'on'
+  /**
    * Enable reasoning while leaving the effort at the provider's model default.
    */
   reasoningUseDefaultEffort?: boolean

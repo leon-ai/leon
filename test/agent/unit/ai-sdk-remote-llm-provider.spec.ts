@@ -834,6 +834,52 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(body.temperature).toBeUndefined()
   })
 
+  it.each([
+    ['claude-opus-5-5', true, 'high'],
+    ['claude-opus-5-5', true, 'on'],
+    ['claude-opus-5', true, 'high'],
+    ['claude-haiku-5-5', true, 'high'],
+    ['claude-fable-5-1', true, 'high'],
+    ['claude-mythos-5-1', true, 'high'],
+    ['claude-opus-4-8', false, 'high'],
+    ['claude-fable-5', false, 'high']
+  ] as const)('keeps cached task configuration when applying review effort on %s (%s, %s)', async (model, perMessage, baseline) => {
+    const fetch = vi.fn().mockImplementation(async () => Response.json({
+      id: 'msg_review', type: 'message', role: 'assistant', model,
+      content: [{ type: 'text', text: 'Verified.' }], stop_reason: 'end_turn',
+      usage: { input_tokens: 100, output_tokens: 10 }
+    }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new AnthropicLLMProvider({
+      ...TARGET, provider: LLMProviders.Anthropic, model
+    })
+    const params: CompletionParams = {
+      ...PARAMS, reasoningEffort: 'high', promptCacheKey: AGENT_PROMPT_CACHE_KEY
+    }
+    await provider.runChatCompletion([{ role: 'user', content: 'Check the file.' }], params)
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Check the file.' },
+      { role: 'assistant', content: 'Verified.' },
+      { role: 'user', content: 'Review the evidence.' }
+    ], { ...params, reasoningEffort: 'low', reasoningEffortBaseline: baseline, toolChoice: 'none' })
+
+    const task = JSON.parse(fetch.mock.calls[0]![1].body)
+    const review = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(review.system).toEqual(task.system)
+    expect(review.thinking).toEqual(task.thinking)
+    expect(review.messages[0]).toEqual(task.messages[0])
+    expect(review.output_config.effort).toBe(perMessage ? 'high' : 'low')
+    if (perMessage) {
+      expect(review.messages.at(-1)).toMatchObject({
+        role: 'system', content: [], output_config: { effort: 'low' }
+      })
+      expect(new Headers(fetch.mock.calls[1]![1].headers).get('anthropic-beta'))
+        .toContain('mid-conversation-output-config-2026-07-01')
+    } else {
+      expect(review.messages.at(-1).role).toBe('user')
+    }
+  })
+
   it.each(['off', 'required'] as const)(
     'allows Haiku 5.5 requests with %s thinking or tool choice',
     (mode) => {
