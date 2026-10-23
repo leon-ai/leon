@@ -67,6 +67,7 @@ export enum ModelResponseState {
   Waiting = 'waiting',
   Connected = 'connected',
   Reasoning = 'reasoning',
+  Reviewing = 'reviewing',
   Retrying = 'retrying',
   Completed = 'completed'
 }

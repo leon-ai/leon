@@ -1004,6 +1004,12 @@ export default class Chatbot {
     const accountingMarkup = accountingLabels.map((label) =>
       `<span class="bubble-metric-item" title="Observed agent model calls only">${label}</span>`
     ).join('')
+    const reviewCount = Number(metrics.reviewCount || 0)
+    const reviewRetryCount = Number(metrics.reviewRetryCount || 0)
+    const reviewRetryLabel = reviewRetryCount === 1 ? 'retry' : 'retries'
+    const reviewMarkup = reviewCount > 0
+      ? `<span class="bubble-metric-item" title="${reviewCount} completion ${reviewCount === 1 ? 'review' : 'reviews'}; included in turn duration">Review ${this.formatTurnDuration(metrics.reviewDurationMs)} · ${reviewRetryCount} ${reviewRetryLabel}</span>`
+      : ''
 
     return `
       <span class="bubble-metric-item">
@@ -1021,6 +1027,7 @@ export default class Chatbot {
       ${timestampMarkup}
       ${contextMarkup}
       ${accountingMarkup}
+      ${reviewMarkup}
     `.trim()
   }
 

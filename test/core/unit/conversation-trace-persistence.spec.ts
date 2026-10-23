@@ -457,6 +457,7 @@ describe('conversation trace persistence', () => {
       ...draft, messageId: 'request:leon', message: 'Done', isAddedToHistory: true,
       llmMetrics: {
         completionCount: 2, inputTokens: 100, outputTokens: 20, totalTokens: 120,
+        reviewCount: 1, reviewRetryCount: 1, reviewDurationMs: 50,
         durationMs: 100, tokensPerSecond: 200,
         usageAccounting: {
           cachedInputTokens: 80, cacheReadCompletionCount: 2, cacheWriteInputTokens: 0,
@@ -479,6 +480,9 @@ describe('conversation trace persistence', () => {
       .toEqual(draft.agentResponseTrace?.progressMessages)
     expect(history[0]?.llmMetrics?.usageAccounting).toEqual(finished.llmMetrics.usageAccounting)
     expect(history[0]?.llmMetrics?.completionCount).toBe(2)
+    expect(history[0]?.llmMetrics).toMatchObject({
+      reviewCount: 1, reviewRetryCount: 1, reviewDurationMs: 50
+    })
     expect(await logger.loadAll({ sessionId: 'second' })).toEqual([{ ...draft, sentAt: 1_600 }])
   })
 })

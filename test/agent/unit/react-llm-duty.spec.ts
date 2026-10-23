@@ -4451,6 +4451,51 @@ describe('model response status', () => {
     }
   )
 
+  it('reports review time and retries even when an earlier review fails', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.Anthropic, model: 'claude-opus-5-5'
+    })
+    const duty = new ReActLLMDuty({ input: 'Check the result.' })
+    Object.assign(duty, {
+      writeAgentPromptLog: vi.fn(), hasFinalizedAnswer: true, executionStartedAt: 1_000
+    })
+    coreMocks.prompt
+      .mockImplementationOnce(async (_messages, params) => {
+        expect(params.data).toBeUndefined()
+        now.mockReturnValue(1_200)
+        throw new Error('Connection interrupted')
+      })
+      .mockImplementationOnce(async (_messages, params) => {
+        expect(params.data).toMatchObject({
+          required: ['reason', 'status', 'out_of_scope_steps'],
+          additionalProperties: false
+        })
+        for (const attemptId of ['retry-first', 'retry-second']) {
+          params.onAttempt({ attemptId, outcome: 'started' })
+          params.onAttempt({ attemptId, outcome: 'completed' })
+        }
+        now.mockReturnValue(1_500)
+
+        return { output: { status: 'complete', reason: 'Verified.', out_of_scope_steps: [] } }
+      })
+
+    await expect(duty['callAgentModel']([], 'Check evidence.', [], {
+      isRecoveryAttempt: false, isCompletionReview: true
+    })).rejects.toThrow('Connection interrupted')
+    await duty['callAgentModel']([], 'Check evidence.', [], {
+      isRecoveryAttempt: false, isCompletionReview: true, isCompletionReviewRetry: true
+    })
+
+    expect(duty['makeDutyResult']('Done.').data?.['llmMetrics']).toMatchObject({
+      reviewCount: 1, reviewRetryCount: 2, reviewDurationMs: 500, durationMs: 500
+    })
+    expect(duty['responseTraceCollector'].snapshot({}).inferences).toEqual([
+      expect.objectContaining({ attemptId: 'retry-first', phase: 'review' }),
+      expect.objectContaining({ attemptId: 'retry-second', phase: 'review' })
+    ])
+  })
+
   it.each([false, true])('reports observed stream activity without adding chat history (review=%s)', async (review) => {
     let finish!: (result: { output: string }) => void
     let params!: CompletionParams
@@ -4470,13 +4515,14 @@ describe('model response status', () => {
       expect(params.toolChoice).toBe(review ? 'none' : 'auto')
       expect(params.disableContextCompaction).toBe(review)
       expect(params.systemPrompt).toBe('Follow the request.')
-      expect(statuses().at(-1)?.state).toBe(ModelResponseState.Waiting)
+      expect(statuses().at(-1)?.state).toBe(review ? ModelResponseState.Reviewing : ModelResponseState.Waiting)
       params.onStreamEvent?.({ type: 'stream-open' })
       params.onStreamEvent?.({ type: 'reasoning-start' })
       await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
-      expect(statuses().map((status) => status.state)).toEqual([
-        ModelResponseState.Waiting, ModelResponseState.Connected, ModelResponseState.Reasoning
-      ])
+      expect(statuses().map((status) => status.state)).toEqual(review
+        ? [ModelResponseState.Reviewing, ModelResponseState.Reviewing, ModelResponseState.Reviewing]
+        : [ModelResponseState.Waiting, ModelResponseState.Connected, ModelResponseState.Reasoning]
+      )
       expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toBeUndefined()
       expect(coreMocks.emitAnswerToChatClients.mock.calls.some(([payload]) =>
         payload.historyMode === 'system_widget'

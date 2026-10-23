@@ -200,6 +200,9 @@ export class ReActLLMDuty extends LLMDuty {
     final_answer: { outputTokens: 0, durationMs: 0 }
   }
   private finalAnswerMetrics: FinalAnswerMetricsSnapshot | null = null
+  private reviewCount = 0
+  private reviewRetryCount = 0
+  private reviewDurationMs = 0
 
   private executionStartedAt = 0
   private firstOutputAt: number | null = null
@@ -305,6 +308,9 @@ export class ReActLLMDuty extends LLMDuty {
       final_answer: { outputTokens: 0, durationMs: 0 }
     }
     this.finalAnswerMetrics = null
+    this.reviewCount = 0
+    this.reviewRetryCount = 0
+    this.reviewDurationMs = 0
     this.hasExplicitMemoryWrite = false
     this.hasOwnerMessages = false
     this.hasFinalizedAnswer = false
@@ -1388,7 +1394,9 @@ export class ReActLLMDuty extends LLMDuty {
         return
       }
 
-      modelStatus.state = state
+      modelStatus.state = options.isCompletionReview && state !== ModelResponseState.Completed
+        ? ModelResponseState.Reviewing
+        : state
       SOCKET_SERVER.emitToChatClients('model-response-status', { ...modelStatus }, {
         sessionId: modelStatus.sessionId
       })
@@ -1459,6 +1467,10 @@ export class ReActLLMDuty extends LLMDuty {
       // A subsequent operational call removes any ending rejected by review.
       if (!options.isCompletionReview) {
         this.answerStream.discard()
+      } else if (options.isCompletionReviewRetry) {
+        this.reviewRetryCount += 1
+      } else {
+        this.reviewCount += 1
       }
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
@@ -1483,12 +1495,18 @@ export class ReActLLMDuty extends LLMDuty {
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
         onAttempt: (timing): void => {
-          this.responseTraceCollector.recordInference({ ...timing, phase })
+          this.responseTraceCollector.recordInference({
+            ...timing,
+            phase: options.isCompletionReview ? 'review' : phase
+          })
           this.scheduleTraceSave()
           if (timing.outcome !== 'started') {
             lastAttemptFailureKind = timing.failureKind
           }
           if (timing.outcome === 'started') {
+            if (options.isCompletionReview && modelAttempt > 0) {
+              this.reviewRetryCount += 1
+            }
             startWaitDiagnostics()
             renewModelResponseDeadline(timing.inferenceTimeoutMs)
             modelAttempt += 1
@@ -1669,6 +1687,9 @@ export class ReActLLMDuty extends LLMDuty {
 
       throw error
     } finally {
+      if (options.isCompletionReview) {
+        this.reviewDurationMs += Math.max(0, Date.now() - completionStartedAt)
+      }
       completed = true
       clearTimeout(responseDeadlineTimer)
       executionSignal?.removeEventListener('abort', clearModelStatus)
@@ -2152,7 +2173,7 @@ export class ReActLLMDuty extends LLMDuty {
       `Total tokens — input: ${this.totalInputTokens} | output: ${this.totalOutputTokens} | combined: ${this.totalInputTokens + this.totalOutputTokens}`
     )
 
-    const llmMetrics = deriveLLMMetrics({
+    const generationMetrics = deriveLLMMetrics({
       contextUsage: this.contextUsage,
       usageAccounting: this.usageAccounting,
       completionCount: this.completionCount,
@@ -2171,6 +2192,12 @@ export class ReActLLMDuty extends LLMDuty {
       finalAnswerMetrics: this.finalAnswerMetrics,
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
+    const llmMetrics = {
+      ...generationMetrics,
+      reviewCount: this.reviewCount,
+      reviewRetryCount: this.reviewRetryCount,
+      reviewDurationMs: this.reviewDurationMs
+    }
     const agentResponseTrace = this.responseTraceCollector.snapshot({
       ...llmMetrics
     })
