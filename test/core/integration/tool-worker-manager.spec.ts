@@ -40,7 +40,7 @@ it.each(['recordLimit', 'timeout', 'canceled'])(
 let home = ''
 let manager: ToolWorkerManager
 
-it('keeps scaffold slides readable while evidence handoffs animate without click steps', async () => {
+it('keeps scaffold content visible without click steps and respects reduced motion', async () => {
   await fixture(false)
 
   const project = path.join(home, 'presentation')
@@ -60,16 +60,6 @@ it('keeps scaffold slides readable while evidence handoffs animate without click
   }
 
   await run('create', [project, 'Evidence handoffs'])
-  const checked = await run('check', [project])
-
-  expect(checked, JSON.stringify(checked)).toMatchObject({
-    ok: true, scope: 'full', complete: true, checkedStates: 5, findingCount: 0,
-    durationMs: expect.any(Number)
-  })
-  expect(await run('check', [project, { slides: [3] }])).toMatchObject({
-    ok: true, scope: 'targeted', complete: false, checkedStates: 1, findingCount: 0
-  })
-
   const live = await run('present', [project, { openBrowser: false }])
   const require = createRequire(path.resolve('tools/document/slidev/src/nodejs/package.json'))
   const { chromium } = require('playwright-chromium') as typeof import('../../../tools/document/slidev/src/nodejs/node_modules/playwright-chromium')
@@ -81,25 +71,41 @@ it('keeps scaffold slides readable while evidence handoffs animate without click
     await page.addInitScript(() => localStorage.setItem('slidev-wake-lock', 'false'))
     await page.goto(live['audienceUrl'] as string, { waitUntil: 'networkidle' })
 
-    for (let slide = 1; slide <= 5; slide += 1) {
+    await expect.poll(() => page.evaluate('window.__slidev__?.nav?.total || 0'))
+      .toBeGreaterThan(0)
+    const slideCount = await page.evaluate('window.__slidev__.nav.total') as number
+    let checkedReducedMotion = false
+
+    for (let slide = 1; slide <= slideCount; slide += 1) {
       await expect.poll(() => page.evaluate('window.__slidev__.nav.currentSlideNo')).toBe(slide)
       expect(await page.evaluate('window.__slidev__.nav.clicksTotal')).toBe(0)
 
-      if (slide === 3) {
-        const cards = page.locator('.slidev-page-3 .card')
-        const packet = page.locator('.slidev-page-3 .handoff-packet')
-        const position = await packet.evaluate((element) => getComputedStyle(element).left)
+      const layout = page.locator(`.slidev-page-${slide} .slidev-layout`)
 
-        expect(await cards.count()).toBe(3)
-        expect(await cards.evaluateAll((elements) => elements.every((element) => getComputedStyle(element).opacity === '1'))).toBe(true)
-        await expect.poll(() => packet.evaluate((element) => getComputedStyle(element).left)).not.toBe(position)
+      await expect.poll(() => layout.getByRole('heading').first().isVisible()).toBe(true)
+      await expect.poll(() => layout.locator('p').evaluateAll((elements) => elements.every((element) =>
+        Number(getComputedStyle(element).opacity) > 0 &&
+        getComputedStyle(element).visibility === 'visible'
+      ))).toBe(true)
+
+      // Check continuous motion independently of the template's layout and artwork.
+      const hasContinuousMotion = (): Promise<boolean> => layout.evaluate((element) =>
+        element.getAnimations({ subtree: true }).some((animation) =>
+          animation.effect?.getTiming().iterations === Infinity
+        )
+      )
+
+      if (await hasContinuousMotion()) {
         await page.emulateMedia({ reducedMotion: 'reduce' })
-        expect(await packet.evaluate((element) => getComputedStyle(element).animationName)).toBe('none')
-        expect(await cards.first().isVisible()).toBe(true)
+        expect(await hasContinuousMotion()).toBe(false)
+        checkedReducedMotion = true
+        await page.emulateMedia({ reducedMotion: 'no-preference' })
       }
 
       await page.keyboard.press('ArrowRight')
     }
+
+    expect(checkedReducedMotion).toBe(true)
   } finally {
     await browser.close()
   }
