@@ -127,7 +127,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - Treat tool errors as observations: correct the arguments, choose another available tool, or explain the blocker.
 - Continue until the requested deliverable is complete and verified. When complete, return the final user-facing answer as plain text with no tool call.
 - An execution_budget is a fixed caller deadline, not a renewable model wait. Use its finishing reserve for pending writes, required checks and the answer; stop optional exploration in the finishing phase. Report unfinished work honestly if the deadline prevents completion.
-- Call request_clarification with one concise question only for required information, authorization, or owner action that available tools cannot resolve.
+- Call request_clarification alone, after consuming available tool results, with one concrete question only for required information, authorization, or owner action that available tools cannot resolve. Do not use it for draft text or a routine technical failure that tools can address.
 </agent_loop>
 
 <coding>
@@ -1233,6 +1233,22 @@ export async function runAgentLoop(
           content: toolCall.id === cancellationCall?.id
             ? 'Task canceled by the owner.'
             : 'Tool call skipped because an earlier call ended this agent run.'
+        })
+        callIndex += 1
+        continue
+      }
+
+      // A pause must be chosen after consuming the response's other results.
+      // Settle the rejected call so the provider can continue with that evidence.
+      if (
+        toolCall.function.name === AGENT_CLARIFICATION_TOOL_NAME &&
+        emittedToolCalls.length > 1
+      ) {
+        transcript.push({
+          role: 'tool',
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          content: 'Clarification request rejected: call request_clarification alone after inspecting the other tool results. Ask one concrete question only if required owner input or action remains unavailable through tools.'
         })
         callIndex += 1
         continue
@@ -2371,7 +2387,7 @@ function createClarificationTool(): OpenAITool {
     function: {
       name: AGENT_CLARIFICATION_TOOL_NAME,
       description:
-        'Pause the current agent run and ask the owner one required clarification question. Use this instead of a normal final answer when the owner reply should resume the same work with its current plan, evidence, and artifacts.',
+        'Pause the current agent run and ask the owner one concrete question about required information, authorization, or owner action that available tools cannot resolve. Call this alone, after inspecting available tool results; never alongside other calls or for draft text. The owner reply resumes the same work with its current plan, evidence, and artifacts.',
       parameters: {
         type: 'object',
         properties: {

@@ -2287,6 +2287,65 @@ describe('continuous agent loop', () => {
     })
   })
 
+  it.each(['before', 'after'])(
+    'consumes tool evidence before accepting clarification emitted %s another call',
+    async (position) => {
+      const clarification = toolCall('clarify-recipient', AGENT_CLARIFICATION_TOOL_NAME, {
+        question: 'Which recipient should I use?'
+      })
+      const lookup = toolCall('lookup-recipient', CALLABLE_TOOL_NAME, {
+        query: 'recipient'
+      })
+      const observation = 'The requested recipient is Alice.'
+      const executeFunction = vi.fn(async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation
+        }
+      }))
+      const callModel = vi.fn()
+        .mockResolvedValueOnce({
+          toolCalls: position === 'before'
+            ? [clarification, lookup]
+            : [lookup, clarification]
+        })
+        .mockImplementationOnce(async (messages: AgentToolTranscriptMessage[]) => {
+          expect(messages).toContainEqual({
+            role: 'tool',
+            toolCallId: lookup.id,
+            toolName: CALLABLE_TOOL_NAME,
+            content: observation
+          })
+          expect(messages).toContainEqual({
+            role: 'tool',
+            toolCallId: clarification.id,
+            toolName: AGENT_CLARIFICATION_TOOL_NAME,
+            content: expect.stringContaining('Clarification request rejected:')
+          })
+
+          return { textContent: 'The recipient is Alice.' }
+        })
+
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Find the requested recipient.' }],
+        catalog: createCatalog(),
+        callModel,
+        executeFunction,
+        loadAgentSkill: async () => null
+      })
+
+      expect(executeFunction).toHaveBeenCalledTimes(1)
+      expect(callModel).toHaveBeenCalledTimes(2)
+      expect(result).toMatchObject({
+        intent: 'answer',
+        answer: 'The recipient is Alice.'
+      })
+      expect(result.transcript.filter((message) => message.role === 'tool'))
+        .toHaveLength(2)
+    }
+  )
+
   it.each(['answer', 'cancelled'])(
     'allows the %s outcome at the iteration limit without further operational work',
     async (intent) => {
