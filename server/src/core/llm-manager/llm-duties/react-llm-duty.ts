@@ -103,6 +103,7 @@ import {
   emitToolExecutionOutputToWebApp
 } from './react-llm-duty/tool-execution'
 import {
+  AGENT_COMPLETION_REVIEW_SCHEMA,
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
@@ -1114,6 +1115,7 @@ export class ReActLLMDuty extends LLMDuty {
       isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
       isCompletionReview?: boolean
+      isCompletionReviewRetry?: boolean
       isContextRecoveryAttempt?: boolean
     },
     checkpointInput?: AgentContinuityCheckpointInput,
@@ -1229,6 +1231,13 @@ export class ReActLLMDuty extends LLMDuty {
       ? modelSettings.reasoning === 'auto'
         ? defaultReasoning.effort
         : modelSettings.reasoning
+      : undefined
+    // Claude's response schema changes its cached system prefix. Keep the
+    // first review cacheable, using constrained JSON only to recover a retry.
+    const reviewSchema = options.isCompletionReview &&
+      modelCapabilities?.supportsStructuredOutput &&
+      (providerName !== LLMProviders.Anthropic || options.isCompletionReviewRetry)
+      ? AGENT_COMPLETION_REVIEW_SCHEMA
       : undefined
     // Finalization is still a model request. Keep its configured reasoning:
     // providers with mandatory reasoning reject a forced reasoning-off retry.
@@ -1454,6 +1463,7 @@ export class ReActLLMDuty extends LLMDuty {
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         systemPrompt: activeSystemPrompt,
+        ...(reviewSchema ? { data: reviewSchema } : {}),
         temperature: AGENT_TEMPERATURE,
         // Operational calls leave time for recovery. Finishing and review use
         // the reserved time rather than repeatedly halving the final wait.

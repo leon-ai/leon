@@ -880,6 +880,54 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   })
 
+  it.each([LLMProviders.OpenAI, LLMProviders.Anthropic])(
+    'serializes native review schemas through the %s adapter', async (providerName) => {
+      const model = providerName === LLMProviders.OpenAI ? 'gpt-6.1-sol' : 'claude-opus-5-5'
+      const verdict = { status: 'complete' }
+      const schema = {
+        type: 'object',
+        properties: { status: { type: 'string', enum: ['complete'] } },
+        required: ['status'],
+        additionalProperties: false
+      }
+      const fetch = vi.fn().mockImplementation(async () => Response.json(
+        providerName === LLMProviders.OpenAI
+          ? {
+              id: 'resp_review', model, status: 'completed', created_at: 1,
+              output: [{ type: 'message', id: 'message', role: 'assistant',
+                content: [{ type: 'output_text', text: JSON.stringify(verdict), annotations: [] }] }],
+              usage: { input_tokens: 100, output_tokens: 10 }
+            }
+          : {
+              id: 'msg_review', type: 'message', role: 'assistant', model,
+              content: [{ type: 'text', text: JSON.stringify(verdict) }], stop_reason: 'end_turn',
+              usage: { input_tokens: 100, output_tokens: 10 }
+            }
+      ))
+      vi.stubGlobal('fetch', fetch)
+      const target = { ...TARGET, provider: providerName, model }
+      const provider = providerName === LLMProviders.OpenAI
+        ? new OpenAILLMProvider(target)
+        : new AnthropicLLMProvider(target)
+      const result = await provider.runChatCompletion('Review the evidence.', {
+        ...PARAMS, data: schema,
+        reasoningEffort: 'low', toolChoice: 'none'
+      })
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      const format = providerName === LLMProviders.OpenAI
+        ? body.text.format
+        : body.output_config.format
+
+      expect(format).toMatchObject({ type: 'json_schema', schema })
+      if (providerName === LLMProviders.Anthropic) {
+        expect(body.system).toEqual([{ type: 'text', text: PARAMS.systemPrompt }])
+      } else {
+        expect(body.input[0].content).toBe(PARAMS.systemPrompt)
+      }
+      expect(normalizeCompletionResultForOpenAICompatibleProvider(result).rawResult).toBe(JSON.stringify(verdict))
+    }
+  )
+
   it.each(['off', 'required'] as const)(
     'allows Haiku 5.5 requests with %s thinking or tool choice',
     (mode) => {

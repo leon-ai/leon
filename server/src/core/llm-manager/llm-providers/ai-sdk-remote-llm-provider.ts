@@ -1276,7 +1276,11 @@ export default class AISDKRemoteLLMProvider {
       prompt: this.toTextPrompt(
         prompt,
         completionParams,
-        Boolean(normalizedSchema)
+        // Native schemas already constrain the response. Preserve the shared
+        // system prefix instead of adding redundant JSON instructions to it.
+        Boolean(normalizedSchema) &&
+          this.config.flavor !== 'openai-responses' &&
+          this.config.flavor !== 'anthropic'
       ),
       ...(completionParams.signal ? { abortSignal: completionParams.signal } : {}),
       ...(typeof completionParams.maxTokens === 'number'

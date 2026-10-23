@@ -1575,8 +1575,8 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('The OCR text is LEON AI 42.')
     expect(callModel).toHaveBeenCalledTimes(3)
-    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
-    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ isCompletionReview: true })
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true, isCompletionReviewRetry: false })
+    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ isCompletionReview: true, isCompletionReviewRetry: true })
     expect(callModel.mock.calls[2]?.[0].at(-1)?.content).toContain('previous completion review response was unusable')
   })
 
@@ -4440,6 +4440,9 @@ describe('model response status', () => {
       expect(reviewParams.serviceTier).toBe('priority')
       expect(reviewParams.toolChoice).toBe('none')
       expect(reviewParams.disableThinking).not.toBe(true)
+      expect(Boolean(reviewParams.data)).toBe(
+        provider === LLMProviders.OpenAI && model !== 'uncatalogued-model'
+      )
       if (provider === LLMProviders.Anthropic) {
         expect(reviewParams.reasoningEffortBaseline).toBe(
           taskReasoning === 'auto' ? 'medium' : taskReasoning

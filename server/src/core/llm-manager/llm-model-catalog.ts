@@ -43,6 +43,7 @@ export interface LLMModelCatalogEntry {
   supportsForcedToolChoice?: boolean
   supportsTemperature?: boolean
   supportsPromptCacheOptions?: boolean
+  supportsStructuredOutput?: boolean
   supportsPerMessageReasoning?: boolean
   // Verified endpoint capacity; omitted when the limit is unknown.
   contextWindowTokens?: number
@@ -700,6 +701,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6-astra',
     supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
@@ -715,6 +717,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6.1-sol',
     supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
@@ -730,6 +733,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6-sol',
     supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
@@ -744,6 +748,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6-luna',
     supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
@@ -759,6 +764,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.6-sol',
     supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
@@ -773,6 +779,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.6-terra',
     supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
@@ -787,6 +794,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.6-luna',
     supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
@@ -801,6 +809,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.5',
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.5',
@@ -814,6 +823,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.4',
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.4',
@@ -826,6 +836,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.4-mini',
     contextWindowTokens: 400_000,
     label: 'GPT-5.4 mini',
@@ -838,6 +849,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.4-nano',
     contextWindowTokens: 400_000,
     label: 'GPT-5.4 nano',
@@ -851,6 +863,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-5-5',
     supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
@@ -869,6 +882,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-haiku-5-5',
     supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
@@ -885,6 +899,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-fable-5-1',
     supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
@@ -901,6 +916,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-mythos-5-1',
     supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
@@ -917,6 +933,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-fable-5',
     contextWindowTokens: 1_000_000,
     label: 'Claude Fable 5',
@@ -931,6 +948,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-5',
     supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
@@ -946,6 +964,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-4-8',
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 4.8',
@@ -959,6 +978,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-4-7',
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 4.7',
@@ -972,6 +992,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-4-6',
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 4.6',
@@ -985,6 +1006,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-sonnet-4-6',
     contextWindowTokens: 1_000_000,
     label: 'Claude Sonnet 4.6',
