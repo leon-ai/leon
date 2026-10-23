@@ -21,7 +21,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     exclude: [...configDefaults.exclude, '**/tmp/**'],
-    fileParallelism: false,
+    fileParallelism: true,
+    maxWorkers: 4,
     disableConsoleIntercept: true,
     restoreMocks: true,
     clearMocks: true,

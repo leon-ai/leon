@@ -63,6 +63,7 @@ const childProcess = spawn(
     '--config',
     'vitest.config.ts',
     resolveSuitePath(suite),
+    ...(suite === 'e2e' ? ['--no-file-parallelism'] : []),
     ...forwardedArgs
   ],
   {
