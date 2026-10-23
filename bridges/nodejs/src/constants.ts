@@ -14,12 +14,17 @@ const runtimeIndex = args.indexOf('--runtime')
 const runtime =
   runtimeIndex >= 0 && args[runtimeIndex + 1] ? args[runtimeIndex + 1] : 'skill'
 const filteredArgs = args.filter((_, index) => {
-  if (index === runtimeIndex || index === runtimeIndex + 1) {
+  if (runtimeIndex >= 0 &&
+      (index === runtimeIndex || index === runtimeIndex + 1)) {
     return false
   }
   return true
 })
-const intentPathCandidate = filteredArgs.find((arg) => !arg.startsWith('--'))
+// Native skills pass their intent path first. Named options in standalone SDK
+// scripts can contain file paths without becoming a native skill invocation.
+const intentPathCandidate = filteredArgs[0]?.startsWith('--')
+  ? undefined
+  : filteredArgs[0]
 const INTENT_OBJ_FILE_PATH =
   runtime === 'skill' ? intentPathCandidate : undefined
 
