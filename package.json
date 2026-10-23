@@ -112,7 +112,7 @@
     "dayjs": "1.11.20",
     "dotenv": "16.4.5",
     "execa": "10.2.0",
-    "fastify": "5.12.5",
+    "fastify": "5.12.7",
     "ffmpeg-static": "5.2.0",
     "getos": "3.2.1",
     "jose": "6.2.12",
