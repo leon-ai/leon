@@ -1,6 +1,6 @@
 import type { LLMDutyParams } from '@/core/llm-manager/llm-duty'
+import type { ToolCompletionReview, AgentResponseToolCall  } from '@/types'
 import type { AgentModelFile } from '@/core/llm-manager/types'
-import type { AgentResponseToolCall } from '@/types'
 export interface AgentSkillContext {
   id: string
   name: string
@@ -35,6 +35,10 @@ export type AgentRunProgressEvent =
 export interface ReactLLMDutyParams extends LLMDutyParams {
   files?: AgentModelFile[]
   signal?: AbortSignal
+  /**
+   * Optional absolute run deadline, shared by tools, inference and completion review.
+   */
+  deadlineAt?: number
   agentSkill?: AgentSkillContext | null
   forcedToolName?: string | null
   allowDirectAnswerHandoff?: boolean
@@ -48,7 +52,9 @@ export interface FunctionConfig {
   parameters: Record<string, unknown>
   output_schema?: Record<string, unknown>
   deduplicate_calls?: boolean
+  read_only?: boolean
   background?: boolean
+  completion_review?: ToolCompletionReview
   hooks?: {
     post_execution?: {
       response_jq?: string

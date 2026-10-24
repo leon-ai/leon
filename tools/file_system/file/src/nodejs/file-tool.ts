@@ -6,17 +6,28 @@ import { randomUUID } from 'node:crypto'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
+import type { ReusableToolContext } from '@@/bridges/runtime/contracts/tool-runtime-types'
 import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
 import { contentHash, patchTextFile, type TextChange, type PatchOptions } from './lib/text-patch'
 
-const DEFAULT_MAX_CHARS = 80_000
+// Leave room for metadata and JSON escaping in inline tool observations.
+const DEFAULT_MAX_CHARS = 20_000
 const MAX_CHARS = 250_000
 const BINARY_SAMPLE_BYTES = 8_192
+const REPOSITORY_MARKER = '.git'
+const REPOSITORY_INSTRUCTIONS_FILE = 'AGENTS.md'
+
+interface RepositoryInstructions extends ReusableToolContext {
+  path: string
+}
 
 interface ReadOptions {
+  allowMissing?: boolean
   head?: number
   tail?: number
+  startLine?: number
+  endLine?: number
   maxChars?: number
   offsetChars?: number
 }
@@ -156,11 +167,15 @@ export default class FileTool extends Tool {
     return this.documentReader
   }
 
+  /**
+   * Read bounded text, optionally treating an absent file as an expected result.
+   */
   public async read(
     targetPath: string,
     options: ReadOptions = {}
   ): Promise<{
     success: boolean
+    exists?: boolean
     data?: {
       path: string
       content: string
@@ -171,21 +186,51 @@ export default class FileTool extends Tool {
       truncated: boolean
       offsetChars: number
       nextOffsetChars: number | null
+      repositoryInstructions?: RepositoryInstructions[]
     }
     error?: string
   }> {
     const resolvedPath = this.resolvePath(targetPath)
-    const readable = await this.assertReadableTextFile(resolvedPath)
-
-    if (!readable.success) {
-      return readable
-    }
 
     if (options.head !== undefined && options.tail !== undefined) {
       return {
         success: false,
         error: 'Use either head or tail, not both.'
       }
+    }
+
+    const hasLineRange = options.startLine !== undefined || options.endLine !== undefined
+    const startLine = options.startLine ?? 1
+    const endLine = options.endLine ?? Number.MAX_SAFE_INTEGER
+
+    if (hasLineRange && (
+      !Number.isSafeInteger(startLine) || startLine < 1 ||
+      !Number.isSafeInteger(endLine) || endLine < startLine
+    )) {
+      return {
+        success: false,
+        error: 'Line numbers must be positive integers with endLine >= startLine.'
+      }
+    }
+
+    if (hasLineRange && (
+      options.head !== undefined || options.tail !== undefined ||
+      options.offsetChars !== undefined
+    )) {
+      return {
+        success: false,
+        error: 'Use line ranges separately from head, tail, or offsetChars.'
+      }
+    }
+
+    const readable = await this.assertReadableTextFile(resolvedPath)
+
+    if (!readable.success) {
+      if (options.allowMissing === true && readable.exists === false) {
+        return { success: true, exists: false }
+      }
+
+      return readable
     }
 
     const bytes = await fs.promises.readFile(resolvedPath)
@@ -206,6 +251,35 @@ export default class FileTool extends Tool {
         .slice(-this.clampNumber(options.tail, 0, Number.MAX_SAFE_INTEGER, 0))
         .join('\n')
       offsetChars = Math.max(0, totalChars - selectedContent.length)
+    } else if (hasLineRange) {
+      // Search locations are line numbers; preserve original separators and
+      // character offsets so bounded pages can still resume without gaps.
+      let line = 1
+      let lineOffset = 0
+      let endOffset = totalChars
+      offsetChars = totalChars
+
+      while (line <= endLine) {
+        if (line === startLine) {
+          offsetChars = lineOffset
+        }
+
+        const newlineOffset = content.indexOf('\n', lineOffset)
+
+        if (newlineOffset === -1) {
+          break
+        }
+
+        lineOffset = newlineOffset + 1
+        if (line === endLine) {
+          endOffset = lineOffset
+          break
+        }
+
+        line += 1
+      }
+
+      selectedContent = content.slice(offsetChars, endOffset)
     } else {
       selectedContent = content.slice(offsetChars)
     }
@@ -215,9 +289,11 @@ export default class FileTool extends Tool {
     const nextOffsetChars = offsetChars + returnedContent.length
     const truncated =
       returnedContent.length < selectedContent.length || nextOffsetChars < totalChars
+    const repositoryInstructions = await this.readRepositoryInstructions(resolvedPath)
 
     return {
       success: true,
+      ...(options.allowMissing === true ? { exists: true } : {}),
       data: {
         path: resolvedPath,
         content: returnedContent,
@@ -227,7 +303,8 @@ export default class FileTool extends Tool {
         totalChars,
         truncated,
         offsetChars,
-        nextOffsetChars: truncated ? nextOffsetChars : null
+        nextOffsetChars: truncated ? nextOffsetChars : null,
+        ...(repositoryInstructions.length > 0 ? { repositoryInstructions } : {})
       }
     }
   }
@@ -253,6 +330,50 @@ export default class FileTool extends Tool {
       maxChars: options.maxChars ?? DEFAULT_MAX_CHARS,
       offsetChars: options.offsetChars ?? 0
     })
+  }
+
+  /**
+   * Reuse existing text by reference while retaining ordinary write safeguards.
+   */
+  public async copyText(
+    sourcePath: string,
+    targetPath: string,
+    options: WriteOptions = {}
+  ): Promise<Record<string, unknown>> {
+    const source = this.resolvePath(sourcePath)
+    const readable = await this.assertReadableTextFile(source)
+
+    if (!readable.success) {
+      return readable
+    }
+
+    const bytes = await fs.promises.readFile(source)
+    const content = bytes.toString('utf8')
+
+    if (!Buffer.from(content, 'utf8').equals(bytes)) {
+      return { success: false, error: 'Text copying requires valid UTF-8 bytes.' }
+    }
+
+    const result = await this.write(targetPath, content, options)
+
+    if (!result.success || !result.data) {
+      return result
+    }
+
+    const sourceContentHash = contentHash(bytes)
+    const destinationContentHash = contentHash(
+      await fs.promises.readFile(result.data.path)
+    )
+    const matches = sourceContentHash === destinationContentHash
+
+    return {
+      ...result,
+      success: matches,
+      sourcePath: source,
+      sourceContentHash,
+      destinationContentHash,
+      ...(!matches ? { error: 'Destination changed before copy verification.' } : {})
+    }
   }
 
   /**
@@ -426,8 +547,60 @@ export default class FileTool extends Tool {
     return path.resolve(trimmedPath)
   }
 
+  /**
+   * Deliver current repository rules with source text before an agent edits it.
+   */
+  private async readRepositoryInstructions(targetPath: string): Promise<RepositoryInstructions[]> {
+    const directories: string[] = []
+    let directory = path.dirname(targetPath)
+
+    // The nearest repository owns its subtree; unrelated parent rules do not.
+    while (true) {
+      directories.push(directory)
+
+      if (await this.safeLstat(path.join(directory, REPOSITORY_MARKER))) {
+        break
+      }
+
+      const parent = path.dirname(directory)
+
+      if (parent === directory) {
+        return []
+      }
+
+      directory = parent
+    }
+
+    const instructions = await Promise.all(directories.reverse().map(async (ancestor) => {
+      const instructionPath = path.join(ancestor, REPOSITORY_INSTRUCTIONS_FILE)
+
+      if (instructionPath === targetPath) {
+        return null
+      }
+
+      const readable = await this.assertReadableTextFile(instructionPath)
+
+      if (!readable.success) {
+        if (await this.safeLstat(instructionPath)) {
+          throw new Error(readable.error)
+        }
+
+        return null
+      }
+
+      return {
+        path: instructionPath,
+        modelContextId: instructionPath,
+        content: await fs.promises.readFile(instructionPath, 'utf8')
+      }
+    }))
+
+    return instructions.filter((entry): entry is RepositoryInstructions => entry !== null)
+  }
+
   private async assertReadableTextFile(targetPath: string): Promise<{
     success: false
+    exists?: false
     error: string
     size?: never
   } | {
@@ -439,6 +612,7 @@ export default class FileTool extends Tool {
     if (!stat) {
       return {
         success: false,
+        exists: false,
         error: `File not found: ${targetPath}`
       }
     }
@@ -505,8 +679,13 @@ export default class FileTool extends Tool {
   private async safeLstat(targetPath: string): Promise<fs.Stats | null> {
     try {
       return await fs.promises.lstat(targetPath)
-    } catch {
-      return null
+    } catch (error) {
+      // Only absence is an expected lookup result; access and I/O errors must fail.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null
+      }
+
+      throw error
     }
   }
 

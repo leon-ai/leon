@@ -41,8 +41,8 @@ vi.mock('@/helpers/profile-helper', () => ({
     }
   }
 }))
-vi.mock('@sdk/toolkit-config', () => ({
-  ToolkitConfig: {
+vi.mock('@/core/tool-manager/tool-settings', () => ({
+  ToolSettings: {
     loadToolSettings: (): Record<string, unknown> => ({ ...fixture.settings }),
     saveToolSettings: (_toolkit: string, _tool: string, values: Record<string, unknown>): void => {
       Object.assign(fixture.settings, values)

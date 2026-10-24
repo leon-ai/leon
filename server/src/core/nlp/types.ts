@@ -1,3 +1,7 @@
+import type { EntityType, BuiltInEntityType, CustomEntityType } from '@@/bridges/runtime/contracts/entity-types'
+
+export * from '@@/bridges/runtime/contracts/entity-types'
+
 import type { ShortLanguageCode } from '@/types'
 import type { BrainProcessResult } from '@/core/brain/types'
 import type { ActionCallingSuccessOutput } from '@/core/llm-manager/types'
@@ -145,31 +149,6 @@ export interface NLUResult {
 // TODO: core rewrite delete?
 export type NLUSlots = Record<string, NLUSlot>
 
-/**
- * Built-in entity types still used for schema typing.
- */
-
-export const BUILT_IN_ENTITY_TYPES = [
-  'number',
-  'ip',
-  'hashtag',
-  'phonenumber',
-  'currency',
-  'percentage',
-  'date',
-  'time',
-  'timerange',
-  'daterange',
-  'datetimerange',
-  'duration',
-  'dimension',
-  'email',
-  'ordinal',
-  'age',
-  'url',
-  'temperature'
-] as const
-
 export type NERDurationUnit =
   | 'seconds'
   | 'minutes'
@@ -178,16 +157,6 @@ export type NERDurationUnit =
   | 'weeks'
   | 'months'
   | 'years'
-
-export type BuiltInEntityType = (typeof BUILT_IN_ENTITY_TYPES)[number]
-
-export const CUSTOM_ENTITY_TYPES = ['regex', 'trim', 'enum', 'llm'] as const
-
-export type CustomEntityType = (typeof CUSTOM_ENTITY_TYPES)[number]
-
-export const ENTITY_TYPES = [...BUILT_IN_ENTITY_TYPES, ...CUSTOM_ENTITY_TYPES] as const
-
-export type EntityType = (typeof ENTITY_TYPES)[number]
 
 interface Entity<
   Type extends EntityType,

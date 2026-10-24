@@ -1,4 +1,9 @@
-import type { ToolExecutionContext } from './tool-runtime-types'
+import type {
+  ToolExecutionContext,
+  ToolModelFile,
+  ToolRuntimeProgress
+} from './tool-runtime-types'
+export type { ToolModelFile } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -7,9 +12,10 @@ import { spawn, execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import {
-  NetworkHelper,
+  FileDownloader,
   type DownloadFileProgress
-} from '@/helpers/network-helper'
+} from '@@/bridges/runtime/nodejs/file-downloader'
+import { resolveToolBinaryPath } from '@@/bridges/runtime/nodejs/tool-binary'
 
 import {
   LEON_TOOLKITS_PATH,
@@ -32,17 +38,7 @@ import {
 } from '@sdk/utils'
 
 const COMMAND_OUTPUT_PROGRESS_INTERVAL_MS = 2_000
-const COMMAND_OUTPUT_MAX_CHARS = 4_000
-
-/**
- * A tool-produced attachment made available to the agent model.
- */
-export interface ToolModelFile {
-  dataBase64: string
-  mediaType: string
-  filename?: string
-  visualDetail?: 'auto' | 'low' | 'high'
-}
+const OUTPUT_CHUNK_MAX_CHARS = 4_000
 
 // Progress callback type for reporting tool progress
 export type ProgressCallback = (progress: {
@@ -84,6 +80,55 @@ export abstract class Tool {
   public async prepareExecution(context: ToolExecutionContext): Promise<void> {
     this.executionContext = context
     this.modelFiles.length = 0
+  }
+
+  /**
+   * Emit bounded text chunks, retaining the original call context for background work.
+   */
+  protected emitOutput(
+    output: string,
+    stream?: ToolRuntimeProgress['stream'],
+    context = this.executionContext
+  ): void {
+    if (!output) {
+      return
+    }
+
+    for (let offset = 0; offset < output.length; offset += OUTPUT_CHUNK_MAX_CHARS) {
+      if (context?.signal?.aborted) {
+        return
+      }
+
+      const chunk = output.slice(offset, offset + OUTPUT_CHUNK_MAX_CHARS)
+
+      if (context?.onProgress) {
+        context.onProgress({
+          source: 'report',
+          activity: true,
+          key: 'bridges.tools.output_delta',
+          message: chunk,
+          data: { output: chunk },
+          ...(stream ? { stream } : {})
+        })
+      } else {
+        void this.report('bridges.tools.output_delta', { output: chunk })
+      }
+    }
+  }
+
+  /**
+   * Report advancing work without fabricating text output or exposing private data.
+   */
+  protected emitProgress(message: string, context = this.executionContext): void {
+    if (context?.signal?.aborted) {
+      return
+    }
+
+    if (context?.onProgress) {
+      context.onProgress({ source: 'report', message, activity: true })
+    } else {
+      this.log(message)
+    }
   }
 
   /**
@@ -567,7 +612,7 @@ export abstract class Tool {
 
         const output = pendingOutput
         pendingOutput = ''
-        await this.reportCommandOutputDelta(output, commandString, toolGroupId)
+        this.emitOutput(output)
       }
       const scheduleOutputDelta = (output: string): void => {
         pendingOutput += output
@@ -784,26 +829,11 @@ export abstract class Tool {
       throw new Error(`No download URL found for binary '${binaryName}'`)
     }
 
-    // Extract the actual filename from the URL
-    const urlPath = new URL(binaryUrl).pathname
-    let actualFilename = path.basename(urlPath)
-
-    // Strip archive extensions to get the base binary name
-    const archiveExtensions = ['.tar.gz', '.tar.xz', '.tgz', '.zip', '.tar']
-    for (const ext of archiveExtensions) {
-      if (actualFilename.toLowerCase().endsWith(ext)) {
-        actualFilename = actualFilename.slice(0, -ext.length)
-        break
-      }
-    }
-
-    const executable =
-      isWindows() && !actualFilename.endsWith('.exe')
-        ? `${actualFilename}.exe`
-        : actualFilename
-
-    const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
-    const binaryPath = path.join(binsPath, executable)
+    const binaryPath = resolveToolBinaryPath(
+      LEON_TOOLKITS_PATH, this.toolkit, binaryUrl, isWindows()
+    )
+    const binsPath = path.dirname(binaryPath)
+    const executable = path.basename(binaryPath)
     const binaryExists = fs.existsSync(binaryPath)
 
     // Reusing an executable needs no preparation or repeated permission changes.
@@ -849,17 +879,14 @@ export abstract class Tool {
     return binaryPath
   }
 
-  private formatCommandOutput(
-    output: string,
-    options: { preserveWhitespace?: boolean } = {}
-  ): string | null {
+  private formatCommandOutput(output: string): string | null {
     const trimmed = output.trim()
     if (!trimmed) {
       return null
     }
 
-    const value = options.preserveWhitespace ? output : trimmed
-    const maxLength = COMMAND_OUTPUT_MAX_CHARS
+    const value = trimmed
+    const maxLength = OUTPUT_CHUNK_MAX_CHARS
     if (value.length <= maxLength) {
       return value
     }
@@ -879,28 +906,6 @@ export abstract class Tool {
 
     await this.report(
       'bridges.tools.command_output',
-      {
-        command,
-        output: formatted
-      },
-      toolGroupId
-    )
-  }
-
-  private async reportCommandOutputDelta(
-    output: string,
-    command: string,
-    toolGroupId: string
-  ): Promise<void> {
-    const formatted = this.formatCommandOutput(output, {
-      preserveWhitespace: true
-    })
-    if (!formatted) {
-      return
-    }
-
-    await this.report(
-      'bridges.tools.command_output_delta',
       {
         command,
         output: formatted
@@ -985,7 +990,7 @@ export abstract class Tool {
 
       try {
         await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-        await NetworkHelper.downloadFile(adjustedUrl, filePath, {
+        await FileDownloader.downloadFile(adjustedUrl, filePath, {
           cliProgress: false,
           parallelStreams: 3,
           skipExisting: false,
@@ -1438,7 +1443,7 @@ export abstract class Tool {
         downloadPath = outputPath + archiveExt
       }
 
-      await NetworkHelper.downloadFile(url, downloadPath, {
+      await FileDownloader.downloadFile(url, downloadPath, {
         cliProgress: false,
         parallelStreams: 3,
         skipExisting: false,
@@ -1539,12 +1544,14 @@ export abstract class Tool {
   private createDownloadProgressListener(
     fileName: string
   ): (progress: DownloadFileProgress) => void {
-    if (!this.cliProgress) {
+    if (!this.cliProgress && !this.executionContext?.onProgress) {
       return (): void => {}
     }
 
     let lastLoggedPercentage = -1
     let lastLogTime = 0
+    let lastReportedBytes = 0
+    const context = this.executionContext
     const LOG_INTERVAL_MS = 2_000 // Log every 2 seconds at most
     const PERCENTAGE_THRESHOLD = 5 // Log every 5% progress
 
@@ -1559,6 +1566,18 @@ export abstract class Tool {
         percentage === 100
 
       if (!shouldLog) {
+        return
+      }
+
+      lastReportedBytes = Math.min(lastReportedBytes, progress.downloadedBytes)
+      if (progress.downloadedBytes > lastReportedBytes) {
+        this.emitProgress(`Downloading ${fileName}: ${formatBytes(progress.downloadedBytes)}`, context)
+        lastReportedBytes = progress.downloadedBytes
+      }
+      lastLoggedPercentage = percentage
+      lastLogTime = currentTime
+
+      if (!this.cliProgress) {
         return
       }
 
@@ -1608,9 +1627,6 @@ export abstract class Tool {
           file_name: fileName
         })
       }
-
-      lastLoggedPercentage = percentage
-      lastLogTime = currentTime
     }
   }
 

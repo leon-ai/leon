@@ -14,6 +14,25 @@ class MissingToolSettingsError(Exception):
 
 class ToolManager:
     @staticmethod
+    def get_tool_binary_path(toolkit_id: str, tool_id: str) -> str:
+        """Prepare a declared executable without loading its tool's runtime."""
+
+        class BinaryTool(BaseTool):
+            @property
+            def toolkit(self) -> str:
+                return toolkit_id
+
+            @property
+            def tool_name(self) -> str:
+                return tool_id
+
+            @property
+            def description(self) -> str:
+                return tool_id
+
+        return BinaryTool().get_binary_path(tool_id)
+
+    @staticmethod
     def init_tool(tool_class: Type[BaseTool]) -> BaseTool:
         tool = tool_class()
         missing = tool.get_missing_settings()

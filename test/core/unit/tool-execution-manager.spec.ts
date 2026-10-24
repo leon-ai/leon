@@ -180,7 +180,7 @@ it('queries the entire retained JSON before bounding or paging its HTTP preview'
     })
     expect(count.statusCode).toBe(200)
     expect(count.json()).toMatchObject({
-      content: '2', truncated: false,
+      content: '2', value: 2, truncated: false,
       sourceCoverage: { truncated: true, reason: 'recordLimit' }
     })
 

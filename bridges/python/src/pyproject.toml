@@ -5,9 +5,9 @@ name = "leon-python-bridge"
 version = "1.0.0"
 requires-python = "==3.11.9"
 dependencies = [
-  "requests==2.32.3",
-  "beautifulsoup4==4.7.1",
-  "pypdl==1.5.6",
+  "requests==2.34.2",
+  "beautifulsoup4==4.15.0",
+  "pypdl==1.5.7",
 ]
 
 [tool.uv]

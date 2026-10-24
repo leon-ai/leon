@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import dotenv from 'dotenv'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 import { PROFILE_DOT_ENV_PATH } from './server/src/leon-roots.ts'
 
@@ -20,7 +20,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    fileParallelism: false,
+    exclude: [...configDefaults.exclude, '**/tmp/**'],
+    fileParallelism: true,
+    maxWorkers: 4,
     disableConsoleIntercept: true,
     restoreMocks: true,
     clearMocks: true,

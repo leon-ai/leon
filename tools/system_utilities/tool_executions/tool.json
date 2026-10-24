@@ -35,7 +35,7 @@
               "jq": {
                 "type": "string",
                 "minLength": 1,
-                "description": "jq projection of retained tool output. Ripgrep records live at .result.files or .result.matches; e.g. .result.files | length. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
+                "description": "jq projection of saved JSON rooted at result and execution. Command text is at .result.stdout or .result.stderr; ripgrep records are at .result.files or .result.matches. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
               },
               "offsetChars": {
                 "type": "integer",
@@ -59,7 +59,7 @@
     },
     "read": {
       "description": "Query retained JSON with jq for filtering, counting or grouping, or page its textual representation.",
-      "progressive_guidance": "jq queries original retained output before preview truncation. Check sourceCoverage when counting, filtering or grouping incomplete scans. Page with offsetChars and nextOffsetChars when needed.",
+      "progressive_guidance": "jq queries retained output before preview truncation. A complete single JSON projection also returns decoded value; content is its paged text. Check sourceCoverage when counting, filtering or grouping: a truncated source must be continued through the original tool, not treated as the whole input. Page the retained JSON with offsetChars and nextOffsetChars when needed.",
       "deduplicate_calls": false,
       "parameters": {
         "type": "object",
@@ -75,7 +75,7 @@
               "jq": {
                 "type": "string",
                 "minLength": 1,
-                "description": "jq projection of retained tool output. Ripgrep records live at .result.files or .result.matches; e.g. .result.files | length. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
+                "description": "jq projection of saved JSON rooted at result and execution. Command text is at .result.stdout or .result.stderr; ripgrep records are at .result.files or .result.matches. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
               },
               "offsetChars": {
                 "type": "integer",

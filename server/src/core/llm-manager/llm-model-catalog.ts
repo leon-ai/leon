@@ -42,6 +42,9 @@ export interface LLMModelCatalogEntry {
   recommended?: boolean
   supportsForcedToolChoice?: boolean
   supportsTemperature?: boolean
+  supportsPromptCacheOptions?: boolean
+  supportsStructuredOutput?: boolean
+  supportsPerMessageReasoning?: boolean
   // Verified endpoint capacity; omitted when the limit is unknown.
   contextWindowTokens?: number
   // Verified inline inputs supported by both this endpoint and Leon's adapter.
@@ -168,7 +171,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     provider: LLMProviders.DeepSeek,
     model: 'deepseek-flash',
     contextWindowTokens: 1_048_576,
-    label: 'DeepSeek-V4.1-Flash',
+    label: 'DeepSeek-V4.1-Flash-1017',
     recommended: true,
     defaultReasoningEffort: 'high',
     reasoning: DEEPSEEK_REASONING,
@@ -643,6 +646,23 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: []
   },
   /**
+   * @see https://openrouter.ai/moonshotai/kimi-k3.1-pro Model-specific reasoning support.
+   * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'moonshotai/kimi-k3.1-pro',
+    contextWindowTokens: 1_048_576,
+    label: 'moonshotai/kimi-k3.1-pro',
+    recommended: true,
+    supportsForcedToolChoice: true,
+    supportsTemperature: false,
+    defaultReasoningEffort: 'max',
+    reasoning: OPENROUTER_KIMI_K3_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: VIDEO_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/moonshotai/kimi-k3 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
@@ -656,29 +676,27 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: VIDEO_INPUTS
   },
   /**
-   * @see https://openrouter.ai/moonshotai/kimi-k2.6 Model-specific reasoning support.
-   * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
+   * @see https://openrouter.ai/deepseek/deepseek-v4.1-flash-1017
    */
   {
     provider: LLMProviders.OpenRouter,
-    model: 'moonshotai/kimi-k2.6',
-    contextWindowTokens: 262_144,
-    label: 'moonshotai/kimi-k2.6',
-    reasoning: TOGGLE_REASONING,
+    model: 'deepseek/deepseek-v4.1-flash-1017',
+    contextWindowTokens: 1_048_576,
+    label: 'deepseek/deepseek-v4.1-flash-1017',
+    reasoning: DEEPSEEK_REASONING,
     speed: ROUTABLE_SPEED,
     inputMediaTypes: IMAGE_INPUTS
   },
   /**
-   * @see https://openrouter.ai/minimax/minimax-m3 Model-specific reasoning support.
-   * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
+   * @see https://openrouter.ai/minimax/minimax-m3.1-flash:free
    */
   {
     provider: LLMProviders.OpenRouter,
-    model: 'minimax/minimax-m3',
-    contextWindowTokens: 1_048_576,
-    label: 'minimax/minimax-m3',
-    reasoning: TOGGLE_REASONING,
-    speed: ROUTABLE_SPEED,
+    model: 'minimax/minimax-m3.1-flash:free',
+    contextWindowTokens: 1_000_000,
+    label: 'minimax/minimax-m3.1-flash:free',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
     inputMediaTypes: VIDEO_INPUTS
   },
 
@@ -687,7 +705,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6-astra',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6 Astra',
     recommended: true,
@@ -701,7 +721,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6.1-sol',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6.1 Sol',
     defaultReasoningEffort: 'medium',
@@ -715,7 +737,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6-sol',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6 Sol',
     reasoning: OPENAI_GPT_6_REASONING,
@@ -728,7 +752,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-6-luna',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-6 Luna',
     reasoning: OPENAI_GPT_6_REASONING,
@@ -742,7 +768,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.6-sol',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.6 Sol',
     reasoning: OPENAI_GPT_56_REASONING,
@@ -755,7 +783,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.6-terra',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.6 Terra',
     reasoning: OPENAI_GPT_56_REASONING,
@@ -768,7 +798,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.6-luna',
+    supportsPromptCacheOptions: true,
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.6 Luna',
     reasoning: OPENAI_GPT_56_REASONING,
@@ -781,6 +813,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.5',
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.5',
@@ -794,6 +827,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.4',
     contextWindowTokens: 1_050_000,
     label: 'GPT-5.4',
@@ -806,6 +840,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.4-mini',
     contextWindowTokens: 400_000,
     label: 'GPT-5.4 mini',
@@ -818,6 +853,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
     model: 'gpt-5.4-nano',
     contextWindowTokens: 400_000,
     label: 'GPT-5.4 nano',
@@ -831,7 +867,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-5-5',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 5.5',
     recommended: true,
@@ -848,7 +886,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-haiku-5-5',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Haiku 5.5',
     supportsForcedToolChoice: true,
@@ -863,7 +903,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-fable-5-1',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Fable 5.1',
     defaultReasoningEffort: 'high',
@@ -878,7 +920,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-mythos-5-1',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Mythos 5.1 (invite only)',
     defaultReasoningEffort: 'high',
@@ -893,6 +937,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-fable-5',
     contextWindowTokens: 1_000_000,
     label: 'Claude Fable 5',
@@ -907,7 +952,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-5',
+    supportsPerMessageReasoning: true,
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 5',
     defaultReasoningEffort: 'high',
@@ -921,6 +968,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-4-8',
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 4.8',
@@ -934,6 +982,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-4-7',
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 4.7',
@@ -947,6 +996,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-opus-4-6',
     contextWindowTokens: 1_000_000,
     label: 'Claude Opus 4.6',
@@ -960,6 +1010,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.Anthropic,
+    supportsStructuredOutput: true,
     model: 'claude-sonnet-4-6',
     contextWindowTokens: 1_000_000,
     label: 'Claude Sonnet 4.6',
@@ -1048,15 +1099,27 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   },
 
   /**
-   * @see https://platform.minimax.io/docs/api-reference/text-openai-api Model-specific reasoning support.
-   * @see https://platform.minimax.io/docs/api-reference/text-openai-api Provider speed tier; not exposed by every supported AI SDK flavor.
+   * @see https://platform.minimax.io/docs/guides/text-generation
+   */
+  {
+    provider: LLMProviders.MiniMax,
+    model: 'MiniMax-M3.1-Flash',
+    contextWindowTokens: 1_000_000,
+    label: 'MiniMax-M3.1-Flash',
+    recommended: true,
+    defaultReasoningEffort: 'max',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://platform.minimax.io/docs/api-reference/text-openai-api
    */
   {
     provider: LLMProviders.MiniMax,
     model: 'MiniMax-M3',
     contextWindowTokens: 1_000_000,
     label: 'MiniMax-M3',
-    recommended: true,
     reasoning: TOGGLE_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: IMAGE_INPUTS
@@ -1085,18 +1148,6 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     label: 'Kimi K3',
     recommended: true,
     reasoning: MOONSHOT_KIMI_K3_REASONING,
-    speed: AUTO_SPEED,
-    inputMediaTypes: IMAGE_INPUTS
-  },
-  /**
-   * @see https://platform.kimi.ai/docs/guide/kimi-k2-6-quickstart Model-specific reasoning support.
-   */
-  {
-    provider: LLMProviders.MoonshotAI,
-    model: 'kimi-k2.6',
-    contextWindowTokens: 262_144,
-    label: 'Kimi K2.6',
-    reasoning: TOGGLE_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: IMAGE_INPUTS
   },

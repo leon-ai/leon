@@ -1,19 +1,16 @@
-import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
 import type { ToolConcurrency } from '@/types'
-import { LEON_PROFILE_NAME, resolveToolDirectory } from '@/leon-roots'
 import {
-  readFileSync,
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  renameSync,
-  unlinkSync
-} from 'node:fs'
-import { randomUUID } from 'node:crypto'
-import { dirname, join } from 'node:path'
+  LEON_PROFILE_NAME,
+  LEON_PROFILES_PATH,
+  isValidProfileName,
+  resolveToolDirectory
+} from '@/leon-roots'
+import { ToolSettingsStore, type ToolSettingsPaths } from '@@/bridges/runtime/nodejs/tool-settings'
+import { readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 
-import { getPlatformName } from '@sdk/utils'
+import { getPlatformName } from '@sdk/utils/platform'
 import {
   TOOLS_PATH
 } from '@bridge/constants'
@@ -43,39 +40,8 @@ interface ToolkitConfigData {
   tools: string[]
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value)
-  )
-}
-
-function mergeMissingSettings(
-  defaultSettings: Record<string, unknown>,
-  existingSettings: Record<string, unknown>
-): Record<string, unknown> {
-  const mergedSettings = { ...existingSettings }
-
-  for (const [key, defaultValue] of Object.entries(defaultSettings)) {
-    const existingValue = existingSettings[key]
-
-    if (!Object.prototype.hasOwnProperty.call(existingSettings, key)) {
-      mergedSettings[key] = defaultValue
-      continue
-    }
-
-    if (isPlainObject(defaultValue) && isPlainObject(existingValue)) {
-      mergedSettings[key] = mergeMissingSettings(defaultValue, existingValue)
-    }
-  }
-
-  return mergedSettings
-}
-
 export class ToolkitConfig {
   private static configCache = new Map<string, ToolkitConfigData>()
-  private static settingsCache = new Map<string, Record<string, unknown>>()
 
   /**
    * Load tool configuration from its toolkit/tool directory.
@@ -124,52 +90,11 @@ export class ToolkitConfig {
     refresh = false,
     profileName = LEON_PROFILE_NAME
   ): Record<string, unknown> {
-    const cacheKey = `${profileName}:${toolkitName}:${toolName}`
-    if (!refresh && this.settingsCache.has(cacheKey)) {
-      return this.settingsCache.get(cacheKey) || {}
-    }
-
-    const settingsPath = join(
-      getProfilePaths(profileName).tools,
-      toolkitName,
-      toolName,
-      'settings.json'
+    return ToolSettingsStore.load(
+      this.getSettingsPaths(toolkitName, toolName, profileName),
+      defaults,
+      refresh
     )
-    const settingsSamplePath = join(
-      resolveToolDirectory(TOOLS_PATH, toolkitName, toolName),
-      'settings.sample.json'
-    )
-    const settingsDir = dirname(settingsPath)
-    const defaultSettings = existsSync(settingsSamplePath)
-      ? (JSON.parse(
-        readFileSync(settingsSamplePath, 'utf-8')
-      ) as Record<string, unknown>)
-      : defaults
-
-    mkdirSync(settingsDir, { recursive: true })
-
-    let toolSettings: Record<string, unknown> = {}
-    let shouldWrite = false
-
-    if (existsSync(settingsPath)) {
-      const settingsContent = readFileSync(settingsPath, 'utf-8')
-      toolSettings = JSON.parse(settingsContent) as Record<string, unknown>
-    } else {
-      shouldWrite = true
-    }
-
-    const mergedSettings = mergeMissingSettings(defaultSettings, toolSettings)
-
-    if (!shouldWrite) {
-      shouldWrite = JSON.stringify(toolSettings) !== JSON.stringify(mergedSettings)
-    }
-
-    if (shouldWrite) {
-      writeFileSync(settingsPath, JSON.stringify(mergedSettings, null, 2))
-    }
-
-    this.settingsCache.set(cacheKey, mergedSettings)
-    return mergedSettings
   }
 
   /**
@@ -181,35 +106,38 @@ export class ToolkitConfig {
     values: Record<string, unknown>,
     profileName = LEON_PROFILE_NAME
   ): void {
-    const settings = {
-      ...this.loadToolSettings(toolkitName, toolName, {}, true, profileName),
-      ...values
-    }
-    const settingsPath = join(
-      getProfilePaths(profileName).tools,
-      toolkitName,
-      toolName,
-      'settings.json'
+    ToolSettingsStore.save(
+      this.getSettingsPaths(toolkitName, toolName, profileName),
+      values
     )
-    const temporaryPath = `${settingsPath}.${randomUUID()}.tmp`
+  }
 
-    try {
-      // Settings can contain application secrets, so a replacement starts private.
-      writeFileSync(temporaryPath, JSON.stringify(settings, null, 2), {
-        mode: 0o600,
-        flag: 'wx'
-      })
-      renameSync(temporaryPath, settingsPath)
-    } finally {
-      if (existsSync(temporaryPath)) {
-        unlinkSync(temporaryPath)
-      }
+  /**
+   * Resolve SDK settings from explicit host paths without loading Core services.
+   */
+  private static getSettingsPaths(
+    toolkitName: string,
+    toolName: string,
+    profileName: string
+  ): ToolSettingsPaths {
+    if (!isValidProfileName(profileName)) {
+      throw new Error(`Invalid Leon profile name "${profileName}".`)
     }
 
-    this.settingsCache.set(
-      `${profileName}:${toolkitName}:${toolName}`,
-      settings
-    )
+    return {
+      settings: join(
+        LEON_PROFILES_PATH,
+        profileName.trim(),
+        'tools',
+        toolkitName,
+        toolName,
+        'settings.json'
+      ),
+      sample: join(
+        resolveToolDirectory(TOOLS_PATH, toolkitName, toolName),
+        'settings.sample.json'
+      )
+    }
   }
 
   /**

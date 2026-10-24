@@ -1,3 +1,3 @@
 {
-  "*.{js,jsx,ts,tsx,mjs,cjs}": ["eslint --fix --ignore-pattern .gitignore"]
+  "*.{js,jsx,ts,tsx,mjs,cjs}": ["eslint --fix --cache --cache-strategy content --cache-location node_modules/.cache/eslint/staged --ignore-pattern .gitignore"]
 }

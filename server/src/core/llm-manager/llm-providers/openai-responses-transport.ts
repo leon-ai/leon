@@ -1,5 +1,16 @@
-import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
+import { createHash } from 'node:crypto'
+
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { OpenAIResponsesWebSocket } from './openai-responses-websocket'
+import { CONFIG_MANAGER } from '@/config'
+import { getLLMModelCatalogEntry } from '@/core/llm-manager/llm-model-catalog'
+import { AGENT_PROMPT_CACHE_KEY } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import { requestChatGPTAccount } from '../llm-accounts/chatgpt-account-request'
+import { ProviderPromptCache } from './prompt-cache'
+import { readProviderUsage } from '@/core/llm-manager/llm-usage/usage-context'
+import type { CompletionParams, PromptCacheObservation } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
 
 const CHATGPT_UNSUPPORTED_FIELDS = [
   'background',
@@ -19,17 +30,40 @@ const CHATGPT_UNSUPPORTED_FIELDS = [
   'user',
   'previous_response_id'
 ]
-const OPENAI_UNCLOSED_TERMINAL_EVENTS = new Set([
+const MAXIMUM_WEBSOCKET_SESSIONS = 32
+const UNSUPPORTED_WEBSOCKET_STATUSES = new Set([400, 404, 405, 426, 501])
+const CONNECTION_IDENTITY_HEADERS = [
+  'authorization', 'chatgpt-account-id', 'originator', 'session_id'
+]
+
+interface ResponsesConnection {
+  signature: string
+  socket: OpenAIResponsesWebSocket
+  http: boolean
+}
+
+interface TransportResponse {
+  response: Response
+  transport: 'http' | 'websocket'
+  socket?: OpenAIResponsesWebSocket
+}
+
+const OPENAI_TERMINAL_EVENTS = new Set([
+  'response.completed',
   'response.failed',
-  'response.incomplete'
+  'response.incomplete',
+  'error'
 ])
+const SSE_EVENT_BOUNDARY = /\r\n\r\n|\n\n|\r\r/
+const SSE_LINE_BOUNDARY = /\r\n|\r|\n/
 
 /**
  * Shares authenticated Responses transport between inference and auxiliary requests.
  */
 export class OpenAIResponsesTransport {
-  private openAIWebSocketFetch: ReturnType<typeof createWebSocketFetch> | undefined
-  private openAIWebSocketAuthorization: string | undefined
+  private readonly connections = new Map<string, ResponsesConnection>()
+  public transport: 'http' | 'websocket' = 'websocket'
+  private readonly promptCache = new ProviderPromptCache()
 
   constructor(
     private readonly baseURL: string,
@@ -43,19 +77,40 @@ export class OpenAIResponsesTransport {
    */
   public async fetch(
     input: Parameters<typeof globalThis.fetch>[0],
-    init?: RequestInit
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<Response> {
-    return this.accountId
-      ? this.fetchChatGPT(input, init)
-      : this.fetchOpenAI(input, init)
+    let observation: PromptCacheObservation | undefined
+    const observe: CompletionParams['onStreamEvent'] = (event) => {
+      observation = event.promptCache ?? observation
+      onStreamEvent?.(event)
+    }
+    const result = await (this.accountId
+      ? this.fetchChatGPT(input, init, observe)
+      : this.fetchOpenAI(input, init, observe))
+
+    const { response, transport, socket } = result
+    this.transport = transport
+    onStreamEvent?.({
+      type: 'response-headers',
+      transport,
+      ...(response.headers.get('x-request-id')
+        ? { requestId: response.headers.get('x-request-id')! }
+        : {})
+    })
+
+    return this.finishResponseStream(response, transport, socket, onStreamEvent, observation)
   }
 
   /**
    * Retires in-flight or stale connections before they can be reused.
    */
   public close(): void {
-    this.openAIWebSocketFetch?.close()
-    this.openAIWebSocketFetch = undefined
+    for (const connection of this.connections.values()) {
+      connection.socket.close()
+    }
+
+    this.connections.clear()
   }
 
   /**
@@ -63,8 +118,9 @@ export class OpenAIResponsesTransport {
    */
   private async fetchChatGPT(
     input: Parameters<typeof globalThis.fetch>[0],
-    init?: RequestInit
-  ): Promise<Response> {
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
+  ): Promise<TransportResponse> {
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
     for (const field of CHATGPT_UNSUPPORTED_FIELDS) {
       delete body[field]
@@ -90,104 +146,309 @@ export class OpenAIResponsesTransport {
       return item
     })
     body['instructions'] ??= ''
+    const { sessionId, observation } = this.promptCache.prepare(
+      body,
+      String(this.accountId)
+    )
 
-    return requestChatGPTAccount(String(this.accountId), async (accountHeaders) => {
+    let result: TransportResponse | undefined
+    await requestChatGPTAccount(String(this.accountId), async (accountHeaders) => {
       const headers = new Headers(init?.headers)
       for (const [name, value] of Object.entries(accountHeaders)) {
         headers.set(name, value)
       }
+      if (sessionId) {
+        headers.set('session_id', sessionId)
+      }
+      if (observation) {
+        headers.set('x-client-request-id', observation.key)
+        onStreamEvent?.({ type: 'prompt-cache', promptCache: observation })
+      }
 
-      // The WebSocket adapter drops custom headers. Codex needs its workspace
-      // header on the handshake, so use its native HTTP/SSE transport here.
-      init?.signal?.throwIfAborted()
-      this.onDispatch?.(String(input))
-
-      return globalThis.fetch(input, {
+      result = await this.fetchAuthenticated(input, {
         ...init,
         headers,
         body: JSON.stringify(body),
         redirect: 'error'
-      })
+      }, onStreamEvent)
+
+      return result.response
     })
+
+    return result!
   }
 
   /**
-   * Rotates authenticated API-key sockets when their authorization changes.
+   * Applies API-key cache hints before selecting the authenticated transport.
    */
   private async fetchOpenAI(
     input: Parameters<typeof globalThis.fetch>[0],
-    init?: RequestInit
-  ): Promise<Response> {
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
+  ): Promise<TransportResponse> {
     init?.signal?.throwIfAborted()
     const authorization = new Headers(init?.headers).get('authorization') || ''
-    if (this.openAIWebSocketAuthorization !== authorization) {
-      this.openAIWebSocketFetch?.close()
-      this.openAIWebSocketFetch = undefined
-      this.openAIWebSocketAuthorization = authorization
+    const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+    const shareAcrossSessions = this.prepareInstructionsCache(body)
+    const { observation } = this.promptCache.prepare(
+      body,
+      JSON.stringify([this.baseURL, authorization]),
+      false,
+      'agent',
+      shareAcrossSessions
+    )
+
+    if (observation) {
+      init = { ...init, body: JSON.stringify(body) }
+      onStreamEvent?.({ type: 'prompt-cache', promptCache: observation })
     }
-
-    const transport = this.getOpenAIWebSocketFetch()
-    try {
-      this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
-      const response = await transport(input, init)
-      if (init?.signal?.aborted) {
-        transport.close()
-        await response.body?.cancel()
-        init.signal.throwIfAborted()
-      }
-      if (response.status === 401 || response.status === 403) {
-        await response.body?.cancel()
-        throw Object.assign(new Error('OpenAI authorization was rejected.'), {
-          statusCode: response.status
-        })
-      }
-
-      if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
-        return response
-      }
-
-      // The adapter emits one SSE chunk per WebSocket message, but leaves
-      // failed/incomplete responses open. Forward their usage before closing.
-      const decoder = new TextDecoder()
-      const body = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-        transform: (chunk, controller): void => {
-          controller.enqueue(chunk)
-          const line = decoder.decode(chunk).trim()
-          if (!line.startsWith('data: ') || line === 'data: [DONE]') {
-            return
-          }
-          let event: Record<string, unknown>
-          try {
-            event = JSON.parse(line.slice('data: '.length)) as Record<string, unknown>
-          } catch {
-            return
-          }
-          if (OPENAI_UNCLOSED_TERMINAL_EVENTS.has(String(event['type']))) {
-            this.close()
-            controller.terminate()
-          }
-        }
-      }))
-
-      return new Response(body, { status: response.status, headers: response.headers })
-    } catch (error) {
-      // A rejected handshake or canceled opening must not leave reusable state.
-      transport.close()
-      if (this.openAIWebSocketFetch === transport) {
-        this.openAIWebSocketFetch = undefined
-      }
-      throw error
-    }
+    return this.fetchAuthenticated(input, init, onStreamEvent)
   }
 
-  private getOpenAIWebSocketFetch(): ReturnType<typeof createWebSocketFetch> {
-    if (!this.openAIWebSocketFetch) {
-      this.openAIWebSocketFetch = createWebSocketFetch({
-        url: this.toOpenAIResponsesWebSocketURL(this.baseURL)
-      })
+  /**
+   * Keeps sockets private to a profile, conversation and authenticated binding.
+   * HTTP fallback is allowed only before a WebSocket request was dispatched.
+   */
+  private async fetchAuthenticated(
+    input: Parameters<typeof globalThis.fetch>[0],
+    init?: RequestInit,
+    onStreamEvent?: CompletionParams['onStreamEvent']
+  ): Promise<TransportResponse> {
+    init?.signal?.throwIfAborted()
+    const headers = Object.fromEntries(new Headers(init?.headers).entries())
+    // Per-request trace and cache hints must not rotate an authenticated socket.
+    const signature = createHash('sha256').update(JSON.stringify(
+      CONNECTION_IDENTITY_HEADERS.map((name) => headers[name])
+    )).digest('hex')
+    const scope = JSON.stringify([
+      getActiveProfileName(), getActiveConversationSessionId()
+    ])
+    let connection = this.connections.get(scope)
+
+    if (connection && connection.signature !== signature && !connection.socket.busy) {
+      connection.socket.close()
+      this.connections.delete(scope)
+      connection = undefined
+    }
+    if (!connection) {
+      if (this.connections.size >= MAXIMUM_WEBSOCKET_SESSIONS) {
+        const idle = [...this.connections].find(([, entry]) => !entry.socket.busy)
+
+        if (idle) {
+          idle[1].socket.close()
+          this.connections.delete(idle[0])
+        }
+      }
+
+      connection = {
+        signature,
+        socket: new OpenAIResponsesWebSocket(
+          this.toOpenAIResponsesWebSocketURL(this.baseURL), headers
+        ),
+        http: false
+      }
+      this.connections.set(scope, connection)
     }
 
-    return this.openAIWebSocketFetch
+    const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+    // Concurrent requests must not share one socket's event stream or lineage.
+    if (connection.signature === signature && !connection.http &&
+      !connection.socket.busy && body['stream'] === true) {
+      try {
+        this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
+        onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
+        const response = await connection.socket.fetch(body, init?.signal ?? undefined)
+        init?.signal?.throwIfAborted()
+
+        return { response, transport: 'websocket', socket: connection.socket }
+      } catch (error) {
+        connection.socket.close()
+        init?.signal?.throwIfAborted()
+        const status = (error as { statusCode?: number }).statusCode
+
+        // Authorization and provider overload keep the existing refresh/retry
+        // policy. A failed handshake cannot have produced an accepted answer.
+        if (status !== undefined && !UNSUPPORTED_WEBSOCKET_STATUSES.has(status)) {
+          throw error
+        }
+
+        connection.http = true
+      }
+    }
+
+    this.onDispatch?.(String(input))
+    onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
+    const response = await globalThis.fetch(input, init)
+
+    return { response, transport: 'http' }
+  }
+
+  /**
+   * Gives only the stable agent instruction prefix extended coverage. Apply
+   * wire options here so SDK validation cannot discard per-block lifetimes.
+   */
+  private prepareInstructionsCache(body: Record<string, unknown>): boolean {
+    const model = body['model']
+
+    if (body['prompt_cache_key'] !== AGENT_PROMPT_CACHE_KEY ||
+      typeof model !== 'string' ||
+      !getLLMModelCatalogEntry(LLMProviders.OpenAI, model)?.supportsPromptCacheOptions ||
+      (CONFIG_MANAGER.getConfig().llm.model_settings[`openai/${model}`]
+        ?.instructions_cache_ttl ?? '12h') !== '12h' ||
+      !Array.isArray(body['input'])) {
+      return false
+    }
+
+    const instructions = body['input'][0] as Record<string, unknown> | undefined
+
+    if (!instructions ||
+      (instructions['role'] !== 'developer' && instructions['role'] !== 'system')) {
+      return false
+    }
+
+    const content = typeof instructions['content'] === 'string'
+      ? [{ type: 'input_text', text: instructions['content'] }]
+      : instructions['content']
+
+    if (!Array.isArray(content)) {
+      return false
+    }
+
+    const index = content.findLastIndex((part) => part?.type === 'input_text')
+
+    if (index < 0) {
+      return false
+    }
+
+    // All later messages keep the short lifetime, including fresh host state.
+    instructions['content'] = content.map((part, partIndex) => partIndex === index
+      ? { ...part, prompt_cache_breakpoint: { mode: 'explicit', ttl: '12h' } }
+      : part)
+    body['prompt_cache_options'] = { mode: 'implicit', ttl: '30m' }
+    delete body['prompt_cache_retention']
+
+    return true
+  }
+
+  /**
+   * Let the SDK flush terminal usage without waiting for a remote connection to close.
+   */
+  private finishResponseStream(
+    response: Response,
+    transport: 'http' | 'websocket',
+    socket: OpenAIResponsesWebSocket | undefined,
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    observation?: PromptCacheObservation
+  ): Response {
+    if (!response.body) {
+      return response
+    }
+
+    // Native Responses requests use SSE even when a subscription omits its header.
+    const headers = new Headers(response.headers)
+
+    if (response.ok && !headers.has('content-type')) {
+      headers.set('content-type', 'text/event-stream')
+    }
+    if (!headers.get('content-type')?.includes('text/event-stream')) {
+      return response
+    }
+
+    let pending = ''
+    const body = response.body
+      // Observe bytes before framing or SDK lookahead can delay parsed events.
+      .pipeThrough(new TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>({
+        transform: (chunk, controller): void => {
+          if (chunk.byteLength > 0) {
+            onStreamEvent?.({
+              type: 'transport-activity',
+              transport
+            })
+          }
+
+          controller.enqueue(chunk)
+        }
+      }))
+      .pipeThrough(new TextDecoderStream())
+      .pipeThrough(new TransformStream<string, string>({
+        transform: (chunk, controller): void => {
+          pending += chunk
+          let boundary = SSE_EVENT_BOUNDARY.exec(pending)
+
+          while (boundary) {
+            const end = boundary.index + boundary[0].length
+            const frame = pending.slice(0, end)
+            pending = pending.slice(end)
+            controller.enqueue(frame)
+
+            const data = frame.split(SSE_LINE_BOUNDARY)
+              .filter((line) => line.startsWith('data:'))
+              .map((line) => line.slice('data:'.length).trimStart())
+              .join('\n')
+            let event: Record<string, unknown> | undefined
+
+            try {
+              event = JSON.parse(data) as Record<string, unknown>
+            } catch {
+              // Leave protocol validation and provider errors to the SDK.
+            }
+
+            // Observe protocol progress before SDK early-error lookahead can
+            // buffer it. Only metadata crosses this diagnostic boundary.
+            if (event && typeof event['type'] === 'string') {
+              const result = event['response'] as Record<string, unknown> | undefined
+
+              onStreamEvent?.({
+                type: 'provider-event',
+                providerEventType: event['type'],
+                transport,
+                ...(typeof result?.['id'] === 'string'
+                  ? { responseId: result['id'] }
+                  : {})
+              })
+            }
+
+            if (event && OPENAI_TERMINAL_EVENTS.has(String(event['type']))) {
+              if (observation && event['type'] === 'response.completed') {
+                const result = event['response'] as Record<string, unknown> | undefined
+                const usage = readProviderUsage(result?.['usage'])
+
+                onStreamEvent?.({
+                  type: 'prompt-cache',
+                  promptCache: {
+                    ...observation,
+                    ...(usage.inputTokens !== undefined
+                      ? { inputTokens: usage.inputTokens }
+                      : {}),
+                    ...(usage.cachedInputTokens !== undefined
+                      ? { cachedInputTokens: usage.cachedInputTokens }
+                      : {})
+                  }
+                })
+              }
+              if (event['type'] !== 'response.completed') {
+                socket?.close()
+              }
+
+              controller.terminate()
+              return
+            }
+
+            boundary = SSE_EVENT_BOUNDARY.exec(pending)
+          }
+        },
+        flush(): void {
+          // EOF without a terminal event must not turn a partial draft into success.
+          throw new Error('The provider stream ended before terminal completion.')
+        }
+      }))
+      .pipeThrough(new TextEncoderStream())
+
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    })
   }
 
   private toOpenAIResponsesWebSocketURL(baseURL: string): string {

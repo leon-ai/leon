@@ -1,4 +1,4 @@
-import { command } from 'execa'
+import { execa } from 'execa'
 
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -8,7 +8,7 @@ import { LogHelper } from '@/helpers/log-helper'
 export default async function buildApp(options = {}) {
   const { quiet = false } = options
 
-  await command('vite build --config app/vite.config.js', {
+  await execa('vite', ['build', '--config', 'app/vite.config.js'], {
     stdio: quiet ? 'ignore' : 'inherit'
   })
 

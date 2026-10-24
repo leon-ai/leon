@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import execa from 'execa'
+import { execa } from 'execa'
 
 const WAYLAND_ENV = 'CUA_DRIVER_RS_ENABLE_WAYLAND'
 const GNOME_DESKTOP = 'gnome'

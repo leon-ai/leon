@@ -1,9 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 
-import execa from 'execa'
+import { execa } from 'execa'
 
 import {
+  CODEBASE_PATH,
   PYTHON_RUNTIME_BIN_PATH,
   UV_RUNTIME_BIN_PATH
 } from '@/constants'
@@ -12,6 +14,7 @@ import { SystemHelper } from '@/helpers/system-helper'
 import { createSetupStatus } from './setup-status'
 
 const PYPROJECT_FILE_NAME = 'pyproject.toml'
+const UV_CONFIG_FILE_NAME = 'uv.toml'
 
 /**
  * Detect whether a command failed to spawn because the executable was missing.
@@ -104,7 +107,23 @@ export function getProjectVenvPythonPath(projectPath) {
 }
 
 /**
- * Check whether a project dependency sync stamp is newer than its manifest.
+ * Bind installed dependencies to their source location, manifest and shared policy.
+ */
+export async function getPythonProjectSyncFingerprint(projectPath) {
+  const hash = createHash('sha256').update(path.resolve(projectPath))
+
+  for (const configPath of [
+    path.join(projectPath, PYPROJECT_FILE_NAME),
+    path.join(CODEBASE_PATH, UV_CONFIG_FILE_NAME)
+  ]) {
+    hash.update('\0').update(await fs.promises.readFile(configPath))
+  }
+
+  return hash.digest('hex')
+}
+
+/**
+ * Check whether the environment matches its source location, manifest and policy.
  */
 export async function isPythonProjectSyncCurrent(projectPath, stampFileName) {
   const pyprojectPath = path.join(projectPath, PYPROJECT_FILE_NAME)
@@ -118,19 +137,35 @@ export async function isPythonProjectSyncCurrent(projectPath, stampFileName) {
     return false
   }
 
-  const [manifestStat, stampStat] = await Promise.all([
-    fs.promises.stat(pyprojectPath),
-    fs.promises.stat(stampPath)
-  ])
-
   // Console-script shebangs contain absolute paths, so moved environments
   // must be rebuilt even when their Python symlink still resolves.
-  const installedPath = await fs.promises.readFile(stampPath, 'utf8')
-
   return (
-    installedPath === path.resolve(projectPath) &&
-    manifestStat.mtimeMs <= stampStat.mtimeMs
+    await fs.promises.readFile(stampPath, 'utf8') ===
+    await getPythonProjectSyncFingerprint(projectPath)
   )
+}
+
+/**
+ * Apply the codebase's uv policy even to independently installed profile sources.
+ */
+export async function installPythonProjectDependencies(
+  projectPath,
+  dependencies,
+  { stdio = 'pipe' } = {}
+) {
+  if (dependencies.length === 0) {
+    return
+  }
+
+  await execa(UV_RUNTIME_BIN_PATH, [
+      'pip',
+      'install',
+      '--config-file',
+      path.join(CODEBASE_PATH, UV_CONFIG_FILE_NAME),
+      '--python',
+      getProjectVenvPythonPath(projectPath),
+      ...dependencies
+    ], { cwd: projectPath, stdio })
 }
 
 /**
@@ -162,6 +197,7 @@ export async function setupPythonProjectEnv({
   await ensureUVRuntimeAvailable(name)
 
   const dependencies = await getPyprojectDependencies(projectPath)
+  const fingerprint = await getPythonProjectSyncFingerprint(projectPath)
 
   await fs.promises.rm(stampPath, { force: true })
   await fs.promises.rm(venvPath, { recursive: true, force: true })
@@ -173,17 +209,9 @@ export async function setupPythonProjectEnv({
       venvPath
     ], { cwd: projectPath })
 
-  if (dependencies.length > 0) {
-    await execa(UV_RUNTIME_BIN_PATH, [
-        'pip',
-        'install',
-        '--python',
-        getProjectVenvPythonPath(projectPath),
-        ...dependencies
-      ], { cwd: projectPath })
-  }
+  await installPythonProjectDependencies(projectPath, dependencies)
 
-  await fs.promises.writeFile(stampPath, path.resolve(projectPath))
+  await fs.promises.writeFile(stampPath, fingerprint)
 
   status.succeed(`${name}: ready`)
 }

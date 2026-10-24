@@ -6,6 +6,7 @@ interface WorkerInput {
   workflowLlmName: string
   agentLlmName: string
   localLlmName: string
+  runtime: { nodeVersion: string, executable: string, pid: number }
 }
 
 function parseArgs(argv: string[]): WorkerInput {
@@ -13,7 +14,10 @@ function parseArgs(argv: string[]): WorkerInput {
     filename: '',
     workflowLlmName: 'unknown',
     agentLlmName: 'unknown',
-    localLlmName: 'unknown'
+    localLlmName: 'unknown',
+    runtime: {
+      nodeVersion: process.version, executable: process.execPath, pid: process.pid
+    }
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -44,6 +48,24 @@ function parseArgs(argv: string[]): WorkerInput {
     if (key === '--local-llm-name') {
       input.localLlmName = value
       index += 1
+      continue
+    }
+
+    if (key === '--runtime-node-version') {
+      input.runtime.nodeVersion = value
+      index += 1
+      continue
+    }
+
+    if (key === '--runtime-executable') {
+      input.runtime.executable = value
+      index += 1
+      continue
+    }
+
+    if (key === '--runtime-pid') {
+      input.runtime.pid = Number(value)
+      index += 1
     }
   }
 
@@ -63,7 +85,8 @@ async function main(): Promise<void> {
     {
       getWorkflowLLMName: () => input.workflowLlmName,
       getAgentLLMName: () => input.agentLlmName,
-      getLocalLLMName: () => input.localLlmName
+      getLocalLLMName: () => input.localLlmName,
+      runtime: input.runtime
     }
   )
   const definition = contextFiles.find(

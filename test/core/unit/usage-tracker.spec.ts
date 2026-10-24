@@ -11,6 +11,7 @@ import { runWithConversationSession, recordTurnInference } from '@/core/session-
 import { trackInferenceUsage } from '@/core/llm-manager/llm-usage'
 import { appendInferenceUsage, readInferenceUsage, HISTORICAL_USAGE_FILENAME, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { recordInferenceUsage, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
+import { trackProviderResponseUsage } from '@/core/llm-manager/llm-usage/provider-response-usage'
 import { createInferenceMetadata, InferenceAuthMode, InferenceCredentialSource } from '@/core/llm-manager/inference-metadata'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -253,5 +254,115 @@ describe('inference usage', () => {
 
     await expect(trackInferenceUsage(TARGET, async () => 'answer')).resolves.toBe('answer')
     expect(LogHelper.warning).toHaveBeenCalledWith(expect.stringContaining('Could not save inference usage'))
+  })
+
+  it('attributes streamed tool usage to its initiating profile and session without changing bytes', async () => {
+    const text = [
+      'data: {"type":"response.output_text.delta","delta":"private answer 世界"}\r\n\r\n',
+      'data: {"type":"response.completed","response":{"usage":{"input_tokens":120,"output_tokens":20,"input_tokens_details":{"cached_tokens":80,"cache_write_tokens":30,"cache_write_tokens_details":{"ttl_30m_tokens":10,"ttl_12h_tokens":20}}}}}\r\n\r\n'
+    ].join('')
+    const bytes = new TextEncoder().encode(text)
+    const response = await runWithProfileContext({ profileName: 'tool-owner' }, () =>
+      runWithConversationSession({ sessionId: 'tool-session' }, () => trackProviderResponseUsage(
+        createInferenceMetadata({
+          provider: 'openai', model: 'search-model',
+          authMode: InferenceAuthMode.ChatGPTOAuth,
+          credentialSource: InferenceCredentialSource.AccountBinding,
+          endpoint: 'https://provider.example/responses'
+        }),
+        async () => new Response(new ReadableStream({
+          start(controller): void {
+            for (const byte of bytes) {
+              controller.enqueue(Uint8Array.of(byte))
+            }
+            controller.close()
+          }
+        }), { headers: { 'content-type': 'text/event-stream' } })
+      ))
+    )
+
+    expect(await records()).toEqual([])
+    expect(await response.text()).toBe(text)
+    const saved = await runWithProfileContext({ profileName: 'tool-owner' }, records)
+
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({
+      sessionId: 'tool-session', purpose: 'provider-tool', outcome: 'completed',
+      usage: {
+        inputTokens: 120, outputTokens: 20, cachedInputTokens: 80,
+        cacheWriteInputTokens: 30, cacheWrite30mInputTokens: 10, cacheWrite12hInputTokens: 20
+      }
+    })
+    expect(JSON.stringify(saved)).not.toContain('private answer')
+    expect(await records()).toEqual([])
+  })
+
+  it('merges streamed cache counters and preserves reported usage on failure or cancellation', async () => {
+    const inference = createInferenceMetadata({
+      ...TARGET, authMode: InferenceAuthMode.APIKey,
+      credentialSource: InferenceCredentialSource.ProfileAPIKey,
+      endpoint: 'https://provider.example/messages'
+    })
+    const stream = await trackProviderResponseUsage(inference, async () => new Response([
+      'data: {"type":"message_start","message":{"usage":{"input_tokens":50,"output_tokens":0,"cache_read_input_tokens":100,"cache_creation_input_tokens":50}}}\n\n',
+      'data: {"type":"message_delta","usage":{"output_tokens":20}}\n\n',
+      'data: {"type":"message_delta","usage":{"output_tokens":20}}\n\n',
+      'data: {"type":"error","error":{"message":"private error"}}\n\n'
+    ].join(''), { headers: { 'content-type': 'text/event-stream' } }))
+    await stream.text()
+
+    const canceled = await trackProviderResponseUsage(inference, async () => new Response(
+      new ReadableStream({
+        start(controller): void {
+          controller.enqueue(new TextEncoder().encode('data: {"usage":{"prompt_tokens":10}}\n\n'))
+        }
+      }), { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    const reader = canceled.body!.getReader()
+    await reader.read()
+    await reader.cancel()
+
+    const controller = new AbortController()
+    const unread = await trackProviderResponseUsage(inference, async () => new Response(
+      new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } }
+    ), controller.signal)
+    controller.abort()
+    await unread.body!.cancel()
+
+    await expect(trackProviderResponseUsage(inference, async () => {
+      throw new Error('Transport unavailable')
+    })).rejects.toThrow('Transport unavailable')
+    const saved = await records()
+
+    expect(saved.map((record) => ({ outcome: record.outcome, usage: record.usage }))).toEqual([
+      { outcome: 'failed', usage: {
+        inputTokens: 200, outputTokens: 20, cachedInputTokens: 100, cacheWriteInputTokens: 50
+      } },
+      { outcome: 'canceled', usage: { inputTokens: 10 } },
+      { outcome: 'canceled', usage: {} },
+      { outcome: 'failed', usage: {} }
+    ])
+  })
+
+  it('records JSON tool usage and bounds observation without dropping oversized provider content', async () => {
+    const inference = createInferenceMetadata({
+      ...TARGET, authMode: InferenceAuthMode.APIKey,
+      credentialSource: InferenceCredentialSource.ProfileAPIKey,
+      endpoint: 'https://provider.example/chat/completions'
+    })
+    const json = { usage: { prompt_tokens: 90, completion_tokens: 10, prompt_cache_hit_tokens: 60 } }
+    const response = await trackProviderResponseUsage(inference, async () => Response.json(json))
+    expect(await response.json()).toEqual(json)
+
+    const text = `data: ${JSON.stringify({ content: 'x'.repeat(1_048_577) })}\n\n` +
+      'data: {"usage":{"prompt_tokens":30,"completion_tokens":5}}\n\ndata: [DONE]\n\n'
+    const large = await trackProviderResponseUsage(inference, async () => new Response(text, {
+      headers: { 'content-type': 'text/event-stream' }
+    }))
+    expect(await large.text()).toBe(text)
+    expect((await records()).map((record) => record.usage)).toEqual([
+      { inputTokens: 90, outputTokens: 10, cachedInputTokens: 60 },
+      { inputTokens: 30, outputTokens: 5 }
+    ])
   })
 })

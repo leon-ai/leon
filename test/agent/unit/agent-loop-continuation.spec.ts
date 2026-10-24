@@ -9,8 +9,13 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
+import { appendAgentRuntimeContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import {
+  AGENT_RECENT_TOOL_IMAGE_LIMIT,
+  AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 
 function createCheckpointInput(): AgentContinuityCheckpointInput {
   return {
@@ -87,12 +92,19 @@ describe('agent loop continuation', () => {
     const state = createAgentLoopContinuationState({
       ...checkpoint,
       transcript,
+      toolOrder: ['load_toolkit', 'release__builder__run'],
+      planTracking: true,
       clarificationQuestion: 'Which registry?',
       planWidgetId: 'release-plan'
     })
     const restored: typeof state = JSON.parse(JSON.stringify(state))
 
     expect(isAgentLoopContinuationStateValid(restored)).toBe(true)
+    expect(restored.toolOrder).toEqual(['load_toolkit', 'release__builder__run'])
+    expect(restored.planTracking).toBe(true)
+    expect(isAgentLoopContinuationStateValid({
+      ...restored, toolOrder: undefined, planTracking: undefined
+    })).toBe(true)
     expect(restored.trackedSteps).toEqual(checkpoint.trackedSteps)
     expect(restored.executionHistory).toEqual(checkpoint.executionHistory)
     expect(restored.transcript.map((message) => ({ ...message, files: undefined })))
@@ -168,6 +180,7 @@ describe('agent loop continuation', () => {
     ]
     for (let index = 1; index <= 16; index += 1) {
       appendToolExchange(transcript, index)
+      appendAgentRuntimeContext(transcript, { elapsedMs: index * 1_000 })
     }
     for (const message of transcript) {
       if (message.role === 'assistant') {
@@ -189,6 +202,7 @@ describe('agent loop continuation', () => {
     )
 
     expect(summarize).toHaveBeenCalledOnce()
+    expect(result[0]).toEqual({ role: 'user', content: 'Prepare the release.' })
     expect(summarize.mock.calls[0]?.[0]).not.toContain('opaque-replay-data')
     expect(result.find((message) =>
       message.role === 'assistant' && message.toolCalls?.[0]?.id === 'call-16'
@@ -209,6 +223,35 @@ describe('agent loop continuation', () => {
     expect(result.some((message) =>
       message.role === 'tool' && message.toolCallId === 'call-1'
     )).toBe(false)
+  })
+
+  it('summarizes long follow-up work while retaining the owner request and recent exchanges', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+    appendToolExchange(transcript, 1)
+
+    const followUp: AgentToolTranscriptMessage = {
+      role: 'user',
+      content: 'Publish to staging, not production.'
+    }
+    transcript.push(followUp)
+    for (let index = 2; index <= 24; index += 1) {
+      appendToolExchange(transcript, index)
+    }
+
+    const summarize = vi.fn().mockResolvedValue('Earlier release work verified.')
+    const result = await buildAgentContinuationTranscript(transcript, summarize)
+
+    expect(result[0]).toEqual(followUp)
+    expect(summarize.mock.calls[0]?.[0]).toContain('Result 16:')
+    expect(result.some((message) =>
+      message.role === 'tool' && message.toolCallId === 'call-16'
+    )).toBe(false)
+    expect(result.slice(-16)).toEqual(transcript.slice(-16))
+    expect(JSON.stringify(result).length).toBeLessThan(
+      JSON.stringify(transcript).length / 2
+    )
   })
 
   it('uses deterministic state when semantic summarization fails', async () => {
@@ -242,9 +285,12 @@ describe('agent loop continuation', () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Inspect the documents and save their metadata.' }
     ]
+    const imageCount =
+      AGENT_RECENT_TOOL_IMAGE_LIMIT + AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+
     for (let index = 1; index <= 20; index += 1) {
       appendToolExchange(transcript, index)
-      if (index <= 3) {
+      if (index <= imageCount) {
         const assistant = transcript.at(-2)!
         const tool = transcript.at(-1)!
         if (assistant.role === 'assistant' && assistant.toolCalls && tool.role === 'tool') {
@@ -266,7 +312,10 @@ describe('agent loop continuation', () => {
 
     expect(visualResults.map((message) =>
       message.role === 'tool' ? message.toolCallId : null
-    )).toEqual(['call-2', 'call-3'])
+    )).toEqual(Array.from(
+      { length: AGENT_RECENT_TOOL_IMAGE_LIMIT },
+      (_, index) => `call-${AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE + index + 1}`
+    ))
     for (const message of visualResults) {
       if (message.role === 'tool') {
         expect(result.some((candidate) =>

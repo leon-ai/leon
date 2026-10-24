@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional
+from enum import Enum
 
 from bridges.python.src.sdk.base_tool import BaseTool
 from bridges.python.src.sdk.toolkit_config import ToolkitConfig
@@ -9,6 +10,14 @@ REQUIRED_SETTINGS = []
 
 
 DEFAULT_FORECAST_DAYS = 1
+
+
+class WeatherDetail(str, Enum):
+    """Include hourly series only when intraday detail is requested."""
+
+    SUMMARY = "summary"
+    HOURLY = "hourly"
+
 CURRENT_WEATHER_VARIABLES = [
     "temperature_2m", "relative_humidity_2m", "apparent_temperature",
     "weather_code", "wind_speed_10m", "wind_direction_10m",
@@ -150,10 +159,14 @@ class OpenMeteoTool(BaseTool):
         location: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        detail: str = WeatherDetail.SUMMARY,
     ) -> Dict[str, Any]:
         """Return current conditions and today's forecast, or a requested interval."""
         if not location or not location.strip():
             return {"success": False, "error": "Location is required."}
+
+        if detail not in (WeatherDetail.SUMMARY, WeatherDetail.HOURLY):
+            return {"success": False, "error": "Unsupported forecast detail."}
 
         try:
             geocoding = self._geocode(location.strip())
@@ -165,10 +178,13 @@ class OpenMeteoTool(BaseTool):
                 geocoding["longitude"],
                 start_date,
                 end_date,
+                detail,
             )
             daily = weather.get("daily", {})
             hourly = weather.get("hourly", {})
-            if not daily.get("time") or not hourly.get("time"):
+            if not daily.get("time") or (
+                detail == WeatherDetail.HOURLY and not hourly.get("time")
+            ):
                 return {"success": False, "error": "No forecast data available for this location."}
 
             data = {
@@ -176,20 +192,21 @@ class OpenMeteoTool(BaseTool):
                 "timezone": weather.get("timezone"),
                 "utcOffsetSeconds": weather.get("utc_offset_seconds"),
                 "dailyUnits": weather.get("daily_units"),
-                "hourlyUnits": weather.get("hourly_units"),
                 "daily": {
                     **daily,
                     "description": [
                         _get_weather_description(code) for code in daily["weather_code"]
                     ],
                 },
-                "hourly": {
+            }
+            if detail == WeatherDetail.HOURLY:
+                data["hourlyUnits"] = weather.get("hourly_units")
+                data["hourly"] = {
                     **hourly,
                     "description": [
                         _get_weather_description(code) for code in hourly["weather_code"]
                     ],
-                },
-            }
+                }
             if weather.get("current"):
                 data["current"] = _format_current_conditions(
                     weather["current"], geocoding["display_name"]
@@ -245,6 +262,7 @@ class OpenMeteoTool(BaseTool):
         longitude: float,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        detail: str = WeatherDetail.SUMMARY,
     ) -> Dict[str, Any]:
         from urllib.parse import urlencode
 
@@ -259,7 +277,8 @@ class OpenMeteoTool(BaseTool):
             "timezone": "auto",
         }
 
-        query_params_object["hourly"] = ",".join(HOURLY_FORECAST_VARIABLES)
+        if detail == WeatherDetail.HOURLY:
+            query_params_object["hourly"] = ",".join(HOURLY_FORECAST_VARIABLES)
         query_params_object["daily"] = ",".join(DAILY_FORECAST_VARIABLES)
         if normalized_start_date and normalized_end_date:
             query_params_object["start_date"] = normalized_start_date

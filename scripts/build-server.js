@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { command } from 'execa'
+import { execa } from 'execa'
 import ts from 'typescript'
 
 import { LogHelper } from '@/helpers/log-helper'
@@ -191,12 +191,14 @@ export default async function buildServer(options = {}) {
   await runBuildStep(
     'Compiling TypeScript...',
     // Capture output in quiet mode so execa includes compiler diagnostics on failure.
-    () => command('tsc --project tsconfig.json', { stdio: quiet ? 'pipe' : 'inherit' }),
+    () => execa('tsc', ['--project', 'tsconfig.json'], {
+      stdio: quiet ? 'pipe' : 'inherit'
+    }),
     quiet
   )
   await runBuildStep(
     'Resolving TS paths...',
-    () => command('resolve-tspaths', { stdio: quiet ? 'pipe' : 'inherit' }),
+    () => execa('resolve-tspaths', [], { stdio: quiet ? 'pipe' : 'inherit' }),
     quiet
   )
   await runBuildStep('Reshaping server dist...', () => reshapeServerDist(), quiet)

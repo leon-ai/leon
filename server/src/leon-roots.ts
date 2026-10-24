@@ -13,6 +13,24 @@ import path from 'node:path'
  * - `constants.ts` owns broader runtime constants plus derived paths that are
  *   tied to the server runtime configuration.
  */
+export const PROFILE_TOKEN_SEPARATOR = ':'
+
+/**
+ * Validate a profile name before using it as a filesystem segment.
+ */
+export function isValidProfileName(profileName: string): boolean {
+  const normalizedProfileName = profileName.trim()
+
+  return Boolean(
+    normalizedProfileName &&
+      normalizedProfileName !== '.' &&
+      normalizedProfileName !== '..' &&
+      !normalizedProfileName.includes(PROFILE_TOKEN_SEPARATOR) &&
+      path.posix.basename(normalizedProfileName) === normalizedProfileName &&
+      path.win32.basename(normalizedProfileName) === normalizedProfileName
+  )
+}
+
 export const DEFAULT_LEON_PROFILE = 'just-me'
 const LEON_HOME_DIRNAME = '.leon'
 

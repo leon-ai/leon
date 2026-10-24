@@ -22,7 +22,7 @@ CRITICAL_COMMAND_SEQUENCES: Sequence[Sequence[str]] = (
 
 CRITICAL_COMMAND_TOKENS: Sequence[str] = ("mkfs", "format", "fdisk")
 HIGH_RISK_DD_TOKENS: Sequence[str] = ("dd",)
-HIGH_RISK_EVAL_DOWNLOAD_TOKENS: Sequence[str] = ("curl", "wget")
+DOWNLOAD_COMMAND_TOKENS: Sequence[str] = ("curl", "wget")
 ELEVATED_COMMAND_TOKENS: Sequence[str] = ("sudo", "doas", "pkexec", "su")
 PERMISSION_COMMAND_TOKENS: Sequence[str] = ("chmod", "chown")
 PACKAGE_MANAGER_COMMAND_TOKENS: Sequence[str] = (
@@ -339,6 +339,8 @@ class ShellTool(BaseTool):
         command_lower = command.lower()
         tokens = self._tokenize_command(command_lower)
 
+        # Authorized installations can fetch and run scripts; reject destructive
+        # host commands rather than the presence of a download.
         for pattern in UNSAFE_COMMAND_PATTERNS:
             if pattern in command_lower:
                 return False
@@ -347,11 +349,7 @@ class ShellTool(BaseTool):
             self._has_any_token_sequence(tokens, CRITICAL_COMMAND_SEQUENCES)
             or self._has_command_token(tokens, CRITICAL_COMMAND_TOKENS)
             or self._has_dangerous_dd_pattern(tokens)
-            or self._has_eval_download_pattern(tokens)
         ):
-            return False
-
-        if self._is_download_piped_to_shell(command_lower):
             return False
 
         return True
@@ -368,13 +366,8 @@ class ShellTool(BaseTool):
             risk_level = "critical"
 
         if risk_level == "low":
-            if self._has_dangerous_dd_pattern(
-                tokens
-            ) or self._has_eval_download_pattern(tokens):
+            if self._has_dangerous_dd_pattern(tokens):
                 risk_level = "high"
-
-        if risk_level == "low" and self._is_download_piped_to_shell(command_lower):
-            risk_level = "high"
 
         if risk_level == "low":
             for pattern in MEDIUM_RISK_COMMAND_PATTERNS:
@@ -399,9 +392,7 @@ class ShellTool(BaseTool):
             return "change file permissions or ownership"
         if self._has_command_token(tokens, PACKAGE_MANAGER_COMMAND_TOKENS):
             return "install or modify system packages"
-        if self._is_download_piped_to_shell(command_lower):
-            return "download remote content and execute it as a shell script"
-        if self._has_command_token(tokens, HIGH_RISK_EVAL_DOWNLOAD_TOKENS):
+        if self._has_command_token(tokens, DOWNLOAD_COMMAND_TOKENS):
             return "download content from the internet"
 
         descriptions = {
@@ -430,13 +421,6 @@ class ShellTool(BaseTool):
             return file_content
         except Exception:
             return command
-
-    def _is_download_piped_to_shell(self, command_lower: str) -> bool:
-        downloads_remote_content = self._has_command_token(
-            self._tokenize_command(command_lower), ("curl", "wget")
-        )
-        pipes_to_shell = "| bash" in command_lower or "| sh" in command_lower
-        return downloads_remote_content and pipes_to_shell
 
     def _tokenize_command(self, command: str) -> List[str]:
         tokens: List[str] = []
@@ -515,20 +499,6 @@ class ShellTool(BaseTool):
             return False
 
         return any(token.startswith("if=") for token in tokens)
-
-    def _has_eval_download_pattern(self, tokens: Sequence[str]) -> bool:
-        for index in range(len(tokens) - 1):
-            if tokens[index] != "eval":
-                continue
-
-            next_token = tokens[index + 1]
-            if any(
-                next_token.startswith(f"$({token}")
-                for token in HIGH_RISK_EVAL_DOWNLOAD_TOKENS
-            ):
-                return True
-
-        return False
 
     def _normalize_command_token(self, token: str) -> str:
         stripped_token = re.sub(r"^[([{]+|[)\]}]+$", "", token)

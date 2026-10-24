@@ -229,6 +229,7 @@ export default class RipgrepTool extends Tool {
         ) {
           preview.push(value)
           previewBytes += bytes
+          this.emitOutput(`${serialized}\n`)
         }
 
         // Batch writes rather than issuing one filesystem operation per path.

@@ -21,6 +21,7 @@ export enum LLMDuties {
 }
 
 export enum InferencePurpose {
+  ProviderTool = 'provider-tool',
   SessionTitle = 'session-title',
   Memory = 'memory',
   OwnerProfile = 'owner-profile',
@@ -78,6 +79,15 @@ export interface ProviderReasoningItem {
 }
 
 /**
+ * Retains assistant text boundaries and phases for the issuing provider route.
+ */
+export interface ProviderMessageMetadata {
+  provider: LLMProviders
+  binding: string
+  parts: Array<{ text: string, phase?: 'commentary' | 'final_answer' }>
+}
+
+/**
  * Canonical provider window plus recoverable evidence for provider changes.
  */
 export interface ProviderCompactionContext {
@@ -98,12 +108,15 @@ export type AgentToolTranscriptMessage =
       role: 'user'
       content: string
       files?: AgentModelFile[]
+      // Host-owned state deltas preserve append-only provider history.
+      runtimeContext?: Record<string, unknown>
     }
   | {
       role: 'assistant'
       content: string
       reasoning?: string
       reasoningItems?: ProviderReasoningItem[]
+      providerMessage?: ProviderMessageMetadata
       compactionContext?: ProviderCompactionContext
       toolCalls?: OpenAIToolCall[]
     }
@@ -178,16 +191,41 @@ export interface LLMPromptAbortReason {
  */
 export interface CompletionStreamEvent {
   type: string
+  providerEventType?: string
   transport?: 'http' | 'websocket'
   requestId?: string
   responseId?: string
   toolCallId?: string
   providerExecuted?: boolean
   preliminary?: boolean
+  promptCache?: PromptCacheObservation
+}
+
+/**
+ * Describes consecutive wire requests using fingerprints, never prompt content.
+ */
+export interface PromptCacheObservation {
+  key: string
+  systemHash: string
+  toolsHash: string
+  inputItems: number
+  previousInputItems: number
+  matchingPrefixItems: number
+  changedInputs: string[]
+  toolChanges?: {
+    added: number
+    removed: number
+    modified: number
+    reordered: boolean
+  }
+  inputTokens?: number
+  cachedInputTokens?: number
 }
 
 export enum CompletionFailureKind {
   Timeout = 'timeout',
+  Context = 'context',
+  Unavailable = 'unavailable',
   Provider = 'provider'
 }
 
@@ -208,13 +246,22 @@ export interface CompletionAttemptTiming {
   connectionErrorCode?: string | undefined
   requestId?: string | undefined
   responseId?: string | undefined
+  promptCache?: PromptCacheObservation | undefined
   elapsedMs: number
   inferenceTimeoutMs: number
   streamIdleTimeoutMs: number
   generationStartMs?: number | undefined
+  requestDispatchMs?: number | undefined
+  requestAcceptedMs?: number | undefined
+  responseHeadersMs?: number | undefined
+  firstByteMs?: number | undefined
+  /**
+   * The SDK has opened its parsed stream; response bytes may arrive earlier.
+   */
   streamOpenMs?: number | undefined
   firstEventMs?: number | undefined
   firstTokenMs?: number | undefined
+  firstReasoningTokenMs?: number | undefined
   firstToolInputMs?: number | undefined
   lastEvent: string
   idleMs?: number | undefined
@@ -272,6 +319,12 @@ export interface CompletionParams {
    */
   reasoningEffort?: LLMReasoningEffort
   /**
+   * Keeps the request's normal effort stable when an adapter can apply the
+   * requested effort to the latest turn without invalidating cached history.
+   * "on" retains the adapter's normal enabled-thinking default.
+   */
+  reasoningEffortBaseline?: LLMReasoningEffort | 'on'
+  /**
    * Enable reasoning while leaving the effort at the provider's model default.
    */
   reasoningUseDefaultEffort?: boolean
@@ -300,6 +353,11 @@ export interface CompletionParams {
    * LLM provider wrapper.
    */
   remoteProviderErrorRetries?: number
+  /**
+   * Recomputes the retry wait from the caller's remaining work budget.
+   * Returning zero preserves time for delivery instead of dispatching a retry.
+   */
+  getRetryTimeout?: (timeoutMs: number) => number
   /**
    * OpenAI-compatible tools for providers that support tool calling. When set,
    * the provider sends these as `tools`

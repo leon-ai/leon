@@ -17,6 +17,7 @@ const MODEL_STATUS_LABELS = {
   [ModelResponseState.Waiting]: 'Waiting for model response',
   [ModelResponseState.Connected]: 'Waiting for model response (stream connected)',
   [ModelResponseState.Reasoning]: 'Model is reasoning',
+  [ModelResponseState.Reviewing]: 'Checking answer',
   [ModelResponseState.Retrying]: 'Retrying model response'
 }
 const MODEL_RETRY_LABELS = {

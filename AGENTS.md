@@ -6,6 +6,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 - For a new goal, inspect the existing implementation and confirm the plan with the owner before changing code.
 - Use `pnpm`, never npm. Keep changes minimal; reuse existing SDK facilities and `server/src/helpers/` before adding abstractions. Remove superseded logic rather than maintaining parallel implementations.
+- Keep registry dependencies at least 36 hours old through root pnpm/uv policy, including standalone installs. Exceptions require explicit owner approval, exact version pins and package-scoped overrides; never disable the global cooldown.
 - Preserve unrelated working-tree changes and profile isolation. Use existing profile/path/runtime utilities instead of hardcoded owner paths, runtime versions, or global mutable owner state.
 - Run `pnpm lint`, fix warnings/errors, and run checks relevant to the change.
 - Test current behavior with minimal coverage; extend existing suites. Trivial changes need no new tests.
@@ -28,6 +29,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Keep each tool self-contained. Duplicate small application-specific helpers when appropriate; do not introduce toolkit-level source folders. Put generic capabilities in SDK helpers when they avoid repeated dependencies or meaningful implementation duplication.
 - Preserve the tool's existing directory layout. Actual implementations belong in `src/nodejs/` or `src/python/`: Node.js extends SDK `Tool` and exports through `index.ts`; Python extends SDK `BaseTool` and follows the package exports. Supporting scripts belong under the implementation's `lib/`, not in a language folder implying another SDK implementation.
 - Use `ToolkitConfig` and inherited settings, validation, reporting, command and binary facilities. Keep tool-specific connection checks in the tool; do not create another settings loader or installer.
+- Assess incremental output support when changing tools. Use SDK command streaming, `emitOutput`/`emit_output` for text, and `emitProgress`/`emit_progress` only for advancing work. Keep final results separate, chunks bounded and retained output attached to its original call. Declare function `timeout.idleMs` and optional `totalMs` as needed; activity renews only idle time. Respect cancellation/task deadlines; reuse the host policy instead of parallel timers or simulated output.
 - Declare source-local dependencies in `package.json` and/or `pyproject.toml`. Reuse `scripts/setup/setup-tools-dependencies.js` and `sync-source-dependencies.js`; setup supplies managed Node.js, Python, pnpm and uv.
 - Do not add nested `pnpm-workspace.yaml` files to tools, skills, bridges or generated tool projects. Keep shared build policy in the repository root; the shared installer carries it into independent source installs. Keep application-specific dependency compatibility rules in a source-local `.pnpmfile.mjs` hook, and include that hook in generated projects and source exports that need it.
 - Before adding a dependency, inspect existing packages and SDK helpers. Prefer an existing package at a compatible pinned version. Keep application engines and assets tool-local; consider a bridge-owned package behind a generic SDK helper for reusable infrastructure. Judge each dependency individually instead of moving application behavior into the SDK merely to reduce package manifests.
@@ -36,10 +38,11 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 ## Bridge SDKs
 
-- Organize generic helpers under `sdk/utils/`. Preserve existing public utility imports when reorganizing modules.
-- Add small generic SDK capabilities when they serve shared infrastructure needs and avoid repeated dependencies or meaningful duplication. Keep application-specific behavior in its tool and avoid speculative shared APIs.
-- Declare SDK helper dependencies in the corresponding bridge's own manifest. Bridges must not rely on Core's `node_modules` or import Core helpers for dependency reuse. Compatible package versions can share pnpm's store without sharing runtime ownership; prefer standard-library equivalents where available.
-- Any shared SDK change must have equivalent behavior in both Node.js and Python, following each language's conventions. Keep host-specific transport internals outside the public SDK.
+- Core must not import SDK/tool runtime implementations; SDKs must not import Core services/helpers. Allow type-only imports and explicit dependency-free host contracts.
+- Put shared contracts in `bridges/runtime/contracts/` and Node.js capabilities in `bridges/runtime/nodejs/`: small standard-library leaves without Core/SDK/toolkit imports. Reuse persistence/transport through thin adapters; keep paths/context, logging and authentication host-owned.
+- Keep SDK helpers in `sdk/utils/`, preserve public imports and equivalent, idiomatic Node.js/Python behavior. Add helpers only for shared infrastructure that avoids repeated dependencies or meaningful duplication; keep application behavior in tools and host transport outside the public SDK.
+- Declare SDK dependencies in their bridge manifest, never Core's `node_modules`. Prefer standard-library equivalents; compatible versions may share pnpm's store, not runtime ownership.
+- Use narrow imports: platform/path/settings must not load archives/downloaders/integrations. Lazy loading only defers optional work. Verify boundary changes with built import graphs and isolated startup without bridge-only dependencies available to Core; source tests alone are insufficient.
 
 ## Skills
 

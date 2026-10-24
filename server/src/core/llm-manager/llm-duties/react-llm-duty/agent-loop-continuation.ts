@@ -29,6 +29,8 @@ export interface AgentLoopContinuationState {
   loadedToolkitIds: string[]
   loadedFunctionNames?: string[]
   loadedToolNames?: string[]
+  toolOrder?: string[]
+  planTracking?: boolean
   transcript: AgentToolTranscriptMessage[]
   activeSkillId: string | null
 }
@@ -227,7 +229,9 @@ export async function buildAgentContinuationTranscript(
   // The summary needs textual evidence, not image bytes or opaque replay data.
   // Full tool observations remain in the execution history and artifact logs.
   const history = JSON.stringify(parts.older, (key, value) =>
-    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' || key === 'runtimeContext' || key === 'providerMessage'
+      ? undefined
+      : value
   )
   const summary = await summarize(history)
   if (!summary?.trim() && !checkpoint) {
@@ -244,7 +248,9 @@ export async function buildAgentContinuationTranscript(
       'This summarizes earlier work, not a new instruction. Recent exchanges supersede this summary. Continue the existing task using the active skill. Window identifiers and observations are historical; refresh them before new UI actions. Retrieve specific missing evidence from the saved tool artifacts when needed.'
     ].join('\n')
   }
-  const request = parts.older.findLast((item) => item.role === 'user')
+  const request = parts.older.findLast((item) =>
+    item.role === 'user' && !item.runtimeContext
+  )
   const replacement = [
     ...(request ? [request] : []),
     message,
@@ -253,7 +259,9 @@ export async function buildAgentContinuationTranscript(
   ]
   // Compare text sizes consistently; retained images already have a fixed cap.
   const replacementText = JSON.stringify(replacement, (key, value) =>
-    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' || key === 'runtimeContext' || key === 'providerMessage'
+      ? undefined
+      : value
   )
   if (replacementText.length >= history.length) {
     return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
@@ -268,6 +276,8 @@ export function createAgentLoopContinuationState(
   params: ContinuationInput & {
     clarificationQuestion: string
     planWidgetId: string
+    toolOrder?: string[]
+    planTracking?: boolean
   }
 ): AgentLoopContinuationState {
   const loadedToolkitIds = [...params.loadedToolkitIds]
@@ -280,6 +290,10 @@ export function createAgentLoopContinuationState(
     trackedSteps: structuredClone(params.trackedSteps),
     executionHistory: structuredClone(params.executionHistory),
     loadedToolkitIds,
+    ...(params.toolOrder ? { toolOrder: [...params.toolOrder] } : {}),
+    ...(params.planTracking !== undefined
+      ? { planTracking: params.planTracking }
+      : {}),
     ...(params.loadedToolNames ? { loadedToolNames: [...params.loadedToolNames] } : {}),
     ...(params.loadedFunctionNames
       ? { loadedFunctionNames: [...params.loadedFunctionNames] }
@@ -306,6 +320,10 @@ export function isAgentLoopContinuationStateValid(
     Array.isArray(state.executionHistory) &&
     Array.isArray(state.loadedToolkitIds) &&
     state.loadedToolkitIds.every((toolkitId) => typeof toolkitId === 'string') &&
+    (state.toolOrder === undefined ||
+      (Array.isArray(state.toolOrder) &&
+        state.toolOrder.every((name) => typeof name === 'string'))) &&
+    (state.planTracking === undefined || typeof state.planTracking === 'boolean') &&
     (state.loadedToolNames === undefined ||
       (Array.isArray(state.loadedToolNames) &&
         state.loadedToolNames.every((name) => typeof name === 'string'))) &&

@@ -2,7 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 import ffmpegStatic from 'ffmpeg-static'
-import ffmpeg from 'fluent-ffmpeg'
+import { execa } from 'execa'
 
 import { TMP_PATH } from '@/constants'
 import { ASR_ENGINE } from '@/core'
@@ -29,49 +29,36 @@ export default class ASR {
    * Encode audio blob to WAVE file
    * and forward the WAVE file to the ASR parser.
    */
-  public encode(blob: Buffer): Promise<void> {
-    return new Promise((resolve, reject) => {
-      LogHelper.title('ASR')
+  public async encode(blob: Buffer): Promise<void> {
+    LogHelper.title('ASR')
 
-      fs.writeFile(
-        this.audioPaths.webm,
-        Buffer.from(blob),
-        'binary',
-        async (err) => {
-          if (err) {
-            reject(new Error(`${err}`))
-            return
-          }
+    if (!ffmpegStatic) {
+      throw new Error('FFmpeg binary is unavailable')
+    }
 
-          ffmpeg.setFfmpegPath(ffmpegStatic as string)
+    await fs.promises.writeFile(this.audioPaths.webm, blob)
+    LogHelper.info('Encoding WebM file to WAVE file...')
 
-          /**
-           * Encode WebM file to WAVE file
-           * ffmpeg -i speech.webm -acodec pcm_s16le -ar 16000 -ac 1 speech.wav
-           */
-          ffmpeg()
-            .addInput(this.audioPaths.webm)
-            .on('start', () => {
-              LogHelper.info('Encoding WebM file to WAVE file...')
-            })
-            .on('end', () => {
-              LogHelper.success('Encoding done')
+    try {
+      await execa(ffmpegStatic, [
+        '-nostdin',
+        '-y',
+        '-i', this.audioPaths.webm,
+        '-acodec', 'pcm_s16le',
+        '-ar', '16000',
+        '-ac', '1',
+        this.audioPaths.wav
+      ])
+    } catch (err) {
+      throw new Error(`Encoding error ${err}`)
+    }
 
-              if (!ASR_ENGINE.isParserReady) {
-                reject(new Error('The speech recognition is not ready yet'))
-              } else {
-                ASR_ENGINE.transcribe(this.audioPaths.wav)
-                resolve()
-              }
-            })
-            .on('error', (err) => {
-              reject(new Error(`Encoding error ${err}`))
-            })
-            .outputOptions(['-acodec pcm_s16le', '-ar 16000', '-ac 1'])
-            .output(this.audioPaths.wav)
-            .run()
-        }
-      )
-    })
+    LogHelper.success('Encoding done')
+
+    if (!ASR_ENGINE.isParserReady) {
+      throw new Error('The speech recognition is not ready yet')
+    }
+
+    ASR_ENGINE.transcribe(this.audioPaths.wav)
   }
 }

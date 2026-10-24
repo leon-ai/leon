@@ -11,7 +11,7 @@ import {
   type SkillToolExecutionInput,
   type SkillToolExecutionResult,
   type SkillToolResponse
-} from '@/core/skill-tool-bridge'
+} from '@@/bridges/runtime/contracts/skill-tool-protocol'
 
 interface PendingToolRequest {
   resolve: (result: SkillToolExecutionResult) => void
@@ -43,6 +43,20 @@ export default class ToolManager {
   >()
   private static stdinBuffer = ''
   private static isListeningForToolResults = false
+
+  /**
+   * Prepares another tool's declared executable through the normal SDK installer.
+   * Binary consumers do not need to load the tool's application runtime.
+   */
+  static async getToolBinaryPath(toolkitId: string, toolId: string): Promise<string> {
+    const tool = new (class extends Tool {
+      public readonly toolkit = toolkitId
+      public readonly toolName = toolId
+      public readonly description = toolId
+    })()
+
+    return tool.getBinaryPath(toolId)
+  }
 
   static async initTool<TTool extends Tool>(
     ToolClass: new () => TTool

@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildBoundedToolObservation,
   prepareAgentModelContext,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
-  resolveAgentMaxOutputTokens
+  resolveAgentMaxOutputTokens,
+  retainRecentToolImages,
+  reuseToolContext
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
 import type {
   AgentToolTranscriptMessage,
+  OpenAITool,
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
@@ -56,6 +60,154 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('reuses visible context, refreshes changed content and restores it after compaction', () => {
+    const result = (id: string, content: string): AgentToolTranscriptMessage => ({
+      role: 'tool', toolCallId: id, toolName: 'source',
+      content: JSON.stringify({ data: { output: {
+        instructions: [{ modelContextId: 'workspace/rules', content }]
+      } } })
+    })
+    const transcript = [
+      result('first', 'Follow these rules.'),
+      result('repeat', 'Follow these rules.'),
+      result('changed', 'Follow the current rules.'),
+      result('reverted', 'Follow these rules.')
+    ]
+    const original = JSON.stringify(transcript)
+    const projected = reuseToolContext(transcript)
+
+    expect(projected[0]).toBe(transcript[0])
+    expect(JSON.parse(projected[1]!.content).data.output.instructions[0]).toEqual({
+      modelContextId: 'workspace/rules',
+      contentReference: 'Unchanged context; complete content is in tool call first.'
+    })
+    expect(projected[2]).toBe(transcript[2])
+    expect(projected[3]).toBe(transcript[3])
+    expect(reuseToolContext(transcript.slice(1))[0]).toBe(transcript[1])
+    expect(JSON.stringify(transcript)).toBe(original)
+  })
+
+  it('keeps reusable context isolated by tool and leaves ordinary evidence intact', () => {
+    const content = JSON.stringify({ data: {
+      parsed_input: { modelContextId: 'rules', content: 'Read me.' },
+      output: { modelContextId: 'rules', content: 'Read me.' }
+    } })
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'tool', toolCallId: 'a', toolName: 'first', content },
+      { role: 'tool', toolCallId: 'b', toolName: 'second', content },
+      { role: 'tool', toolCallId: 'c', toolName: 'first', content: 'Read me.' }
+    ]
+
+    expect(reuseToolContext(transcript)).toEqual(transcript)
+  })
+
+  it('restores full context when pressure removes the earlier complete source', () => {
+    const context = { modelContextId: 'workspace', content: 'Required context. '.repeat(300) }
+    const observation = JSON.stringify({
+      status: 'success', output_log_path: '/logs/source.json',
+      data: { output: { result: context } }
+    })
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'tool', toolCallId: 'source',
+      toolName: 'computer_use__cua__get_window_state', content: observation
+    }]
+    for (let index = 0; index < 8; index += 1) {
+      appendToolExchange(transcript, `read-${index}`, 'Observed evidence.')
+    }
+    transcript.push({ ...transcript[0]!, toolCallId: 'latest' } as AgentToolTranscriptMessage)
+
+    const prepared = prepareAgentModelContext({
+      transcript, systemPrompt: 'Inspect context.', tools: [],
+      compactionTriggerTokens: 100_000, forceCompaction: true
+    })
+
+    expect(prepared.transcript[0]!.content).not.toBe(observation)
+    expect(prepared.transcript.at(-1)!.content).toBe(observation)
+    expect(transcript[0]!.content).toBe(observation)
+  })
+
+  it('batches image removals while preserving the request prefix between removals', () => {
+    const transcript: AgentToolTranscriptMessage[] = []
+    const image = { dataBase64: 'image', mediaType: 'image/png' }
+    const appendImage = (id: string): void => {
+      appendToolExchange(transcript, id, 'Inspected image.')
+      const message = transcript.at(-1)!
+      if (message.role === 'tool') {
+        message.files = [image]
+      }
+    }
+
+    appendImage('one')
+    appendImage('two')
+    appendImage('three')
+    expect(retainRecentToolImages(transcript)).toEqual(transcript)
+
+    appendImage('four')
+    const removed = retainRecentToolImages(transcript)
+    expect(removed[1]).not.toHaveProperty('files')
+    expect(removed[3]).not.toHaveProperty('files')
+    expect(removed[5]).toHaveProperty('files')
+    expect(removed[7]).toHaveProperty('files')
+
+    appendImage('five')
+    expect(retainRecentToolImages(transcript).slice(0, removed.length)).toEqual(removed)
+    expect(transcript[1]).toHaveProperty('files')
+  })
+
+  it('keeps a default retained-result page complete in the model observation', () => {
+    const content = 'x'.repeat(8_000)
+    const observation = {
+      status: 'success',
+      data: { output: { result: {
+        execution: { id: 'original-result', state: 'completed' },
+        content: JSON.stringify(content), value: content, truncated: false
+      } } }
+    }
+
+    const result = JSON.parse(buildBoundedToolObservation(observation))
+
+    expect(result.data.output.result).toEqual({
+      execution: { id: 'original-result', state: 'completed' },
+      value: content, truncated: false
+    })
+    expect(observation.data.output.result.content).toBe(JSON.stringify(content))
+  })
+
+  it('preserves projection text when decoding cannot retain its exact number', () => {
+    const content = '9007199254740993'
+    const observation = { data: { output: { result: {
+      execution: { id: 'original-result', state: 'completed' },
+      content, value: JSON.parse(content), truncated: false
+    } } } }
+
+    expect(JSON.parse(buildBoundedToolObservation(observation))).toEqual(observation)
+  })
+
+  it('retains complete review capabilities while exposing context pressure', () => {
+    const tools: OpenAITool[] = [
+      'load_toolkit',
+      'file_system__file__read',
+      'weather__openmeteo__getWeather'
+    ].map((name) => ({
+      type: 'function',
+      function: { name, description: name, parameters: { type: 'object' } }
+    }))
+    const params = {
+      transcript: [{ role: 'user' as const, content: 'Review the evidence.' }],
+      systemPrompt: 'Review completion.',
+      tools,
+      compactionTriggerTokens: 1,
+      forceCompaction: true
+    }
+
+    expect(prepareAgentModelContext(params).tools.length).toBeLessThan(tools.length)
+
+    const review = prepareAgentModelContext({ ...params, preserveToolSchemas: true })
+
+    expect(review.tools).toEqual(tools)
+    expect(review.estimatedInputTokens).toBeGreaterThan(params.compactionTriggerTokens)
+  })
+
   it('budgets native context tokens without counting ciphertext or source snapshots', () => {
     const context = {
       provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
@@ -77,7 +229,7 @@ describe('agent context budget', () => {
     expect(prepared.transcript[0]).toEqual(transcript[0])
   })
 
-  it('bounds older successful UI evidence only when the full artifact is available', () => {
+  it('preserves UI text until context pressure requires reloadable evidence to shrink', () => {
     const transcript: AgentToolTranscriptMessage[] = []
     for (let index = 0; index < 12; index += 1) {
       transcript.push({ role: 'tool', toolCallId: String(index),
@@ -87,7 +239,16 @@ describe('agent context budget', () => {
           data: { output: { elements: 'Old screen '.repeat(400) } } }) })
     }
     const original = JSON.stringify(transcript)
-    const result = prepareAgentModelContext({ transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 96_000 })
+    const normal = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 96_000
+    })
+
+    expect(normal.transcript).toEqual(transcript)
+    expect(normal.wasCompacted).toBe(false)
+
+    const result = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 1
+    })
     expect(result.transcript[0]!.content.length).toBeLessThan(1_500)
     expect(result.transcript[0]!.content).toContain('/logs/0.json')
     expect(result.transcript[1]).toEqual(transcript[1])

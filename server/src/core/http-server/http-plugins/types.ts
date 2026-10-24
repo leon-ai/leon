@@ -162,6 +162,14 @@ export interface HTTPPluginPublishConversationEventInput {
   response_id?: string
   type: HTTPPluginAgentEventType
   data: Record<string, unknown>
+  /**
+   * Keep correlated activity in UI history without adding it to model context.
+   */
+  persist?: boolean
+  /**
+   * Complete activity snapshot; required when persistence is requested.
+   */
+  response_trace?: HTTPPluginAgentTrace
 }
 
 export interface HTTPPluginAppendConversationMessageResult {

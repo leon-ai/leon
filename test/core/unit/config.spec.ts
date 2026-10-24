@@ -103,6 +103,20 @@ describe('ConfigManager', () => {
     }
   })
 
+  it('keeps cache overrides optional and reloads per-model lifetimes', async () => {
+    const manager = await loadConfigManager()
+    const key = 'openai/gpt-6.1-sol'
+
+    expect(manager.getConfig().llm.model_settings[key]).toBeUndefined()
+
+    for (const ttl of ['30m', '12h']) {
+      fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+        llm: { model_settings: { [key]: { instructions_cache_ttl: ttl } } }
+      }))
+      expect(manager.reload().llm.model_settings[key]?.instructions_cache_ttl).toBe(ttl)
+    }
+  })
+
   it('defaults an omitted iteration limit and reloads an owner override', async () => {
     fs.writeFileSync(profilePaths.configPath, 'runtime:\n  pulse_enabled: false\n')
     const configManager = await loadConfigManager()
@@ -111,6 +125,23 @@ describe('ConfigManager', () => {
 
     fs.writeFileSync(profilePaths.configPath, 'runtime:\n  agent_max_iterations: 1\n')
     expect(configManager.reload().runtime.agent_max_iterations).toBe(1)
+  })
+
+  it('keeps the execution timeout optional and reloads a positive seconds value', async () => {
+    const manager = await loadConfigManager()
+    expect(manager.getConfig().runtime.agent_execution_timeout_seconds).toBeUndefined()
+
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+      runtime: { agent_execution_timeout_seconds: 180 }
+    }))
+    expect(manager.reload().runtime.agent_execution_timeout_seconds).toBe(180)
+  })
+
+  it.each([0, -1, '180', null])('rejects invalid execution timeout %s', async (timeout) => {
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+      runtime: { agent_execution_timeout_seconds: timeout }
+    }))
+    await expect(loadConfigManager()).rejects.toThrow('runtime.agent_execution_timeout_seconds')
   })
 
   it.each([0, -1, 1.5, '256', null, Number.MAX_SAFE_INTEGER + 1])(

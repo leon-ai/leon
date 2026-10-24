@@ -14,7 +14,8 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { LEON_HOME_PATH } from '@/leon-roots'
-import type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
+import { ToolExecutionOrigin } from '@/types'
+import type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 import { DUTY_NAME } from './agent-constants'
 import { buildBoundedToolObservation } from './agent-context-budget'
@@ -312,6 +313,7 @@ export async function runToolExecution(
   const requestedToolInput = toolInput
 
   const toolExecutionInput: {
+    origin: ToolExecutionOrigin
     signal?: AbortSignal
     toolId: string
     toolkitId: string
@@ -321,6 +323,7 @@ export async function runToolExecution(
     parsedInput?: Record<string, unknown>
     onProgress?: (progress: ToolRuntimeProgress) => void
   } = {
+    origin: ToolExecutionOrigin.Agent,
     ...(signal ? { signal } : {}),
     toolId,
     toolkitId,
@@ -503,7 +506,8 @@ export async function runToolExecution(
     }
 
 
-    const isOutputDelta = progress.key === 'bridges.tools.command_output_delta'
+    const isOutputDelta = progress.key === 'bridges.tools.command_output_delta' ||
+      progress.key === 'bridges.tools.output_delta'
     const outputDelta = isOutputDelta
       ? typeof progress.data?.['output'] === 'string'
         ? progress.data['output']
@@ -530,7 +534,7 @@ export async function runToolExecution(
       input: requestedToolInput,
       output: progress.data || progress.message,
       ...(outputDelta
-        ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving command output...' }
+        ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving tool output...' }
         : { progressMessage: progress.message }),
       ...(stepLabel ? { stepLabel } : {})
     })
@@ -907,6 +911,7 @@ export async function runToolExecution(
     ...(outputLogPath
       ? { output_log_path: outputLogPath }
       : {}),
+    ...(toolOutput['execution'] ? { execution: toolOutput['execution'] } : {}),
     message: effectiveMessage,
     data: observationData,
     ...(hasObservedToolFailure

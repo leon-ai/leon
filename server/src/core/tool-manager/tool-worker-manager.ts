@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import treeKill from 'tree-kill'
+import { ToolTimeout } from '@@/bridges/runtime/nodejs/tool-timeout'
 
 import {
   CODEBASE_PATH,
@@ -13,8 +14,13 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ToolConcurrency } from '@/types'
-import type { ToolExecutionContext, ToolRuntimeProgress, ToolRuntimeResult } from '@sdk/tool-runtime-types'
-import { ToolRuntimeLifetime, type ToolWorkerResponse } from '@bridge/tool-runtime-types'
+import {
+  ToolRuntimeLifetime,
+  type ToolExecutionContext,
+  type ToolRuntimeProgress,
+  type ToolRuntimeResult,
+  type ToolWorkerResponse
+} from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
 const DIAGNOSTIC_LIMIT = 16_000
@@ -104,6 +110,9 @@ export class ToolWorkerManager {
         ...RuntimeHelper.getManagedNodeEnvironment(),
         TSX_TSCONFIG_PATH: path.join(NODEJS_BRIDGE_ROOT_PATH, 'tsconfig.json'),
         LEON_CODEBASE_PATH: CODEBASE_PATH,
+        // Tool assets belong to the codebase; relative task files belong to
+        // the caller's workspace, including across fresh conversations.
+        LEON_WORKSPACE_PATH: process.cwd(),
         LEON_PROFILE: context.profileName,
         LEON_SESSION_ID: context.conversationSessionId || ''
       },
@@ -187,8 +196,10 @@ export class ToolWorkerManager {
       context.profileName,
       context.toolkitId,
       context.toolId,
+      process.cwd(),
       ...(isolated ? [randomUUID()] : [])
     ])
+    const timeout = context.timeout ? new ToolTimeout(context.timeout) : undefined
     const worker = this.workers.get(key) ?? this.create(context, key)
     const requestId = randomUUID()
     // A persistent worker may serve another conversation while earlier work
@@ -197,6 +208,10 @@ export class ToolWorkerManager {
       streams: new Set<string>(),
       returned: false,
       receive: (progress: ToolRuntimeProgress): void => {
+        if (!subscription.returned && progress.activity) {
+          timeout?.touch()
+        }
+
         runWithProfileContext({ profileName: context.profileName }, () =>
           runWithConversationSession({ sessionId: context.conversationSessionId || '' }, () =>
             context.onProgress?.(progress)
@@ -211,6 +226,21 @@ export class ToolWorkerManager {
       void this.stop(worker)
     }
     context.signal?.addEventListener('abort', abort, { once: true })
+    let forceStopTimer: NodeJS.Timeout | undefined
+    const cancelTimedOutCall = (): void => {
+      if (worker.process.connected) {
+        worker.process.send({
+          type: 'cancel', requestId, reason: timeout!.signal.reason.message
+        }, () => {})
+      }
+
+      // Give the tool time to return partial evidence and release only this
+      // call's resources before retiring an unresponsive worker and its children.
+      forceStopTimer = setTimeout(() => {
+        void this.stop(worker, 0)
+      }, SHUTDOWN_TIMEOUT_MS)
+    }
+    timeout?.signal.addEventListener('abort', cancelTimedOutCall, { once: true })
     let retire = false
     const result = await new Promise<ToolRuntimeResult>((resolve) => {
       const finish = (value: ToolRuntimeResult): void => {
@@ -236,6 +266,9 @@ export class ToolWorkerManager {
         }
       })
     })
+    clearTimeout(forceStopTimer)
+    timeout?.signal.removeEventListener('abort', cancelTimedOutCall)
+    timeout?.dispose()
     context.signal?.removeEventListener('abort', abort)
     subscription.returned = true
     if (subscription.streams.size === 0) {
@@ -246,12 +279,21 @@ export class ToolWorkerManager {
       await this.stop(worker)
     }
     delete worker.log
-    return context.signal?.aborted
-      ? { ...result, success: false, message: 'Tool execution canceled. Inspect any delivered input before retrying.' }
-      : result
+    if (context.signal?.aborted) {
+      return { ...result, success: false, message: 'Tool execution canceled. Inspect any delivered input before retrying.' }
+    }
+    if (timeout?.signal.aborted) {
+      return {
+        ...result,
+        success: false,
+        message: `${timeout.signal.reason.message} Inspect any delivered input and retained results before retrying.`
+      }
+    }
+
+    return result
   }
 
-  private async stop(worker: Worker): Promise<void> {
+  private async stop(worker: Worker, graceMs = SHUTDOWN_TIMEOUT_MS): Promise<void> {
     const timer = setTimeout(() => {
       // A non-cooperative call can retain command children. Killing only the
       // worker would orphan them and leave their output pipes open.
@@ -262,7 +304,7 @@ export class ToolWorkerManager {
           }
         })
       }
-    }, SHUTDOWN_TIMEOUT_MS)
+    }, graceMs)
     try {
       if (worker.process.connected) {
         worker.process.send({ type: 'shutdown' }, () => {})

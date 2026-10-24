@@ -217,6 +217,10 @@ export function normalizeCompletionResultForOpenAICompatibleProvider(
     result.compactionContext = message['compactionContext'] as ProviderCompactionContext
   }
 
+  if (message['providerMessage']) {
+    result.providerMessage = message['providerMessage'] as NonNullable<NormalizedCompletionResult['providerMessage']>
+  }
+
   const toolCallsRaw = Array.isArray(message['tool_calls'])
     ? (message['tool_calls'] as unknown[])
     : Array.isArray(message['toolCalls'])

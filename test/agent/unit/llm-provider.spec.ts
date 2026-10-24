@@ -10,7 +10,7 @@ import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 import LLMProvider from '@/core/llm-manager/llm-provider'
 import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
 import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
-import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { CompletionFailureKind, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 import { appendInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
 
 vi.mock('@/core/llm-manager/llm-usage/usage-ledger', () => ({
@@ -74,12 +74,79 @@ vi.mock('@/helpers/log-helper', () => ({
 interface LLMProviderTestState {
   agentLLMProvider: {
     modelName: string
+    transport?: 'http' | 'websocket'
     runChatCompletion: ReturnType<typeof vi.fn>
   }
   agentLLMProviderTargetLabel: string
 }
 
 describe('LLMProvider', () => {
+  it.each(['http', 'websocket'] as const)(
+    'reports the selected %s transport before a connection opens',
+    async (transport) => {
+      const onAttempt = vi.fn()
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = {
+        modelName: 'test-model',
+        transport,
+        runChatCompletion: vi.fn().mockRejectedValue(new Error('Connection failed'))
+      }
+      celerisTarget.provider = LLMProviders.OpenAI
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      await manager.prompt('Continue.', {
+        dutyType: LLMDuties.ReAct,
+        shouldStream: true,
+        maxRetries: 0,
+        remoteProviderErrorRetries: 0,
+        onAttempt
+      })
+
+      expect(onAttempt.mock.calls.map(([timing]) => timing.transport)).toEqual([
+        transport,
+        transport
+      ])
+      expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+        outcome: 'Error',
+        requestDispatchMs: undefined,
+        responseHeadersMs: undefined,
+        firstByteMs: undefined
+      })
+    }
+  )
+
+  it.each([
+    { metadata: { statusCode: 503 }, kind: CompletionFailureKind.Unavailable },
+    { metadata: { response: { status: 429 } }, kind: CompletionFailureKind.Unavailable },
+    { metadata: { statusCode: 400, data: { error: { code: 'context_length_exceeded' } } }, kind: CompletionFailureKind.Context },
+    { metadata: { statusCode: 400, data: { error: { param: 'context_management' } } }, kind: CompletionFailureKind.Context },
+    { metadata: { statusCode: 401 }, kind: CompletionFailureKind.Provider }
+  ])('preserves structured $kind failures through provider wrappers', async ({ metadata, kind }) => {
+    const onAttempt = vi.fn()
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    state.agentLLMProvider = {
+      modelName: 'celeris-1',
+      runChatCompletion: vi.fn().mockRejectedValue(new Error('Request failed', {
+        cause: metadata
+      }))
+    }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    const result = await manager.prompt('Continue the task.', {
+      dutyType: LLMDuties.ReAct,
+      maxRetries: 0,
+      remoteProviderErrorRetries: 0,
+      onAttempt
+    })
+
+    expect(result).toBeNull()
+    expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({ failureKind: kind })
+    expect(state.agentLLMProvider.runChatCompletion).toHaveBeenCalledOnce()
+  })
+
   it('releases cancellation after bounded cleanup when the provider ignores abort', async () => {
     vi.useFakeTimers()
 
@@ -375,6 +442,47 @@ describe('LLMProvider', () => {
     }
   })
 
+  it.each([0, 20_000])('preserves the caller finishing reserve when the retry budget is %sms', async (retryBudget) => {
+    vi.useFakeTimers()
+
+    try {
+      const attempts: CompletionParams[] = []
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = {
+        modelName: 'celeris-1',
+        runChatCompletion: vi.fn((_prompt, params: CompletionParams) => {
+          attempts.push(params)
+          return new Promise(() => {})
+        })
+      }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const retryDeadline = Date.now() + 30_000 + retryBudget
+      const result = manager.prompt('Finish the deliverable.', {
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        shouldStream: false,
+        timeout: 30_000,
+        maxRetries: 2,
+        remoteProviderErrorRetries: 0,
+        getRetryTimeout: (timeout) => Math.min(timeout, Math.max(0, retryDeadline - Date.now()))
+      })
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      if (retryBudget > 0) {
+        expect(attempts[1]?.timeout).toBe(retryBudget)
+        await vi.advanceTimersByTimeAsync(retryBudget)
+      }
+
+      expect(await result).toBeNull()
+      expect(attempts).toHaveLength(retryBudget > 0 ? 2 : 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('still extends the deadline after a genuine inference timeout', async () => {
     vi.useFakeTimers()
 
@@ -412,6 +520,51 @@ describe('LLMProvider', () => {
     }
   })
 
+  it('retains the initial inference allowance after HTTP fallback', async () => {
+    vi.useFakeTimers()
+
+    try {
+      let params!: CompletionParams
+      let complete!: (result: unknown) => void
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = {
+        modelName: 'celeris-1',
+        transport: 'websocket',
+        runChatCompletion: vi.fn((_prompt, options: CompletionParams) => {
+          params = options
+          params.onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
+          return new Promise((resolve) => {
+            complete = resolve
+          })
+        })
+      }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const pending = manager.prompt('Think through the task.', {
+        dutyType: LLMDuties.ReAct,
+        shouldStream: true,
+        timeout: 120_000
+      })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      params.onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(params.signal?.aborted).toBe(false)
+      expect(state.agentLLMProvider.runChatCompletion).toHaveBeenCalledOnce()
+      params.onToken?.('Done')
+      params.onStreamEvent?.({ type: 'finish' })
+      complete({ data: { choices: [{ message: { content: 'Done' } }] } })
+
+      expect((await pending)?.output).toBe('Done')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['text', 'tool'] as const)(
     'separates inference from %s stream silence and retries without extending idle time',
     async (output) => {
@@ -422,7 +575,7 @@ describe('LLMProvider', () => {
         const onAttempt = vi.fn()
         const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
           attempts.push(params)
-          params.onStreamEvent?.({ type: 'stream-open', transport: 'http', requestId: 'req-test' })
+          params.onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
 
           if (attempts.length === 2) {
             params.onToken?.('Recovered')
@@ -458,7 +611,18 @@ describe('LLMProvider', () => {
 
         // Opening a connection, or an empty token, is not model output.
         attempts[0]!.onToken?.('')
-        await vi.advanceTimersByTimeAsync(40_000)
+        await vi.advanceTimersByTimeAsync(10)
+        attempts[0]!.onStreamEvent?.({ type: 'response-headers', requestId: 'req-test' })
+        const promptCache = {
+          key: 'opaque-session-key', systemHash: 'system-hash', toolsHash: 'tools-hash',
+          inputItems: 4, previousInputItems: 2, matchingPrefixItems: 2, changedInputs: []
+        }
+        attempts[0]!.onStreamEvent?.({ type: 'prompt-cache', promptCache })
+        await vi.advanceTimersByTimeAsync(10)
+        attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
+        await vi.advanceTimersByTimeAsync(10)
+        attempts[0]!.onStreamEvent?.({ type: 'stream-open', transport: 'http' })
+        await vi.advanceTimersByTimeAsync(39_970)
         expect(attempts[0]!.signal?.aborted).toBe(false)
 
         const progress = (): void => {
@@ -492,7 +656,11 @@ describe('LLMProvider', () => {
         ])
         expect(timings[1]).toMatchObject({
           attemptId: timings[0].attemptId,
-          streamOpenMs: 0,
+          promptCache,
+          requestDispatchMs: 0,
+          responseHeadersMs: 10,
+          firstByteMs: 20,
+          streamOpenMs: 30,
           generationStartMs: 40_000,
           transportIdleMs: 1_000,
           outputIdleMs: 30_000,
@@ -505,11 +673,12 @@ describe('LLMProvider', () => {
     }
   )
 
-  it.each(['reasoning', 'hosted tool'])('allows silent %s and reports actual text arrival', async (phase) => {
+  it.each(['reasoning', 'hosted tool', 'compaction'])('allows silent %s and reports actual text arrival', async (phase) => {
     vi.useFakeTimers()
 
     try {
       let params: CompletionParams | undefined
+      const onAttempt = vi.fn()
       let complete: (value: unknown) => void = () => {}
       const runChatCompletion = vi.fn((_prompt, options: CompletionParams) => {
         params = options
@@ -528,22 +697,36 @@ describe('LLMProvider', () => {
         dutyType: LLMDuties.ReAct,
         systemPrompt: '',
         shouldStream: true,
+        onAttempt,
         maxRetries: 0
       })
 
       await vi.advanceTimersByTimeAsync(0)
+      let firstTokenAt = Date.now()
+      if (phase === 'compaction') {
+        params!.onToken?.('Done')
+        params!.onStreamEvent?.({ type: 'text-end' })
+      }
       params!.onStreamEvent?.(phase === 'reasoning'
         ? { type: 'reasoning-start' }
-        : { type: 'tool-call', toolCallId: 'hosted', providerExecuted: true })
+        : phase === 'compaction'
+          ? { type: 'compaction-start' }
+          : { type: 'tool-call', toolCallId: 'hosted', providerExecuted: true })
       await vi.advanceTimersByTimeAsync(60_000)
       expect(params!.signal?.aborted).toBe(false)
       params!.onStreamEvent?.(phase === 'reasoning'
         ? { type: 'reasoning-end' }
-        : { type: 'tool-result', toolCallId: 'hosted' })
+        : phase === 'compaction'
+          ? { type: 'compaction-end' }
+          : { type: 'tool-result', toolCallId: 'hosted' })
 
-      const firstTokenAt = Date.now()
-
-      params!.onToken?.('Done')
+      if (phase !== 'compaction') {
+        firstTokenAt = Date.now()
+        if (phase === 'reasoning') {
+          params!.onReasoningToken?.('Verified the result.')
+        }
+        params!.onToken?.('Done')
+      }
       params!.onStreamEvent?.({ type: 'finish' })
       await vi.advanceTimersByTimeAsync(120_000)
       expect(params!.signal?.aborted).toBe(false)
@@ -554,6 +737,46 @@ describe('LLMProvider', () => {
       } })
 
       expect((await pending)?.firstTokenAt).toBe(firstTokenAt)
+      expect(onAttempt.mock.calls.at(-1)?.[0].firstReasoningTokenMs).toBe(
+        phase === 'reasoning' ? 60_000 : undefined
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds silent compaction even when transport heartbeats continue', async () => {
+    vi.useFakeTimers()
+
+    try {
+      let params!: CompletionParams
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = {
+        modelName: 'celeris-1',
+        runChatCompletion: vi.fn((_prompt, options: CompletionParams) => {
+          params = options
+          params.onToken?.('Drafted answer.')
+          params.onStreamEvent?.({ type: 'text-end' })
+          params.onStreamEvent?.({ type: 'compaction-start' })
+
+          return new Promise(() => {})
+        })
+      }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Answer the question.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 120_000, maxRetries: 0, remoteProviderErrorRetries: 0
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(params.signal?.aborted).toBe(false)
+      params.onStreamEvent?.({ type: 'transport-activity' })
+      await vi.advanceTimersByTimeAsync(60_001)
+
+      expect(await pending).toBeNull()
+      expect(params.signal?.aborted).toBe(true)
+      expect(state.agentLLMProvider.runChatCompletion).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }

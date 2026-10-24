@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import execa from 'execa'
+import { execa } from 'execa'
 
 import { CPUArchitectures } from '@/types'
 import {

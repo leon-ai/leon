@@ -10,11 +10,50 @@ import type {
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
 
 import type { Widget } from '@sdk/widget'
-import { ParamsHelper } from '@sdk/params-helper'
+import type { ParamsHelper } from '@sdk/params-helper'
 
 export type { ActionParams, IntentObject }
 
-export * from '@/core/nlp/types'
+export type {
+  NLPDomain,
+  NLPSkill,
+  NLPAction,
+  NLPUtterance,
+  NLUPartialProcessResult,
+  NLPJSProcessResult,
+  NLUSlot,
+  NLUClassification,
+  NLUProcessResult,
+  NLUResult,
+  NLUSlots,
+  NERDurationUnit,
+  BuiltInEntity,
+  BuiltInNumberEntity,
+  BuiltInIPEntity,
+  BuiltInHashtagEntity,
+  BuiltInPhoneNumberEntity,
+  BuiltInCurrencyEntity,
+  BuiltInPercentageEntity,
+  BuiltInDateEntity,
+  BuiltInTimeEntity,
+  BuiltInTimeRangeEntity,
+  BuiltInDateRangeEntity,
+  BuiltInDateTimeRangeEntity,
+  BuiltInDurationEntity,
+  BuiltInDimensionEntity,
+  BuiltInEmailEntity,
+  BuiltInOrdinalEntity,
+  BuiltInAgeEntity,
+  BuiltInURLEntity,
+  BuiltInTemperatureEntity,
+  CustomEnumEntity,
+  CustomRegexEntity,
+  NERBuiltInEntity,
+  NERCustomEntity,
+  NERGlobalEntity,
+  NEREntity
+} from '@/core/nlp/types'
+export * from '@@/bridges/runtime/contracts/entity-types'
 
 export type ActionFunction = (
   params: ActionParams,

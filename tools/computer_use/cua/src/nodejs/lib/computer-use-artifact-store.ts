@@ -10,9 +10,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import ffmpegStatic from 'ffmpeg-static'
-
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { getFfmpegBinaryPath } from './ffmpeg'
 
 import {
   COMPUTER_USE_ARTIFACT_DIRECTORY,
@@ -50,7 +49,7 @@ export class ComputerUseArtifactStore {
     artifacts: PersistedComputerUseImages['artifacts']
     modelFiles: PersistedComputerUseImages['modelFiles']
   }> {
-    if (!ffmpegStatic || !transform.artifactPath || transform.fromZoom || transform.sourceOffset) {
+    if (!transform.artifactPath || transform.fromZoom || transform.sourceOffset) {
       throw new Error('Zoom requires an original window or desktop capture and FFmpeg. Observe the target again.')
     }
     let x = Number(region['x1']), y = Number(region['y1'])
@@ -78,7 +77,9 @@ export class ComputerUseArtifactStore {
     const scale = Math.min(READING_IMAGE_SCALE, Math.sqrt(READING_IMAGE_PIXEL_BUDGET / pixels))
     const outputWidth = Math.floor(width * scale), outputHeight = Math.floor(height * scale)
     const artifactPath = path.join(this.getArtifactDirectory(input), `${Date.now()}-${randomUUID()}-read.png`)
-    await execFileAsync(ffmpegStatic, [
+    const binary = await getFfmpegBinaryPath()
+
+    await execFileAsync(binary, [
       '-nostdin', '-hide_banner', '-loglevel', 'error', '-i', transform.artifactPath,
       '-vf', `crop=${width}:${height}:${x}:${y}:exact=1,scale=${outputWidth}:${outputHeight}:flags=lanczos`,
       '-frames:v', '1', '-y', artifactPath
@@ -297,7 +298,6 @@ export class ComputerUseArtifactStore {
       modelDimensions.width !== sourceDimensions.width ||
       modelDimensions.height !== sourceDimensions.height
     if (
-      !ffmpegStatic ||
       extension === 'bin' ||
       (!needsResize && !setOfMark.filter && !coordinateGuide)
     ) {
@@ -317,7 +317,9 @@ export class ComputerUseArtifactStore {
         ...(setOfMark.filter ? [setOfMark.filter] : []),
         ...(coordinateGuide ? [coordinateGuide] : [])
       ].join(',')
-      await execFileAsync(ffmpegStatic, [
+      const binary = await getFfmpegBinaryPath()
+
+      await execFileAsync(binary, [
         '-nostdin',
         '-hide_banner',
         '-loglevel',

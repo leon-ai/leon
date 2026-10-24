@@ -129,6 +129,8 @@ describe('chat client answer streams', () => {
     expect(element.textContent).toContain('stream connected')
     update({ ...status, state: ModelResponseState.Reasoning })
     expect(element.textContent).toBe('Model is reasoning · Elapsed: 20 s')
+    update({ ...status, state: ModelResponseState.Reviewing })
+    expect(element.textContent).toBe('Checking answer · Elapsed: 20 s')
     update({ ...status, sessionId: 'session-b' })
     update({ ...status, requestId: 'old-request', state: ModelResponseState.Completed })
     expect(element.hidden).toBe(false)

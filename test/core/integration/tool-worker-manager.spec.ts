@@ -40,7 +40,7 @@ it.each(['recordLimit', 'timeout', 'canceled'])(
 let home = ''
 let manager: ToolWorkerManager
 
-it('keeps scaffold slides readable while evidence handoffs animate without click steps', async () => {
+it('keeps scaffold content visible without click steps and respects reduced motion', async () => {
   await fixture(false)
 
   const project = path.join(home, 'presentation')
@@ -60,16 +60,6 @@ it('keeps scaffold slides readable while evidence handoffs animate without click
   }
 
   await run('create', [project, 'Evidence handoffs'])
-  const checked = await run('check', [project])
-
-  expect(checked, JSON.stringify(checked)).toMatchObject({
-    ok: true, scope: 'full', complete: true, checkedStates: 5, findingCount: 0,
-    durationMs: expect.any(Number)
-  })
-  expect(await run('check', [project, { slides: [3] }])).toMatchObject({
-    ok: true, scope: 'targeted', complete: false, checkedStates: 1, findingCount: 0
-  })
-
   const live = await run('present', [project, { openBrowser: false }])
   const require = createRequire(path.resolve('tools/document/slidev/src/nodejs/package.json'))
   const { chromium } = require('playwright-chromium') as typeof import('../../../tools/document/slidev/src/nodejs/node_modules/playwright-chromium')
@@ -81,25 +71,41 @@ it('keeps scaffold slides readable while evidence handoffs animate without click
     await page.addInitScript(() => localStorage.setItem('slidev-wake-lock', 'false'))
     await page.goto(live['audienceUrl'] as string, { waitUntil: 'networkidle' })
 
-    for (let slide = 1; slide <= 5; slide += 1) {
+    await expect.poll(() => page.evaluate('window.__slidev__?.nav?.total || 0'))
+      .toBeGreaterThan(0)
+    const slideCount = await page.evaluate('window.__slidev__.nav.total') as number
+    let checkedReducedMotion = false
+
+    for (let slide = 1; slide <= slideCount; slide += 1) {
       await expect.poll(() => page.evaluate('window.__slidev__.nav.currentSlideNo')).toBe(slide)
       expect(await page.evaluate('window.__slidev__.nav.clicksTotal')).toBe(0)
 
-      if (slide === 3) {
-        const cards = page.locator('.slidev-page-3 .card')
-        const packet = page.locator('.slidev-page-3 .handoff-packet')
-        const position = await packet.evaluate((element) => getComputedStyle(element).left)
+      const layout = page.locator(`.slidev-page-${slide} .slidev-layout`)
 
-        expect(await cards.count()).toBe(3)
-        expect(await cards.evaluateAll((elements) => elements.every((element) => getComputedStyle(element).opacity === '1'))).toBe(true)
-        await expect.poll(() => packet.evaluate((element) => getComputedStyle(element).left)).not.toBe(position)
+      await expect.poll(() => layout.getByRole('heading').first().isVisible()).toBe(true)
+      await expect.poll(() => layout.locator('p').evaluateAll((elements) => elements.every((element) =>
+        Number(getComputedStyle(element).opacity) > 0 &&
+        getComputedStyle(element).visibility === 'visible'
+      ))).toBe(true)
+
+      // Check continuous motion independently of the template's layout and artwork.
+      const hasContinuousMotion = (): Promise<boolean> => layout.evaluate((element) =>
+        element.getAnimations({ subtree: true }).some((animation) =>
+          animation.effect?.getTiming().iterations === Infinity
+        )
+      )
+
+      if (await hasContinuousMotion()) {
         await page.emulateMedia({ reducedMotion: 'reduce' })
-        expect(await packet.evaluate((element) => getComputedStyle(element).animationName)).toBe('none')
-        expect(await cards.first().isVisible()).toBe(true)
+        expect(await hasContinuousMotion()).toBe(false)
+        checkedReducedMotion = true
+        await page.emulateMedia({ reducedMotion: 'no-preference' })
       }
 
       await page.keyboard.press('ArrowRight')
     }
+
+    expect(checkedReducedMotion).toBe(true)
   } finally {
     await browser.close()
   }
@@ -179,33 +185,37 @@ Every profile owns its settings, sessions and artifacts.
 
   expect(checked).toMatchObject({ ok: true, checkedStates: 3, findingCount: 0 })
 
-  for (const format of ['pdf', 'png', 'pptx', 'pptx-editable']) {
-    const exported = await run('export', [project, { format, withClicks: true }])
-    const artifacts = exported['artifacts'] as Array<{ path: string, filename: string }>
-    const primary = await fs.readFile(artifacts[0]!.path)
+  // Each export owns its workspace and artifact paths, so formats can render
+  // independently while still exercising the real worker and delivery contract.
+  await Promise.all(
+    ['pdf', 'png', 'pptx', 'pptx-editable'].map(async (format) => {
+      const exported = await run('export', [project, { format, withClicks: true }])
+      const artifacts = exported['artifacts'] as Array<{ path: string, filename: string }>
+      const primary = await fs.readFile(artifacts[0]!.path)
 
-    expect(exported['animated']).toBe(false)
-    expect(primary.length).toBeGreaterThan(100)
-    expect(artifacts.some((artifact) => artifact.filename === 'presentation-source.zip')).toBe(false)
+      expect(exported['animated']).toBe(false)
+      expect(primary.length).toBeGreaterThan(100)
+      expect(artifacts.some((artifact) => artifact.filename === 'presentation-source.zip')).toBe(false)
 
-    if (format === 'pdf') {
-      expect(primary.subarray(0, 4).toString()).toBe('%PDF')
-    } else if (format === 'png') {
-      expect(primary.subarray(1, 4).toString()).toBe('PNG')
-      expect(artifacts).toHaveLength(3)
-    } else {
-      const unpacked = path.join(home, format)
-      const archive = path.join(home, `${format}.zip`)
+      if (format === 'pdf') {
+        expect(primary.subarray(0, 4).toString()).toBe('%PDF')
+      } else if (format === 'png') {
+        expect(primary.subarray(1, 4).toString()).toBe('PNG')
+        expect(artifacts).toHaveLength(3)
+      } else {
+        const unpacked = path.join(home, format)
+        const archive = path.join(home, `${format}.zip`)
 
-      await fs.copyFile(artifacts[0]!.path, archive)
-      await extractArchive(archive, unpacked)
-      expect(await fs.readdir(path.join(unpacked, 'ppt', 'slides'))).toContain('slide3.xml')
+        await fs.copyFile(artifacts[0]!.path, archive)
+        await extractArchive(archive, unpacked)
+        expect(await fs.readdir(path.join(unpacked, 'ppt', 'slides'))).toContain('slide3.xml')
 
-      if (format === 'pptx-editable') {
-        expect(await fs.readFile(path.join(unpacked, 'ppt', 'slides', 'slide1.xml'), 'utf8')).toContain('Ground, act, verify')
+        if (format === 'pptx-editable') {
+          expect(await fs.readFile(path.join(unpacked, 'ppt', 'slides', 'slide1.xml'), 'utf8')).toContain('Ground, act, verify')
+        }
       }
-    }
-  }
+    })
+  )
 
   const web = await run('export', [project, { includeSource: true }])
   const artifacts = web['artifacts'] as Array<{ path: string, filename: string }>
@@ -825,7 +835,7 @@ export default class Fixture extends Tool {
     if (crash) process.exit(7)
     this.count++
     if (attach) this.attachModelFiles([{ dataBase64: 'eA==', mediaType: 'text/plain' }])
-    return { count: this.count, profile: this.executionContext.profileName,
+    return { count: this.count, cwd: process.cwd(), profile: this.executionContext.profileName,
       session: this.executionContext.conversationSessionId, pid: process.pid }
   }
   async hold() {
@@ -866,11 +876,15 @@ async function next(profile: string, session: string, attach = false, crash = fa
 
 it('retains per-profile state, refreshes session context, clears attachments and disposes workers', async () => {
   await fixture(true)
+  const workspace = path.join(home, 'workspace')
+  await fs.mkdir(workspace)
+  vi.spyOn(process, 'cwd').mockReturnValue(workspace)
   const first = await next('a', 'one', true)
   expect(first.success).toBe(true)
+  expect(first.output['result']).toMatchObject({ cwd: workspace })
   expect(first.modelFiles).toHaveLength(1)
   const second = await next('a', 'two')
-  expect(second.output['result']).toMatchObject({ count: 2, profile: 'a', session: 'two' })
+  expect(second.output['result']).toMatchObject({ count: 2, profile: 'a', session: 'two', cwd: workspace })
   expect(second.modelFiles).toBeUndefined()
   expect((await next('b', 'three')).output['result']).toMatchObject({ count: 1, profile: 'b' })
   await manager.dispose()

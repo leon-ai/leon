@@ -85,6 +85,8 @@ pnpm run dev:app
 
 The commit message guideline is adapted from the [AngularJS Git Commit Guidelines](https://github.com/angular/angular.js/blob/master/DEVELOPERS.md#-git-commit-guidelines).
 
+Use `type(scope): description`, or `type: description` when no single scope fits. The description must be between 1 and 50 characters. An optional body follows the subject on separate lines. The commit hook validates the subject with `scripts/commit-msg.js`.
+
 ### Types
 
 Types define which kind of changes you made to the project.
@@ -105,24 +107,50 @@ Types define which kind of changes you made to the project.
 
 ### Scopes
 
-Scopes define high-level nodes of Leon.
+Scopes identify the subsystem that owns the behavior, not the directory containing the code. Choose the primary subsystem rather than listing every touched area. Omit the scope for genuinely cross-cutting changes; do not use catch-all scopes such as `server` or `core`.
 
-- bridge/python
-- bridge/nodejs
-- hotword
-- scripts
-- server
-- tcp server
-- web app
-- skill/skill_name
+Use the scope names listed below, including spaces in multiword names such as `web app` and `messaging app`. Namespaced tool and skill suffixes retain the component's actual identifier, including hyphens and underscores.
+
+| Scope | Responsibility |
+| ----- | -------------- |
+| agent | Agent loop, planning, completion and compaction. |
+| context | Prompt assembly, context files and persona guidance. |
+| memory | Memory storage, retrieval and consolidation. |
+| sessions | Conversation persistence and lifecycle. |
+| llm | Shared inference, routing, caching and usage accounting. |
+| tools | Shared tool discovery, execution, retention and cancellation. |
+| runtime | Startup, profiles and managed runtimes. |
+| satellite | Remote-device connections and execution. |
+| api | HTTP and Socket.IO interfaces. |
+| voice | Speech input/output orchestration. |
+| controlled | Deterministic skill/action execution. |
+| web app | Web client. |
+| scripts | Repository automation, setup and release scripts. |
+| aurora | Shared UI components. |
+| messaging app | Messaging clients and integrations. |
+| built-in command | Built-in commands. |
+| hotword | Wake-word detection. |
+| python tcp server | Python TCP service. |
+
+Use these namespaces for changes confined to one component:
+
+- `bridge/python` or `bridge/nodejs`: the corresponding bridge and SDK.
+- `tool/<name>`: one tool, such as `tool/browser-use` or `tool/tool_executions`.
+- `skill/<name>`: one native or agent skill, such as `skill/timer_skill` or `skill/coding`.
+- `provider/<name>`: one provider integration. Accepted names are `llamacpp`, `sglang`, `openrouter`, `zai`, `deepseek`, `minimax`, `openai`, `anthropic`, `moonshotai`, `huggingface`, `cerebras`, `groq` and `celeris`.
+
+Use `tools` for shared tool infrastructure and `tool/<name>` for an individual tool. Likewise, use `llm` for shared model infrastructure and `provider/<name>` for a provider-specific change.
 
 ### Examples
 
 ```sh
-git commit -m "feat(server): awesome new server feature"
-git commit -m "docs(skill/leon): fix spelling"
-git commit -m "chore: split training script into awesome blocks"
-git commit -m "style(web app): remove chatbot useless parentheses"
+git commit -m "fix(context): narrow persona disclosure guidance"
+git commit -m "fix(runtime): isolate profile startup state"
+git commit -m "feat(tools): retain large execution results"
+git commit -m "fix(provider/openai): preserve cache identity"
+git commit -m "docs(skill/coding): clarify verification steps"
+git commit -m "style(web app): simplify chat layout"
+git commit -m "refactor: share dependency-free runtime contracts"
 ```
 
 ### GUI Clients

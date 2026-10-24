@@ -1,4 +1,4 @@
-import { ToolkitConfig } from '@sdk/toolkit-config'
+import { ToolSettings } from '@/core/tool-manager/tool-settings'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { MediaKind } from './media-generation-types'
@@ -58,7 +58,7 @@ function validateSettings(kind: MediaKind, settings: GenerationSettings): void {
 export async function readGenerationSettings(
   kind: MediaKind
 ): Promise<GenerationSettings> {
-  const settings = ToolkitConfig.loadToolSettings(
+  const settings = ToolSettings.loadToolSettings(
     getGenerationToolkit(kind),
     kind,
     {},
@@ -79,7 +79,7 @@ export async function saveGenerationSettings(
   settings: GenerationSettings
 ): Promise<GenerationSettings> {
   validateSettings(kind, settings)
-  ToolkitConfig.saveToolSettings(
+  ToolSettings.saveToolSettings(
     getGenerationToolkit(kind),
     kind,
     { ...settings },

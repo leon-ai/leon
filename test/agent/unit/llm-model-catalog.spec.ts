@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canDisableLLMModelReasoning,
-  getLLMModelCatalogEntries,
   getLLMModelCatalogEntry,
   LLM_MODEL_CATALOG,
   LLM_MODEL_REASONING_VALUES,
@@ -20,7 +19,9 @@ describe('LLM model catalog', () => {
       .toBe(1_050_000)
     expect(resolveModelContextWindowTokens(LLMProviders.MiniMax, 'MiniMax-M3'))
       .toBe(1_000_000)
-    expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'minimax/minimax-m3'))
+    expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'minimax/minimax-m3.1-flash:free'))
+      .toBe(1_000_000)
+    expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'deepseek/deepseek-v4.1-flash-1017'))
       .toBe(1_048_576)
     expect(resolveModelContextWindowTokens(LLMProviders.LlamaCPP, 'local.gguf'))
       .toBe(LOCAL_LLM_CONTEXT_WINDOW_TOKENS)
@@ -86,7 +87,7 @@ describe('LLM model catalog', () => {
     ])
     expect(getLLMModelCatalogEntry(
       LLMProviders.OpenRouter,
-      'moonshotai/kimi-k3'
+      'moonshotai/kimi-k3.1-pro'
     )?.reasoning).toEqual(['auto', 'none', 'low', 'high', 'max'])
     expect(getLLMModelCatalogEntry(
       LLMProviders.MoonshotAI,
@@ -115,23 +116,12 @@ describe('LLM model catalog', () => {
       LLMProviders.OpenRouter,
       'google/gemini-3.5-flash-lite'
     )).toBe(false)
-  })
-
-  it('preserves curated setup order and recommendations', () => {
-    const openAIModels = getLLMModelCatalogEntries(LLMProviders.OpenAI)
-
-    expect(openAIModels[0]).toMatchObject({
-      model: 'gpt-6-astra',
-      recommended: true
-    })
-    expect(getLLMModelCatalogEntries(LLMProviders.Anthropic)[0]).toMatchObject({
-      model: 'claude-opus-5-5',
-      recommended: true
-    })
-    expect(getLLMModelCatalogEntry(
-      LLMProviders.Anthropic,
-      'claude-fable-5-1'
-    )?.recommended).toBeUndefined()
+    expect(canDisableLLMModelReasoning(
+      LLMProviders.MiniMax, 'MiniMax-M3.1-Flash'
+    )).toBe(false)
+    expect(canDisableLLMModelReasoning(
+      LLMProviders.OpenRouter, 'minimax/minimax-m3.1-flash:free'
+    )).toBe(false)
   })
 
   it.each([

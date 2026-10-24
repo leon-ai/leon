@@ -82,11 +82,12 @@ const resolveToolModulePath = (
   return null
 }
 
-const setProjectCwd = (): void => {
+const setWorkspaceCwd = (): void => {
   const runtimeDir = path.dirname(fileURLToPath(import.meta.url))
-  const projectRoot = path.join(runtimeDir, '..', '..', '..')
-  if (process.cwd() !== projectRoot) {
-    process.chdir(projectRoot)
+  const workspaceRoot = process.env['LEON_WORKSPACE_PATH'] ||
+    path.join(runtimeDir, '..', '..', '..')
+  if (process.cwd() !== workspaceRoot) {
+    process.chdir(workspaceRoot)
   }
 }
 
@@ -99,6 +100,7 @@ const setRuntimeToolReporter = (): void => {
 let toolInstance: ManagedTool | undefined
 let closing = false
 let activeCall: AbortController | undefined
+let activeRequestId: string | undefined
 let execution: Promise<void> = Promise.resolve()
 
 /**
@@ -126,6 +128,7 @@ const execute = async (context: ToolExecutionContext, args: unknown[]): Promise<
       toolInstance = await ToolManager.initTool(ToolClass)
     }
     await toolInstance.prepareExecution(context)
+    context.signal?.throwIfAborted()
     const method = (toolInstance as unknown as Record<string, unknown>)[context.functionName]
     if (typeof method !== 'function') throw new Error(`Function ${context.functionName} not found on ${context.toolId}.`)
     const result = await method.apply(toolInstance, args)
@@ -148,12 +151,18 @@ const execute = async (context: ToolExecutionContext, args: unknown[]): Promise<
 }
 
 const run = async (): Promise<void> => {
-  setProjectCwd()
+  setWorkspaceCwd()
   setRuntimeToolReporter()
   const input = parseArgs()
   if (process.send) {
     process.on('message', (request: ToolWorkerRequest) => {
       if (request.type === 'shutdown') { void shutdown(); return }
+      if (request.type === 'cancel') {
+        if (request.requestId === activeRequestId) {
+          activeCall?.abort(new DOMException(request.reason, 'TimeoutError'))
+        }
+        return
+      }
       if (closing || request.type !== 'execute') return
       execution = execution.then(async () => {
         // The process is profile-bound; only conversation context changes per call.
@@ -163,6 +172,7 @@ const run = async (): Promise<void> => {
         }
         process.env['LEON_SESSION_ID'] = request.context.conversationSessionId || ''
         activeCall = new AbortController()
+        activeRequestId = request.requestId
         const result = await runWithConversationSession(
           { sessionId: request.context.conversationSessionId || '' },
           () => execute({
@@ -176,6 +186,7 @@ const run = async (): Promise<void> => {
           }, request.args)
         )
         activeCall = undefined
+        activeRequestId = undefined
         const lifetime = toolInstance?.runtimeLifetime ?? ToolRuntimeLifetime.Call
         await new Promise<void>((resolve, reject) => {
           process.send?.({ type: 'result', lifetime, result }, (error: Error | null) => error ? reject(error) : resolve())

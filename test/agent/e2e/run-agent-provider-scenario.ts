@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { once } from 'node:events'
+import { createServer } from 'node:net'
 
 import YAML from 'yaml'
 import { createCodingFixture, type CodingEvidence } from './coding-fixture'
@@ -19,6 +21,7 @@ const PROGRESS_PREFIX = '__AGENT_PROGRESS__'
 const TEST_HOME_PREFIX = 'leon-agent-e2e'
 const TEST_PROFILE_PREFIX = 'agent-e2e'
 const SOURCE_CONFIG_PATH_ENV = 'LEON_AGENT_E2E_SOURCE_CONFIG_PATH'
+const SOURCE_JQ_PATH_ENV = 'LEON_AGENT_E2E_SOURCE_JQ_PATH'
 const EMPTY_PROFILE_DISABLED_CONFIG = {
   skills: [],
   tools: []
@@ -194,6 +197,34 @@ async function prepareTestProfilePath(
 }
 
 /**
+ * Allocate a local service port so isolated profiles never call the owner runtime.
+ */
+async function getTestServerPort(): Promise<number> {
+  const server = createServer()
+  const listening = once(server, 'listening')
+  server.listen(0, '127.0.0.1')
+  await listening
+
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Could not allocate the scenario service port')
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+
+      resolve()
+    })
+  })
+
+  return address.port
+}
+
+/**
  * Seeds an isolated profile from the active profile configuration.
  */
 async function prepareTestProfileConfig(
@@ -221,6 +252,7 @@ async function prepareTestProfileConfig(
   }
 
   // Keep real provider settings while making the matrix target authoritative.
+  document.setIn(['server', 'port'], await getTestServerPort())
   document.setIn(['llm', 'default'], llmTarget)
   document.setIn(['llm', 'workflow'], null)
   document.setIn(['llm', 'agent'], null)
@@ -287,6 +319,7 @@ async function main(): Promise<void> {
   process.env['LEON_LLM'] = llmTarget
   process.env['LEON_HOME'] = testHomePath
   process.env['LEON_PROFILE'] = testProfileName
+  delete process.env['LEON_PROFILE_TOKEN']
 
   await prepareTestProfileConfig(
     String(process.env[SOURCE_CONFIG_PATH_ENV] || '').trim(),
@@ -317,6 +350,13 @@ async function main(): Promise<void> {
     PROFILE_TOOLS_PATH,
     TMP_PATH
   } = await import('../../../server/src/constants')
+
+  // Retained-output queries need the managed binary in the isolated home too.
+  const { RuntimeHelper } = await import('../../../server/src/helpers/runtime-helper')
+  const sourceJQPath = String(process.env[SOURCE_JQ_PATH_ENV] || '').trim()
+  const testJQPath = RuntimeHelper.getJQBinPath()
+  await fs.mkdir(path.dirname(testJQPath), { recursive: true })
+  await fs.copyFile(sourceJQPath, testJQPath)
 
   await prepareTestProfilePath(
     [
@@ -364,7 +404,7 @@ async function main(): Promise<void> {
   const {
     ReActLLMDuty
   } = await import('../../../server/src/core/llm-manager/llm-duties/react-llm-duty')
-  const { CONVERSATION_LOGGER, TOOL_EXECUTOR, LLM_PROVIDER, TOOL_WORKER_MANAGER } = await import(
+  const { CONVERSATION_LOGGER, TOOL_EXECUTOR, LLM_PROVIDER, TOOL_WORKER_MANAGER, HTTP_SERVER } = await import(
     '../../../server/src/core/index'
   )
   // These subprocesses bypass the server's signal handlers. Dispose native
@@ -443,6 +483,16 @@ async function main(): Promise<void> {
   }
 
   try {
+    const { default: generateProfileToken } = await import(
+      '../../../scripts/generate/generate-profile-token.js'
+    )
+    await generateProfileToken()
+
+    // Retained executions and provider-backed tools use the profile's own API.
+    const listening = once(HTTP_SERVER.httpServer, 'listening')
+    await HTTP_SERVER.init()
+    await listening
+
     /**
      * The e2e subprocess bypasses the normal server bootstrap, so initialize
      * the selected provider explicitly before the first agent turn.
@@ -565,6 +615,18 @@ async function main(): Promise<void> {
     })
   } finally {
     await TOOL_WORKER_MANAGER.dispose()
+    if (HTTP_SERVER.httpServer.listening) {
+      await new Promise<void>((resolve, reject) => {
+        HTTP_SERVER.httpServer.close((error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+
+          resolve()
+        })
+      })
+    }
     process.removeListener('SIGINT', stop)
     process.removeListener('SIGTERM', stop)
     TOOL_EXECUTOR.executeTool = originalExecuteTool

@@ -73,7 +73,8 @@ export class ShellSessions {
     args: string[],
     options: SessionOptions,
     signal?: AbortSignal,
-    onProgress?: (progress: ToolRuntimeProgress) => void
+    onProgress?: (progress: ToolRuntimeProgress) => void,
+    onOutput?: (output: string, stream: ToolRuntimeProgress['stream']) => void
   ): Promise<Record<string, unknown>> {
     if (!owner || !command.trim() || signal?.aborted) {
       throw new Error('An active conversation and a non-empty command are required.')
@@ -122,13 +123,7 @@ export class ShellSessions {
       if (!pendingOutput) {
         return
       }
-      onProgress?.({
-        source: 'report',
-        key: 'bridges.tools.command_output_delta',
-        message: pendingOutput,
-        data: { output: pendingOutput },
-        stream
-      })
+      onOutput?.(pendingOutput, stream)
       pendingOutput = ''
     }
     const append = (data: string): void => {
@@ -137,7 +132,7 @@ export class ShellSessions {
       session.offset += removed
       session.output = combined.slice(removed)
       // Keep live updates bounded independently of retained output pages.
-      if (onProgress) {
+      if (onOutput) {
         pendingOutput = (pendingOutput + data).slice(-OUTPUT_PROGRESS_MAX_CHARS)
         progressTimer ??= setTimeout(flushOutput, OUTPUT_PROGRESS_INTERVAL_MS)
       }

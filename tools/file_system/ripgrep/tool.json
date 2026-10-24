@@ -12,8 +12,9 @@
   },
   "functions": {
     "search": {
+      "read_only": true,
       "description": "Search local file contents using ripgrep; return matching lines, 1-based line numbers, paths and byte-offset submatches.",
-      "progressive_guidance": "Choose files when only filenames are needed; rg stops after the first match in each file. Choose count for totals without collecting lines. Match records contain path, lines, line_number, absolute_offset and submatches. No multiline matching; recursively encountered binary content is skipped.",
+      "progressive_guidance": "Choose files when only filenames are needed; rg stops after the first match in each file. Choose count for totals without collecting lines. Match records contain path, lines, line_number, absolute_offset and submatches. Use line_number with file.read startLine/endLine for surrounding text; absolute_offset is a byte offset, not a character offset. No multiline matching; recursively encountered binary content is skipped.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -80,6 +81,7 @@
       "background": true
     },
     "listFiles": {
+      "read_only": true,
       "description": "List local files using ripgrep, optionally filtered by include/exclude globs. Filenames including newlines are preserved.",
       "progressive_guidance": "Enumerate file paths without reading contents. Case-insensitive globs include uppercase extensions. Filenames containing newlines or non-UTF-8 bytes are preserved. files is only an inline preview; summary counts the saved inventory. Use system_utilities.tool_executions.read with jq to count, group or filter the full inventory without rescanning. Check summary.complete before treating counts as totals.",
       "parameters": {

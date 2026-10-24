@@ -1,7 +1,13 @@
 import { CONVERSATION_LOGGER, LLM_PROVIDER } from '@/core'
+import { createHash } from 'node:crypto'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
-import { LLMDuties, InferencePurpose, type LLMProviders } from '@/core/llm-manager/types'
+import {
+  LLMDuties,
+  InferencePurpose,
+  type LLMProviders,
+  type AgentToolTranscriptMessage
+} from '@/core/llm-manager/types'
 import type { PostTurnMaintenanceTask } from '@/core/post-turn-maintenance-queue'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -30,12 +36,19 @@ import {
   type AgentHistoryCompactionConfig,
   type AgentHistoryCompactionProviderState,
   type AgentHistoryCompactionScope,
-  type AgentHistoryCompactionState
+  type AgentHistoryCompactionState,
+  type AgentConversationState
 } from './agent-session-state'
 import type { PlanStepStatus, TrackedPlanStep } from './agent-types'
+import { buildAgentTranscriptHistory } from './agent-loop'
 
 interface PreparedAgentHistory {
   messageLogs: MessageLog[]
+  conversationState: AgentConversationState | null
+}
+
+function hashHistory(messages: AgentToolTranscriptMessage[]): string {
+  return createHash('sha256').update(JSON.stringify(messages)).digest('hex')
 }
 
 function getLLMProviderName(): LLMProviders {
@@ -53,7 +66,9 @@ export class AgentHistoryManager {
     private readonly sessionState: AgentSessionState
   ) {}
 
-  public async loadPreparedHistory(): Promise<PreparedAgentHistory> {
+  public async loadPreparedHistory(
+    currentOwnerInput = ''
+  ): Promise<PreparedAgentHistory> {
     const historyConfig = this.getHistoryCompactionConfig()
     const historyScope = this.getHistoryCompactionScope()
     const conversationLogs = this.getHistoryEligibleConversationLogs(
@@ -69,13 +84,87 @@ export class AgentHistoryManager {
       this.saveHistoryCompactionProviderState(historyScope, synchronizedState.state)
     }
 
-    return this.buildPreparedHistory(
-      this.buildHistoryForCurrentTurn(
+    return {
+      messageLogs: this.buildHistoryForCurrentTurn(
         conversationLogs,
         synchronizedState.state,
         historyConfig
+      ),
+      conversationState: this.loadConversationState(
+        buildAgentTranscriptHistory(conversationLogs, currentOwnerInput)
       )
+    }
+  }
+
+  /**
+   * Reuses exact protocol history only while its visible conversation is intact.
+   * Edited, removed or replaced chat messages invalidate the cached transcript.
+   */
+  private loadConversationState(
+    history: AgentToolTranscriptMessage[]
+  ): AgentConversationState | null {
+    const store = this.sessionState.getConversationStore()
+    const state = store?.load()
+    if (!state) {
+      return null
+    }
+
+    if (
+      state.version !== 1 ||
+      !Number.isInteger(state.historyLength) ||
+      state.historyLength < 1 ||
+      state.historyLength > history.length ||
+      !Array.isArray(state.transcript) ||
+      !state.transcript.length ||
+      ![
+        state.loadedToolkitIds,
+        state.loadedFunctionNames,
+        state.loadedToolNames,
+        state.toolOrder
+      ].every((values) =>
+        Array.isArray(values) &&
+        values.every((value) => typeof value === 'string')
+      ) ||
+      typeof state.planTracking !== 'boolean' ||
+      state.historyHash !== hashHistory(history.slice(0, state.historyLength))
+    ) {
+      store?.save(null)
+      return null
+    }
+
+    return {
+      ...state,
+      transcript: [...state.transcript, ...history.slice(state.historyLength)]
+    }
+  }
+
+  /**
+   * Keeps completed protocol exchanges for follow-ups without resuming task state.
+   * The caller persists the final chat answer after this duty returns.
+   */
+  public async saveConversationState(
+    state: Omit<AgentConversationState, 'version' | 'historyHash' | 'historyLength'>,
+    answer: string
+  ): Promise<void> {
+    const store = this.sessionState.getConversationStore()
+    if (!store) {
+      return
+    }
+
+    const logs = this.getHistoryEligibleConversationLogs(
+      await CONVERSATION_LOGGER.loadAll()
     )
+    const history = [
+      ...buildAgentTranscriptHistory(logs, ''),
+      { role: 'assistant' as const, content: answer }
+    ]
+
+    store.save({
+      ...state,
+      version: 1,
+      historyHash: hashHistory(history),
+      historyLength: history.length
+    })
   }
 
   private getHistoryCompactionScope(): AgentHistoryCompactionScope {
@@ -499,12 +588,6 @@ export class AgentHistoryManager {
     }
 
     return [summaryMessage, ...state.tail]
-  }
-
-  private buildPreparedHistory(history: MessageLog[]): PreparedAgentHistory {
-    return {
-      messageLogs: history
-    }
   }
 
   private async compactHistoryLogs(

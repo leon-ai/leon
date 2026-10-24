@@ -1,8 +1,11 @@
-import { ToolConcurrency } from '@/types'
+import { ToolCompletionReview, ToolConcurrency } from '@/types'
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { saveConnection } from '@/core/connections/connection-service'
 import { ConnectionStatus } from '@/core/connections/connection-store'
+import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,7 +14,14 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ConversationSessionManager } from '@/core/session-manager'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import Persona from '@/core/llm-manager/persona'
+import { AgentHistoryManager } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-history-manager'
+import { AgentRunBudget, AgentRunDeadlineError } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-run-budget'
+import { AgentSessionState, createEmptyHistoryCompactionProviderState, type AgentConversationState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
+import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import type { MessageLog } from '@/types'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
+import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import type {
   AgentCallableFunction,
@@ -30,7 +40,7 @@ import {
   buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
   evaluateAgentToolkitPreloadCost,
-  findHighConfidenceAgentToolkitId,
+  findHighConfidenceAgentToolSelection,
   runAgentLoop as runAgentLoopWithCompletionReview
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
 import {
@@ -39,7 +49,7 @@ import {
   parseAgentPlan,
   isAgentPlanComplete
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-plan'
-import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
+import { appendAgentRuntimeContext, findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import { runToolExecution } from '@/core/llm-manager/llm-duties/react-llm-duty/tool-execution'
 import { emitPlanWidget } from '@/core/llm-manager/llm-duties/react-llm-duty/plan-widget'
 import {
@@ -78,6 +88,7 @@ const coreMocks = vi.hoisted(() => ({
   emitAnswerToChatClients: vi.fn(),
   emitToChatClients: vi.fn(),
   prompt: vi.fn(),
+  loadConversationLogs: vi.fn(),
   consumeLastProviderErrorMessage: vi.fn(),
   prepareAgentTranscript: vi.fn(async (transcript: AgentToolTranscriptMessage[]) => transcript)
 }))
@@ -88,6 +99,7 @@ vi.mock('@/core/connections/connection-service', () => ({
 }))
 
 vi.mock('@/core', () => ({
+  CONVERSATION_LOGGER: { loadAll: coreMocks.loadConversationLogs },
   PERSONA: {
     getCompactDutySystemPrompt: (prompt: string): string => prompt
   },
@@ -162,7 +174,7 @@ it.each(['success', 'error', 'background', 'throw'])(
       input.onProgress({ message: 'Working.' })
       input.onProgress({ key: 'bridges.tools.command_started', message: 'Executing command.' })
       input.onProgress({
-        key: 'bridges.tools.command_output_delta', message: 'First line\n',
+        key: 'bridges.tools.output_delta', message: 'First line\n',
         data: { output: 'First line\n' }
       })
       input.onProgress({
@@ -428,6 +440,187 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it.each([
+    'optional', 'default', 'nondefault', 'required', 'failed', 'compacted', 'partial', 'retained',
+    'planned', 'resumed', 'recovered', 'steered', 'multiple'
+  ])('keeps completion review conservative for a %s lookup', async (scenario) => {
+    const catalog = createCatalog()
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable,
+      functionConfig: {
+        ...callable.functionConfig,
+        parameters: {
+          ...callable.functionConfig.parameters,
+          properties: { query: { type: 'string' }, detail: { default: 'summary' } }
+        },
+        ...(scenario !== 'required'
+          ? { completion_review: ToolCompletionReview.Optional }
+          : {})
+      }
+    })
+    const observation = {
+      status: scenario === 'failed' ? 'error' : 'success',
+      data: { output: { result: {
+        success: scenario !== 'failed',
+        ...(scenario === 'partial' ? { truncated: true } : {})
+      } } },
+      ...(scenario === 'compacted' ? { observation_compacted: true } : {}),
+      ...(scenario === 'retained' ? { execution: { id: 'lookup', state: 'running' } } : {})
+    }
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName,
+      status: observation.status,
+      observation: JSON.stringify(observation),
+      requestedToolInput: JSON.stringify({
+        query: 'first',
+        ...(['default', 'nondefault'].includes(scenario)
+          ? { detail: scenario === 'default' ? 'summary' : 'hourly' }
+          : {})
+      })
+    } }))
+    const calls = [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'first' })]
+    if (scenario === 'multiple') {
+      calls.push(toolCall('second', CALLABLE_TOOL_NAME, { query: 'second' }))
+    }
+
+    const callModel = vi.fn()
+    if (scenario === 'recovered') {
+      callModel.mockResolvedValueOnce({ textContent: '' })
+    }
+    callModel.mockResolvedValueOnce({ toolCalls: calls })
+      .mockResolvedValueOnce({ textContent: 'The requested result.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete', reason: 'The result supports the answer.'
+      }) })
+    let delivered = false
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Look up the value.' }],
+      catalog, callModel, executeFunction,
+      ...(scenario === 'planned' ? { initialTrackedSteps: [
+        { label: 'Look up the value', status: 'completed' as const }
+      ] } : {}),
+      ...(scenario === 'resumed' ? { initialExecutionHistory: [] } : {}),
+      drainOwnerMessages: async () => {
+        if (scenario === 'steered' && executeFunction.mock.calls.length && !delivered) {
+          delivered = true
+          return [{ role: 'user' as const, content: 'Use the revised scope.' }]
+        }
+
+        return []
+      },
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(callModel.mock.calls.some(([, , options]) => options.isCompletionReview))
+      .toBe(!['optional', 'default'].includes(scenario))
+  })
+
+  it('does not accept or retry a completion review that outlives the run deadline', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const runBudget = new AgentRunBudget(Date.now() + 180_000)
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [
+        toolCall('inspect', CALLABLE_TOOL_NAME, { query: 'inspect' })
+      ] })
+      .mockResolvedValueOnce({ textContent: 'Inspection completed.' })
+      .mockImplementationOnce(async () => {
+        clock.mockReturnValue(180_000)
+        return { textContent: JSON.stringify({ status: 'complete', reason: 'Complete.' }) }
+      })
+
+    try {
+      const result = await runAgentLoopWithCompletionReview({
+        transcript: [{ role: 'user', content: 'Inspect the source.' }],
+        catalog: createCatalog(), runBudget, callModel,
+        executeFunction: async () => ({ output: 'Source inspected.' }),
+        loadAgentSkill: async () => null
+      })
+
+      expect(result.intent).toBe('blocked')
+      expect(result.answer).toContain('run deadline')
+      expect(callModel).toHaveBeenCalledTimes(3)
+    } finally {
+      runBudget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it('retains completed tool receipts when the shared deadline expires', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const runBudget = new AgentRunBudget(Date.now() + 180_000)
+    const callModel = vi.fn(async () => ({ toolCalls: [
+      toolCall('completed-work', CALLABLE_TOOL_NAME, { query: 'inspect' }),
+      toolCall('unstarted-plan', AGENT_PLAN_TOOL_NAME, {
+        steps: [{ label: 'Inspect and verify', status: 'completed' }]
+      }),
+      toolCall('unstarted-work', CALLABLE_TOOL_NAME, { query: 'verify' })
+    ] }))
+
+    try {
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Inspect the source.' }],
+        catalog: createCatalog(),
+        initialTrackedSteps: [{ label: 'Inspect and verify', status: 'in_progress' }],
+        runBudget,
+        callModel,
+        executeFunction: async () => {
+          clock.mockReturnValue(180_000)
+          return { output: 'Inspection completed.' }
+        },
+        loadAgentSkill: async () => null
+      })
+
+      expect(result.intent).toBe('error')
+      expect(result.answer).toContain('run deadline')
+      expect(result.trackedSteps[0]?.status).toBe('in_progress')
+      expect(result.transcript).toContainEqual(expect.objectContaining({
+        role: 'tool', toolCallId: 'completed-work'
+      }))
+      expect(result.transcript.filter((message) => message.role === 'tool')
+        .map((message) => message.toolCallId)).toEqual([
+        'completed-work', 'unstarted-plan', 'unstarted-work'
+      ])
+      expect(callModel).toHaveBeenCalledOnce()
+    } finally {
+      runBudget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it('enters finishing once without spending its reserve on auxiliary compaction', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const runBudget = new AgentRunBudget(Date.now() + 180_000)
+    clock.mockReturnValue(125_000)
+    const prepareContinuation = vi.fn()
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [
+        toolCall('required-check', CALLABLE_TOOL_NAME, { query: 'verify' })
+      ] })
+      .mockResolvedValueOnce({ textContent: 'Verified the result.' })
+
+    try {
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Finish and verify.' }],
+        catalog: createCatalog(), runBudget, callModel, prepareContinuation,
+        executeFunction: async () => ({ output: 'Required check passed.' }),
+        loadAgentSkill: async () => null
+      })
+
+      expect(result.intent).toBe('answer')
+      expect(prepareContinuation).not.toHaveBeenCalled()
+      expect(callModel).toHaveBeenCalledTimes(2)
+      expect(result.transcript.filter((message) => message.role === 'user'
+        && message.content.includes('<execution_finishing_pass>'))).toHaveLength(1)
+      expect(result.transcript).toContainEqual(expect.objectContaining({
+        role: 'tool', toolCallId: 'required-check'
+      }))
+    } finally {
+      runBudget.dispose()
+      clock.mockRestore()
+    }
+  })
+
   it.each(['model', 'tool', 'review'])(
     'interrupts %s work for owner cancellation and ends without reviewing unfinished plans',
     async (phase) => {
@@ -714,27 +907,44 @@ describe('continuous agent loop', () => {
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
-  it('exposes execution controls immediately after a retained handle is returned', async () => {
+  it.each([
+    { state: ToolExecutionState.Running, compacted: false, functions: ['wait', 'read', 'cancel'] },
+    { state: ToolExecutionState.Completed, compacted: false, functions: [] },
+    { state: ToolExecutionState.Completed, compacted: true, functions: ['read'] }
+  ])('loads only needed execution controls for $state output (compacted=$compacted)', async ({ state, compacted, functions }) => {
     coreMocks.getFlattenedTools.mockReturnValue([{
       toolkitId: 'system_utilities', toolkitName: 'System Utilities',
       toolkitDescription: 'Manage executions', toolId: 'tool_executions',
       toolName: 'Tool Executions', toolDescription: 'Read retained results'
     }])
-    coreMocks.getToolFunctions.mockReturnValue({
-      read: { description: 'Read saved results', parameters: {
-        type: 'object', properties: { executionId: { type: 'string' } },
-        required: ['executionId']
-      } }
-    })
+    coreMocks.getToolFunctions.mockReturnValue(Object.fromEntries(
+      ['wait', 'read', 'cancel'].map((name) => [name, {
+        description: `${name} retained execution`,
+        parameters: {
+          type: 'object', properties: { executionId: { type: 'string' } },
+          required: ['executionId']
+        }
+      }])
+    ))
     const executeFunction = vi.fn().mockResolvedValue({
-      executionHandle: { id: 'retained', state: 'completed' },
-      execution: { function: callable.qualifiedName, status: 'success', observation: 'Saved results' }
+      executionHandle: { id: 'retained', state },
+      execution: {
+        function: callable.qualifiedName, status: 'success',
+        observation: JSON.stringify({
+          status: 'success', observation_compacted: compacted,
+          execution: { id: 'retained', state },
+          ...(compacted ? { data_preview: 'Saved result preview' } : { data: 'Complete result' })
+        })
+      }
     })
     const callModel = vi.fn()
       .mockResolvedValueOnce({ toolCalls: [toolCall('scan', CALLABLE_TOOL_NAME, { query: 'files' })] })
       .mockImplementationOnce(async (_messages, tools) => {
         expect(tools.map((tool: { function: { name: string } }) => tool.function.name))
-          .toContain('system_utilities__tool_executions__read')
+          .toEqual([
+            CALLABLE_TOOL_NAME,
+            ...functions.map((name) => `system_utilities__tool_executions__${name}`)
+          ])
 
         return { textContent: 'Done.' }
       })
@@ -1186,16 +1396,14 @@ describe('continuous agent loop', () => {
       undefined,
       'remaining'
     )
-    expect(callModel.mock.calls[1]?.[1]).toEqual([])
+    expect(callModel.mock.calls[1]?.[1]).toEqual(catalog.tools)
     expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
     expect(
       callModel.mock.calls[1]?.[0].slice(0, transcript.length)
     ).toEqual(transcript)
     const review = JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)
 
-    expect(review.available_tool_contracts).toEqual([catalog.tools[0]!.function])
-    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ requiresToolAction: true })
-    expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
+    expect(review).not.toHaveProperty('available_tool_contracts')
     expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')
   })
 
@@ -1211,6 +1419,99 @@ describe('continuous agent loop', () => {
       executeFunction, loadAgentSkill: async () => null
     })
     expect(result.intent).toBe('blocked')
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it.each([0, 2])('completes the current request while preserving unrelated pending work with %i operational turns', async (maxIterations) => {
+    const steps = [
+      { label: 'Activate the installed runtime', status: 'pending' as const },
+      {
+        label: 'Save the requested revision',
+        status: 'completed' as const,
+        details: 'Revision saved; exact files and requested timestamps verified.'
+      }
+    ]
+    const answer = 'The requested revision is saved and verified.'
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: answer })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete',
+        reason: 'The current request is complete. Runtime activation is separate.',
+        out_of_scope_steps: ['Activate the installed runtime']
+      }) })
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Save the verified revision.' }],
+      catalog: createCatalog(), initialTrackedSteps: steps, maxIterations,
+      callModel, executeFunction, loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe(answer)
+    expect(result.trackedSteps).toEqual(steps)
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('allows an answer correction from existing evidence without another tool action', async () => {
+    const duty = new ReActLLMDuty({ input: 'What is the temperature?' })
+
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    coreMocks.prompt.mockResolvedValueOnce({ output: 'The temperature is 20 degrees.' })
+
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: 'The temperature is 30 degrees.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'continue', reason: 'The observed temperature is 20 degrees; correct the answer.'
+      }) })
+      .mockImplementationOnce(async (messages, tools, options) => duty['callAgentModel'](
+        messages, AGENT_SYSTEM_PROMPT, tools, options
+      ))
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete', reason: 'The answer matches the observation.'
+      }) })
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'What is the temperature?' }],
+      catalog: createCatalog(),
+      initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success',
+        observation: 'The temperature is 20 degrees.'
+      }],
+      callModel, executeFunction, loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('The temperature is 20 degrees.')
+    expect(coreMocks.prompt.mock.lastCall?.[1].toolChoice).toBe('auto')
+    expect(callModel).toHaveBeenCalledTimes(4)
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('retains concrete completed outcomes when the provider cannot continue', async () => {
+    const savedRevision = 'Saved revision abc123 with the requested timestamp; its exact two-file scope is verified.'
+    const steps = [
+      { label: 'Save the revision', status: 'completed' as const, details: savedRevision },
+      { label: 'Activate the installed runtime', status: 'pending' as const }
+    ]
+    const callModel = vi.fn().mockRejectedValue(new AgentModelProviderError(
+      'Provider unavailable', false, CompletionFailureKind.Unavailable
+    ))
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Finish the runtime update.' }],
+      catalog: createCatalog(), initialTrackedSteps: steps,
+      initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: savedRevision
+      }],
+      callModel, executeFunction, loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('temporarily unavailable')
+    expect(result.answer).toContain(savedRevision)
+    expect(result.answer).toContain('Remaining: Activate the installed runtime.')
+    expect(result.trackedSteps).toEqual(steps)
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
@@ -1235,6 +1536,8 @@ describe('continuous agent loop', () => {
   it.each([
     null,
     { textContent: 'not valid JSON' },
+    { textContent: JSON.stringify({ status: 'complete', reason: 'Done.', out_of_scope_steps: ['Unknown step'] }) },
+    { textContent: JSON.stringify({ status: 'complete', reason: 'Done.', out_of_scope_steps: 'All steps' }) },
     { textContent: '{"status":"complete","reason":"ok"}', isTruncated: true },
     { toolCalls: [toolCall('unexpected', CALLABLE_TOOL_NAME, { query: 'unexpected' })] }
   ])('does not accept an unavailable or invalid completion review: %j', async (review) => {
@@ -1242,6 +1545,9 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Do the task.' }], catalog: createCatalog(),
       initialExecutionHistory: [{ function: callable.qualifiedName, status: 'success', observation: 'Evidence.' }],
+      initialTrackedSteps: [{
+        label: 'Save the result', status: 'completed', details: 'Verified result at /tmp/result.txt.'
+      }],
       callModel: vi.fn()
         .mockResolvedValueOnce({ textContent: 'Done.' })
         .mockResolvedValueOnce(review)
@@ -1250,13 +1556,14 @@ describe('continuous agent loop', () => {
     })
     expect(result.intent).toBe('error')
     expect(result.answer).toContain('completion check failed')
+    expect(result.answer).toContain('Verified result at /tmp/result.txt.')
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
   it('retries an unusable completion review before rejecting the proposed answer', async () => {
     const callModel = vi.fn()
       .mockResolvedValueOnce({ textContent: 'The OCR text is LEON AI 42.' })
-      .mockRejectedValueOnce(new Error('Provider rejected structured output'))
+      .mockRejectedValueOnce(new Error('Provider temporarily unavailable'))
       .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The OCR result is included.' }) })
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Read the image text.' }], catalog: createCatalog(),
@@ -1268,8 +1575,8 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('The OCR text is LEON AI 42.')
     expect(callModel).toHaveBeenCalledTimes(3)
-    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ useReviewSchema: true })
-    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ useReviewSchema: false })
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true, isCompletionReviewRetry: false })
+    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ isCompletionReview: true, isCompletionReviewRetry: true })
     expect(callModel.mock.calls[2]?.[0].at(-1)?.content).toContain('previous completion review response was unusable')
   })
 
@@ -1302,7 +1609,6 @@ describe('continuous agent loop', () => {
     expect(JSON.parse(callModel.mock.calls[4]?.[0].at(-1).content)).toMatchObject({
       remaining_operational_iterations: 0
     })
-    expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
     expect(result.intent).toBe('answer')
     expect(result.trackedSteps).toEqual([
       completedStep,
@@ -1344,37 +1650,13 @@ describe('continuous agent loop', () => {
     expect(prepareContinuation).toHaveBeenCalledTimes(limit > 1 ? 1 : 0)
   })
 
-  it('codes directly and keeps owner-selected delegation available', () => {
-    const skill = fs.readFileSync('skills/agent/coding/SKILL.md', 'utf8')
-
-    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding>')).toBeGreaterThanOrEqual(0)
-    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding>')).toBeLessThan(
-      AGENT_SYSTEM_PROMPT.indexOf('<tool_policy>')
-    )
-
-    expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Handle coding directly. Load the coding Agent Skill when enabled.'
-    )
-    expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Delegate only when the owner requests or prefers an external coding agent'
-    )
-    expect(skill).toContain('submitting a prompt is not completion')
-    expect(skill).toContain(
-      'If delegation is unavailable, explain briefly and continue directly'
-    )
-    expect(skill).toContain(
-      'analysis is not authorization to edit, commit, push or publish'
-    )
-    expect(AGENT_SYSTEM_PROMPT).not.toContain('Codex')
-    expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')
-  })
-
-  it('loads collection tracking after plan initialization', async () => {
+  it('keeps collection tracking available through one stable planning contract', async () => {
     const catalog = createCatalog()
     const steps = [{ label: 'Inspect requested collection', status: 'in_progress' }]
     let turn = 0
 
     catalog.tools.push(createAgentPlanTool(AGENT_PLAN_TOOL_NAME))
+    const initialSchema = JSON.stringify(catalog.tools)
 
     await runAgentLoop({
       transcript: [{ role: 'user', content: 'Retrieve the requested documents.' }],
@@ -1388,7 +1670,8 @@ describe('continuous agent loop', () => {
         turn += 1
 
         if (turn === 1) {
-          expect(schema).not.toContain('"collection"')
+          expect(schema).toContain('"collection"')
+          expect(JSON.stringify(tools)).toBe(initialSchema)
 
           return {
             toolCalls: [
@@ -1399,6 +1682,7 @@ describe('continuous agent loop', () => {
 
         expect(schema).toContain('"collection"')
         expect(schema).toContain('"enumeration"')
+        expect(JSON.stringify(tools)).toBe(initialSchema)
 
         return {
           toolCalls: [
@@ -1414,10 +1698,11 @@ describe('continuous agent loop', () => {
 
     expect(turn).toBe(2)
     expect(AGENT_PLAN_GUIDANCE).toContain(
-      'Immediately after a milestone is verified, call update_plan'
+      'when work remains, set the next in_progress and include its operational call in the same response'
     )
+    expect(AGENT_PLAN_GUIDANCE).toContain('At the final milestone, reconcile the plan without inventing another action')
     expect(AGENT_PLAN_GUIDANCE).toContain(
-      'never defer multiple historical completions until final reconciliation'
+      'Do not start/report later work with a stale plan or batch historical completions at final reconciliation'
     )
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Enumerate stable source identities')
   })
@@ -1446,7 +1731,7 @@ describe('continuous agent loop', () => {
           )
           const schema = JSON.stringify(planTool?.function.parameters)
 
-          expect(schema.includes('"collection"')).toBe(state !== 'absent')
+          expect(schema).toContain('"collection"')
 
           turn += 1
           if (options.requiresPlanReconciliation) {
@@ -1762,9 +2047,11 @@ describe('continuous agent loop', () => {
 
     expect(callModel).toHaveBeenCalledTimes(2)
     expect(callModel.mock.calls[0]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: false
     })
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: true
     })
     expect(result.answer).toBe('Recovered answer.')
@@ -1836,9 +2123,11 @@ describe('continuous agent loop', () => {
     })
 
     expect(callModel.mock.calls[0]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: 9,
       isRecoveryAttempt: false
     })
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: 8,
       isRecoveryAttempt: false
     })
   })
@@ -1874,10 +2163,12 @@ describe('continuous agent loop', () => {
     })
 
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: true,
       isContextRecoveryAttempt: true
     })
     expect(callModel.mock.calls[2]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: false,
       isContextRecoveryAttempt: true
     })
@@ -1906,6 +2197,7 @@ describe('continuous agent loop', () => {
 
     expect(callModel).toHaveBeenCalledTimes(2)
     expect(callModel.mock.calls[1]?.[2]).toEqual({
+      elapsedMs: expect.any(Number), remainingIterations: expect.any(Number),
       isRecoveryAttempt: true,
       isOutputRecoveryAttempt: true
     })
@@ -1969,6 +2261,65 @@ describe('continuous agent loop', () => {
     })
   })
 
+  it.each(['before', 'after'])(
+    'consumes tool evidence before accepting clarification emitted %s another call',
+    async (position) => {
+      const clarification = toolCall('clarify-recipient', AGENT_CLARIFICATION_TOOL_NAME, {
+        question: 'Which recipient should I use?'
+      })
+      const lookup = toolCall('lookup-recipient', CALLABLE_TOOL_NAME, {
+        query: 'recipient'
+      })
+      const observation = 'The requested recipient is Alice.'
+      const executeFunction = vi.fn(async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation
+        }
+      }))
+      const callModel = vi.fn()
+        .mockResolvedValueOnce({
+          toolCalls: position === 'before'
+            ? [clarification, lookup]
+            : [lookup, clarification]
+        })
+        .mockImplementationOnce(async (messages: AgentToolTranscriptMessage[]) => {
+          expect(messages).toContainEqual({
+            role: 'tool',
+            toolCallId: lookup.id,
+            toolName: CALLABLE_TOOL_NAME,
+            content: observation
+          })
+          expect(messages).toContainEqual({
+            role: 'tool',
+            toolCallId: clarification.id,
+            toolName: AGENT_CLARIFICATION_TOOL_NAME,
+            content: expect.stringContaining('Clarification request rejected:')
+          })
+
+          return { textContent: 'The recipient is Alice.' }
+        })
+
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Find the requested recipient.' }],
+        catalog: createCatalog(),
+        callModel,
+        executeFunction,
+        loadAgentSkill: async () => null
+      })
+
+      expect(executeFunction).toHaveBeenCalledTimes(1)
+      expect(callModel).toHaveBeenCalledTimes(2)
+      expect(result).toMatchObject({
+        intent: 'answer',
+        answer: 'The recipient is Alice.'
+      })
+      expect(result.transcript.filter((message) => message.role === 'tool'))
+        .toHaveLength(2)
+    }
+  )
+
   it.each(['answer', 'cancelled'])(
     'allows the %s outcome at the iteration limit without further operational work',
     async (intent) => {
@@ -1991,11 +2342,22 @@ describe('continuous agent loop', () => {
           AGENT_CLARIFICATION_TOOL_NAME,
           AGENT_CANCELLATION_TOOL_NAME
         ])
-        return intent === 'cancelled'
+        const completion = intent === 'cancelled'
           ? { toolCalls: [toolCall('cancel-limit', AGENT_CANCELLATION_TOOL_NAME, {
               acknowledgment: 'Stopped.'
             })] }
-          : { textContent: 'Here is the complete supported answer.' }
+          : { output: 'Here is the complete supported answer.' }
+        coreMocks.prompt.mockResolvedValueOnce(completion)
+        const duty = new ReActLLMDuty({ input: 'Find the answer.' })
+        Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+        const result = await duty['callAgentModel'](
+          messages, AGENT_SYSTEM_PROMPT, tools, options
+        )
+        const request = coreMocks.prompt.mock.lastCall?.[1]
+        expect(request.toolChoice).toBe('auto')
+        expect(request.tools).toEqual(tools)
+
+        return result
       })
 
       const result = await runAgentLoop({
@@ -2026,7 +2388,7 @@ describe('continuous agent loop', () => {
     }
   )
 
-  it('offers alternatives and saves a continuation when work is incomplete', async () => {
+  it('preserves clarification for missing owner information at the iteration limit', async () => {
     const callModel = vi.fn(async (_messages, _tools, options) => {
       if (!options.isFinalizationAttempt) {
         return {
@@ -2040,13 +2402,13 @@ describe('continuous agent loop', () => {
 
       return {
         toolCalls: [
-          toolCall('continue-after-limit', AGENT_CLARIFICATION_TOOL_NAME, {
-            explanation: 'The remaining source could not be verified yet.',
+          toolCall('missing-source', AGENT_CLARIFICATION_TOOL_NAME, {
+            explanation: 'The remaining document has no supplied path.',
             alternatives: [
-              'Continue checking the remaining source.',
-              'Answer from the verified evidence only.'
+              'Provide its path.',
+              'Attach the document.'
             ],
-            question: 'May I continue from the saved state?'
+            question: 'Where is the remaining document?'
           })
         ]
       }
@@ -2070,12 +2432,13 @@ describe('continuous agent loop', () => {
 
     expect(result.intent).toBe('clarification')
     expect(result.answer).toContain(
-      'The remaining source could not be verified yet.'
+      'The remaining document has no supplied path.'
     )
     expect(result.answer).toContain(
-      '- Continue checking the remaining source.'
+      '- Provide its path.'
     )
-    expect(result.answer).toContain('May I continue from the saved state?')
+    expect(result.answer).toContain('Where is the remaining document?')
+    expect(result.answer).not.toContain('May I continue')
     expect(result.transcript.at(-1)).toMatchObject({
       role: 'tool',
       toolName: AGENT_CLARIFICATION_TOOL_NAME
@@ -2095,7 +2458,7 @@ describe('continuous agent loop', () => {
       .mockResolvedValueOnce(null)
 
     const result = await runAgentLoop({
-      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      transcript: [{ role: 'user', content: '<user_request>Finish this request.</user_request><context_manifest>CONTEXT_CANARY_7812</context_manifest>' }],
       catalog: createCatalog(),
       maxIterations: 1,
       callModel,
@@ -2110,14 +2473,17 @@ describe('continuous agent loop', () => {
       loadAgentSkill: async () => null
     })
 
-    expect(result.intent).toBe('clarification')
+    expect(result.intent).toBe('error')
     expect(callModel).toHaveBeenCalledTimes(3)
-    expect(result.answer).toContain('Finish this request.')
-    expect(result.answer).toContain('Partial progress saved.')
+    expect(result.answer).not.toContain('CONTEXT_CANARY_7812')
+    expect(result.answer).not.toContain('context_manifest')
+    expect(result.answer).not.toContain('Partial progress saved.')
+    expect(result.executionHistory[0]?.observation).toBe('Partial progress saved.')
+    expect(result.transcript[0]?.content).toContain('CONTEXT_CANARY_7812')
     expect(result.answer).toContain(
       'Produce the final answer from the verified findings'
     )
-    expect(result.answer).toContain('May I continue with that next step?')
+    expect(result.answer).not.toContain('May I continue')
   })
 
   it('retries failed finalization from a bounded evidence-only transcript', async () => {
@@ -2204,12 +2570,13 @@ describe('continuous agent loop', () => {
 
     expect(executeFunction).toHaveBeenCalledTimes(1)
     expect(callModel).toHaveBeenCalledTimes(3)
-    expect(result.intent).toBe('clarification')
-    expect(result.answer).toContain('Unexpected execution.')
-    expect(result.answer).toContain('May I continue with that next step?')
+    expect(result.intent).toBe('error')
+    expect(result.answer).not.toContain('Unexpected execution.')
+    expect(result.executionHistory[0]?.observation).toBe('Unexpected execution.')
+    expect(result.answer).not.toContain('May I continue')
   })
 
-  it('builds context-recovery failure details from the saved run state', async () => {
+  it('preserves progress and reports the current provider failure after context recovery', async () => {
     const callModel = vi
       .fn()
       .mockRejectedValueOnce(
@@ -2239,14 +2606,15 @@ describe('continuous agent loop', () => {
       loadAgentSkill: async () => null
     })
 
-    expect(result.intent).toBe('clarification')
-    expect(result.answer).toContain('Prepare the security report.')
-    expect(result.answer).toContain('TLS configuration verified.')
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('model provider failed')
+    expect(result.answer).not.toContain('task context')
+    expect(result.executionHistory[0]?.observation).toBe('TLS configuration verified.')
     expect(result.answer).toContain(
-      'Review unresolved findings (in_progress)'
+      'Reported progress: 1/2 steps completed.'
     )
     expect(result.answer).toContain(
-      'Next, I will: Review unresolved findings.'
+      'Remaining: Review unresolved findings.'
     )
   })
 
@@ -2548,6 +2916,48 @@ describe('continuous agent loop', () => {
     expect(result.answer).toBe('Both state reads completed.')
   })
 
+  it('refreshes observations after mutations while blocking repeated side effects', async () => {
+    const catalog = createCatalog()
+    const mutationName = 'test__lookup__change'
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable,
+      functionConfig: { ...callable.functionConfig, read_only: true }
+    })
+    catalog.functionsByToolName.set(mutationName, {
+      ...callable, qualifiedName: 'test.lookup.change', functionName: 'change'
+    })
+    catalog.tools.push({
+      type: 'function',
+      function: { ...catalog.tools[0]!.function, name: mutationName }
+    })
+    const executeFunction = vi.fn(async (entry: AgentCallableFunction, input: string) => ({
+      execution: {
+        function: entry.qualifiedName, status: 'success',
+        observation: 'Current state.', requestedToolInput: input
+      }
+    }))
+    let turn = 0
+
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Observe, change and verify the state.' }],
+      catalog,
+      callModel: async () => {
+        turn += 1
+        if (turn <= 4) {
+          return { toolCalls: [toolCall(`state-${turn}`,
+            turn % 2 === 0 ? mutationName : CALLABLE_TOOL_NAME, { query: 'Leon' })] }
+        }
+
+        return { textContent: 'The changed state is verified.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction.mock.calls.map(([entry]) => entry.qualifiedName))
+      .toEqual(['test.lookup.run', 'test.lookup.change', 'test.lookup.run'])
+  })
+
   it('blocks overlapping reads of the same tool artifact', () => {
     const previousInput = JSON.stringify({
       outputLogPath: '/tmp/tool-output.log',
@@ -2593,6 +3003,43 @@ describe('continuous agent loop', () => {
         toolInput
       )
     ).toBeNull()
+  })
+
+  it('reuses observations across reads but refreshes them after state may change', () => {
+    const input = JSON.stringify({ path: 'source.ts' })
+    const read = {
+      function: 'files.read',
+      status: 'success',
+      observation: 'Current contents.',
+      requestedToolInput: input
+    }
+    const otherRead = { ...read, requestedToolInput: JSON.stringify({ path: 'other.ts' }) }
+    const isReadOnly = (name: string): boolean => name === read.function
+
+    expect(findDuplicateToolInputMatch(
+      [read, otherRead], read.function, '', input, isReadOnly
+    )).toMatchObject({ stepNumber: 1 })
+
+    for (const status of ['success', 'error']) {
+      expect(findDuplicateToolInputMatch(
+        [read, { function: 'files.patch', status, observation: 'May have changed state.' }],
+        read.function, '', input, isReadOnly
+      )).toBeNull()
+    }
+
+    expect(findDuplicateToolInputMatch(
+      [read, { function: 'files.patch', status: 'success', observation: 'Changed.' }, read],
+      read.function, '', input, isReadOnly
+    )).toMatchObject({ stepNumber: 3 })
+  })
+
+  it('refreshes reads that overlapped a mutation regardless of emitted order', () => {
+    const input = JSON.stringify({ path: 'source.ts' })
+
+    expect(findDuplicateToolInputMatch([
+      { function: 'files.patch', status: 'success', observation: 'Changed.', startedAt: 10, completedAt: 30 },
+      { function: 'files.read', status: 'success', observation: 'Old contents.', requestedToolInput: input, startedAt: 15, completedAt: 20 }
+    ], 'files.read', '', input, (name) => name === 'files.read')).toBeNull()
   })
 
   it('restores execution and plan state after clarification', async () => {
@@ -2680,6 +3127,7 @@ describe('continuous agent loop', () => {
     expect(loader?.function.description).not.toContain(
       'exact subtitle timestamps'
     )
+    expect(loader?.function.description).toContain('downloadSubtitles')
     expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toBe('')
     let modelTurn = 0
 
@@ -2724,7 +3172,52 @@ describe('continuous agent loop', () => {
     )
   })
 
-  it('discovers function summaries before selectively loading guidance and preserves the selection on resume', async () => {
+  it('loads small tool contracts with their guidance in one discovery round trip', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([{
+      toolkitId: 'test', toolkitName: 'Test', toolkitDescription: 'Source inspection.',
+      toolId: 'source', toolName: 'Source', toolDescription: 'Inspect a source.',
+      toolProgressiveGuidance: 'Use the supplied source identity.'
+    }])
+    coreMocks.getToolFunctions.mockReturnValue({
+      inspect: {
+        description: 'Inspect a source.', progressive_guidance: 'Return verified evidence.',
+        parameters: { type: 'object', properties: {}, additionalProperties: false }
+      }
+    })
+    const catalog = buildAgentToolCatalog()
+    let turn = 0
+
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Inspect the source.' }], catalog,
+      callModel: async (_messages, tools) => {
+        turn += 1
+
+        if (turn === 1) {
+          return { toolCalls: [toolCall('load', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test'
+          })] }
+        }
+
+        expect(tools).toContainEqual(expect.objectContaining({
+          function: expect.objectContaining({
+            name: 'test__source__inspect',
+            description: expect.stringContaining('Return verified evidence.')
+          })
+        }))
+        expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain(
+          'Use the supplied source identity.'
+        )
+
+        return { textContent: 'Capability loaded.' }
+      },
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => null
+    })
+
+    expect(turn).toBe(2)
+  })
+
+  it('selectively loads large function contracts and preserves the selection on resume', async () => {
     coreMocks.getFlattenedTools.mockReturnValue(['first', 'other'].map((toolId) => ({
       toolkitId: 'test', toolkitName: 'Test', toolkitDescription: 'Test discovery.',
       toolkitProgressiveGuidance: 'Shared toolkit instructions.', toolId,
@@ -2733,10 +3226,13 @@ describe('continuous agent loop', () => {
     })))
     coreMocks.getToolFunctions.mockReturnValue(Object.fromEntries(['read', 'write', 'inspect'].map((name) => [name, {
       description: `Summary for ${name}.`,
-      progressive_guidance: `Detailed ${name} instructions.`,
+      progressive_guidance: `Detailed ${name} instructions. `.repeat(200),
       parameters: { type: 'object', properties: {}, additionalProperties: false }
     }])))
     const catalog = buildAgentToolCatalog()
+    const initialLoader = structuredClone(catalog.tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME))
+    expect(initialLoader?.function.description).toContain('first.read')
+    expect(JSON.stringify(initialLoader)).not.toContain('Tool routing summary.')
     expect(JSON.stringify(catalog.tools)).not.toContain('Detailed')
     expect(JSON.stringify(catalog.tools)).not.toContain('Summary for read')
     let turn = 0
@@ -2751,11 +3247,11 @@ describe('continuous agent loop', () => {
         if (turn === 2) {
           expect(catalog.functionsByToolName.size).toBe(0)
           const loader = tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)
-          expect(loader?.function.parameters).toMatchObject({
-            properties: { functions: { items: { enum: expect.arrayContaining(['first.read', 'first.inspect']) } } }
-          })
-          expect(JSON.stringify(loader?.function.parameters)).not.toContain('first.first')
-          expect(JSON.stringify(tools)).toContain('first.read: Summary for read.')
+          expect(loader).toEqual(initialLoader)
+          expect(messages.at(-1)?.content).toContain('first: Tool routing summary.')
+          expect(messages.at(-1)?.content).toContain('first.read: Summary for read.')
+          expect(messages.at(-1)?.content).toContain('first.inspect: Summary for inspect.')
+          expect(JSON.stringify(tools)).not.toContain('Summary for read.')
           expect(JSON.stringify(tools)).not.toContain('Detailed')
           expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain('Shared first instructions.')
           expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Shared other instructions.')
@@ -2768,20 +3264,31 @@ describe('continuous agent loop', () => {
         }
         if (turn === 3) {
           expect(messages.at(-1)?.content).toContain('rejected')
+          expect(messages.at(-1)?.content).toContain('first.read: Summary for read.')
+          expect(messages.at(-1)?.content).toContain('first.inspect: Summary for inspect.')
+          expect(messages.at(-1)?.content).not.toContain('Detailed')
           expect(catalog.functionsByToolName.size).toBe(0)
           return { toolCalls: [toolCall('select', AGENT_TOOLKIT_LOADER_NAME, {
             toolkit_id: 'test', functions: ['first.read', 'first.inspect']
           })] }
         }
         expect(catalog.functionsByToolName.size).toBe(2)
+        expect(tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)).toEqual(initialLoader)
         expect(JSON.stringify(tools)).toContain('Detailed read instructions.')
         expect(JSON.stringify(tools)).toContain('Detailed inspect instructions.')
         expect(JSON.stringify(tools)).not.toContain('Detailed write instructions.')
         expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Detailed read instructions.')
         expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Shared other instructions.')
-        if (turn === 4) return { toolCalls: [toolCall('reuse', AGENT_TOOLKIT_LOADER_NAME, {
-          toolkit_id: 'test', functions: ['first.read']
-        })] }
+        if (turn === 4) {
+          expect(messages.at(-1)?.content).toContain(
+            'Selected functions: first.read, first.inspect.'
+          )
+          expect(messages.at(-1)?.content).not.toContain('Summary for write.')
+
+          return { toolCalls: [toolCall('reuse', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test', functions: ['first.read']
+          })] }
+        }
         expect(tools.filter((tool) => tool.function.name === 'test__first__read')).toHaveLength(1)
         return { textContent: 'Ready.' }
       },
@@ -2792,7 +3299,11 @@ describe('continuous agent loop', () => {
     expect(turn).toBe(5)
     expect(loadToolkitContext).toHaveBeenCalledTimes(1)
     const selected = [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName)
-    const resumed = buildAgentToolCatalog(null, catalog.loadedToolkitIds, true, selected, catalog.loadedToolNames)
+    catalog.tools.reverse()
+    const resumed = buildAgentToolCatalog(null, catalog.loadedToolkitIds, true, selected, catalog.loadedToolNames, {
+      toolOrder: catalog.tools.map((tool) => tool.function.name), planTracking: false
+    })
+    expect(resumed.tools).toEqual(catalog.tools)
     expect([...resumed.functionsByToolName.keys()]).toEqual([...catalog.functionsByToolName.keys()])
     expect(buildAgentProgressiveGuidanceSystemPrompt(resumed)).toBe(buildAgentProgressiveGuidanceSystemPrompt(catalog))
     expect(JSON.stringify(resumed.tools)).not.toContain('Detailed write instructions.')
@@ -2823,10 +3334,13 @@ describe('continuous agent loop', () => {
     ])
 
     expect(
-      findHighConfidenceAgentToolkitId(
+      findHighConfidenceAgentToolSelection(
         'What is the weather like in Shenzhen?'
       )
-    ).toBe('weather')
+    ).toEqual({ toolkitId: 'weather' })
+
+    expect(findHighConfidenceAgentToolSelection('Use Open-Meteo for Shenzhen.'))
+      .toEqual({ toolkitId: 'weather', toolIds: ['openmeteo'] })
   })
 
   it('keeps model-led discovery when registry metadata is ambiguous', () => {
@@ -2849,8 +3363,8 @@ describe('continuous agent loop', () => {
       }
     ])
 
-    expect(findHighConfidenceAgentToolkitId('Open a local file.')).toBeNull()
-    expect(findHighConfidenceAgentToolkitId('Tell me a joke.')).toBeNull()
+    expect(findHighConfidenceAgentToolSelection('Open a local file.')).toBeNull()
+    expect(findHighConfidenceAgentToolSelection('Tell me a joke.')).toBeNull()
   })
 
   it('keeps model-led discovery for translated descriptive wording', () => {
@@ -2865,10 +3379,10 @@ describe('continuous agent loop', () => {
       }
     ])
 
-    expect(findHighConfidenceAgentToolkitId('深圳今天天气如何？')).toBeNull()
+    expect(findHighConfidenceAgentToolSelection('深圳今天天气如何？')).toBeNull()
   })
 
-  it('omits a preloaded toolkit from the discovery catalog', () => {
+  it('keeps discovery contracts stable when a toolkit is preloaded', () => {
     coreMocks.getFlattenedTools.mockReturnValue([
       {
         toolkitId: 'weather',
@@ -2910,11 +3424,15 @@ describe('continuous agent loop', () => {
     expect(loader?.function.parameters).toMatchObject({
       properties: {
         toolkit_id: {
-          enum: ['search_web']
+          enum: ['weather', 'search_web']
         }
       }
     })
-    expect(loader?.function.description).not.toContain('weather: Weather')
+    expect(loader?.function.description).toContain('weather: openmeteo.run')
+    expect(loader?.function.description).toContain('search_web: hosted.run')
+    expect(loader).toEqual(buildAgentToolCatalog().tools.find(
+      (tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME
+    ))
   })
 
   it('preloads only when the toolkit payload fits the routing budget', () => {
@@ -3048,7 +3566,7 @@ describe('continuous agent loop', () => {
           expect(tools.map((tool) => tool.function.name)).toContain(
             'weather__openmeteo__getWeather'
           )
-          expect(tools.map((tool) => tool.function.name)).not.toContain(
+          expect(tools.map((tool) => tool.function.name)).toContain(
             AGENT_TOOLKIT_LOADER_NAME
           )
           return {
@@ -3180,10 +3698,15 @@ describe('continuous agent loop', () => {
       status: 'success',
       message: 'Subtitles loaded.',
       output_log_path: '/tmp/tool-output.log',
+      execution: { id: 'retained-subtitles', state: 'completed' },
       data: { output: 'subtitle '.repeat(2_000) }
-    })
+    }, 6_000)
     expect(largeObservation.length).toBeLessThanOrEqual(6_000)
     expect(largeObservation).toContain('/tmp/tool-output.log')
+    expect(JSON.parse(largeObservation)).toMatchObject({
+      execution: { id: 'retained-subtitles', state: 'completed' },
+      result_note: expect.stringContaining('system_utilities.tool_executions.read')
+    })
 
     const oldToolkitTool = {
       type: 'function' as const,
@@ -3311,6 +3834,106 @@ describe('continuous agent loop', () => {
 })
 
 
+describe('conversation protocol history', () => {
+  let directory: string
+  let manager: AgentHistoryManager
+  let store: ContextStateStore<AgentConversationState | null>
+  const owner: MessageLog = {
+    who: 'owner',
+    message: 'Inspect the project.',
+    sentAt: 1,
+    isAddedToHistory: true
+  }
+  const answer: MessageLog = {
+    who: 'leon',
+    message: 'Inspection verified.',
+    sentAt: 2,
+    isAddedToHistory: true
+  }
+  const transcript: AgentToolTranscriptMessage[] = [
+    { role: 'user', content: '<user_request>Inspect the project.</user_request>' },
+    {
+      role: 'assistant',
+      content: '',
+      toolCalls: [toolCall('inspect', CALLABLE_TOOL_NAME, { query: 'project' })]
+    },
+    {
+      role: 'tool',
+      toolCallId: 'inspect',
+      toolName: CALLABLE_TOOL_NAME,
+      content: 'Verified source evidence.'
+    },
+    { role: 'assistant', content: 'Inspection verified.' }
+  ]
+  const snapshot = {
+    transcript,
+    loadedToolkitIds: ['test'],
+    loadedToolNames: ['test.lookup'],
+    loadedFunctionNames: ['test.lookup.run'],
+    toolOrder: [CALLABLE_TOOL_NAME],
+    planTracking: true
+  }
+
+  beforeEach(() => {
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), 'leon-conversation-history-'))
+    const sessionState = new AgentSessionState()
+    store = new ContextStateStore<AgentConversationState | null>(
+      'conversation.json', null, directory
+    )
+    vi.spyOn(sessionState, 'getConversationStore').mockReturnValue(store)
+    vi.spyOn(sessionState, 'getHistoryCompactionStore').mockReturnValue(
+      new ContextStateStore('history.json', {
+        version: 1,
+        local: createEmptyHistoryCompactionProviderState(),
+        remote: createEmptyHistoryCompactionProviderState()
+      }, directory)
+    )
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
+    manager = new AgentHistoryManager('Test history', sessionState)
+    coreMocks.loadConversationLogs.mockResolvedValue([owner])
+  })
+
+  afterEach(() => {
+    fs.rmSync(directory, { recursive: true, force: true })
+  })
+
+  it('reuses completed tool exchanges and catalog order while appending unseen chat', async () => {
+    await manager.saveConversationState(snapshot, answer.message)
+    coreMocks.loadConversationLogs.mockResolvedValue([
+      owner,
+      answer,
+      { who: 'owner', message: 'Use CSV.', sentAt: 3, isAddedToHistory: true },
+      { who: 'owner', message: 'Continue.', sentAt: 4, isAddedToHistory: true }
+    ])
+    const restored = (await manager.loadPreparedHistory('Continue.')).conversationState
+
+    expect(restored?.transcript.slice(0, transcript.length)).toEqual(transcript)
+    expect(restored?.transcript.at(-1)).toEqual({ role: 'user', content: 'Use CSV.' })
+    expect(restored?.toolOrder).toEqual(snapshot.toolOrder)
+    expect(restored?.loadedFunctionNames).toEqual(snapshot.loadedFunctionNames)
+    expect(restored?.planTracking).toBe(true)
+    expect(restored).not.toHaveProperty('trackedSteps')
+    expect(restored).not.toHaveProperty('executionHistory')
+    expect(new AgentSessionState().getConversationStore()).toBeNull()
+  })
+
+  it('invalidates cached protocol history when visible messages are edited or removed', async () => {
+    const changedHistories = [
+      [{ ...owner, message: 'Inspect another project.' }, answer],
+      [answer]
+    ]
+
+    for (const history of changedHistories) {
+      coreMocks.loadConversationLogs.mockResolvedValue([owner])
+      await manager.saveConversationState(snapshot, answer.message)
+      coreMocks.loadConversationLogs.mockResolvedValue(history)
+
+      expect((await manager.loadPreparedHistory()).conversationState).toBeNull()
+      expect(store.load()).toBeNull()
+    }
+  })
+})
+
 describe('agent automatic compaction', () => {
   beforeEach(() => {
     coreMocks.prompt.mockReset()
@@ -3318,6 +3941,133 @@ describe('agent automatic compaction', () => {
 
   afterEach(() => {
     coreMocks.prompt.mockReset()
+  })
+
+  it('keeps clock and mood changes outside reusable duty rules', () => {
+    const persona = Object.assign(Object.create(Persona.prototype), {
+      contextInfo: 'Clock one', whoYouAre: 'Owner facts', whatYouDo: 'Profile facts',
+      personalityRules: 'Style rules', _mood: { description: 'Calm' }
+    }) as Persona
+    const options = {
+      cacheFriendly: true, includeRuntimeContext: false, includeMood: true
+    }
+    const rules = persona.getCompactDutySystemPrompt('Complete the request.', options)
+    const context = persona.getDutyRuntimeContext({ includeMood: true })
+    Object.assign(persona, { contextInfo: 'Clock two', _mood: { description: 'Curious' } })
+
+    expect(persona.getCompactDutySystemPrompt('Complete the request.', options)).toBe(rules)
+    expect(rules).not.toContain('Clock one')
+    expect(rules).not.toContain('Calm')
+    expect(context).toContain('Clock one')
+    expect(persona.getDutyRuntimeContext({ includeMood: true })).toContain('Clock two')
+    expect(persona.getDutyRuntimeContext({ includeMood: true })).toContain('Curious')
+  })
+
+  it('appends only changed runtime state while preserving the complete reusable history', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Review the sources.' }
+    ]
+    const state = { guidance: { first: 'Inspect authoritative sources.' }, plan: ['Inspect'], elapsedMs: 0 }
+    appendAgentRuntimeContext(transcript, state)
+    const prefix = structuredClone(transcript)
+    appendAgentRuntimeContext(transcript, state)
+    expect(transcript).toEqual(prefix)
+
+    appendAgentRuntimeContext(transcript, { ...state, plan: ['Verify'], elapsedMs: 100 })
+    expect(transcript.slice(0, prefix.length)).toEqual(prefix)
+    expect(transcript.at(-1)).toMatchObject({
+      runtimeContext: { plan: ['Verify'], elapsedMs: 100 }
+    })
+    expect(transcript.at(-1)?.content).not.toContain(state.guidance.first)
+
+    appendAgentRuntimeContext(transcript, {
+      ...state, guidance: { ...state.guidance, second: 'Verify the requested output.' }
+    })
+    expect(transcript.at(-1)).toMatchObject({
+      runtimeContext: { guidance: { second: 'Verify the requested output.' } }
+    })
+    expect(transcript.at(-1)?.content).not.toContain(state.guidance.first)
+    const updated = structuredClone(transcript)
+    appendAgentRuntimeContext(transcript, {
+      ...state, guidance: { ...state.guidance, second: 'Verify the requested output.' }
+    })
+    expect(transcript).toEqual(updated)
+
+    const compacted: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Retained summary.' }]
+    appendAgentRuntimeContext(compacted, state)
+    expect(compacted.at(-1)).toMatchObject({ runtimeContext: state })
+  })
+
+  it.each([false, true])('preserves completed writes through provider overload (recovers=%s)', async (recovers) => {
+    vi.useFakeTimers()
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'leon-recovery-'))
+    const outputPath = path.join(directory, 'audit.csv')
+    const catalog = createCatalog()
+    let failures = 0
+    const runChatCompletion = vi.fn(async (messages: AgentToolTranscriptMessage[]) => {
+      const hasWritten = messages.some((message) => message.role === 'tool')
+
+      if (hasWritten && (!recovers || failures === 0)) {
+        failures += 1
+        throw Object.assign(new Error('Provider is overloaded'), { statusCode: 503 })
+      }
+
+      return { data: {
+        choices: [{ message: hasWritten
+          ? { content: 'One audit row was saved.' }
+          : { content: '', tool_calls: [toolCall('write-audit', CALLABLE_TOOL_NAME, { query: outputPath })] },
+        finish_reason: hasWritten ? 'stop' : 'tool_calls' }],
+        usage: { prompt_tokens: 100, completion_tokens: 10 }
+      } }
+    })
+    coreMocks.prompt.mockImplementation((history, params) => runCompletionAttempt(
+      { modelName: 'test-model', runChatCompletion }, LLMProviders.OpenAI, history,
+      { ...params, data: null, remoteProviderErrorRetries: params.remoteProviderErrorRetries ?? 1 } as PreparedCompletionParams,
+      'overload-test', (retryParams) => coreMocks.prompt(history, retryParams),
+      () => coreMocks.consumeLastProviderErrorMessage.mockReturnValue('Provider is overloaded')
+    ))
+    const duty = new ReActLLMDuty({ input: 'Append one audit row and report the count.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const executeFunction = vi.fn(async () => {
+      fs.appendFileSync(outputPath, 'probe-001,ready\n')
+
+      return { execution: {
+        function: callable.qualifiedName,
+        status: 'success',
+        observation: 'One matching audit row exists.',
+        requestedToolInput: JSON.stringify({ query: outputPath })
+      } }
+    })
+
+    try {
+      const pending = runAgentLoop({
+        transcript: [{ role: 'user', content: 'Append one audit row and report the count.' }],
+        catalog,
+        callModel: (messages, tools, options, checkpoint) => duty['callAgentModel'](
+          messages, 'Complete the authorized task.', tools, options, checkpoint
+        ),
+        executeFunction,
+        loadAgentSkill: async () => null
+      })
+      await vi.advanceTimersByTimeAsync(4_999)
+      expect(runChatCompletion).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      const result = await pending
+
+      expect(fs.readFileSync(outputPath, 'utf8')).toBe('probe-001,ready\n')
+      expect(executeFunction).toHaveBeenCalledOnce()
+      expect(runChatCompletion).toHaveBeenCalledTimes(3)
+      expect(result.executionHistory).toHaveLength(1)
+      expect(result.transcript.some((message) => message.role === 'tool')).toBe(true)
+      expect(result.intent).toBe(recovers ? 'answer' : 'error')
+      expect(result.answer).toContain(recovers ? 'One audit row was saved.' : 'temporarily unavailable')
+      expect(result.answer).not.toContain('task context')
+      expect(result.answer).not.toContain('May I continue')
+      expect(duty['automaticCompactionFailed']).toBe(false)
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true })
+      vi.useRealTimers()
+    }
   })
 
   it('lets OpenAI decide when to compact and passes returned context to the loop', async () => {
@@ -3350,7 +4100,10 @@ describe('agent automatic compaction', () => {
     vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({ provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
     vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({ reasoning: 'on', speed: 'auto' })
     const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Keep exact evidence.' }]
-    coreMocks.prompt.mockResolvedValueOnce(null)
+    coreMocks.prompt.mockImplementationOnce(async (_history, params) => {
+      params.onAttempt?.({ failureKind: CompletionFailureKind.Context, outcome: 'Error' })
+      return null
+    })
     coreMocks.consumeLastProviderErrorMessage.mockReturnValueOnce('Unsupported context_management')
     const duty = new ReActLLMDuty({ input: 'Continue.' })
     Object.assign(duty, { writeAgentPromptLog: vi.fn() })
@@ -3428,6 +4181,135 @@ describe('model response status', () => {
     .filter(([event]) => event === 'model-response-status')
     .map(([, status]) => status)
 
+  it('lets productive tool generation finish after the finishing reserve begins', async () => {
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const budget = new AgentRunBudget(Date.now() + 180_000)
+    let params!: CompletionParams
+    let finish!: (result: { output: string }) => void
+    coreMocks.prompt.mockImplementationOnce((_messages, input: CompletionParams) => {
+      params = input
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    })
+    const duty = new ReActLLMDuty({ input: 'Finish the deliverable.' })
+    const catalog = createCatalog()
+    Object.assign(duty, { runBudget: budget, writeAgentPromptLog: vi.fn() })
+    const pending = runWithConversationSession({ sessionId: 'productive-generation' }, () =>
+      duty['callAgentModel']([], 'Follow the request.', catalog.tools, {
+        isRecoveryAttempt: false
+      }, undefined, catalog.functionsByToolName)
+    )
+
+    try {
+      for (let elapsed = 0; elapsed < 120_000; elapsed += 20_000) {
+        params.onStreamEvent?.({ type: 'tool-input-delta' })
+        params.onToolCall?.(toolCall('draft', CALLABLE_TOOL_NAME, {
+          query: `Partial content at ${elapsed}`
+        }))
+        await vi.advanceTimersByTimeAsync(20_000)
+      }
+
+      expect(budget.isFinishing).toBe(true)
+      expect(budget.remainingMs).toBe(60_000)
+      expect(params.cancellationSignal?.aborted).toBe(false)
+      finish({ output: 'Done.' })
+      expect(await pending).toMatchObject({ textContent: 'Done.' })
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it('enters the finishing pass once when operational recovery reaches the reserve', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const budget = new AgentRunBudget(Date.now() + 180_000)
+    const callModel = vi.fn()
+      .mockImplementationOnce(async () => {
+        clock.mockReturnValue(125_000)
+        throw new AgentModelResponseTimeoutError()
+      })
+      .mockResolvedValueOnce({ textContent: 'Delivered from verified evidence.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Verified.' }) })
+
+    try {
+      const result = await runAgentLoopWithCompletionReview({
+        transcript: [{ role: 'user', content: 'Deliver the verified results.' }],
+        catalog: createCatalog(), runBudget: budget,
+        callModel, executeFunction: vi.fn(), loadAgentSkill: async () => null
+      })
+
+      expect(result.answer).toBe('Delivered from verified evidence.')
+      expect(JSON.stringify(callModel.mock.calls[1]?.[0])).toContain('execution_finishing_pass')
+      expect(budget.remainingMs).toBe(55_000)
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it('uses monotonic remaining time and imposes no deadline when omitted', () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const unlimited = new AgentRunBudget()
+    const budget = new AgentRunBudget(Date.now() + 180_000)
+
+    try {
+      vi.setSystemTime(Date.now() - 3_600_000)
+      clock.mockReturnValue(125_000)
+      expect(budget.remainingMs).toBe(55_000)
+      expect(budget.isFinishing).toBe(true)
+      expect(budget.capTimeout(120_000)).toBe(55_000)
+      expect(unlimited.signal).toBeUndefined()
+      expect(unlimited.remainingMs).toBeUndefined()
+      expect(unlimited.isFinishing).toBe(false)
+
+      clock.mockReturnValue(180_000)
+      expect(() => budget.throwIfExpired()).toThrow(AgentRunDeadlineError)
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
+  it.each([false, true])('does not renew the run deadline for productive generation (review=%s)', async (review) => {
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const budget = new AgentRunBudget(Date.now() + 30_000)
+    let params!: CompletionParams
+    coreMocks.prompt.mockImplementationOnce((_messages, input: CompletionParams) => {
+      params = input
+      return new Promise((_resolve, reject) => {
+        input.cancellationSignal?.addEventListener('abort', () => {
+          reject(input.cancellationSignal?.reason)
+        }, { once: true })
+      })
+    })
+    const duty = new ReActLLMDuty({ input: 'Finish the deliverable.' })
+    Object.assign(duty, { runBudget: budget, writeAgentPromptLog: vi.fn() })
+    const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+      isRecoveryAttempt: false, isCompletionReview: review
+    }).then(() => null, (error) => error)
+
+    try {
+      for (let elapsed = 0; elapsed < 30_000; elapsed += 5_000) {
+        params.onReasoningToken?.('Working.')
+        await vi.advanceTimersByTimeAsync(5_000)
+      }
+
+      expect(await pending).toBeInstanceOf(AgentRunDeadlineError)
+      expect(params.cancellationSignal?.aborted).toBe(true)
+      expect(params.timeout).toBe(review ? 30_000 : 15_000)
+      if (review) {
+        expect(params.maxRetries).toBeGreaterThan(0)
+        expect(params.remoteProviderErrorRetries).toBe(0)
+      }
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
   it('retains the prepared prompt estimate when an adapter reports no input usage', async () => {
     coreMocks.prompt.mockResolvedValueOnce({
       output: 'Done.',
@@ -3503,6 +4385,150 @@ describe('model response status', () => {
     expect(coreMocks.prompt).toHaveBeenCalledTimes(3)
   })
 
+  it.each([
+    {
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6.1-sol',
+      taskReasoning: 'high',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.Anthropic,
+      model: 'claude-opus-5-5',
+      taskReasoning: 'high',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.Anthropic,
+      model: 'claude-opus-5-5',
+      taskReasoning: 'on',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.Anthropic,
+      model: 'claude-opus-5-5',
+      taskReasoning: 'auto',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6.1-sol',
+      taskReasoning: 'on',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.DeepSeek,
+      model: 'deepseek-flash',
+      taskReasoning: 'high',
+      reviewEffort: 'low'
+    },
+    {
+      provider: LLMProviders.OpenRouter,
+      model: 'z-ai/glm-5-turbo',
+      taskReasoning: 'on',
+      reviewEffort: undefined
+    },
+    {
+      provider: LLMProviders.OpenAI,
+      model: 'uncatalogued-model',
+      taskReasoning: 'high',
+      reviewEffort: 'high'
+    }
+  ] as const)(
+    'defaults review to supported low effort with $taskReasoning task reasoning for $provider/$model', async ({ provider, model, taskReasoning, reviewEffort }) => {
+      vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+        provider, model
+      })
+      vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
+        reasoning: taskReasoning, speed: 'fast'
+      })
+      coreMocks.prompt.mockImplementation(async (_messages, params) => {
+        prepareCompletionRequest(
+          params,
+          provider,
+          CONFIG_STATE.getModelState().getAgentTarget()
+        )
+
+        return { output: 'Done.' }
+      })
+      const duty = new ReActLLMDuty({ input: 'Answer the question.' })
+      Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+      for (const review of [false, true]) {
+        await duty['callAgentModel']([], 'Follow the request.', [], {
+          isRecoveryAttempt: false, isCompletionReview: review
+        })
+      }
+
+      const taskParams = coreMocks.prompt.mock.calls[0]![1]
+      const reviewParams = coreMocks.prompt.mock.calls[1]![1]
+      expect(taskParams.reasoningEffort).toBe(
+        taskReasoning === 'on' ? undefined : taskReasoning === 'auto' ? 'medium' : 'high'
+      )
+      expect(reviewParams.reasoningEffort).toBe(reviewEffort)
+      expect(reviewParams.reasoningUseDefaultEffort).toBe(
+        reviewEffort === undefined ? true : undefined
+      )
+      expect(taskParams.serviceTier).toBe('priority')
+      expect(reviewParams.serviceTier).toBe('priority')
+      expect(reviewParams.toolChoice).toBe('none')
+      expect(reviewParams.disableThinking).not.toBe(true)
+      expect(Boolean(reviewParams.data)).toBe(
+        provider === LLMProviders.OpenAI && model !== 'uncatalogued-model'
+      )
+      if (provider === LLMProviders.Anthropic) {
+        expect(reviewParams.reasoningEffortBaseline).toBe(
+          taskReasoning === 'auto' ? 'medium' : taskReasoning
+        )
+      }
+    }
+  )
+
+  it('reports review time and retries even when an earlier review fails', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.Anthropic, model: 'claude-opus-5-5'
+    })
+    const duty = new ReActLLMDuty({ input: 'Check the result.' })
+    Object.assign(duty, {
+      writeAgentPromptLog: vi.fn(), hasFinalizedAnswer: true, executionStartedAt: 1_000
+    })
+    coreMocks.prompt
+      .mockImplementationOnce(async (_messages, params) => {
+        expect(params.data).toBeUndefined()
+        now.mockReturnValue(1_200)
+        throw new Error('Connection interrupted')
+      })
+      .mockImplementationOnce(async (_messages, params) => {
+        expect(params.data).toMatchObject({
+          required: ['reason', 'status', 'out_of_scope_steps'],
+          additionalProperties: false
+        })
+        for (const attemptId of ['retry-first', 'retry-second']) {
+          params.onAttempt({ attemptId, outcome: 'started' })
+          params.onAttempt({ attemptId, outcome: 'completed' })
+        }
+        now.mockReturnValue(1_500)
+
+        return { output: { status: 'complete', reason: 'Verified.', out_of_scope_steps: [] } }
+      })
+
+    await expect(duty['callAgentModel']([], 'Check evidence.', [], {
+      isRecoveryAttempt: false, isCompletionReview: true
+    })).rejects.toThrow('Connection interrupted')
+    await duty['callAgentModel']([], 'Check evidence.', [], {
+      isRecoveryAttempt: false, isCompletionReview: true, isCompletionReviewRetry: true
+    })
+
+    expect(duty['makeDutyResult']('Done.').data?.['llmMetrics']).toMatchObject({
+      reviewCount: 1, reviewRetryCount: 2, reviewDurationMs: 500, durationMs: 500
+    })
+    expect(duty['responseTraceCollector'].snapshot({}).inferences).toEqual([
+      expect.objectContaining({ attemptId: 'retry-first', phase: 'review' }),
+      expect.objectContaining({ attemptId: 'retry-second', phase: 'review' })
+    ])
+  })
+
   it.each([false, true])('reports observed stream activity without adding chat history (review=%s)', async (review) => {
     let finish!: (result: { output: string }) => void
     let params!: CompletionParams
@@ -3519,13 +4545,17 @@ describe('model response status', () => {
     })
 
     try {
-      expect(statuses().at(-1)?.state).toBe(ModelResponseState.Waiting)
+      expect(params.toolChoice).toBe(review ? 'none' : 'auto')
+      expect(params.disableContextCompaction).toBe(review)
+      expect(params.systemPrompt).toBe('Follow the request.')
+      expect(statuses().at(-1)?.state).toBe(review ? ModelResponseState.Reviewing : ModelResponseState.Waiting)
       params.onStreamEvent?.({ type: 'stream-open' })
       params.onStreamEvent?.({ type: 'reasoning-start' })
       await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
-      expect(statuses().map((status) => status.state)).toEqual([
-        ModelResponseState.Waiting, ModelResponseState.Connected, ModelResponseState.Reasoning
-      ])
+      expect(statuses().map((status) => status.state)).toEqual(review
+        ? [ModelResponseState.Reviewing, ModelResponseState.Reviewing, ModelResponseState.Reviewing]
+        : [ModelResponseState.Waiting, ModelResponseState.Connected, ModelResponseState.Reasoning]
+      )
       expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toBeUndefined()
       expect(coreMocks.emitAnswerToChatClients.mock.calls.some(([payload]) =>
         payload.historyMode === 'system_widget'
@@ -3652,7 +4682,67 @@ describe('model response status', () => {
     }
   })
 
-  it.each(['text', 'reasoning', 'tool-input', 'review'])(
+  it.each(['text', 'reasoning', 'tool-input'])(
+    'warns only when %s progress stops, independently of transport heartbeats',
+    async (output) => {
+      let params!: CompletionParams
+      let finish!: (result: { output: string }) => void
+      coreMocks.prompt.mockImplementationOnce((_messages, input) => {
+        params = input
+
+        return new Promise((resolve) => {
+          finish = resolve
+        })
+      })
+      const duty = new ReActLLMDuty({ input: 'Inspect the files.' })
+      Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+      const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+        isRecoveryAttempt: false
+      })
+
+      try {
+        for (let chunk = 0; chunk < 4; chunk += 1) {
+          await vi.advanceTimersByTimeAsync(15_000)
+          if (output === 'text') {
+            params.onToken?.('Generated content.')
+          } else if (output === 'reasoning') {
+            params.onReasoningToken?.('Checking the files.')
+          } else {
+            params.onStreamEvent?.({ type: 'tool-input-delta' })
+          }
+        }
+
+        expect(LogHelper.warning).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS - 1)
+        params.onToken?.('')
+        params.onStreamEvent?.({ type: 'transport-activity', transport: 'http' })
+        expect(LogHelper.warning).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1)
+        expect(LogHelper.warning).toHaveBeenCalledWith(
+          'callAgentModel: no model progress for 20000ms'
+        )
+        await vi.advanceTimersByTimeAsync(
+          AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS - AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS
+        )
+        expect(LogHelper.warning).toHaveBeenCalledWith(
+          expect.stringContaining('Model progress stalled')
+        )
+
+        params.onToken?.('Done.')
+        params.onStreamEvent?.({ type: 'finish' })
+        vi.mocked(LogHelper.warning).mockClear()
+        await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
+        expect(LogHelper.warning).not.toHaveBeenCalled()
+      } finally {
+        finish({ output: 'Done.' })
+        await pending
+      }
+
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it.each(['text', 'reasoning', 'tool-input', 'review', 'compaction'])(
     'allows productive %s beyond the initial response deadline', async (output) => {
       let params!: CompletionParams
       let finish!: (result: { output: string }) => void
@@ -3676,7 +4766,13 @@ describe('model response status', () => {
           elapsed += 20_000
         ) {
           await vi.advanceTimersByTimeAsync(20_000)
-          if (output === 'tool-input') {
+          if (output === 'compaction') {
+            if (elapsed === 60_000) {
+              params.onStreamEvent?.({ type: 'compaction-start' })
+            } else if (elapsed === 140_000) {
+              params.onStreamEvent?.({ type: 'compaction-end' })
+            }
+          } else if (output === 'tool-input') {
             params.onStreamEvent?.({ type: 'tool-input-delta' })
           } else if (output === 'reasoning') {
             params.onReasoningToken?.('Planning the next step.')
@@ -3805,8 +4901,16 @@ describe('model response status', () => {
     expect(duty['responseTraceCollector'].snapshot({}).inferences?.at(-1)?.failureKind).toBe(CompletionFailureKind.Timeout)
   })
 
-  it.each(['review', 'finalization'])('retains task state without restarting exhausted %s recovery', async (phase) => {
-    const trackedSteps = [{ label: 'Verify the deliverable', status: 'in_progress' as const }]
+  it.each([
+    { phase: 'review', status: 'in_progress' as const },
+    { phase: 'review', status: 'completed' as const },
+    { phase: 'finalization', status: 'in_progress' as const },
+    { phase: 'finalization', status: 'completed' as const }
+  ])('retains task state without restarting exhausted recovery (%j)', async ({ phase, status }) => {
+    const trackedSteps = [{
+      label: 'Verify the deliverable', status,
+      details: 'Saved artifact /tmp/verified-result.pdf; its contents match the requested export.'
+    }]
     const callModel = vi.fn(async (_messages, _tools, options) => {
       if (!options.isCompletionReview && !options.isFinalizationAttempt) {
         return { textContent: 'Proposed result.' }
@@ -3821,6 +4925,18 @@ describe('model response status', () => {
     })
     expect(result.intent).not.toBe('answer')
     expect(result.answer).toContain('exceeded its time limit')
+    if (status === 'completed') {
+      expect(result.answer).toContain('Reported completed work:\n- Verify the deliverable')
+      expect(result.answer).toContain(trackedSteps[0]!.details)
+      expect(result.answer).not.toContain('The task is incomplete')
+    }
+    if (phase === 'review') {
+      expect(result.answer).toContain('The final answer was drafted, but completion could not be verified')
+      expect(result.answer).toContain(status === 'completed'
+        ? 'Remaining: Verify the drafted final answer.'
+        : 'Remaining: Verify the deliverable.')
+      expect(result.answer).not.toContain('Produce the final answer')
+    }
     expect(result.trackedSteps).toEqual(trackedSteps)
     expect(callModel).toHaveBeenCalledTimes(phase === 'review' ? 2 : 1)
   })
@@ -3923,15 +5039,23 @@ describe('plan state', () => {
   })
 
   it('keeps an unfinished collection blocked at the limit even if the reviewer says complete', async () => {
+    const steps = [
+      ...plan,
+      { label: 'Activate the installed runtime', status: 'pending' as const }
+    ]
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Retrieve the requested documents.' }], catalog: createCatalog(),
-      initialTrackedSteps: plan, maxIterations: 0,
+      initialTrackedSteps: steps, maxIterations: 0,
       callModel: vi.fn()
         .mockResolvedValueOnce({ textContent: 'All done.' })
-        .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Done.' }) }),
+        .mockResolvedValueOnce({ textContent: JSON.stringify({
+          status: 'complete', reason: 'Runtime activation belongs to a separate request.',
+          out_of_scope_steps: ['Activate the installed runtime']
+        }) }),
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
     expect(result.intent).toBe('blocked')
-    expect(result.trackedSteps).toEqual(plan)
+    expect(result.answer).toContain('Retrieve documents')
+    expect(result.trackedSteps).toEqual(steps)
   })
 })

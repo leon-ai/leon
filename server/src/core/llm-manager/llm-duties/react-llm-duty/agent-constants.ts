@@ -1,5 +1,6 @@
 export const CHARS_PER_TOKEN = 4
 export const DUTY_NAME = 'Agent LLM Duty'
+export const AGENT_PROMPT_CACHE_KEY = 'leon-ai-assistant'
 
 export const AGENT_HISTORY_COMPACTION_SYSTEM_PROMPT = `You rewrite a bounded rolling summary for older agent conversation turns.
 
@@ -21,6 +22,7 @@ Rules:
 // The default total includes the finishing pass, rather than adding it on top.
 export const AGENT_MAX_ITERATIONS = 256
 export const AGENT_FINISHING_ITERATIONS = 16
+export const AGENT_RUN_FINISHING_RESERVE_MS = 60_000
 export const AGENT_CONTINUATION_SUMMARY_MAX_TOKENS = 4_096
 export const AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS = 60_000
 export const AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT = `Summarize earlier agent work so the same task can continue without repeating it.
@@ -46,9 +48,9 @@ export const AGENT_CONTEXT_RECOVERY_BUDGET_RATIO = 0.5
 export const AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO = 0.05
 export const AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS = 96_000
 export const AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS = 64_000
-export const AGENT_TOOL_OBSERVATION_MAX_CHARS = 6_000
 export const AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT = 1
 export const AGENT_RECENT_TOOL_IMAGE_LIMIT = 2
+export const AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE = 2
 export const AGENT_COMPUTER_USE_RECENT_ACTION_LIMIT = 8
 export const AGENT_COMPUTER_USE_SCROLL_REVERSAL_THRESHOLD = 2
 export const AGENT_COMPUTER_USE_UNVERIFIED_ACTION_THRESHOLD = 3

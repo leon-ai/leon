@@ -101,7 +101,10 @@ export default class ContextManager {
     {
       getWorkflowLLMName: () => LLM_PROVIDER.workflowLLMName,
       getAgentLLMName: () => LLM_PROVIDER.agentLLMName,
-      getLocalLLMName: () => LLM_PROVIDER.localLLMName
+      getLocalLLMName: () => LLM_PROVIDER.localLLMName,
+      runtime: {
+        nodeVersion: process.version, executable: process.execPath, pid: process.pid
+      }
     }
   )
   private readonly hasDisabledAllContextFiles =
@@ -554,7 +557,13 @@ export default class ContextManager {
       '--agent-llm-name',
       LLM_PROVIDER.agentLLMName,
       '--local-llm-name',
-      LLM_PROVIDER.localLLMName
+      LLM_PROVIDER.localLLMName,
+      '--runtime-node-version',
+      process.version,
+      '--runtime-executable',
+      process.execPath,
+      '--runtime-pid',
+      String(process.pid)
     ]
 
     try {
@@ -562,6 +571,7 @@ export default class ContextManager {
         cwd: CODEBASE_PATH,
         env: {
           ...process.env,
+          LEON_WORKSPACE_PATH: process.cwd(),
           LEON_PROFILE: this.profilePaths.name
         },
         maxBuffer: CONTEXT_REFRESH_WORKER_MAX_BUFFER,

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 
 import dotenv from 'dotenv'
-import execa from 'execa'
+import { execa } from 'execa'
 import semver from 'semver'
 import kill from 'tree-kill'
 

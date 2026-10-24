@@ -50,6 +50,9 @@ const llmProviderWithBaseURL = strictObject({
   api_key: secretReference
 })
 const llmModelSetting = strictObject({
+  instructions_cache_ttl: Type.Optional(
+    Type.Union([Type.Literal('30m'), Type.Literal('12h')])
+  ),
   reasoning: Type.Optional(
     Type.Union(LLM_MODEL_REASONING_VALUES.map((value) => Type.Literal(value)))
   ),
@@ -116,6 +119,9 @@ export const configSchemaObject = strictObject({
     ])
   }),
   runtime: strictObject({
+    agent_execution_timeout_seconds: Type.Optional(
+      Type.Number({ exclusiveMinimum: 0 })
+    ),
     agent_max_iterations: Type.Optional(
       Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })
     ),

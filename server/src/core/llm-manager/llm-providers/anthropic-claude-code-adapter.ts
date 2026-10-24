@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 
-import execa from 'execa'
+import { execa, type Subprocess } from 'execa'
 import { parsePartialJson } from 'ai'
 import type { AxiosResponse } from 'axios'
 
@@ -142,7 +142,17 @@ export default class AnthropicClaudeCodeAdapter {
     const validate = streamText ? ajv.compile(schema) : null
 
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-claude-'))
-    let command: execa.ExecaChildProcess<string> | undefined
+    const commandOptions = {
+      cwd: directory,
+      env,
+      extendEnv: false,
+      input,
+      maxBuffer: CLI_MAX_BUFFER,
+      ...(params.timeout ? { timeout: params.timeout } : {}),
+      ...(params.signal ? { cancelSignal: params.signal } : {}),
+      reject: false
+    } as const
+    let command: Subprocess<typeof commandOptions> | undefined
     let lines: ReturnType<typeof createInterface> | undefined
     const toolCallIds: string[] = []
     const closeStream = (): void => {
@@ -157,7 +167,7 @@ export default class AnthropicClaudeCodeAdapter {
       await fs.writeFile(systemPromptFile, [
         params.systemPrompt,
         LEON_MODEL_INSTRUCTIONS,
-        JSON.stringify(allowedTools),
+        JSON.stringify(params.tools || []),
         ...(streamText ? [STREAM_OUTPUT_INSTRUCTIONS, JSON.stringify(schema)] : [])
       ].join('\n'))
 
@@ -178,16 +188,7 @@ export default class AnthropicClaudeCodeAdapter {
         '--tools', '',
         '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
         '--safe-mode', '--setting-sources', '', '--no-session-persistence', '--max-turns', CLI_MAX_TURNS
-      ], {
-        cwd: directory,
-        env,
-        extendEnv: false,
-        input,
-        maxBuffer: CLI_MAX_BUFFER,
-        ...(params.timeout ? { timeout: params.timeout } : {}),
-        ...(params.signal ? { signal: params.signal } : {}),
-        reject: false
-      })
+      ], commandOptions)
       // Observe process failures while reading stdout, then await exit below.
       void command.catch(() => undefined)
       let completed: ClaudeResult | undefined

@@ -1,6 +1,7 @@
 import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
-import { ToolConcurrency } from '@/types'
+import { ToolCompletionReview, ToolConcurrency } from '@/types'
+import { MAX_TOOL_TIMEOUT_MS } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 import {
   PROGRESSIVE_GUIDANCE_MAX_LENGTH,
@@ -69,13 +70,35 @@ const toolFunctionSchemaObject = Type.Strict(
       deduplicate_calls: Type.Optional(
         Type.Boolean({
           description:
-            'Whether the agent should block repeated successful calls with the same input. Disable this for state reads whose result can change over time.'
+            'Block repeated successful inputs until an operation may change the observed state. Disable for reads that can change independently over time.'
+        })
+      ),
+      read_only: Type.Optional(
+        Type.Boolean({
+          description:
+            'Whether this function leaves observed state unchanged. Undeclared functions invalidate reuse of prior observations, including failures after partial execution.'
         })
       ),
       background: Type.Optional(
         Type.Boolean({
           description:
             'Allow agent calls to yield a retained execution handle after a bounded wait. Execution keeps its original deadline and can be waited on, queried or canceled.'
+        })
+      ),
+      timeout: Type.Optional(
+        Type.Object({
+          idleMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_TIMEOUT_MS })),
+          totalMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_TIMEOUT_MS }))
+        }, {
+          additionalProperties: false,
+          minProperties: 1,
+          description: 'Execution limits in milliseconds. Actual output or advancing progress renews idleMs; totalMs is optional and never renewed. Task deadlines still apply.'
+        })
+      ),
+      completion_review: Type.Optional(
+        Type.Enum(ToolCompletionReview, {
+          description:
+            'Required by default. Optional is only for complete, low-risk read-only lookups; the agent still reviews plans, failures, recovery, partial or retained results and multiple calls.'
         })
       ),
       concurrency: Type.Optional(

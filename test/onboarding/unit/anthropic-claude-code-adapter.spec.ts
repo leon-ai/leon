@@ -7,7 +7,7 @@ import AnthropicClaudeCodeAdapter from '@/core/llm-manager/llm-providers/anthrop
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 
 const cli = vi.hoisted(() => vi.fn())
-vi.mock('execa', () => ({ default: cli }))
+vi.mock('execa', () => ({ execa: cli }))
 
 describe('Anthropic Claude Code adapter', () => {
   it('returns tool decisions for Core and disables executable CLI tools', async () => {
@@ -62,6 +62,41 @@ describe('Anthropic Claude Code adapter', () => {
       accounting: { cachedInputTokens: 80, cacheWriteInputTokens: 10 }
     })
     expect(await fs.stat(temporaryDirectory).catch(() => null)).toBeNull()
+  })
+
+  it('retains capability definitions when tool decisions are disabled', async () => {
+    const tools = [{ type: 'function' as const, function: {
+      name: 'read_note', description: 'Read a note',
+      parameters: { type: 'object', properties: { name: { type: 'string' } } }
+    } }]
+    cli.mockImplementationOnce((_command, args) => {
+      const result = (async (): Promise<{ exitCode: number }> => {
+        const file = args[args.indexOf('--system-prompt-file') + 1]
+        expect(await fs.readFile(file, 'utf8')).toContain(JSON.stringify(tools))
+
+        return { exitCode: 0 }
+      })()
+
+      return Object.assign(result, {
+        stdout: Readable.from([JSON.stringify({
+          type: 'result', subtype: 'success',
+          structured_output: { status: 'complete' }
+        }) + '\n']),
+        kill: vi.fn()
+      })
+    })
+    const provider = new AnthropicClaudeCodeAdapter({
+      provider: LLMProviders.Anthropic, model: 'sonnet', label: 'anthropic/sonnet',
+      isLocal: false, isEnabled: true, isResolved: true
+    }, { config_directory: '/example/claude' })
+    const result = await provider.runChatCompletion('Assess completion.', {
+      dutyType: LLMDuties.ReAct, systemPrompt: 'Review task evidence.',
+      toolChoice: 'none', tools,
+      data: { type: 'object', properties: { status: { type: 'string' } } }
+    })
+
+    expect(result.data.choices[0].message.content).toBe('{"status":"complete"}')
+    expect(result.data.choices[0].message.tool_calls).toEqual([])
   })
 
   it.each([false, true])('streams answer text before exit and validates tool decisions (invalid: %s)', async (invalid) => {
@@ -127,7 +162,7 @@ describe('Anthropic Claude Code adapter', () => {
   })
 
   it('stops a real streaming process on abort and removes its prompt file', async () => {
-    const { default: execa } = await vi.importActual<typeof import('execa')>('execa')
+    const { execa } = await vi.importActual<typeof import('execa')>('execa')
     const controller = new AbortController()
     const onToken = vi.fn()
     let directory = ''

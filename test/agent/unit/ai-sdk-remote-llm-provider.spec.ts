@@ -17,10 +17,14 @@ import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-p
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
+import { ProviderPromptCache } from '@/core/llm-manager/llm-providers/prompt-cache'
+import { AGENT_PROMPT_CACHE_KEY } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
+import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { readCompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { CONFIG_MANAGER } from '@/config'
 import {
   getActiveTurnInference,
+  getActiveConversationSessionId,
   runWithConversationSession
 } from '@/core/session-manager/session-context'
 import {
@@ -50,8 +54,12 @@ const websocketMocks = vi.hoisted(() => ({
   close: vi.fn()
 }))
 
-vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
-  createWebSocketFetch: websocketMocks.create
+vi.mock('@/core/llm-manager/llm-providers/openai-responses-websocket', () => ({
+  OpenAIResponsesWebSocket: class {
+    constructor(url: string, headers: Record<string, string>) {
+      return websocketMocks.create({ url, headers })
+    }
+  }
 }))
 
 vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
@@ -59,7 +67,7 @@ vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
 }))
 vi.mock('@/core/session-manager/session-context', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/core/session-manager/session-context')>(),
-  getActiveConversationSessionId: (): string => 'media-session'
+  getActiveConversationSessionId: vi.fn((): string => 'media-session')
 }))
 
 const openRouterMocks = vi.hoisted(() => {
@@ -87,7 +95,8 @@ vi.mock('@/config', () => ({
   CONFIG_MANAGER: {
     getProviderAPIKeyEnv: vi.fn(() => null),
     getProviderAPIKey: vi.fn(() => 'test-openrouter-key'),
-    getProviderBaseURL: vi.fn(() => null)
+    getProviderBaseURL: vi.fn(() => null),
+    getConfig: vi.fn(() => ({ llm: { model_settings: {} } }))
   }
 }))
 
@@ -227,7 +236,8 @@ describe('AISDKRemoteLLMProvider', () => {
     }
     const provider = new OpenAILLMProvider(target)
     const transcript: PromptOrChatHistory = [{ role: 'user', content: 'Read the file.' }]
-    const params = { ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream }
+    const onStreamEvent = vi.fn()
+    const params = { ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream, onStreamEvent }
     const result = await provider.runChatCompletion(transcript, params)
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
     const context = normalized.compactionContext!
@@ -238,6 +248,13 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(context.output).toEqual(output.slice(1))
     expect(context.sourceTranscript[0]).toEqual(transcript[0])
     expect(normalized.toolCalls?.[0]?.id).toBe('call-retained')
+    if (shouldStream) {
+      expect(onStreamEvent.mock.calls.map(([event]) => event.type).filter((type) =>
+        type === 'compaction-start' || type === 'compaction-end'
+      )).toEqual([
+        'compaction-start', 'compaction-end', 'compaction-start', 'compaction-end'
+      ])
+    }
     if (subscription) {
       expect(accountMocks.getCredentials).toHaveBeenCalledWith('account', undefined, true)
       expect(new Headers(websocketMocks.fetch.mock.calls.at(-1)![1].headers).get('authorization')).toBe('Bearer fresh-token')
@@ -279,7 +296,12 @@ describe('AISDKRemoteLLMProvider', () => {
   })
 
   it.each(['connection', 'legacy endpoint', 'workspace'])('restores source evidence when compaction belongs to a different %s', async (difference) => {
-    websocketMocks.fetch.mockImplementation(async () => new Response('data: [DONE]\n\n', {
+    websocketMocks.fetch.mockImplementation(async () => new Response(`data: ${JSON.stringify({
+      type: 'response.completed', response: {
+        id: 'resp_empty', created_at: 1, model: 'gpt-6.1-sol', status: 'completed', output: [],
+        usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 }
+      }
+    })}\n\n`, {
       headers: { 'content-type': 'text/event-stream' }
     }))
     const credentials = {
@@ -468,10 +490,11 @@ describe('AISDKRemoteLLMProvider', () => {
       { id: 'test', choices: [{ index: 0, delta: { content: 'Yes ' } }] },
       { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage, x_groq: { usage } }
     ]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    const fetch = vi.fn().mockResolvedValue(new Response(
       events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n',
       { headers: { 'content-type': 'text/event-stream' } }
-    )))
+    ))
+    vi.stubGlobal('fetch', fetch)
     const provider = new AISDKRemoteLLMProvider({
       name, providerName: name, model, flavor, apiKeyEnv: 'TEST_KEY', baseURL: 'https://example.invalid/v1'
     })
@@ -480,28 +503,47 @@ describe('AISDKRemoteLLMProvider', () => {
       ...createCompletionParams(null),
       shouldStream: true,
       onToken,
-      ...(name === LLMProviders.Groq ? { seed: 7 } : {})
+      promptCacheKey: 'agent',
+      ...(name === LLMProviders.Groq
+        ? { seed: 7, reasoningMode: 'off' as const }
+        : {})
     })
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(response)
     expect(onToken.mock.calls.map(([chunk]) => chunk).join('')).toBe('Yes Yes ')
     expect(normalized).toMatchObject({
       usedInputTokens: 100, usedOutputTokens: 20, accounting: { cachedInputTokens: 80 }
     })
+
+    if (name === LLMProviders.Cerebras) {
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      expect(body.prompt_cache_key).toBe('media-session')
+    }
+
+    if (name === LLMProviders.Groq) {
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      expect(body.reasoning_effort).toBeUndefined()
+      expect(body.reasoning_format).toBe('hidden')
+    }
   })
 
-  it.each(['anthropic', 'openai'])('preserves MiniMax %s connection media, reasoning controls and cache usage', async (protocol) => {
+  it.each([
+    { protocol: 'anthropic', model: 'MiniMax-M3' },
+    { protocol: 'openai', model: 'MiniMax-M3' },
+    { protocol: 'anthropic', model: 'MiniMax-M3.1-Flash' },
+    { protocol: 'openai', model: 'MiniMax-M3.1-Flash' }
+  ])('preserves MiniMax connection media, reasoning controls and cache usage (%j)', async ({ protocol, model }) => {
     const baseURL = protocol === 'anthropic'
       ? 'https://example.invalid/anthropic'
       : 'https://example.invalid/v1'
     const fetch = vi.fn().mockImplementation(async () => Response.json(
       protocol === 'anthropic'
         ? {
-            id: 'msg_minimax', type: 'message', role: 'assistant', model: 'MiniMax-M3',
+            id: 'msg_minimax', type: 'message', role: 'assistant', model,
             content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn', stop_sequence: null,
             usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 }
           }
         : {
-            id: 'chat_minimax', created: 1, model: 'MiniMax-M3',
+            id: 'chat_minimax', created: 1, model,
             choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
             usage: { prompt_tokens: 100, completion_tokens: 2,
               prompt_tokens_details: { cached_tokens: 80, cache_write_tokens: 10 } }
@@ -509,7 +551,7 @@ describe('AISDKRemoteLLMProvider', () => {
     ))
     vi.stubGlobal('fetch', fetch)
     const provider = new MiniMaxLLMProvider({
-      provider: LLMProviders.MiniMax, model: 'MiniMax-M3', label: 'MiniMax',
+      provider: LLMProviders.MiniMax, model, label: 'MiniMax',
       isEnabled: true, isLocal: false, isResolved: true,
       accountCredentials: { api_key: 'minimax-account-key', base_url: baseURL }
     })
@@ -517,7 +559,8 @@ describe('AISDKRemoteLLMProvider', () => {
       role: 'user', content: 'Look.', files: [{ mediaType: 'image/png', dataBase64: 'AA==' }]
     }]
     const params: CompletionParams = {
-      ...createCompletionParams(null), shouldStream: false, reasoningMode: 'on'
+      ...createCompletionParams(null), shouldStream: false, reasoningMode: 'on',
+      ...(model === 'MiniMax-M3.1-Flash' ? { reasoningEffort: 'xhigh' } : {})
     }
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
       await provider.runChatCompletion(prompt, params)
@@ -530,6 +573,10 @@ describe('AISDKRemoteLLMProvider', () => {
       accounting: { cachedInputTokens: 80, cacheWriteInputTokens: 10 }
     })
     expect(body.thinking).toEqual({ type: 'adaptive' })
+    if (model === 'MiniMax-M3.1-Flash') {
+      expect(protocol === 'anthropic' ? body.output_config.effort : body.reasoning_effort)
+        .toBe('xhigh')
+    }
     if (protocol === 'anthropic') {
       expect(String(fetch.mock.calls[0]![0])).toBe(`${baseURL}/v1/messages`)
       expect(content).toContainEqual({
@@ -543,7 +590,14 @@ describe('AISDKRemoteLLMProvider', () => {
     }
 
     await provider.runChatCompletion(prompt, { ...params, reasoningMode: 'off', disableThinking: true })
-    expect(JSON.parse(fetch.mock.calls[1]![1].body).thinking).toEqual({ type: 'disabled' })
+    const guardedBody = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(guardedBody.thinking).toEqual({
+      type: model === 'MiniMax-M3.1-Flash' ? 'adaptive' : 'disabled'
+    })
+    if (model === 'MiniMax-M3.1-Flash') {
+      expect(protocol === 'anthropic' ? guardedBody.output_config.effort : guardedBody.reasoning_effort)
+        .toBe('low')
+    }
   })
 
   it('distinguishes unavailable cache accounting from a reported zero', () => {
@@ -552,6 +606,87 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(readCompletionAccounting({ inputTokens, raw: {
       prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 0 }
     } })).toEqual({ cachedInputTokens: 0 })
+  })
+
+  it.each([
+    { ttl: undefined, model: 'gpt-6.1-sol', subscription: false, enabled: true },
+    { ttl: '30m', model: 'gpt-6.1-sol', subscription: false, enabled: false },
+    { ttl: '12h', model: 'gpt-6.1-sol', subscription: false, enabled: true },
+    { ttl: '12h', model: 'gpt-5.5', subscription: false, enabled: false },
+    { ttl: '12h', model: 'gpt-6.1-sol', subscription: true, enabled: false }
+  ] as const)('defaults to mixed caching for supported API agents and respects overrides (%j)', async ({ ttl, model, subscription, enabled }) => {
+    vi.mocked(CONFIG_MANAGER.getConfig).mockReturnValue({
+      llm: { model_settings: { [`openai/${model}`]: { instructions_cache_ttl: ttl } } }
+    } as ReturnType<typeof CONFIG_MANAGER.getConfig>)
+
+    if (subscription) {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+      accountMocks.getCredentials.mockResolvedValue({
+        auth_kind: 'chatgpt', auth_flow: 'codex',
+        access_token: 'fixture-token', chatgpt_account_id: 'workspace'
+      })
+    }
+
+    const usage = {
+      input_tokens: 12_000, output_tokens: 10,
+      input_tokens_details: {
+        cached_tokens: 4_000, cache_write_tokens: 7_000,
+        cache_write_tokens_details: { ttl_30m_tokens: 3_000, ttl_12h_tokens: 4_000 }
+      }
+    }
+    const response = {
+      id: 'resp-cache', created_at: 1, model, status: 'completed', output: [], usage
+    }
+    websocketMocks.fetch.mockImplementation(async () => new Response(
+      `data: ${JSON.stringify({ type: 'response.completed', response })}\n\n`,
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model,
+      ...(subscription ? { accountCredentials: {
+        auth_kind: 'chatgpt', account_id: 'account', access_token: 'fixture-token'
+      } } : {})
+    })
+    const transcript: PromptOrChatHistory = [
+      { role: 'user', content: 'Current owner request.' },
+      { role: 'user', content: 'Current clock and mood.' }
+    ]
+    const params = {
+      ...PARAMS, promptCacheKey: AGENT_PROMPT_CACHE_KEY, shouldStream: true
+    }
+    const result = await provider.runChatCompletion(transcript, params)
+    const body = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
+
+    expect(body.input.slice(1)).toEqual([
+      { role: 'user', content: [{ type: 'input_text', text: 'Current owner request.' }] },
+      { role: 'user', content: [{ type: 'input_text', text: 'Current clock and mood.' }] }
+    ])
+    expect(body.tools[0].name).toBe(TOOL.function.name)
+
+    if (enabled) {
+      expect(body.prompt_cache_options).toEqual({ mode: 'implicit', ttl: '30m' })
+      expect(body.input[0]).toEqual({
+        role: 'developer',
+        content: [{
+          type: 'input_text', text: PARAMS.systemPrompt,
+          prompt_cache_breakpoint: { mode: 'explicit', ttl: '12h' }
+        }]
+      })
+
+      await provider.runChatCompletion(transcript, { ...params, systemPrompt: 'Updated rules.' })
+      const updated = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
+      expect(updated.input[0].content[0].text).toBe('Updated rules.')
+      expect(updated.prompt_cache_key).toBe(body.prompt_cache_key)
+    } else {
+      expect(body.prompt_cache_options).toBeUndefined()
+      expect(JSON.stringify(body.input)).not.toContain('prompt_cache_breakpoint')
+    }
+
+    expect(normalizeCompletionResultForOpenAICompatibleProvider(result).accounting).toMatchObject({
+      cachedInputTokens: 4_000, cacheWriteInputTokens: 7_000,
+      cacheWrite30mInputTokens: 3_000, cacheWrite12hInputTokens: 4_000
+    })
+    provider.dispose()
   })
 
   it('preserves reasoning, tool images and cache usage on DeepSeek schema Responses', async () => {
@@ -699,6 +834,100 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(body.temperature).toBeUndefined()
   })
 
+  it.each([
+    ['claude-opus-5-5', true, 'high'],
+    ['claude-opus-5-5', true, 'on'],
+    ['claude-opus-5', true, 'high'],
+    ['claude-haiku-5-5', true, 'high'],
+    ['claude-fable-5-1', true, 'high'],
+    ['claude-mythos-5-1', true, 'high'],
+    ['claude-opus-4-8', false, 'high'],
+    ['claude-fable-5', false, 'high']
+  ] as const)('keeps cached task configuration when applying review effort on %s (%s, %s)', async (model, perMessage, baseline) => {
+    const fetch = vi.fn().mockImplementation(async () => Response.json({
+      id: 'msg_review', type: 'message', role: 'assistant', model,
+      content: [{ type: 'text', text: 'Verified.' }], stop_reason: 'end_turn',
+      usage: { input_tokens: 100, output_tokens: 10 }
+    }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new AnthropicLLMProvider({
+      ...TARGET, provider: LLMProviders.Anthropic, model
+    })
+    const params: CompletionParams = {
+      ...PARAMS, reasoningEffort: 'high', promptCacheKey: AGENT_PROMPT_CACHE_KEY
+    }
+    await provider.runChatCompletion([{ role: 'user', content: 'Check the file.' }], params)
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Check the file.' },
+      { role: 'assistant', content: 'Verified.' },
+      { role: 'user', content: 'Review the evidence.' }
+    ], { ...params, reasoningEffort: 'low', reasoningEffortBaseline: baseline, toolChoice: 'none' })
+
+    const task = JSON.parse(fetch.mock.calls[0]![1].body)
+    const review = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(review.system).toEqual(task.system)
+    expect(review.thinking).toEqual(task.thinking)
+    expect(review.messages[0]).toEqual(task.messages[0])
+    expect(review.output_config.effort).toBe(perMessage ? 'high' : 'low')
+    if (perMessage) {
+      expect(review.messages.at(-1)).toMatchObject({
+        role: 'system', content: [], output_config: { effort: 'low' }
+      })
+      expect(new Headers(fetch.mock.calls[1]![1].headers).get('anthropic-beta'))
+        .toContain('mid-conversation-output-config-2026-07-01')
+    } else {
+      expect(review.messages.at(-1).role).toBe('user')
+    }
+  })
+
+  it.each([LLMProviders.OpenAI, LLMProviders.Anthropic])(
+    'serializes native review schemas through the %s adapter', async (providerName) => {
+      const model = providerName === LLMProviders.OpenAI ? 'gpt-6.1-sol' : 'claude-opus-5-5'
+      const verdict = { status: 'complete' }
+      const schema = {
+        type: 'object',
+        properties: { status: { type: 'string', enum: ['complete'] } },
+        required: ['status'],
+        additionalProperties: false
+      }
+      const fetch = vi.fn().mockImplementation(async () => Response.json(
+        providerName === LLMProviders.OpenAI
+          ? {
+              id: 'resp_review', model, status: 'completed', created_at: 1,
+              output: [{ type: 'message', id: 'message', role: 'assistant',
+                content: [{ type: 'output_text', text: JSON.stringify(verdict), annotations: [] }] }],
+              usage: { input_tokens: 100, output_tokens: 10 }
+            }
+          : {
+              id: 'msg_review', type: 'message', role: 'assistant', model,
+              content: [{ type: 'text', text: JSON.stringify(verdict) }], stop_reason: 'end_turn',
+              usage: { input_tokens: 100, output_tokens: 10 }
+            }
+      ))
+      vi.stubGlobal('fetch', fetch)
+      const target = { ...TARGET, provider: providerName, model }
+      const provider = providerName === LLMProviders.OpenAI
+        ? new OpenAILLMProvider(target)
+        : new AnthropicLLMProvider(target)
+      const result = await provider.runChatCompletion('Review the evidence.', {
+        ...PARAMS, data: schema,
+        reasoningEffort: 'low', toolChoice: 'none'
+      })
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      const format = providerName === LLMProviders.OpenAI
+        ? body.text.format
+        : body.output_config.format
+
+      expect(format).toMatchObject({ type: 'json_schema', schema })
+      if (providerName === LLMProviders.Anthropic) {
+        expect(body.system).toEqual([{ type: 'text', text: PARAMS.systemPrompt }])
+      } else {
+        expect(body.input[0].content).toBe(PARAMS.systemPrompt)
+      }
+      expect(normalizeCompletionResultForOpenAICompatibleProvider(result).rawResult).toBe(JSON.stringify(verdict))
+    }
+  )
+
   it.each(['off', 'required'] as const)(
     'allows Haiku 5.5 requests with %s thinking or tool choice',
     (mode) => {
@@ -727,7 +956,7 @@ describe('AISDKRemoteLLMProvider', () => {
   )
 
   it.each([LLMProviders.Anthropic, LLMProviders.MiniMax])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
-    const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3'
+    const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3.1-Flash'
     const message = { id: 'msg_claude', type: 'message', role: 'assistant', model,
       content: [], stop_reason: null, stop_sequence: null,
       usage: { input_tokens: 100, output_tokens: 0, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 } }
@@ -823,7 +1052,11 @@ describe('AISDKRemoteLLMProvider', () => {
       { role: 'tool', toolCallId: 'tool_or', toolName: 'check', content: 'Checked.' }
     ], params)
     const body = JSON.parse(fetch.mock.calls[1]![1].body)
-    expect(body).toMatchObject({ provider: { sort: 'throughput' }, session_id: 'media-session' })
+    expect(body).toMatchObject({
+      provider: { sort: 'throughput' },
+      session_id: 'media-session',
+      cache_control: { type: 'ephemeral' }
+    })
     expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' })
     expect(body.messages[2].reasoning_details).toEqual(reasoningDetails)
   })
@@ -857,19 +1090,133 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'minimax' })
   })
 
+  it('isolates cache identities and reports changes to the final request prefix without retaining content', () => {
+    const cache = new ProviderPromptCache()
+    const template = {
+      model: 'gpt-6.1-sol', prompt_cache_key: 'agent',
+      instructions: 'Private system instructions.',
+      tools: [{ type: 'function', name: 'read_note' }],
+      input: [{ role: 'user', content: 'Private owner request.' }]
+    }
+    const request = (): typeof template => structuredClone(template)
+    const initial = runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(request(), 'first-account')
+    )
+    const continued = request()
+    continued.input.push({ role: 'assistant', content: 'Verified result.' })
+    const warm = runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(continued, 'first-account')
+    )
+
+    expect(warm.observation).toMatchObject({
+      key: initial.observation!.key,
+      previousInputItems: 1, matchingPrefixItems: 1, changedInputs: []
+    })
+
+    continued.prompt_cache_key = 'agent'
+    continued.tools.push({ type: 'function', name: 'write_note' })
+    continued.input[0]!.content = 'Edited owner request.'
+    const changed = runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(continued, 'first-account')
+    )
+
+    expect(changed.observation).toMatchObject({
+      key: initial.observation!.key, matchingPrefixItems: 0,
+      changedInputs: ['tools', 'history']
+    })
+    expect(runWithProfileContext({ profileName: 'second' }, () =>
+      cache.prepare(request(), 'first-account').observation?.key
+    )).not.toBe(initial.observation!.key)
+    expect(runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(request(), 'second-account').observation?.key
+    )).not.toBe(initial.observation!.key)
+    vi.mocked(getActiveConversationSessionId).mockReturnValueOnce('another-session')
+    expect(runWithProfileContext({ profileName: 'first' }, () =>
+      cache.prepare(request(), 'first-account').observation?.key
+    )).not.toBe(initial.observation!.key)
+    expect(JSON.stringify(changed)).not.toContain('Private')
+    expect(JSON.stringify(changed)).not.toContain('first-account')
+  })
+
+  it('shares instruction prefixes across sessions while keeping profile, binding and observations isolated', () => {
+    const cache = new ProviderPromptCache()
+    const request = (): Record<string, unknown> => {
+      return {
+        model: 'gpt-6.1-sol', prompt_cache_key: AGENT_PROMPT_CACHE_KEY,
+        input: [{ role: 'developer', content: 'Stable instructions.' }]
+      }
+    }
+    const prepare = (
+      profile = 'owner',
+      binding = 'account'
+    ): ReturnType<ProviderPromptCache['prepare']> => {
+      return runWithProfileContext({ profileName: profile }, () =>
+        cache.prepare(request(), binding, false, 'agent', true)
+      )
+    }
+    const first = prepare()
+    vi.mocked(getActiveConversationSessionId).mockReturnValueOnce('another-session')
+    const otherSession = prepare()
+
+    expect(otherSession.observation?.key).toBe(first.observation?.key)
+    expect(otherSession.observation?.previousInputItems).toBe(0)
+    expect(prepare().observation?.previousInputItems).toBe(1)
+    expect(prepare('other-owner').observation?.key).not.toBe(first.observation?.key)
+    expect(prepare('owner', 'other-account').observation?.key).not.toBe(first.observation?.key)
+  })
+
+  it.each(['messages', 'input'])('observes %s without mutating provider requests or misclassifying appended instructions', (field) => {
+    const cache = new ProviderPromptCache()
+    const body: Record<string, unknown> = {
+      model: 'model', system: 'Stable rules.',
+      tools: [
+        { type: 'function', function: { name: 'read', parameters: {} } },
+        { type: 'function', function: { name: 'write', parameters: {} } }
+      ],
+      [field]: [{ role: 'user', content: 'Inspect the workspace.' }]
+    }
+    const original = JSON.stringify(body)
+    const first = cache.prepare(body, 'account', true)
+    expect(JSON.stringify(body)).toBe(original)
+
+    const continued = structuredClone(body)
+    ;(continued[field] as unknown[]).push({ role: 'developer', content: 'Current runtime state.' })
+    expect(cache.prepare(continued, 'account', true).observation).toMatchObject({
+      systemHash: first.observation!.systemHash,
+      matchingPrefixItems: 1, changedInputs: []
+    })
+
+    ;(continued['tools'] as unknown[]).reverse()
+    expect(cache.prepare(continued, 'account', true).observation).toMatchObject({
+      changedInputs: ['tools'],
+      toolChanges: { added: 0, removed: 0, modified: 0, reordered: true }
+    })
+
+    continued['tools'] = [{ type: 'function', function: { name: 'read', parameters: { changed: true } } }]
+    expect(cache.prepare(continued, 'account', true).observation).toMatchObject({
+      toolChanges: { added: 0, removed: 1, modified: 1, reordered: false }
+    })
+    expect(JSON.stringify(first.observation)).not.toContain('Stable rules.')
+  })
+
   it('preserves subscription streaming, cache usage, summaries and encrypted reasoning for replay', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
     accountMocks.getCredentials.mockResolvedValue({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'fresh-chatgpt-token' })
     const call = { type: 'function_call', id: 'fc_test', call_id: 'call_test',
-      name: 'read_note', namespace: 'leon', arguments: '{"name":"todo"}', status: 'completed' }
+      name: 'read_note', namespace: 'leon', arguments: '{ "name": "todo" }', status: 'completed' }
     const reasoning = {
       type: 'reasoning',
       id: 'rs_test',
       encrypted_content: 'encrypted-test',
       summary: [{ type: 'summary_text', text: 'Checking the note.' }]
     }
+    const message = {
+      type: 'message', id: 'msg_progress', role: 'assistant', phase: 'commentary',
+      status: 'completed',
+      content: [{ type: 'output_text', text: 'Checking your note.', annotations: [] }]
+    }
     const response = { id: 'resp_test', created_at: 1, model: 'gpt-6.1-sol',
-      status: 'completed', output: [reasoning, call], usage: {
+      status: 'completed', output: [reasoning, message, call], usage: {
         input_tokens: 1_536, output_tokens: 24, total_tokens: 1_560,
         input_tokens_details: { cached_tokens: 1_024 }, output_tokens_details: { reasoning_tokens: 10 }
       } }
@@ -879,9 +1226,12 @@ describe('AISDKRemoteLLMProvider', () => {
       { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, output_index: 0,
         summary_index: 0, delta: 'Checking the note.' },
       { type: 'response.output_item.done', output_index: 0, item: reasoning },
-      { type: 'response.output_item.added', output_index: 1, item: { ...call, arguments: '', status: 'in_progress' } },
-      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 1, delta: call.arguments },
-      { type: 'response.output_item.done', output_index: 1, item: call },
+      { type: 'response.output_item.added', output_index: 1, item: { ...message, content: [] } },
+      { type: 'response.output_text.delta', item_id: message.id, output_index: 1, content_index: 0, delta: 'Checking your note.' },
+      { type: 'response.output_item.done', output_index: 1, item: message },
+      { type: 'response.output_item.added', output_index: 2, item: { ...call, arguments: '', status: 'in_progress' } },
+      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 2, delta: call.arguments },
+      { type: 'response.output_item.done', output_index: 2, item: call },
       { type: 'response.completed', response }
     ]
     websocketMocks.fetch.mockImplementation(async () => new Response(
@@ -922,14 +1272,14 @@ describe('AISDKRemoteLLMProvider', () => {
       authMode: InferenceAuthMode.ChatGPTOAuth,
       credentialSource: InferenceCredentialSource.AccountBinding,
       connectionRef: expect.any(String),
-      endpoint: 'https://chatgpt.com/backend-api/codex/responses'
+      endpoint: 'wss://chatgpt.com/backend-api/codex/responses'
     })
     expect(JSON.stringify(inference)).not.toContain('openai.test')
     expect(JSON.stringify(inference)).not.toContain('chatgpt-token')
     expect(getActiveTurnInference()).toBeUndefined()
 
     const [url, request] = websocketMocks.fetch.mock.calls[0]!
-    expect(String(url)).toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(String(url)).toBe('wss://chatgpt.com/backend-api/codex/responses')
     expect(new Headers(request?.headers).get('authorization')).toBe('Bearer fresh-chatgpt-token')
     const body = JSON.parse(request?.body as string)
     expect(body).toMatchObject({ stream: true, store: false, tools: [{ type: 'function', name: 'read_note' }] })
@@ -938,15 +1288,21 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(body.input[0].role).toBe('developer')
     expect(body).toMatchObject({
       reasoning: { effort: 'medium', summary: 'auto' },
-      include: ['reasoning.encrypted_content'], prompt_cache_key: 'leon-test'
+      include: ['reasoning.encrypted_content'], prompt_cache_key: expect.stringMatching(/^leon-[a-f0-9]{48}$/)
     })
     expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
     expect(onReasoningToken).toHaveBeenCalledWith('Checking the note.')
+    expect(provider.transport).toBe('websocket')
+    expect(onStreamEvent.mock.calls.filter(([event]) => event.type !== 'prompt-cache').slice(0, 3).map(([event]) => event)).toEqual([
+      { type: 'request-dispatched', transport: 'websocket' },
+      { type: 'response-headers', transport: 'websocket' },
+      { type: 'transport-activity', transport: 'websocket' }
+    ])
     expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'stream-open', transport: 'http'
+      type: 'stream-open', transport: 'websocket'
     }))
     expect(onStreamEvent).toHaveBeenCalledWith({
-      type: 'transport-activity', transport: 'http'
+      type: 'transport-activity', transport: 'websocket'
     })
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
     expect(normalized.accounting?.cachedInputTokens).toBe(1_024)
@@ -958,16 +1314,164 @@ describe('AISDKRemoteLLMProvider', () => {
 
     await provider.runChatCompletion([
       { role: 'user', content: 'Read my note.' },
-      { role: 'assistant', content: '', toolCalls: normalized.toolCalls,
-        reasoningItems: normalized.reasoningItems },
+      { role: 'assistant', content: normalized.rawResult, toolCalls: normalized.toolCalls,
+        reasoningItems: normalized.reasoningItems, providerMessage: normalized.providerMessage },
       { role: 'tool', toolName: 'read_note', toolCallId: 'call_test', content: 'Note contents.' }
     ], params)
     const replay = JSON.parse(websocketMocks.fetch.mock.calls[1]![1].body)
     expect(replay.input).toContainEqual(reasoning)
-    expect(websocketMocks.create).not.toHaveBeenCalled()
+    expect(replay.input).toContainEqual({ role: 'assistant', content: 'Checking your note.', phase: 'commentary' })
+    expect(replay.input).toContainEqual(expect.objectContaining({
+      type: 'function_call', call_id: call.call_id, arguments: call.arguments
+    }))
+    expect(replay.prompt_cache_key).toBe(body.prompt_cache_key)
+    expect(new Headers(request?.headers).get('session_id')).toBe('media-session')
+    expect(new Headers(request?.headers).get('x-client-request-id')).toBe(body.prompt_cache_key)
+    const cacheEvents = onStreamEvent.mock.calls.filter(([event]) => event.type === 'prompt-cache')
+    expect(cacheEvents.at(-1)?.[0].promptCache).toMatchObject({
+      previousInputItems: body.input.length, matchingPrefixItems: body.input.length,
+      changedInputs: [], inputTokens: 1_536, cachedInputTokens: 1_024
+    })
+    expect(websocketMocks.create).toHaveBeenCalled()
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test')
     provider.dispose()
   })
+
+  it.each([
+    { subscription: false, contentType: 'text/event-stream' },
+    { subscription: true, contentType: 'text/event-stream' },
+    { subscription: true, contentType: null }
+  ])('finishes terminal responses on open connections and retains usage (%j)', async ({ subscription, contentType }) => {
+    if (subscription) {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+      accountMocks.getCredentials.mockResolvedValue({
+        auth_kind: 'chatgpt', auth_flow: 'codex',
+        access_token: 'fixture-token', chatgpt_account_id: 'workspace'
+      })
+    }
+
+    const item = {
+      type: 'message', id: 'msg_done', role: 'assistant', status: 'completed',
+      content: [{ type: 'output_text', text: 'Ready 👋', annotations: [] }]
+    }
+    const response = {
+      id: 'resp_done', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
+      output: [item], usage: {
+        input_tokens: 100, output_tokens: 10, total_tokens: 110,
+        input_tokens_details: { cached_tokens: 80 }
+      }
+    }
+    const events = [
+      { type: 'response.created', response: { ...response, status: 'in_progress', output: [] } },
+      { type: 'response.output_item.added', output_index: 0, item: { ...item, content: [] } },
+      { type: 'response.output_text.delta', item_id: item.id, output_index: 0, content_index: 0, delta: 'Ready 👋' },
+      { type: 'response.output_item.done', output_index: 0, item },
+      { type: 'response.completed', response }
+    ]
+    const bytes = new TextEncoder().encode(events.map((event) =>
+      `event: ${event.type}\r\ndata: ${JSON.stringify(event)}\r\n\r\n`
+    ).join(''))
+    const cancel = vi.fn()
+    websocketMocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(controller): void {
+        // Network chunks can split JSON, UTF-8 characters and SSE delimiters.
+        for (let offset = 0; offset < bytes.length; offset += 7) {
+          controller.enqueue(bytes.slice(offset, offset + 7))
+        }
+      },
+      cancel
+    }), { headers: contentType ? { 'content-type': contentType } : {} }))
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model: response.model,
+      ...(subscription ? { accountCredentials: {
+        auth_kind: 'chatgpt', auth_flow: 'codex', access_token: 'fixture-token',
+        chatgpt_account_id: 'workspace', account_id: 'openai.test'
+      } } : {})
+    })
+    const onStreamEvent = vi.fn()
+
+    try {
+      const result = normalizeCompletionResultForOpenAICompatibleProvider(
+        await provider.runChatCompletion('Report the result.', {
+          ...createCompletionParams(null), shouldStream: true, onStreamEvent
+        })
+      )
+
+      expect(result.rawResult).toBe('Ready 👋')
+      expect(result.usedInputTokens).toBe(100)
+      expect(result.usedOutputTokens).toBe(10)
+      expect(result.accounting?.cachedInputTokens).toBe(80)
+      expect(onStreamEvent).toHaveBeenCalledWith({ type: 'finish' })
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+    } finally {
+      provider.dispose()
+    }
+  }, 2_000)
+
+  it.each(['complete', 'disconnect'])('requires terminal completion after text-end (ending=%s)', async (ending) => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    websocketMocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(streamController): void {
+        controller = streamController
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+    const item = {
+      type: 'message', id: 'msg_pending', role: 'assistant', status: 'completed',
+      content: [{ type: 'output_text', text: 'Provisional.', annotations: [] }]
+    }
+    const response = {
+      id: 'resp_pending', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
+      output: [item], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 }
+    }
+    const onStreamEvent = vi.fn()
+    let settled = false
+    const pending = provider.runChatCompletion('Report.', {
+      ...createCompletionParams(null), shouldStream: true, onStreamEvent
+    }).finally(() => {
+      settled = true
+    })
+    const send = (event: Record<string, unknown>): void => {
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
+    }
+
+    try {
+      controller.enqueue(new TextEncoder().encode(': keep-alive'))
+      await vi.waitFor(() => expect(onStreamEvent).toHaveBeenCalledWith({
+        type: 'transport-activity', transport: 'websocket'
+      }))
+      expect(onStreamEvent).toHaveBeenCalledWith({
+        type: 'response-headers', transport: 'websocket'
+      })
+      expect(onStreamEvent).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'stream-open' })
+      )
+      controller.enqueue(new TextEncoder().encode('\n\n'))
+
+      send({ type: 'response.created', response: { ...response, status: 'in_progress', output: [] } })
+      send({ type: 'response.output_item.added', output_index: 0, item: { ...item, content: [] } })
+      send({ type: 'response.output_text.delta', item_id: item.id, output_index: 0, content_index: 0, delta: 'Provisional.' })
+      send({ type: 'response.output_item.done', output_index: 0, item })
+      await vi.waitFor(() => expect(onStreamEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'text-end' })
+      ))
+      expect(settled).toBe(false)
+      expect(onStreamEvent).not.toHaveBeenCalledWith({ type: 'finish' })
+
+      if (ending === 'complete') {
+        send({ type: 'response.completed', response })
+        expect((await pending).data.choices[0].message.content).toBe('Provisional.')
+      } else {
+        controller.close()
+        await expect(pending).rejects.toThrow()
+        expect(onStreamEvent).not.toHaveBeenCalledWith({ type: 'finish' })
+      }
+    } finally {
+      provider.dispose()
+    }
+  }, 2_000)
 
   it('finishes an incomplete websocket response even when the adapter leaves it open', async () => {
     const response = {
@@ -1041,11 +1545,11 @@ describe('AISDKRemoteLLMProvider', () => {
     await provider.runChatCompletion('Hello again.', createCompletionParams(null))
 
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test', undefined, true)
-    expect(websocketMocks.create).not.toHaveBeenCalled()
+    expect(websocketMocks.create).toHaveBeenCalled()
     expect(websocketMocks.fetch.mock.calls.map(([, request]) =>
       new Headers(request.headers).get('authorization')
     )).toEqual(['Bearer expired-token', 'Bearer fresh-token', 'Bearer rotated-token'])
-    expect(websocketMocks.close).not.toHaveBeenCalled()
+    expect(websocketMocks.close).toHaveBeenCalled()
     expect(accountMocks.markNeedsAttention).not.toHaveBeenCalled()
     provider.dispose()
   })
@@ -1130,21 +1634,23 @@ describe('AISDKRemoteLLMProvider', () => {
       ...createCompletionParams(null),
       shouldStream: true
     })
-    expect(websocketMocks.create).toHaveBeenCalledTimes(2)
+    expect(websocketMocks.create).toHaveBeenCalledTimes(1)
     provider.dispose()
   })
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(CONFIG_MANAGER.getConfig).mockReturnValue({
+      llm: { model_settings: {} }
+    } as ReturnType<typeof CONFIG_MANAGER.getConfig>)
     websocketMocks.fetch.mockReset()
-    websocketMocks.create.mockImplementation(() => {
-      return Object.assign(
-        (...args: unknown[]) => {
-          return websocketMocks.fetch(...args)
-        },
-        { close: websocketMocks.close }
-      )
-    })
+    vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+    websocketMocks.create.mockImplementation(({ url, headers }) => ({
+      busy: false,
+      fetch: (body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> =>
+        websocketMocks.fetch(url, { headers, body: JSON.stringify(body), signal }),
+      close: websocketMocks.close
+    }))
     vi.stubEnv('LEON_OPENROUTER_API_KEY', 'test-openrouter-key')
   })
 
@@ -1652,18 +2158,22 @@ describe('AISDKRemoteLLMProvider', () => {
     vi.stubGlobal('fetch', fetch)
     const provider = new DeepSeekLLMProvider({ ...TARGET, provider: LLMProviders.DeepSeek, model: 'deepseek-flash' })
 
-    const response = await provider.runChatCompletion('Read README.md', PARAMS)
+    const onStreamEvent = vi.fn()
+    const response = await provider.runChatCompletion('Read README.md', { ...PARAMS, onStreamEvent })
     expect(fetch.mock.calls[0]![0]).toMatch(/\/chat\/completions$/)
     expect(response.data.choices[0].message.tool_calls[0].function.name).toBe('read_file')
     expect(response.data.usage.prompt_tokens).toBe(100)
 
     await provider.runChatCompletion('Is it done?', {
       ...PARAMS,
+      onStreamEvent,
       toolChoice: 'none',
       data: { done: { type: 'boolean' } }
     })
     expect(fetch.mock.calls[1]![0]).toMatch(/\/responses$/)
     expect(JSON.parse(fetch.mock.calls[1]![1].body).text.format.type).toBe('json_schema')
+    expect(onStreamEvent.mock.calls.filter(([event]) => event.type === 'prompt-cache')).toHaveLength(2)
+    expect(JSON.parse(fetch.mock.calls[0]![1].body)).not.toHaveProperty('prompt_cache_key')
   })
 
   it('uses Groq Responses while preserving native seed and hidden-reasoning controls', async () => {

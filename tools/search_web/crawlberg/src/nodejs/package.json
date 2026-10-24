@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@xberg-io/xberg": "1.3.4"
+    "@xberg-io/xberg": "1.3.10"
   }
 }

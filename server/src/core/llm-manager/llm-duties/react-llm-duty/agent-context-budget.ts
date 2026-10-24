@@ -4,6 +4,7 @@ import type {
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
   isLocalLLMProvider
@@ -15,10 +16,10 @@ import {
   AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
   AGENT_RECENT_TOOL_IMAGE_LIMIT,
+  AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
-  AGENT_TOOL_OBSERVATION_MAX_CHARS,
   CHARS_PER_TOKEN
 } from './agent-constants'
 
@@ -27,6 +28,7 @@ const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
 const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
+const RETAINED_RESULT_PREVIEW_MAX_CHARS = 4_096
 
 interface AgentModelContextParams {
   transcript: AgentToolTranscriptMessage[]
@@ -34,6 +36,7 @@ interface AgentModelContextParams {
   tools: OpenAITool[]
   compactionTriggerTokens: number
   forceCompaction?: boolean
+  preserveToolSchemas?: boolean
 }
 
 export interface PreparedAgentModelContext {
@@ -134,6 +137,9 @@ function estimateAgentInputTokens(
   let imageCount = 0
   let compactionTokens = 0
   const serializedTranscript = JSON.stringify(transcript, (key, value) => {
+    if (key === 'runtimeContext' || key === 'providerMessage') {
+      return undefined
+    }
     if (value?.role === 'assistant' && value.compactionContext) {
       compactionTokens += value.compactionContext.estimatedTokens
       return { role: 'assistant', content: '' }
@@ -157,24 +163,26 @@ function estimateAgentInputTokens(
 
 /**
  * Keeps recent tool images and the latest inspection batch without changing
- * saved evidence, textual results, or owner attachments.
+ * saved evidence, textual results, or owner attachments. Older results leave
+ * in batches, preserving the prefix between removals with bounded headroom.
  */
 export function retainRecentToolImages(
   transcript: AgentToolTranscriptMessage[]
 ): AgentToolTranscriptMessage[] {
   const retainedImageIndexes = new Set<number>()
-  for (
-    let index = transcript.length - 1;
-    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_TOOL_IMAGE_LIMIT;
-    index -= 1
-  ) {
-    const message = transcript[index]
-    if (
-      message?.role === 'tool' &&
-      message.files?.some((file) => file.mediaType.startsWith('image/'))
-    ) {
-      retainedImageIndexes.add(index)
-    }
+  const imageIndexes = transcript.flatMap((message, index) =>
+    message.role === 'tool' &&
+    message.files?.some((file) => file.mediaType.startsWith('image/'))
+      ? [index]
+      : []
+  )
+  const removedCount = Math.floor(
+    Math.max(0, imageIndexes.length - AGENT_RECENT_TOOL_IMAGE_LIMIT) /
+      AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+  ) * AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE
+
+  for (const index of imageIndexes.slice(removedCount)) {
+    retainedImageIndexes.add(index)
   }
 
   // Parallel inspections must reach the model together, even when their batch
@@ -272,30 +280,63 @@ function readRecord(value: unknown): Record<string, unknown> | null {
  */
 export function buildBoundedToolObservation(
   observation: Record<string, unknown>,
-  maxChars = AGENT_TOOL_OBSERVATION_MAX_CHARS
+  maxChars = TOOL_RESULT_INLINE_MAX_CHARS
 ): string {
+  const data = readRecord(observation['data'])
+  const output = readRecord(data?.['output'])
+  const page = readRecord(output?.['result'])
+
+  // Complete projections need one lossless representation in the model context.
+  // Keep both forms when serialization differs, including unsafe JSON numbers.
+  if (
+    data && output && page &&
+    typeof readRecord(page['execution'])?.['id'] === 'string' &&
+    typeof page['content'] === 'string' && page['truncated'] === false &&
+    page['content'].trim() === JSON.stringify(page['value'])
+  ) {
+    const projectedPage = { ...page }
+    delete projectedPage['content']
+    observation = {
+      ...observation,
+      data: { ...data, output: { ...output, result: projectedPage } }
+    }
+  }
+
   const serialized = JSON.stringify(observation)
   if (serialized.length <= maxChars) {
     return serialized
   }
 
   const outputLogPath = observation['output_log_path']
+  const retainedExecution = readRecord(observation['execution']) ||
+    readRecord(readRecord(readRecord(observation['data'])?.['output'])?.['execution'])
+  const execution = typeof retainedExecution?.['id'] === 'string'
+    ? { id: retainedExecution['id'], state: retainedExecution['state'] }
+    : null
+  const previewMaxChars = Math.max(Math.floor(maxChars * 0.7), 1)
   const compacted = {
     status: observation['status'],
     ...(observation['raw_status'] !== undefined
       ? { raw_status: observation['raw_status'] }
       : {}),
     message: observation['message'],
+    ...(execution ? {
+      execution,
+      result_note: 'Query the full retained JSON with system_utilities.tool_executions.read using execution.id and options.jq. Do not parse diagnostic logs or rerun completed work.'
+    } : {}),
     ...(typeof outputLogPath === 'string' && outputLogPath
       ? {
           output_log_path: outputLogPath,
-          artifact_note:
-            'The complete tool result is stored at output_log_path. Read only the needed section if the preview is insufficient.'
+          artifact_note: execution
+            ? 'output_log_path is a diagnostic log; use the retained execution to query structured output.'
+            : 'The complete tool result is stored at output_log_path. Read only the needed section if the preview is insufficient.'
         }
       : {}),
     data_preview: createAgentTextPreview(
       JSON.stringify(observation['data'] ?? null),
-      Math.max(Math.floor(maxChars * 0.7), 1)
+      execution
+        ? Math.min(previewMaxChars, RETAINED_RESULT_PREVIEW_MAX_CHARS)
+        : previewMaxChars
     ),
     ...(observation['observed_tool_failure'] !== undefined
       ? { observed_tool_failure: observation['observed_tool_failure'] }
@@ -363,12 +404,9 @@ export function splitAgentTranscriptForSummary(
   const exchanges = findCompletedToolExchanges(transcript)
   if (exchanges.length < SUMMARY_RECENT_EXCHANGES * 2) return null
 
-  let boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
-  // Keep the latest user correction verbatim, even if that enlarges the tail.
-  const lastUserIndex = transcript.findLastIndex((message) => message.role === 'user')
-  if (lastUserIndex > exchanges[0]!.startIndex) {
-    boundary = Math.min(boundary, lastUserIndex)
-  }
+  // The continuation retains the latest owner message separately. Anchoring the
+  // tail to that message would retain all subsequent work in a long task.
+  const boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
   if (boundary <= 0) return null
 
   // Keep a bounded visual reference even when the recent tail is text-only.
@@ -439,6 +477,86 @@ function findRecentToolkitIds(
   return toolkitIds
 }
 
+/**
+ * References identical tool-owned context only when its latest full version is
+ * still in this request. Rebuilding from raw history restores it after compaction
+ * without sharing state across conversations or changing saved evidence.
+ */
+export function reuseToolContext(
+  transcript: AgentToolTranscriptMessage[]
+): AgentToolTranscriptMessage[] {
+  let visible = new Map<string, { content: string, callId: string }>()
+
+  return transcript.map((message) => {
+    if (message.role !== 'tool' || !message.content.includes('"modelContextId"')) {
+      return message
+    }
+
+    let changed = false
+    const nextVisible = new Map(visible)
+    const project = (value: unknown): unknown => {
+      if (Array.isArray(value)) {
+        return value.map(project)
+      }
+
+      const record = readRecord(value)
+      if (!record) {
+        return value
+      }
+
+      if (typeof record['modelContextId'] === 'string' &&
+          typeof record['content'] === 'string') {
+        const key = JSON.stringify([message.toolName, record['modelContextId']])
+        const previous = nextVisible.get(key)
+
+        if (previous?.content === record['content']) {
+          const reference = { ...record }
+          delete reference['content']
+          changed = true
+          return {
+            ...reference,
+            contentReference: `Unchanged context; complete content is in tool call ${previous.callId}.`
+          }
+        }
+
+        nextVisible.set(key, {
+          content: record['content'],
+          callId: message.toolCallId
+        })
+        return record
+      }
+
+      return Object.fromEntries(Object.entries(record).map(([key, child]) =>
+        [key, project(child)]
+      ))
+    }
+
+    try {
+      const observation = readRecord(JSON.parse(message.content))
+      const data = readRecord(observation?.['data'])
+      const output = readRecord(data?.['output'])
+
+      if (!observation || !data || !output) {
+        return message
+      }
+
+      // Only tool-owned output opts in. Echoed model arguments are not context.
+      const projectedOutput = project(output)
+      const projected = changed
+        ? { ...message, content: JSON.stringify({
+            ...observation,
+            data: { ...data, output: projectedOutput }
+          }) }
+        : message
+      visible = nextVisible
+      return projected
+    } catch {
+      // Plain text and incomplete observations remain available verbatim.
+      return message
+    }
+  })
+}
+
 function pruneInactiveToolkitSchemas(
   transcript: AgentToolTranscriptMessage[],
   tools: OpenAITool[]
@@ -468,16 +586,27 @@ export function prepareAgentModelContext(
   const imageBoundedTranscript = retainRecentToolImages(
     params.transcript
   )
+  const reusedTranscript = reuseToolContext(imageBoundedTranscript)
   const estimatedInputTokensBeforePreparation = estimateAgentInputTokens(
-    imageBoundedTranscript,
+    reusedTranscript,
     params.systemPrompt,
     params.tools
   )
-  const boundedTranscript = boundOlderUIObservations(imageBoundedTranscript)
+  // Keep reusable text unchanged until context pressure requires reduction.
+  // Aging alone must not rewrite the prefix on every successive request.
+  const shouldReduceContext = params.forceCompaction ||
+    estimatedInputTokensBeforePreparation > params.compactionTriggerTokens
+  // Reduction may remove a context source. Resolve references from the final
+  // view so every reference still has its complete content in this request.
+  const reducedTranscript = shouldReduceContext
+    ? boundOlderUIObservations(imageBoundedTranscript)
+    : imageBoundedTranscript
+  const boundedTranscript = shouldReduceContext
+    ? reuseToolContext(reducedTranscript)
+    : reusedTranscript
   // Only discard reloadable schemas here. The continuity summary owns text
   // reduction, so its trigger sees the real cost of the original evidence.
-  const tools = params.forceCompaction ||
-    estimatedInputTokensBeforePreparation > params.compactionTriggerTokens
+  const tools = !params.preserveToolSchemas && shouldReduceContext
     ? pruneInactiveToolkitSchemas(imageBoundedTranscript, params.tools)
     : params.tools
   return {
@@ -487,7 +616,7 @@ export function prepareAgentModelContext(
     estimatedInputTokens: estimateAgentInputTokens(
       boundedTranscript, params.systemPrompt, tools
     ),
-    wasCompacted: tools.length < params.tools.length || boundedTranscript.some(
+    wasCompacted: tools.length < params.tools.length || reducedTranscript.some(
       (message, index) => message !== imageBoundedTranscript[index]
     )
   }

@@ -7,6 +7,7 @@ import type {
   LLMCaller
 } from './agent-types'
 import { parseToolCallArguments } from './agent-utils'
+import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 
 const TOOLKIT_CONTEXT_SUMMARY_MAX_CHARS = 180
 const ARTIFACT_PATH_INPUT_FIELD = 'outputLogPath'
@@ -46,6 +47,59 @@ function stableSerialize(value: unknown): string {
   }
 
   return JSON.stringify(value)
+}
+
+function isContextRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+/**
+ * Appends changed host state while preserving earlier cacheable messages.
+ * Missing state after compaction naturally restores the complete snapshot.
+ * Object fields carry shallow keyed deltas; arrays and scalars replace a field.
+ */
+export function appendAgentRuntimeContext(
+  transcript: AgentToolTranscriptMessage[],
+  context: Record<string, unknown>
+): void {
+  const previous: Record<string, unknown> = {}
+
+  for (const message of transcript) {
+    if (message.role === 'user' && message.runtimeContext) {
+      for (const [key, value] of Object.entries(message.runtimeContext)) {
+        previous[key] = isContextRecord(value) && isContextRecord(previous[key])
+          ? { ...previous[key], ...value }
+          : value
+      }
+    }
+  }
+
+  const changes: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(context)) {
+    if (isContextRecord(value) && isContextRecord(previous[key])) {
+      // Guidance is keyed by source, so discovering one capability appends only
+      // that capability's instructions instead of the entire loaded catalog.
+      const prior = previous[key]
+      const delta = Object.fromEntries(Object.entries(value).filter(([name, entry]) =>
+        stableSerialize(prior[name]) !== stableSerialize(entry)
+      ))
+
+      if (Object.keys(delta).length > 0) {
+        changes[key] = delta
+      }
+    } else if (stableSerialize(previous[key]) !== stableSerialize(value)) {
+      changes[key] = value
+    }
+  }
+
+  if (Object.keys(changes).length > 0) {
+    transcript.push({
+      role: 'user',
+      content: `<agent_runtime_context>\n${JSON.stringify(changes)}\n</agent_runtime_context>`,
+      runtimeContext: structuredClone(changes)
+    })
+  }
 }
 
 function normalizeToolInputForComparison(toolInput: string): string {
@@ -143,7 +197,8 @@ export function findDuplicateToolInputMatch(
   history: ExecutionRecord[],
   functionName: string,
   currentStepLabel: string,
-  candidateToolInput: string
+  candidateToolInput: string,
+  isReadOnlyFunction?: (functionName: string) => boolean
 ): DuplicateInputMatch | null {
   const normalizedCandidate = normalizeToolInputForComparison(candidateToolInput)
   if (!normalizedCandidate) {
@@ -154,41 +209,42 @@ export function findDuplicateToolInputMatch(
 
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const execution = history[index]
-    if (
-      !execution ||
-      execution.status !== 'success' ||
-      execution.function !== functionName
-    ) {
+    if (!execution) {
       continue
     }
 
     const executionStepLabel = normalizeStepLabel(execution.stepLabel)
-    if (
-      normalizedCurrentStepLabel &&
-      executionStepLabel &&
-      executionStepLabel !== normalizedCurrentStepLabel
-    ) {
-      continue
-    }
+    const sameStep = !normalizedCurrentStepLabel || !executionStepLabel ||
+      executionStepLabel === normalizedCurrentStepLabel
+    if (execution.status === 'success' && execution.function === functionName && sameStep) {
+      const requestedInput = getExecutionRequestedToolInput(execution)
+      const normalizedRequested = requestedInput
+        ? normalizeToolInputForComparison(requestedInput)
+        : null
 
-    const requestedInput = getExecutionRequestedToolInput(execution)
-    if (!requestedInput) {
-      continue
-    }
+      if (normalizedRequested && (
+        normalizedRequested === normalizedCandidate ||
+        artifactReadRangesOverlap(requestedInput!, candidateToolInput)
+      )) {
+        // Concurrent results retain emitted order, not completion order. A read
+        // overlapping an earlier-emitted mutation is not a reusable snapshot.
+        const startedAt = execution.startedAt
+        if (isReadOnlyFunction && startedAt !== undefined &&
+            history.slice(0, index).some((earlier) =>
+              !isReadOnlyFunction(earlier.function) &&
+              earlier.completedAt !== undefined && earlier.completedAt >= startedAt
+            )) {
+          return null
+        }
 
-    const normalizedRequested = normalizeToolInputForComparison(requestedInput)
-    if (!normalizedRequested) {
-      continue
-    }
-
-    if (
-      normalizedRequested === normalizedCandidate ||
-      artifactReadRangesOverlap(requestedInput, candidateToolInput)
-    ) {
-      return {
-        stepNumber: index + 1,
-        stepLabel: execution.stepLabel ?? null
+        return { stepNumber: index + 1, stepLabel: execution.stepLabel ?? null }
       }
+    }
+
+    // Mutations and unknown operations can change previously observed state,
+    // even when they report failure after partially executing.
+    if (isReadOnlyFunction && !isReadOnlyFunction(execution.function)) {
+      return null
     }
   }
 

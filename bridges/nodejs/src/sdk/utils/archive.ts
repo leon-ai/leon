@@ -1,7 +1,58 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-import { zipSync } from 'fflate'
+import { unzipSync, zipSync } from 'fflate'
+
+/**
+ * Extract ZIP files when a host has no native archive command.
+ */
+export async function extractZipArchive(archivePath: string, targetPath: string): Promise<void> {
+  await fs.mkdir(targetPath, { recursive: true })
+  const destination = await fs.realpath(targetPath)
+  const files = unzipSync(await fs.readFile(archivePath))
+  const entries = Object.entries(files).map(([name, content]) => {
+    const filename = path.resolve(destination, name)
+    const relative = path.relative(destination, filename)
+
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error('ZIP entry escapes its destination.')
+    }
+
+    return { filename, content, directory: name.endsWith('/') }
+  })
+
+  for (const entry of entries) {
+    // Existing destination links must not redirect writes outside the root.
+    let ancestor = entry.filename
+
+    while (true) {
+      try {
+        const relative = path.relative(destination, await fs.realpath(ancestor))
+
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+          throw new Error('ZIP entry escapes its destination.')
+        }
+
+        break
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
+        }
+
+        ancestor = path.dirname(ancestor)
+      }
+    }
+  }
+
+  for (const entry of entries) {
+    if (entry.directory) {
+      await fs.mkdir(entry.filename, { recursive: true })
+    } else {
+      await fs.mkdir(path.dirname(entry.filename), { recursive: true })
+      await fs.writeFile(entry.filename, entry.content)
+    }
+  }
+}
 
 /**
  * Select archive contents using portable paths relative to the source directory.

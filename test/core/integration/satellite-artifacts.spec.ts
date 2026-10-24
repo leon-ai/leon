@@ -20,6 +20,8 @@ import { API_VERSION } from '@/constants'
 import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import { ComputerUseArtifactStore } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-artifact-store'
 import type { PersistedComputerUseImages } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
+import ToolManager from '@sdk/tool-manager'
+import { LEON_TOOLKITS_PATH } from '@bridge/constants'
 
 const execute = promisify(execFile)
 const temporaryRoots: string[] = []
@@ -111,6 +113,15 @@ describe('Satellite session artifact integration', () => {
     const device = path.join(temporary, 'device', 'artifacts')
     const serverHome = path.join(temporary, 'server')
     const server = path.join(serverHome, 'profiles', 'test', 'sessions', 'session', 'artifacts')
+    const binary = await ToolManager.getToolBinaryPath('video_streaming', 'ffmpeg')
+    const serverBinary = path.join(serverHome, 'toolkits', path.relative(LEON_TOOLKITS_PATH, binary))
+
+    // Seed the isolated server home's managed tool installation so the
+    // artifact-transfer and rendering checks stay offline.
+    await fs.mkdir(path.dirname(serverBinary), { recursive: true })
+    await fs.copyFile(binary, serverBinary)
+    await fs.chmod(serverBinary, 0o755)
+
     const recording = path.join(device, 'computer-use', 'recordings', 'recording')
     await fs.mkdir(recording, { recursive: true })
     const startup = result({ output_dir: recording })

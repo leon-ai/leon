@@ -5,6 +5,8 @@ export interface CompletionAccounting {
   reasoningOutputTokens?: number | undefined
   cachedInputTokens?: number | undefined
   cacheWriteInputTokens?: number | undefined
+  cacheWrite30mInputTokens?: number | undefined
+  cacheWrite12hInputTokens?: number | undefined
   costUSD?: number | undefined
   costEstimated?: boolean | undefined
   costSource?: string | undefined
@@ -43,6 +45,8 @@ export function readCompletionAccounting(usage: unknown): CompletionAccounting {
   const input = object(data['inputTokens'])
   const details = object(data['prompt_tokens_details'] ?? data['input_tokens_details'])
   const rawDetails = object(raw['prompt_tokens_details'] ?? raw['input_tokens_details'])
+  const writes = object(details['cache_write_tokens_details'])
+  const rawWrites = object(rawDetails['cache_write_tokens_details'])
   const output = object(data['outputTokens'])
   const outputDetails = object(data['output_tokens_details'] ?? data['completion_tokens_details'])
   const rawOutputDetails = object(raw['output_tokens_details'] ?? raw['completion_tokens_details'])
@@ -71,10 +75,21 @@ export function readCompletionAccounting(usage: unknown): CompletionAccounting {
     data['raw'] == null ? input['cacheWrite'] : undefined
   )
   const costUSD = count(normalized['costUSD'], data['cost'], raw['cost'])
+  const cacheWrite30mInputTokens = count(
+    normalized['cacheWrite30mInputTokens'],
+    writes['ttl_30m_tokens'], rawWrites['ttl_30m_tokens']
+  )
+  const cacheWrite12hInputTokens = count(
+    normalized['cacheWrite12hInputTokens'],
+    writes['ttl_12h_tokens'], rawWrites['ttl_12h_tokens']
+  )
+
   return {
     ...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
     ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
     ...(cacheWriteInputTokens !== undefined ? { cacheWriteInputTokens } : {}),
+    ...(cacheWrite30mInputTokens !== undefined ? { cacheWrite30mInputTokens } : {}),
+    ...(cacheWrite12hInputTokens !== undefined ? { cacheWrite12hInputTokens } : {}),
     ...(costUSD !== undefined ? {
       costUSD, costEstimated: normalized['costEstimated'] === true,
       costSource: typeof normalized['costSource'] === 'string'

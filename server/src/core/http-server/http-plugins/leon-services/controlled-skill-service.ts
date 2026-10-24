@@ -16,6 +16,7 @@ import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-pr
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 
 import type {
   HTTPPluginAgentEvent,
@@ -96,9 +97,9 @@ export async function runControlledSkill(
       sessionId,
       async () => {
         const historyStartedAt = performance.now()
-        const history = await CONVERSATION_LOGGER.load({
-          nbOfLogsToLoad: CONTROLLED_HISTORY_LIMIT
-        })
+        const history = (await CONVERSATION_LOGGER.loadAll({ sessionId }))
+          .filter(ConversationHistoryHelper.isAddedToHistory)
+          .slice(-CONTROLLED_HISTORY_LIMIT)
         input.signal?.throwIfAborted()
         const historyLoadMs = elapsedMilliseconds(historyStartedAt)
         const recentUtterances = history

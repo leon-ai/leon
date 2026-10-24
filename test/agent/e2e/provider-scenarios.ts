@@ -32,7 +32,7 @@ export const PROVIDER_SCENARIOS = [
     id: 'coding_session',
     testName: 'fixes coding behavior while managing an interactive shell session',
     buildInput: (root: string): string =>
-      `Fix the greeting in ${root} directly using Leon's tools. Reproduce the failing project test. Before editing, start pnpm run dev with shell.startSession, read SESSION_READY, and send Ada followed by a newline. Fix the source so that the greeting is "Hello, Ada!". Send Ada again and verify the corrected output in the same running session, run the project test and review the diff. Stop the session before finishing. Follow repository instructions and preserve existing owner changes.`
+      `Fix the greeting in ${root} directly using Leon's tools. Reproduce the failing project test. Before editing, start pnpm run dev with shell.startSession, read SESSION_READY, send Ada followed by a newline, and read the HELLO Ada response before changing the source. Fix the source so that the greeting is "Hello, Ada!". Send Ada again and verify the corrected output in the same running session, run the project test and review the diff. Stop the session before finishing. Follow repository instructions and preserve existing owner changes.`
   }
 ] as const
 

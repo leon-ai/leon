@@ -1,1 +1,1 @@
-export { default } from './open-meteo-tool'
+export { default, WeatherDetail } from './open-meteo-tool'

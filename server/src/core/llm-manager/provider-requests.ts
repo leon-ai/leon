@@ -14,9 +14,16 @@ import {
   requireChatGPTCodexAccount
 } from './llm-accounts/chatgpt-account-config'
 import { requestChatGPTAccount } from './llm-accounts/chatgpt-account-request'
+import { trackProviderResponseUsage } from './llm-usage/provider-response-usage'
+import {
+  createInferenceMetadata,
+  InferenceAuthMode,
+  InferenceCredentialSource
+} from './inference-metadata'
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 600_000
 const PROVIDER_CAPABILITY_HEADERS = ['anthropic-beta', 'anthropic-version']
+const MODEL_USAGE_ENDPOINTS = new Set(['/responses', '/chat/completions', '/messages'])
 const CHATGPT_API_ENDPOINTS = new Set([
   '/responses',
   '/images/generations',
@@ -116,6 +123,7 @@ async function readResponsesJSON(response: Response): Promise<Record<string, unk
           event['type'] === 'response.incomplete') {
           const result = event['response'] as Record<string, unknown> | undefined
           return {
+            ...result,
             status: 'failed',
             error: result?.['error'] || event['error'] || {
               code: event['code'] || event['type'],
@@ -132,7 +140,7 @@ async function readResponsesJSON(response: Response): Promise<Record<string, unk
 }
 
 /**
- * Serializes auxiliary Responses requests so a profile can reuse its connection.
+ * Reuses auxiliary Responses transport while preserving shared socket ordering.
  */
 class ProviderRequests {
   private transport: OpenAIResponsesTransport | undefined
@@ -147,18 +155,23 @@ class ProviderRequests {
   }
 
   /**
-   * Uses the same transport as chat, returning a complete native provider response.
+   * Uses the profile transport for streamed or complete native provider responses.
    */
   public async responses(
     connection: ProviderConnection,
     body: Record<string, unknown>,
     signal: AbortSignal
   ): Promise<Response> {
-    const previous = this.tail
+    // Linked accounts use independent HTTP streams. Only the API-key socket
+    // needs to remain reserved while a preceding response is consumed.
+    const previous = connection.accountId ? Promise.resolve() : this.tail
     let release: () => void = () => undefined
-    this.tail = new Promise<void>((resolve) => {
-      release = resolve
-    })
+
+    if (!connection.accountId) {
+      this.tail = new Promise<void>((resolve) => {
+        release = resolve
+      })
+    }
 
     await previous
     const binding = JSON.stringify([connection.baseURL, connection.accountId])
@@ -172,6 +185,11 @@ class ProviderRequests {
       transport.close()
     }
     signal.addEventListener('abort', abort, { once: true })
+    let streaming = false
+    const finish = (): void => {
+      signal.removeEventListener('abort', abort)
+      release()
+    }
 
     try {
       signal.throwIfAborted()
@@ -188,6 +206,44 @@ class ProviderRequests {
       if (!response.ok) {
         return response
       }
+
+      if (body['stream'] === true && response.body) {
+        const reader = response.body.getReader()
+
+        streaming = true
+
+        // Keep the profile's transport reserved until its stream settles.
+        return new Response(new ReadableStream<Uint8Array>({
+          async pull(controller): Promise<void> {
+            try {
+              const { done, value } = await reader.read()
+
+              if (done) {
+                finish()
+                controller.close()
+              } else {
+                controller.enqueue(value)
+              }
+            } catch (error) {
+              transport.close()
+              finish()
+              controller.error(error)
+            }
+          },
+          async cancel(reason): Promise<void> {
+            try {
+              await reader.cancel(reason)
+            } finally {
+              transport.close()
+              finish()
+            }
+          }
+        }), {
+          status: response.status,
+          headers: response.headers
+        })
+      }
+
       const data = await readResponsesJSON(response)
       if (data['status'] === 'failed' || data['error']) {
         this.close()
@@ -199,8 +255,9 @@ class ProviderRequests {
       this.close()
       throw error
     } finally {
-      signal.removeEventListener('abort', abort)
-      release()
+      if (!streaming) {
+        finish()
+      }
     }
   }
 }
@@ -262,6 +319,9 @@ export async function requestProvider(
   const baseURL = connection.baseURL.endsWith('/')
     ? connection.baseURL.slice(0, -1)
     : connection.baseURL
+  const requestURL = `${options.anthropicCompatibility
+    ? new URL('/anthropic/v1', baseURL).href
+    : baseURL}${endpoint}`
   const anthropic = provider === LLMProviders.Anthropic || options.anthropicCompatibility
   const headers: Record<string, string> = anthropic
     ? { 'x-api-key': connection.apiKey, 'anthropic-version': '2023-06-01' }
@@ -281,9 +341,7 @@ export async function requestProvider(
     Object.assign(headers, accountHeaders)
     signal.throwIfAborted()
 
-    return fetch(`${options.anthropicCompatibility
-      ? new URL('/anthropic/v1', baseURL).href
-      : baseURL}${endpoint}`, {
+    return fetch(requestURL, {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
         ...headers,
@@ -298,7 +356,7 @@ export async function requestProvider(
       redirect: 'error'
     })
   }
-  const response = provider === LLMProviders.OpenAI && endpoint === '/responses' &&
+  const execute = async (): Promise<Response> => provider === LLMProviders.OpenAI && endpoint === '/responses' &&
     body && typeof body === 'object' && !(body instanceof FormData)
     ? await PROVIDER_REQUESTS.responses(
         { ...connection, baseURL }, body as Record<string, unknown>, signal
@@ -306,6 +364,22 @@ export async function requestProvider(
     : connection.accountId
       ? await requestChatGPTAccount(connection.accountId, dispatch)
       : await dispatch()
+  const model = body && typeof body === 'object' && !(body instanceof FormData)
+    ? (body as Record<string, unknown>)['model']
+    : undefined
+  const account = CONFIG_MANAGER.getProviderConfig(provider)?.account
+  const response = MODEL_USAGE_ENDPOINTS.has(endpoint) && typeof model === 'string'
+    ? await trackProviderResponseUsage(createInferenceMetadata({
+        provider, model,
+        authMode: connection.accountId ? InferenceAuthMode.ChatGPTOAuth : InferenceAuthMode.APIKey,
+        credentialSource: account
+          ? InferenceCredentialSource.AccountBinding
+          : InferenceCredentialSource.ProfileAPIKey,
+        ...(account ? { connectionId: account } : {}),
+        privateValues: [connection.apiKey],
+        endpoint: requestURL
+      }), execute, signal)
+    : await execute()
 
   if (!response.ok) {
     throw await createMediaProviderError(

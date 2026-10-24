@@ -1,7 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
-import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai'
+import { generateText, streamText, stepCountIs, type LanguageModel, type ToolSet } from 'ai'
 
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
@@ -14,9 +14,12 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 2_000
 const MAX_SEARCH_STEPS = 3
 const WEB_TIMEOUT_MS = 90_000
 const SEARCH_RESULT_LIMIT = 5
+const MAX_SEARCH_SOURCES = 50
 const KIMI_SEARCH_TIMEOUT_SECONDS = 30
 const ZAI_SEARCH_ENDPOINT = '/chat/completions'
 const KIMI_SEARCH_ENDPOINT = '/tools/search_pro'
+const DEEPSEEK_SEARCH_ENDPOINT = '/tools/search'
+const DEEPSEEK_MAX_QUERY_CHARS = 128
 const SEARCH_SYSTEM_PROMPT =
   'Search the web to answer the user request. Base the answer on retrieved sources and cite their URLs. Return a concise, direct answer.'
 const MAX_CONTENT_CHARS = 40_000
@@ -55,6 +58,12 @@ interface HostedSearchResult {
   provider: HostedWebProvider
   model: string
   content: string
+  success?: boolean
+  complete?: boolean
+  error?: string
+  sources?: Array<{ url: string, title?: string }>
+  completed_search_calls?: number
+  truncated?: boolean
   used_input_tokens?: number
   used_output_tokens?: number
 }
@@ -86,6 +95,16 @@ interface KimiSearchResponse {
     date?: string
     snippet?: string
     chunks?: Array<{ text: string }>
+  }>
+}
+
+interface DeepSeekSearchResponse {
+  results: Array<{
+    title: string
+    url: string
+    summary: string
+    snippet: string
+    date?: string | null
   }>
 }
 
@@ -175,15 +194,18 @@ export default class HostedTool extends Tool {
       throw new Error(`max_chars must be an integer between 1 and ${MAX_CONTENT_CHARS}.`)
     }
     const { provider, model } = await this.resolveTarget('auto')
-    if (provider === 'deepseek') {
-      throw new Error('DeepSeek supports hosted search but has no verified native URL fetch. Use the browser tool to read this URL.')
-    }
     const signal = this.createWebSignal()
     let content = ''
     let title: string | undefined
     let contentKind: HostedFetchResult['content_kind'] = 'extracted_text'
 
-    if (provider === 'moonshotai') {
+    if (provider === 'deepseek') {
+      const data = await this.postWebRequest<{ content: string, title: string }>(
+        provider, '/tools/fetch', { url }, signal
+      )
+      content = data.content || ''
+      title = data.title
+    } else if (provider === 'moonshotai') {
       const data = await this.postWebRequest<{ markdown?: string, title?: string }>(
         provider, '/tools/fetch', { url }, signal
       )
@@ -313,44 +335,121 @@ export default class HostedTool extends Tool {
     if (target.provider === 'moonshotai') {
       return this.searchKimi(query, target)
     }
+    if (target.provider === 'deepseek') {
+      return this.searchDeepSeek(query, target)
+    }
 
-    // generateText translates SDK tools into the provider's wire format and
-    // resumes deferred server tools without introducing another agent loop.
-    const result = await generateText({
-      model: this.createLanguageModel(target),
-      system: `${SEARCH_SYSTEM_PROMPT}\nCurrent date and time: ${this.currentDateTime}.`,
-      prompt: query,
-      maxOutputTokens: this.resolveMaxOutputTokens(options),
-      ...(target.provider === 'openai'
-        ? { providerOptions: { openai: { store: false } } }
-        : {}),
-      // Leave model defaults intact unless the caller explicitly requests this.
-      ...(typeof options?.temperature === 'number' &&
-      Number.isFinite(options.temperature)
-        ? { temperature: options.temperature }
-        : {}),
-      tools: { web_search: this.createHostedSearchTool(target.provider) },
-      stopWhen: stepCountIs(MAX_SEARCH_STEPS),
-      maxRetries: 0,
-      abortSignal: this.createWebSignal()
-    })
-    const content = result.text.trim()
+    const signal = this.executionContext?.timeout && this.executionContext.signal
+      ? this.executionContext.signal
+      : this.createWebSignal()
+    const sources = new Map<string, { url: string, title?: string }>()
+    let content = ''
+    let completedSearchCalls = 0
+    let complete = false
+    let truncated = false
+    let failure: unknown
+    let inputTokens: number | undefined
+    let outputTokens: number | undefined
 
-    if (!content) {
-      throw new Error(
-        `Hosted search returned no text for ${target.provider}/${target.model}.`
-      )
+    try {
+      // Leave streamRetries unset: retry callback mode buffers native tool evidence.
+      const result = streamText({
+        model: this.createLanguageModel(target),
+        system: SEARCH_SYSTEM_PROMPT,
+        // Fresh request data follows the reusable instructions and tool schemas.
+        prompt: `Current date and time: ${this.currentDateTime}.\n\n${query}`,
+        maxOutputTokens: this.resolveMaxOutputTokens(options),
+        ...(target.provider === 'openai'
+          ? { providerOptions: { openai: { store: false } } }
+          : {}),
+        // Leave model defaults intact unless the caller explicitly requests this.
+        ...(typeof options?.temperature === 'number' &&
+        Number.isFinite(options.temperature)
+          ? { temperature: options.temperature }
+          : {}),
+        tools: { web_search: this.createHostedSearchTool(target.provider) },
+        stopWhen: stepCountIs(MAX_SEARCH_STEPS),
+        maxRetries: 0,
+        abortSignal: signal,
+        onError: ({ error }) => {
+          failure = error
+        }
+      })
+
+      for await (const chunk of result.fullStream) {
+        if (chunk.type === 'text-delta') {
+          const text = chunk.text.slice(0, MAX_CONTENT_CHARS - content.length)
+
+          content += text
+          truncated ||= text.length < chunk.text.length
+          this.emitOutput(text)
+        } else if (chunk.type === 'source' && chunk.sourceType === 'url') {
+          if (!sources.has(chunk.url) && sources.size < MAX_SEARCH_SOURCES) {
+            sources.set(chunk.url, {
+              url: chunk.url,
+              ...(chunk.title ? { title: chunk.title } : {})
+            })
+            this.emitOutput(`\nSource: ${chunk.url}\n`)
+          } else if (!sources.has(chunk.url)) {
+            truncated = true
+          }
+        } else if (chunk.type === 'tool-call' && chunk.providerExecuted) {
+          this.emitOutput('\nSearching the web...\n')
+        } else if (chunk.type === 'tool-result') {
+          completedSearchCalls += 1
+          this.emitOutput('\nSearch step completed; preparing the answer...\n')
+        } else if (chunk.type === 'reasoning-delta' && chunk.text.length > 0) {
+          this.emitProgress('Preparing search results...')
+        } else if (chunk.type === 'finish-step') {
+          if (typeof chunk.usage.inputTokens === 'number') {
+            inputTokens = (inputTokens || 0) + chunk.usage.inputTokens
+          }
+          if (typeof chunk.usage.outputTokens === 'number') {
+            outputTokens = (outputTokens || 0) + chunk.usage.outputTokens
+          }
+        } else if (chunk.type === 'finish') {
+          complete = chunk.finishReason === 'stop'
+          inputTokens = chunk.totalUsage.inputTokens
+          outputTokens = chunk.totalUsage.outputTokens
+        } else if (chunk.type === 'error' || chunk.type === 'tool-error') {
+          throw chunk.error
+        } else if (chunk.type === 'abort') {
+          throw signal.reason || new Error('Hosted search was interrupted.')
+        }
+      }
+    } catch (error) {
+      failure = error
+    }
+
+    // Owner cancellation must still terminate the turn rather than resume from a draft.
+    if (this.executionContext?.signal?.reason?.name !== 'TimeoutError') {
+      this.executionContext?.signal?.throwIfAborted()
+    }
+    complete = complete && !failure && content.trim().length > 0
+    const error = failure instanceof Error
+      ? failure.message
+      : failure ? String(failure)
+        : `Hosted search did not finish its answer for ${target.provider}/${target.model}.`
+
+    if (!complete) {
+      this.emitOutput(`\nSearch incomplete: ${error}\n`)
     }
 
     return {
       provider: target.provider,
       model: target.model,
-      content,
-      ...(typeof result.totalUsage.inputTokens === 'number'
-        ? { used_input_tokens: result.totalUsage.inputTokens }
+      success: complete,
+      complete,
+      content: content.trim(),
+      sources: [...sources.values()],
+      completed_search_calls: completedSearchCalls,
+      truncated,
+      ...(!complete ? { error } : {}),
+      ...(typeof inputTokens === 'number'
+        ? { used_input_tokens: inputTokens }
         : {}),
-      ...(typeof result.totalUsage.outputTokens === 'number'
-        ? { used_output_tokens: result.totalUsage.outputTokens }
+      ...(typeof outputTokens === 'number'
+        ? { used_output_tokens: outputTokens }
         : {})
     }
   }
@@ -371,7 +470,6 @@ export default class HostedTool extends Tool {
       return createOpenAI(options).responses(target.model)
     }
 
-    // DeepSeek's hosted search uses its Anthropic-compatible request format.
     return createAnthropic(options)(target.model)
   }
 
@@ -404,11 +502,13 @@ export default class HostedTool extends Tool {
           'x-leon-profile-token': service.token
         },
         body: JSON.stringify({
+          ...(this.executionContext?.conversationSessionId
+            ? { session_id: this.executionContext.conversationSessionId }
+            : {}),
           provider,
           endpoint,
           payload: JSON.parse(String(init?.body || '{}')),
-          headers: Object.fromEntries(new Headers(init?.headers)),
-          ...(provider === 'deepseek' ? { anthropicCompatibility: true } : {})
+          headers: Object.fromEntries(new Headers(init?.headers))
         }),
         signal: init?.signal || this.createWebSignal()
       })
@@ -449,9 +549,9 @@ export default class HostedTool extends Tool {
         messages: [
           {
             role: 'system',
-            content: `${SEARCH_SYSTEM_PROMPT}\nCurrent date and time: ${this.currentDateTime}.`
+            content: SEARCH_SYSTEM_PROMPT
           },
-          { role: 'user', content: query }
+          { role: 'user', content: `Current date and time: ${this.currentDateTime}.\n\n${query}` }
         ],
         max_tokens: this.resolveMaxOutputTokens(options),
         ...(typeof options?.temperature === 'number' &&
@@ -522,6 +622,41 @@ export default class HostedTool extends Tool {
     ].filter(Boolean).join('\n')).join('\n\n')
 
     return { ...target, content: content || 'No web search results were found.' }
+  }
+
+  /**
+   * Returns ranked DeepSeek passages without an additional model inference.
+   */
+  private async searchDeepSeek(
+    query: string,
+    target: ResolvedTarget
+  ): Promise<HostedSearchResult> {
+    if (!query.trim() || Array.from(query).length > DEEPSEEK_MAX_QUERY_CHARS) {
+      throw new Error(`DeepSeek search requires a nonblank query of at most ${DEEPSEEK_MAX_QUERY_CHARS} characters.`)
+    }
+
+    const data = await this.postWebRequest<DeepSeekSearchResponse>(
+      target.provider,
+      DEEPSEEK_SEARCH_ENDPOINT,
+      { query, count: SEARCH_RESULT_LIMIT, need_content: false }
+    )
+    if (!Array.isArray(data.results)) {
+      throw new Error('DeepSeek search returned an invalid search response.')
+    }
+
+    const content = data.results.map((source) => [
+      source.title, source.url, source.date, source.summary || source.snippet
+    ].filter(Boolean).join('\n')).join('\n\n')
+
+    return {
+      ...target,
+      content: content.slice(0, MAX_CONTENT_CHARS) || 'No web search results were found.',
+      success: true,
+      complete: true,
+      sources: data.results.map(({ url, title }) => ({ url, title })),
+      completed_search_calls: 1,
+      truncated: content.length > MAX_CONTENT_CHARS
+    }
   }
 
   /**

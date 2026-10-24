@@ -433,12 +433,31 @@ describe('conversation trace persistence', () => {
     expect(ConversationHistoryHelper.toHistoryItems(reloaded, { supportsWidgets: true })[0]?.agentResponseTrace)
       .toEqual(draft.agentResponseTrace)
 
+    const activity = {
+      ...draft,
+      agentResponseTrace: {
+        ...draft.agentResponseTrace!,
+        planSteps: [{ id: 'review', label: 'Review the result', status: 'in_progress' as const }],
+        toolCalls: draft.agentResponseTrace!.toolCalls
+      }
+    }
+    vi.mocked(Date.now).mockReturnValue(1_500)
+    await logger.upsert({ who: 'owner', message: 'Another message', isAddedToHistory: true }, { sessionId: 'first' })
+    vi.mocked(Date.now).mockReturnValue(1_600)
+    await logger.upsert(activity, { sessionId: 'first', activity: true, refreshSentAt: true })
+    const [latestActivity] = await logger.load({ sessionId: 'first', nbOfLogsToLoad: 1, sortBySentAt: true })
+    expect(latestActivity?.messageId).toBe('turn')
+    expect(latestActivity?.agentResponseTrace?.toolCalls).toEqual(draft.agentResponseTrace?.toolCalls)
+    expect(latestActivity?.agentResponseTrace?.planSteps).toEqual(activity.agentResponseTrace.planSteps)
+    expect(latestActivity?.isAddedToHistory).toBe(false)
+
     // A separate session can use the same request ID without crossing histories.
     await logger.upsert(draft, { sessionId: 'second' })
     const finished = {
       ...draft, messageId: 'request:leon', message: 'Done', isAddedToHistory: true,
       llmMetrics: {
         completionCount: 2, inputTokens: 100, outputTokens: 20, totalTokens: 120,
+        reviewCount: 1, reviewRetryCount: 1, reviewDurationMs: 50,
         durationMs: 100, tokensPerSecond: 200,
         usageAccounting: {
           cachedInputTokens: 80, cacheReadCompletionCount: 2, cacheWriteInputTokens: 0,
@@ -454,12 +473,16 @@ describe('conversation trace persistence', () => {
     ])
     // Repeated delivery of a final answer must still update the same turn.
     await logger.upsert(finished, { sessionId: 'first' })
-    expect(await logger.loadAll({ sessionId: 'first' })).toEqual([{ ...finished, sentAt: 2_000 }])
+    await logger.upsert(activity, { sessionId: 'first', activity: true })
+    expect((await logger.loadAll({ sessionId: 'first' }))[0]).toEqual({ ...finished, sentAt: 2_000 })
     const history = ConversationHistoryHelper.toHistoryItems(await logger.loadAll({ sessionId: 'first' }), { supportsWidgets: true })
     expect(history[0]?.agentResponseTrace?.progressMessages)
       .toEqual(draft.agentResponseTrace?.progressMessages)
     expect(history[0]?.llmMetrics?.usageAccounting).toEqual(finished.llmMetrics.usageAccounting)
     expect(history[0]?.llmMetrics?.completionCount).toBe(2)
-    expect(await logger.loadAll({ sessionId: 'second' })).toEqual([{ ...draft, sentAt: 1_000 }])
+    expect(history[0]?.llmMetrics).toMatchObject({
+      reviewCount: 1, reviewRetryCount: 1, reviewDurationMs: 50
+    })
+    expect(await logger.loadAll({ sessionId: 'second' })).toEqual([{ ...draft, sentAt: 1_600 }])
   })
 })

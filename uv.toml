@@ -1,0 +1,2 @@
+# Allow time for newly uploaded dependencies to receive community scrutiny.
+exclude-newer = "36 hours"

@@ -63,6 +63,7 @@ export async function runAgent(
     let actionExecutionMs = 0
     let reasoningSummary = 'Understanding your request'
     const requestId = input.request_id || null
+    const messageId = requestId ? `${requestId}:leon` : undefined
     let turnArtifacts: Artifact[] = []
     let finalMetrics: Record<string, unknown> | null = null
     let finalTrace: HTTPPluginAgentTrace = { plan_steps: [], tool_calls: [] }
@@ -73,7 +74,7 @@ export async function runAgent(
       publishAgentEvent(getActiveProfileName(), {
         session_id: sessionId,
         turn_id: requestId,
-        response_id: requestId,
+        response_id: messageId || null,
         type,
         data
       })
@@ -217,9 +218,6 @@ export async function runAgent(
         finalTrace = trace
 
         if (typeof output === 'string' && output.trim()) {
-          const messageId = input.request_id
-            ? `${input.request_id}:leon`
-            : undefined
           await CONVERSATION_LOGGER.upsert(
             {
               who: 'leon',

@@ -10,6 +10,10 @@ engineStrict: true
 # Keep dependency versions pinned when adding packages
 saveExact: true
 
+# Allow time for newly published dependencies to receive community scrutiny.
+minimumReleaseAge: 2160
+minimumReleaseAgeStrict: true
+
 # Do not let `pnpm run` auto-install dependencies before running scripts
 verifyDepsBeforeRun: false
 

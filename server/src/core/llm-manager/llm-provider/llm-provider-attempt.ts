@@ -4,6 +4,7 @@ import { type AxiosResponse } from 'axios'
 
 import {
   LOCAL_SERVER_PROVIDERS,
+  REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME,
   STREAM_IDLE_TIMEOUT_ERROR_NAME
 } from '@/core/llm-manager/llm-provider/llm-provider-constants'
 import {
@@ -12,8 +13,8 @@ import {
   createPromptAbortError,
   formatPromptErrorForLog,
   getConnectionErrorCode,
+  getCompletionFailureKind,
   isPromptAbortReason,
-  isTimeoutLikeError,
   prepareCompletionRetry,
   safeSerialize,
   truncateForLog,
@@ -38,12 +39,13 @@ import type {
 } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   LLMProviders,
-  CompletionFailureKind,
   type CompletionParams,
   type CompletionStreamEvent,
   type CompletionAttemptTiming,
   type OpenAIToolCall,
   type ProviderReasoningItem,
+  type ProviderMessageMetadata,
+  type PromptCacheObservation,
   type ProviderCompactionContext,
   type PromptOrChatHistory
 } from '@/core/llm-manager/types'
@@ -66,6 +68,7 @@ const STREAM_OUTPUT_EVENTS = new Set([
 ])
 
 const REMOTE_STREAM_IDLE_TIMEOUT_MS = 30_000
+const REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS = 12_000
 const PROVIDER_CANCELLATION_CLEANUP_TIMEOUT_MS = 1_000
 
 /**
@@ -93,22 +96,27 @@ export async function runCompletionAttempt(
   const completionStartedAt = Date.now()
   let generationStartedAt: number | null = null
   let firstTokenAt: number | undefined
+  let firstReasoningTokenAt: number | undefined
   let firstToolInputAt: number | undefined
   let accounting: CompletionAccounting | undefined
   let firstEventAt: number | undefined
   let streamOpenedAt: number | undefined
+  let requestDispatchedAt: number | undefined
+  let requestAcceptedAt: number | undefined
+  let responseHeadersAt: number | undefined
+  let firstByteAt: number | undefined
   let lastEventAt: number | undefined
   let lastTransportActivityAt: number | undefined
   let lastOutputAt: number | undefined
   let lastEvent = 'dispatched'
-  let transport: CompletionAttemptTiming['transport'] = isRemoteProvider
-    ? providerName === LLMProviders.OpenAI && shouldStreamOutput
-      ? 'websocket'
-      : 'http'
-    : 'local'
+  let transport: CompletionAttemptTiming['transport'] = provider.transport ?? (
+    isRemoteProvider ? 'http' : 'local'
+  )
   let requestId: string | undefined
   let responseId: string | undefined
+  let promptCache: PromptCacheObservation | undefined
   let isReasoning = false
+  let isCompacting = false
   const pendingHostedTools = new Set<string>()
   const attemptId = randomUUID()
   const idleTimeout = completionParams.streamIdleTimeout ?? (
@@ -132,19 +140,30 @@ export async function runCompletionAttempt(
       transport,
       outcome,
       ...(error ? {
-        failureKind: isTimeoutLikeError(error)
-          ? CompletionFailureKind.Timeout
-          : CompletionFailureKind.Provider
+        failureKind: getCompletionFailureKind(error)
       } : {}),
       connectionErrorCode: getConnectionErrorCode(error),
       requestId,
       responseId,
+      ...(promptCache ? { promptCache } : {}),
       elapsedMs: Date.now() - completionStartedAt,
       inferenceTimeoutMs: completionParams.timeout,
       streamIdleTimeoutMs: idleTimeout,
       generationStartMs: generationStartedAt === null
         ? undefined
         : generationStartedAt - completionStartedAt,
+      requestDispatchMs: requestDispatchedAt === undefined
+        ? undefined
+        : requestDispatchedAt - completionStartedAt,
+      requestAcceptedMs: requestAcceptedAt === undefined
+        ? undefined
+        : requestAcceptedAt - completionStartedAt,
+      responseHeadersMs: responseHeadersAt === undefined
+        ? undefined
+        : responseHeadersAt - completionStartedAt,
+      firstByteMs: firstByteAt === undefined
+        ? undefined
+        : firstByteAt - completionStartedAt,
       streamOpenMs: streamOpenedAt === undefined
         ? undefined
         : streamOpenedAt - completionStartedAt,
@@ -154,6 +173,9 @@ export async function runCompletionAttempt(
       firstTokenMs: firstTokenAt === undefined
         ? undefined
         : firstTokenAt - completionStartedAt,
+      firstReasoningTokenMs: firstReasoningTokenAt === undefined
+        ? undefined
+        : firstReasoningTokenAt - completionStartedAt,
       firstToolInputMs: firstToolInputAt === undefined
         ? undefined
         : firstToolInputAt - completionStartedAt,
@@ -202,9 +224,10 @@ export async function runCompletionAttempt(
     }
   }
   const resetStreamStallTimeout = (
-    delay = isReasoning || pendingHostedTools.size > 0
+    delay = isReasoning || isCompacting || pendingHostedTools.size > 0
       ? completionParams.timeout
-      : idleTimeout
+      : idleTimeout,
+    errorName = STREAM_IDLE_TIMEOUT_ERROR_NAME
   ): void => {
     if (!shouldStreamOutput || !completionParams.timeout) {
       return
@@ -212,10 +235,13 @@ export async function runCompletionAttempt(
 
     clearStreamStallTimeout()
     streamStallTimeoutHandle = setTimeout(() => {
+      const stage = errorName === REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
+        ? 'before the provider accepted the request'
+        : 'after streaming stalled'
       const error = new Error(
-        `Timeout (${delay}ms) for "${completionParams.dutyType}" duty after streaming stalled`
+        `Timeout (${delay}ms) for "${completionParams.dutyType}" duty ${stage}`
       )
-      error.name = STREAM_IDLE_TIMEOUT_ERROR_NAME
+      error.name = errorName
 
       if (!abortController.signal.aborted) {
         abortController.abort(error)
@@ -265,6 +291,7 @@ export async function runCompletionAttempt(
     }
 
     if (reasoningChunk.length > 0) {
+      firstReasoningTokenAt ??= Date.now()
       recordActivity('reasoning-delta')
       lastOutputAt = Date.now()
       markStreamStarted()
@@ -279,6 +306,12 @@ export async function runCompletionAttempt(
       return
     }
 
+    if (event.promptCache) {
+      promptCache = event.promptCache
+      completionParams.onStreamEvent?.(event)
+      return
+    }
+
     transport = event.transport ?? transport
     requestId = event.requestId ?? requestId
     responseId = event.responseId ?? responseId
@@ -290,10 +323,37 @@ export async function runCompletionAttempt(
       firstToolInputAt ??= Date.now()
     }
 
-    if (event.type === 'transport-activity') {
+    if (event.type === 'request-dispatched') {
+      requestDispatchedAt ??= Date.now()
+
+      // A socket can remain open without accepting a new request. Bound this
+      // wait separately from reasoning after the provider accepts generation.
+      if (isRemoteProvider && transport === 'websocket' && !hasStartedStreaming) {
+        resetStreamStallTimeout(
+          Math.min(REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS, completionParams.timeout),
+          REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
+        )
+      } else if (!hasStartedStreaming) {
+        // HTTP fallback retains its ordinary initial inference deadline.
+        clearStreamStallTimeout()
+      }
+    } else if (event.type === 'provider-event' && event.providerEventType) {
+      recordActivity(event.providerEventType)
+
+      if (event.providerEventType === 'response.in_progress') {
+        requestAcceptedAt ??= Date.now()
+
+        if (!hasStartedStreaming) {
+          clearStreamStallTimeout()
+        }
+      }
+    } else if (event.type === 'response-headers') {
+      responseHeadersAt ??= Date.now()
+    } else if (event.type === 'transport-activity') {
       // Heartbeats prove connection activity, not model progress. They must not
       // keep an unproductive inference alive indefinitely.
       lastTransportActivityAt = Date.now()
+      firstByteAt ??= lastTransportActivityAt
     } else if (event.type === 'stream-open') {
       streamOpenedAt = Date.now()
     } else if (event.type !== 'stream-start') {
@@ -317,6 +377,14 @@ export async function runCompletionAttempt(
         clearTimeout(timeoutHandle)
         timeoutHandle = null
       }
+    } else if (event.type === 'compaction-start') {
+      // Context maintenance may continue silently after the answer is drafted.
+      isCompacting = true
+      markStreamStarted()
+      resetStreamStallTimeout()
+    } else if (event.type === 'compaction-end') {
+      isCompacting = false
+      resetStreamStallTimeout()
     } else if (event.type === 'reasoning-start') {
       isReasoning = true
       markStreamStarted()
@@ -537,6 +605,7 @@ export async function runCompletionAttempt(
   let reasoning: string | undefined
   let reasoningItems: ProviderReasoningItem[] | undefined
   let compactionContext: ProviderCompactionContext | undefined
+  let providerMessage: ProviderMessageMetadata | undefined
   let finishReason: string | undefined
 
   // Normalize the completion result according to the provider.
@@ -601,6 +670,7 @@ export async function runCompletionAttempt(
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
       compactionContext = normalized.compactionContext
+      providerMessage = normalized.providerMessage
       finishReason = normalized.finishReason
     } else if (
       [
@@ -635,6 +705,7 @@ export async function runCompletionAttempt(
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
       compactionContext = normalized.compactionContext
+      providerMessage = normalized.providerMessage
       finishReason = normalized.finishReason
     } else if (
       [LLMProviders.OpenAI, LLMProviders.OpenRouter].includes(
@@ -666,6 +737,7 @@ export async function runCompletionAttempt(
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
       compactionContext = normalized.compactionContext
+      providerMessage = normalized.providerMessage
       finishReason = normalized.finishReason
     } else {
       LogHelper.error(`The LLM provider "${providerName}" is not yet supported`)
@@ -714,6 +786,15 @@ export async function runCompletionAttempt(
   clearStreamStallTimeout()
   rejectStreamStall = null
 
+  if (promptCache && usedInputTokens > 0) {
+    promptCache = {
+      ...promptCache,
+      inputTokens: usedInputTokens,
+      ...(accounting?.cachedInputTokens !== undefined
+        ? { cachedInputTokens: accounting.cachedInputTokens }
+        : {})
+    }
+  }
   logAttempt('completed')
 
   // Guard against silent empty provider responses which otherwise trigger
@@ -787,6 +868,7 @@ export async function runCompletionAttempt(
     ...(reasoning ? { reasoning } : {}),
     ...(reasoningItems?.length ? { reasoningItems } : {}),
     ...(compactionContext ? { compactionContext } : {}),
+    ...(providerMessage ? { providerMessage } : {}),
     ...(finishReason ? { finishReason } : {}),
     ...(toolCalls ? { toolCalls } : {})
   }

@@ -25,6 +25,7 @@ interface ConversationLoggerSettings {
 interface LoadParams {
   nbOfLogsToLoad?: number
   sessionId?: string
+  sortBySentAt?: boolean
 }
 
 interface UpsertParams {
@@ -32,6 +33,7 @@ interface UpsertParams {
   refreshSentAt?: boolean
   sentAt?: number
   sessionId?: string
+  activity?: boolean
 }
 
 /**
@@ -251,6 +253,11 @@ export class ConversationLogger {
               conversationLogs[existingConversationLogIndex]
 
             if (existingConversationLog) {
+              // Delayed activity must not replace a completed answer. Activity
+              // snapshots share its ID but remain outside the model transcript.
+              if (params?.activity && existingConversationLog.isAddedToHistory) {
+                return
+              }
               conversationLogs[existingConversationLogIndex] = {
                 ...existingConversationLog,
                 ...newRecord,
@@ -312,6 +319,10 @@ export class ConversationLogger {
         const conversationLog = await this.getAllLogs(params?.sessionId)
         const nbOfLogsToLoad =
           params?.nbOfLogsToLoad || this.settings.nbOfLogsToLoad
+
+        if (params?.sortBySentAt) {
+          conversationLog.sort((left, right) => left.sentAt - right.sentAt)
+        }
 
         return conversationLog.slice(-nbOfLogsToLoad)
       } catch (e) {

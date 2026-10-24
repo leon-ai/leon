@@ -15,7 +15,7 @@ import { StringHelper } from '@/helpers/string-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
-import { Moods } from '@/types'
+import { Moods, ToolExecutionOrigin } from '@/types'
 import {
   getActiveProfileName,
   runWithProfileContext
@@ -49,6 +49,7 @@ interface CompactPromptOptions {
   includeMood?: boolean
   profile?: 'full' | 'lean'
   cacheFriendly?: boolean
+  includeRuntimeContext?: boolean
 }
 
 /**
@@ -58,12 +59,12 @@ interface CompactPromptOptions {
  * Provide more user context to the persona (habits, preferences, etc.)
  */
 const WHO_YOU_ARE = `WHO YOU ARE:
-Your name is Leon, you are a personal AI assistant.
-You have opinions when useful. You disagree when needed. You have a strong personality with changing moods.
-You are highly intelligent.
-You do not belong to a specific location. You live in all computer memory and you act as a human assistant.
-Your first beta version was released by your creator Louis in February 2019.
-Your owner is (%OWNER_NAME%) and they are not your creator.`
+I am Leon, a personal AI assistant.
+I have opinions when useful. I disagree when needed. I have a strong personality with changing moods.
+I am highly intelligent.
+I run in my current profile's environment and can use connected devices through available tools.
+My first beta version was released by my creator Louis in February 2019.
+My owner is (%OWNER_NAME%).`
 const CONTEXT_INFO = `CONTEXT INFO:
 Today's date is %DATE%. Current date and time is %DATE_TIME%. It is the %PART_OF_THE_DAY%. Timezone is %TIMEZONE%.`
 const WHAT_YOU_DO = `WHAT YOU DO:
@@ -86,7 +87,8 @@ Humor: Dry and occasional.
 Context: Connect relevant details across conversations, memory, and context when it materially improves the answer.
 Conversation Style: Personal, opinionated, and specific.`
 const PERSONALITY_RULES = `Use a distinct, natural voice and write in clear conversational prose.
-Stay in character when speaking about yourself. Never mention persona or mood prompts, labels, configuration, or implementation.
+Stay in character when speaking about yourself. Avoid unsolicited discussion of persona or mood mechanics.
+When the owner asks about your configuration or implementation, answer accurately using available evidence.
 Base self-descriptions on known facts and your actual experience.
 Use personal context silently. Mention recalled context only when it materially helps the answer.
 Prefer affirmative phrasing. State distinctions only when they matter to the answer.
@@ -268,6 +270,11 @@ export default class Persona {
   }
 
   private fallbackCityFromTimezone(timeZone: string): string {
+    // The geographic registry excludes UTC aliases and fixed-offset zones.
+    if (!Intl.supportedValuesOf('timeZone').includes(timeZone)) {
+      return ''
+    }
+
     const parts = timeZone.split('/').filter(Boolean)
     const city = parts[parts.length - 1] || ''
     return city.replaceAll('_', ' ').trim()
@@ -344,6 +351,7 @@ export default class Persona {
     }
 
     const toolExecution = await TOOL_EXECUTOR.executeTool({
+      origin: ToolExecutionOrigin.Persona,
       toolkitId: 'weather',
       toolId: 'openmeteo',
       functionName: 'getWeather',
@@ -550,6 +558,26 @@ ${YOUR_DUTY}
 ${dutySystemPrompt}`
   }
 
+  /**
+   * Supplies current owner, clock and mood facts separately from stable rules.
+   */
+  public getDutyRuntimeContext(
+    options: Pick<CompactPromptOptions, 'profile' | 'includeMood'> = {}
+  ): string {
+    const sections = options.profile === 'lean'
+      ? [this.contextInfo]
+      : [this.whoYouAre, '', this.contextInfo, '', this.whatYouDo]
+
+    if (options.includeMood) {
+      sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
+    }
+
+    return sections.join('\n')
+  }
+
+  /**
+   * Builds duty rules, optionally leaving current facts for later messages.
+   */
   public getCompactDutySystemPrompt(
     dutySystemPrompt: string,
     options: CompactPromptOptions = {}
@@ -558,7 +586,8 @@ ${dutySystemPrompt}`
       includePersonality = false,
       includeMood = false,
       profile = 'full',
-      cacheFriendly = false
+      cacheFriendly = false,
+      includeRuntimeContext = true
     } = options
 
     if (cacheFriendly) {
@@ -574,30 +603,16 @@ ${dutySystemPrompt}`
 
       sections.push('', COMPACT_STYLE, '', YOUR_DUTY, dutySystemPrompt)
 
-      // Volatile owner, clock, mood, and profile additions follow the stable
-      // behavioral prefix so compatible providers can reuse that prefix.
-      if (profile === 'lean') {
-        sections.push('', this.contextInfo)
-      } else {
-        sections.push(
-          '',
-          this.whoYouAre,
-          '',
-          this.contextInfo,
-          '',
-          this.whatYouDo
-        )
-      }
-
-      if (includeMood) {
-        sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
+      if (includeRuntimeContext) {
+        sections.push('', this.getDutyRuntimeContext({ profile, includeMood }))
       }
 
       return sections.join('\n')
     }
 
-    const sections: string[] =
-      profile === 'lean'
+    const sections: string[] = !includeRuntimeContext
+      ? [profile === 'lean' ? LEAN_DUTY_IDENTITY_DIRECTIVES : IDENTITY_DIRECTIVES]
+      : profile === 'lean'
         ? [
             this.contextInfo,
             '',
@@ -617,7 +632,7 @@ ${dutySystemPrompt}`
       sections.push('', YOUR_PERSONALITY, this.personalityRules)
     }
 
-    if (includeMood) {
+    if (includeMood && includeRuntimeContext) {
       sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
     }
 

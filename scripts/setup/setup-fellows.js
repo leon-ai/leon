@@ -1,4 +1,4 @@
-import execa from 'execa'
+import { execa } from 'execa'
 
 import { discoverFellows, FellowAuthType } from '@/core/llm-manager/fellows/fellow-discovery'
 import { connectFellow, startModelAccountSignIn } from '@/core/llm-manager/llm-accounts'

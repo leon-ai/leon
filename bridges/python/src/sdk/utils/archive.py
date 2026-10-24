@@ -4,6 +4,21 @@ from typing import Callable, Optional
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
+def extract_zip_archive(archive_path: str, target_path: str) -> None:
+    """Extract ZIP files when a host has no native archive command."""
+    destination = Path(target_path).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+
+    with ZipFile(archive_path) as archive:
+        for entry in archive.infolist():
+            filename = (destination / entry.filename).resolve()
+
+            if not filename.is_relative_to(destination):
+                raise ValueError('ZIP entry escapes its destination.')
+
+        archive.extractall(destination)
+
+
 def create_zip_archive(
     directory: str,
     destination: str,

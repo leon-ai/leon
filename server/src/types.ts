@@ -49,6 +49,22 @@ export enum ToolConcurrency {
 }
 
 /**
+ * Review is required unless a function opts into the single-lookup fast path.
+ */
+export enum ToolCompletionReview {
+  Required = 'required',
+  Optional = 'optional'
+}
+
+/**
+ * Identifies the caller so ambient activity is distinct from agent actions.
+ */
+export enum ToolExecutionOrigin {
+  Agent = 'agent',
+  Persona = 'persona'
+}
+
+/**
  * Routing mode
  */
 export enum RoutingMode {
@@ -100,6 +116,13 @@ export interface ConversationWidgetData {
 export interface LLMAnswerMetrics extends Partial<ContextUsageMetrics> {
   usageAccounting?: UsageAccounting | undefined
   completionCount?: number
+  /**
+   * Completion checks exclude retries from their count; their duration includes
+   * every attempt and remains part of the overall turn duration.
+   */
+  reviewCount?: number
+  reviewRetryCount?: number
+  reviewDurationMs?: number
   inputTokens: number
   outputTokens: number
   totalTokens: number
@@ -159,7 +182,7 @@ export interface AgentResponseToolCall {
  */
 export interface AgentResponseTrace {
   id?: string
-  inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' })[]
+  inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' | 'review' })[]
   progressMessages?: { id: string, content: string, createdAt: number }[]
   reasoning?: {
     id: string

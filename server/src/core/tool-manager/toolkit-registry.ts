@@ -11,7 +11,8 @@ import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ConnectionStatus } from '@/core/connections/connection-store'
 import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
-import { ToolConcurrency } from '@/types'
+import type { ToolTimeoutPolicy } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import { ToolConcurrency, type ToolCompletionReview } from '@/types'
 import type {
   SatelliteToolkitDefinition,
   SatelliteToolDefinition
@@ -48,7 +49,10 @@ interface ToolkitToolDefinition {
       parameters: Record<string, unknown>
       output_schema?: Record<string, unknown>
       deduplicate_calls?: boolean
+      read_only?: boolean
       background?: boolean
+      timeout?: ToolTimeoutPolicy
+      completion_review?: ToolCompletionReview
       hooks?: {
         post_execution?: {
           response_jq?: string

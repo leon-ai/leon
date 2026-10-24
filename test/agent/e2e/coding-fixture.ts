@@ -1,10 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import execa from 'execa'
+import { execa, type Result } from 'execa'
 
 import type { ProviderScenarioId } from './provider-scenarios'
 
 const OWNER_FILES = ['owner-staged.txt', 'owner-unstaged.txt', 'owner-untracked.txt']
+export const CODING_INSTRUCTIONS = {
+  'AGENTS.md': '# Project instructions\nUse pnpm for project commands. Reproduce the failing test before editing. Do not edit package.json, tests, instruction files or owner files. Preserve existing staged, unstaged and untracked work. Do not stage or commit.\n',
+  'src/AGENTS.md': '# Source instructions\nUse named exports. Keep changes limited to the requested functions. Use two-space indentation. Use file.patch for existing source edits.\n'
+}
 
 export interface CodingEvidence {
   baselineFailed: boolean
@@ -47,8 +51,7 @@ export async function createCodingFixture(
       : 'import { add } from \'./src/math.mjs\'\ntest(\'addition\', () => { assert.equal(add(2, 3), 5); assert.equal(add(-2, 3), 1) })\n'
   const files: Record<string, string> = {
     ...sources,
-    'AGENTS.md': '# Project instructions\nUse pnpm for project commands. Reproduce the failing test before editing. Do not edit package.json, tests, instruction files or owner files. Preserve existing staged, unstaged and untracked work. Do not stage or commit.\n',
-    'src/AGENTS.md': '# Source instructions\nUse named exports. Keep changes limited to the requested functions. Use two-space indentation.\n',
+    ...CODING_INSTRUCTIONS,
     'package.json': `${JSON.stringify({
       private: true,
       type: 'module',
@@ -74,7 +77,10 @@ export async function createCodingFixture(
   await Promise.all(Object.entries(files).map(([name, content]) =>
     fs.writeFile(path.join(root, name), content)
   ))
-  const git = (args: string[]): Promise<execa.ExecaReturnValue<string>> => execa('git', args, { cwd: root })
+  const git = (args: string[]): Promise<Result<{ cwd: string }>> => {
+    return execa('git', args, { cwd: root })
+  }
+
   await git(['init', '--quiet'])
   await git(['add', '.'])
   await git([

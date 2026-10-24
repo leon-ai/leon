@@ -1,4 +1,4 @@
-import { ToolkitConfig } from '@sdk/toolkit-config'
+import { ToolSettings } from '@/core/tool-manager/tool-settings'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { CONFIG_MANAGER } from '@/config'
 import { TOOLKIT_REGISTRY } from '@/core'
@@ -34,7 +34,7 @@ function getLegacyOAuthClientSettings(
   let settings: Record<string, unknown>
 
   try {
-    settings = ToolkitConfig.loadToolSettings(
+    settings = ToolSettings.loadToolSettings(
       tool.toolkit_id,
       tool.tool_id,
       {},
@@ -84,7 +84,7 @@ export async function getOAuthClientSettings(
     }
     // Keep unrelated configuration and remove plaintext only after read-back.
     try {
-      ToolkitConfig.saveToolSettings(tool.toolkit_id, tool.tool_id,
+      ToolSettings.saveToolSettings(tool.toolkit_id, tool.tool_id,
         Object.fromEntries(Object.keys(method.settings).map((key) => [key, null])),
         getActiveProfileName())
     } catch {

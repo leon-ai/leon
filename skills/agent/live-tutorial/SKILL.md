@@ -1,7 +1,7 @@
 ---
 name: live-tutorial
 description: Create an annotated MP4 tutorial from a workflow demonstrated in the owner's actual application. Use when asked for a tutorial video, not merely to watch an action live.
-compatibility: Leon runtime with managed Node.js, bundled ffmpeg-static, and an active profile and session.
+compatibility: Leon runtime with managed Node.js, the FFmpeg tool, and an active profile and session.
 metadata:
   author: "Louis Grenard <louis@getleon.ai>"
   version: "1.2.9"

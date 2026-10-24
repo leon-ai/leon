@@ -106,6 +106,9 @@ export class ConversationHistoryHelper {
 
     const optionalNumberKeys = [
       'completionCount',
+      'reviewCount',
+      'reviewRetryCount',
+      'reviewDurationMs',
       'finalAnswerOutputTokens',
       'finalAnswerDurationMs',
       'finalAnswerTokensPerSecond',

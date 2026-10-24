@@ -10,7 +10,7 @@ import path from 'node:path'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 import { LogHelper } from '@/helpers/log-helper'
-import { GLOBAL_DATA_PATH, API_VERSION } from '@/constants'
+import { GLOBAL_DATA_PATH, API_VERSION, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
 import {
   TOOLKIT_REGISTRY,
@@ -28,11 +28,11 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import { TOOL_EXECUTION_MANAGER } from './tool-execution-manager'
-import type { LongLanguageCode } from '@/types'
+import type { LongLanguageCode, ToolExecutionOrigin } from '@/types'
 import type {
   ToolModelFile,
   ToolRuntimeProgress
-} from '@sdk/tool-runtime-types'
+} from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
@@ -41,6 +41,7 @@ const TOOL_RUNTIME_LOG_PREFIX = '[LEON_TOOL_LOG]'
 const TOOL_RUNTIME_REPORT_PREFIX = '[LEON_TOOL_REPORT]'
 
 export interface ToolExecutionInput {
+  origin?: ToolExecutionOrigin | undefined
   toolId: string
   toolkitId?: string
   functionName?: string
@@ -58,6 +59,7 @@ export interface ToolExecutionResult {
   status: 'success' | 'error' | 'not_available' | 'invalid_input'
   message: string
   data: {
+    origin?: ToolExecutionOrigin | undefined
     tool_id: string
     toolkit_id: string | null
     function_name: string | null
@@ -70,7 +72,7 @@ export interface ToolExecutionResult {
   toolLabel?: string | undefined
 }
 
-export type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
+export type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 export default class ToolExecutor {
   private readonly globalAnswersCache = new Map<
@@ -281,6 +283,7 @@ export default class ToolExecutor {
         status: snapshot.execution.error ? 'error' : 'success',
         message: snapshot.execution.error || 'Tool execution is still running. Use system_utilities.tool_executions.wait/read with its id; do not restart it or claim completion.',
         data: {
+          ...(input.origin ? { origin: input.origin } : {}),
           tool_id: input.toolId,
           toolkit_id: input.toolkitId || null,
           function_name: input.functionName || null,
@@ -291,7 +294,27 @@ export default class ToolExecutor {
       }
     }
 
-    const result = await this.executeToolInternal(input)
+    let result = await this.executeToolInternal(input)
+
+    if (
+      input.retainExecution && sessionId &&
+      JSON.stringify(result.data.output).length > TOOL_RESULT_INLINE_MAX_CHARS
+    ) {
+      const snapshot = TOOL_EXECUTION_MANAGER.retain(
+        getActiveProfileName(),
+        sessionId,
+        `${input.toolkitId}.${input.toolId}.${input.functionName}`,
+        result
+      )
+
+      result = {
+        ...result,
+        data: {
+          ...result.data,
+          output: { ...result.data.output, execution: snapshot.execution }
+        }
+      }
+    }
 
     if (input.deferArtifactDelivery) {
       return result
@@ -360,6 +383,7 @@ export default class ToolExecutor {
 
     if (!resolvedTool) {
       return this.buildResult({
+        origin: input.origin,
         status: 'invalid_input',
         message: toolkitId
           ? 'Unknown tool_id for selected toolkit.'
@@ -394,6 +418,8 @@ export default class ToolExecutor {
       requiredConnections.forEach(emitConnectionWidget)
 
       return this.buildResult({
+
+        origin: input.origin,
         status: 'not_available',
         message: `Connect ${resolvedTool.toolName} using the connection widget in chat to continue.`,
         input: input.toolInput ?? null,
@@ -416,6 +442,8 @@ export default class ToolExecutor {
           : 'Tool is not available in the current runtime.')
 
       return this.buildResult({
+
+        origin: input.origin,
         status: 'error',
         message: reason,
         input: input.toolInput ?? null,
@@ -435,6 +463,7 @@ export default class ToolExecutor {
 
     if (!functionName) {
       return this.buildResult({
+        origin: input.origin,
         status: 'invalid_input',
         message: 'Missing function_name for selected tool.',
         input: input.toolInput ?? null,
@@ -451,6 +480,7 @@ export default class ToolExecutor {
 
     if (satelliteDeviceId && declaredConnections.length > 0) {
       return this.buildResult({
+        origin: input.origin,
         status: 'not_available',
         message: 'Tools using profile connections must run on the Leon server.',
         input: input.toolInput ?? null,
@@ -469,6 +499,7 @@ export default class ToolExecutor {
 
     if (input.executionTarget === 'satellite' && !satelliteDeviceId) {
       return this.buildResult({
+        origin: input.origin,
         status: 'not_available',
         message: 'No Satellite is connected for this tool.',
         input: input.toolInput ?? null,
@@ -496,6 +527,7 @@ export default class ToolExecutor {
         })
       } catch (error) {
         return this.buildResult({
+          origin: input.origin,
           status: 'error',
           message: error instanceof Error ? error.message : String(error),
           input: input.toolInput ?? null,
@@ -513,6 +545,7 @@ export default class ToolExecutor {
     )
     if (!functions || !functions[functionName]) {
       return this.buildResult({
+        origin: input.origin,
         status: 'invalid_input',
         message: `Unknown function_name "${functionName}" for selected tool.`,
         input: input.toolInput ?? null,
@@ -526,6 +559,7 @@ export default class ToolExecutor {
       input.parsedInput || this.parseToolInput(input.toolInput)
     if (!parsedInput) {
       return this.buildResult({
+        origin: input.origin,
         status: 'invalid_input',
         message: 'tool_input must be valid JSON.',
         input: input.toolInput ?? null,
@@ -543,6 +577,7 @@ export default class ToolExecutor {
       argsArray = this.mapArgs(parsedInput, functionConfig.parameters)
     } catch (error) {
       return this.buildResult({
+        origin: input.origin,
         status: 'invalid_input',
         message: (error as Error).message,
         input: input.toolInput ?? null,
@@ -586,6 +621,8 @@ export default class ToolExecutor {
       declaredConnections.forEach(emitConnectionWidget)
 
       return this.buildResult({
+
+        origin: input.origin,
         status: 'not_available',
         message:
           'This connection needs attention. Use the connection widget in chat to reconnect. If the encryption key is missing, restore the profile key.',
@@ -596,6 +633,11 @@ export default class ToolExecutor {
         output: { required_connections: declaredConnections }
       })
     }
+
+    const timeout = TOOLKIT_REGISTRY.getToolFunctions(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )?.[functionName]?.timeout
 
     const executeTool = (): ReturnType<typeof TOOL_WORKER_MANAGER.execute> =>
       TOOL_WORKER_MANAGER.execute(
@@ -612,6 +654,7 @@ export default class ToolExecutor {
           },
           ...(Object.keys(connections).length ? { connections } : {}),
           ...(input.signal ? { signal: input.signal } : {}),
+          ...(timeout ? { timeout } : {}),
           ...(input.onProgress ? { onProgress: input.onProgress } : {})
         },
         argsArray,
@@ -666,6 +709,7 @@ export default class ToolExecutor {
         runtimeOutput = await this.applyResponseJQ(runtimeResult.output, responseJQ)
       } catch (error) {
         return this.buildResult({
+          origin: input.origin,
           status: 'invalid_input',
           message: `response_jq failed: ${(error as Error).message}`,
           input: input.toolInput ?? null,
@@ -678,6 +722,7 @@ export default class ToolExecutor {
     }
 
     TOOL_CALL_LOGGER.recordToolCall({
+      origin: input.origin,
       toolkitId: resolvedTool.toolkitId,
       toolId: resolvedTool.toolId,
       functionName,
@@ -685,6 +730,7 @@ export default class ToolExecutor {
     })
 
     return this.buildResult({
+      origin: input.origin,
       status:
         runtimeResult.success && !toolReportedFailure ? 'success' : 'error',
       message: toolReportedFailure?.message || runtimeResult.message,
@@ -700,6 +746,7 @@ export default class ToolExecutor {
   }
 
   private async buildResult(params: {
+    origin?: ToolExecutionOrigin | undefined
     status: ToolExecutionResult['status']
     message: string
     input: string | null
@@ -713,6 +760,7 @@ export default class ToolExecutor {
       status: params.status,
       message: params.message,
       data: {
+        ...(params.origin ? { origin: params.origin } : {}),
         tool_id: params.resolvedTool?.toolId || '',
         toolkit_id: params.resolvedTool?.toolkitId || null,
         function_name: params.functionName ?? null,
@@ -728,6 +776,7 @@ export default class ToolExecutor {
     }
 
     const outputLogPath = await TOOL_CALL_LOGGER.recordToolOutput({
+      origin: params.origin,
       toolkitId: result.data.toolkit_id,
       toolId: result.data.tool_id || params.resolvedTool?.toolId || 'unknown',
       functionName: result.data.function_name,

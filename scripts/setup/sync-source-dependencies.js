@@ -3,7 +3,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 
-import execa from 'execa'
+import { execa } from 'execa'
 import YAML from 'yaml'
 
 import {
@@ -15,8 +15,9 @@ import {
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 import {
-  getProjectVenvPythonPath,
   getPyprojectDependencies,
+  getPythonProjectSyncFingerprint,
+  installPythonProjectDependencies,
   isPythonProjectSyncCurrent
 } from './setup-python-project-env'
 
@@ -32,6 +33,8 @@ const PNPM_POLICY_ENV_KEYS = {
   dangerouslyAllowAllBuilds: 'pnpm_config_dangerously_allow_all_builds',
   sideEffectsCache: 'pnpm_config_side_effects_cache',
   overrides: 'pnpm_config_overrides',
+  minimumReleaseAge: 'pnpm_config_minimum_release_age',
+  minimumReleaseAgeStrict: 'pnpm_config_minimum_release_age_strict',
   minimumReleaseAgeExclude: 'pnpm_config_minimum_release_age_exclude'
 }
 
@@ -202,6 +205,7 @@ export const syncPythonSourceDependencies = async (
   }
 
   const dependencies = await getPyprojectDependencies(sourcePath)
+  const fingerprint = await getPythonProjectSyncFingerprint(sourcePath)
 
   onInstall?.()
 
@@ -214,15 +218,7 @@ export const syncPythonSourceDependencies = async (
       venvPath
     ], { cwd: sourcePath, stdio })
 
-  if (dependencies.length > 0) {
-    await execa(UV_RUNTIME_BIN_PATH, [
-        'pip',
-        'install',
-        '--python',
-        getProjectVenvPythonPath(sourcePath),
-        ...dependencies
-      ], { cwd: sourcePath, stdio })
-  }
+  await installPythonProjectDependencies(sourcePath, dependencies, { stdio })
 
-  await fs.promises.writeFile(stampPath, path.resolve(sourcePath))
+  await fs.promises.writeFile(stampPath, fingerprint)
 }

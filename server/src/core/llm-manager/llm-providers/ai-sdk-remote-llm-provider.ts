@@ -25,6 +25,7 @@ import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
 import { OpenAIResponsesTransport } from './openai-responses-transport'
+import { ProviderPromptCache } from './prompt-cache'
 import { CHATGPT_CODEX_BASE_URL } from '../llm-accounts/chatgpt-account-config'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
@@ -44,6 +45,7 @@ import type {
   OpenAIToolCall,
   OpenAIToolChoice,
   ProviderReasoningItem,
+  ProviderMessageMetadata,
   PromptOrChatHistory,
   ProviderCompactionContext
 } from '@/core/llm-manager/types'
@@ -123,6 +125,7 @@ interface CallState {
   usedOutputTokens: number | undefined
   finishReason?: string
   compactionOutput?: Record<string, unknown>[]
+  messageParts: ProviderMessageMetadata['parts']
 }
 
 
@@ -138,6 +141,7 @@ export default class AISDKRemoteLLMProvider {
   private languageModel: LanguageModelV4
   private responsesModel: LanguageModelV4 | undefined
   private openAITransport: OpenAIResponsesTransport | undefined
+  private readonly promptCache = new ProviderPromptCache()
 
   constructor(
     config: AISDKRemoteProviderConfig
@@ -182,6 +186,15 @@ export default class AISDKRemoteLLMProvider {
 
   public get modelName(): string {
     return this.model
+  }
+
+  /**
+   * Identifies the selected transport even when a request fails before streaming.
+   */
+  public get transport(): 'http' | 'websocket' {
+    return this.config.flavor === 'openai-responses'
+      ? this.openAITransport?.transport ?? 'websocket'
+      : 'http'
   }
 
   /**
@@ -256,30 +269,70 @@ export default class AISDKRemoteLLMProvider {
   private createLanguageModel(
     flavor = this.config.flavor,
     contexts: ProviderCompactionContext[] = [],
-    onStreamEvent?: CompletionParams['onStreamEvent']
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    toolCalls: OpenAIToolCall[] = [],
+    cacheScope?: string
   ): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
+    const originalCalls = new Map<string, OpenAIToolCall>()
+
+    for (const call of toolCalls) {
+      try {
+        JSON.parse(call.function.arguments)
+        originalCalls.set(call.id, call)
+      } catch {
+        // Invalid arguments keep the SDK's structured recovery representation.
+      }
+    }
     const fetch: typeof globalThis.fetch = async (input, init) => {
       let response: Response
 
       if (this.config.flavor === 'openai-responses') {
-        if (contexts.length > 0) {
+        if (contexts.length > 0 || originalCalls.size > 0) {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-          body['input'] = replayCompactionWindows(
-            body['input'] as Record<string, unknown>[],
-            contexts
-          )
+          const items = body['input'] as Record<string, unknown>[]
+
+          // SDK object conversion changes whitespace in accepted arguments.
+          // Replay the canonical transcript's bytes, including any host redaction.
+          body['input'] = replayCompactionWindows(items.map((item) => {
+            const call = originalCalls.get(String(item['call_id']))
+
+            return item['type'] === 'function_call' && call &&
+              call.function.name === item['name']
+              ? { ...item, arguments: call.function.arguments }
+              : item
+          }), contexts)
           init = { ...init, body: JSON.stringify(body) }
         }
 
-        response = await this.getOpenAITransport().fetch(input, init)
+        return this.getOpenAITransport().fetch(input, init, onStreamEvent)
       } else {
         init?.signal?.throwIfAborted()
+        if (onStreamEvent && typeof init?.body === 'string') {
+          const { observation } = this.promptCache.prepare(
+            JSON.parse(init.body) as Record<string, unknown>,
+            this.compactionBinding,
+            true,
+            cacheScope
+          )
+          if (observation) {
+            onStreamEvent({ type: 'prompt-cache', promptCache: observation })
+          }
+        }
         this.recordInference(input instanceof Request ? input.url : String(input))
+        onStreamEvent?.({ type: 'request-dispatched', transport: this.transport })
 
         response = await globalThis.fetch(input, init)
       }
+
+      onStreamEvent?.({
+        type: 'response-headers',
+        transport: this.transport,
+        ...(response.headers.get('x-request-id')
+          ? { requestId: response.headers.get('x-request-id')! }
+          : {})
+      })
 
       if (!onStreamEvent || !response.body || !response.ok) {
         return response
@@ -292,10 +345,7 @@ export default class AISDKRemoteLLMProvider {
           if (chunk.byteLength > 0 && !init?.signal?.aborted) {
             onStreamEvent({
               type: 'transport-activity',
-              transport: this.config.flavor === 'openai-responses' &&
-                this.config.credentials?.['auth_kind'] !== 'chatgpt'
-                ? 'websocket'
-                : 'http'
+              transport: this.transport
             })
           }
 
@@ -468,8 +518,15 @@ export default class AISDKRemoteLLMProvider {
       ? this.getCompactionContexts(prompt)
       : []
 
-    if (contexts.length > 0 || onStreamEvent) {
-      return this.createLanguageModel(flavor, contexts, onStreamEvent)
+    const toolCalls = Array.isArray(prompt) && this.config.flavor === 'openai-responses'
+      ? prompt.flatMap((message) => message.role === 'assistant' ? message.toolCalls || [] : [])
+      : []
+
+    if (contexts.length > 0 || toolCalls.length > 0 || onStreamEvent) {
+      return this.createLanguageModel(
+        flavor, contexts, onStreamEvent, toolCalls,
+        completionParams.usagePurpose || completionParams.dutyType
+      )
     }
 
     if (flavor === 'open-responses') {
@@ -800,7 +857,22 @@ export default class AISDKRemoteLLMProvider {
         content.push({ type: 'reasoning', text: message.reasoning })
       }
       if (message.content.trim()) {
-        content.push({ type: 'text', text: message.content })
+        const metadata = message.providerMessage
+        const parts = metadata?.provider === this.config.providerName &&
+          metadata.binding === this.compactionBinding &&
+          metadata.parts.map((part) => part.text).join('').trim() === message.content.trim()
+          ? metadata.parts
+          : [{ text: message.content }]
+
+        for (const part of parts) {
+          content.push({
+            type: 'text',
+            text: part.text,
+            ...('phase' in part && part.phase ? {
+              providerOptions: { openai: { phase: part.phase } }
+            } : {})
+          })
+        }
       }
       for (const toolCall of message.toolCalls || []) {
         content.push({
@@ -1105,40 +1177,16 @@ export default class AISDKRemoteLLMProvider {
     }
 
     if (this.config.flavor === 'moonshotai') {
-      if (this.model === 'kimi-k3') {
-        // K3 always reasons and replaces K2's thinking object with a top-level
-        // effort. Recovery uses its lowest supported level instead of "none".
-        const reasoningEffort = reasoningMode === 'off' ||
-          reasoningMode === 'guarded'
-          ? 'low'
-          : completionParams.reasoningEffort
+      // Moonshot's supported models always reason. Short and recovery calls
+      // use the lowest effort instead of attempting to disable reasoning.
+      const reasoningEffort = reasoningMode === 'off' ||
+        reasoningMode === 'guarded' || completionParams.reasoningEffort === 'none'
+        ? 'low'
+        : completionParams.reasoningEffort
 
-        return reasoningEffort
-          ? { moonshotai: { reasoningEffort } }
-          : {}
-      }
-
-      if (!reasoningMode) {
-        return {}
-      }
-
-      if (reasoningMode === 'on') {
-        return {
-          moonshotai: {
-            thinking: { type: 'enabled' },
-            reasoningHistory: 'interleaved'
-          }
-        }
-      }
-
-      // K2 has no thinking-token budget control. Disable thinking for short
-      // guarded calls rather than sending an unsupported budget parameter.
-      return {
-        moonshotai: {
-          thinking: { type: 'disabled' },
-          reasoningHistory: 'disabled'
-        }
-      }
+      return reasoningEffort
+        ? { moonshotai: { reasoningEffort } }
+        : {}
     }
 
     if (this.config.flavor === 'cerebras') {
@@ -1153,9 +1201,17 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'groq') {
       if (reasoningMode === 'off') {
+        const entry = getLLMModelCatalogEntry(LLMProviders.Groq, this.model)
+
+        // Hiding reasoning is supported without inventing an effort value for
+        // an uncataloged model whose reasoning may be mandatory.
         return {
           groq: {
-            reasoningEffort: 'none',
+            ...(entry?.reasoning.includes('none')
+              ? { reasoningEffort: 'none' }
+              : entry?.reasoning.includes('low')
+                ? { reasoningEffort: 'low' }
+                : {}),
             reasoningFormat: 'hidden'
           }
         }
@@ -1196,7 +1252,11 @@ export default class AISDKRemoteLLMProvider {
       prompt: this.toTextPrompt(
         prompt,
         completionParams,
-        Boolean(normalizedSchema)
+        // Native schemas already constrain the response. Preserve the shared
+        // system prefix instead of adding redundant JSON instructions to it.
+        Boolean(normalizedSchema) &&
+          this.config.flavor !== 'openai-responses' &&
+          this.config.flavor !== 'anthropic'
       ),
       ...(completionParams.signal ? { abortSignal: completionParams.signal } : {}),
       ...(typeof completionParams.maxTokens === 'number'
@@ -1324,14 +1384,13 @@ export default class AISDKRemoteLLMProvider {
         }
       }
     } else if (this.config.flavor === 'moonshotai') {
-      providerOptions['moonshotai'] = completionParams.disableThinking === true
-        ? {
-            thinking: { type: 'disabled' }
-          }
-        : {
-            thinking: { type: 'enabled' },
-            reasoningHistory: 'interleaved'
-          }
+      Object.assign(
+        providerOptions,
+        this.buildManagedProviderOptions(
+          completionParams.disableThinking === true ? 'off' : 'on',
+          completionParams
+        )
+      )
     } else if (this.config.flavor === 'cerebras') {
       providerOptions['cerebras'] = completionParams.disableThinking === true
         ? {
@@ -1341,15 +1400,13 @@ export default class AISDKRemoteLLMProvider {
             reasoningEffort: 'high'
           }
     } else if (this.config.flavor === 'groq') {
-      providerOptions['groq'] = completionParams.disableThinking === true
-        ? {
-            reasoningEffort: 'none',
-            reasoningFormat: 'hidden'
-          }
-        : {
-            reasoningEffort: 'medium',
-            reasoningFormat: 'parsed'
-          }
+      Object.assign(
+        providerOptions,
+        this.buildManagedProviderOptions(
+          completionParams.disableThinking === true ? 'off' : 'on',
+          completionParams
+        )
+      )
     }
 
     // OpenRouter's SDK omits tool_choice when the tool list is empty. Preserve
@@ -1363,11 +1420,32 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'openrouter') {
       const sessionId = getActiveConversationSessionId()
+
+      // Cache the growing conversation as well as the stable system prefix.
+      if (completionParams.promptCacheKey) {
+        providerOptions['openrouter'] = {
+          ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
+          cacheControl: { type: 'ephemeral' }
+        }
+      }
+
       if (sessionId) {
         // Stable session routing lets gateway providers reuse their prompt cache.
         providerOptions['openrouter'] = {
           ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
           session_id: sessionId
+        }
+      }
+    }
+
+    if (this.config.flavor === 'cerebras' && completionParams.promptCacheKey) {
+      const sessionId = getActiveConversationSessionId()
+
+      // Routing hints belong to one conversation, not the shared agent prefix.
+      if (sessionId) {
+        providerOptions['cerebras'] = {
+          ...(providerOptions['cerebras'] as Record<string, unknown> | undefined),
+          promptCacheKey: sessionId
         }
       }
     }
@@ -1428,6 +1506,7 @@ export default class AISDKRemoteLLMProvider {
       text: '',
       reasoning: '',
       reasoningItems: new Map(),
+      messageParts: [],
       toolCallsById: {},
       toolCallOrder: [],
       usedInputTokens: undefined,
@@ -1436,12 +1515,29 @@ export default class AISDKRemoteLLMProvider {
   }
 
   /**
-   * Keeps the latest server compaction and all output after it in provider order.
+   * Retains assistant message boundaries and the latest server compaction window.
    */
-  private captureCompactionOutput(state: CallState, output: unknown): void {
+  private captureResponseOutput(state: CallState, output: unknown): void {
     if (this.config.flavor !== 'openai-responses' || !Array.isArray(output)) {
       return
     }
+
+    state.messageParts = output.flatMap((item) => {
+      if (item?.type !== 'message' || item.role !== 'assistant' || !Array.isArray(item.content)) {
+        return []
+      }
+
+      return item.content.flatMap((part: Record<string, unknown>) =>
+        part['type'] === 'output_text' && typeof part['text'] === 'string'
+          ? [{
+              text: part['text'],
+              ...(item.phase === 'commentary' || item.phase === 'final_answer'
+                ? { phase: item.phase as 'commentary' | 'final_answer' }
+                : {})
+            }]
+          : []
+      )
+    })
 
     const index = output.findLastIndex((item) =>
       item?.type === 'compaction' &&
@@ -1610,6 +1706,13 @@ export default class AISDKRemoteLLMProvider {
     state: CallState,
     prompt: PromptOrChatHistory
   ): Record<string, unknown> {
+    const providerMessage: ProviderMessageMetadata | undefined = state.messageParts.length > 0
+      ? {
+          provider: LLMProviders.OpenAI,
+          binding: this.compactionBinding,
+          parts: state.messageParts
+        }
+      : undefined
     const toolCalls: OpenAIToolCall[] = state.toolCallOrder
       .map((toolCallId, index) => {
         const call = state.toolCallsById[toolCallId]
@@ -1635,6 +1738,7 @@ export default class AISDKRemoteLLMProvider {
       role: 'assistant',
       content: state.text,
       ...(state.reasoning ? { reasoning: state.reasoning } : {}),
+      ...(providerMessage ? { providerMessage } : {}),
       ...(state.reasoningItems.size > 0
         ? { reasoningItems: [...state.reasoningItems.values()] }
         : {}),
@@ -1649,6 +1753,7 @@ export default class AISDKRemoteLLMProvider {
             : {}),
           message: {
             content: state.text,
+            ...(providerMessage ? { providerMessage } : {}),
             ...(compactionContext ? { compactionContext } : {}),
             ...(state.reasoning.length > 0
               ? { reasoning: state.reasoning }
@@ -1831,9 +1936,13 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel(completionParams, prompt)
+    const languageModel = this.getLanguageModel(
+      completionParams,
+      prompt,
+      completionParams.onStreamEvent
+    )
     const result = await languageModel.doGenerate(callOptions)
-    this.captureCompactionOutput(
+    this.captureResponseOutput(
       state,
       (result.response?.body as Record<string, unknown> | undefined)?.['output']
     )
@@ -1841,7 +1950,7 @@ export default class AISDKRemoteLLMProvider {
 
     completionParams.onStreamEvent?.({
       type: 'response-metadata',
-      transport: 'http',
+      transport: this.transport,
       ...(result.response?.id ? { responseId: result.response.id } : {}),
       ...(result.response?.headers?.['x-request-id']
         ? { requestId: result.response.headers['x-request-id'] }
@@ -1906,22 +2015,30 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
+    // Concurrent conversations can use different transports after fallback.
+    let transport = this.transport
     const languageModel = this.getLanguageModel(
       completionParams,
       prompt,
-      completionParams.onStreamEvent
+      this.config.flavor === 'openai-responses' && completionParams.onStreamEvent
+        ? (event): void => {
+            if ('transport' in event && event.transport) {
+              transport = event.transport
+            }
+
+            completionParams.onStreamEvent?.(event)
+          }
+        : completionParams.onStreamEvent
     )
     const result = await languageModel.doStream(callOptions)
     const outputItems: Record<string, unknown>[] = []
+    let hasCompleteOutput = false
 
     // Clear a previous attempt's provisional text without claiming model output.
     completionParams.onToken?.('')
     completionParams.onStreamEvent?.({
       type: 'stream-open',
-      transport: this.config.flavor === 'openai-responses' &&
-        this.config.credentials?.['auth_kind'] !== 'chatgpt'
-        ? 'websocket'
-        : 'http',
+      transport,
       ...(result.response?.headers?.['x-request-id']
         ? { requestId: result.response.headers['x-request-id'] }
         : {})
@@ -1933,6 +2050,17 @@ export default class AISDKRemoteLLMProvider {
 
       if (type === 'raw') {
         const raw = part['rawValue'] as Record<string, unknown> | undefined
+        const item = raw?.['item'] as Record<string, unknown> | undefined
+
+        // Providers can compact context after text ends, before terminal usage.
+        if (item?.['type'] === 'compaction') {
+          if (raw?.['type'] === 'response.output_item.added') {
+            completionParams.onStreamEvent?.({ type: 'compaction-start' })
+          } else if (raw?.['type'] === 'response.output_item.done') {
+            completionParams.onStreamEvent?.({ type: 'compaction-end' })
+          }
+        }
+
         if (
           raw?.['type'] === 'response.output_item.done' &&
           typeof raw['output_index'] === 'number'
@@ -1941,7 +2069,8 @@ export default class AISDKRemoteLLMProvider {
         }
         if (raw?.['type'] === 'response.completed') {
           const response = raw['response'] as Record<string, unknown>
-          this.captureCompactionOutput(state, response['output'])
+          this.captureResponseOutput(state, response['output'])
+          hasCompleteOutput = Array.isArray(response['output']) && response['output'].length > 0
         }
         continue
       }
@@ -2117,9 +2246,9 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
-    if (!state.compactionOutput) {
+    if (!hasCompleteOutput) {
       // Some completed events omit output; item events retain the ordered window.
-      this.captureCompactionOutput(state, outputItems)
+      this.captureResponseOutput(state, outputItems)
     }
 
     await this.completeMediaOutput(state)
@@ -2133,24 +2262,15 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<AxiosResponse> {
     completionParams.signal?.throwIfAborted()
     this.checkAPIKey()
-    const abort = (): void => {
-      // The WebSocket fetch adapter stops reading on abort but leaves the
-      // response in flight. Never reuse that socket for the next owner's turn.
-      this.openAITransport?.close()
-    }
-    completionParams.signal?.addEventListener('abort', abort, { once: true })
-    try {
-      const responseData = await (completionParams.shouldStream === true || this.config.credentials?.['auth_kind'] === 'chatgpt'
-        ? this.runStreamingCompletion(prompt, completionParams)
-        : this.runNonStreamingCompletion(prompt, completionParams))
-      completionParams.signal?.throwIfAborted()
-      return { data: responseData } as AxiosResponse
-    } finally {
-      completionParams.signal?.removeEventListener('abort', abort)
-      // Also close a connection that finished opening after cancellation.
-      if (completionParams.signal?.aborted) {
-        this.openAITransport?.close()
-      }
-    }
+
+    const shouldStream = completionParams.shouldStream === true ||
+      this.config.credentials?.['auth_kind'] === 'chatgpt'
+    const responseData = await (shouldStream
+      ? this.runStreamingCompletion(prompt, completionParams)
+      : this.runNonStreamingCompletion(prompt, completionParams))
+
+    completionParams.signal?.throwIfAborted()
+
+    return { data: responseData } as AxiosResponse
   }
 }

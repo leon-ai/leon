@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Dict, Optional, Union, List, Any, cast
 from pypdl import Pypdl
 from urllib.parse import urlparse, quote
-from .tool_runtime_types import ToolExecutionContext, ToolModelFile
+from .tool_runtime_types import ToolExecutionContext, ToolModelFile, ToolProgressStream
 from .toolkit_config import ToolkitConfig
 from .leon import leon
 from .utils import (
@@ -57,7 +57,7 @@ NVIDIA_LIBRARY_FOLDERS = [
 ]
 
 COMMAND_OUTPUT_PROGRESS_INTERVAL_SECONDS = 2.0
-COMMAND_OUTPUT_MAX_CHARS = 4_000
+OUTPUT_CHUNK_MAX_CHARS = 4_000
 COMMAND_OUTPUT_CHUNK_BYTES = 4_096
 COMMAND_READER_CLEANUP_SECONDS = 1.0
 
@@ -101,6 +101,47 @@ class BaseTool(ABC):
         """Reset per-call evidence when a host prepares this tool for execution."""
         self.execution_context = context
         self._model_files.clear()
+
+    def emit_output(
+        self,
+        output: str,
+        stream: ToolProgressStream | None = None,
+        context: ToolExecutionContext | None = None,
+    ) -> None:
+        """Emit bounded text chunks using the original call context for retained work."""
+        context = context if context is not None else self.execution_context
+        if not output:
+            return
+
+        for offset in range(0, len(output), OUTPUT_CHUNK_MAX_CHARS):
+            if context and context.signal and context.signal.is_set():
+                return
+
+            chunk = output[offset : offset + OUTPUT_CHUNK_MAX_CHARS]
+            if context and context.on_progress:
+                context.on_progress({
+                    "source": "report",
+                    "activity": True,
+                    "key": "bridges.tools.output_delta",
+                    "message": chunk,
+                    "data": {"output": chunk},
+                    **({"stream": stream} if stream else {}),
+                })
+            else:
+                self.report("bridges.tools.output_delta", {"output": chunk})
+
+    def emit_progress(
+        self, message: str, context: ToolExecutionContext | None = None
+    ) -> None:
+        """Report advancing work without fabricating output or exposing private data."""
+        context = context if context is not None else self.execution_context
+        if context and context.signal and context.signal.is_set():
+            return
+
+        if context and context.on_progress:
+            context.on_progress({"source": "report", "message": message, "activity": True})
+        else:
+            self.log(message)
 
     def create_artifact(
         self, file_path: str, mime_type: str, filename: str | None = None
@@ -297,15 +338,13 @@ class BaseTool(ABC):
     def _get_tool_dir(self, module_file: str) -> str:
         return os.path.dirname(os.path.abspath(module_file))
 
-    def _format_command_output(
-        self, output: str, preserve_whitespace: bool = False
-    ) -> Optional[str]:
+    def _format_command_output(self, output: str) -> Optional[str]:
         trimmed = output.strip()
         if not trimmed:
             return None
 
-        value = output if preserve_whitespace else trimmed
-        max_length = COMMAND_OUTPUT_MAX_CHARS
+        value = trimmed
+        max_length = OUTPUT_CHUNK_MAX_CHARS
         if len(value) <= max_length:
             return value
 
@@ -320,19 +359,6 @@ class BaseTool(ABC):
 
         self.report(
             "bridges.tools.command_output",
-            {"command": command, "output": formatted},
-            tool_group_id,
-        )
-
-    def _report_command_output_delta(
-        self, output: str, command: str, tool_group_id: Optional[str]
-    ) -> None:
-        formatted = self._format_command_output(output, preserve_whitespace=True)
-        if not formatted:
-            return
-
-        self.report(
-            "bridges.tools.command_output_delta",
             {"command": command, "output": formatted},
             tool_group_id,
         )
@@ -515,9 +541,7 @@ class BaseTool(ABC):
                 ):
                     return
 
-                self._report_command_output_delta(
-                    pending_output, command_string, tool_group_id
-                )
+                self.emit_output(pending_output)
                 pending_output = ""
                 last_output_reported_at = now
 
@@ -526,9 +550,7 @@ class BaseTool(ABC):
                 if not pending_output:
                     return
 
-                self._report_command_output_delta(
-                    pending_output, command_string, tool_group_id
-                )
+                self.emit_output(pending_output)
                 pending_output = ""
                 last_output_reported_at = time.time()
 
@@ -990,7 +1012,9 @@ class BaseTool(ABC):
                 # Use pypdl to download the file properly
                 dl = Pypdl()
 
-                if self.cli_progress:
+                if self.cli_progress or (
+                    self.execution_context and self.execution_context.on_progress
+                ):
                     # Start download without blocking and with custom progress tracking
                     dl.start(
                         url=adjusted_url,
@@ -1280,7 +1304,9 @@ class BaseTool(ABC):
             # Use pypdl to download the file
             dl = Pypdl()
 
-            if self.cli_progress:
+            if self.cli_progress or (
+                self.execution_context and self.execution_context.on_progress
+            ):
                 # Start download without blocking and with custom progress tracking
                 dl.start(url=url, file_path=download_path, display=False, block=False)
 
@@ -1378,6 +1404,8 @@ class BaseTool(ABC):
         """
         last_logged_percentage = -1
         last_log_time = 0
+        last_reported_bytes = 0
+        context = self.execution_context
         LOG_INTERVAL_MS = 2000  # Log every 2 seconds at most
         PERCENTAGE_THRESHOLD = 5  # Log every 5% progress
 
@@ -1395,6 +1423,14 @@ class BaseTool(ABC):
             )
 
             if should_log:
+                downloaded_bytes = float(getattr(dl_any, "doneMB", 0) or 0) * 1_024 * 1_024
+                last_reported_bytes = min(last_reported_bytes, downloaded_bytes)
+                if downloaded_bytes > last_reported_bytes:
+                    self.emit_progress(
+                        f"Downloading {file_name}: {format_bytes(downloaded_bytes)}", context
+                    )
+                    last_reported_bytes = downloaded_bytes
+
                 speed_info = ""
                 speed_value = getattr(dl_any, "speed", None)
                 if speed_value and speed_value > 0:
@@ -1419,7 +1455,8 @@ class BaseTool(ABC):
                     )
 
                 progress_line = f"Downloading {file_name}: {current_progress}%{speed_info}{eta_info}{size_info}"
-                self.log(progress_line)
+                if self.cli_progress:
+                    self.log(progress_line)
 
                 last_logged_percentage = current_progress
                 last_log_time = current_time
@@ -1429,7 +1466,8 @@ class BaseTool(ABC):
             failed = bool(getattr(dl_any, "Failed", False))
 
         # Log completion
-        self.log(f"Download completed: {file_name}")
+        if self.cli_progress:
+            self.log(f"Download completed: {file_name}")
 
         if bool(getattr(dl_any, "Failed", False)):
             raise Exception("Download failed")
