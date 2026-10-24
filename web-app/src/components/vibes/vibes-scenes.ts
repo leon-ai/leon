@@ -119,7 +119,7 @@ const SCENE_PRESENTATION_BASE = {
   light: {
     brightness: 1,
     contrast: 1.03,
-    opacity: .9,
+    opacity: .28,
     saturation: 1
   }
 } as const
@@ -164,7 +164,7 @@ const SCENE_PRESENTATION_OVERRIDES: Partial<Record<
       brightness: 1,
       contrast: 1.03,
       maskOpacity: .14,
-      opacity: .9,
+      opacity: .3,
       saturation: 1
     }
   },
@@ -180,7 +180,7 @@ const SCENE_PRESENTATION_OVERRIDES: Partial<Record<
       brightness: 1,
       contrast: 1.03,
       maskOpacity: .16,
-      opacity: .9,
+      opacity: .31,
       saturation: .96
     }
   }
