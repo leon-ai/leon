@@ -646,6 +646,23 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: []
   },
   /**
+   * @see https://openrouter.ai/moonshotai/kimi-k3.1-pro Model-specific reasoning support.
+   * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'moonshotai/kimi-k3.1-pro',
+    contextWindowTokens: 1_048_576,
+    label: 'moonshotai/kimi-k3.1-pro',
+    recommended: true,
+    supportsForcedToolChoice: true,
+    supportsTemperature: false,
+    defaultReasoningEffort: 'max',
+    reasoning: OPENROUTER_KIMI_K3_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: VIDEO_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/moonshotai/kimi-k3 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */

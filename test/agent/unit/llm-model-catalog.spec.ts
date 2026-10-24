@@ -87,7 +87,7 @@ describe('LLM model catalog', () => {
     ])
     expect(getLLMModelCatalogEntry(
       LLMProviders.OpenRouter,
-      'moonshotai/kimi-k3'
+      'moonshotai/kimi-k3.1-pro'
     )?.reasoning).toEqual(['auto', 'none', 'low', 'high', 'max'])
     expect(getLLMModelCatalogEntry(
       LLMProviders.MoonshotAI,
