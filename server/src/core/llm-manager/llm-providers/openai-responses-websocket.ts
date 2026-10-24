@@ -13,6 +13,9 @@ const EXPIRED_CONTINUATION_CODES = new Set([
   'previous_response_not_found',
   'previous_response_id_not_found'
 ])
+// Retire idle connections before the provider's 60-minute lifetime expires.
+const MAXIMUM_CONNECTION_AGE_MS = 55 * 60_000
+const CONNECTION_LIMIT_ERROR_CODE = 'websocket_connection_limit_reached'
 const TERMINAL_EVENTS = new Set([
   'response.completed',
   'response.failed',
@@ -26,6 +29,7 @@ const TERMINAL_EVENTS = new Set([
  */
 export class OpenAIResponsesWebSocket {
   private socket: WebSocket | undefined
+  private connectedAt = 0
   private previous: CompletedResponse | undefined
   public busy = false
 
@@ -39,6 +43,7 @@ export class OpenAIResponsesWebSocket {
    */
   public close(): void {
     this.previous = undefined
+    this.connectedAt = 0
     this.socket?.terminate()
     this.socket = undefined
   }
@@ -96,6 +101,7 @@ export class OpenAIResponsesWebSocket {
         let finished = false
         let hasOutput = false
         let retriedContinuation = false
+        let retriedConnection = false
         const cleanup = (): void => {
           finished = true
           socket.off('message', onMessage)
@@ -123,19 +129,66 @@ export class OpenAIResponsesWebSocket {
         const onAbort = (): void => {
           fail(signal?.reason)
         }
-        const onMessage = (data: RawData): void => {
+        const send = (request: Record<string, unknown>): void => {
+          socket.send(JSON.stringify(request), (error) => {
+            if (error) {
+              fail(error)
+            }
+          })
+        }
+        const listen = (): void => {
+          socket.on('message', onMessage)
+          socket.on('error', onError)
+          socket.on('close', onClose)
+        }
+        const onMessage = async (data: RawData): Promise<void> => {
           try {
             const text = data.toString()
             const event = JSON.parse(text) as Record<string, unknown>
             const error = event['error'] as Record<string, unknown> | undefined
+            const code = error?.['code'] ?? event['code']
+
+            // An explicit rejection before any response events is safe to
+            // replay. New sockets cannot use connection-local response IDs.
+            if (event['type'] === 'error' && !hasOutput &&
+              !retriedConnection && code === CONNECTION_LIMIT_ERROR_CODE) {
+              retriedConnection = true
+              socket.off('message', onMessage)
+              socket.off('error', onError)
+              socket.off('close', onClose)
+              this.close()
+              socket = await this.connect()
+              signal?.throwIfAborted()
+
+              if (finished) {
+                return
+              }
+
+              listen()
+              send({ ...options, type: 'response.create', input })
+              return
+            }
 
             // A server can expire its connection-local response cache. Retry
             // only a rejected continuation, before any generation was emitted.
             if (event['type'] === 'error' && canContinue && !hasOutput &&
               !retriedContinuation &&
-              EXPIRED_CONTINUATION_CODES.has(String(error?.['code'] ?? event['code']))) {
+              EXPIRED_CONTINUATION_CODES.has(String(code))) {
               retriedContinuation = true
-              socket.send(JSON.stringify({ ...options, type: 'response.create', input }))
+              send({ ...options, type: 'response.create', input })
+              return
+            }
+
+            // WebSocket errors have a different envelope from SSE errors.
+            // Preserve their meaning before the SDK validates response chunks.
+            if (event['type'] === 'error') {
+              const message = error?.['message'] ?? event['message'] ??
+                'The provider WebSocket request failed.'
+
+              fail(Object.assign(
+                new Error(String(message)),
+                { code, statusCode: event['status'], error }
+              ))
               return
             }
 
@@ -180,18 +233,12 @@ export class OpenAIResponsesWebSocket {
           }
         }
 
-        socket.on('message', onMessage)
-        socket.on('error', onError)
-        socket.on('close', onClose)
+        listen()
         signal?.addEventListener('abort', onAbort, { once: true })
 
         try {
           signal?.throwIfAborted()
-          socket.send(JSON.stringify(request), (error) => {
-            if (error) {
-              fail(error)
-            }
-          })
+          send(request)
         } catch (error) {
           fail(error)
         }
@@ -208,11 +255,12 @@ export class OpenAIResponsesWebSocket {
   }
 
   private async connect(): Promise<WebSocket> {
-    if (this.socket?.readyState === WebSocket.OPEN) {
+    if (this.socket?.readyState === WebSocket.OPEN &&
+      Date.now() - this.connectedAt < MAXIMUM_CONNECTION_AGE_MS) {
       return this.socket
     }
 
-    this.previous = undefined
+    this.close()
     const socket = new WebSocket(this.url, {
       headers: this.headers,
       followRedirects: false
@@ -240,6 +288,7 @@ export class OpenAIResponsesWebSocket {
       }
       const onOpen = (): void => {
         cleanup()
+        this.connectedAt = Date.now()
         resolve(socket)
       }
       const onError = (error: Error): void => {
