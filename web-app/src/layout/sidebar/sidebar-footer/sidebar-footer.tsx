@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 
 import { Tooltip } from '@/components/tooltip'
+import { getPublicAssetPath } from '@/config'
 
 import './sidebar-footer.sass'
 
@@ -11,11 +12,11 @@ const LEON_VERSION = '2.0.0-alpha.1+dev'
 export type Mood = 'sad' | 'cocky' | 'tired' | 'angry' | 'happy'
 
 const MOOD_ASSET_PATHS: Record<Mood, string> = {
-  sad: '/img/moods/sad.svg',
-  cocky: '/img/moods/cocky.svg',
-  tired: '/img/moods/tired.svg',
-  angry: '/img/moods/angry.svg',
-  happy: '/img/moods/happy.svg'
+  sad: getPublicAssetPath('img/moods/sad.svg'),
+  cocky: getPublicAssetPath('img/moods/cocky.svg'),
+  tired: getPublicAssetPath('img/moods/tired.svg'),
+  angry: getPublicAssetPath('img/moods/angry.svg'),
+  happy: getPublicAssetPath('img/moods/happy.svg')
 }
 
 type MoodIconStyle = CSSProperties & {

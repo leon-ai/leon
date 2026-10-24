@@ -172,14 +172,41 @@ export default class HTTPServer {
    * Bootstrap API
    */
   private async bootstrap(): Promise<void> {
+    const legacyWebAppDistPath = join(CODEBASE_PATH, 'app', 'dist')
+    const webAppDistPath = join(CODEBASE_PATH, 'web-app', 'dist')
+
     // Render the web app
     this.fastify.register(fastifyStatic, {
-      root: join(CODEBASE_PATH, 'app', 'dist'),
+      root: legacyWebAppDistPath,
       prefix: '/'
     })
     this.fastify.get('/', (_request, reply) => {
       reply.sendFile('index.html')
     })
+    this.fastify.get('/web-app', (_request, reply) => {
+      return reply.redirect('/web-app/')
+    })
+
+    // Keep the in-progress 2.0 app isolated until it replaces the legacy app.
+    this.fastify.register(async (webApp) => {
+      await webApp.register(fastifyStatic, {
+        root: webAppDistPath,
+        prefix: '/',
+        decorateReply: false
+      })
+      webApp.setNotFoundHandler((request, reply) => {
+        const requestPath = request.url.split('?')[0] || ''
+
+        if (
+          request.method === 'GET' &&
+          path.extname(requestPath) === ''
+        ) {
+          return reply.type('text/html').sendFile('index.html', webAppDistPath)
+        }
+
+        return reply.code(404).send()
+      })
+    }, { prefix: '/web-app' })
 
     this.fastify.register(profileAuthRoutes, { apiVersion: API_VERSION })
     this.fastify.addHook('onRequest', async (request, reply) => {

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type TransitionEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
+import { getPublicAssetPath } from '@/config'
+
 import './sidebar.sass'
 import { Button } from '@/components/button'
 import { Dialog } from '@/components/dialog'
@@ -22,8 +24,10 @@ import { Menu } from './menu'
 import { SessionList } from './session-list'
 import { SidebarFooter } from './sidebar-footer'
 
-const DARK_THEME_LOGO_SRC = '/img/logo-for-dark-bg-text.svg'
-const LIGHT_THEME_LOGO_SRC = '/img/logo-for-light-bg-text.svg'
+const DARK_THEME_LOGO_SRC = getPublicAssetPath('img/logo-for-dark-bg-text.svg')
+const LIGHT_THEME_LOGO_SRC = getPublicAssetPath(
+  'img/logo-for-light-bg-text.svg'
+)
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SCROLL_MASK_FADE_DISTANCE_PX = 54
 
