@@ -6,10 +6,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 
 import { OpenAIResponsesTransport } from '@/core/llm-manager/llm-providers/openai-responses-transport'
+import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
+import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
+import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
+import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 
 vi.mock('@/config', () => ({ CONFIG_MANAGER: { getConfig: (): object => ({}) } }))
+vi.mock('@/core', () => ({ BRAIN: { wernicke: vi.fn() } }))
+vi.mock('@/core/config-states/config-state', () => ({ CONFIG_STATE: {} }))
+vi.mock('@/helpers/log-helper', () => ({
+  LogHelper: {
+    title: vi.fn(),
+    success: vi.fn(),
+    debug: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+    timeEnd: vi.fn()
+  }
+}))
 
 const OUTPUT = [{
   type: 'message', id: 'message', role: 'assistant', status: 'completed',
@@ -142,6 +158,79 @@ describe('Responses connection lifecycle', () => {
     expect(requests.every((item) => item['previous_response_id'] === undefined)).toBe(true)
   })
 
+  it('rotates aged connections and restores the full transcript', async () => {
+    let now = Date.now()
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const requests: Record<string, unknown>[] = []
+    let connections = 0
+
+    sockets.on('connection', (socket) => {
+      connections += 1
+      socket.on('message', (data) => {
+        requests.push(JSON.parse(data.toString()))
+        socket.send(JSON.stringify({
+          type: 'response.completed',
+          response: { id: 'response', output: OUTPUT }
+        }))
+      })
+    })
+    const next = [...INPUT, ...OUTPUT, { role: 'user', content: 'Continue.' }]
+
+    await request()
+    now += 55 * 60_000
+    await request(next)
+
+    expect(connections).toBe(2)
+    expect(requests[1]?.['input']).toEqual(next)
+    expect(requests[1]?.['previous_response_id']).toBeUndefined()
+  })
+
+  it.each([false, true])('bounds reconnection after an explicit connection expiry (rejected again=%s)', async (rejectedAgain) => {
+    const requests: Record<string, unknown>[] = []
+    let connections = 0
+    const error = {
+      code: 'websocket_connection_limit_reached',
+      message: 'Create a new websocket connection to continue.',
+      type: 'invalid_request_error'
+    }
+
+    sockets.on('connection', (socket) => {
+      connections += 1
+      socket.on('message', (data) => {
+        requests.push(JSON.parse(data.toString()))
+
+        if (requests.length === 2 || (rejectedAgain && requests.length > 2)) {
+          socket.send(JSON.stringify({ type: 'error', status: 400, error }))
+          return
+        }
+
+        socket.send(JSON.stringify({
+          type: 'response.completed',
+          response: { id: 'response', output: OUTPUT }
+        }))
+      })
+    })
+    const next = [...INPUT, ...OUTPUT, { role: 'user', content: 'Continue.' }]
+
+    await request()
+
+    if (rejectedAgain) {
+      await expect(request(next)).rejects.toMatchObject({
+        message: error.message,
+        code: error.code,
+        statusCode: 400
+      })
+    } else {
+      expect(await request(next)).toContain('response.completed')
+    }
+
+    expect(connections).toBe(2)
+    expect(requests).toHaveLength(3)
+    expect(requests[1]?.['previous_response_id']).toBe('response')
+    expect(requests[2]?.['previous_response_id']).toBeUndefined()
+    expect(requests[2]?.['input']).toEqual(next)
+  })
+
   it('cancels a pending response and reconnects with the full transcript', async () => {
     const requests: Record<string, unknown>[] = []
     sockets.on('connection', (socket) => {
@@ -164,6 +253,149 @@ describe('Responses connection lifecycle', () => {
 
     expect(requests[1]?.['input']).toEqual(INPUT)
     expect(requests[1]?.['previous_response_id']).toBeUndefined()
+  })
+
+  it.each([false, true])('bounds the SDK acceptance wait without canceling accepted generation (accepted=%s)', async (accepted) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const provider = new AISDKRemoteLLMProvider({
+      name: 'Fixture',
+      providerName: LLMProviders.OpenAI,
+      credentials: { api_key: 'fixture' },
+      apiKeyEnv: 'LEON_OPENAI_API_KEY',
+      model: 'gpt-6.1-sol',
+      baseURL: url.slice(0, -'/responses'.length),
+      flavor: 'openai-responses'
+    })
+    const requests: Record<string, unknown>[] = []
+    const onAttempt = vi.fn()
+    const onStreamEvent = vi.fn()
+    const onToken = vi.fn()
+    const reportError = vi.fn()
+    const closed = vi.fn()
+    const response = {
+      id: 'response',
+      model: 'gpt-6.1-sol',
+      created_at: 1,
+      status: 'in_progress',
+      output: []
+    }
+    let finish!: () => void
+
+    sockets.on('connection', (socket) => {
+      socket.on('close', closed)
+      socket.on('message', (data) => {
+        requests.push(JSON.parse(data.toString()))
+        const send = (event: Record<string, unknown>): void => {
+          socket.send(JSON.stringify(event))
+        }
+        const complete = (): void => {
+          send({ type: 'response.output_item.added', output_index: 0, item: {
+            ...OUTPUT[0], content: []
+          } })
+          send({
+            type: 'response.output_text.delta',
+            item_id: 'message',
+            output_index: 0,
+            content_index: 0,
+            delta: 'Ready.'
+          })
+          send({ type: 'response.output_item.done', output_index: 0, item: OUTPUT[0] })
+          send({ type: 'response.completed', response: {
+            ...response,
+            status: 'completed',
+            output: OUTPUT,
+            usage: { input_tokens: 10, output_tokens: 1, total_tokens: 11 }
+          } })
+        }
+
+        send({ type: 'response.created', response })
+
+        if (requests.length === 1) {
+          finish = complete
+
+          if (accepted) {
+            send({ type: 'response.in_progress', response })
+          }
+
+          return
+        }
+
+        complete()
+      })
+    })
+    const params: PreparedCompletionParams = {
+      dutyType: LLMDuties.ReAct,
+      systemPrompt: 'Answer the request.',
+      shouldStream: true,
+      timeout: 120_000,
+      temperature: 0,
+      data: null,
+      maxRetries: 1,
+      remoteProviderErrorRetries: 0,
+      onAttempt,
+      onStreamEvent,
+      onToken
+    }
+    const complete = (params: PreparedCompletionParams): ReturnType<typeof runCompletionAttempt> => {
+      return runCompletionAttempt(
+        provider,
+        LLMProviders.OpenAI,
+        'Continue the task.',
+        params,
+        'fixture',
+        (retry) => complete({ ...params, ...retry }),
+        reportError
+      )
+    }
+
+    try {
+      const pending = complete(params)
+      await vi.waitFor(() => expect(onStreamEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'provider-event',
+          providerEventType: accepted ? 'response.in_progress' : 'response.created'
+        })
+      ))
+
+      if (accepted) {
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(requests).toHaveLength(1)
+        expect(onAttempt).toHaveBeenCalledTimes(1)
+        expect(closed).not.toHaveBeenCalled()
+        finish()
+      } else {
+        expect(onStreamEvent).not.toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'stream-open' })
+        )
+        await vi.advanceTimersByTimeAsync(12_000)
+      }
+
+      await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
+      expect((await pending)?.output).toBe('Ready.')
+      expect(onToken.mock.calls.map(([token]) => token).filter(Boolean)).toEqual(['Ready.'])
+      expect(reportError).not.toHaveBeenCalled()
+
+      if (accepted) {
+        expect(requests).toHaveLength(1)
+        expect(onAttempt.mock.calls.at(-1)?.[0].requestAcceptedMs).toBeDefined()
+      } else {
+        const failure = onAttempt.mock.calls[1]![0]
+
+        expect(failure.outcome).toBe('LLMRequestAcceptanceTimeout')
+        expect(failure.elapsedMs - failure.requestDispatchMs).toBe(12_000)
+        expect(failure.lastEvent).toBe('response.created')
+        expect(failure.responseId).toBe(response.id)
+        expect(requests).toHaveLength(2)
+        expect(requests[1]?.['input']).toEqual(requests[0]?.['input'])
+        expect(requests[1]?.['previous_response_id']).toBeUndefined()
+        await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce())
+      }
+
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      provider.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it('uses HTTP after an unsupported handshake without retrying the handshake', async () => {
@@ -220,18 +452,36 @@ describe('Responses connection lifecycle', () => {
     await expect(request()).rejects.toMatchObject({ statusCode: status })
   })
 
-  it('reports a disconnected generation without replaying it over HTTP', async () => {
+  it.each(['disconnect', 'connection expiry'])('reports %s after output without transport replay', async (ending) => {
     const http = vi.fn()
+    const dispatched = vi.fn()
     server.on('request', http)
     sockets.on('connection', (socket) => {
       socket.on('message', () => {
+        dispatched()
         socket.send(JSON.stringify({
           type: 'response.output_text.delta', delta: 'Provisional.'
-        }), () => socket.close())
+        }))
+
+        if (ending === 'disconnect') {
+          socket.close()
+        } else {
+          socket.send(JSON.stringify({
+            type: 'error',
+            error: {
+              code: 'websocket_connection_limit_reached',
+              message: 'Connection expired.'
+            },
+            status: 400
+          }))
+        }
       })
     })
 
-    await expect(request()).rejects.toThrow('before terminal completion')
+    await expect(request()).rejects.toThrow(
+      ending === 'disconnect' ? 'before terminal completion' : 'Connection expired.'
+    )
+    expect(dispatched).toHaveBeenCalledOnce()
     expect(http).not.toHaveBeenCalled()
   })
 })

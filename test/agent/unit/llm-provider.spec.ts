@@ -520,6 +520,51 @@ describe('LLMProvider', () => {
     }
   })
 
+  it('retains the initial inference allowance after HTTP fallback', async () => {
+    vi.useFakeTimers()
+
+    try {
+      let params!: CompletionParams
+      let complete!: (result: unknown) => void
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = {
+        modelName: 'celeris-1',
+        transport: 'websocket',
+        runChatCompletion: vi.fn((_prompt, options: CompletionParams) => {
+          params = options
+          params.onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
+          return new Promise((resolve) => {
+            complete = resolve
+          })
+        })
+      }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const pending = manager.prompt('Think through the task.', {
+        dutyType: LLMDuties.ReAct,
+        shouldStream: true,
+        timeout: 120_000
+      })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      params.onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(params.signal?.aborted).toBe(false)
+      expect(state.agentLLMProvider.runChatCompletion).toHaveBeenCalledOnce()
+      params.onToken?.('Done')
+      params.onStreamEvent?.({ type: 'finish' })
+      complete({ data: { choices: [{ message: { content: 'Done' } }] } })
+
+      expect((await pending)?.output).toBe('Done')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['text', 'tool'] as const)(
     'separates inference from %s stream silence and retries without extending idle time',
     async (output) => {
