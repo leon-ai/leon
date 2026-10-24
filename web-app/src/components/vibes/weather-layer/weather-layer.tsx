@@ -5,11 +5,15 @@ import type { VibeWeatherCondition } from '@/components/vibes/vibes-scenes'
 import './weather-layer.sass'
 
 const DEVICE_PIXEL_RATIO_LIMIT = 2
-const EXIT_FADE_DISTANCE_PX = 32
+const ENTRY_FADE_DISTANCE_PX = 32
+const GLASS_DROPLET_AREA_PX = 10_000
+const GLASS_DROPLET_COUNT_MAXIMUM = 36
+const GLASS_DROPLET_COUNT_MINIMUM = 8
 const MAXIMUM_FRAME_DELTA_SECONDS = .04
 const PARTICLE_AREA_PX = 3_400
 const PARTICLE_COUNT_MINIMUM = 24
-const PARTICLE_COUNT_MAXIMUM = 96
+const PARTICLE_COUNT_MAXIMUM = 180
+const RAIN_PARTICLE_OPACITY_MULTIPLIER = 1.15
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SPAWN_FADE_DURATION_SECONDS = .22
 
@@ -17,6 +21,7 @@ type WeatherAnimationKind = 'rain' | 'snow'
 
 interface WeatherAnimationConfig {
   density: number
+  glassDensity: number
   kind: WeatherAnimationKind
   opacity: number
   seed: number
@@ -27,32 +32,36 @@ const WEATHER_ANIMATIONS: Partial<
   Record<VibeWeatherCondition, WeatherAnimationConfig>
 > = {
   drizzle: {
-    density: .58,
+    density: .9,
+    glassDensity: .48,
     kind: 'rain',
     opacity: .62,
     seed: 1_021,
-    speed: .72
+    speed: .4
   },
   rain: {
-    density: 1,
+    density: 1.6,
+    glassDensity: 1,
     kind: 'rain',
     opacity: 1,
     seed: 2_047,
-    speed: 1
+    speed: .55
   },
   storm: {
-    density: 1.32,
+    density: 2,
+    glassDensity: 1.25,
     kind: 'rain',
     opacity: 1.15,
     seed: 4_093,
-    speed: 1.24
+    speed: .78
   },
   snow: {
-    density: 1,
+    density: 1.65,
+    glassDensity: .8,
     kind: 'snow',
     opacity: 1,
     seed: 8_191,
-    speed: 1
+    speed: .68
   }
 }
 
@@ -71,6 +80,18 @@ interface WeatherParticle {
   speed: number
   x: number
   y: number
+}
+
+interface GlassDroplet {
+  age: number
+  baseY: number
+  holdDuration: number
+  opacity: number
+  radius: number
+  slideDistance: number
+  slideDuration: number
+  slides: boolean
+  x: number
 }
 
 function createSeededRandom(seed: number): () => number {
@@ -97,33 +118,57 @@ function createParticle(
   distributeVertically: boolean
 ): WeatherParticle {
   const depth = .35 + random() * .65
+  const age = distributeVertically ? SPAWN_FADE_DURATION_SECONDS : 0
 
   if (animation.kind === 'rain') {
     return {
-      age: distributeVertically ? SPAWN_FADE_DURATION_SECONDS : 0,
+      age,
       depth,
-      drift: -42 - random() * 54,
-      length: 7 + random() * 16,
-      opacity: (.12 + depth * .3) * animation.opacity,
+      drift: (-18 - random() * 30) * animation.speed,
+      length: 4 + random() * 9,
+      opacity: (.115 + depth * .23) * animation.opacity *
+        RAIN_PARTICLE_OPACITY_MULTIPLIER,
       phase: random() * Math.PI * 2,
-      size: .65 + depth,
-      speed: (420 + depth * 620) * animation.speed,
+      size: .35 + depth * .5 + random() * .15,
+      speed: (90 + depth * 180) * animation.speed,
       x: random() * width,
       y: distributeVertically ? random() * height : -24 - random() * height
     }
   }
 
   return {
-    age: distributeVertically ? SPAWN_FADE_DURATION_SECONDS : 0,
+    age,
     depth,
-    drift: -7 + random() * 14,
+    drift: -5 + random() * 10,
     length: 0,
-    opacity: (.22 + depth * .48) * animation.opacity,
+    opacity: (.2 + depth * .42) * animation.opacity,
     phase: random() * Math.PI * 2,
-    size: .65 + depth * 1.65,
-    speed: (16 + depth * 42) * animation.speed,
+    size: .25 + depth * .65 + random() * .35,
+    speed: (9 + depth * 27) * animation.speed,
     x: random() * width,
     y: distributeVertically ? random() * height : -8 - random() * height * .2
+  }
+}
+
+function createGlassDroplet(
+  width: number,
+  height: number,
+  random: () => number,
+  distributeCycle: boolean
+): GlassDroplet {
+  const holdDuration = 2.4 + random() * 7.6
+  const slideDuration = 1.4 + random() * 1.8
+
+  return {
+    age: distributeCycle ? random() * holdDuration : 0,
+    baseY: random() * height * .9,
+    holdDuration,
+    opacity: .12 + random() * .22,
+    radius: .7 + random() * 1.35,
+    slideDistance: 18 + random() * height * .22,
+    slideDuration,
+    slides: random() < .28,
+    x: random() * width
   }
 }
 
@@ -137,6 +182,20 @@ function getParticleCount(
     Math.max(PARTICLE_COUNT_MINIMUM, Math.round(
       width * height / PARTICLE_AREA_PX * density
     ))
+  )
+}
+
+function getAreaBasedCount(
+  width: number,
+  height: number,
+  areaPerItem: number,
+  density: number,
+  minimum: number,
+  maximum: number
+): number {
+  return Math.min(
+    maximum,
+    Math.max(minimum, Math.round(width * height / areaPerItem * density))
   )
 }
 
@@ -167,6 +226,7 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
     const motionPreference = window.matchMedia(REDUCED_MOTION_MEDIA_QUERY)
     const random = createSeededRandom(activeAnimation.seed)
     let animationFrame: number | null = null
+    let glassDroplets: GlassDroplet[] = []
     let height = 0
     let particles: WeatherParticle[] = []
     let previousTime = 0
@@ -184,11 +244,75 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
       Object.assign(particle, nextParticle)
     }
 
+    function resetGlassDroplet(droplet: GlassDroplet): void {
+      const nextDroplet = createGlassDroplet(
+        width,
+        height,
+        random,
+        false
+      )
+
+      Object.assign(droplet, nextDroplet)
+    }
+
+    function drawGlassDroplets(deltaSeconds: number): void {
+      for (const droplet of glassDroplets) {
+        droplet.age += deltaSeconds
+        const rawSlideProgress = droplet.slides
+          ? (droplet.age - droplet.holdDuration) / droplet.slideDuration
+          : 0
+        const slideProgress = clampOpacity(rawSlideProgress)
+
+        if (rawSlideProgress >= 1) {
+          resetGlassDroplet(droplet)
+          continue
+        }
+
+        const easedSlideProgress = slideProgress * slideProgress
+        const y = droplet.baseY + droplet.slideDistance * easedSlideProgress
+        const exitOpacity = 1 - clampOpacity((slideProgress - .68) / .32)
+        const opacity = droplet.opacity * exitOpacity
+
+        if (slideProgress > 0) {
+          const trailLength = Math.min(
+            18,
+            droplet.slideDistance * easedSlideProgress
+          )
+
+          renderingContext.beginPath()
+          renderingContext.lineCap = 'round'
+          renderingContext.lineWidth = Math.max(.45, droplet.radius * .42)
+          renderingContext.strokeStyle =
+            `rgba(191, 211, 229, ${opacity * .42})`
+          renderingContext.moveTo(droplet.x, y - droplet.radius)
+          renderingContext.lineTo(droplet.x, y - trailLength)
+          renderingContext.stroke()
+        }
+
+        renderingContext.beginPath()
+        renderingContext.fillStyle = `rgba(118, 148, 174, ${opacity * .2})`
+        renderingContext.strokeStyle = `rgba(223, 235, 245, ${opacity})`
+        renderingContext.lineWidth = .55
+        renderingContext.ellipse(
+          droplet.x,
+          y,
+          droplet.radius * .72,
+          droplet.radius * 1.18,
+          0,
+          0,
+          Math.PI * 2
+        )
+        renderingContext.fill()
+        renderingContext.stroke()
+      }
+    }
+
     function drawFrame(deltaSeconds: number, timeSeconds: number): void {
       renderingContext.clearRect(0, 0, width, height)
 
       for (const particle of particles) {
         particle.age += deltaSeconds
+
         const spawnOpacity = clampOpacity(
           particle.age / SPAWN_FADE_DURATION_SECONDS
         )
@@ -202,18 +326,14 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
             particle.x += width * .1
           }
 
-          const exitOpacity = clampOpacity(
-            (height - (particle.y - particle.length)) /
-            EXIT_FADE_DISTANCE_PX
-          )
           const entryOpacity = clampOpacity(
-            (particle.y + particle.length) / EXIT_FADE_DISTANCE_PX
+            (particle.y + particle.length) / ENTRY_FADE_DISTANCE_PX
           )
           const horizontalExitOpacity = clampOpacity(
-            (particle.x + 24) / EXIT_FADE_DISTANCE_PX
+            (particle.x + 24) / ENTRY_FADE_DISTANCE_PX
           )
           const opacity = particle.opacity * spawnOpacity * entryOpacity *
-            exitOpacity * horizontalExitOpacity
+            horizontalExitOpacity
 
           renderingContext.beginPath()
           renderingContext.lineCap = 'round'
@@ -228,7 +348,7 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
           continue
         }
 
-        const snowDrift = Math.sin(timeSeconds * .9 + particle.phase) * 8
+        const snowDrift = Math.sin(timeSeconds * .72 + particle.phase) * 6
 
         particle.x += (particle.drift + snowDrift) * deltaSeconds
         particle.y += particle.speed * deltaSeconds
@@ -241,18 +361,15 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
           resetParticle(particle)
         }
 
-        const verticalExitOpacity = clampOpacity(
-          (height - (particle.y - particle.size)) / EXIT_FADE_DISTANCE_PX
-        )
         const verticalEntryOpacity = clampOpacity(
-          (particle.y + particle.size) / EXIT_FADE_DISTANCE_PX
+          (particle.y + particle.size) / ENTRY_FADE_DISTANCE_PX
         )
         const horizontalExitOpacity = Math.min(
-          clampOpacity((particle.x + 8) / EXIT_FADE_DISTANCE_PX),
-          clampOpacity((width + 8 - particle.x) / EXIT_FADE_DISTANCE_PX)
+          clampOpacity((particle.x + 8) / ENTRY_FADE_DISTANCE_PX),
+          clampOpacity((width + 8 - particle.x) / ENTRY_FADE_DISTANCE_PX)
         )
         const opacity = particle.opacity * spawnOpacity *
-          verticalEntryOpacity * verticalExitOpacity * horizontalExitOpacity
+          verticalEntryOpacity * horizontalExitOpacity
 
         renderingContext.beginPath()
         renderingContext.fillStyle = `rgba(245, 245, 247, ${opacity})`
@@ -264,6 +381,11 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
           Math.PI * 2
         )
         renderingContext.fill()
+      }
+
+      // Precipitation remains behind droplets attached to the glass.
+      if (activeAnimation.kind === 'rain') {
+        drawGlassDroplets(deltaSeconds)
       }
     }
 
@@ -321,6 +443,21 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
         },
         () => createParticle(activeAnimation, width, height, random, true)
       )
+      glassDroplets = activeAnimation.kind === 'rain'
+        ? Array.from(
+            {
+              length: getAreaBasedCount(
+                width,
+                height,
+                GLASS_DROPLET_AREA_PX,
+                activeAnimation.glassDensity,
+                GLASS_DROPLET_COUNT_MINIMUM,
+                GLASS_DROPLET_COUNT_MAXIMUM
+              )
+            },
+            () => createGlassDroplet(width, height, random, true)
+          )
+        : []
       startAnimation()
     }
 
