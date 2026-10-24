@@ -24,6 +24,7 @@ const SETTLED_SNOWFLAKE_AREA_PX = 14_000
 const SETTLED_SNOWFLAKE_COUNT_MAXIMUM = 24
 const SETTLED_SNOWFLAKE_COUNT_MINIMUM = 8
 const SPAWN_FADE_DURATION_SECONDS = .22
+const TARGET_FRAME_DURATION_MS = 1_000 / 30
 
 type WeatherAnimationKind = 'rain' | 'snow'
 
@@ -520,14 +521,28 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
     }
 
     function render(time: number): void {
-      const deltaSeconds = previousTime === 0
-        ? 0
-        : Math.min(
-          (time - previousTime) / 1_000,
-          MAXIMUM_FRAME_DELTA_SECONDS
-        )
+      if (previousTime === 0) {
+        previousTime = time
+        drawFrame(0, time / 1_000)
+        animationFrame = window.requestAnimationFrame(render)
+        return
+      }
 
-      previousTime = time
+      const elapsedTime = time - previousTime
+
+      if (elapsedTime < TARGET_FRAME_DURATION_MS) {
+        animationFrame = window.requestAnimationFrame(render)
+        return
+      }
+
+      const deltaSeconds = Math.min(
+        elapsedTime / 1_000,
+        MAXIMUM_FRAME_DELTA_SECONDS
+      )
+
+      // Preserve the fractional remainder so browser timing jitter does not
+      // accidentally lower the effective frame rate below the target.
+      previousTime = time - elapsedTime % TARGET_FRAME_DURATION_MS
       drawFrame(deltaSeconds, time / 1_000)
       animationFrame = window.requestAnimationFrame(render)
     }
@@ -542,6 +557,10 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
     function startAnimation(): void {
       stopAnimation()
       previousTime = 0
+
+      if (width === 0 || height === 0) {
+        return
+      }
 
       if (document.hidden || motionPreference.matches) {
         drawFrame(0, 0)
