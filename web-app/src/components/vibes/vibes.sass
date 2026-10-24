@@ -1,4 +1,11 @@
 .vibes
+  // Scale the dark artwork's feather with the scene to blend into the page.
+  --vibes-edge-blend-width: 12%
+  --vibes-edge-blend-midpoint: calc(var(--vibes-edge-blend-width) * .5)
+  --vibes-top-edge-blend-midpoint: var(--vibes-edge-blend-midpoint)
+  --vibes-top-edge-blend-width: var(--vibes-edge-blend-width)
+  --vibes-inline-edge-mask: linear-gradient(90deg, transparent 0, rgba(0, 0, 0, .5) var(--vibes-edge-blend-midpoint), #000 var(--vibes-edge-blend-width), #000 calc(100% - var(--vibes-edge-blend-width)), rgba(0, 0, 0, .5) calc(100% - var(--vibes-edge-blend-midpoint)), transparent 100%)
+  --vibes-block-edge-mask: linear-gradient(180deg, transparent 0, rgba(0, 0, 0, .5) var(--vibes-top-edge-blend-midpoint), #000 var(--vibes-top-edge-blend-width), #000 100%)
   --vibes-scene-transition-duration: 30s
   --vibes-stage-inline-offset: clamp(80px, 5vw, 112px)
   --vibes-weather-blend-mode: normal
@@ -52,6 +59,13 @@
   left: calc(50% + var(--vibes-stage-inline-offset))
   width: min(100%, 1672px)
   aspect-ratio: 1672 / 941
+  // Intersect both gradients so every exposed edge reveals the theme background.
+  -webkit-mask-image: var(--vibes-inline-edge-mask), var(--vibes-block-edge-mask)
+  mask-image: var(--vibes-inline-edge-mask), var(--vibes-block-edge-mask)
+  -webkit-mask-composite: source-in
+  mask-composite: intersect
+  -webkit-mask-repeat: no-repeat
+  mask-repeat: no-repeat
   transform: translateX(-50%) scale(1.05)
   transform-origin: center bottom
   transition: opacity var(--transition-duration-main) var(--transition-timing-main)
