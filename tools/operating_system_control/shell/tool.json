@@ -4,7 +4,7 @@
   "toolkit_id": "operating_system_control",
   "name": "Shell",
   "description": "Run finite shell commands or retain command sessions with bounded output, stdin and optional PTY on the active platform.",
-  "icon_name": "terminal-box-line",
+  "icon_name": "terminal-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

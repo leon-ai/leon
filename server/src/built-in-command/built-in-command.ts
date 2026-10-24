@@ -111,7 +111,7 @@ export interface BuiltInCommandExecutionResult {
 export abstract class BuiltInCommand {
   protected description = ''
   protected required_parameters: RequiredParameter[] = []
-  protected icon_name = 'ri-terminal-box-line'
+  protected icon_name = 'ri-terminal-line'
   protected supported_usages: string[] = []
   protected help_usage = ''
   protected aliases: string[] = []

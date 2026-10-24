@@ -142,7 +142,7 @@ function createShellToolCall(
     toolCallTitle,
     toolkitName: 'Operating System Control',
     toolName: 'Shell',
-    toolIconName: 'terminal-box-line',
+    toolIconName: 'terminal-line',
     functionName: 'executeCommand',
     status,
     input: {
