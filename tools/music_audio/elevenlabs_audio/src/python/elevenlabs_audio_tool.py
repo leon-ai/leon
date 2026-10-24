@@ -8,7 +8,7 @@ from .lib.transcription_schema import TranscriptionOutput, TranscriptionSegment
 
 # Hardcoded default settings for ElevenLabs audio tool
 ELEVENLABS_AUDIO_API_KEY = None
-ELEVENLABS_AUDIO_MODEL = "scribe_v1"
+ELEVENLABS_AUDIO_MODEL = "scribe_v2"
 DEFAULT_SETTINGS = {
     "ELEVENLABS_AUDIO_API_KEY": ELEVENLABS_AUDIO_API_KEY,
     "ELEVENLABS_AUDIO_MODEL": ELEVENLABS_AUDIO_MODEL,
@@ -59,7 +59,7 @@ class ElevenLabsAudioTool(BaseTool):
         diarize: bool = True,
     ) -> str:
         """
-        Transcribe audio to a file using ElevenLabs' Scribe v1 API
+        Transcribe audio to a file using ElevenLabs' Scribe v2 API
 
         Args:
             input_path: Path to the audio file to transcribe
