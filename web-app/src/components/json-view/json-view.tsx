@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 
-import type { JsonValue } from '../../data/feed'
+import type { JsonValue } from '@/data/feed'
 
 import './json-view.sass'
 

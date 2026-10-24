@@ -5,15 +5,15 @@ import type {
   FeedToolsActivity,
   LeonFeedActivity,
   LeonFeedEntry
-} from '../../data/feed'
-import { ArtifactAttachments } from '../artifact-attachments'
-import { BonusResponse } from '../bonus-response'
-import { FinalAnswer } from '../final-answer'
-import { ProcessGroup } from '../process-group'
-import { StreamingText, useAnimateOnce } from '../streaming-text'
-import { TaskList } from '../task-list'
-import { ThinkingMessage } from '../thinking-message'
-import { ToolCallList } from '../tool-call-list'
+} from '@/data/feed'
+import { ArtifactAttachments } from '@/components/artifact-attachments'
+import { BonusResponse } from '@/components/bonus-response'
+import { FinalAnswer } from '@/components/final-answer'
+import { ProcessGroup } from '@/components/process-group'
+import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
+import { TaskList } from '@/components/task-list'
+import { ThinkingMessage } from '@/components/thinking-message'
+import { ToolCallList } from '@/components/tool-call-list'
 
 import './leon-message.sass'
 

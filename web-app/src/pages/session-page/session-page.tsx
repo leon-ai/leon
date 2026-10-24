@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useParams } from '@tanstack/react-router'
 
-import { Feed } from '../../components/feed'
-import { QueryInput } from '../../components/query-input'
-import { createMockFeedExchange } from '../../data/feed-mocks'
-import type { FeedEntry } from '../../data/feed'
-import { getMockSessionInitialQuery } from '../../data/mock-session-store'
+import { Feed } from '@/components/feed'
+import { QueryInput } from '@/components/query-input'
+import { createMockFeedExchange } from '@/data/feed-mocks'
+import type { FeedEntry } from '@/data/feed'
+import { getMockSessionInitialQuery } from '@/data/mock-session-store'
 
 import './session-page.sass'
 

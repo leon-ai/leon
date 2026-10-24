@@ -8,10 +8,10 @@ import {
 import { Link } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
-import { Button } from '../../../components/button'
-import { Dialog } from '../../../components/dialog'
-import { Dropdown } from '../../../components/dropdown'
-import { Input } from '../../../components/input'
+import { Button } from '@/components/button'
+import { Dialog } from '@/components/dialog'
+import { Dropdown } from '@/components/dropdown'
+import { Input } from '@/components/input'
 
 import './session-list-item.sass'
 

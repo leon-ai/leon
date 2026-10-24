@@ -1,10 +1,10 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 
-import type { FeedPlanStep } from '../../data/feed'
-import { Collapse } from '../collapse'
-import { useProcessGroupNestedDisclosureDefault } from '../process-group'
-import { ToolCallList } from '../tool-call-list'
+import type { FeedPlanStep } from '@/data/feed'
+import { Collapse } from '@/components/collapse'
+import { useProcessGroupNestedDisclosureDefault } from '@/components/process-group'
+import { ToolCallList } from '@/components/tool-call-list'
 
 import './task-list-item.sass'
 

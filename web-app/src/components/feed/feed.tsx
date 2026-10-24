@@ -2,11 +2,11 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { clsx } from 'clsx'
 
-import type { FeedEntry } from '../../data/feed'
-import { LeonMessage } from '../leon-message'
-import { Message } from '../message'
-import { OwnerMessage } from '../owner-message'
-import { FeedAnimationProvider } from '../streaming-text'
+import type { FeedEntry } from '@/data/feed'
+import { LeonMessage } from '@/components/leon-message'
+import { Message } from '@/components/message'
+import { OwnerMessage } from '@/components/owner-message'
+import { FeedAnimationProvider } from '@/components/streaming-text'
 
 import './feed.sass'
 

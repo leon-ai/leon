@@ -2,8 +2,8 @@ import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
-import { Tooltip } from '../tooltip'
-import type { TooltipPosition } from '../tooltip'
+import { Tooltip } from '@/components/tooltip'
+import type { TooltipPosition } from '@/components/tooltip'
 
 import './button.sass'
 

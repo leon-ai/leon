@@ -8,8 +8,8 @@ import {
   VIBE_SOLAR_PHASES,
   VIBE_WEATHER_CONDITIONS,
   resolveVibeScene
-} from '../../components/vibes'
-import { applyTheme, getStoredTheme } from '../../theme'
+} from '@/components/vibes'
+import { applyTheme, getStoredTheme } from '@/theme'
 import {
   getVibesPreviewConfiguration,
   parseVibesPreviewSearch,

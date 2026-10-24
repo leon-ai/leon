@@ -6,7 +6,9 @@ interface ThoughtIconProps {
   className?: string
 }
 
-/** Displays the cloud-shaped thought indicator missing from RemixIcon. */
+/**
+ * Displays the cloud-shaped thought indicator missing from RemixIcon.
+ */
 export function ThoughtIcon({ className }: ThoughtIconProps) {
   return (
     <svg

@@ -1,10 +1,10 @@
 import { useId, useState } from 'react'
 import { clsx } from 'clsx'
 
-import type { FeedToolCall } from '../../data/feed'
-import { formatToolDuration } from '../../utils/format-tool-duration'
-import { Collapse } from '../collapse'
-import { JsonView } from '../json-view'
+import type { FeedToolCall } from '@/data/feed'
+import { formatToolDuration } from '@/utils/format-tool-duration'
+import { Collapse } from '@/components/collapse'
+import { JsonView } from '@/components/json-view'
 
 import './tool-call.sass'
 

@@ -7,9 +7,9 @@ import {
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-import { sessionIndex, type ConversationSession } from '../../../data/sessions'
-import { useToast } from '../../../components/toast'
-import { SessionListItem } from '../session-list-item'
+import { sessionIndex, type ConversationSession } from '@/data/sessions'
+import { useToast } from '@/components/toast'
+import { SessionListItem } from '@/layout/sidebar/session-list-item'
 
 import './session-list.sass'
 

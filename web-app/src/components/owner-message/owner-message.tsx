@@ -1,6 +1,6 @@
 import { clsx } from 'clsx'
 
-import { useAnimateOnce } from '../streaming-text'
+import { useAnimateOnce } from '@/components/streaming-text'
 
 import './owner-message.sass'
 

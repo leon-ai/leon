@@ -2,7 +2,7 @@ import type { ComponentType, MouseEvent , ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
-import { Tooltip } from '../../../components/tooltip'
+import { Tooltip } from '@/components/tooltip'
 
 import './menu-item.sass'
 

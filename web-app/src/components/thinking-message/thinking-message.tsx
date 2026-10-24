@@ -1,8 +1,8 @@
 import { clsx } from 'clsx'
 
-import { ProcessGroup } from '../process-group'
-import { StreamingText, useAnimateOnce } from '../streaming-text'
-import { ThoughtIcon } from '../thought-icon'
+import { ProcessGroup } from '@/components/process-group'
+import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
+import { ThoughtIcon } from '@/components/thought-icon'
 
 import './thinking-message.sass'
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-import type { VibeWeatherCondition } from '../vibes-scenes'
+import type { VibeWeatherCondition } from '@/components/vibes/vibes-scenes'
 
 import './weather-layer.sass'
 

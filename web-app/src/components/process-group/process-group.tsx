@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { clsx } from 'clsx'
 
-import { Collapse } from '../collapse'
+import { Collapse } from '@/components/collapse'
 
 import './process-group.sass'
 
@@ -26,12 +26,16 @@ interface ProcessGroupProps {
 
 const NestedDisclosureDefaultContext = createContext(true)
 
-/** Returns whether nested disclosures should open on their next mount. */
+/**
+ * Returns whether nested disclosures should open on their next mount.
+ */
 export function useProcessGroupNestedDisclosureDefault(): boolean {
   return useContext(NestedDisclosureDefaultContext)
 }
 
-/** Groups one progressive agent activity behind a shared status disclosure. */
+/**
+ * Groups one progressive agent activity behind a shared status disclosure.
+ */
 export function ProcessGroup({
   active,
   activeLabel,

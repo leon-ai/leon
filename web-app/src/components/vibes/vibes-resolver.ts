@@ -241,7 +241,9 @@ function environmentsMatch(
     first.weather === second.weather
 }
 
-/** Returns the surface state implied by precipitation. */
+/**
+ * Returns the surface state implied by precipitation.
+ */
 export function getVibeSurfaceForWeather(
   weather: VibeWeatherCondition
 ): VibeSurfaceCondition {
@@ -256,7 +258,9 @@ export function getVibeSurfaceForWeather(
   return 'dry'
 }
 
-/** Normalizes partial environmental data against the current default scene. */
+/**
+ * Normalizes partial environmental data against the current default scene.
+ */
 export function normalizeVibeEnvironment(
   environment: VibeEnvironmentInput = {}
 ): VibeEnvironment {
@@ -271,7 +275,9 @@ export function normalizeVibeEnvironment(
   }
 }
 
-/** Resolves requested conditions to the closest available scene artwork. */
+/**
+ * Resolves requested conditions to the closest available scene artwork.
+ */
 export function resolveVibeScene(
   environment: VibeEnvironmentInput = {}
 ): VibeSceneResolution {

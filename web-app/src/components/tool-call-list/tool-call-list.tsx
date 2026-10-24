@@ -1,7 +1,7 @@
 import { clsx } from 'clsx'
 
-import type { FeedToolCall } from '../../data/feed'
-import { ToolCall } from '../tool-call'
+import type { FeedToolCall } from '@/data/feed'
+import { ToolCall } from '@/components/tool-call'
 
 import './tool-call-list.sass'
 

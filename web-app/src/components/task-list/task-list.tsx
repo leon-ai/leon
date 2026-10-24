@@ -1,5 +1,5 @@
-import type { FeedPlanStep } from '../../data/feed'
-import { TaskListItem } from '../task-list-item'
+import type { FeedPlanStep } from '@/data/feed'
+import { TaskListItem } from '@/components/task-list-item'
 
 import './task-list.sass'
 

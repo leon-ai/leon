@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 
-import { Button, type ButtonVariant } from '../button'
+import { Button, type ButtonVariant } from '@/components/button'
 
 import './dialog.sass'
 

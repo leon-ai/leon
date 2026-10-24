@@ -6,13 +6,13 @@ import {
   notFound
 } from '@tanstack/react-router'
 
-import { AppLayout } from './layout/app-layout'
+import { AppLayout } from '@/layout/app-layout'
 import { NewSessionPage } from './pages/new-session-page'
 import { SessionPage } from './pages/session-page'
 import {
   parseVibesPreviewSearch,
   VIBES_PREVIEW_PATH
-} from './pages/vibes-preview-page/vibes-preview-search'
+} from '@/pages/vibes-preview-page/vibes-preview-search'
 
 const rootRoute = createRootRoute({
   component: AppLayout

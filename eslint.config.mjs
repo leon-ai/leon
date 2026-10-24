@@ -36,7 +36,9 @@ export default [
     },
     settings: {
       'import-x/resolver-next': [
-        createTypeScriptImportResolver(),
+        createTypeScriptImportResolver({
+          project: 'tsconfig.json'
+        }),
         createNodeResolver()
       ]
     },
@@ -79,6 +81,17 @@ export default [
       'import-x/no-named-as-default': 'off',
       'import-x/no-named-as-default-member': 'off',
       'import-x/order': 'off'
+    }
+  },
+  {
+    files: ['web-app/**/*.{ts,tsx}'],
+    settings: {
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          project: 'web-app/tsconfig.json'
+        }),
+        createNodeResolver()
+      ]
     }
   },
   {

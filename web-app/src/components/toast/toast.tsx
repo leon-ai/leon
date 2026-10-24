@@ -11,7 +11,7 @@ import {
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 
-import { Button } from '../button'
+import { Button } from '@/components/button'
 
 import './toast.sass'
 

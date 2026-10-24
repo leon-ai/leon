@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-import { Tooltip } from '../../../components/tooltip'
+import { Tooltip } from '@/components/tooltip'
 
 import './sidebar-footer.sass'
 

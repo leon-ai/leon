@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 
-import { QueryInput } from '../../components/query-input'
-import { setMockSessionInitialQuery } from '../../data/mock-session-store'
+import { QueryInput } from '@/components/query-input'
+import { setMockSessionInitialQuery } from '@/data/mock-session-store'
 
 import './new-session-page.sass'
 

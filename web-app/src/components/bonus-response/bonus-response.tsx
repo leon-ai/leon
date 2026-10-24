@@ -1,6 +1,6 @@
 import { clsx } from 'clsx'
 
-import { StreamingText, useAnimateOnce } from '../streaming-text'
+import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
 
 import './bonus-response.sass'
 

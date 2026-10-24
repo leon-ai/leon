@@ -7,11 +7,11 @@ import {
 import { Link } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-import { Input } from '../input'
+import { Input } from '@/components/input'
 import {
   sessionIndex,
   type ConversationSession
-} from '../../data/sessions'
+} from '@/data/sessions'
 
 import './search-sessions-dialog.sass'
 

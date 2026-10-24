@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
-import { MenuItem } from '../menu-item'
-import { Badge } from '../../../components/badge'
+import { MenuItem } from '@/layout/sidebar/menu-item'
+import { Badge } from '@/components/badge'
 
 import './menu.sass'
 

@@ -3,9 +3,9 @@ import { useNavigate } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
 import './sidebar.sass'
-import { Button } from '../../components/button'
-import { Dialog } from '../../components/dialog'
-import { SearchSessionsDialog } from '../../components/search-sessions-dialog'
+import { Button } from '@/components/button'
+import { Dialog } from '@/components/dialog'
+import { SearchSessionsDialog } from '@/components/search-sessions-dialog'
 import {
   getStoredSidebarExpanded,
   getStoredSoundsEnabled,
@@ -15,7 +15,7 @@ import {
   saveTheme,
   THEME_CHANGE_EVENT,
   type Theme
-} from '../../theme'
+} from '@/theme'
 
 import { Logo } from './logo'
 import { Menu } from './menu'

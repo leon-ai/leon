@@ -1,4 +1,4 @@
-import { StreamingText } from '../streaming-text'
+import { StreamingText } from '@/components/streaming-text'
 
 import './final-answer.sass'
 

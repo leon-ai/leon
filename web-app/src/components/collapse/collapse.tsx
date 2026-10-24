@@ -17,7 +17,9 @@ interface CollapseProps {
   isOpen: boolean
 }
 
-/** Reveals content as one sliding block and unmounts it after closing. */
+/**
+ * Reveals content as one sliding block and unmounts it after closing.
+ */
 export function Collapse({
   children,
   className,

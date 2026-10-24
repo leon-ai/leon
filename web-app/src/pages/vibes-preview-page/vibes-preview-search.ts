@@ -1,4 +1,4 @@
-import type { Theme } from '../../theme'
+import type { Theme } from '@/theme'
 import {
   VIBE_CUP_STATES,
   VIBE_SEASONS,
@@ -10,8 +10,8 @@ import {
   type VibeSeason,
   type VibeSolarPhase,
   type VibeWeatherCondition
-} from '../../components/vibes'
-import { getVibeSurfaceForWeather } from '../../components/vibes'
+} from '@/components/vibes'
+import { getVibeSurfaceForWeather } from '@/components/vibes'
 
 const DEFAULT_LAMP_INTENSITY = .56
 const THEMES: readonly Theme[] = ['dark', 'light']
@@ -48,7 +48,9 @@ function getLampIntensity(value: unknown): number {
     : DEFAULT_LAMP_INTENSITY
 }
 
-/** Validates URL search values used by the development-only Vibes preview. */
+/**
+ * Validates URL search values used by the development-only Vibes preview.
+ */
 export function parseVibesPreviewSearch(
   search: Record<string, unknown>
 ): VibesPreviewSearch {
@@ -67,7 +69,9 @@ export function parseVibesPreviewSearch(
   }
 }
 
-/** Converts preview URL state into renderer inputs. */
+/**
+ * Converts preview URL state into renderer inputs.
+ */
 export function getVibesPreviewConfiguration(search: VibesPreviewSearch): {
   environment: VibeEnvironment
   interior: Partial<VibeInterior> & {

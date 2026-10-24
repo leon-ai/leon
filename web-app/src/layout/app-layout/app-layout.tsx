@@ -1,13 +1,13 @@
 import { Outlet, useRouterState } from '@tanstack/react-router'
 
-import { Vibes } from '../../components/vibes'
-import { PageContainer } from '../page-container'
-import { Sidebar } from '../sidebar'
+import { Vibes } from '@/components/vibes'
+import { PageContainer } from '@/layout/page-container'
+import { Sidebar } from '@/layout/sidebar'
 import {
   getVibesPreviewConfiguration,
   parseVibesPreviewSearch,
   VIBES_PREVIEW_PATH
-} from '../../pages/vibes-preview-page/vibes-preview-search'
+} from '@/pages/vibes-preview-page/vibes-preview-search'
 
 import './app-layout.sass'
 
