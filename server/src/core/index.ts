@@ -23,6 +23,7 @@ import SelfModelManager from '@/core/self-model-manager'
 import PulseManager from '@/core/pulse-manager'
 import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
 import { ToolkitRegistry, ToolExecutor, ToolWorkerManager } from '@/core/tool-manager'
+import AmbientConditionsManager from '@/core/ambient-conditions-manager'
 import { ConversationLogger } from '@/conversation-logger'
 import { ToolCallLogger } from '@/tool-call-logger'
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
@@ -89,6 +90,11 @@ export const TOOL_EXECUTOR = createProfileServiceProxy(
 )
 
 export const TOOL_WORKER_MANAGER = new ToolWorkerManager()
+
+export const AMBIENT_CONDITIONS_MANAGER = createProfileServiceProxy(
+  'ambient-conditions-manager',
+  () => new AmbientConditionsManager()
+)
 
 export const PERSONA = createProfileServiceProxy(
   'persona',
