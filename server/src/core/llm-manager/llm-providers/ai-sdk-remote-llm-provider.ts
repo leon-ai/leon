@@ -1177,40 +1177,16 @@ export default class AISDKRemoteLLMProvider {
     }
 
     if (this.config.flavor === 'moonshotai') {
-      if (this.model === 'kimi-k3') {
-        // K3 always reasons and replaces K2's thinking object with a top-level
-        // effort. Recovery uses its lowest supported level instead of "none".
-        const reasoningEffort = reasoningMode === 'off' ||
-          reasoningMode === 'guarded'
-          ? 'low'
-          : completionParams.reasoningEffort
+      // Moonshot's supported models always reason. Short and recovery calls
+      // use the lowest effort instead of attempting to disable reasoning.
+      const reasoningEffort = reasoningMode === 'off' ||
+        reasoningMode === 'guarded' || completionParams.reasoningEffort === 'none'
+        ? 'low'
+        : completionParams.reasoningEffort
 
-        return reasoningEffort
-          ? { moonshotai: { reasoningEffort } }
-          : {}
-      }
-
-      if (!reasoningMode) {
-        return {}
-      }
-
-      if (reasoningMode === 'on') {
-        return {
-          moonshotai: {
-            thinking: { type: 'enabled' },
-            reasoningHistory: 'interleaved'
-          }
-        }
-      }
-
-      // K2 has no thinking-token budget control. Disable thinking for short
-      // guarded calls rather than sending an unsupported budget parameter.
-      return {
-        moonshotai: {
-          thinking: { type: 'disabled' },
-          reasoningHistory: 'disabled'
-        }
-      }
+      return reasoningEffort
+        ? { moonshotai: { reasoningEffort } }
+        : {}
     }
 
     if (this.config.flavor === 'cerebras') {
@@ -1408,14 +1384,13 @@ export default class AISDKRemoteLLMProvider {
         }
       }
     } else if (this.config.flavor === 'moonshotai') {
-      providerOptions['moonshotai'] = completionParams.disableThinking === true
-        ? {
-            thinking: { type: 'disabled' }
-          }
-        : {
-            thinking: { type: 'enabled' },
-            reasoningHistory: 'interleaved'
-          }
+      Object.assign(
+        providerOptions,
+        this.buildManagedProviderOptions(
+          completionParams.disableThinking === true ? 'off' : 'on',
+          completionParams
+        )
+      )
     } else if (this.config.flavor === 'cerebras') {
       providerOptions['cerebras'] = completionParams.disableThinking === true
         ? {

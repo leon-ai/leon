@@ -659,19 +659,6 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: VIDEO_INPUTS
   },
   /**
-   * @see https://openrouter.ai/moonshotai/kimi-k2.6 Model-specific reasoning support.
-   * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
-   */
-  {
-    provider: LLMProviders.OpenRouter,
-    model: 'moonshotai/kimi-k2.6',
-    contextWindowTokens: 262_144,
-    label: 'moonshotai/kimi-k2.6',
-    reasoning: TOGGLE_REASONING,
-    speed: ROUTABLE_SPEED,
-    inputMediaTypes: IMAGE_INPUTS
-  },
-  /**
    * @see https://openrouter.ai/deepseek/deepseek-v4.1-flash-1017
    */
   {
@@ -1144,18 +1131,6 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     label: 'Kimi K3',
     recommended: true,
     reasoning: MOONSHOT_KIMI_K3_REASONING,
-    speed: AUTO_SPEED,
-    inputMediaTypes: IMAGE_INPUTS
-  },
-  /**
-   * @see https://platform.kimi.ai/docs/guide/kimi-k2-6-quickstart Model-specific reasoning support.
-   */
-  {
-    provider: LLMProviders.MoonshotAI,
-    model: 'kimi-k2.6',
-    contextWindowTokens: 262_144,
-    label: 'Kimi K2.6',
-    reasoning: TOGGLE_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: IMAGE_INPUTS
   },

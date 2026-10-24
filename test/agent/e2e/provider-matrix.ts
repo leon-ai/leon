@@ -32,8 +32,8 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'moonshotai',
     requiredEnv: 'LEON_MOONSHOTAI_API_KEY',
-    llmTarget: 'moonshotai/kimi-k2.6',
-    reasoning: 'none'
+    llmTarget: 'moonshotai/kimi-k3',
+    reasoning: 'low'
   },
   {
     provider: 'deepseek',
