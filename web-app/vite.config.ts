@@ -53,8 +53,25 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true
-
+    emptyOutDir: true,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'react-vendor',
+              test: /node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+              priority: 20
+            },
+            {
+              name: 'tanstack-vendor',
+              test: /node_modules[\\/]@tanstack[\\/]/,
+              priority: 10
+            }
+          ]
+        }
+      }
+    }
   },
   server: {
     port: WEB_APP_DEV_SERVER_PORT

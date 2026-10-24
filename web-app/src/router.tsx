@@ -2,13 +2,10 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  lazyRouteComponent,
-  notFound
+  lazyRouteComponent
 } from '@tanstack/react-router'
 
 import { AppLayout } from '@/layout/app-layout'
-import { NewSessionPage } from './pages/new-session-page'
-import { SessionPage } from './pages/session-page'
 import {
   parseVibesPreviewSearch,
   VIBES_PREVIEW_PATH
@@ -21,34 +18,35 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: NewSessionPage
+  component: lazyRouteComponent(
+    () => import('@/pages/new-session-page/new-session-page'),
+    'NewSessionPage'
+  )
 })
 
 const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/session/$sessionId',
-  component: SessionPage
-})
-
-const vibesPreviewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: VIBES_PREVIEW_PATH,
-  beforeLoad: () => {
-    if (!import.meta.env.DEV) {
-      throw notFound()
-    }
-  },
   component: lazyRouteComponent(
-    () => import('./pages/vibes-preview-page/vibes-preview-page'),
-    'VibesPreviewPage'
-  ),
-  validateSearch: parseVibesPreviewSearch
+    () => import('@/pages/session-page/session-page'),
+    'SessionPage'
+  )
 })
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   sessionRoute,
-  vibesPreviewRoute
+  ...(import.meta.env.DEV
+    ? [createRoute({
+        getParentRoute: () => rootRoute,
+        path: VIBES_PREVIEW_PATH,
+        component: lazyRouteComponent(
+          () => import('@/pages/vibes-preview-page/vibes-preview-page'),
+          'VibesPreviewPage'
+        ),
+        validateSearch: parseVibesPreviewSearch
+      })]
+    : [])
 ])
 
 export const router = createRouter({
