@@ -48,6 +48,7 @@ interface IdleCallbackWindow {
 }
 
 interface VibesProps {
+  animateTransitions?: boolean
   environment?: VibeEnvironmentInput
   location?: VibeLocationInput
   sceneId?: VibeSceneId
@@ -242,6 +243,7 @@ function VibeFrame({
  * Displays ambient scenes after their assets load, with optional crossfades.
  */
 export function Vibes({
+  animateTransitions = true,
   environment,
   location,
   sceneId
@@ -263,6 +265,11 @@ export function Vibes({
   useEffect(() => {
     const nextVibe = requestedVibeRef.current
 
+    // Manual previews must also dismiss any crossfade already in progress.
+    if (!animateTransitions) {
+      setTransition(null)
+    }
+
     if (nextVibe.assetSrc === activeVibeRef.current.assetSrc) {
       if (nextVibe.theme !== activeVibeRef.current.theme) {
         activeVibeRef.current = nextVibe
@@ -275,12 +282,16 @@ export function Vibes({
     let isCancelled = false
 
     const activateScene = () => {
-      if (isCancelled) {
+      if (
+        isCancelled ||
+        nextVibe.assetSrc !== requestedVibeRef.current.assetSrc
+      ) {
         return
       }
 
       const previousVibe = activeVibeRef.current
-      const shouldAnimate = nextVibe.theme === previousVibe.theme &&
+      const shouldAnimate = animateTransitions &&
+        nextVibe.theme === previousVibe.theme &&
         !window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
 
       activeVibeRef.current = nextVibe
@@ -299,7 +310,7 @@ export function Vibes({
     return () => {
       isCancelled = true
     }
-  }, [requestedVibe.assetSrc])
+  }, [animateTransitions, requestedVibe.assetSrc])
 
   useEffect(() => {
     if (!shouldPreloadVibeSources()) {

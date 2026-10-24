@@ -22,7 +22,7 @@ export function AppLayout() {
 
   return (
     <div className="app-layout">
-      <Vibes {...(previewConfiguration === undefined ? {} : {
+      <Vibes animateTransitions={previewConfiguration === undefined} {...(previewConfiguration === undefined ? {} : {
         environment: previewConfiguration.environment
       })} />
       <Sidebar />
