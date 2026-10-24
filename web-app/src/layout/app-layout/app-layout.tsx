@@ -23,8 +23,7 @@ export function AppLayout() {
   return (
     <div className="app-layout">
       <Vibes {...(previewConfiguration === undefined ? {} : {
-        environment: previewConfiguration.environment,
-        interior: previewConfiguration.interior
+        environment: previewConfiguration.environment
       })} />
       <Sidebar />
       <main className="app-main">

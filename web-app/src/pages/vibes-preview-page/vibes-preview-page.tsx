@@ -3,7 +3,6 @@ import type { ChangeEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 
 import {
-  VIBE_CUP_STATES,
   VIBE_SEASONS,
   VIBE_SOLAR_PHASES,
   VIBE_WEATHER_CONDITIONS,
@@ -20,10 +19,6 @@ import {
 import './vibes-preview-page.sass'
 
 type VibesPreviewSearchKey = keyof VibesPreviewSearch
-type VibesPreviewSelectKey = Exclude<
-  VibesPreviewSearchKey,
-  'lampIntensity' | 'lampOn'
->
 
 function formatOption(value: string): string {
   return value
@@ -41,12 +36,12 @@ export function VibesPreviewPage() {
 
   useEffect(() => {
     return () => {
-      applyTheme(getStoredTheme())
+      void applyTheme(getStoredTheme())
     }
   }, [])
 
   useEffect(() => {
-    applyTheme(search.theme)
+    void applyTheme(search.theme)
   }, [search.theme])
 
   function updateSearch<Key extends VibesPreviewSearchKey>(
@@ -64,7 +59,7 @@ export function VibesPreviewPage() {
   }
 
   function handleSelectChange(
-    key: VibesPreviewSelectKey,
+    key: VibesPreviewSearchKey,
     event: ChangeEvent<HTMLSelectElement>
   ): void {
     updateSearch(
@@ -137,49 +132,6 @@ export function VibesPreviewPage() {
           </select>
         </label>
 
-        <label className="vibes-preview-field">
-          <span>Cup</span>
-          <select
-            value={search.cupState}
-            onChange={(event) => handleSelectChange('cupState', event)}
-          >
-            {VIBE_CUP_STATES.map((cupState) => (
-              <option key={cupState} value={cupState}>
-                {formatOption(cupState)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="vibes-preview-field">
-          <span>Lamp</span>
-          <select
-            value={String(search.lampOn)}
-            onChange={(event) => updateSearch(
-              'lampOn',
-              event.target.value === 'true'
-            )}
-          >
-            <option value="true">On</option>
-            <option value="false">Off</option>
-          </select>
-        </label>
-
-        <label className="vibes-preview-field vibes-preview-intensity">
-          <span>Intensity {Math.round(search.lampIntensity * 100)}%</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={search.lampIntensity}
-            disabled={!search.lampOn}
-            onChange={(event) => updateSearch(
-              'lampIntensity',
-              Number(event.target.value)
-            )}
-          />
-        </label>
       </fieldset>
     </section>
   )

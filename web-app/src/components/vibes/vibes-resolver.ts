@@ -1,4 +1,9 @@
 import {
+  DEFAULT_VIBE_LANDSCAPE,
+  type VibeLocation,
+  type VibeLocationInput
+} from './vibes-landscapes'
+import {
   DEFAULT_VIBE_SCENE_ID,
   VIBE_SCENES,
   type VibeEnvironment,
@@ -9,6 +14,14 @@ import {
   type VibeSurfaceCondition,
   type VibeWeatherCondition
 } from './vibes-scenes'
+
+enum LocationFallbackRank {
+  Exact,
+  National,
+  SameCountry,
+  Default,
+  OtherCountry
+}
 
 const SEASON_FALLBACKS: Record<VibeSeason, readonly VibeSeason[]> = {
   spring: ['spring', 'summer', 'autumn', 'winter'],
@@ -186,6 +199,7 @@ export type VibeEnvironmentInput = Partial<VibeEnvironment>
 export interface VibeSceneResolution {
   isExactMatch: boolean
   requestedEnvironment: VibeEnvironment
+  requestedLocation: VibeLocation
   scene: VibeScene
   sceneId: VibeSceneId
 }
@@ -217,9 +231,12 @@ function compareScores(
 
 function getSceneScore(
   requested: VibeEnvironment,
-  candidate: VibeEnvironment
+  requestedLocation: VibeLocation,
+  candidate: VibeEnvironment,
+  candidateLocation: VibeLocation
 ): readonly number[] {
   return [
+    getLocationFallbackRank(requestedLocation, candidateLocation),
     getFallbackRank(requested.season, candidate.season, SEASON_FALLBACKS),
     getFallbackRank(requested.weather, candidate.weather, WEATHER_FALLBACKS),
     getFallbackRank(
@@ -229,6 +246,35 @@ function getSceneScore(
     ),
     getFallbackRank(requested.surface, candidate.surface, SURFACE_FALLBACKS)
   ]
+}
+
+function locationsMatch(
+  first: VibeLocation,
+  second: VibeLocation
+): boolean {
+  return first.countryCode === second.countryCode &&
+    first.locality === second.locality
+}
+
+function getLocationFallbackRank(
+  requested: VibeLocation,
+  candidate: VibeLocation
+): LocationFallbackRank {
+  if (locationsMatch(requested, candidate)) {
+    return LocationFallbackRank.Exact
+  }
+
+  if (requested.countryCode === candidate.countryCode) {
+    return candidate.locality === undefined
+      ? LocationFallbackRank.National
+      : LocationFallbackRank.SameCountry
+  }
+
+  if (locationsMatch(candidate, DEFAULT_VIBE_LANDSCAPE.location)) {
+    return LocationFallbackRank.Default
+  }
+
+  return LocationFallbackRank.OtherCountry
 }
 
 function environmentsMatch(
@@ -276,24 +322,52 @@ export function normalizeVibeEnvironment(
 }
 
 /**
+ * Normalizes optional owner location data for hierarchical scene fallback.
+ */
+export function normalizeVibeLocation(
+  location: VibeLocationInput = {}
+): VibeLocation {
+  const countryCode = location.countryCode?.trim().toLowerCase()
+  const locality = location.locality?.trim().toLowerCase()
+
+  if (countryCode === undefined || countryCode.length === 0) {
+    return DEFAULT_VIBE_LANDSCAPE.location
+  }
+
+  return {
+    countryCode,
+    ...(locality === undefined || locality.length === 0 ? {} : { locality })
+  }
+}
+
+/**
  * Resolves requested conditions to the closest available scene artwork.
  */
 export function resolveVibeScene(
-  environment: VibeEnvironmentInput = {}
+  environment: VibeEnvironmentInput = {},
+  location: VibeLocationInput = {}
 ): VibeSceneResolution {
   const requestedEnvironment = normalizeVibeEnvironment(environment)
+  const requestedLocation = normalizeVibeLocation(location)
   const sceneEntries = Object.entries(VIBE_SCENES) as Array<[
     VibeSceneId,
     VibeScene
   ]>
   let bestSceneId: VibeSceneId = DEFAULT_VIBE_SCENE_ID
   let bestScene: VibeScene = VIBE_SCENES[DEFAULT_VIBE_SCENE_ID]
-  let bestScore = getSceneScore(requestedEnvironment, bestScene.environment)
+  let bestScore = getSceneScore(
+    requestedEnvironment,
+    requestedLocation,
+    bestScene.environment,
+    bestScene.landscape.location
+  )
 
   for (const [candidateId, candidate] of sceneEntries) {
     const candidateScore = getSceneScore(
       requestedEnvironment,
-      candidate.environment
+      requestedLocation,
+      candidate.environment,
+      candidate.landscape.location
     )
 
     if (compareScores(candidateScore, bestScore) < 0) {
@@ -307,8 +381,9 @@ export function resolveVibeScene(
     isExactMatch: environmentsMatch(
       requestedEnvironment,
       bestScene.environment
-    ),
+    ) && locationsMatch(requestedLocation, bestScene.landscape.location),
     requestedEnvironment,
+    requestedLocation,
     scene: bestScene,
     sceneId: bestSceneId
   }

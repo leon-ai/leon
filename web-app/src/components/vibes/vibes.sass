@@ -1,9 +1,9 @@
 .vibes
-  --vibes-scene-brightness: var(--vibes-dark-brightness)
-  --vibes-scene-contrast: var(--vibes-dark-contrast)
-  --vibes-scene-mask-opacity: var(--vibes-dark-mask-opacity)
-  --vibes-scene-opacity: var(--vibes-dark-opacity)
-  --vibes-scene-saturation: var(--vibes-dark-saturation)
+  --vibes-scene-transition-duration: 30s
+  --vibes-stage-inline-offset: clamp(80px, 5vw, 112px)
+  --vibes-weather-blend-mode: normal
+  --vibes-weather-filter: none
+  --vibes-weather-opacity: 1
   position: fixed
   top: 0
   right: 0
@@ -16,177 +16,125 @@
   pointer-events: none
   transition: left var(--transition-duration-sidebar) var(--transition-timing-sidebar), background-color var(--transition-duration-main) var(--transition-timing-main)
 
+.vibes-frame
+  --vibes-frame-transition-duration: var(--vibes-scene-transition-duration)
+  --vibes-frame-transition-timing: ease-in-out
+  --vibes-scene-brightness: var(--vibes-dark-brightness)
+  --vibes-scene-contrast: var(--vibes-dark-contrast)
+  --vibes-scene-mask-opacity: var(--vibes-dark-mask-opacity)
+  --vibes-scene-opacity: var(--vibes-dark-opacity)
+  --vibes-scene-saturation: var(--vibes-dark-saturation)
+  position: absolute
+  inset: 0
+
+.vibes-frame-active
+  z-index: 1
+
+.vibes-frame-entering
+  z-index: 2
+  animation: vibes-frame-fade-in var(--vibes-frame-transition-duration) var(--vibes-frame-transition-timing) both
+
+.vibes-frame-outgoing
+  z-index: 1
+  animation: vibes-frame-fade-out var(--vibes-frame-transition-duration) var(--vibes-frame-transition-timing) both
+
 .vibes-tone
   position: absolute
   inset: 0
   width: 100%
   height: 100%
+  background: linear-gradient(90deg, rgba(0, 0, 0, .08), rgba(0, 0, 0, .58) 36%, rgba(0, 0, 0, .62) 64%, rgba(0, 0, 0, .08)), linear-gradient(0deg, rgba(0, 0, 0, .4), transparent 36%, rgba(0, 0, 0, .2))
+  opacity: var(--vibes-scene-mask-opacity)
 
 .vibes-stage
   position: absolute
   bottom: 0
-  left: 50%
+  left: calc(50% + var(--vibes-stage-inline-offset))
   width: min(100%, 1672px)
   aspect-ratio: 1672 / 941
-  transform: translateX(-50%)
+  transform: translateX(-50%) scale(1.05)
+  transform-origin: center bottom
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main)
 
-.vibes-scene-art
+.vibes-scene
   position: absolute
   inset: 0
+  width: 100%
+  height: 100%
+  object-fit: cover
+  object-position: center
   filter: brightness(var(--vibes-scene-brightness)) contrast(var(--vibes-scene-contrast)) saturate(var(--vibes-scene-saturation))
-  opacity: var(--vibes-scene-opacity)
-
-.vibes-scene,
-.vibes-scene-layer
-  position: absolute
   image-rendering: pixelated
+  opacity: var(--vibes-scene-opacity)
   user-select: none
 
-.vibes-scene,
-.vibes-room-desk
-  inset: 0
-  width: 100%
-  height: 100%
-  object-fit: cover
-  object-position: center
-
-.vibes-window-view,
 .vibes-weather-window
   position: absolute
-  top: 5%
-  right: 4%
-  width: 22.5%
-  height: 55%
+  top: var(--vibes-window-top)
+  right: var(--vibes-window-right)
+  z-index: 2
+  width: var(--vibes-window-width)
+  height: var(--vibes-window-height)
   overflow: hidden
-  clip-path: polygon(3% 2%, 98% 0, 96% 96%, 1% 93%)
+  clip-path: var(--vibes-window-weather-clip-path)
 
-.vibes-window-view
-  z-index: 1
-
-.vibes-landscape
-  inset: 0
-  width: 100%
-  height: 100%
-  object-fit: cover
-  object-position: center
-
-.vibes-weather-window
-  z-index: 2
-
-.vibes-window-frame
-  top: -1.5%
-  right: -.5%
-  z-index: 3
-  width: 33%
-
-.vibes-lamp-plant
-  top: 26.25%
-  left: .3%
-  z-index: 3
-  width: 22.37%
-
-.vibes-lamp-glow
-  position: absolute
-  top: 38%
-  left: 12%
-  z-index: 2
-  width: 20%
-  height: 32%
-  border-radius: 50%
-  background: radial-gradient(ellipse at top, rgba(255, 196, 105, .72), rgba(255, 144, 48, .2) 46%, transparent 72%)
-  filter: blur(18px)
-  opacity: var(--vibes-lamp-intensity)
-
-.vibes-keyboard
-  bottom: 4%
-  left: 20%
-  z-index: 3
-  width: 48%
-
-.vibes-cup
-  right: 10.5%
-  bottom: 5%
-  z-index: 3
-  width: 13%
-
-.vibes-cup-steam
-  position: absolute
-  right: 14%
-  bottom: 20%
-  z-index: 4
-  width: 5%
-  height: 12%
-  opacity: 0
-
-  &::before,
   &::after
     content: ''
     position: absolute
-    bottom: 0
-    width: 28%
-    height: 82%
-    border-left: 2px solid rgba(245, 245, 247, .38)
-    border-radius: 50%
-    filter: blur(1px)
-    animation: vibes-steam-rise 2.8s ease-in-out infinite
+    z-index: 1
+    inset: 0
+    background: radial-gradient(ellipse at top left, rgba(232, 242, 250, .2), transparent 22%), radial-gradient(ellipse at top right, rgba(232, 242, 250, .16), transparent 18%), radial-gradient(ellipse at bottom left, rgba(218, 233, 244, .13), transparent 20%), radial-gradient(ellipse at bottom right, rgba(218, 233, 244, .14), transparent 24%)
+    box-shadow: inset 0 0 12px rgba(222, 236, 247, .14)
+    opacity: 0
+    pointer-events: none
 
-  &::before
-    left: 24%
-
-  &::after
-    right: 18%
-    animation-delay: -1.4s
-
-.vibes[data-cup-state='steaming'] .vibes-cup-steam
+.vibes-weather-snow .vibes-weather-window::after
   opacity: 1
 
-.vibes-tone
-  background: linear-gradient(90deg, rgba(0, 0, 0, .08), rgba(0, 0, 0, .58) 36%, rgba(0, 0, 0, .62) 64%, rgba(0, 0, 0, .08)), linear-gradient(0deg, rgba(0, 0, 0, .4), transparent 36%, rgba(0, 0, 0, .2))
-  opacity: var(--vibes-scene-mask-opacity)
+// Each frame uses its authored theme's palette and edge treatment.
+.vibes-frame[data-vibe-theme='light']
+  --vibes-scene-brightness: var(--vibes-light-brightness)
+  --vibes-scene-contrast: var(--vibes-light-contrast)
+  --vibes-scene-mask-opacity: var(--vibes-light-mask-opacity)
+  --vibes-scene-opacity: var(--vibes-light-opacity)
+  --vibes-scene-saturation: var(--vibes-light-saturation)
+  --vibes-weather-opacity: 1
 
-[data-theme='light']
-  .vibes
-    --vibes-scene-brightness: var(--vibes-light-brightness)
-    --vibes-scene-contrast: var(--vibes-light-contrast)
-    --vibes-scene-mask-opacity: var(--vibes-light-mask-opacity)
-    --vibes-scene-opacity: var(--vibes-light-opacity)
-    --vibes-scene-saturation: var(--vibes-light-saturation)
-
-  .vibes-scene-art
-    mask-image: radial-gradient(ellipse 48% 62% at 50% 44%, transparent 18%, rgba(0, 0, 0, .08) 48%, rgba(0, 0, 0, .62) 76%, #000 100%)
-
-  .vibes-scene-layered .vibes-scene-art
-    opacity: 1
-
-  .vibes-scene
-    opacity: 1
-
-  .vibes-room-desk
-    opacity: .18
-
-  .vibes-landscape
-    opacity: .92
-
-  .vibes-lamp-plant,
-  .vibes-keyboard,
-  .vibes-cup,
-  .vibes-window-frame
-    opacity: .95
+  // Light assets author their white perimeter directly, so masking them would
+  // unnecessarily soften the scene's foreground details.
+  .vibes-stage
+    -webkit-mask-image: none
+    mask-image: none
 
   .vibes-tone
-    background: linear-gradient(90deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .8) 34%, rgba(255, 255, 255, .8) 66%, rgba(255, 255, 255, .06)), linear-gradient(0deg, rgba(255, 255, 255, .3), transparent 44%, rgba(255, 255, 255, .12))
+    background: rgba(255, 255, 255, .18)
 
-@keyframes vibes-steam-rise
-  0%
+  &.vibes-weather-snow .vibes-weather-window::after
+    background: radial-gradient(ellipse at top left, rgba(88, 112, 132, .13), transparent 22%), radial-gradient(ellipse at top right, rgba(88, 112, 132, .1), transparent 18%), radial-gradient(ellipse at bottom left, rgba(104, 127, 146, .08), transparent 20%), radial-gradient(ellipse at bottom right, rgba(104, 127, 146, .09), transparent 24%)
+    box-shadow: inset 0 0 12px rgba(89, 115, 136, .1)
+
+  &.vibes-weather-drizzle,
+  &.vibes-weather-rain,
+  &.vibes-weather-storm
+    --vibes-weather-blend-mode: multiply
+    --vibes-weather-filter: brightness(.5) contrast(1.4) drop-shadow(0 0 .8px rgba(35, 58, 78, .8))
+
+  &.vibes-weather-snow
+    --vibes-weather-filter: drop-shadow(0 0 1px rgba(48, 65, 82, .95)) drop-shadow(0 1px 1px rgba(67, 83, 101, .8))
+
+@keyframes vibes-frame-fade-in
+  from
     opacity: 0
-    transform: translateY(8%) scaleX(.8)
 
-  35%
-    opacity: .7
+  to
+    opacity: 1
 
-  100%
+@keyframes vibes-frame-fade-out
+  from
+    opacity: 1
+
+  to
     opacity: 0
-    transform: translateY(-24%) scaleX(1.2)
 
 @media (max-width: 960px)
   .vibes
@@ -196,7 +144,6 @@
   .vibes
     transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
-  .vibes-cup-steam::before,
-  .vibes-cup-steam::after
+  .vibes-frame-entering,
+  .vibes-frame-outgoing
     animation: none
-    opacity: .45
