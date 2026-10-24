@@ -1,8 +1,7 @@
 import {
+  AMBIENT_CONDITIONS_MANAGER,
   EVENT_EMITTER,
-  SOCKET_SERVER,
-  TOOLKIT_REGISTRY,
-  TOOL_EXECUTOR
+  SOCKET_SERVER
 } from '@/core'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import {
@@ -13,13 +12,16 @@ import { pickAutomaticMood } from '@/core/config-states/mood-state'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { DateHelper } from '@/helpers/date-helper'
-import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
-import { Moods, ToolExecutionOrigin } from '@/types'
+import { Moods } from '@/types'
 import {
   getActiveProfileName,
   runWithProfileContext
 } from '@/core/profile-runtime/profile-context'
+import {
+  AMBIENT_WEATHER_REFRESH_INTERVAL_MS,
+  type AmbientWeatherSnapshot
+} from '@/core/ambient-conditions-manager'
 
 /**
  * @see https://llama.meta.com/docs/how-to-guides/prompting/
@@ -29,19 +31,6 @@ interface Mood {
   type: Moods
   description: string
   emoji: string
-}
-
-interface WeatherSnapshot {
-  location: string
-  description: string
-  temperatureC: number
-  observationTime: string
-}
-
-interface WeatherCacheState {
-  fetchedAt: number | null
-  locationQuery: string | null
-  snapshot: WeatherSnapshot | null
 }
 
 interface CompactPromptOptions {
@@ -154,14 +143,6 @@ const MOODS: Mood[] = [
   { type: Moods.Cocky, description: COCKY_MOOD_DESC, emoji: '😎' }
 ]
 const DEFAULT_MOOD = MOODS.find((mood) => mood.type === Moods.Default) as Mood
-// 4 hours
-const WEATHER_REFRESH_INTERVAL_MS = (60_000 * 60) * 4
-const EMPTY_WEATHER_CACHE_STATE: WeatherCacheState = {
-  fetchedAt: null,
-  locationQuery: null,
-  snapshot: null
-}
-
 export default class Persona {
   private _mood: Mood = DEFAULT_MOOD
   private contextInfo = CONTEXT_INFO
@@ -170,11 +151,7 @@ export default class Persona {
   private whoYouAre = WHO_YOU_ARE
   private whatYouDo = WHAT_YOU_DO
   private personalityRules = PERSONALITY_RULES
-  private weatherSnapshot: WeatherSnapshot | null = null
-  private readonly weatherCacheStore = new ContextStateStore<WeatherCacheState>(
-    '.persona-weather-cache.json',
-    EMPTY_WEATHER_CACHE_STATE
-  )
+  private weatherSnapshot: AmbientWeatherSnapshot | null = null
 
   get mood(): Mood {
     return this._mood
@@ -198,7 +175,7 @@ export default class Persona {
         void runWithProfileContext({ profileName }, () =>
           this.syncWeatherMoodAndContext()
         )
-      }, WEATHER_REFRESH_INTERVAL_MS).unref()
+      }, AMBIENT_WEATHER_REFRESH_INTERVAL_MS).unref()
 
       this.setContextInfo()
       this.setOwnerInfo()
@@ -269,136 +246,10 @@ export default class Persona {
     )
   }
 
-  private fallbackCityFromTimezone(timeZone: string): string {
-    // The geographic registry excludes UTC aliases and fixed-offset zones.
-    if (!Intl.supportedValuesOf('timeZone').includes(timeZone)) {
-      return ''
-    }
-
-    const parts = timeZone.split('/').filter(Boolean)
-    const city = parts[parts.length - 1] || ''
-    return city.replaceAll('_', ' ').trim()
-  }
-
-  private getOwnerWeatherLocationQuery(): string {
-    const ownerProfile = readOwnerProfileSync()
-    const city = ownerProfile.owner_current_city?.trim() || ''
-    const country = ownerProfile.owner_current_country?.trim() || ''
-
-    if (city && country) {
-      return `${city}, ${country}`
-    }
-
-    if (city) {
-      return city
-    }
-
-    return ''
-  }
-
-  private getFreshCachedWeatherSnapshot(
-    locationQuery: string
-  ): WeatherSnapshot | null {
-    const cache = this.weatherCacheStore.load()
-    if (
-      !cache.snapshot ||
-      !cache.locationQuery ||
-      cache.locationQuery !== locationQuery ||
-      typeof cache.fetchedAt !== 'number'
-    ) {
-      return null
-    }
-
-    if (Date.now() - cache.fetchedAt >= WEATHER_REFRESH_INTERVAL_MS) {
-      return null
-    }
-
-    return cache.snapshot
-  }
-
-  private saveWeatherSnapshotCache(
-    locationQuery: string,
-    snapshot: WeatherSnapshot
-  ): void {
-    this.weatherCacheStore.save({
-      fetchedAt: Date.now(),
-      locationQuery,
-      snapshot
-    })
-  }
-
   private async refreshWeatherSnapshot(): Promise<void> {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
-    const weatherLocationQuery =
-      this.getOwnerWeatherLocationQuery() ||
-      this.fallbackCityFromTimezone(timeZone)
+    const ambientConditions = await AMBIENT_CONDITIONS_MANAGER.getSnapshot()
 
-    if (!weatherLocationQuery) {
-      this.weatherSnapshot = null
-      return
-    }
-
-    const cachedSnapshot = this.getFreshCachedWeatherSnapshot(
-      weatherLocationQuery
-    )
-    if (cachedSnapshot) {
-      this.weatherSnapshot = cachedSnapshot
-      return
-    }
-
-    if (!TOOLKIT_REGISTRY.isLoaded) {
-      await TOOLKIT_REGISTRY.load()
-    }
-
-    const toolExecution = await TOOL_EXECUTOR.executeTool({
-      origin: ToolExecutionOrigin.Persona,
-      toolkitId: 'weather',
-      toolId: 'openmeteo',
-      functionName: 'getWeather',
-      parsedInput: {
-        location: weatherLocationQuery
-      }
-    })
-
-    if (toolExecution.status !== 'success') {
-      this.weatherSnapshot = null
-      return
-    }
-
-    const runtimeOutput = toolExecution.data.output
-    const toolResult = runtimeOutput['result'] as
-      | {
-          success?: boolean
-          data?: {
-            location?: string
-            current?: {
-              description?: string
-              temperatureC?: string
-              observationTime?: string
-            }
-          }
-        }
-      | undefined
-    const current = toolResult?.data?.current
-    if (!toolResult?.success || !current) {
-      this.weatherSnapshot = null
-      return
-    }
-
-    const temperatureC = Number(current.temperatureC)
-    const observationTime = current.observationTime || ''
-    if (!Number.isFinite(temperatureC) || !observationTime) {
-      this.weatherSnapshot = null
-      return
-    }
-
-    this.weatherSnapshot = {
-      location: toolResult.data?.location || weatherLocationQuery,
-      description: current.description || 'Unknown',
-      temperatureC,
-      observationTime
-    }
-    this.saveWeatherSnapshotCache(weatherLocationQuery, this.weatherSnapshot)
+    this.weatherSnapshot = ambientConditions.weather
   }
 
   private applyWeatherMoodOverride(random: number): void {
