@@ -191,6 +191,7 @@ export interface LLMPromptAbortReason {
  */
 export interface CompletionStreamEvent {
   type: string
+  providerEventType?: string
   transport?: 'http' | 'websocket'
   requestId?: string
   responseId?: string

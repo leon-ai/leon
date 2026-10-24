@@ -393,6 +393,21 @@ export class OpenAIResponsesTransport {
               // Leave protocol validation and provider errors to the SDK.
             }
 
+            // Observe protocol progress before SDK early-error lookahead can
+            // buffer it. Only metadata crosses this diagnostic boundary.
+            if (event && typeof event['type'] === 'string') {
+              const result = event['response'] as Record<string, unknown> | undefined
+
+              onStreamEvent?.({
+                type: 'provider-event',
+                providerEventType: event['type'],
+                transport,
+                ...(typeof result?.['id'] === 'string'
+                  ? { responseId: result['id'] }
+                  : {})
+              })
+            }
+
             if (event && OPENAI_TERMINAL_EVENTS.has(String(event['type']))) {
               if (observation && event['type'] === 'response.completed') {
                 const result = event['response'] as Record<string, unknown> | undefined
