@@ -114,6 +114,7 @@ def _format_current_conditions(current: Dict[str, Any], location: str) -> Dict[s
     return {
         "location": location,
         "description": _get_weather_description(current["weather_code"]),
+        "weatherCode": current["weather_code"],
         "temperatureC": str(temperature),
         "temperatureF": _celsius_to_fahrenheit(temperature),
         "feelsLikeC": str(feels_like),

@@ -75,6 +75,7 @@ interface WeatherResponse {
 export interface WeatherConditions {
   location: string
   description: string
+  weatherCode: number
   temperatureC: string
   temperatureF: string
   feelsLikeC: string
@@ -202,6 +203,7 @@ function formatCurrentConditions(
   return {
     location,
     description: getWeatherDescription(current.weather_code),
+    weatherCode: current.weather_code,
     temperatureC: temperature.toString(),
     temperatureF: celsiusToFahrenheit(temperature),
     feelsLikeC: feelsLike.toString(),
