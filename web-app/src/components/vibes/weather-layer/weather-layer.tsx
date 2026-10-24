@@ -9,15 +9,28 @@ const ENTRY_FADE_DISTANCE_PX = 32
 const GLASS_DROPLET_AREA_PX = 10_000
 const GLASS_DROPLET_COUNT_MAXIMUM = 36
 const GLASS_DROPLET_COUNT_MINIMUM = 8
+const LIFETIME_FADE_DELAY_MAXIMUM_SECONDS = 6.5
+const LIFETIME_FADE_DELAY_MINIMUM_SECONDS = 1.8
+const LIFETIME_FADE_DURATION_MAXIMUM_SECONDS = .9
+const LIFETIME_FADE_DURATION_MINIMUM_SECONDS = .45
+const LIFETIME_FADE_THRESHOLD = .2
 const MAXIMUM_FRAME_DELTA_SECONDS = .04
 const PARTICLE_AREA_PX = 3_400
 const PARTICLE_COUNT_MINIMUM = 24
 const PARTICLE_COUNT_MAXIMUM = 180
 const RAIN_PARTICLE_OPACITY_MULTIPLIER = 1.15
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
+const SETTLED_SNOWFLAKE_AREA_PX = 14_000
+const SETTLED_SNOWFLAKE_COUNT_MAXIMUM = 24
+const SETTLED_SNOWFLAKE_COUNT_MINIMUM = 8
 const SPAWN_FADE_DURATION_SECONDS = .22
 
 type WeatherAnimationKind = 'rain' | 'snow'
+
+enum ParticleFadeMode {
+  Lifetime,
+  None
+}
 
 interface WeatherAnimationConfig {
   density: number
@@ -73,6 +86,9 @@ interface WeatherParticle {
   age: number
   depth: number
   drift: number
+  fadeAfterAge: number
+  fadeDuration: number
+  fadeMode: ParticleFadeMode
   length: number
   opacity: number
   phase: number
@@ -80,6 +96,12 @@ interface WeatherParticle {
   speed: number
   x: number
   y: number
+}
+
+interface ParticleFadeBehavior {
+  fadeAfterAge: number
+  fadeDuration: number
+  fadeMode: ParticleFadeMode
 }
 
 interface GlassDroplet {
@@ -92,6 +114,14 @@ interface GlassDroplet {
   slideDuration: number
   slides: boolean
   x: number
+}
+
+interface SettledSnowflake {
+  opacity: number
+  rotation: number
+  size: number
+  x: number
+  y: number
 }
 
 function createSeededRandom(seed: number): () => number {
@@ -118,13 +148,18 @@ function createParticle(
   distributeVertically: boolean
 ): WeatherParticle {
   const depth = .35 + random() * .65
-  const age = distributeVertically ? SPAWN_FADE_DURATION_SECONDS : 0
+  const fadeBehavior = createParticleFadeBehavior(random)
+  const age = distributeVertically &&
+    fadeBehavior.fadeMode === ParticleFadeMode.Lifetime
+    ? random() * (fadeBehavior.fadeAfterAge + fadeBehavior.fadeDuration)
+    : distributeVertically ? SPAWN_FADE_DURATION_SECONDS : 0
 
   if (animation.kind === 'rain') {
     return {
       age,
       depth,
       drift: (-18 - random() * 30) * animation.speed,
+      ...fadeBehavior,
       length: 4 + random() * 9,
       opacity: (.115 + depth * .23) * animation.opacity *
         RAIN_PARTICLE_OPACITY_MULTIPLIER,
@@ -140,6 +175,7 @@ function createParticle(
     age,
     depth,
     drift: -5 + random() * 10,
+    ...fadeBehavior,
     length: 0,
     opacity: (.2 + depth * .42) * animation.opacity,
     phase: random() * Math.PI * 2,
@@ -147,6 +183,34 @@ function createParticle(
     speed: (9 + depth * 27) * animation.speed,
     x: random() * width,
     y: distributeVertically ? random() * height : -8 - random() * height * .2
+  }
+}
+
+function createParticleFadeBehavior(
+  random: () => number
+): ParticleFadeBehavior {
+  const fadesDuringLifetime = random() < LIFETIME_FADE_THRESHOLD
+
+  if (!fadesDuringLifetime) {
+    return {
+      fadeAfterAge: 0,
+      fadeDuration: 0,
+      fadeMode: ParticleFadeMode.None
+    }
+  }
+
+  return {
+    fadeAfterAge: LIFETIME_FADE_DELAY_MINIMUM_SECONDS +
+      random() * (
+        LIFETIME_FADE_DELAY_MAXIMUM_SECONDS -
+        LIFETIME_FADE_DELAY_MINIMUM_SECONDS
+      ),
+    fadeDuration: LIFETIME_FADE_DURATION_MINIMUM_SECONDS +
+      random() * (
+        LIFETIME_FADE_DURATION_MAXIMUM_SECONDS -
+        LIFETIME_FADE_DURATION_MINIMUM_SECONDS
+      ),
+    fadeMode: ParticleFadeMode.Lifetime
   }
 }
 
@@ -169,6 +233,20 @@ function createGlassDroplet(
     slideDuration,
     slides: random() < .28,
     x: random() * width
+  }
+}
+
+function createSettledSnowflake(
+  width: number,
+  height: number,
+  random: () => number
+): SettledSnowflake {
+  return {
+    opacity: .1 + random() * .2,
+    rotation: random() * Math.PI,
+    size: .8 + random() * 1.25,
+    x: random() * width,
+    y: random() * height
   }
 }
 
@@ -203,6 +281,23 @@ function clampOpacity(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
 
+function getParticleLifetimeOpacity(
+  particle: WeatherParticle
+): number {
+  if (particle.fadeMode === ParticleFadeMode.None) {
+    return 1
+  }
+
+  return 1 - clampOpacity(
+    (particle.age - particle.fadeAfterAge) / particle.fadeDuration
+  )
+}
+
+function hasParticleLifetimeEnded(particle: WeatherParticle): boolean {
+  return particle.fadeMode === ParticleFadeMode.Lifetime &&
+    particle.age >= particle.fadeAfterAge + particle.fadeDuration
+}
+
 export function WeatherLayer({ weather }: WeatherLayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -230,6 +325,7 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
     let height = 0
     let particles: WeatherParticle[] = []
     let previousTime = 0
+    let settledSnowflakes: SettledSnowflake[] = []
     let width = 0
 
     function resetParticle(particle: WeatherParticle): void {
@@ -307,15 +403,46 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
       }
     }
 
+    function drawSettledSnowflakes(): void {
+      for (const snowflake of settledSnowflakes) {
+        renderingContext.lineCap = 'round'
+        renderingContext.lineWidth = .45
+        renderingContext.strokeStyle =
+          `rgba(245, 248, 252, ${snowflake.opacity})`
+
+        for (let arm = 0; arm < 3; arm += 1) {
+          const angle = snowflake.rotation + arm * Math.PI / 3
+          const xOffset = Math.cos(angle) * snowflake.size
+          const yOffset = Math.sin(angle) * snowflake.size
+
+          renderingContext.beginPath()
+          renderingContext.moveTo(
+            snowflake.x - xOffset,
+            snowflake.y - yOffset
+          )
+          renderingContext.lineTo(
+            snowflake.x + xOffset,
+            snowflake.y + yOffset
+          )
+          renderingContext.stroke()
+        }
+      }
+    }
+
     function drawFrame(deltaSeconds: number, timeSeconds: number): void {
       renderingContext.clearRect(0, 0, width, height)
 
       for (const particle of particles) {
         particle.age += deltaSeconds
 
+        if (hasParticleLifetimeEnded(particle)) {
+          resetParticle(particle)
+        }
+
         const spawnOpacity = clampOpacity(
           particle.age / SPAWN_FADE_DURATION_SECONDS
         )
+        const lifetimeOpacity = getParticleLifetimeOpacity(particle)
 
         if (activeAnimation.kind === 'rain') {
           particle.x += particle.drift * deltaSeconds
@@ -333,7 +460,7 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
             (particle.x + 24) / ENTRY_FADE_DISTANCE_PX
           )
           const opacity = particle.opacity * spawnOpacity * entryOpacity *
-            horizontalExitOpacity
+            lifetimeOpacity * horizontalExitOpacity
 
           renderingContext.beginPath()
           renderingContext.lineCap = 'round'
@@ -369,7 +496,7 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
           clampOpacity((width + 8 - particle.x) / ENTRY_FADE_DISTANCE_PX)
         )
         const opacity = particle.opacity * spawnOpacity *
-          verticalEntryOpacity * horizontalExitOpacity
+          verticalEntryOpacity * lifetimeOpacity * horizontalExitOpacity
 
         renderingContext.beginPath()
         renderingContext.fillStyle = `rgba(245, 245, 247, ${opacity})`
@@ -383,9 +510,12 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
         renderingContext.fill()
       }
 
-      // Precipitation remains behind droplets attached to the glass.
+      // Precipitation remains behind these pane details, which makes the
+      // droplets and settled flakes read as being attached to the glass.
       if (activeAnimation.kind === 'rain') {
         drawGlassDroplets(deltaSeconds)
+      } else {
+        drawSettledSnowflakes()
       }
     }
 
@@ -456,6 +586,21 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
               )
             },
             () => createGlassDroplet(width, height, random, true)
+          )
+        : []
+      settledSnowflakes = activeAnimation.kind === 'snow'
+        ? Array.from(
+            {
+              length: getAreaBasedCount(
+                width,
+                height,
+                SETTLED_SNOWFLAKE_AREA_PX,
+                activeAnimation.glassDensity,
+                SETTLED_SNOWFLAKE_COUNT_MINIMUM,
+                SETTLED_SNOWFLAKE_COUNT_MAXIMUM
+              )
+            },
+            () => createSettledSnowflake(width, height, random)
           )
         : []
       startAnimation()
