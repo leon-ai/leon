@@ -3,7 +3,10 @@ import { inspect } from 'node:util'
 import axios from 'axios'
 
 import { BRAIN } from '@/core'
-import { STREAM_IDLE_TIMEOUT_ERROR_NAME } from '@/core/llm-manager/llm-provider/llm-provider-constants'
+import {
+  REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME,
+  STREAM_IDLE_TIMEOUT_ERROR_NAME
+} from '@/core/llm-manager/llm-provider/llm-provider-constants'
 import { withOmittedToolChoice } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import type {
   PreparedCompletionParams,
@@ -587,9 +590,11 @@ export async function prepareCompletionRetry(
       abortController.abort()
     }
 
-    const isStreamIdleTimeout = e instanceof Error &&
-      e.name === STREAM_IDLE_TIMEOUT_ERROR_NAME
-    const nextTimeout = isTimeoutError && !isStreamIdleTimeout
+    const isProgressTimeout = e instanceof Error && (
+      e.name === STREAM_IDLE_TIMEOUT_ERROR_NAME ||
+      e.name === REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
+    )
+    const nextTimeout = isTimeoutError && !isProgressTimeout
       ? (completionParams.timeout ?? 0) + TIMEOUT_RETRY_INCREMENT_MS
       : completionParams.timeout
     const retryParams = promptAbortReason?.shouldRetry

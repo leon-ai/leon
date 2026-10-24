@@ -252,6 +252,7 @@ export interface CompletionAttemptTiming {
   streamIdleTimeoutMs: number
   generationStartMs?: number | undefined
   requestDispatchMs?: number | undefined
+  requestAcceptedMs?: number | undefined
   responseHeadersMs?: number | undefined
   firstByteMs?: number | undefined
   /**

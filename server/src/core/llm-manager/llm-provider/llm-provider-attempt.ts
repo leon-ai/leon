@@ -4,6 +4,7 @@ import { type AxiosResponse } from 'axios'
 
 import {
   LOCAL_SERVER_PROVIDERS,
+  REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME,
   STREAM_IDLE_TIMEOUT_ERROR_NAME
 } from '@/core/llm-manager/llm-provider/llm-provider-constants'
 import {
@@ -67,6 +68,7 @@ const STREAM_OUTPUT_EVENTS = new Set([
 ])
 
 const REMOTE_STREAM_IDLE_TIMEOUT_MS = 30_000
+const REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS = 12_000
 const PROVIDER_CANCELLATION_CLEANUP_TIMEOUT_MS = 1_000
 
 /**
@@ -100,6 +102,7 @@ export async function runCompletionAttempt(
   let firstEventAt: number | undefined
   let streamOpenedAt: number | undefined
   let requestDispatchedAt: number | undefined
+  let requestAcceptedAt: number | undefined
   let responseHeadersAt: number | undefined
   let firstByteAt: number | undefined
   let lastEventAt: number | undefined
@@ -152,6 +155,9 @@ export async function runCompletionAttempt(
       requestDispatchMs: requestDispatchedAt === undefined
         ? undefined
         : requestDispatchedAt - completionStartedAt,
+      requestAcceptedMs: requestAcceptedAt === undefined
+        ? undefined
+        : requestAcceptedAt - completionStartedAt,
       responseHeadersMs: responseHeadersAt === undefined
         ? undefined
         : responseHeadersAt - completionStartedAt,
@@ -220,7 +226,8 @@ export async function runCompletionAttempt(
   const resetStreamStallTimeout = (
     delay = isReasoning || isCompacting || pendingHostedTools.size > 0
       ? completionParams.timeout
-      : idleTimeout
+      : idleTimeout,
+    errorName = STREAM_IDLE_TIMEOUT_ERROR_NAME
   ): void => {
     if (!shouldStreamOutput || !completionParams.timeout) {
       return
@@ -228,10 +235,13 @@ export async function runCompletionAttempt(
 
     clearStreamStallTimeout()
     streamStallTimeoutHandle = setTimeout(() => {
+      const stage = errorName === REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
+        ? 'before the provider accepted the request'
+        : 'after streaming stalled'
       const error = new Error(
-        `Timeout (${delay}ms) for "${completionParams.dutyType}" duty after streaming stalled`
+        `Timeout (${delay}ms) for "${completionParams.dutyType}" duty ${stage}`
       )
-      error.name = STREAM_IDLE_TIMEOUT_ERROR_NAME
+      error.name = errorName
 
       if (!abortController.signal.aborted) {
         abortController.abort(error)
@@ -315,6 +325,28 @@ export async function runCompletionAttempt(
 
     if (event.type === 'request-dispatched') {
       requestDispatchedAt ??= Date.now()
+
+      // A socket can remain open without accepting a new request. Bound this
+      // wait separately from reasoning after the provider accepts generation.
+      if (isRemoteProvider && transport === 'websocket' && !hasStartedStreaming) {
+        resetStreamStallTimeout(
+          Math.min(REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS, completionParams.timeout),
+          REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
+        )
+      } else if (!hasStartedStreaming) {
+        // HTTP fallback retains its ordinary initial inference deadline.
+        clearStreamStallTimeout()
+      }
+    } else if (event.type === 'provider-event' && event.providerEventType) {
+      recordActivity(event.providerEventType)
+
+      if (event.providerEventType === 'response.in_progress') {
+        requestAcceptedAt ??= Date.now()
+
+        if (!hasStartedStreaming) {
+          clearStreamStallTimeout()
+        }
+      }
     } else if (event.type === 'response-headers') {
       responseHeadersAt ??= Date.now()
     } else if (event.type === 'transport-activity') {
