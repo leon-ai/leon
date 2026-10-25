@@ -15,6 +15,11 @@ from bridges.python.src.sdk.toolkit_config import ToolkitConfig
 
 DEFAULT_SETTINGS = {}
 REQUIRED_SETTINGS = []
+QUALITY_FORMAT_SELECTORS = {
+    "best": "bv*+ba/b",
+    "worst": "wv*+wa/w",
+}
+RESOLUTION_QUALITY_PATTERN = re.compile(r"[1-9][0-9]*p")
 DOWNLOAD_DESTINATION_PATTERN = re.compile(r"Destination:\s+(.+)$")
 ALREADY_DOWNLOADED_PATTERN = re.compile(
     r"\[download\]\s+(.+)\s+has already been downloaded"
@@ -629,28 +634,33 @@ class YtdlpTool(BaseTool):
         on_progress: Optional[ProgressCallback] = None,
     ) -> str:
         """
-        Downloads a video in a specific quality or resolution.
+        Download video with audio at the requested quality or exact pixel height.
 
         Args:
             video_url: The URL of the video to download.
             output_path: The directory or file path where the video will be saved.
-            quality: The desired quality string (e.g., 'best', '720p', '1080p').
+            quality: 'best', 'worst', or an exact pixel height such as '1080p'.
             on_progress: The callback function for progress reporting.
 
         Returns:
             The file path of the downloaded video.
         """
         try:
-            if quality == "best":
-                format_selector = "best"
-            elif quality == "worst":
-                format_selector = "worst"
-            elif quality.endswith("p"):
-                # For resolution like 720p, 1080p.
+            format_selector = QUALITY_FORMAT_SELECTORS.get(quality)
+
+            if not format_selector:
+                if not RESOLUTION_QUALITY_PATTERN.fullmatch(quality):
+                    raise ValueError(
+                        'quality must be "best", "worst", or an exact pixel height '
+                        'such as "1080p"; format IDs and raw format selectors '
+                        'are not accepted'
+                    )
+
                 height = quality[:-1]
-                format_selector = f"best[height<={height}]"
-            else:
-                format_selector = quality
+
+                # Streaming sites can serve audio separately; both alternatives
+                # must preserve the requested height instead of reducing quality.
+                format_selector = f"bv*[height={height}]+ba/b[height={height}]"
 
             target = self._resolve_media_output_target(output_path)
             os.makedirs(target["directory_path"], exist_ok=True)
@@ -682,12 +692,14 @@ class YtdlpTool(BaseTool):
                         on_progress({"percentage": 100, "status": "completed"})
 
             args = self._get_config_args() + [
-                video_url,
+                "--no-playlist",
                 "-f",
                 format_selector,
                 "-o",
                 target["output_template"],
                 "--newline",
+                "--",
+                video_url,
             ]
             result = self.execute_command(
                 ExecuteCommandOptions(

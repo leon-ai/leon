@@ -7,6 +7,11 @@ import { ToolkitConfig } from '@sdk/toolkit-config'
 
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
+const QUALITY_FORMAT_SELECTORS: Record<string, string> = {
+  best: 'bv*+ba/b',
+  worst: 'wv*+wa/w'
+}
+const RESOLUTION_QUALITY_PATTERN = /^[1-9][0-9]*p$/
 const DOWNLOAD_DESTINATION_PATTERN = /Destination:\s+(.+)$/
 const ALREADY_DOWNLOADED_PATTERN =
   /\[download\]\s+(.+)\s+has already been downloaded/
@@ -630,10 +635,10 @@ export default class YtdlpTool extends Tool {
   }
 
   /**
-   * Downloads a video in a specific quality or resolution.
+   * Downloads video with audio at the requested quality or exact pixel height.
    * @param videoUrl The URL of the video to download.
-   * @param outputPath The directory where the video will be saved.
-   * @param quality The desired quality string (e.g., 'best', '720p', '1080p').
+   * @param outputPath The directory or filename where the video will be saved.
+   * @param quality 'best', 'worst', or an exact pixel height such as '1080p'.
    * @param onProgress The callback function for progress reporting.
    * @returns A promise that resolves with the file path of the downloaded video.
    */
@@ -644,18 +649,22 @@ export default class YtdlpTool extends Tool {
     onProgress?: ProgressCallback
   ): Promise<string> {
     try {
-      // Convert quality to yt-dlp format
-      let formatSelector: string
-      if (quality === 'best') {
-        formatSelector = 'best'
-      } else if (quality === 'worst') {
-        formatSelector = 'worst'
-      } else if (quality.endsWith('p')) {
-        // For resolution like 720p, 1080p
+      let formatSelector = Object.hasOwn(QUALITY_FORMAT_SELECTORS, quality)
+        ? QUALITY_FORMAT_SELECTORS[quality]
+        : undefined
+
+      if (!formatSelector) {
+        if (!RESOLUTION_QUALITY_PATTERN.test(quality)) {
+          throw new Error(
+            'quality must be "best", "worst", or an exact pixel height such as "1080p"; format IDs and raw format selectors are not accepted'
+          )
+        }
+
         const height = quality.slice(0, -1)
-        formatSelector = `best[height<=${height}]`
-      } else {
-        formatSelector = quality
+
+        // Streaming sites can serve audio separately; both alternatives must
+        // preserve the requested height rather than silently reduce quality.
+        formatSelector = `bv*[height=${height}]+ba/b[height=${height}]`
       }
 
       const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
@@ -667,12 +676,14 @@ export default class YtdlpTool extends Tool {
         binaryName: 'yt-dlp',
         args: [
           ...this.getConfigArgs(),
-          videoUrl,
+          '--no-playlist',
           '-f',
           formatSelector,
           '-o',
           target.outputTemplate,
-          '--newline'
+          '--newline',
+          '--',
+          videoUrl
         ],
         options: { sync: false },
         onProgress,

@@ -104,46 +104,34 @@
       }
     },
     "downloadVideoByQuality": {
-      "description": "Download a video at a specified quality.",
+      "description": "Download a single video with audio at an exact pixel height (e.g. 1080p), or the best/worst available quality. Separate streams are merged using FFmpeg. An unavailable requested height fails instead of silently downloading a lower resolution.",
+      "progressive_guidance": "Use quality='1080p' for an exact height of 1080 pixels, not '1080' (which yt-dlp would interpret as a format ID). Accepted values are 'best', 'worst', or a positive integer followed by 'p'. Raw yt-dlp format IDs/selectors are not accepted. If a requested height is unavailable, report that rather than choosing a different resolution without the owner's approval. 'best' uses bv*+ba/b; 'worst' uses wv*+wa/w and means lowest quality, not smallest file size. Height requests use bv*[height=H]+ba/b[height=H]. FFmpeg must be available to yt-dlp for merging. The output extension follows the selected media formats; specifying .mp4 in outputPath does not force MP4 or a particular codec.",
+      "timeout": {
+        "idleMs": 120000
+      },
       "parameters": {
         "type": "object",
         "properties": {
           "videoUrl": {
-            "type": "string"
+            "type": "string",
+            "description": "Single video URL; playlist entries are not downloaded."
           },
           "outputPath": {
-            "type": "string"
+            "type": "string",
+            "description": "Output directory or filename. The actual extension follows the selected media formats."
           },
           "quality": {
-            "type": "string"
-          },
-          "onProgress": {
-            "type": "object",
-            "properties": {
-              "percentage": {
-                "type": "number"
-              },
-              "status": {
-                "type": "string"
-              },
-              "eta": {
-                "type": "string"
-              },
-              "speed": {
-                "type": "string"
-              },
-              "size": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
+            "type": "string",
+            "pattern": "^(best|worst|[1-9][0-9]*p)$",
+            "description": "'best', 'worst', or an exact video height such as '720p', '1080p', or '2160p'. Bare numbers and raw yt-dlp selectors are invalid. No fallback to another height."
           }
         },
         "required": [
           "videoUrl",
           "outputPath",
           "quality"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     "downloadSubtitles": {
