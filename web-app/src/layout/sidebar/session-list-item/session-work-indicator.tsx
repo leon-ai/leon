@@ -1,7 +1,9 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { clsx } from 'clsx'
 
 import './session-work-indicator.sass'
 
+const PARTICLE_COUNT = 6
 const STROKE_WIDTH_PX = 1
 const PATH_END_HEIGHT_FRACTION = .75
 const WAVE_RADIUS_PX = 28
@@ -16,7 +18,7 @@ interface IndicatorBounds {
 }
 
 /**
- * Highlights a working session with one perimeter wave.
+ * Highlights a working session with one perimeter wave and interior particles.
  */
 export function SessionWorkIndicator() {
   const indicatorRef = useRef<HTMLSpanElement>(null)
@@ -84,7 +86,7 @@ export function SessionWorkIndicator() {
       return
     }
 
-    // Pause native SVG motion while the document is hidden or motion is reduced.
+    // Native SVG motion and CSS particles share the same visibility lifecycle.
     if (isAnimating) {
       svg.unpauseAnimations()
     } else {
@@ -122,7 +124,9 @@ export function SessionWorkIndicator() {
   return (
     <span
       ref={indicatorRef}
-      className="session-work-indicator"
+      className={clsx('session-work-indicator', {
+        'session-work-paused': !isAnimating
+      })}
       aria-hidden="true"
     >
       {bounds !== null && bounds.width > 0 && bounds.height > 0 && (
@@ -187,6 +191,11 @@ export function SessionWorkIndicator() {
           />
         </svg>
       )}
+      <span className="session-work-particles">
+        {Array.from({ length: PARTICLE_COUNT }, (_, index) => (
+          <span key={index} className="session-work-particle" />
+        ))}
+      </span>
     </span>
   )
 }
