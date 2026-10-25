@@ -11,11 +11,14 @@ import {
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 
+import { QueryInputFocusWave } from './query-input-focus-wave'
+
 import './query-input.sass'
 
 const DEFAULT_PLACEHOLDER = 'Don’t be shy'
 const DEFAULT_MAXIMUM_LINE_COUNT = 12
 const HEIGHT_COMPARISON_TOLERANCE = 1
+const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 interface QueryInputProps {
   autoFocus?: boolean
@@ -39,6 +42,8 @@ export function QueryInput({
   const [query, setQuery] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
   const [isScrollable, setIsScrollable] = useState(false)
+  const [showFocusWave, setShowFocusWave] = useState(false)
+  const [focusWaveKey, setFocusWaveKey] = useState(0)
   const [formHeight, setFormHeight] = useState<number>()
   const actionsRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
@@ -248,6 +253,13 @@ export function QueryInput({
           autoComplete="off"
           autoFocus={autoFocus}
           disabled={disabled || loading}
+          onFocus={() => {
+            // A fresh clock is needed even when blur and refocus are batched.
+            setFocusWaveKey((current) => current + 1)
+            setShowFocusWave(
+              !window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
+            )
+          }}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}
         />
@@ -273,6 +285,13 @@ export function QueryInput({
           />
         </div>
       </form>
+      {showFocusWave && (
+        <QueryInputFocusWave
+          key={focusWaveKey}
+          formRef={formRef}
+          onComplete={() => setShowFocusWave(false)}
+        />
+      )}
     </div>
   )
 }

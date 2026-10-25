@@ -134,6 +134,25 @@
     pointer-events: none
     resize: none
 
+.query-input-focus-wave
+  position: absolute
+  z-index: 4
+  inset: 0
+  overflow: visible
+  color: var(--query-input-focus-wave-color)
+  pointer-events: none
+  animation: query-input-focus-sweep ease-in-out both
+
+@keyframes query-input-focus-sweep
+  0%, 80%, 100%
+    opacity: 0
+
+  35%
+    opacity: .9
+
+  65%
+    opacity: .1
+
 @keyframes query-input-glow-breathe
   0%,
   100%
@@ -143,6 +162,10 @@
     transform: scale3d(.98, .9, 1)
 
 @media (prefers-reduced-motion: reduce)
+  .query-input-focus-wave
+    display: none
+    animation: none
+
   .query-input-container
     .query-input-glow
       transition: none
