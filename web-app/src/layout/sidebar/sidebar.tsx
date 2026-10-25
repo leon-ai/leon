@@ -240,7 +240,7 @@ export function Sidebar() {
         actions={[
           {
             label: 'Close',
-            variant: 'primary',
+            variant: 'secondary',
             onClick: () => setSearchSessionsDialogOpen(false)
           }
         ]}

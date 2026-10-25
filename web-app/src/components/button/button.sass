@@ -1,3 +1,9 @@
+// A typed fill color lets gradient-backed buttons interpolate their state changes.
+@property --button-background
+  syntax: '<color>'
+  inherits: false
+  initial-value: transparent
+
 .button-icon-only.button-tone-default
   color: var(--color-text)
 
@@ -5,17 +11,28 @@
   color: var(--color-text-secondary)
 
 .button
+  --button-background: var(--color-surface)
+  --button-border-gradient: var(--gradient-secondary-button-border)
+  --button-border-width: 1px
   display: inline-flex
   align-items: center
   justify-content: center
   gap: var(--space-sm)
   box-sizing: border-box
-  border: 1px solid transparent
+  border: var(--button-border-width) solid transparent
   border-radius: var(--border-radius-lg)
+  background-color: var(--button-background)
   color: var(--color-text-secondary)
   font-weight: var(--font-weight-semi-bold)
   text-decoration: none
-  transition: color var(--transition-duration-main) var(--transition-timing-main), background-color var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main)
+  transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main)
+
+  &:not(.button-ghost)
+    // The opaque padding layer keeps translucent states from revealing the border gradient.
+    background: linear-gradient(var(--button-background), var(--button-background)) padding-box, linear-gradient(var(--color-surface), var(--color-surface)) padding-box, var(--button-border-gradient) border-box
+
+  &.button-ghost
+    --button-background: transparent
 
   .button-icon
     flex: 0 0 auto
@@ -43,44 +60,42 @@
 
   &.button-ghost:hover:not(:disabled):not([aria-disabled='true']),
   &.button-secondary:hover:not(:disabled):not([aria-disabled='true'])
-    background-color: var(--color-surface-hover)
+    --button-background: var(--color-surface-hover)
     color: var(--color-text)
-
-  &.button-secondary
-    background-color: transparent
-    border-color: var(--color-border)
 
   &.button-secondary:not(.button-icon-only)
     color: var(--color-text)
 
   &.button-ghost:active:not(:disabled):not([aria-disabled='true']),
   &.button-secondary:active:not(:disabled):not([aria-disabled='true'])
-    background-color: var(--color-surface-active)
+    --button-background: var(--color-surface-active)
     color: var(--color-text)
 
   &.button-primary
-    background-color: var(--color-primary-button)
+    --button-background: var(--color-primary-button)
+    --button-border-gradient: var(--gradient-primary-button-border)
     color: var(--color-primary-button-text)
 
   &.button-primary:hover:not(:disabled):not([aria-disabled='true'])
-    background-color: var(--color-primary-button-hover)
+    --button-background: var(--color-primary-button-hover)
 
   &.button-primary:active:not(:disabled):not([aria-disabled='true'])
-    background-color: var(--color-primary-button-active)
+    --button-background: var(--color-primary-button-active)
 
   &.button-primary:disabled,
   &.button-primary[aria-disabled='true']
-    background-color: var(--color-primary-button-disabled)
+    --button-background: var(--color-primary-button-disabled)
 
   &.button-danger
-    background-color: var(--color-danger)
+    --button-background: var(--color-danger)
+    --button-border-gradient: var(--gradient-danger-button-border)
     color: var(--color-danger-contrast)
 
   &.button-danger:hover:not(:disabled):not([aria-disabled='true'])
-    background-color: var(--color-danger-hover)
+    --button-background: var(--color-danger-hover)
 
   &.button-danger:active:not(:disabled):not([aria-disabled='true'])
-    background-color: var(--color-danger-pressed)
+    --button-background: var(--color-danger-pressed)
 
   &:disabled
     color: var(--color-text-disabled)
