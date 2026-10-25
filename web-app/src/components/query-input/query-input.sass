@@ -27,7 +27,7 @@
     &::before
       position: absolute
       inset: 0
-      background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 66%, transparent), color-mix(in srgb, var(--color-accent-pink) 66%, transparent))
+      background: var(--gradient-query)
       filter: blur(48px)
       transform-origin: center bottom
       content: ''
@@ -45,8 +45,8 @@
   min-height: var(--query-input-height)
   padding: var(--query-input-padding-block) var(--query-input-padding-inline)
   border: var(--query-input-border-width) solid transparent
-  border-radius: 30px
-  background: linear-gradient(var(--color-surface), var(--color-surface)) padding-box, var(--gradient-border) border-box
+  border-radius: 20px
+  background: linear-gradient(var(--color-query-surface), var(--color-query-surface)) padding-box, var(--gradient-query-border) border-box
   backdrop-filter: blur(18px)
   overflow: hidden
   transition: height var(--transition-duration-main) var(--transition-timing-main)
