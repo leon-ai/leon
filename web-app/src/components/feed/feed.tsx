@@ -58,6 +58,7 @@ export function Feed({ entries }: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
   const bottomMaskRef = useRef<HTMLDivElement>(null)
   const previousTurnCountRef = useRef<number | null>(null)
+  const scrimRef = useRef<HTMLDivElement>(null)
   const topMaskRef = useRef<HTMLDivElement>(null)
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const turnCount = turns.length
@@ -82,6 +83,7 @@ export function Feed({ entries }: FeedProps) {
     const feed = feedRef.current
     const bottomMask = bottomMaskRef.current
     const scrollElement = feed?.closest<HTMLElement>('.app-main')
+    const scrim = scrimRef.current
     const topMask = topMaskRef.current
 
     if (
@@ -89,30 +91,31 @@ export function Feed({ entries }: FeedProps) {
       bottomMask === null ||
       scrollElement === undefined ||
       scrollElement === null ||
+      scrim === null ||
       topMask === null
     ) {
       return undefined
     }
 
     const observedFeed = feed
-    const observedMasks = [bottomMask, topMask]
+    const observedLayers = [bottomMask, topMask, scrim]
     const observedScrollElement = scrollElement
 
     // Fixed elements use the viewport as their containing block, so measure
     // the feed to account for the main scrollbar and sidebar transitions.
-    function updateMaskBounds(): void {
+    function updateLayerBounds(): void {
       const feedBounds = observedFeed.getBoundingClientRect()
 
-      for (const mask of observedMasks) {
-        mask.style.left = `${feedBounds.left}px`
-        mask.style.width = `${feedBounds.width}px`
+      for (const layer of observedLayers) {
+        layer.style.left = `${feedBounds.left}px`
+        layer.style.width = `${feedBounds.width}px`
       }
     }
 
-    const resizeObserver = new ResizeObserver(updateMaskBounds)
+    const resizeObserver = new ResizeObserver(updateLayerBounds)
     resizeObserver.observe(observedFeed)
     resizeObserver.observe(observedScrollElement)
-    updateMaskBounds()
+    updateLayerBounds()
 
     return () => resizeObserver.disconnect()
   }, [])
@@ -285,6 +288,12 @@ export function Feed({ entries }: FeedProps) {
   return (
     <FeedAnimationProvider>
       <section ref={feedRef} className="feed" aria-label="Session messages">
+        <div
+          ref={scrimRef}
+          className="feed-scrim"
+          hidden={entries.length === 0}
+          aria-hidden="true"
+        />
         <div
           className="feed-virtual-content"
           style={{ height: `${virtualizer.getTotalSize()}px` }}

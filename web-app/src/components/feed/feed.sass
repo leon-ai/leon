@@ -1,13 +1,31 @@
 .feed
   --feed-bottom-clearance: 148px
   --feed-entry-gap: 42px
+  --feed-scrim-edge-width: 64px
   --feed-top-clearance: 52px
   box-sizing: border-box
   width: 100%
   padding: var(--feed-top-clearance) 0 var(--feed-bottom-clearance)
-  color: var(--color-text-secondary)
+  color: var(--color-feed-text)
   font-size: var(--font-size-lg)
   line-height: var(--line-height-lg)
+
+.feed-scrim
+  // A fixed decoration cannot widen the feed's scrollable content on small screens.
+  position: fixed
+  top: 0
+  bottom: 0
+  left: 0
+  z-index: -1
+  width: 100%
+  pointer-events: none
+
+  &::before
+    content: ''
+    position: absolute
+    inset: 0 calc(var(--feed-scrim-edge-width) * -1)
+    // Full coverage reaches both text edges; only the outer margins fade away.
+    background: linear-gradient(90deg, transparent, var(--color-feed-scrim) var(--feed-scrim-edge-width), var(--color-feed-scrim) calc(100% - var(--feed-scrim-edge-width)), transparent)
 
 .feed-virtual-content
   position: relative
@@ -37,7 +55,9 @@
   left: 0
   z-index: 2
   width: 100%
-  background-color: var(--color-background)
+  background-color: var(--color-feed-mask)
+  -webkit-backdrop-filter: var(--feed-mask-backdrop-filter)
+  backdrop-filter: var(--feed-mask-backdrop-filter)
   pointer-events: none
   transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
@@ -50,8 +70,11 @@
 .feed-mask-bottom
   bottom: 0
   height: var(--feed-bottom-clearance)
-  mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--feed-bottom-mask-stop), #000)
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--feed-bottom-mask-stop), #000)
+
+[data-theme='light'] .feed-mask-bottom
+  display: none
 
 @media (max-width: 680px)
   .feed
