@@ -3,8 +3,10 @@ import type {
   Ref,
   TextareaHTMLAttributes
 } from 'react'
-import { useId } from 'react'
+import { useCallback, useId, useRef } from 'react'
 import { clsx } from 'clsx'
+
+import { InputEffects, type TextField } from './input-effects'
 
 import './input.sass'
 
@@ -46,6 +48,30 @@ export function Input({
   ...fieldProps
 }: InputProps) {
   const generatedId = useId()
+  const nativeFieldRef = useRef<TextField | null>(null)
+  const setFieldRef = useCallback((field: TextField | null) => {
+    nativeFieldRef.current = field
+
+    if (typeof fieldRef === 'function') {
+      const cleanup = fieldRef(field)
+
+      return () => {
+        nativeFieldRef.current = null
+
+        if (typeof cleanup === 'function') {
+          cleanup()
+        } else {
+          fieldRef(null)
+        }
+      }
+    }
+
+    if (fieldRef !== undefined && fieldRef !== null) {
+      fieldRef.current = field
+    }
+
+    return undefined
+  }, [fieldRef])
   const inputId = fieldProps.id ?? generatedId
   const inputClassName = clsx(
     'input',
@@ -71,7 +97,7 @@ export function Input({
           id={inputId}
           className="input-field"
           aria-label={ariaLabel}
-          ref={fieldRef as Ref<HTMLTextAreaElement>}
+          ref={setFieldRef}
         />
       ) : (
         <input
@@ -79,9 +105,10 @@ export function Input({
           id={inputId}
           className="input-field"
           aria-label={ariaLabel}
-          ref={fieldRef as Ref<HTMLInputElement>}
+          ref={setFieldRef}
         />
       )}
+      <InputEffects key={multiline ? 'textarea' : 'input'} fieldRef={nativeFieldRef} />
     </span>
   )
 }

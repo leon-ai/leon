@@ -1,0 +1,85 @@
+.input-effects
+  position: absolute
+  z-index: 1
+  border-radius: inherit
+  color: var(--color-text)
+  pointer-events: none
+  user-select: none
+
+  &[hidden]
+    display: none
+
+.input-effects-text-viewport
+  position: absolute
+  inset: 0
+  overflow: hidden
+
+.input-effects-text,
+.input-effects-measurement,
+.input-effects-placeholder-ink
+  position: absolute
+  z-index: 1
+  top: 0
+  left: 0
+  box-sizing: border-box
+  min-height: 100%
+  margin: 0
+
+.input-effects-measurement
+  visibility: hidden
+
+.input-effects-placeholder-ink
+  color: var(--color-accent-contrast)
+
+.input-effects-caret
+  position: absolute
+  inset: 0
+  color: var(--color-accent)
+  z-index: 0
+  clip-path: inset(0 calc(var(--input-caret-width) / -2))
+  animation: input-caret-blink 1.8s linear 1.2s infinite
+
+  &.input-effects-moving
+    animation: none
+
+  &[hidden]
+    display: none
+
+.input-effects-block
+  position: absolute
+  overflow: hidden
+  border-radius: 1px
+  background: var(--color-accent)
+  box-shadow: 0 0 5px var(--color-accent-soft)
+
+.input-field.input-effects-active
+  // Spellcheck can paint glyphs using color independently of text-fill-color.
+  // Both must switch immediately while the animated layer owns the text.
+  --input-native-text-color: transparent
+  caret-color: transparent
+  -webkit-text-fill-color: transparent
+
+  &::placeholder
+    -webkit-text-fill-color: var(--color-text-secondary)
+
+  &.input-effects-native-caret
+    caret-color: var(--color-accent)
+
+@keyframes input-caret-blink
+  0%, 47%, 100%
+    opacity: 1
+
+  55%, 92%
+    opacity: 0
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active)
+  .input-effects
+    display: none
+
+  .input-field.input-effects-active
+    --input-native-text-color: var(--color-text)
+    caret-color: var(--color-accent)
+    -webkit-text-fill-color: currentColor
+
+    &::placeholder
+      -webkit-text-fill-color: var(--color-text-secondary)
