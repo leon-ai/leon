@@ -45,7 +45,7 @@
   min-height: var(--query-input-height)
   padding: var(--query-input-padding-block) var(--query-input-padding-inline)
   border: var(--query-input-border-width) solid transparent
-  border-radius: 20px
+  border-radius: 30px
   background: linear-gradient(var(--color-query-surface), var(--color-query-surface)) padding-box, var(--gradient-query-border) border-box
   backdrop-filter: blur(18px)
   overflow: hidden
@@ -94,7 +94,7 @@
     .input-field
       resize: none
       overflow: hidden
-      transition: color var(--transition-duration-main) var(--transition-timing-main)
+      transition: none
 
     &.query-input-field-scrollable
       .input-field
@@ -120,7 +120,7 @@
     min-height: 42px
     padding: 10px 0
     border: 0
-    color: var(--color-text)
+    color: var(--input-native-text-color, var(--color-text))
     font-family: var(--font-family)
     font-size: var(--font-size-lg)
     line-height: var(--line-height-lg)
@@ -133,6 +133,10 @@
     visibility: hidden
     pointer-events: none
     resize: none
+
+.query-input-focus-wave
+  z-index: 4
+  color: var(--query-input-focus-wave-color)
 
 @keyframes query-input-glow-breathe
   0%,

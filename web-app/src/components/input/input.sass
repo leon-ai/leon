@@ -25,11 +25,12 @@
   border-radius: var(--border-radius-pill)
   outline: 0
   background-color: var(--color-background)
-  color: var(--color-text)
+  color: var(--input-native-text-color, var(--color-text))
+  caret-color: var(--color-accent)
   font-family: var(--font-family)
   font-size: var(--font-size-md)
   line-height: var(--line-height-md)
-  transition: background-color var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), color var(--transition-duration-main) var(--transition-timing-main)
+  transition: background-color var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main)
 
   &::placeholder
     color: var(--color-text-secondary)

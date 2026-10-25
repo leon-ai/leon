@@ -1,0 +1,61 @@
+@use 'sass:list'
+
+$particles: ((12%, 74%, -.6s), (27%, 38%, -2.4s), (43%, 78%, -1.5s), (61%, 29%, -3.2s), (76%, 65%, -.1s), (89%, 43%, -2s))
+
+.session-work-indicator
+  position: absolute
+  z-index: 0
+  inset: 0
+  overflow: hidden
+  border-radius: inherit
+  color: var(--color-accent)
+  pointer-events: none
+
+  &::before
+    content: ''
+    position: absolute
+    inset: 0
+    background: radial-gradient(ellipse at 50% 0, var(--color-accent-soft), transparent 75%)
+    opacity: .4
+
+.session-work-paths,
+.session-work-particles
+  position: absolute
+  inset: 0
+  width: 100%
+  height: 100%
+
+.session-work-particle
+  position: absolute
+  width: 2px
+  height: 2px
+  border-radius: 50%
+  background-color: currentColor
+  opacity: 0
+  animation: session-work-drift 4s ease-in-out infinite
+
+@each $left, $top, $delay in $particles
+  .session-work-particle:nth-child(#{list.index($particles, ($left, $top, $delay))})
+    left: $left
+    top: $top
+    animation-delay: $delay
+
+.session-work-paused
+  .session-work-particle
+    animation-play-state: paused
+
+@keyframes session-work-drift
+  0%
+    opacity: 0
+    transform: translate(0, 5px)
+
+  40%
+    opacity: .66
+
+  100%
+    opacity: 0
+    transform: translate(5px, -7px)
+
+@media (prefers-reduced-motion: reduce)
+  .session-work-particles
+    display: none

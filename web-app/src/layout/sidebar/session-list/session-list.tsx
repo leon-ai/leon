@@ -181,6 +181,7 @@ export function SessionList({
               key={session.id}
               id={session.id}
               isPinned={session.isPinned}
+              status={session.status}
               title={session.title}
               onDelete={deleteSession}
               onRename={renameSession}

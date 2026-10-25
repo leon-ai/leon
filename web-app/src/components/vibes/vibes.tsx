@@ -260,6 +260,10 @@ export function Vibes({
   const [transition, setTransition] = useState<VibeTransition | null>(null)
   const activeVibeRef = useRef(activeVibe)
   const requestedVibeRef = useRef(requestedVibe)
+  const hasResolvedScene = environment !== undefined || sceneId !== undefined
+  // Startup artwork must remain visible while real conditions are unavailable.
+  // Its first replacement should not wait through an environmental crossfade.
+  const hasResolvedSceneRef = useRef(hasResolvedScene)
 
   requestedVibeRef.current = requestedVibe
 
@@ -295,6 +299,8 @@ export function Vibes({
     }
 
     if (nextVibe.assetSrc === activeVibeRef.current.assetSrc) {
+      hasResolvedSceneRef.current ||= hasResolvedScene
+
       if (nextVibe.theme !== activeVibeRef.current.theme) {
         activeVibeRef.current = nextVibe
         setActiveVibe(nextVibe)
@@ -314,10 +320,11 @@ export function Vibes({
       }
 
       const previousVibe = activeVibeRef.current
-      const shouldAnimate = animateTransitions &&
+      const shouldAnimate = animateTransitions && hasResolvedSceneRef.current &&
         nextVibe.theme === previousVibe.theme &&
         !window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
 
+      hasResolvedSceneRef.current ||= hasResolvedScene
       activeVibeRef.current = nextVibe
       setTransition(shouldAnimate
         ? {
@@ -334,7 +341,7 @@ export function Vibes({
     return () => {
       isCancelled = true
     }
-  }, [animateTransitions, requestedVibe.assetSrc])
+  }, [animateTransitions, hasResolvedScene, requestedVibe.assetSrc])
 
   useEffect(() => {
     if (!shouldPreloadVibeSources()) {

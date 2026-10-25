@@ -50,10 +50,6 @@ function supportsScrollEnd(element: HTMLElement): boolean {
   return 'onscrollend' in element
 }
 
-function shouldAdjustFeedScrollPosition(): boolean {
-  return false
-}
-
 export function Feed({ entries }: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
   const bottomMaskRef = useRef<HTMLDivElement>(null)
@@ -73,11 +69,6 @@ export function Feed({ entries }: FeedProps) {
     overscan: FEED_OVERSCAN_COUNT,
     useAnimationFrameWithResizeObserver: true
   })
-
-  // Disclosure resizing happens in visible content, so compensating scroll
-  // offsets on every animation frame would make older turns visibly jitter.
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange =
-    shouldAdjustFeedScrollPosition
 
   useLayoutEffect(() => {
     const feed = feedRef.current
@@ -143,6 +134,10 @@ export function Feed({ entries }: FeedProps) {
       })
       return
     }
+
+    // Each turn owns its reveal scroll; an older virtualizer target must not
+    // keep correcting the viewport after a new turn takes over.
+    virtualizer.cancelScroll()
 
     const feedElement = feedRef.current
     const scrollElement = feedElement?.closest<HTMLElement>('.app-main')
@@ -265,8 +260,8 @@ export function Feed({ entries }: FeedProps) {
         })
       }
 
-      // Native scrolling avoids TanStack's dynamic-size reconciliation
-      // replacing this movement with an immediate corrective scroll.
+      // Reveal the owner message at its position inside the turn instead of
+      // aligning the virtualized turn's outer bounds.
       scrollElement.scrollTo({
         top: targetOffset,
         behavior: 'smooth'

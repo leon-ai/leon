@@ -12,6 +12,9 @@ import { Button } from '@/components/button'
 import { Dialog } from '@/components/dialog'
 import { Dropdown } from '@/components/dropdown'
 import { Input } from '@/components/input'
+import { SessionStatus } from '@/data/sessions'
+
+import { SessionWorkIndicator } from './session-work-indicator'
 
 import './session-list-item.sass'
 
@@ -27,6 +30,7 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 interface SessionListItemProps {
   id: string
   isPinned: boolean
+  status: SessionStatus
   onDelete: (sessionId: string) => void
   onRename: (sessionId: string, title: string) => void
   title: string
@@ -36,6 +40,7 @@ interface SessionListItemProps {
 export function SessionListItem({
   id,
   isPinned,
+  status,
   onDelete,
   onRename,
   title,
@@ -51,6 +56,7 @@ export function SessionListItem({
   const [editing, setEditing] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [draftTitle, setDraftTitle] = useState(title)
+  const isWorking = status === SessionStatus.Wip
   const pinDropdownItem = isPinned
     ? {
         iconName: 'unpin',
@@ -262,7 +268,8 @@ export function SessionListItem({
     <li
       className={clsx('session-list-item', {
         'session-list-item-editing': editing,
-        'session-list-item-pinned': isPinned
+        'session-list-item-pinned': isPinned,
+        'session-list-item-wip': isWorking
       })}
       style={style}
       onMouseEnter={startTitleScroll}
@@ -285,6 +292,7 @@ export function SessionListItem({
           to="/session/$sessionId"
           params={{ sessionId: id }}
           className="session-list-item-link"
+          aria-label={isWorking ? `${title}, Leon is working` : undefined}
           activeProps={{
             className: clsx('session-list-item-link', 'session-list-item-active')
           }}
@@ -295,6 +303,7 @@ export function SessionListItem({
           onFocus={startTitleScroll}
           onBlur={stopTitleScroll}
         >
+          {isWorking && <SessionWorkIndicator />}
           <span
             ref={titleViewportRef}
             className="session-list-item-title"
