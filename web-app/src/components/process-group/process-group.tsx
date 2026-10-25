@@ -10,6 +10,7 @@ import {
 import { clsx } from 'clsx'
 
 import { Collapse } from '@/components/collapse'
+import { ActivityWave } from '@/components/activity-wave'
 
 import './process-group.sass'
 
@@ -71,28 +72,6 @@ export function ProcessGroup({
     setIsExpanded(!isExpanded)
   }
 
-  const headingLayer = (
-    label: string,
-    className?: string,
-    decorative = false
-  ) => (
-    <span
-      className={clsx('process-group-heading-layer', className)}
-      aria-hidden={decorative || undefined}
-    >
-      <span className="process-group-indicator" aria-hidden="true">
-        {indicator}
-      </span>
-      <span className="process-group-title">{label}</span>
-      {!decorative && (
-        <i
-          className="process-group-chevron ri-arrow-right-s-line"
-          aria-hidden="true"
-        />
-      )}
-    </span>
-  )
-
   const label = active ? activeLabel : completedLabel
 
   return (
@@ -112,12 +91,19 @@ export function ProcessGroup({
           aria-expanded={isExpanded}
           onClick={handleToggle}
         >
-          {active && animateWhileActive ? (
-            <span className="process-group-active-content">
-              {headingLayer(label)}
-              {headingLayer(label, 'process-group-wave', true)}
+          <ActivityWave
+            active={active && animateWhileActive}
+            className="process-group-heading-layer"
+          >
+            <span className="process-group-indicator" aria-hidden="true">
+              {indicator}
             </span>
-          ) : headingLayer(label)}
+            <span className="process-group-title">{label}</span>
+          </ActivityWave>
+          <i
+            className="process-group-chevron ri-arrow-right-s-line"
+            aria-hidden="true"
+          />
         </button>
         <Collapse
           id={contentId}
