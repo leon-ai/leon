@@ -2,21 +2,20 @@ import { useEffect, useRef, useState, type TransitionEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
-import { getPublicAssetPath } from '@/config'
-
 import './sidebar.sass'
+import { getPublicAssetPath } from '@/config'
 import { Button } from '@/components/button'
 import { Dialog } from '@/components/dialog'
 import { SearchSessionsDialog } from '@/components/search-sessions-dialog'
+import { useTheme } from '@/hooks/use-theme'
+import { loadImage } from '@/utils/load-image'
 import {
   getStoredSidebarExpanded,
   getStoredSoundsEnabled,
-  getStoredTheme,
   saveSidebarExpanded,
   saveSoundsEnabled,
-  saveTheme,
-  THEME_CHANGE_EVENT,
-  type Theme
+  registerThemePreparation,
+  toggleTheme
 } from '@/theme'
 
 import { Logo } from './logo'
@@ -39,7 +38,7 @@ export function Sidebar() {
   const navigate = useNavigate()
   const sidebarScrollAreaRef = useRef<HTMLDivElement>(null)
   const [soundsEnabled, setSoundsEnabled] = useState(getStoredSoundsEnabled)
-  const [theme, setTheme] = useState<Theme>(getStoredTheme)
+  const theme = useTheme()
   const [sidebarExpanded, setSidebarExpanded] = useState(getStoredSidebarExpanded)
   const [sidebarContentCollapsed, setSidebarContentCollapsed] = useState(
     () => !getStoredSidebarExpanded()
@@ -50,12 +49,12 @@ export function Sidebar() {
   const [searchSessionsDialogOpen, setSearchSessionsDialogOpen] =
     useState(false)
 
-  function toggleTheme(): void {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark'
-
-    setTheme(nextTheme)
-    saveTheme(nextTheme)
-  }
+  useEffect(() => registerThemePreparation(async (nextTheme) => {
+    await loadImage(
+      nextTheme === 'dark' ? DARK_THEME_LOGO_SRC : LIGHT_THEME_LOGO_SRC,
+      'high'
+    )
+  }), [])
 
   function updateSoundsEnabled(nextSoundsEnabled: boolean): void {
     setSoundsEnabled(nextSoundsEnabled)
@@ -118,18 +117,6 @@ export function Sidebar() {
   function openSearchSessionsDialog(): void {
     setSearchSessionsDialogOpen(true)
   }
-
-  useEffect(() => {
-    function handleThemeChange(event: Event): void {
-      setTheme((event as CustomEvent<Theme>).detail)
-    }
-
-    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
-
-    return () => {
-      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
-    }
-  }, [])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {

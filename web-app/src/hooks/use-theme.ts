@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import {
-  getStoredTheme,
+  getCurrentTheme,
   THEME_CHANGE_EVENT,
   type Theme
 } from '@/theme'
@@ -10,7 +10,7 @@ import {
  * Keeps React consumers synchronized with theme changes from any UI surface.
  */
 export function useTheme(): Theme {
-  const [theme, setTheme] = useState<Theme>(getStoredTheme)
+  const [theme, setTheme] = useState<Theme>(getCurrentTheme)
 
   useEffect(() => {
     function handleThemeChange(event: Event): void {

@@ -40,3 +40,19 @@ button
 
 ::view-transition-group(query-input)
   z-index: 10
+
+// Theme snapshots contain the whole composition, including the fixed composer.
+html[data-theme-transition] *
+  view-transition-name: none !important
+
+html[data-theme-transition],
+html[data-theme-transition] *,
+html[data-theme-transition] *::before,
+html[data-theme-transition] *::after
+  transition: none !important
+
+html[data-theme-transition]::view-transition-group(root),
+html[data-theme-transition]::view-transition-old(root),
+html[data-theme-transition]::view-transition-new(root)
+  animation-duration: var(--transition-duration-theme)
+  animation-timing-function: var(--transition-timing-main)

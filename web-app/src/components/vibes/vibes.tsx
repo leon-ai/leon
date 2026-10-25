@@ -1,6 +1,7 @@
 import { clsx } from 'clsx'
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type AnimationEvent,
@@ -24,7 +25,7 @@ import {
 } from './vibes-scenes'
 
 import { useTheme } from '@/hooks/use-theme'
-import type { Theme } from '@/theme'
+import { registerThemePreparation, type Theme } from '@/theme'
 import { loadImage } from '@/utils/load-image'
 
 import './vibes.sass'
@@ -261,6 +262,29 @@ export function Vibes({
   const requestedVibeRef = useRef(requestedVibe)
 
   requestedVibeRef.current = requestedVibe
+
+  useLayoutEffect(() => registerThemePreparation(async (nextTheme) => {
+    let preparedVibe: RenderedVibe
+
+    do {
+      const currentVibe = requestedVibeRef.current
+
+      preparedVibe = {
+        ...currentVibe,
+        assetSrc: resolveVibeSceneAsset(currentVibe.scene, nextTheme),
+        theme: nextTheme
+      }
+
+      await loadImage(preparedVibe.assetSrc, 'high')
+      // Preview selections can change while a theme's artwork is being prepared.
+    } while (preparedVibe.sceneId !== requestedVibeRef.current.sceneId)
+
+    return () => {
+      activeVibeRef.current = preparedVibe
+      setTransition(null)
+      setActiveVibe(preparedVibe)
+    }
+  }), [])
 
   useEffect(() => {
     const nextVibe = requestedVibeRef.current
