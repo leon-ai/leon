@@ -96,7 +96,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
   const typingRef = useRef<HTMLSpanElement>(null)
   const caretRef = useRef<HTMLSpanElement>(null)
   const blockRef = useRef<HTMLSpanElement>(null)
-  const placeholderInkRef = useRef<HTMLSpanElement>(null)
+  const caretInkRef = useRef<HTMLSpanElement>(null)
   const refreshRef = useRef<(() => void) | null>(null)
 
   useLayoutEffect(() => {
@@ -106,11 +106,11 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
     const typing = typingRef.current
     const caret = caretRef.current
     const block = blockRef.current
-    const placeholderInk = placeholderInkRef.current
+    const caretInk = caretInkRef.current
 
     if (
       field === null || viewport === null || mirror === null || typing === null ||
-      caret === null || block === null || placeholderInk === null
+      caret === null || block === null || caretInk === null
     ) {
       return
     }
@@ -122,7 +122,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
     const typingText = createTypingText(typedText)
     const caretLayer = caret
     const caretBlock = block
-    const placeholderGlyph = placeholderInk
+    const caretGlyphs = caretInk
     const motionPreference = window.matchMedia(REDUCED_MOTION_QUERY)
 
     let selectionBeforeInput: TypingSelection | null = null
@@ -151,7 +151,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
       nativeField.classList.remove('input-effects-native-caret')
       layer.hidden = true
       typingText.finish()
-      placeholderGlyph.textContent = ''
+      caretGlyphs.textContent = ''
       cancelMotion()
     }
 
@@ -173,10 +173,10 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
       caretBlock.style.width = `${width}px`
       caretBlock.style.height = `${height}px`
       caretBlock.style.clipPath = frame === 0 ? 'none' : `polygon(${polygon})`
-      // Counter the block's motion so the placeholder's glyphs remain aligned
-      // with the native placeholder, showing contrasting ink only inside it.
-      placeholderGlyph.style.left = `${-x}px`
-      placeholderGlyph.style.top = `${-y}px`
+      // Counter the block's motion so contrasting glyphs stay aligned with the
+      // text and placeholder, and remain clipped to the accent background.
+      caretGlyphs.style.left = `${-x}px`
+      caretGlyphs.style.top = `${-y}px`
     }
 
     function animate(time: number): void {
@@ -322,7 +322,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
 
       text.style.transform = `translate(${-nativeField.scrollLeft}px, ${-nativeField.scrollTop}px)`
       typedText.style.cssText = text.style.cssText
-      placeholderGlyph.style.cssText = text.style.cssText
+      caretGlyphs.style.cssText = text.style.cssText
     }
 
     function renderText(): void {
@@ -335,7 +335,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
         text.textContent = measurement
       }
 
-      placeholderGlyph.textContent = placeholder
+      caretGlyphs.textContent = nativeField.value || placeholder
       typingText.update(
         nativeField.value,
         animateInput && !composing,
@@ -498,7 +498,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
       </span>
       <span ref={caretRef} className="input-effects-caret">
         <span ref={blockRef} className="input-effects-block">
-          <span ref={placeholderInkRef} className="input-effects-placeholder-ink" />
+          <span ref={caretInkRef} className="input-effects-caret-ink" />
         </span>
       </span>
     </span>

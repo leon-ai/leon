@@ -16,7 +16,7 @@
 
 .input-effects-text,
 .input-effects-measurement,
-.input-effects-placeholder-ink
+.input-effects-caret-ink
   position: absolute
   z-index: 1
   top: 0
@@ -28,14 +28,14 @@
 .input-effects-measurement
   visibility: hidden
 
-.input-effects-placeholder-ink
-  color: var(--color-accent-contrast)
+.input-effects-caret-ink
+  color: var(--color-primary-button-text)
 
 .input-effects-caret
   position: absolute
   inset: 0
   color: var(--color-accent)
-  z-index: 0
+  z-index: 2
   clip-path: inset(0 calc(var(--input-caret-width) / -2))
   animation: input-caret-blink 1.8s linear 1.2s infinite
 
