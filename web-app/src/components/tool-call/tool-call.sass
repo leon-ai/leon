@@ -1,5 +1,4 @@
 .tool-call
-  --tool-call-highlight-width: 48px
   --tool-call-title-color: var(--color-text-secondary)
   position: relative
   min-width: 0
@@ -26,7 +25,7 @@
   text-align: left
 
   &:hover
-    .tool-call-heading-layer:not(.tool-call-wave),
+    .tool-call-heading-layer,
     .tool-call-chevron
       color: var(--color-text)
 
@@ -42,25 +41,16 @@
     outline: 1px solid var(--color-accent)
     outline-offset: var(--space-xs)
 
-.tool-call-running-content
-  isolation: isolate
-  display: block
-  position: relative
-  min-width: 0
-  flex: 1 1 auto
-
 .tool-call-heading-layer
   display: flex
   align-items: center
   gap: var(--space-sm)
   min-width: 0
   flex: 1 1 auto
-  color: var(--tool-call-title-color)
+  color: inherit
   transition: color var(--transition-duration-main) var(--transition-timing-main)
 
 .tool-call-tool-icon
-  position: relative
-  z-index: 1
   display: inline-flex
   flex: 0 0 auto
   align-items: center
@@ -78,26 +68,6 @@
   text-overflow: ellipsis
   white-space: nowrap
   color: currentColor
-
-.tool-call-preparing,
-.tool-call-running
-  --tool-call-title-color: var(--color-text)
-
-.tool-call-wave
-  position: absolute
-  inset: 0
-  z-index: 2
-  color: var(--color-activity-wave)
-  pointer-events: none
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
-  -webkit-mask-position: calc(0px - var(--tool-call-highlight-width)) 0
-  -webkit-mask-repeat: no-repeat
-  -webkit-mask-size: var(--tool-call-highlight-width) 100%
-  mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
-  mask-position: calc(0px - var(--tool-call-highlight-width)) 0
-  mask-repeat: no-repeat
-  mask-size: var(--tool-call-highlight-width) 100%
-  animation: tool-call-title-wave var(--activity-animation-duration) linear infinite
 
 .tool-call-duration
   flex: 0 0 auto
@@ -139,19 +109,6 @@
   font-size: var(--font-size-xs)
   line-height: var(--line-height-xs)
 
-@keyframes tool-call-title-wave
-  0%
-    -webkit-mask-position: calc(0px - var(--tool-call-highlight-width)) 0
-    mask-position: calc(0px - var(--tool-call-highlight-width)) 0
-
-  84%
-    -webkit-mask-position: calc(100% + var(--tool-call-highlight-width)) 0
-    mask-position: calc(100% + var(--tool-call-highlight-width)) 0
-
-  100%
-    -webkit-mask-position: calc(100% + var(--tool-call-highlight-width)) 0
-    mask-position: calc(100% + var(--tool-call-highlight-width)) 0
-
 @media (max-width: 680px)
   .tool-call-details
     grid-template-columns: minmax(0, 1fr)
@@ -165,6 +122,3 @@
   .tool-call-heading-layer,
   .tool-call-chevron
     transition: none
-
-  .tool-call-wave
-    display: none

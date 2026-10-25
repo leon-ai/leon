@@ -3,6 +3,7 @@ import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '@/data/feed'
 import { formatToolDuration } from '@/utils/format-tool-duration'
+import { ActivityWave } from '@/components/activity-wave'
 import { Collapse } from '@/components/collapse'
 import { JsonView } from '@/components/json-view'
 
@@ -41,6 +42,9 @@ function formatFunctionName(functionName: string): string {
     : `${label[0]?.toLocaleUpperCase()}${label.slice(1)}`
 }
 
+/**
+ * Shows a tool invocation, its execution state, and expandable input and output.
+ */
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const detailsId = useId()
@@ -59,21 +63,6 @@ export function ToolCall({ toolCall }: ToolCallProps) {
     toolCall.toolName,
     formatFunctionName(toolCall.functionName)
   ].join(' • ')
-  const headingLayer = (
-    className?: string,
-    decorative = false
-  ) => (
-    <span
-      className={clsx('tool-call-heading-layer', className)}
-      aria-hidden={decorative || undefined}
-    >
-      <i
-        className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
-        aria-hidden="true"
-      />
-      <span className="tool-call-title">{toolCall.toolCallTitle}</span>
-    </span>
-  )
 
   return (
     <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
@@ -84,12 +73,16 @@ export function ToolCall({ toolCall }: ToolCallProps) {
         aria-controls={detailsId}
         onClick={() => setIsExpanded((isOpen) => !isOpen)}
       >
-        {isActive ? (
-          <span className="tool-call-running-content">
-            {headingLayer()}
-            {headingLayer('tool-call-wave', true)}
-          </span>
-        ) : headingLayer()}
+        <ActivityWave
+          active={isActive}
+          className="tool-call-heading-layer"
+        >
+          <i
+            className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
+            aria-hidden="true"
+          />
+          <span className="tool-call-title">{toolCall.toolCallTitle}</span>
+        </ActivityWave>
         {toolCall.status === 'preparing' && (
           <span className="tool-call-duration">Preparing call</span>
         )}
