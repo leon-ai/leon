@@ -7,7 +7,7 @@ const MAXIMUM_PIXEL_RATIO = 2
 const TAIL_FRACTION = .36
 const SEGMENT_COUNT = 32
 const TAIL_FALLOFF = 1.6
-const LOOP_FADE_IN_FRACTION = .1
+const LOOP_FADE_FRACTION = .35
 const PEAK_OPACITY = .9
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
@@ -194,20 +194,30 @@ export function createBorderWaveRenderer(
       time - lastDrawTime >= LOOP_FRAME_INTERVAL_MS - FRAME_TOLERANCE_MS
     ) {
       const progress = positionMs / geometry.movementMs
+      const returning = options.repeat &&
+        Math.floor(elapsed / geometry.cycleMs) % 2 === 1
       const travelDistance = geometry.distance +
         (options.repeat ? 0 : geometry.tailLength)
-      const head = progress * travelDistance
-      // Fade through the second corner, ending exactly at its exit tangent.
+      const head = (returning ? 1 - progress : progress) * travelDistance
+      const remainingDistance = returning ? head : geometry.distance - head
+      const fadeOutDistance = returning
+        ? geometry.distance * LOOP_FADE_FRACTION
+        : geometry.cornerLength
+      // Grow into the route rather than flashing at its origin. The return
+      // dissolves gradually into the midpoint before the next outward pass.
       const opacity = options.repeat
-        ? PEAK_OPACITY * smoothStep(progress / LOOP_FADE_IN_FRACTION) *
-          smoothStep((geometry.distance - head) / geometry.cornerLength)
+        ? PEAK_OPACITY * smoothStep(progress / LOOP_FADE_FRACTION) *
+          smoothStep(remainingDistance / fadeOutDistance)
         : 1
       paint.clearRect(0, 0, options.bounds.width, options.bounds.height)
 
       for (const path of geometry.paths) {
         for (const segment of geometry.segments) {
           paint.globalAlpha = opacity * segment.opacity
-          paint.lineDashOffset = segment.offset - head
+          // The fading tail stays behind the head in either direction.
+          paint.lineDashOffset = returning
+            ? -head - segment.offset + geometry.tailLength / SEGMENT_COUNT
+            : segment.offset - head
           paint.stroke(path)
         }
       }
@@ -253,7 +263,20 @@ export function createBorderWaveRenderer(
     options = next
 
     if (geometryChanged) {
+      const previousGeometry = geometry
+
       geometry = createGeometry(next)
+
+      if (next.repeat && previousGeometry !== null) {
+        // A resize must retain the pass and direction already in progress.
+        const pass = Math.floor(elapsedMs / previousGeometry.cycleMs)
+        const position = elapsedMs % previousGeometry.cycleMs
+        const nextPosition = position < previousGeometry.movementMs
+          ? position / previousGeometry.movementMs * geometry.movementMs
+          : geometry.movementMs + position - previousGeometry.movementMs
+
+        elapsedMs = pass * geometry.cycleMs + Math.min(nextPosition, geometry.cycleMs)
+      }
 
       const pixelRatio = Math.min(window.devicePixelRatio, MAXIMUM_PIXEL_RATIO)
 
