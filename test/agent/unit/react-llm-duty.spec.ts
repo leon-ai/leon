@@ -2261,6 +2261,108 @@ describe('continuous agent loop', () => {
     })
   })
 
+  it('continues from tool evidence when review rejects an unnecessary clarification', async () => {
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({
+        toolCalls: [toolCall('unnecessary-pause', AGENT_CLARIFICATION_TOOL_NAME, {
+          question: 'test'
+        })]
+      })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'continue',
+        reason: 'No owner input is missing. Inspect the available usage logs.'
+      }) })
+      .mockImplementationOnce(async (messages, _tools, options) => {
+        expect(options.isCompletionReview).toBeUndefined()
+        expect(messages.at(-1)?.content).toContain('No owner input is missing')
+        expect(JSON.stringify(messages)).not.toContain('<clarification_review>')
+
+        return {
+          toolCalls: [toolCall('inspect-usage', CALLABLE_TOOL_NAME, {
+            query: 'usage logs'
+          })]
+        }
+      })
+      .mockResolvedValueOnce({ textContent: 'The usage logs report a cold cache.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete', reason: 'The inspected logs support the answer.'
+      }) })
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName,
+      status: 'success',
+      observation: 'The usage logs report a cold cache.'
+    } }))
+
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Check why the previous turn missed the cache.' }],
+      catalog: createCatalog(),
+      callModel,
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('The usage logs report a cold cache.')
+    expect(executeFunction).toHaveBeenCalledOnce()
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
+    const review = JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)
+
+    expect(review.review_intent).toBe('clarification')
+    expect(review.review_instructions).toContain('<clarification_review>')
+  })
+
+  it.each([false, true])('accepts a reviewed clarification with unfinished work at the iteration limit=%s', async (atLimit) => {
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({
+        toolCalls: [toolCall('missing-recipient', AGENT_CLARIFICATION_TOOL_NAME, {
+          question: 'Which recipient should I use?'
+        })]
+      })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete', reason: 'The recipient is required and only the owner can select it.'
+      }) })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Send the document.' }],
+      catalog: createCatalog(),
+      initialTrackedSteps: [{ label: 'Send the document', status: 'pending' }],
+      maxIterations: atLimit ? 0 : 1,
+      callModel,
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('clarification')
+    expect(result.answer).toBe('Which recipient should I use?')
+    expect(result.trackedSteps[0]?.status).toBe('pending')
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
+  })
+
+  it.each([null, 'continue'])('preserves work instead of pausing on an unapproved clarification at the iteration limit: %s', async (verdict) => {
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({
+        toolCalls: [toolCall('unapproved-pause', AGENT_CLARIFICATION_TOOL_NAME, {
+          question: 'May I continue?'
+        })]
+      })
+      .mockResolvedValue(verdict === null ? null : { textContent: JSON.stringify({
+        status: verdict, reason: 'The owner has already authorized this work.'
+      }) })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Inspect the logs.' }],
+      catalog: createCatalog(),
+      maxIterations: 0,
+      callModel,
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('progress')
+    expect(result.answer).not.toContain('May I continue?')
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
+  })
+
   it.each(['before', 'after'])(
     'consumes tool evidence before accepting clarification emitted %s another call',
     async (position) => {
@@ -4483,6 +4585,46 @@ describe('model response status', () => {
       }
     }
   )
+
+  it.each([0, 1])('uses low reasoning and disables tools for clarification review with %i operational turns', async (maxIterations) => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+    vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
+      reasoning: 'high', speed: 'fast'
+    })
+    coreMocks.prompt
+      .mockResolvedValueOnce({
+        output: '',
+        toolCalls: [toolCall('choose-recipient', AGENT_CLARIFICATION_TOOL_NAME, {
+          question: 'Which recipient should I use?'
+        })]
+      })
+      .mockResolvedValueOnce({ output: JSON.stringify({
+        status: 'complete', reason: 'The owner must choose the recipient.'
+      }) })
+    const duty = new ReActLLMDuty({ input: 'Send the document.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Send the document.' }],
+      catalog: createCatalog(),
+      maxIterations,
+      callModel: (messages, tools, options) =>
+        duty['callAgentModel'](messages, AGENT_SYSTEM_PROMPT, tools, options),
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('clarification')
+    expect(coreMocks.prompt).toHaveBeenCalledTimes(2)
+    expect(coreMocks.prompt.mock.calls[0]?.[1].reasoningEffort).toBe('high')
+    expect(coreMocks.prompt.mock.calls[1]?.[1]).toMatchObject({
+      reasoningEffort: 'low',
+      toolChoice: 'none',
+      disableContextCompaction: true
+    })
+  })
 
   it('reports review time and retries even when an earlier review fails', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
