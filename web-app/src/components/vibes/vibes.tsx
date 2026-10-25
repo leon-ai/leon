@@ -206,6 +206,8 @@ function VibeFrame({
     }
   }
 
+  // Compact layouts reuse the cached artwork in two edge views so smaller
+  // decorations can stay beside the feed without stretching the scene.
   return (
     <div
       className={clsx(
@@ -223,7 +225,16 @@ function VibeFrame({
       onAnimationEnd={handleAnimationEnd}
       style={getVibeStyle(scene)}
     >
-      <div className="vibes-stage">
+      <div className="vibes-stage vibes-stage-left">
+        <img
+          className="vibes-scene"
+          src={renderedVibe.assetSrc}
+          alt=""
+          decoding="async"
+          draggable="false"
+        />
+      </div>
+      <div className="vibes-stage vibes-stage-right">
         <img
           className="vibes-scene"
           src={renderedVibe.assetSrc}
