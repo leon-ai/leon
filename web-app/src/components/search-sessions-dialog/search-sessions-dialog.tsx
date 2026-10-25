@@ -7,6 +7,7 @@ import {
 import { Link } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
+import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import {
   sessionIndex,
@@ -252,13 +253,13 @@ export function SearchSessionsDialog({
             <p className="search-sessions-dialog-empty-text">
               No session found.
             </p>
-            <Link
+            <Button
               to="/"
-              className="search-sessions-dialog-empty-link"
-              onClick={onSessionSelect}
+              variant="primary"
+              {...(onSessionSelect === undefined ? {} : { onClick: onSessionSelect })}
             >
               New session
-            </Link>
+            </Button>
           </div>
         )}
       </div>
