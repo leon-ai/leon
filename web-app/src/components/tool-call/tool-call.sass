@@ -1,5 +1,4 @@
 .tool-call
-  --tool-call-title-color: var(--color-text-secondary)
   position: relative
   min-width: 0
 
@@ -24,11 +23,10 @@
   line-height: var(--line-height-md)
   text-align: left
 
-  &:hover
-    .tool-call-heading-layer,
-    .tool-call-chevron
-      color: var(--color-text)
+  &:hover:not(:has(> .activity-wave-active))
+    color: var(--color-text)
 
+  &:hover
     .tool-call-chevron
       opacity: 1
 
@@ -83,7 +81,7 @@
   opacity: 0
   font-size: var(--font-size-xl)
   line-height: 1
-  color: var(--tool-call-title-color)
+  color: currentColor
   transform: rotate(0deg)
   transform-origin: center
   transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
