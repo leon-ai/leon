@@ -29,6 +29,16 @@
     &:active
       background-color: var(--color-surface-active)
 
+  &.session-list-item-wip
+    .session-list-item-link
+      position: relative
+      isolation: isolate
+      overflow: hidden
+      background-color: var(--color-surface-hover)
+
+    .session-list-item-title
+      z-index: 1
+
   .session-list-item-actions
     position: absolute
     top: 50%
