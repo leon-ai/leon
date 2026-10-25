@@ -10,7 +10,7 @@
   backdrop-filter: blur(2px)
   opacity: 0
   pointer-events: none
-  transition: opacity var(--transition-duration-sidebar) var(--transition-timing-sidebar)
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main)
 
 .dialog-overlay-open
   opacity: 1
@@ -23,16 +23,12 @@
   border-radius: var(--border-radius-lg)
   color: var(--color-text)
   opacity: 0
-  scale: 1
   scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
   scrollbar-width: thin
-  transform-origin: center
-  transition: opacity var(--transition-duration-sidebar) var(--transition-timing-sidebar), scale var(--transition-duration-sidebar) var(--transition-timing-sidebar)
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main)
 
 .dialog-open
   opacity: 1
-  animation: dialog-enter-pulse .75s cubic-bezier(.16, 1, .3, 1) both
-  scale: 1
 
 .dialog-medium
   width: min(464px, calc(100vw - 32px))
@@ -46,21 +42,6 @@
 
   .dialog-open
     opacity: 0
-    scale: 1
-
-.dialog:not(.dialog-open)
-  opacity: 0
-  scale: 1
-
-@keyframes dialog-enter-pulse
-  0%
-    scale: .75
-
-  25%
-    scale: 1.03
-
-  100%
-    scale: 1
 
 .dialog-header
   display: flex
@@ -120,9 +101,4 @@
 @media (prefers-reduced-motion: reduce)
   .dialog-overlay,
   .dialog
-    animation: none
     transition: none
-
-  .dialog
-    opacity: 1
-    transform: none
