@@ -11,6 +11,7 @@
   --vibes-weather-blend-mode: normal
   --vibes-weather-filter: none
   --vibes-weather-opacity: 1
+  container: vibes / size
   position: fixed
   top: 0
   right: 0
@@ -82,6 +83,9 @@
   opacity: var(--vibes-scene-opacity)
   user-select: none
 
+.vibes-stage-left
+  display: none
+
 .vibes-weather-window
   position: absolute
   top: var(--vibes-window-top)
@@ -149,6 +153,28 @@
 
   to
     opacity: 0
+
+// Size decorations to the available canvas, including changes in sidebar width.
+@container vibes (max-width: 1600px)
+  .vibes-stage
+    left: auto
+    // The outer quarter of each view fits the gutters beside the content column.
+    width: min(100cqw, 115cqh, max(640px, calc((100cqw - var(--content-width)) * 1.85)))
+    transform: none
+
+  .vibes-stage-left
+    --vibes-inline-edge-mask: linear-gradient(90deg, transparent, rgba(0, 0, 0, .5) 6%, #000 12%, #000 22%, transparent 36%)
+    display: block
+    left: 0
+
+  .vibes-stage-right
+    --vibes-inline-edge-mask: linear-gradient(90deg, transparent 62%, #000 76%, #000 88%, rgba(0, 0, 0, .5) 94%, transparent)
+    right: 0
+
+  .vibes-frame[data-vibe-theme='light'] .vibes-stage
+    // Retain the authored white perimeter while blending the split inner edges.
+    -webkit-mask-image: var(--vibes-inline-edge-mask)
+    mask-image: var(--vibes-inline-edge-mask)
 
 @media (max-width: 960px)
   .vibes
