@@ -10,11 +10,13 @@ const REQUIRED_SETTINGS: string[] = []
 const FILE_OUTPUT_PREFIX = 'leon:file:'
 const PROGRESS_OUTPUT_PREFIX = 'leon:progress:'
 const MAX_FORMATS = 200
+const MAX_PLAYLIST_PAGE = 100
 const FORMAT_FIELDS = [
   'format_id', 'ext', 'width', 'height', 'fps', 'vcodec', 'acodec',
   'filesize', 'filesize_approx', 'tbr', 'abr', 'language', 'format_note'
 ] as const
 const FORMATS_TEMPLATE = `{"source":%(.{id,title,webpage_url})j,"formats":%(formats.:.{${FORMAT_FIELDS.join(',')}})j}`
+const PLAYLIST_TEMPLATE = '%(.{id,url,webpage_url,title,duration,channel,uploader,playlist_index})j'
 const SUBTITLE_DESTINATION_PATTERN =
   /Writing (?:video subtitles|video automatic captions) to:\s+(.+)$/
 const YTDLP_EXT_TEMPLATE = '%(ext)s'
@@ -552,6 +554,34 @@ export default class YtdlpTool extends Tool {
       formats: formats.slice(0, MAX_FORMATS),
       totalFormats: formats.length,
       truncated: formats.length > MAX_FORMATS
+    }
+  }
+
+  /**
+   * Page through playlist metadata without extracting or downloading each video.
+   */
+  async listPlaylistItems(
+    playlistUrl: string, startIndex = 0, limit = 50
+  ): Promise<Record<string, unknown>> {
+    if (!Number.isSafeInteger(startIndex) || startIndex < 0 ||
+        !Number.isInteger(limit) || limit < 1 || limit > MAX_PLAYLIST_PAGE ||
+        !Number.isSafeInteger(startIndex + limit + 1)) {
+      throw new Error(`Use a non-negative startIndex and a limit from 1 to ${MAX_PLAYLIST_PAGE}.`)
+    }
+
+    const output = await this.executeCommand({
+      binaryName: 'yt-dlp',
+      args: [...this.getConfigArgs(), '--flat-playlist', '--skip-download',
+        '--playlist-start', String(startIndex + 1),
+        '--playlist-end', String(startIndex + limit + 1),
+        '--print', PLAYLIST_TEMPLATE, '--', playlistUrl],
+      options: { sync: true }
+    })
+    const items = output.split('\n').filter(Boolean).map((line) => JSON.parse(line))
+
+    return {
+      items: items.slice(0, limit), startIndex,
+      nextIndex: items.length > limit ? startIndex + limit : null
     }
   }
 

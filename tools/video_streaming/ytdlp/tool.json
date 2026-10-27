@@ -214,6 +214,31 @@
         "additionalProperties": false
       },
       "read_only": true
+    },
+    "listPlaylistItems": {
+      "description": "Read one bounded playlist page without downloading videos. Pass nextIndex as startIndex to continue.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "playlistUrl": {
+            "type": "string"
+          },
+          "startIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "playlistUrl"
+        ],
+        "additionalProperties": false
+      },
+      "read_only": true
     }
   }
 }

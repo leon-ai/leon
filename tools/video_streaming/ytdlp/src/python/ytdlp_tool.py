@@ -18,12 +18,14 @@ REQUIRED_SETTINGS = []
 FILE_OUTPUT_PREFIX = "leon:file:"
 PROGRESS_OUTPUT_PREFIX = "leon:progress:"
 MAX_FORMATS = 200
+MAX_PLAYLIST_PAGE = 100
 FORMAT_FIELDS = (
     "format_id", "ext", "width", "height", "fps", "vcodec", "acodec",
     "filesize", "filesize_approx", "tbr", "abr", "language", "format_note",
 )
 FORMATS_TEMPLATE = ('{"source":%(.{id,title,webpage_url})j,"formats":%(formats.:.{'
                     + ",".join(FORMAT_FIELDS) + '})j}')
+PLAYLIST_TEMPLATE = "%(.{id,url,webpage_url,title,duration,channel,uploader,playlist_index})j"
 SUBTITLE_DESTINATION_PATTERN = re.compile(
     r"Writing (?:video subtitles|video automatic captions) to:\s+(.+)$"
 )
@@ -524,6 +526,26 @@ class YtdlpTool(BaseTool):
         formats = data.get("formats") or []
         return {"source": data.get("source"), "formats": formats[:MAX_FORMATS],
                 "totalFormats": len(formats), "truncated": len(formats) > MAX_FORMATS}
+
+    def list_playlist_items(
+        self, playlist_url: str, start_index: int = 0, limit: int = 50
+    ) -> dict[str, Any]:
+        """Read one bounded page of playlist entries without downloading media."""
+        if (type(start_index) is not int or start_index < 0 or
+                type(limit) is not int or not 1 <= limit <= MAX_PLAYLIST_PAGE or
+                start_index + limit + 1 > 9_007_199_254_740_991):
+            raise ValueError(f"Use a non-negative startIndex and a limit from 1 to {MAX_PLAYLIST_PAGE}.")
+        output = self.execute_command(ExecuteCommandOptions(
+            binary_name="yt-dlp",
+            args=self._get_config_args() + ["--flat-playlist", "--skip-download",
+                "--playlist-start", str(start_index + 1),
+                "--playlist-end", str(start_index + limit + 1),
+                "--print", PLAYLIST_TEMPLATE, "--", playlist_url],
+            options={"sync": True},
+        ))
+        items = [json.loads(line) for line in output.splitlines() if line]
+        return {"items": items[:limit], "startIndex": start_index,
+                "nextIndex": start_index + limit if len(items) > limit else None}
 
     def _run_download(
         self, args: list[str], on_progress: Optional[ProgressCallback] = None
