@@ -34,10 +34,23 @@ export enum VectorFormat {
 const MAX_MODEL_PREVIEW_BYTES = 8_388_608
 const DEFAULT_SETTINGS = { timeout_ms: 120_000 }
 const MAX_STEPS = 256
+const MAX_INSPECT_ITEMS = 500
 const MIME_TYPES = {
   [VectorFormat.Svg]: 'image/svg+xml',
   [VectorFormat.Pdf]: 'application/pdf',
   [VectorFormat.Png]: 'image/png'
+}
+
+/**
+ * Bounded document queries using the engine's native scope and paging fields.
+ */
+export interface InspectOptions {
+  ids?: number[]
+  kind?: string
+  offset?: number
+  limit?: number
+  depth?: number
+  childLimit?: number
 }
 
 /**
@@ -84,11 +97,31 @@ export default class VectorCraftTool extends Tool {
   /**
    * Inspects artboards, object kinds and fonts without changing the source.
    */
-  public async inspect(inputPath: string): Promise<unknown> {
-    const source = await this.resolveSource(inputPath)
-    const output = await this.runCli(['info', source])
+  public async inspect(inputPath: string, options: InspectOptions = {}): Promise<unknown> {
+    const params = { depth: 2, childLimit: 20, limit: 100, offset: 0, ...options }
 
-    return { document: JSON.parse(output.stdout), diagnostics: output.stderr }
+    for (const [name, maximum] of [
+      ['depth', 4], ['childLimit', 100], ['limit', MAX_INSPECT_ITEMS],
+      ['offset', Number.MAX_SAFE_INTEGER]
+    ] as const) {
+      const value = params[name]
+      if (!Number.isSafeInteger(value) || value < (name === 'offset' ? 0 : 1) || value > maximum) {
+        throw new Error(`Invalid ${name} for bounded document inspection.`)
+      }
+    }
+    if (options.ids && (options.ids.length > MAX_INSPECT_ITEMS ||
+        options.ids.some((id) => !Number.isSafeInteger(id) || id < 0))) {
+      throw new Error('ids must contain at most 500 non-negative object IDs.')
+    }
+
+    const source = await this.resolveSource(inputPath)
+    const output = await this.runCli([
+      'run', '--in', source, '--cmd', 'document.inspect', '--params', JSON.stringify(params)
+    ])
+
+    const result = this.readJsonLines(output.stdout).at(-1) as { result?: unknown } | undefined
+
+    return { document: result?.result, diagnostics: output.stderr }
   }
 
   /**

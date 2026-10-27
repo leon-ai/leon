@@ -34,13 +34,52 @@
       }
     },
     "inspect": {
-      "description": "Inspect document artboards, object counts and fonts without modifying the file.",
+      "description": "Read bounded document artboards, objects and fonts; options support IDs, kind and pagination. Results report total and childCount when sliced.",
       "parameters": {
         "type": "object",
         "properties": {
           "inputPath": {
             "type": "string",
             "description": "Absolute local source file path."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "ids": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 1,
+                "maxItems": 500
+              },
+              "kind": {
+                "type": "string",
+                "description": "Observed object kind; returns matching nodes."
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "depth": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              },
+              "childLimit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              }
+            },
+            "required": [],
+            "additionalProperties": false
           }
         },
         "additionalProperties": false,
