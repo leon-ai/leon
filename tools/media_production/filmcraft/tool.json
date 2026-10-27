@@ -136,11 +136,31 @@
               },
               "startSeconds": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Provide together with endSeconds for a custom range."
               },
               "endSeconds": {
                 "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Provide together with startSeconds."
+              },
+              "preset": {
+                "type": "string",
+                "description": "Observed export preset name; discover export.presets.list through commands."
+              },
+              "quality": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "scale": {
+                "type": "number",
                 "exclusiveMinimum": 0
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "ExportSettings discovered from the installed command registry."
               }
             },
             "additionalProperties": false
