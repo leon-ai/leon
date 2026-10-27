@@ -82,12 +82,12 @@
     }
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-linux-amd64.zip",
-    "linux-aarch64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-linux-arm64.zip",
-    "macosx-x86_64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-osx-amd64.zip",
-    "macosx-arm64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-osx-arm64.zip",
-    "win-amd64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-windows-amd64.zip",
-    "win-arm64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-windows-arm64.zip"
+    "linux-x86_64": "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-amd64.tar.gz",
+    "linux-aarch64": "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-arm64.tar.gz",
+    "macosx-x86_64": "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-osx-amd64.tar.gz",
+    "macosx-arm64": "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-osx-arm64.tar.gz",
+    "win-amd64": "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-windows-amd64.tar.gz",
+    "win-arm64": "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-windows-arm64.tar.gz"
   },
-  "progressive_guidance": "Supports local CSV, TSV, JSON, JSONL, NDJSON and Parquet. Each call uses an ephemeral in-memory database. Only declared files are accessible; network access, extension loading and writes are unavailable. SELECT validation uses DuckDB’s parser. Memory and row limits come from settings; the execution timeout is built in. Output overflow is an error, never a complete empty result."
+  "progressive_guidance": "Supports local CSV, TSV, JSON, JSONL, NDJSON and Parquet. Each call uses an ephemeral in-memory database. Only declared files are accessible; network access, extension loading and writes are unavailable. SELECT validation uses DuckDB\u2019s parser. Memory and row limits come from settings; the execution timeout is built in. Output overflow is an error, never a complete empty result."
 }
