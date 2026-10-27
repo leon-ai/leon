@@ -8,7 +8,7 @@ import {
   type AgentContinuityCheckpointInput
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
-import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
+import { prepareAgentModelContext, splitAgentTranscriptForSummary } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import { appendAgentRuntimeContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
@@ -76,6 +76,37 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it('summarizes accumulated inspection findings while preserving the queued source exchange', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Compare the photo collection.' }
+    ]
+    appendToolExchange(transcript, 1)
+    transcript.at(-1)!.files = [{
+      dataBase64: 'uninspected-preview', mediaType: 'image/png', inspectionPending: true
+    }]
+    for (let page = 0; page < 24; page += 1) {
+      transcript.push({
+        role: 'user',
+        content: `Saved findings for /photos/${page}.jpg: ${'visual facts '.repeat(100)}`,
+        runtimeContext: { visualInspectionBatch: `page-${page}` }
+      })
+    }
+
+    const parts = splitAgentTranscriptForSummary(transcript)!
+    expect(parts).not.toBeNull()
+    expect(parts.recent).toHaveLength(8)
+    expect(parts.visual).toHaveLength(2)
+    const summarize = vi.fn().mockResolvedValue('Verified photo findings remain linked to /photos/0.jpg.')
+    const result = await buildAgentContinuationTranscript(transcript, summarize, createCheckpointInput())
+
+    expect(summarize).toHaveBeenCalledOnce()
+    expect(result.some((message) => message.content.includes('Verified photo findings'))).toBe(true)
+    expect(result.find((message) => message.role === 'tool')).toMatchObject({
+      files: [expect.objectContaining({ inspectionPending: true })]
+    })
+    expect(result.slice(-8)).toEqual(parts.recent)
+  })
+
   it('saves exact pause evidence and plan state while bounding reloadable tool images', () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Prepare the release.' }

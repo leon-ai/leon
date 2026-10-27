@@ -32,6 +32,8 @@ import {
   LLMProviders,
   InferencePurpose,
   CompletionFailureKind,
+  type LLMReasoningEffort,
+  type ProviderActivitySnapshot,
   type AgentToolTranscriptMessage,
   type OpenAITool,
   type OpenAIToolCall,
@@ -50,7 +52,9 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 
 const TRACE_SAVE_INTERVAL_MS = 1_000
 const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
-const COMPLETION_REVIEW_REASONING_EFFORT = 'low'
+const IMAGE_INSPECTION_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const COMPLETION_REVIEW_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const CLARIFICATION_REVIEW_REASONING_EFFORT: LLMReasoningEffort = 'low'
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentTarget().provider
@@ -115,7 +119,7 @@ import {
   findHighConfidenceAgentToolSelection,
   runAgentLoop
 } from './react-llm-duty/agent-loop'
-import type { AgentCallableFunction } from './react-llm-duty/agent-loop'
+import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/agent-loop'
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
 import {
@@ -143,6 +147,10 @@ import {
 import { AgentHistoryManager } from './react-llm-duty/agent-history-manager'
 import { AgentResponseTraceCollector } from './react-llm-duty/agent-response-trace-collector'
 import { AgentSessionState } from './react-llm-duty/agent-session-state'
+import {
+  AGENT_IMAGE_INSPECTION_SCHEMA,
+  hidePendingImagePreviews
+} from './react-llm-duty/agent-image-batches'
 
 const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
   'length',
@@ -551,6 +559,26 @@ export class ReActLLMDuty extends LLMDuty {
           getLLMProviderName()
       )
 
+      // Store findings and queued sources together so a restart can resume
+      // inspection without repeating pages that already have validated notes.
+      const saveCheckpoint = (
+        state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>,
+        reason: string
+      ): void => {
+        this.saveAgentLoopContinuation(createAgentLoopContinuationState({
+          originalInput,
+          clarificationQuestion: reason,
+          planWidgetId: planWidgetIdValue,
+          ...state,
+          loadedToolkitIds: catalog.loadedToolkitIds,
+          loadedToolNames: catalog.loadedToolNames,
+          loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
+          toolOrder: catalog.tools.map((tool) => tool.function.name),
+          planTracking: catalog.planTracking === true,
+          activeSkillId: caller.agentSkillContext?.id ?? null
+        }))
+      }
+
       const result = await runAgentLoop({
         ...(agentTurn ? {
           drainOwnerMessages: agentTurn.drainOwnerMessages,
@@ -700,6 +728,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.reportProgressEvent({ type: 'reasoning_summary', summary: message })
           await this.emitProgress(message, this.answerStream.finish())
         },
+        onInspectionCheckpoint: (state) => saveCheckpoint(state, 'Image inspection is in progress.'),
         onPlanUpdated: (steps) => {
           trackedSteps = steps.map((step) => ({ ...step }))
           emitPlanWidget(
@@ -744,24 +773,9 @@ export class ReActLLMDuty extends LLMDuty {
       )
 
       if (result.intent !== 'answer' && result.intent !== 'cancelled') {
-        this.saveAgentLoopContinuation(
-          createAgentLoopContinuationState({
-            originalInput,
-            clarificationQuestion: result.answer,
-            planWidgetId: planWidgetIdValue,
-            trackedSteps,
-            executionHistory,
-            loadedToolkitIds: catalog.loadedToolkitIds,
-            loadedToolNames: catalog.loadedToolNames,
-            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
-            // Persist pause state directly; resumed inference compacts it when needed.
-            toolOrder: catalog.tools.map((tool) => tool.function.name),
-            planTracking: catalog.planTracking === true,
-            transcript: result.transcript,
-            activeSkillId: caller.agentSkillContext?.id ?? null
-          })
-        )
+        saveCheckpoint({ transcript: result.transcript, trackedSteps, executionHistory }, result.answer)
       } else {
+        ReActLLMDuty.sessionState.getContinuationStore().save(null)
         await ReActLLMDuty.historyManager.saveConversationState(
           {
             transcript: retainRecentToolImages(result.transcript),
@@ -1122,7 +1136,10 @@ export class ReActLLMDuty extends LLMDuty {
       isFinalizationAttempt?: boolean
       isCompletionReview?: boolean
       isCompletionReviewRetry?: boolean
+      completionReviewIntent?: 'answer' | 'clarification'
       isContextRecoveryAttempt?: boolean
+      isImageInspection?: boolean
+      hasPendingImages?: boolean
     },
     checkpointInput?: AgentContinuityCheckpointInput,
     functionsByToolName?: ReadonlyMap<string, AgentCallableFunction>
@@ -1138,6 +1155,12 @@ export class ReActLLMDuty extends LLMDuty {
     this.runBudget?.throwIfExpired()
     const executionSignal = this.getExecutionSignal()
     executionSignal?.throwIfAborted()
+    if (options.isContextRecoveryAttempt) {
+      // An opaque window can itself exceed the wire budget. Rebuild from its
+      // saved sources rather than carrying the same window into recovery.
+      const sources = restoreCompactionSources(transcript, null)
+      transcript.splice(0, transcript.length, ...sources)
+    }
     if (transcript.some((message) =>
       message.role === 'assistant' && message.compactionContext
     )) {
@@ -1146,9 +1169,21 @@ export class ReActLLMDuty extends LLMDuty {
       transcript.splice(0, transcript.length, ...targetTranscript)
     }
 
+    if (!options.isImageInspection) {
+      const projected = hidePendingImagePreviews(transcript)
+      if (projected.some((message, index) => message !== transcript[index])) {
+        options = { ...options, hasPendingImages: true }
+        transcript = projected
+        appendAgentRuntimeContext(transcript, {
+          pending_image_inspection: 'Queued previews have not yet been inspected. Preserve their pending scope and source references; do not claim visual coverage or completion. Resume their inspection when the execution budget allows.'
+        })
+      }
+    }
+
     const phase: AgentPhase = options.isFinalizationAttempt
       ? 'final_answer'
       : 'agent'
+    const isPrivateResponse = options.isCompletionReview || options.isImageInspection
     const activeSystemPrompt = [
       systemPrompt,
       ...(options.isFinalizationAttempt
@@ -1160,7 +1195,7 @@ export class ReActLLMDuty extends LLMDuty {
       this.automaticCompactionFailed = true
     }
     const providerManagesContext = providerName === LLMProviders.OpenAI &&
-      !this.automaticCompactionFailed
+      !this.automaticCompactionFailed && !options.hasPendingImages
     const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
       ? resolveAgentContextRecoveryTriggerTokens(providerName)
       : resolveAgentContextCompactionTriggerTokens(providerName)
@@ -1209,7 +1244,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
     const preparedTranscript = preparedContext.transcript
     const preparedTools = preparedContext.tools
-    const toolChoice = options.isCompletionReview
+    const toolChoice = isPrivateResponse
       ? 'none'
       : 'auto'
     const promptForLog = this.safeJSONStringify(preparedTranscript)
@@ -1223,15 +1258,20 @@ export class ReActLLMDuty extends LLMDuty {
       agentTarget.provider,
       agentTarget.model
     )
-    // Review checks existing evidence with low effort where supported. Models
-    // without that effort retain their normal, provider-compatible settings.
-    const useReviewReasoning = options.isCompletionReview &&
-      modelCapabilities?.reasoning.includes(COMPLETION_REVIEW_REASONING_EFFORT)
-    const configuredReasoning = useReviewReasoning
-      ? COMPLETION_REVIEW_REASONING_EFFORT
+    const internalReasoningEffort = options.isImageInspection
+      ? IMAGE_INSPECTION_REASONING_EFFORT
+      : options.completionReviewIntent === 'clarification'
+        ? CLARIFICATION_REVIEW_REASONING_EFFORT
+        : COMPLETION_REVIEW_REASONING_EFFORT
+    // Apply each phase's effort only when the active model supports it.
+    // Otherwise, retain its normal provider-compatible settings.
+    const useInternalReasoning = isPrivateResponse &&
+      modelCapabilities?.reasoning.includes(internalReasoningEffort)
+    const configuredReasoning = useInternalReasoning
+      ? internalReasoningEffort
       : modelSettings.reasoning
     const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
-    const reasoningEffortBaseline = useReviewReasoning &&
+    const reasoningEffortBaseline = useInternalReasoning &&
       modelCapabilities?.supportsPerMessageReasoning &&
       modelSettings.reasoning !== 'none'
       ? modelSettings.reasoning === 'auto'
@@ -1240,7 +1280,9 @@ export class ReActLLMDuty extends LLMDuty {
       : undefined
     // Claude's response schema changes its cached system prefix. Keep the
     // first review cacheable, using constrained JSON only to recover a retry.
-    const reviewSchema = options.isCompletionReview &&
+    const responseSchema = options.isImageInspection && modelCapabilities?.supportsStructuredOutput
+      ? AGENT_IMAGE_INSPECTION_SCHEMA
+      : options.isCompletionReview &&
       modelCapabilities?.supportsStructuredOutput &&
       (providerName !== LLMProviders.Anthropic || options.isCompletionReviewRetry)
       ? AGENT_COMPLETION_REVIEW_SCHEMA
@@ -1257,8 +1299,8 @@ export class ReActLLMDuty extends LLMDuty {
       configuredReasoning === 'auto'
         ? defaultReasoning.effort
         : configuredReasoning === 'on' ? undefined : configuredReasoning
-    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = useReviewReasoning
-      ? 'review'
+    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = useInternalReasoning
+      ? options.isImageInspection ? 'inspection' : 'review'
       : configuredReasoning === 'auto' ? defaultReasoning.source : 'owner'
     // Auto may recover from reasoning-only exhaustion with less effort.
     // Never disable mandatory reasoning or override an explicit owner choice.
@@ -1286,7 +1328,7 @@ export class ReActLLMDuty extends LLMDuty {
       )
     }
     const shouldEmitReasoning =
-      !options.isCompletionReview && reasoningMode !== 'off' && inferencePolicy.emitReasoning
+      !isPrivateResponse && reasoningMode !== 'off' && inferencePolicy.emitReasoning
 
     const toolNames = preparedTools.map((t) => t.function.name).join(', ')
     // Each model call starts a new block; its streamed chunks share this ID.
@@ -1352,6 +1394,7 @@ export class ReActLLMDuty extends LLMDuty {
     let modelAttempt = 0
     let lastModelProgressAt = modelResponseStartedAt
     let lastAttemptFailureKind: CompletionFailureKind | undefined
+    let lastAttemptDiagnostics: ProviderActivitySnapshot | undefined
     let lastActivityUpdateAt = 0
     const responseAbortController = new AbortController()
     const cancellationSignal = AbortSignal.any([
@@ -1465,17 +1508,18 @@ export class ReActLLMDuty extends LLMDuty {
     try {
       // Reviews must neither expose their text nor replace the proposed answer.
       // A subsequent operational call removes any ending rejected by review.
-      if (!options.isCompletionReview) {
+      if (!isPrivateResponse) {
         this.answerStream.discard()
       } else if (options.isCompletionReviewRetry) {
         this.reviewRetryCount += 1
-      } else {
+      } else if (options.isCompletionReview) {
         this.reviewCount += 1
       }
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
+        ...(options.isImageInspection ? { usagePurpose: InferencePurpose.ImageInspection } : {}),
         systemPrompt: activeSystemPrompt,
-        ...(reviewSchema ? { data: reviewSchema } : {}),
+        ...(responseSchema ? { data: responseSchema } : {}),
         temperature: AGENT_TEMPERATURE,
         // Operational calls leave time for recovery. Finishing and review use
         // the reserved time rather than repeatedly halving the final wait.
@@ -1491,7 +1535,16 @@ export class ReActLLMDuty extends LLMDuty {
             ? timeoutMs
             : Math.min(timeoutMs, Math.max(0, remaining - (this.runBudget?.finishingReserveMs ?? 0)))
         },
-        ...(isFinishingCall ? { remoteProviderErrorRetries: 0 } : {}),
+        ...(isFinishingCall ? { remoteProviderErrorRetries: 0, connectionErrorRetries: 0 } : {}),
+        onConnectionRetry: async ({ attempt, maxRetries, delayMs }): Promise<void> => {
+          cancellationSignal.throwIfAborted()
+          clearWaitDiagnostics()
+          renewModelResponseDeadline(inferenceTimeout + delayMs)
+          emitModelStatus(ModelResponseState.Retrying)
+          await this.emitProgress(
+            `Connection to my model provider failed. Retry ${attempt}/${maxRetries} in ${delayMs / 1_000} seconds.`
+          )
+        },
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
         onAttempt: (timing): void => {
@@ -1502,6 +1555,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.scheduleTraceSave()
           if (timing.outcome !== 'started') {
             lastAttemptFailureKind = timing.failureKind
+            lastAttemptDiagnostics = timing.failureSummary ? timing : undefined
           }
           if (timing.outcome === 'started') {
             if (options.isCompletionReview && modelAttempt > 0) {
@@ -1523,7 +1577,7 @@ export class ReActLLMDuty extends LLMDuty {
           }
         },
         onStreamEvent: (event): void => {
-          if (cancellationSignal.aborted) {
+          if (cancellationSignal.aborted || event.type === 'transport-heartbeat') {
             return
           }
 
@@ -1541,7 +1595,7 @@ export class ReActLLMDuty extends LLMDuty {
           } else if (event.type === 'reasoning-start' || event.type === 'reasoning-end') {
             refreshWaitDiagnostics()
           }
-          if (event.type === 'stream-open' && !options.isCompletionReview) {
+          if (event.type === 'stream-open' && !isPrivateResponse) {
             // A retry replaces any unfinished previews from its predecessor.
             this.closeStreamedToolCalls()
           }
@@ -1556,7 +1610,7 @@ export class ReActLLMDuty extends LLMDuty {
           } else if (event.type === 'reasoning-start') {
             emitModelStatus(ModelResponseState.Reasoning)
           } else if (
-            event.type === 'finish' || (!options.isCompletionReview && (
+            event.type === 'finish' || (!isPrivateResponse && (
               event.type === 'tool-input-start' || event.type === 'tool-input-delta' ||
               event.type === 'tool-call-delta' || event.type === 'tool-call'
             ))
@@ -1576,7 +1630,7 @@ export class ReActLLMDuty extends LLMDuty {
             renewModelResponseDeadline()
           }
 
-          if (!options.isCompletionReview) {
+          if (!isPrivateResponse) {
             if (token.trim()) {
               clearModelStatus()
             }
@@ -1601,7 +1655,7 @@ export class ReActLLMDuty extends LLMDuty {
             this.emitReasoningToken(reasoningChunk, reasoningGenerationId, phase)
           }
         },
-        ...(!options.isCompletionReview
+        ...(!isPrivateResponse
           ? {
               onToolCall: (call): void => {
                 if (cancellationSignal.aborted) {
@@ -1656,7 +1710,7 @@ export class ReActLLMDuty extends LLMDuty {
         ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),
         // Review verdicts do not retain provider context for subsequent calls.
-        disableContextCompaction: options.isCompletionReview || this.automaticCompactionFailed,
+        disableContextCompaction: isPrivateResponse || options.hasPendingImages || this.automaticCompactionFailed,
         tools: preparedTools,
         toolChoice,
         signal: toolCallAbortController.signal,
@@ -1675,7 +1729,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
 
       if (!completionResult && lastAttemptFailureKind === CompletionFailureKind.Timeout) {
-        throw new AgentModelResponseTimeoutError()
+        throw new AgentModelResponseTimeoutError(lastAttemptDiagnostics)
       }
     } catch (error) {
       executionSignal?.throwIfAborted()
@@ -1706,7 +1760,8 @@ export class ReActLLMDuty extends LLMDuty {
           providerError,
           !options.isContextRecoveryAttempt &&
             lastAttemptFailureKind === CompletionFailureKind.Context,
-          lastAttemptFailureKind ?? CompletionFailureKind.Provider
+          lastAttemptFailureKind ?? CompletionFailureKind.Provider,
+          lastAttemptDiagnostics
         )
       }
       return null
@@ -1717,7 +1772,7 @@ export class ReActLLMDuty extends LLMDuty {
       completionResult as unknown as { toolCalls?: OpenAIToolCall[] }
     ).toolCalls
     const observedPhase: AgentPhase =
-      !options.isCompletionReview && (!toolCalls || toolCalls.length === 0) ? 'final_answer' : phase
+      !isPrivateResponse && (!toolCalls || toolCalls.length === 0) ? 'final_answer' : phase
     this.observeCompletionMetrics({
       phase: observedPhase,
       completionStartedAt,
@@ -1795,7 +1850,7 @@ export class ReActLLMDuty extends LLMDuty {
 
     // JSON-mode providers return a parsed verdict; the loop validates its text.
     if (
-      options.isCompletionReview &&
+      isPrivateResponse &&
       completionResult.output &&
       typeof completionResult.output === 'object'
     ) {

@@ -5,7 +5,7 @@ import {
 } from '@huggingface/inference'
 
 import { CONFIG_MANAGER } from '@/config'
-import { resolveProviderConnection } from '../provider-requests'
+import { readResponsesJSON, resolveProviderConnection } from '../provider-requests'
 import { LLMProviders } from '@/core/llm-manager/types'
 import {
   MediaKind,
@@ -18,6 +18,8 @@ import {
   providerRequest
 } from './media-generation-transport'
 import { generateHostedDocument } from './media-generation-hosted-documents'
+import { resolveMediaGenerationAgentTarget } from './media-generation-selection'
+import { createMediaProviderError } from './media-generation-provider-error'
 
 interface ProviderResult {
   files: GeneratedFile[]
@@ -112,15 +114,42 @@ export async function generateWithProvider(
   const subscriptionImage = provider === LLMProviders.OpenAI &&
     Boolean(imageConnection.accountId)
 
-  if (provider === LLMProviders.OpenAI && options['mode'] === 'hosted') {
+  if (provider === LLMProviders.OpenAI && (subscriptionImage || options['mode'] === 'hosted')) {
     const { image_model, ...imageOptions } = options
+    let responseModel = model
+    let imageModel = image_model
+
+    if (subscriptionImage && options['mode'] !== 'hosted') {
+      const target = resolveMediaGenerationAgentTarget(input.session_id)
+
+      // The mainline model hosts the image tool; it must not replace the owner's
+      // selected image model or inherit another conversation's model override.
+      responseModel = target.provider === provider
+        ? target.model
+        : imageConnection.chatModel || ''
+      imageModel = model
+
+      if (!responseModel) {
+        throw new Error('The selected OpenAI account needs a chat model to host image generation.')
+      }
+    }
+    if (subscriptionImage) {
+      if (imageOptions['n'] !== undefined && imageOptions['n'] !== 1) {
+        throw new Error('Subscription image generation requires one image per call.')
+      }
+
+      delete imageOptions['n']
+    }
 
     delete imageOptions['mode']
     const providerResponse = await providerRequest(
       provider,
       '/responses',
       {
-        model,
+        model: responseModel,
+        // Keep accounting on the bounded terminal event rather than a JSON body
+        // containing the complete base64 image.
+        ...(subscriptionImage ? { stream: true } : {}),
         input: [
           {
             role: 'user',
@@ -138,15 +167,24 @@ export async function generateWithProvider(
           {
             type: 'image_generation',
             ...imageOptions,
-            ...(image_model ? { model: image_model } : {})
+            ...(imageModel ? { model: imageModel } : {})
           }
         ]
       },
       signal,
       imageConnection
     )
-    const response = (await providerResponse.json()) as {
+    const response = (subscriptionImage
+      ? await readResponsesJSON(providerResponse, signal)
+      : await providerResponse.json()) as {
       output?: Array<{ type: string, result?: string }>
+      status?: string
+      error?: unknown
+    }
+    if (response.status === 'failed' || response.error) {
+      throw await createMediaProviderError(
+        provider, Response.json(response, { status: 502 }), [imageConnection.apiKey], { prompt }
+      )
     }
     const images = (response.output || []).filter(
       (part) =>
@@ -228,7 +266,6 @@ export async function generateWithProvider(
   }
 
   let imageBody: unknown = {
-    ...(subscriptionImage ? { n: 1, quality: 'auto', size: 'auto', background: 'opaque' } : {}),
     ...options,
     model,
     prompt,
@@ -239,16 +276,7 @@ export async function generateWithProvider(
       ? '/image_generation'
       : '/images/generations'
 
-  if (references.length && subscriptionImage) {
-    // The Codex Images endpoint accepts JSON image URLs rather than multipart files.
-    imageBody = {
-      ...(imageBody as Record<string, unknown>),
-      images: references.map((file) => ({
-        image_url: `data:${file.artifact.mime_type};base64,${file.data.toString('base64')}`
-      }))
-    }
-    imageEndpoint = '/images/edits'
-  } else if (references.length) {
+  if (references.length) {
     const form = new FormData()
 
     form.set('model', model)

@@ -3,10 +3,6 @@ import { inspect } from 'node:util'
 import axios from 'axios'
 
 import { BRAIN } from '@/core'
-import {
-  REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME,
-  STREAM_IDLE_TIMEOUT_ERROR_NAME
-} from '@/core/llm-manager/llm-provider/llm-provider-constants'
 import { withOmittedToolChoice } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import type {
   PreparedCompletionParams,
@@ -14,32 +10,38 @@ import type {
 } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   LLMProviders,
+  LLMDuties,
   CompletionFailureKind,
+  ProviderRetryDecision,
+  ProviderRetryReason,
   type CompletionParams,
   type LLMPromptAbortReason
 } from '@/core/llm-manager/types'
-import { LogHelper } from '@/helpers/log-helper'
+import { StringHelper } from '@/helpers/string-helper'
+import { getConnectionErrorCode } from './provider-request-activity'
+
+export { getConnectionErrorCode, attachProviderFailureDiagnostics } from './provider-request-activity'
 
 const MAX_LOG_SERIALIZED_LENGTH = 4_000
+const MAX_ERROR_CAUSE_DEPTH = 5
+const ERROR_DIAGNOSTIC_FIELDS = [
+  'name', 'message', 'code', 'type', 'param', 'status', 'statusCode',
+  'closeCode', 'closeReason', 'transportPhase', 'handshakeDurationMs',
+  'requestBytes', 'maximumRequestBytes', 'uploadDurationMs', 'uploadElapsedMs',
+  'requestId', 'responseId', 'providerRequestId', 'elapsedMs', 'requestAcceptedMs',
+  'firstProviderEventMs', 'lastProviderEvent', 'lastProviderEventMs',
+  'providerIdleMs', 'providerEventCount', 'providerCompleted', 'failureSummary',
+  'firstOutputMs', 'outputPreliminary', 'retryDecision', 'retryReason',
+  'pingCount', 'pongCount', 'lastPingAgeMs', 'lastPongAgeMs', 'lastPongRttMs'
+] as const
+const ERROR_CAUSE_FIELDS = ['cause', 'error', 'data', 'response'] as const
 
 const RETRYABLE_ERROR_RETRY_DELAY_MS = 1_250
 
 const REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS = 5_000
 
-const CONNECTION_ERROR_CODES = new Set([
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_SOCKET',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'EPIPE',
-  'EHOSTUNREACH',
-  'ENETUNREACH',
-  'EAI_AGAIN',
-  'ENOTFOUND',
-  'ERR_NETWORK'
-])
-
-const TIMEOUT_RETRY_INCREMENT_MS = 30_000
+const MAX_TRANSIENT_FAILURE_RETRY_ELAPSED_MS = 15_000
+const MAX_PROVIDER_CONNECTION_RETRIES = 5
 const CONTEXT_ERROR_CODES = new Set([
   'context_length_exceeded',
   'context_window_exceeded',
@@ -48,9 +50,43 @@ const CONTEXT_ERROR_CODES = new Set([
 const COMPACTION_PARAMETER = 'context_management'
 
 /**
+ * Recognizes payload limits through SDK wrappers and transport causes.
+ */
+function isRequestSizeError(error: unknown): boolean {
+  const pending: unknown[] = [error]
+  const visited = new Set<object>()
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (!current || typeof current !== 'object' || visited.has(current)) {
+      continue
+    }
+
+    visited.add(current)
+    const details = current as Record<string, unknown>
+    if (details['statusCode'] === 413 || details['status'] === 413 ||
+      details['closeCode'] === 1_009) {
+      return true
+    }
+
+    pending.push(details['cause'], details['error'], details['data'], details['response'])
+    if (current instanceof AggregateError) {
+      pending.push(...current.errors)
+    }
+  }
+
+  return false
+}
+
+/**
  * Preserve structured provider failures so recovery does not confuse availability with context.
  */
 export function getCompletionFailureKind(error: unknown): CompletionFailureKind {
+  if (isRequestSizeError(error)) {
+    return CompletionFailureKind.Context
+  }
+  if (getConnectionErrorCode(error)) {
+    return CompletionFailureKind.Connection
+  }
   if (isTimeoutLikeError(error)) {
     return CompletionFailureKind.Timeout
   }
@@ -124,37 +160,40 @@ export function truncateForLog(input: string): string {
  * Recognize transient provider and transport failures.
  */
 function isRetryablePromptError(error: unknown): boolean {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status
-    if (typeof status === 'number') {
-      return status >= 500 || status === 408 || status === 429
+  if (getConnectionErrorCode(error)) {
+    return true
+  }
+
+  const pending: unknown[] = [error]
+  const visited = new Set<object>()
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (!current || typeof current !== 'object' || visited.has(current)) {
+      continue
     }
 
-    const code = (error.code || '').toUpperCase()
-    if (
-      code === 'ECONNABORTED' ||
-      code === 'ECONNRESET' ||
-      code === 'ETIMEDOUT' ||
-      code === 'EAI_AGAIN' ||
-      code === 'ENOTFOUND' ||
-      code === 'ERR_NETWORK'
-    ) {
+    visited.add(current)
+    const details = current as Record<string, unknown>
+    const status = details['statusCode'] ?? details['status']
+    if (typeof status === 'number' && status >= 400) {
+      return status >= 500 || status === 408 || status === 429
+    }
+    if (details['isRetryable'] === true || details['closeCode'] === 1_006) {
       return true
     }
 
+    pending.push(details['cause'], details['error'], details['response'])
+  }
+
+  if (axios.isAxiosError(error)) {
     return !error.response
   }
 
-  const errorObject =
-    error && typeof error === 'object'
-      ? (error as { message?: unknown, name?: unknown, status?: unknown })
-      : null
-  const status =
-    errorObject && typeof errorObject.status === 'number'
-      ? errorObject.status
-      : null
-  if (status !== null) {
-    return status >= 500 || status === 408 || status === 429
+  const errorObject = error && typeof error === 'object'
+    ? error as { message?: unknown, name?: unknown, status?: unknown }
+    : null
+  if (typeof errorObject?.status === 'number') {
+    return false
   }
 
   const name = String(errorObject?.name ?? '').toLowerCase()
@@ -176,43 +215,6 @@ function isRetryablePromptError(error: unknown): boolean {
     combined.includes('enotfound') ||
     combined.includes('provider overloaded')
   )
-}
-
-/**
- * Read transport error codes through SDK wrappers and aggregate dial errors.
- */
-export function getConnectionErrorCode(error: unknown): string | undefined {
-  const pending: unknown[] = [error]
-  const visited = new Set<object>()
-
-  while (pending.length > 0) {
-    const current = pending.pop()
-
-    if (!current || typeof current !== 'object' || visited.has(current)) {
-      continue
-    }
-
-    visited.add(current)
-
-    const details = current as Record<string, unknown>
-    const code = details['code']
-
-    // ETIMEDOUT also describes read timeouts; only classify an explicit dial.
-    if (typeof code === 'string' && (
-      CONNECTION_ERROR_CODES.has(code) ||
-      (code === 'ETIMEDOUT' && details['syscall'] === 'connect')
-    )) {
-      return code
-    }
-
-    pending.push(details['cause'])
-
-    if (current instanceof AggregateError) {
-      pending.push(...current.errors)
-    }
-  }
-
-  return undefined
 }
 
 /**
@@ -261,9 +263,18 @@ export function isTimeoutLikeError(error: unknown): boolean {
 /**
  * Wait for the configured retry backoff.
  */
-export function waitForRetry(delayMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, delayMs)
+export function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort)
+      resolve()
+    }, delayMs)
+    const abort = (): void => {
+      clearTimeout(timer)
+      reject(signal?.reason)
+    }
+    signal?.addEventListener('abort', abort, { once: true })
   })
 }
 
@@ -302,56 +313,41 @@ function isUnsupportedToolChoiceError(error: unknown): boolean {
  * Preserve useful provider error details within the log size limit.
  */
 export function buildProviderErrorDetails(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status
-    const data = error.response?.data
-    return truncateForLog(
-      safeSerialize({
-        name: error.name,
-        message: error.message,
-        ...(typeof status === 'number' ? { status } : {}),
-        ...(data !== undefined ? { data } : {})
-      })
-    )
+  const visited = new Set<object>()
+  const readDetails = (value: unknown, depth = 0): unknown => {
+    if (!value || typeof value !== 'object') {
+      return typeof value === 'string' ? value : String(value)
+    }
+    if (visited.has(value) || depth >= MAX_ERROR_CAUSE_DEPTH) {
+      return '[truncated]'
+    }
+
+    visited.add(value)
+    const source = value as Record<string, unknown>
+    const details: Record<string, unknown> = {}
+
+    // SDK errors carry prompts and headers too. Retain only diagnostic fields,
+    // explicitly reading Error.message because JSON omits it by default.
+    for (const field of ERROR_DIAGNOSTIC_FIELDS) {
+      if (typeof source[field] === 'string' || typeof source[field] === 'number' ||
+        typeof source[field] === 'boolean') {
+        details[field] = source[field]
+      }
+    }
+    for (const field of ERROR_CAUSE_FIELDS) {
+      if (source[field] !== undefined) {
+        details[field] = readDetails(source[field], depth + 1)
+      }
+    }
+    if (value instanceof AggregateError) {
+      details['errors'] = value.errors.slice(0, MAX_ERROR_CAUSE_DEPTH)
+        .map((cause) => readDetails(cause, depth + 1))
+    }
+
+    return details
   }
 
-  const errorObject =
-    error && typeof error === 'object'
-      ? (error as Record<string, unknown>)
-      : null
-
-  if (!errorObject) {
-    return truncateForLog(String(error))
-  }
-
-  const details: Record<string, unknown> = {
-    name:
-      typeof errorObject['name'] === 'string'
-        ? (errorObject['name'] as string)
-        : 'Error',
-    message:
-      typeof errorObject['message'] === 'string'
-        ? (errorObject['message'] as string)
-        : String(error)
-  }
-
-  if (typeof errorObject['status'] === 'number') {
-    details['status'] = errorObject['status'] as number
-  }
-  if (typeof errorObject['statusCode'] === 'number') {
-    details['statusCode'] = errorObject['statusCode'] as number
-  }
-  if (errorObject['body'] !== undefined) {
-    details['body'] = errorObject['body']
-  }
-  if (errorObject['error'] !== undefined) {
-    details['error'] = errorObject['error']
-  }
-  if (errorObject['cause'] !== undefined) {
-    details['cause'] = errorObject['cause']
-  }
-
-  return truncateForLog(safeSerialize(details))
+  return truncateForLog(StringHelper.redactSecrets(safeSerialize(readDetails(error))))
 }
 
 /**
@@ -369,12 +365,12 @@ export function formatPromptErrorForLog(error: unknown): string {
   const name =
     typeof errorObject?.name === 'string' ? errorObject.name : 'Error'
 
-  if (message && message !== '[object Object]') {
-    return `${name}: ${message}`
-  }
-
   const details = buildProviderErrorDetails(error)
-  return details || String(error)
+  return truncateForLog(StringHelper.redactSecrets(
+    message && message !== '[object Object]'
+      ? `${name}: ${message} | ${details}`
+      : details || String(error)
+  ))
 }
 
 /**
@@ -456,177 +452,139 @@ export function buildProviderErrorMessage(
 }
 
 /**
- * Select the next request and wait for the existing retry backoff, if allowed.
+ * Prepares one recovery decision for execution and diagnostics. Waiting and
+ * cancellation remain with the attempt so the remaining budget is checked again.
  */
-export async function prepareCompletionRetry(
-  e: unknown,
+export function prepareCompletionRetry(
+  error: unknown,
   completionParams: PreparedCompletionParams,
-  isRemoteProvider: boolean,
-  abortController: AbortController
-): Promise<CompletionParams | null> {
-  const budgetRetry = (params: CompletionParams): CompletionParams | null => {
-    completionParams.cancellationSignal?.throwIfAborted()
-    const timeout = completionParams.getRetryTimeout?.(params.timeout ?? 0) ?? params.timeout
-
-    if (timeout !== undefined && timeout <= 0) {
-      return null
-    }
-
-    return { ...params, ...(timeout !== undefined ? { timeout } : {}) }
+  isRemoteProvider: boolean
+): {
+  retryDecision: ProviderRetryDecision
+  retryReason: ProviderRetryReason
+  params: CompletionParams | null
+  delayMs: number
+  message?: string
+} {
+  const stop = (retryReason: ProviderRetryReason): ReturnType<typeof prepareCompletionRetry> => ({
+    retryDecision: ProviderRetryDecision.Stop, retryReason, params: null, delayMs: 0
+  })
+  const retry = (
+    params: CompletionParams,
+    message: string,
+    delayMs = 0,
+    retryReason = ProviderRetryReason.Transient
+  ): ReturnType<typeof prepareCompletionRetry> => ({
+    retryDecision: ProviderRetryDecision.Retry, retryReason, params, delayMs, message
+  })
+  if (isRequestSizeError(error)) {
+    return stop(ProviderRetryReason.Size)
   }
 
-  completionParams.cancellationSignal?.throwIfAborted()
-  const retryWait = completionParams.getRetryTimeout?.(completionParams.timeout)
-
-  if (retryWait !== undefined && retryWait <= 0) {
-    return null
+  if ((completionParams.getRetryTimeout?.(completionParams.timeout) ?? completionParams.timeout) <= 0) {
+    return stop(ProviderRetryReason.Deadline)
   }
 
-  const connectionErrorCode = getConnectionErrorCode(e)
-  const isTimeoutError = isTimeoutLikeError(e)
-  const isRetryableNonTimeoutError = isRetryablePromptError(e)
-  const isThinkingToolChoiceConflict =
-    isThinkingToolChoiceConflictError(e)
-  const isUnsupportedToolChoice = isUnsupportedToolChoiceError(e)
-  const promptAbortReason = getPromptAbortReason(e)
   const remainingRetries = completionParams.maxRetries ?? 0
-  const remainingRemoteProviderErrorRetries =
-    completionParams.remoteProviderErrorRetries ?? 0
-
-  const hasForcedToolChoice =
-    Array.isArray(completionParams.tools) &&
-    completionParams.tools.length > 0 &&
-    completionParams.toolChoice !== undefined &&
+  const remainingProviderRetries = completionParams.remoteProviderErrorRetries ?? 0
+  const thinkingConflict = isThinkingToolChoiceConflictError(error)
+  const hasForcedToolChoice = Array.isArray(completionParams.tools) &&
+    completionParams.tools.length > 0 && completionParams.toolChoice !== undefined &&
     completionParams.toolChoice !== 'auto'
+  if (hasForcedToolChoice && !completionParams.relaxForcedToolChoice &&
+    remainingRetries > 0 && (thinkingConflict || isUnsupportedToolChoiceError(error))) {
+    const disableThinking = thinkingConflict && completionParams.disableThinking !== true
 
-  if (
-    isThinkingToolChoiceConflict &&
-    hasForcedToolChoice &&
-    !completionParams.relaxForcedToolChoice &&
-    remainingRetries > 0
-  ) {
-    if (completionParams.disableThinking !== true) {
-      LogHelper.title('LLM Provider')
-      LogHelper.warning(
-        'Provider rejected forced tool_choice with thinking enabled; retrying with thinking disabled while keeping tool_choice'
-      )
+    const message = disableThinking
+      ? 'Provider rejected forced tool_choice with thinking enabled; retrying with thinking disabled while keeping tool_choice'
+      : 'Provider rejected forced tool_choice; retrying without tool_choice for compatibility'
 
-      return budgetRetry({
-        ...completionParams,
-        disableThinking: true,
+    return retry(
+      {
+        ...(disableThinking ? completionParams : withOmittedToolChoice(completionParams)),
+        ...(disableThinking ? { disableThinking: true } : { relaxForcedToolChoice: true }),
         maxRetries: remainingRetries - 1
-      })
-    }
-
-    LogHelper.title('LLM Provider')
-    LogHelper.warning(
-      'Provider rejected forced tool_choice with thinking enabled; retrying without tool_choice'
+      },
+      message,
+      0,
+      ProviderRetryReason.Compatibility
     )
-
-    const retryParams = withOmittedToolChoice(completionParams)
-    return budgetRetry({
-      ...retryParams,
-      relaxForcedToolChoice: true,
-      maxRetries: remainingRetries - 1
-    })
   }
 
-  if (
-    isUnsupportedToolChoice &&
-    hasForcedToolChoice &&
-    !completionParams.relaxForcedToolChoice &&
-    remainingRetries > 0
-  ) {
-    LogHelper.title('LLM Provider')
-    LogHelper.warning(
-      'Provider rejected forced tool_choice; retrying without tool_choice for compatibility'
-    )
+  const details = error && typeof error === 'object'
+    ? error as Record<string, unknown>
+    : {}
+  if (details['providerCompleted'] === true) {
+    return stop(ProviderRetryReason.Completed)
+  }
+  if (typeof details['firstOutputMs'] === 'number') {
+    return stop(ProviderRetryReason.Output)
+  }
+  const connectionCode = getConnectionErrorCode(error)
+  if (connectionCode) {
+    // An accepted request may already have performed provider-owned work.
+    // Recovery reconnects only when no acceptance or output was confirmed.
+    if (details['requestAcceptedMs'] !== undefined) {
+      return stop(ProviderRetryReason.Accepted)
+    }
+    const remaining = completionParams.connectionErrorRetries ??
+      (remainingProviderRetries <= 0 ? 0 : completionParams.dutyType === LLMDuties.ReAct
+        ? MAX_PROVIDER_CONNECTION_RETRIES
+        : remainingProviderRetries)
+    if (remaining <= 0) {
+      return stop(ProviderRetryReason.Exhausted)
+    }
+    const attempt = (completionParams.connectionRetryAttempt ?? 0) + 1
+    const delayMs = REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS * attempt
+    const remainingTime = completionParams.getRetryTimeout?.(delayMs + completionParams.timeout)
+    if (remainingTime !== undefined && remainingTime <= delayMs) {
+      return stop(ProviderRetryReason.Deadline)
+    }
 
-    const retryParams = withOmittedToolChoice(completionParams)
-    return budgetRetry({
-      ...retryParams,
-      relaxForcedToolChoice: true,
-      maxRetries: remainingRetries - 1
-    })
+    return retry(
+      {
+        ...completionParams,
+        connectionErrorRetries: remaining - 1,
+        connectionRetryAttempt: attempt,
+        remoteProviderErrorRetries: 0
+      },
+      `Provider connection failed (${connectionCode}); retry ${attempt}/${attempt + remaining - 1} after ${delayMs}ms`,
+      delayMs,
+      ProviderRetryReason.Connection
+    )
+  }
+  if (typeof details['elapsedMs'] === 'number' &&
+    details['elapsedMs'] > MAX_TRANSIENT_FAILURE_RETRY_ELAPSED_MS) {
+    return stop(ProviderRetryReason.Slow)
   }
 
-  if (
-    !isTimeoutError &&
-    isRemoteProvider &&
-    remainingRemoteProviderErrorRetries > 0
-  ) {
-    if (!abortController.signal.aborted) {
-      abortController.abort()
-    }
-
-    const delayMs = completionParams.getRetryTimeout?.(REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS)
-      ?? REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS
-
-    await waitForRetry(delayMs)
-    const retryParams = budgetRetry({
-      ...completionParams,
-      remoteProviderErrorRetries: remainingRemoteProviderErrorRetries - 1
-    })
-
-    if (!retryParams) {
-      return null
-    }
-
-    LogHelper.title('LLM Provider')
-    LogHelper.warning(
-      connectionErrorCode
-        ? `Provider connection failed (${connectionErrorCode}); retrying after ${delayMs}ms without increasing the inference timeout (${remainingRemoteProviderErrorRetries} retry left)`
-        : `Remote provider failed; retrying after ${delayMs}ms (${remainingRemoteProviderErrorRetries} retry left)`
-    )
-
-    return retryParams
+  const isTimeout = isTimeoutLikeError(error)
+  if (!isTimeout && !isRetryablePromptError(error)) {
+    return stop(ProviderRetryReason.Permanent)
+  }
+  const usesExecutionRetry = !isRemoteProvider || isTimeout
+  if (remainingProviderRetries <= 0 || (usesExecutionRetry && remainingRetries <= 0)) {
+    return stop(ProviderRetryReason.Exhausted)
   }
 
-  if (
-    (isTimeoutError || (!isRemoteProvider && isRetryableNonTimeoutError)) &&
-    remainingRetries > 0
-  ) {
-    if (!abortController.signal.aborted) {
-      abortController.abort()
-    }
+  const delayMs = isTimeout ? 0 : isRemoteProvider
+    ? REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS
+    : RETRYABLE_ERROR_RETRY_DELAY_MS
+  const params = getPromptAbortReason(error)?.shouldRetry
+    ? omitCompletionSignal(completionParams)
+    : completionParams
 
-    const isProgressTimeout = e instanceof Error && (
-      e.name === STREAM_IDLE_TIMEOUT_ERROR_NAME ||
-      e.name === REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
-    )
-    const nextTimeout = isTimeoutError && !isProgressTimeout
-      ? (completionParams.timeout ?? 0) + TIMEOUT_RETRY_INCREMENT_MS
-      : completionParams.timeout
-    const retryParams = promptAbortReason?.shouldRetry
-      ? omitCompletionSignal(completionParams)
-      : completionParams
+  const message = isTimeout
+    ? `Prompt timed out. Previous inference canceled; retrying within the remaining inference budget (${remainingProviderRetries} retry left)`
+    : `Provider failed; retrying after ${delayMs}ms (${remainingProviderRetries} retry left)`
 
-    if (!isTimeoutError) {
-      await waitForRetry(
-        completionParams.getRetryTimeout?.(RETRYABLE_ERROR_RETRY_DELAY_MS)
-          ?? RETRYABLE_ERROR_RETRY_DELAY_MS
-      )
-    }
-
-    const boundedRetry = budgetRetry({
-      ...retryParams,
-      timeout: nextTimeout,
-      maxRetries: remainingRetries - 1
-    })
-
-    if (!boundedRetry) {
-      return null
-    }
-
-    LogHelper.title('LLM Provider')
-    LogHelper.warning(
-      isTimeoutError
-        ? `Prompt timed out. Previous inference canceled; retrying with timeout=${boundedRetry.timeout}ms (${remainingRetries} retry left)`
-        : `Prompt failed with a retryable provider/network error; retrying (${remainingRetries} retry left)`
-    )
-
-    return boundedRetry
-  }
-
-  return null
+  return retry(
+    {
+      ...params,
+      ...(usesExecutionRetry ? { maxRetries: remainingRetries - 1 } : {}),
+      remoteProviderErrorRetries: remainingProviderRetries - 1
+    },
+    message,
+    completionParams.getRetryTimeout?.(delayMs) ?? delayMs
+  )
 }

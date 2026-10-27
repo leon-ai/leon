@@ -27,7 +27,10 @@ export enum InferencePurpose {
   OwnerProfile = 'owner-profile',
   SelfModel = 'self-model',
   Pulse = 'pulse',
-  ContextCompaction = 'context-compaction'
+  PulsePlanning = 'pulse-planning',
+  PulseReaction = 'pulse-reaction',
+  ContextCompaction = 'context-compaction',
+  ImageInspection = 'image-inspection'
 }
 
 export enum LLMProviders {
@@ -64,6 +67,10 @@ export interface AgentModelFile {
   mediaType: string
   filename?: string
   visualDetail?: 'auto' | 'low' | 'high'
+  /**
+   * Keeps queued previews available across checkpoints until findings are saved.
+   */
+  inspectionPending?: boolean
 }
 
 /**
@@ -191,12 +198,26 @@ export interface LLMPromptAbortReason {
  */
 export interface CompletionStreamEvent {
   type: string
+  requestBytes?: number
+  uploadDurationMs?: number
   providerEventType?: string
   transport?: 'http' | 'websocket'
   requestId?: string
   responseId?: string
+  requestAccepted?: boolean
+  providerCompleted?: boolean
+  heartbeat?: {
+    pingCount: number
+    pongCount: number
+    lastPingAt?: number | undefined
+    lastPongAt?: number | undefined
+    lastPongRttMs?: number | undefined
+  }
   toolCallId?: string
   providerExecuted?: boolean
+  /**
+   * Intermediate text expects a continuation; tool results may also be provisional.
+   */
   preliminary?: boolean
   promptCache?: PromptCacheObservation
 }
@@ -223,36 +244,80 @@ export interface PromptCacheObservation {
 }
 
 export enum CompletionFailureKind {
+  Connection = 'connection',
   Timeout = 'timeout',
   Context = 'context',
   Unavailable = 'unavailable',
   Provider = 'provider'
 }
 
+export enum ProviderRetryDecision {
+  Retry = 'retry',
+  Stop = 'stop'
+}
+
+export enum ProviderRetryReason {
+  Connection = 'connection_failure',
+  Accepted = 'accepted_request_outcome_unknown',
+  Transient = 'quick_transient_failure',
+  Compatibility = 'provider_compatibility',
+  Size = 'unchanged_payload_too_large',
+  Completed = 'provider_already_completed',
+  Output = 'partial_output_received',
+  Slow = 'failure_exceeded_retry_window',
+  Exhausted = 'retry_budget_exhausted',
+  Deadline = 'insufficient_remaining_time',
+  Permanent = 'non_transient_failure'
+}
+
 /**
- * Attempt timings distinguish transport waits, generation and retries without prompt content.
+ * Distinguishes transport waits, generation and retry decisions without prompt content.
  */
-export interface CompletionAttemptTiming {
+export interface ProviderActivitySnapshot {
+  providerRequestId?: string | undefined
+  transport?: 'http' | 'websocket' | 'local' | undefined
+  requestId?: string | undefined
+  responseId?: string | undefined
+  requestBytes?: number | undefined
+  uploadDurationMs?: number | undefined
+  requestAcceptedMs?: number | undefined
+  firstProviderEventMs?: number | undefined
+  lastProviderEvent?: string | undefined
+  lastProviderEventMs?: number | undefined
+  providerIdleMs?: number | undefined
+  providerEventCount: number
+  providerCompleted: boolean
+  failureSummary?: string | undefined
+  firstOutputMs?: number | undefined
+  outputPreliminary?: boolean | undefined
+  pingCount?: number | undefined
+  pongCount?: number | undefined
+  lastPingAgeMs?: number | undefined
+  lastPongAgeMs?: number | undefined
+  lastPongRttMs?: number | undefined
+  retryDecision?: ProviderRetryDecision | undefined
+  retryReason?: ProviderRetryReason | undefined
+  elapsedMs: number
+}
+
+export interface CompletionAttemptTiming extends ProviderActivitySnapshot {
   attemptId: string
   startedAt: number
   provider: LLMProviders
   model?: string | undefined
   duty: LLMDuties
+  usagePurpose?: InferencePurpose | undefined
   reasoningEffort?: LLMReasoningEffort | undefined
   serviceTier?: LLMServiceTier | undefined
   transport: 'http' | 'websocket' | 'local'
   outcome: string
   failureKind?: CompletionFailureKind | undefined
   connectionErrorCode?: string | undefined
-  requestId?: string | undefined
-  responseId?: string | undefined
   promptCache?: PromptCacheObservation | undefined
-  elapsedMs: number
   inferenceTimeoutMs: number
   streamIdleTimeoutMs: number
   generationStartMs?: number | undefined
   requestDispatchMs?: number | undefined
-  requestAcceptedMs?: number | undefined
   responseHeadersMs?: number | undefined
   firstByteMs?: number | undefined
   /**
@@ -349,10 +414,22 @@ export interface CompletionParams {
    */
   disableContextCompaction?: boolean
   /**
-   * Internal retry budget for remote provider failures handled by the central
-   * LLM provider wrapper.
+   * Transient failure budget shared by timeout and transport recovery.
    */
   remoteProviderErrorRetries?: number
+  /**
+   * Remaining connection recovery attempts before provider acceptance.
+   */
+  connectionErrorRetries?: number
+  connectionRetryAttempt?: number
+  /**
+   * Reports each connection retry before waiting, without another model call.
+   */
+  onConnectionRetry?: (notice: {
+    attempt: number
+    maxRetries: number
+    delayMs: number
+  }) => Promise<void> | void
   /**
    * Recomputes the retry wait from the caller's remaining work budget.
    * Returning zero preserves time for delivery instead of dispatching a retry.

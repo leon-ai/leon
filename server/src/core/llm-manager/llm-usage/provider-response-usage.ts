@@ -7,8 +7,12 @@ import type { InferenceMetadata } from '../inference-metadata'
 import { InferencePurpose } from '../types'
 import { readProviderUsage, type InferenceUsage } from './usage-context'
 import { appendInferenceUsage } from './usage-ledger'
+import { ProviderRequestActivity, attachProviderFailureDiagnostics, getConnectionErrorCode } from '../llm-provider/provider-request-activity'
 
 const MAXIMUM_USAGE_EVENT_CHARS = 1_048_576
+const ACCEPTANCE_EVENTS = new Set(['response.in_progress', 'message_start'])
+const MAX_DIAGNOSTIC_FIELD_CHARS = 256
+const TRANSPORT_COUNTER_FIELDS = ['closeCode', 'pingCount', 'pongCount', 'lastPongRttMs'] as const
 
 /**
  * Accounts for tool-owned model requests through body consumption, including
@@ -17,7 +21,10 @@ const MAXIMUM_USAGE_EVENT_CHARS = 1_048_576
 export async function trackProviderResponseUsage(
   inference: InferenceMetadata,
   dispatch: () => Promise<Response>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  diagnostics: { activity: ProviderRequestActivity, observeProtocolEvents?: boolean } = {
+    activity: new ProviderRequestActivity()
+  }
 ): Promise<Response> {
   const profileName = getActiveProfileName()
   const sessionId = getActiveConversationSessionId() || null
@@ -27,10 +34,30 @@ export async function trackProviderResponseUsage(
   let outcome = 'failed'
   let canceled = false
   let terminalFailure = false
+  let failure: unknown
   let saved: Promise<void> | undefined
   const finish = (): Promise<void> => {
     if (!saved) {
       signal?.removeEventListener('abort', abort)
+      const activity = diagnostics.activity.snapshot()
+      activity.providerRequestId = id
+      attachProviderFailureDiagnostics(failure, activity, canceled || signal?.aborted)
+      const source = failure && typeof failure === 'object' ? failure as Record<string, unknown> : {}
+      const counters = Object.fromEntries(TRANSPORT_COUNTER_FIELDS.flatMap((field) =>
+        typeof source[field] === 'number' ? [[field, source[field]]] : []
+      ))
+      const details = JSON.stringify({
+        id, sessionId, provider: inference.provider,
+        model: inference.model.slice(0, MAX_DIAGNOSTIC_FIELD_CHARS),
+        outcome: canceled ? 'canceled' : outcome, ...activity, ...counters,
+        connectionErrorCode: getConnectionErrorCode(failure),
+        failureSummary: typeof source['failureSummary'] === 'string' ? source['failureSummary'] : undefined
+      })
+      if (outcome === 'failed' && !canceled && !signal?.aborted) {
+        LogHelper.error(`Provider request ${details}`)
+      } else {
+        LogHelper.debug(`Provider request ${details}`)
+      }
 
       saved = appendInferenceUsage(profileName, {
         id, startedAt, finishedAt: Date.now(), sessionId,
@@ -50,6 +77,7 @@ export async function trackProviderResponseUsage(
   try {
     response = await dispatch()
   } catch (error) {
+    failure = error
     outcome = signal?.aborted ? 'canceled' : 'failed'
     await finish()
     throw error
@@ -70,18 +98,34 @@ export async function trackProviderResponseUsage(
   const observe = (text: string): void => {
     if (text.trim() === '[DONE]') {
       outcome = response.ok && !terminalFailure ? 'completed' : 'failed'
+      if (diagnostics.observeProtocolEvents !== false) {
+        diagnostics.activity.observe({ type: 'provider-event', providerEventType: '[DONE]', providerCompleted: outcome === 'completed' })
+      }
       return
     }
 
     try {
       const event = JSON.parse(text)
       const result = event.response || event.message || event
+      const terminal = !streaming || event.type === 'response.completed' || event.type === 'message_stop'
+      const succeeded = response.ok && !terminalFailure && !result.error &&
+        result.status !== 'failed' && result.status !== 'incomplete'
+
+      if (diagnostics.observeProtocolEvents !== false) {
+        diagnostics.activity.observe({
+          type: 'provider-event',
+          providerEventType: typeof event.type === 'string' ? event.type : 'response',
+          ...(typeof result.id === 'string' ? { responseId: result.id } : {}),
+          requestAccepted: response.ok && !result.error &&
+            (ACCEPTANCE_EVENTS.has(event.type) || Array.isArray(event.choices) || !streaming),
+          providerCompleted: terminal && succeeded
+        })
+      }
 
       usage = { ...usage, ...readProviderUsage(result.usage) }
 
-      if (!streaming || event.type === 'response.completed' || event.type === 'message_stop') {
-        outcome = response.ok && !terminalFailure && !result.error && result.status !== 'failed' &&
-          result.status !== 'incomplete' ? 'completed' : 'failed'
+      if (terminal) {
+        outcome = succeeded ? 'completed' : 'failed'
       } else if (event.type === 'error' || event.type === 'response.failed' ||
         event.type === 'response.incomplete') {
         terminalFailure = true
@@ -156,6 +200,7 @@ export async function trackProviderResponseUsage(
           controller.enqueue(value)
         }
       } catch (error) {
+        failure = error
         outcome = signal?.aborted ? 'canceled' : 'failed'
         await finish()
         controller.error(error)

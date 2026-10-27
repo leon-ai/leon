@@ -1,7 +1,6 @@
 export const CHATGPT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex'
 export const CHATGPT_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 export const CHATGPT_CODEX_AUTH_FLOW = 'codex'
-export const CHATGPT_CODEX_DEFAULT_IMAGE_MODEL = 'gpt-image-2'
 export const CHATGPT_ACCOUNT_CLAIM = 'https://api.openai.com/auth'
 export const CHATGPT_ORIGINATOR = 'leon'
 

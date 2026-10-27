@@ -15,6 +15,7 @@ import {
   type ProviderReasoningItem,
   type ProviderMessageMetadata,
   type ProviderCompactionContext,
+  type ProviderActivitySnapshot,
   type OpenAITool,
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
@@ -42,6 +43,12 @@ import {
   getComputerUseRetryBlocker
 } from './computer-use-convergence'
 import { createAgentTextPreview } from './agent-context-budget'
+import {
+  completeAgentImageBatch,
+  prepareAgentImageBatch,
+  projectAgentImageBatch,
+  type AgentImageBatch
+} from './agent-image-batches'
 import { parseToolCallArguments, validateToolInput } from './agent-utils'
 import { AgentRunDeadlineError, type AgentRunBudget } from './agent-run-budget'
 
@@ -236,7 +243,8 @@ export class AgentModelProviderError extends Error {
     canRetryWithCompaction: boolean,
     public readonly failureKind = canRetryWithCompaction
       ? CompletionFailureKind.Context
-      : CompletionFailureKind.Provider
+      : CompletionFailureKind.Provider,
+    public readonly diagnostics?: ProviderActivitySnapshot
   ) {
     super(message)
     this.name = 'AgentModelProviderError'
@@ -248,7 +256,7 @@ export class AgentModelProviderError extends Error {
  * Ends exhausted model recovery while preserving the task's execution state.
  */
 export class AgentModelResponseTimeoutError extends Error {
-  constructor() {
+  constructor(public readonly diagnostics?: ProviderActivitySnapshot) {
     super('The model response exceeded its time limit. The task is incomplete; the session retains the work done so far.')
     this.name = 'AgentModelResponseTimeoutError'
   }
@@ -351,8 +359,11 @@ interface AgentModelCallOptions {
   isFinalizationAttempt?: boolean
   isCompletionReview?: boolean
   isCompletionReviewRetry?: boolean
+  completionReviewIntent?: 'answer' | 'clarification'
   requiresPlanReconciliation?: boolean
   isContextRecoveryAttempt?: boolean
+  isImageInspection?: boolean
+  hasPendingImages?: boolean
   elapsedMs?: number
   remainingIterations?: number
 }
@@ -381,6 +392,9 @@ export interface AgentLoopParams {
   onAgentSkillLoaded?: (context: AgentSkillContext) => void
   onPlanUpdated?: (steps: TrackedPlanStep[]) => void
   onProgressMessage?: (message: string) => Promise<void> | void
+  onInspectionCheckpoint?: (
+    state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>
+  ) => Promise<void> | void
   drainOwnerMessages?: () => Promise<AgentToolTranscriptMessage[]>
   getOwnerMessageSignal?: () => AbortSignal
   onOwnerMessagesApplied?: () => void
@@ -909,6 +923,11 @@ export async function runAgentLoop(
   let hasUsedOutputRecovery = false
   let hasUsedContextRecovery = false
   let hasOwnerUpdates = false
+  const lastQueuedSource = transcript.findLastIndex((message) =>
+    message.role !== 'assistant' && message.files?.some((file) => file.inspectionPending)
+  )
+  let pendingOwnerReassessment = lastQueuedSource >= 0 &&
+    transcript.findLastIndex((message) => message.role === 'user' && !message.runtimeContext) > lastQueuedSource
   let operationalTurnsSincePlanUpdate = 0
 
   if (trackedSteps.length > 0) {
@@ -924,6 +943,7 @@ export async function runAgentLoop(
     }
     if (await appendPendingOwnerMessages(params, transcript)) {
       hasOwnerUpdates = true
+      pendingOwnerReassessment = true
     }
     // Continue an unfinished authorized run once, with bounded resume context.
     // This is a bounded finishing pass, not a new task or a renewed permission.
@@ -946,6 +966,8 @@ export async function runAgentLoop(
       })
     }
     let modelResult: AgentModelResult | null
+    let imageBatch: AgentImageBatch | null = null
+    let isImageInspection = false
     let isRecoveryAttempt = false
     let isOutputRecoveryAttempt = false
     // Once a provider needs the smaller context target, keep that target for
@@ -975,13 +997,18 @@ export async function runAgentLoop(
         if (setupTool) {
           params.catalog.tools.push(setupTool)
         }
+        imageBatch = prepareAgentImageBatch(transcript)
+        isImageInspection = imageBatch !== null && !pendingOwnerReassessment
         modelResult = await params.callModel(
-          transcript,
+          imageBatch
+            ? projectAgentImageBatch(transcript, imageBatch, pendingOwnerReassessment)
+            : transcript,
           params.catalog.tools,
           {
             isRecoveryAttempt,
             elapsedMs: Date.now() - startedAt,
             remainingIterations,
+            ...(imageBatch ? { isImageInspection, hasPendingImages: true } : {}),
             ...(remindPlan ? { requiresPlanReconciliation: true } : {}),
             ...(isOutputRecoveryAttempt ? { isOutputRecoveryAttempt: true } : {}),
             ...(isContextRecoveryAttempt
@@ -999,6 +1026,7 @@ export async function runAgentLoop(
         }
         if (await appendPendingOwnerMessages(params, transcript)) {
           hasOwnerUpdates = true
+          pendingOwnerReassessment = true
           continue agentIterations
         }
 
@@ -1010,7 +1038,8 @@ export async function runAgentLoop(
           }
 
           return createResumableAgentResult(
-            CompletionFailureKind.Timeout, transcript, executionHistory, trackedSteps
+            CompletionFailureKind.Timeout, transcript, executionHistory, trackedSteps,
+            false, error.diagnostics
           )
         }
         if (
@@ -1022,6 +1051,9 @@ export async function runAgentLoop(
           hasUsedContextRecovery = true
           isRecoveryAttempt = true
           isContextRecoveryAttempt = true
+          await params.onProgressMessage?.(
+            'The saved context needs to be reduced. I am rebuilding it from the retained sources and retrying once.'
+          )
           continue
         }
 
@@ -1031,7 +1063,9 @@ export async function runAgentLoop(
             : CompletionFailureKind.Provider,
           transcript,
           executionHistory,
-          trackedSteps
+          trackedSteps,
+          false,
+          error instanceof AgentModelProviderError ? error.diagnostics : undefined
         )
       }
       if (!modelResult) {
@@ -1072,8 +1106,27 @@ export async function runAgentLoop(
     // tools or publish a final answer. Reconsider it through the existing loop.
     if (await appendPendingOwnerMessages(params, transcript)) {
       hasOwnerUpdates = true
+      pendingOwnerReassessment = true
       continue
     }
+
+    if (imageBatch && isImageInspection) {
+      // A complete observation page is required before releasing its previews.
+      // Partial, interrupted or tool-bearing replies leave the queue intact.
+      if (modelResult.isTruncated || modelResult.toolCalls?.length ||
+        !completeAgentImageBatch(transcript, imageBatch, modelResult.textContent ?? '')) {
+        return createResumableAgentResult(
+          'synthesis', transcript, executionHistory, trackedSteps
+        )
+      }
+
+      await params.onInspectionCheckpoint?.({ transcript, executionHistory, trackedSteps })
+      await params.onProgressMessage?.(
+        `Saved findings for this image batch. Images inspected: ${imageBatch.entries.length}; remaining: ${imageBatch.remainingImages}.`
+      )
+      continue
+    }
+    pendingOwnerReassessment = false
 
     const emittedToolCalls = modelResult.toolCalls || []
     const toolCalls = emittedToolCalls.slice(
@@ -1106,6 +1159,15 @@ export async function runAgentLoop(
 
     if (toolCalls.length === 0) {
       if (textContent) {
+        if (imageBatch) {
+          // A status reply to owner steering cannot finish uninspected work.
+          appendAgentTranscriptMessage(transcript, {
+            role: 'assistant', content: textContent, ...reasoning
+          })
+          await params.onProgressMessage?.(textContent)
+          continue
+        }
+
         const canSkipReview = iteration === 1 && !hasOwnerUpdates &&
           !hasUsedOutputRecovery && !hasUsedContextRecovery && !hasEnteredFinishing &&
           params.initialExecutionHistory === undefined &&
@@ -1120,6 +1182,7 @@ export async function runAgentLoop(
           )
           if (await appendPendingOwnerMessages(params, transcript)) {
             hasOwnerUpdates = true
+            pendingOwnerReassessment = true
             continue
           }
 
@@ -1226,6 +1289,7 @@ export async function runAgentLoop(
         toolCalls.slice(callIndex)
       )) {
         hasOwnerUpdates = true
+        pendingOwnerReassessment = true
         wasSteered = true
         break
       }
@@ -1301,6 +1365,7 @@ export async function runAgentLoop(
     if (terminalSignal) {
       if (wasSteered || await appendPendingOwnerMessages(params, transcript)) {
         hasOwnerUpdates = true
+        pendingOwnerReassessment = true
         continue
       }
 
@@ -1311,6 +1376,7 @@ export async function runAgentLoop(
         )
         if (await appendPendingOwnerMessages(params, transcript)) {
           hasOwnerUpdates = true
+          pendingOwnerReassessment = true
           continue
         }
 
@@ -1471,6 +1537,7 @@ async function reviewAgentCompletion(
       params.runBudget?.throwIfExpired()
       const response = await params.callModel(messages, params.catalog.tools, {
         isRecoveryAttempt: false, isCompletionReview: true,
+        completionReviewIntent: intent,
         isCompletionReviewRetry: attempt > 0,
         ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
       }, state)
@@ -1555,7 +1622,17 @@ async function finalizeAgentLoopAtLimit(
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
 ): Promise<AgentLoopResult> {
-  await appendPendingOwnerMessages(params, transcript)
+  const ownerUpdated = await appendPendingOwnerMessages(params, transcript)
+  const pendingImages = transcript.reduce((count, message) => count + (
+    message.role === 'assistant' ? 0 :
+      message.files?.filter((file) => file.inspectionPending).length ?? 0
+  ), 0)
+  if (pendingImages > 0 && !ownerUpdated) {
+    return {
+      answer: `The inspection reached its iteration limit. Images still uninspected: ${pendingImages}. Findings and remaining sources are saved in this session; the task is incomplete.`,
+      intent: 'error', transcript, executionHistory, trackedSteps
+    }
+  }
 
   const primaryOutcome = await attemptAgentLimitFinalization(
     params,
@@ -1862,15 +1939,26 @@ function createResumableAgentResult(
   transcript: AgentToolTranscriptMessage[],
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[],
-  answerDrafted = false
+  answerDrafted = false,
+  diagnostics?: ProviderActivitySnapshot
 ): AgentLoopResult {
   const answer = buildResumableAgentAnswer(
     failureKind,
     trackedSteps,
     answerDrafted
   )
+  if (diagnostics?.failureSummary) {
+    transcript.push({
+      role: 'user',
+      content: JSON.stringify({ provider_failure: diagnostics }),
+      runtimeContext: { providerFailure: diagnostics }
+    })
+  }
+
   return {
-    answer,
+    answer: diagnostics?.failureSummary && failureKind !== CompletionFailureKind.Connection
+      ? `${diagnostics.failureSummary}\n\n${answer}`
+      : answer,
     intent: 'error',
     transcript,
     executionHistory,
@@ -1884,6 +1972,7 @@ function buildResumableAgentAnswer(
   answerDrafted = false
 ): string {
   const explanations: Record<typeof failureKind, string> = {
+    [CompletionFailureKind.Connection]: 'I couldn\'t reconnect to my model provider, so I couldn\'t resume.',
     deadline: 'The task reached its run deadline.',
     review: 'The completion check failed.',
     [CompletionFailureKind.Timeout]: 'The model response exceeded its time limit.',

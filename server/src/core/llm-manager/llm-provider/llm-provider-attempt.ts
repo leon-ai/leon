@@ -9,6 +9,7 @@ import {
 } from '@/core/llm-manager/llm-provider/llm-provider-constants'
 import {
   buildProviderErrorDetails,
+  attachProviderFailureDiagnostics,
   buildProviderErrorMessage,
   createPromptAbortError,
   formatPromptErrorForLog,
@@ -39,6 +40,7 @@ import type {
 } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   LLMProviders,
+  ProviderRetryReason,
   type CompletionParams,
   type CompletionStreamEvent,
   type CompletionAttemptTiming,
@@ -52,6 +54,7 @@ import {
 import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { LogHelper } from '@/helpers/log-helper'
 import { recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
+import { ProviderRequestActivity } from './provider-request-activity'
 
 const LEADING_EMPTY_THINKING_BLOCK_PATTERN = /^(?:\s*<think>\s*<\/think>)+\s*/i
 
@@ -94,6 +97,7 @@ export async function runCompletionAttempt(
   let streamStallTimeoutHandle: NodeJS.Timeout | null = null
   let hasStartedStreaming = false
   const completionStartedAt = Date.now()
+  const activity = new ProviderRequestActivity(completionStartedAt)
   let generationStartedAt: number | null = null
   let firstTokenAt: number | undefined
   let firstReasoningTokenAt: number | undefined
@@ -102,7 +106,6 @@ export async function runCompletionAttempt(
   let firstEventAt: number | undefined
   let streamOpenedAt: number | undefined
   let requestDispatchedAt: number | undefined
-  let requestAcceptedAt: number | undefined
   let responseHeadersAt: number | undefined
   let firstByteAt: number | undefined
   let lastEventAt: number | undefined
@@ -112,13 +115,13 @@ export async function runCompletionAttempt(
   let transport: CompletionAttemptTiming['transport'] = provider.transport ?? (
     isRemoteProvider ? 'http' : 'local'
   )
-  let requestId: string | undefined
-  let responseId: string | undefined
   let promptCache: PromptCacheObservation | undefined
   let isReasoning = false
   let isCompacting = false
+  let isAwaitingContinuation = false
   const pendingHostedTools = new Set<string>()
   const attemptId = randomUUID()
+  let retryDiagnostics: Pick<CompletionAttemptTiming, 'retryDecision' | 'retryReason'> | undefined
   const idleTimeout = completionParams.streamIdleTimeout ?? (
     isRemoteProvider
       ? Math.min(REMOTE_STREAM_IDLE_TIMEOUT_MS, completionParams.timeout)
@@ -130,11 +133,13 @@ export async function runCompletionAttempt(
     }
 
     const timing: CompletionAttemptTiming = {
+      ...activity.snapshot(),
       attemptId,
       startedAt: completionStartedAt,
       provider: providerName,
       model: provider.modelName,
       duty: completionParams.dutyType,
+      usagePurpose: completionParams.usagePurpose,
       reasoningEffort: completionParams.reasoningEffort,
       serviceTier: completionParams.serviceTier,
       transport,
@@ -143,8 +148,10 @@ export async function runCompletionAttempt(
         failureKind: getCompletionFailureKind(error)
       } : {}),
       connectionErrorCode: getConnectionErrorCode(error),
-      requestId,
-      responseId,
+      failureSummary: error instanceof Error
+        ? (error as Error & { failureSummary?: string }).failureSummary
+        : undefined,
+      ...retryDiagnostics,
       ...(promptCache ? { promptCache } : {}),
       elapsedMs: Date.now() - completionStartedAt,
       inferenceTimeoutMs: completionParams.timeout,
@@ -155,9 +162,6 @@ export async function runCompletionAttempt(
       requestDispatchMs: requestDispatchedAt === undefined
         ? undefined
         : requestDispatchedAt - completionStartedAt,
-      requestAcceptedMs: requestAcceptedAt === undefined
-        ? undefined
-        : requestAcceptedAt - completionStartedAt,
       responseHeadersMs: responseHeadersAt === undefined
         ? undefined
         : responseHeadersAt - completionStartedAt,
@@ -224,7 +228,7 @@ export async function runCompletionAttempt(
     }
   }
   const resetStreamStallTimeout = (
-    delay = isReasoning || isCompacting || pendingHostedTools.size > 0
+    delay = isReasoning || isCompacting || isAwaitingContinuation || pendingHostedTools.size > 0
       ? completionParams.timeout
       : idleTimeout,
     errorName = STREAM_IDLE_TIMEOUT_ERROR_NAME
@@ -251,6 +255,7 @@ export async function runCompletionAttempt(
     }, delay)
   }
   const markStreamStarted = (): void => {
+    activity.generationStarted()
     if (!hasStartedStreaming) {
       hasStartedStreaming = true
       generationStartedAt = Date.now()
@@ -277,6 +282,7 @@ export async function runCompletionAttempt(
 
     if (chunk.length > 0) {
       firstTokenAt ??= Date.now()
+      activity.outputStarted()
       recordActivity('text-delta')
       lastOutputAt = Date.now()
       markStreamStarted()
@@ -292,6 +298,7 @@ export async function runCompletionAttempt(
 
     if (reasoningChunk.length > 0) {
       firstReasoningTokenAt ??= Date.now()
+      activity.outputStarted()
       recordActivity('reasoning-delta')
       lastOutputAt = Date.now()
       markStreamStarted()
@@ -306,6 +313,13 @@ export async function runCompletionAttempt(
       return
     }
 
+    activity.observe(event)
+
+    if (event.type === 'transport-heartbeat') {
+      completionParams.onStreamEvent?.(event)
+      return
+    }
+
     if (event.promptCache) {
       promptCache = event.promptCache
       completionParams.onStreamEvent?.(event)
@@ -313,8 +327,23 @@ export async function runCompletionAttempt(
     }
 
     transport = event.transport ?? transport
-    requestId = event.requestId ?? requestId
-    responseId = event.responseId ?? responseId
+
+    // Connection setup and upload share the initial inference deadline. The
+    // provider cannot accept the complete request until its payload is sent.
+    if (event.type === 'request-upload-start' || event.type === 'request-uploaded') {
+      if (!hasStartedStreaming) {
+        clearStreamStallTimeout()
+        if (event.type === 'request-uploaded' && isRemoteProvider &&
+          transport === 'websocket' && activity.snapshot().requestAcceptedMs === undefined) {
+          resetStreamStallTimeout(
+            Math.min(REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS, completionParams.timeout),
+            REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
+          )
+        }
+      }
+      completionParams.onStreamEvent?.(event)
+      return
+    }
 
     if (
       event.type === 'tool-input-start' || event.type === 'tool-input-delta' ||
@@ -326,23 +355,13 @@ export async function runCompletionAttempt(
     if (event.type === 'request-dispatched') {
       requestDispatchedAt ??= Date.now()
 
-      // A socket can remain open without accepting a new request. Bound this
-      // wait separately from reasoning after the provider accepts generation.
-      if (isRemoteProvider && transport === 'websocket' && !hasStartedStreaming) {
-        resetStreamStallTimeout(
-          Math.min(REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS, completionParams.timeout),
-          REQUEST_ACCEPTANCE_TIMEOUT_ERROR_NAME
-        )
-      } else if (!hasStartedStreaming) {
-        // HTTP fallback retains its ordinary initial inference deadline.
+      if (!hasStartedStreaming) {
         clearStreamStallTimeout()
       }
     } else if (event.type === 'provider-event' && event.providerEventType) {
       recordActivity(event.providerEventType)
 
-      if (event.providerEventType === 'response.in_progress') {
-        requestAcceptedAt ??= Date.now()
-
+      if (event.requestAccepted) {
         if (!hasStartedStreaming) {
           clearStreamStallTimeout()
         }
@@ -377,6 +396,13 @@ export async function runCompletionAttempt(
         clearTimeout(timeoutHandle)
         timeoutHandle = null
       }
+    } else if (event.type === 'text-start') {
+      // A progress update may be followed by silent planning before tools or
+      // the final answer. It retains the bounded reasoning allowance.
+      isAwaitingContinuation = event.preliminary === true
+      if (hasStartedStreaming) {
+        resetStreamStallTimeout()
+      }
     } else if (event.type === 'compaction-start') {
       // Context maintenance may continue silently after the answer is drafted.
       isCompacting = true
@@ -393,6 +419,8 @@ export async function runCompletionAttempt(
       isReasoning = false
       resetStreamStallTimeout()
     } else if (STREAM_OUTPUT_EVENTS.has(event.type)) {
+      isAwaitingContinuation = false
+      activity.outputStarted()
       lastOutputAt = Date.now()
       markStreamStarted()
       resetStreamStallTimeout()
@@ -470,27 +498,8 @@ export async function runCompletionAttempt(
       )
     )
   } catch (e) {
-    logAttempt('failed', e)
-    removeCallerAbortListener()
-    completionParams.cancellationSignal?.throwIfAborted()
-    LogHelper.title('LLM Provider')
-    LogHelper.error(
-      `Error to complete prompt: ${formatPromptErrorForLog(e)}`
-    )
-    LogHelper.timeEnd(measureExecutionTimeLabel)
-
-    if (trackProviderErrors) {
-      reportError(
-        buildProviderErrorMessage(
-          providerName,
-          formatPromptErrorForLog(e),
-          buildProviderErrorDetails(e),
-          isRemoteProvider
-        )
-      )
-    }
-
-    return null
+    // Synchronous adapter errors use the same bounded recovery as async errors.
+    rawResultPromise = Promise.reject(e)
   }
   // Ensure late rejections after timeout/abort are consumed to avoid
   // unhandled promise rejection noise when we already moved to a retry.
@@ -529,6 +538,15 @@ export async function runCompletionAttempt(
     }
     clearStreamStallTimeout()
   } catch (e) {
+    attachProviderFailureDiagnostics(e, activity.snapshot(), callerAbortSignal?.aborted)
+    const recovery = prepareCompletionRetry(e, completionParams, isRemoteProvider)
+    retryDiagnostics = { retryDecision: recovery.retryDecision, retryReason: recovery.retryReason }
+    if (e instanceof Error) {
+      Object.assign(e, retryDiagnostics)
+      if (recovery.retryReason === ProviderRetryReason.Size) {
+        Object.assign(e, { failureSummary: 'The request exceeded the provider transport size limit.' })
+      }
+    }
     logAttempt(e instanceof Error ? e.name : 'failed', e)
     removeCallerAbortListener()
     if (timeoutHandle) {
@@ -560,15 +578,27 @@ export async function runCompletionAttempt(
     )
     LogHelper.timeEnd(measureExecutionTimeLabel)
 
-    const retryParams = await prepareCompletionRetry(
-      e,
-      completionParams,
-      isRemoteProvider,
-      abortController
-    )
+    if (recovery.params) {
+      abortController.abort()
+      if (recovery.retryReason === ProviderRetryReason.Connection) {
+        const attempt = recovery.params.connectionRetryAttempt!
+        await completionParams.onConnectionRetry?.({
+          attempt,
+          maxRetries: attempt + recovery.params.connectionErrorRetries!,
+          delayMs: recovery.delayMs
+        })
+      }
+      if (recovery.delayMs > 0) {
+        await waitForRetry(recovery.delayMs, completionParams.cancellationSignal ?? completionParams.signal)
+      }
+      completionParams.cancellationSignal?.throwIfAborted()
+      const timeout = completionParams.getRetryTimeout?.(recovery.params.timeout ?? 0)
+        ?? recovery.params.timeout
 
-    if (retryParams) {
-      return retry(retryParams)
+      if (timeout === undefined || timeout > 0) {
+        LogHelper.warning(recovery.message!)
+        return retry({ ...recovery.params, ...(timeout !== undefined ? { timeout } : {}) })
+      }
     }
 
     if (trackProviderErrors) {
@@ -774,6 +804,7 @@ export async function runCompletionAttempt(
     removeCallerAbortListener()
     clearStreamStallTimeout()
     rejectStreamStall = null
+    attachProviderFailureDiagnostics(e, activity.snapshot(), callerAbortSignal?.aborted)
     logAttempt('failed', e)
     completionParams.cancellationSignal?.throwIfAborted()
     LogHelper.title('LLM Provider')
@@ -794,6 +825,9 @@ export async function runCompletionAttempt(
         ? { cachedInputTokens: accounting.cachedInputTokens }
         : {})
     }
+  }
+  if (!activity.snapshot().providerCompleted) {
+    activity.observe({ type: 'finish', requestAccepted: true, providerCompleted: true })
   }
   logAttempt('completed')
 

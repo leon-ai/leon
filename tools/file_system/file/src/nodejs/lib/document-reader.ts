@@ -8,6 +8,10 @@ import { PDFReader } from './pdf-reader'
 
 const MAX_FILE_BYTES = 50 * 1_024 * 1_024
 const MAX_IMAGE_DIMENSION = 2_048
+const MAX_IMAGE_PREVIEW_BYTES = 1_024 * 1_024
+const PHOTO_PREVIEW_QUALITY = 82
+const PREVIEW_SCALE_HEADROOM = 0.9
+const JPEG_EXTENSIONS = new Set(['.jpg', '.jpeg'])
 const MAX_PAGE_COUNT = 8
 const MAX_TEXT_CHARS = 40_000
 const MAX_CACHE_CHARS = 2_000_000
@@ -264,22 +268,49 @@ export class DocumentReader {
     const signature = await this.signature(filePath)
     const image = await loadImage(await fs.readFile(filePath))
     const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height))
-    const canvas = createCanvas(Math.max(1, Math.round(image.width * scale)), Math.max(1, Math.round(image.height * scale)))
+    let canvas = createCanvas(
+      Math.max(1, Math.round(image.width * scale)),
+      Math.max(1, Math.round(image.height * scale))
+    )
     canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height)
-    const png = canvas.toBuffer('image/png')
+    const ocrCanvas = canvas
+    const isJpeg = JPEG_EXTENSIONS.has(path.extname(filePath).toLowerCase())
+    const encodePreview = async (): Promise<Buffer> => isJpeg
+      ? canvas.encode('jpeg', PHOTO_PREVIEW_QUALITY)
+      : canvas.encode('png')
+    let preview = options.render ? await encodePreview() : undefined
+
+    // Bound encoded bytes as well as dimensions: photographic PNG previews
+    // can otherwise dominate a request containing several inspected images.
+    while (preview && preview.length > MAX_IMAGE_PREVIEW_BYTES) {
+      const ratio = Math.sqrt(MAX_IMAGE_PREVIEW_BYTES / preview.length) * PREVIEW_SCALE_HEADROOM
+      canvas = createCanvas(
+        Math.max(1, Math.floor(canvas.width * ratio)),
+        Math.max(1, Math.floor(canvas.height * ratio))
+      )
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height)
+      preview = await encodePreview()
+    }
+
     const key = `${filePath}:image:ocr`
     const cached = this.cache.get(key)
     let text: string | undefined
     let layout: DocumentLayout | undefined
     if (options.ocr !== false) {
-      ({ text, layout } = cached?.signature === signature ? cached : await this.recognize(png))
+      const recognized = cached?.signature === signature
+        ? cached
+        // OCR retains its full frame even when the model preview must shrink.
+        : await this.recognize(await ocrCanvas.encode('png'))
+      text = recognized.text
+      layout = recognized.layout
       this.remember(key, signature, text, layout)
     }
     return {
       data: { path: filePath, sourceWidth: image.width, sourceHeight: image.height, width: canvas.width, height: canvas.height,
         ...(options.layout ? { layout: layout ? sliceLayout(layout, options.layoutOffset) : null } : {}),
         ...(text !== undefined ? this.chunk(text, options) : {}), coverage: 'single frame; local OCR reads text, not visual meaning' },
-      files: options.render ? [{ dataBase64: png.toString('base64'), mediaType: 'image/png', filename: `${path.basename(filePath)}.png` }] : []
+      files: preview ? [{ dataBase64: preview.toString('base64'), mediaType: isJpeg ? 'image/jpeg' : 'image/png',
+        filename: `${path.parse(filePath).name}.${isJpeg ? 'jpg' : 'png'}` }] : []
     }
   }
 

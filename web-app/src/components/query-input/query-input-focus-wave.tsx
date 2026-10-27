@@ -2,7 +2,7 @@ import { useEffect, useState, type RefObject } from 'react'
 
 import { BorderWave, type BorderWaveBounds } from '@/components/border-wave'
 
-const WAVE_DURATION_MS = 1_000
+const WAVE_DURATION_MS = 700
 const WAVE_STROKE_WIDTH_PX = 1
 
 interface QueryInputFocusWaveProps {

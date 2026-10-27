@@ -4,13 +4,17 @@ import type { AxiosResponse } from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogHelper } from '@/helpers/log-helper'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import { FileHelper } from '@/helpers/file-helper'
 import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 
 import LLMProvider from '@/core/llm-manager/llm-provider'
 import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
 import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
-import { CompletionFailureKind, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { attachProviderFailureDiagnostics, formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
+import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
+import { CompletionFailureKind, InferencePurpose, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 import { appendInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
 
 vi.mock('@/core/llm-manager/llm-usage/usage-ledger', () => ({
@@ -81,6 +85,142 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('keeps provider progress separate from transport activity and retains bounded failure evidence', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(1_000)
+      const activity = new ProviderRequestActivity()
+      activity.observe({ type: 'request-uploaded', requestBytes: 42, uploadDurationMs: 10 })
+      activity.observe({ type: 'transport-activity' })
+      expect(activity.snapshot().providerEventCount).toBe(0)
+      expect(activity.snapshot().requestAcceptedMs).toBeUndefined()
+      vi.setSystemTime(4_000)
+      activity.observe({ type: 'provider-event', providerEventType: 'request.accepted', responseId: 'response-1', requestAccepted: true })
+      vi.setSystemTime(6_000)
+      activity.observe(Object.assign({ type: 'provider-event', providerEventType: 'tool.running' }, {
+        prompt: 'private prompt', image: 'private image data', authorization: 'private credentials'
+      }))
+      vi.setSystemTime(9_000)
+      activity.observe({ type: 'transport-activity' })
+      const error = Object.assign(new Error('Connection ended'), { closeCode: 1_006, pongCount: 7 })
+      attachProviderFailureDiagnostics(error, activity.snapshot())
+
+      expect(error).toMatchObject({
+        responseId: 'response-1', requestAcceptedMs: 3_000,
+        firstProviderEventMs: 3_000, lastProviderEventMs: 5_000,
+        lastProviderEvent: 'tool.running', providerIdleMs: 3_000,
+        providerEventCount: 2, providerCompleted: false, pongCount: 7,
+        failureSummary: expect.stringContaining('accepted the request')
+      })
+      const details = formatPromptErrorForLog(error)
+      expect(details).not.toContain('private')
+      expect(details).not.toContain('local network instability')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('distinguishes completed provider work from delivery failures and preserves cancellation reasons', () => {
+    const activity = new ProviderRequestActivity()
+    activity.observe({ type: 'finish', requestAccepted: true, providerCompleted: true })
+    const failed = new Error('Delivery failed')
+    attachProviderFailureDiagnostics(failed, activity.snapshot())
+    expect(failed).toMatchObject({ failureSummary: expect.stringContaining('reported completion') })
+    const cancelled = new Error('Owner canceled')
+    attachProviderFailureDiagnostics(cancelled, activity.snapshot(), true)
+    expect(cancelled).not.toHaveProperty('failureSummary')
+  })
+
+  it.each([InferencePurpose.Memory, InferencePurpose.SelfModel, InferencePurpose.PulsePlanning, InferencePurpose.PulseReaction])('uses supported low reasoning for %s maintenance despite owner high reasoning', (usagePurpose) => {
+    vi.spyOn(CONFIG_STATE, 'getModelSettingsState').mockReturnValue({
+      getSettings: () => ({ reasoning: 'high', speed: 'fast' })
+    } as ReturnType<typeof CONFIG_STATE.getModelSettingsState>)
+    const params: CompletionParams = {
+      dutyType: LLMDuties.Inference, usagePurpose, systemPrompt: '',
+      thoughtTokensBudget: 96, reasoningUseDefaultEffort: true
+    }
+
+    prepareCompletionRequest(params, LLMProviders.OpenAI, {
+      ...celerisTarget, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+
+    expect(params.reasoningMode).toBe('on')
+    expect(params.reasoningEffort).toBe('low')
+    expect(params.reasoningUseDefaultEffort).toBeUndefined()
+    expect(params.thoughtTokensBudget).toBe(96)
+    expect(params.serviceTier).toBe('priority')
+  })
+
+  it.each([{ disableThinking: true }, { reasoningMode: 'off' as const }])('preserves explicit non-thinking maintenance settings: %j', (override) => {
+    const params: CompletionParams = {
+      dutyType: LLMDuties.Inference, usagePurpose: InferencePurpose.Memory,
+      systemPrompt: '', ...override
+    }
+
+    prepareCompletionRequest(params, LLMProviders.OpenAI, {
+      ...celerisTarget, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+
+    expect(params.reasoningEffort).not.toBe('low')
+    expect(params).toMatchObject(override)
+  })
+
+  it.each([
+    { dutyType: LLMDuties.ReAct, usagePurpose: InferencePurpose.Pulse, model: 'gpt-6.1-sol' },
+    { dutyType: LLMDuties.Inference, usagePurpose: InferencePurpose.ProviderTool, model: 'gpt-6.1-sol' },
+    { dutyType: LLMDuties.Inference, usagePurpose: InferencePurpose.Memory, model: 'uncatalogued-model' }
+  ])('preserves owner reasoning outside supported maintenance requests: %j', ({ dutyType, usagePurpose, model }) => {
+    vi.spyOn(CONFIG_STATE, 'getModelSettingsState').mockReturnValue({
+      getSettings: () => ({ reasoning: 'high', speed: 'auto' })
+    } as ReturnType<typeof CONFIG_STATE.getModelSettingsState>)
+    const params: CompletionParams = { dutyType, usagePurpose, systemPrompt: '' }
+
+    prepareCompletionRequest(params, LLMProviders.OpenAI, {
+      ...celerisTarget, provider: LLMProviders.OpenAI, model
+    })
+
+    expect(params.reasoningEffort).toBe('high')
+  })
+
+  it.each([false, true])('logs nested stream diagnostics without request metadata (aggregate=%s)', (aggregate) => {
+    const cause = Object.assign(new Error('The provider socket closed.'), {
+      closeCode: 1_011,
+      closeReason: 'Upstream failure',
+      code: 'upstream_error',
+      statusCode: 502
+    })
+    const error = Object.assign(new Error('Failed to process successful response', {
+      cause: aggregate ? new AggregateError([cause], 'Stream failed') : cause
+    }), {
+      statusCode: 200,
+      requestBodyValues: { input: 'private prompt' },
+      responseHeaders: { authorization: 'private credential' }
+    })
+    const output = formatPromptErrorForLog(error)
+
+    expect(output).toContain('Failed to process successful response')
+    expect(output).toContain('The provider socket closed.')
+    expect(output).toContain('"closeCode":1011')
+    expect(output).toContain('"closeReason":"Upstream failure"')
+    expect(output).toContain('"code":"upstream_error"')
+    expect(output).toContain('"statusCode":502')
+    expect(output).not.toContain('private prompt')
+    expect(output).not.toContain('private credential')
+  })
+
+  it('bounds and redacts diagnostics with circular causes', () => {
+    const error = Object.assign(new Error('Authorization: Bearer private-credential'), {
+      cause: {} as unknown
+    })
+    error.cause = error
+    const output = formatPromptErrorForLog(error)
+
+    expect(output).not.toContain('private-credential')
+    expect(output).toContain('[truncated]')
+    expect(formatPromptErrorForLog(new Error('x'.repeat(8_000))).length)
+      .toBeLessThan(4_100)
+  })
+
   it.each(['http', 'websocket'] as const)(
     'reports the selected %s transport before a connection opens',
     async (transport) => {
@@ -380,7 +520,9 @@ describe('LLMProvider', () => {
   it.each([
     { code: 'UND_ERR_CONNECT_TIMEOUT', aggregate: false },
     { code: 'ETIMEDOUT', aggregate: true },
-    { code: 'ECONNRESET', aggregate: false }
+    { code: 'ECONNRESET', aggregate: false },
+    { code: 'WEBSOCKET_ABNORMAL_CLOSURE', aggregate: false },
+    { code: 'PROVIDER_CONNECTION_UNRESPONSIVE', aggregate: false }
   ])('bounds $code connection retries without extending inference time', async ({ code, aggregate }) => {
     vi.useFakeTimers()
     vi.mocked(LogHelper.warning).mockClear()
@@ -389,12 +531,17 @@ describe('LLMProvider', () => {
     try {
       const cause = Object.assign(new Error('Connection failed'), {
         code,
-        syscall: 'connect'
+        syscall: 'connect',
+        ...(code === 'WEBSOCKET_ABNORMAL_CLOSURE' ? { closeCode: 1_006 } : {}),
+        ...(code === 'PROVIDER_CONNECTION_UNRESPONSIVE'
+          ? { providerEventCount: 0, pingCount: 2, pongCount: 0 }
+          : {})
       })
       const error = new Error('Cannot connect to API', {
         cause: aggregate ? new AggregateError([cause]) : cause
       })
       const attempts: CompletionParams[] = []
+      const onConnectionRetry = vi.fn()
       const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
         attempts.push(params)
 
@@ -411,7 +558,8 @@ describe('LLMProvider', () => {
         systemPrompt: '',
         shouldStream: false,
         timeout: 120_000,
-        maxRetries: 2
+        maxRetries: 2,
+        onConnectionRetry
       })
 
       await vi.advanceTimersByTimeAsync(0)
@@ -421,10 +569,19 @@ describe('LLMProvider', () => {
       expect(attempts).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(1)
-      expect(await result).toBeNull()
       expect(attempts).toHaveLength(2)
-      expect(attempts.map((params) => params.timeout)).toEqual([120_000, 120_000])
-      expect(vi.mocked(appendInferenceUsage).mock.calls).toHaveLength(2)
+      for (const delayMs of [10_000, 15_000, 20_000, 25_000]) {
+        await vi.advanceTimersByTimeAsync(delayMs)
+      }
+      expect(await result).toBeNull()
+      expect(attempts).toHaveLength(6)
+      expect(attempts.map((params) => params.timeout)).toEqual(Array(6).fill(120_000))
+      expect(onConnectionRetry.mock.calls.map(([notice]) => notice)).toEqual(
+        [5_000, 10_000, 15_000, 20_000, 25_000].map((delayMs, index) => ({
+          attempt: index + 1, maxRetries: 5, delayMs
+        }))
+      )
+      expect(vi.mocked(appendInferenceUsage).mock.calls).toHaveLength(6)
       expect(vi.mocked(appendInferenceUsage).mock.calls.every(([, record]) =>
         record.outcome !== 'completed' && Object.keys(record.usage).length === 0
       )).toBe(true)
@@ -440,6 +597,199 @@ describe('LLMProvider', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it.each([{ statusCode: 413 }, { closeCode: 1_009 }])('does not retry unchanged input after a nested size rejection: %j', async (details) => {
+    const onAttempt = vi.fn()
+    const error = Object.assign(new Error('Failed to process successful response'), {
+      statusCode: 200,
+      cause: Object.assign(new Error('Request is too large'), details)
+    })
+    const runChatCompletion = vi.fn().mockRejectedValue(error)
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    expect(await manager.prompt('Inspect images.', {
+      dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: false,
+      timeout: 120_000, maxRetries: 2, remoteProviderErrorRetries: 2, onAttempt
+    })).toBeNull()
+    expect(runChatCompletion).toHaveBeenCalledOnce()
+    expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+      failureKind: CompletionFailureKind.Context,
+      retryReason: 'unchanged_payload_too_large',
+      failureSummary: 'The request exceeded the provider transport size limit.'
+    })
+  })
+
+  it('resumes the original request when the connection recovers before retry exhaustion', async () => {
+    vi.useFakeTimers()
+    try {
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      const onConnectionRetry = vi.fn()
+      const runChatCompletion = vi.fn()
+        .mockRejectedValueOnce(Object.assign(new Error('Disconnected'), { code: 'ECONNRESET' }))
+        .mockRejectedValueOnce(Object.assign(new Error('Disconnected'), { closeCode: 1_006 }))
+        .mockResolvedValue({ data: {
+          choices: [{ message: { content: 'Recovered' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 1 }
+        } })
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Resume the original task.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', onConnectionRetry
+      })
+
+      await vi.runAllTimersAsync()
+      expect((await pending)?.output).toBe('Recovered')
+      expect(runChatCompletion).toHaveBeenCalledTimes(3)
+      expect(runChatCompletion.mock.calls.every(([prompt]) => prompt === 'Resume the original task.')).toBe(true)
+      expect(onConnectionRetry).toHaveBeenCalledTimes(2)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['accepted', 'output', 'deadline'])('does not reconnect when blocked by %s evidence', async (blocker) => {
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    const onConnectionRetry = vi.fn()
+    const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+      if (blocker === 'accepted') {
+        params.onStreamEvent?.({ type: 'provider-event', requestAccepted: true })
+      } else if (blocker === 'output') {
+        params.onToken?.('Partial output')
+      }
+      return Promise.reject(Object.assign(new Error('Connection failed'), { code: 'ECONNRESET' }))
+    })
+    state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    expect(await manager.prompt('Continue.', {
+      dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true, onConnectionRetry,
+      ...(blocker === 'deadline' ? { getRetryTimeout: (timeout: number): number => Math.min(timeout, 4_000) } : {})
+    })).toBeNull()
+    expect(runChatCompletion).toHaveBeenCalledOnce()
+    expect(onConnectionRetry).not.toHaveBeenCalled()
+  })
+
+  it('cancels a reconnect wait immediately with the owner cancellation reason', async () => {
+    vi.useFakeTimers()
+    try {
+      const owner = new AbortController()
+      const reason = new Error('Owner canceled')
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      const runChatCompletion = vi.fn().mockRejectedValue(
+        Object.assign(new Error('Connection failed'), { code: 'ECONNRESET' })
+      )
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const onConnectionRetry = vi.fn((): void => {
+        setTimeout(() => owner.abort(reason), 100)
+      })
+      const pending = expect(manager.prompt('Continue.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', cancellationSignal: owner.signal, onConnectionRetry
+      })).rejects.toBe(reason)
+
+      await vi.advanceTimersByTimeAsync(100)
+      await pending
+      expect(runChatCompletion).toHaveBeenCalledOnce()
+      expect(onConnectionRetry).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('honors disabled connection recovery after consuming the transient retry', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const attempts: CompletionParams[] = []
+      const onAttempt = vi.fn()
+      const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+        attempts.push(params)
+        if (attempts.length === 1) {
+          return new Promise(() => {})
+        }
+
+        throw Object.assign(new Error('Connection failed'), { code: 'ECONNRESET' })
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const pending = manager.prompt('Continue.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', timeout: 1_000,
+        maxRetries: 2, remoteProviderErrorRetries: 2, connectionErrorRetries: 0, onAttempt
+      })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(await pending).toBeNull()
+      expect(attempts).toHaveLength(2)
+      expect(attempts.map((params) => params.timeout)).toEqual([1_000, 1_000])
+      expect(onAttempt.mock.calls[1]?.[0]).toMatchObject({
+        retryDecision: 'retry', retryReason: 'quick_transient_failure'
+      })
+      expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+        retryDecision: 'stop', retryReason: 'retry_budget_exhausted'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    { message: 'tool_choice is incompatible with thinking', disableThinking: false, keepsChoice: true },
+    { message: 'tool_choice is incompatible with thinking', disableThinking: true, keepsChoice: false },
+    { message: 'unsupported value for tool_choice', disableThinking: false, keepsChoice: false }
+  ])('preserves provider compatibility recovery without consuming transient retries: $message ($disableThinking)', async ({ message, disableThinking, keepsChoice }) => {
+    const runChatCompletion = vi.fn()
+      .mockRejectedValueOnce(new Error(message))
+      .mockResolvedValue({ data: {
+        choices: [{ message: { content: 'Recovered' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 1 }
+      } })
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    const result = await manager.prompt('Continue.', {
+      dutyType: LLMDuties.ReAct, systemPrompt: '', disableThinking,
+      tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }],
+      toolChoice: 'required', maxRetries: 1, remoteProviderErrorRetries: 0
+    })
+
+    expect(result?.output).toBe('Recovered')
+    expect(runChatCompletion).toHaveBeenCalledTimes(2)
+    expect(runChatCompletion.mock.calls[1]?.[1]).toMatchObject({
+      maxRetries: 0, remoteProviderErrorRetries: 0,
+      ...(keepsChoice ? { disableThinking: true, toolChoice: 'required' } : { relaxForcedToolChoice: true })
+    })
+    if (!keepsChoice) {
+      expect(runChatCompletion.mock.calls[1]?.[1].toolChoice).toBeUndefined()
+    }
+  })
+
+  it.each([401, 403, 422])('does not retry permanent provider rejection %s', async (statusCode) => {
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    const runChatCompletion = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Provider rejected request'), { statusCode })
+    )
+    state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    expect(await manager.prompt('Continue.', {
+      dutyType: LLMDuties.ReAct, systemPrompt: ''
+    })).toBeNull()
+    expect(runChatCompletion).toHaveBeenCalledOnce()
   })
 
   it.each([0, 20_000])('preserves the caller finishing reserve when the retry budget is %sms', async (retryBudget) => {
@@ -459,21 +809,21 @@ describe('LLMProvider', () => {
       }
       state.agentLLMProviderTargetLabel = celerisTarget.label
 
-      const retryDeadline = Date.now() + 30_000 + retryBudget
+      const retryDeadline = Date.now() + 10_000 + retryBudget
       const result = manager.prompt('Finish the deliverable.', {
         dutyType: LLMDuties.ReAct,
         systemPrompt: '',
         shouldStream: false,
-        timeout: 30_000,
+        timeout: 10_000,
         maxRetries: 2,
-        remoteProviderErrorRetries: 0,
+        remoteProviderErrorRetries: 1,
         getRetryTimeout: (timeout) => Math.min(timeout, Math.max(0, retryDeadline - Date.now()))
       })
 
-      await vi.advanceTimersByTimeAsync(30_000)
+      await vi.advanceTimersByTimeAsync(10_000)
       if (retryBudget > 0) {
-        expect(attempts[1]?.timeout).toBe(retryBudget)
-        await vi.advanceTimersByTimeAsync(retryBudget)
+        expect(attempts[1]?.timeout).toBe(Math.min(10_000, retryBudget))
+        await vi.advanceTimersByTimeAsync(Math.min(10_000, retryBudget))
       }
 
       expect(await result).toBeNull()
@@ -483,13 +833,17 @@ describe('LLMProvider', () => {
     }
   })
 
-  it('still extends the deadline after a genuine inference timeout', async () => {
+  it.each([false, true])('bounds the initial inference/upload wait without replaying a long timeout (%s)', async (uploading) => {
     vi.useFakeTimers()
 
     try {
       const attempts: CompletionParams[] = []
       const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
         attempts.push(params)
+        if (uploading) {
+          params.onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
+          params.onStreamEvent?.({ type: 'request-upload-start', transport: 'websocket' })
+        }
 
         return new Promise(() => {})
       })
@@ -502,19 +856,70 @@ describe('LLMProvider', () => {
       const result = manager.prompt('Hello', {
         dutyType: LLMDuties.ReAct,
         systemPrompt: '',
-        shouldStream: false,
+        shouldStream: uploading,
         timeout: 120_000,
-        maxRetries: 1,
-        remoteProviderErrorRetries: 0
+        maxRetries: 2,
+        remoteProviderErrorRetries: 1
       })
 
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(120_000)
-      expect(attempts.map((params) => params.timeout)).toEqual([120_000, 150_000])
-
-      await vi.advanceTimersByTimeAsync(150_000)
       expect(await result).toBeNull()
-      expect(attempts).toHaveLength(2)
+      expect(attempts.map((params) => params.timeout)).toEqual([120_000])
+      expect(LogHelper.error).toHaveBeenCalledWith(
+        expect.stringContaining('failure_exceeded_retry_window')
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([false, true])('starts the acceptance wait after upload and preserves earlier acceptance (%s)', async (acceptedDuringUpload) => {
+    vi.useFakeTimers()
+
+    try {
+      let params!: CompletionParams
+      let complete!: (value: unknown) => void
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = {
+        modelName: 'celeris-1', transport: 'websocket',
+        runChatCompletion: vi.fn((_prompt, options: CompletionParams) => {
+          params = options
+          params.onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
+          return new Promise((resolve) => {
+            complete = resolve
+          })
+        })
+      }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Inspect the supplied evidence.', {
+        dutyType: LLMDuties.ReAct, shouldStream: true, timeout: 120_000,
+        maxRetries: 0, remoteProviderErrorRetries: 0
+      })
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      params.onStreamEvent?.({ type: 'request-upload-start', transport: 'websocket', requestBytes: 4_000_000 })
+      if (acceptedDuringUpload) {
+        params.onStreamEvent?.({ type: 'provider-event', providerEventType: 'accepted', requestAccepted: true })
+      }
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(params.signal?.aborted).toBe(false)
+      params.onStreamEvent?.({ type: 'request-uploaded', transport: 'websocket', uploadDurationMs: 20_000 })
+      await vi.advanceTimersByTimeAsync(11_000)
+      expect(params.signal?.aborted).toBe(false)
+      if (!acceptedDuringUpload) {
+        params.onStreamEvent?.({ type: 'provider-event', providerEventType: 'accepted', requestAccepted: true })
+      }
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(params.signal?.aborted).toBe(false)
+      params.onToken?.('Done')
+      params.onStreamEvent?.({ type: 'finish' })
+      complete({ data: { choices: [{ message: { content: 'Done' } }] } })
+
+      expect((await pending)?.output).toBe('Done')
+      expect(state.agentLLMProvider.runChatCompletion).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
     }
@@ -565,8 +970,8 @@ describe('LLMProvider', () => {
     }
   })
 
-  it.each(['text', 'tool'] as const)(
-    'separates inference from %s stream silence and retries without extending idle time',
+  it.each(['text', 'tool', 'final text'] as const)(
+    'stops after %s stream silence while retaining progress and heartbeat evidence',
     async (output) => {
       vi.useFakeTimers()
 
@@ -576,15 +981,6 @@ describe('LLMProvider', () => {
         const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
           attempts.push(params)
           params.onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
-
-          if (attempts.length === 2) {
-            params.onToken?.('Recovered')
-
-            return Promise.resolve({ data: {
-              choices: [{ message: { content: 'Recovered' }, finish_reason: 'stop' }],
-              usage: { prompt_tokens: 10, completion_tokens: 1 }
-            } })
-          }
 
           return new Promise((_resolve, reject) => {
             params.signal?.addEventListener('abort', () => {
@@ -626,37 +1022,48 @@ describe('LLMProvider', () => {
         expect(attempts[0]!.signal?.aborted).toBe(false)
 
         const progress = (): void => {
-          if (output === 'text') {
+          if (output !== 'tool') {
             attempts[0]!.onToken?.('partial')
           } else {
             attempts[0]!.onStreamEvent?.({ type: 'tool-input-delta' })
           }
         }
 
+        if (output === 'final text') {
+          attempts[0]!.onStreamEvent?.({ type: 'text-start', preliminary: true })
+          attempts[0]!.onToken?.('Checking.')
+          attempts[0]!.onStreamEvent?.({ type: 'text-start', preliminary: false })
+        }
         progress()
         await vi.advanceTimersByTimeAsync(29_000)
         progress()
         await vi.advanceTimersByTimeAsync(29_000)
         expect(attempts).toHaveLength(1)
         attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
+        attempts[0]!.onStreamEvent?.({
+          type: 'transport-heartbeat',
+          heartbeat: { pingCount: 12, pongCount: 12, lastPingAt: Date.now(), lastPongAt: Date.now(), lastPongRttMs: 25 }
+        })
         await vi.advanceTimersByTimeAsync(1_001)
 
         const result = await pending
 
-        expect(attempts).toHaveLength(2)
+        expect(attempts).toHaveLength(1)
         expect(attempts[0]!.signal?.aborted).toBe(true)
-        expect(attempts[1]!.timeout).toBe(120_000)
-        expect(result?.firstTokenAt).toBeGreaterThan(0)
+        expect(result).toBeNull()
         expect(LogHelper.error).toHaveBeenCalledWith(expect.stringContaining('req-test'))
         expect(LogHelper.error).toHaveBeenCalledWith(expect.stringContaining('LLMStreamIdleTimeout'))
         const timings = onAttempt.mock.calls.map(([timing]) => timing)
 
         expect(timings.map((timing) => timing.outcome)).toEqual([
-          'started', 'LLMStreamIdleTimeout', 'started', 'completed'
+          'started', 'LLMStreamIdleTimeout'
         ])
         expect(timings[1]).toMatchObject({
           attemptId: timings[0].attemptId,
           promptCache,
+          retryDecision: 'stop', retryReason: 'partial_output_received',
+          firstOutputMs: 40_000, pingCount: 12, pongCount: 12,
+          lastPingAgeMs: 1_000, lastPongAgeMs: 1_000, lastPongRttMs: 25,
           requestDispatchMs: 0,
           responseHeadersMs: 10,
           firstByteMs: 20,
@@ -666,7 +1073,6 @@ describe('LLMProvider', () => {
           outputIdleMs: 30_000,
           ...(output === 'tool' ? { firstToolInputMs: 40_000 } : { firstTokenMs: 40_000 })
         })
-        expect(timings[3].attemptId).not.toBe(timings[0].attemptId)
       } finally {
         vi.useRealTimers()
       }
@@ -745,7 +1151,7 @@ describe('LLMProvider', () => {
     }
   })
 
-  it('bounds silent compaction even when transport heartbeats continue', async () => {
+  it.each(['compaction', 'commentary'])('bounds silent %s even when transport heartbeats continue', async (phase) => {
     vi.useFakeTimers()
 
     try {
@@ -756,9 +1162,14 @@ describe('LLMProvider', () => {
         modelName: 'celeris-1',
         runChatCompletion: vi.fn((_prompt, options: CompletionParams) => {
           params = options
+          if (phase === 'commentary') {
+            params.onStreamEvent?.({ type: 'text-start', preliminary: true })
+          }
           params.onToken?.('Drafted answer.')
           params.onStreamEvent?.({ type: 'text-end' })
-          params.onStreamEvent?.({ type: 'compaction-start' })
+          if (phase === 'compaction') {
+            params.onStreamEvent?.({ type: 'compaction-start' })
+          }
 
           return new Promise(() => {})
         })

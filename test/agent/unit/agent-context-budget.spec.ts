@@ -16,6 +16,12 @@ import type {
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { AGENT_IMAGE_BATCH_MAX_BYTES } from '@/constants'
+import {
+  completeAgentImageBatch,
+  prepareAgentImageBatch,
+  projectAgentImageBatch
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-image-batches'
 
 function createToolCall(id: string): OpenAIToolCall {
   return {
@@ -60,6 +66,100 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('pages oversized inspections by bytes and saves every source before releasing previews', () => {
+    const files = [7, 7, 1].map((size, index) => ({
+      dataBase64: 'x'.repeat(size * 1_024 * 1_024),
+      mediaType: 'image/jpeg', filename: `photo-${index}.jpg`
+    }))
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Compare the photos.' }
+    ]
+    appendToolExchange(transcript, 'photos', 'Original sources: /photos/0.jpg, /photos/1.jpg, /photos/2.jpg')
+    const result = transcript.at(-1)!
+    if (result.role === 'tool') {
+      result.files = files
+    }
+    const observed: string[] = []
+
+    for (let page = 0; page < 2; page += 1) {
+      const batch = prepareAgentImageBatch(transcript)!
+      const projected = projectAgentImageBatch(transcript, batch)
+      const visible = projected.flatMap((message) => message.role === 'assistant' ? [] : message.files ?? [])
+      expect(visible.reduce((bytes, file) => bytes + file.dataBase64.length, 0))
+        .toBeLessThanOrEqual(AGENT_IMAGE_BATCH_MAX_BYTES)
+      expect(visible).toHaveLength(page === 0 ? 2 : 1)
+      expect(projected.filter((message) => message.role === 'tool')).toHaveLength(1)
+      const observations = batch.entries.map((entry) => ({
+        source_id: entry.source.id, findings: `Visual facts for ${entry.source.filename}`
+      }))
+      observed.push(...batch.entries.map((entry) => entry.source.filename!))
+      expect(completeAgentImageBatch(transcript, batch, JSON.stringify({ observations }))).toBe(true)
+    }
+
+    expect(prepareAgentImageBatch(transcript)).toBeNull()
+    expect(observed.sort()).toEqual(files.map((file) => file.filename).sort())
+    expect(transcript.filter((message) => message.role === 'user' && message.runtimeContext))
+      .toHaveLength(2)
+    expect(result).toMatchObject({ content: expect.stringContaining('/photos/0.jpg'), files: [] })
+    expect(files.every((file) => file.dataBase64.length > 0)).toBe(true)
+  })
+
+  it.each(['invalid-json', 'missing', 'duplicate', 'empty', 'too-long'])('preserves unseen previews after %s inspection findings', (failure) => {
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'user', content: 'Inspect these photos.',
+      files: Array.from({ length: 9 }, (_, index) => ({
+        dataBase64: 'image', mediaType: 'image/png', filename: `${index}.png`
+      }))
+    }]
+    const batch = prepareAgentImageBatch(transcript)!
+    const observations = batch.entries.map((entry) => ({ source_id: entry.source.id, findings: 'A visible object.' }))
+    if (failure === 'missing') {
+      observations.pop()
+    } else if (failure === 'duplicate') {
+      observations[1] = observations[0]!
+    } else if (failure === 'empty') {
+      observations[0]!.findings = ' '
+    } else if (failure === 'too-long') {
+      observations[0]!.findings = 'x'.repeat(3_000)
+    }
+
+    expect(completeAgentImageBatch(transcript, batch,
+      failure === 'invalid-json' ? '{' : JSON.stringify({ observations }))).toBe(false)
+    expect(transcript[0]).toMatchObject({ files: expect.arrayContaining([
+      expect.objectContaining({ inspectionPending: true })
+    ]) })
+    expect(transcript).toHaveLength(1)
+    expect(prepareAgentImageBatch(transcript)!.remainingImages).toBe(1)
+  })
+
+  it('retains queued inspections across later exchanges and leaves small inspections unchanged', () => {
+    const transcript: AgentToolTranscriptMessage[] = []
+    appendToolExchange(transcript, 'photos', 'Source paths remain available.')
+    const source = transcript.at(-1)!
+    if (source.role === 'tool') {
+      source.files = Array.from({ length: 9 }, () => ({ dataBase64: 'image', mediaType: 'image/png' }))
+    }
+    prepareAgentImageBatch(transcript)
+    for (let index = 0; index < 5; index += 1) {
+      appendToolExchange(transcript, `later-${index}`, 'Other work.')
+      const message = transcript.at(-1)!
+      if (message.role === 'tool') {
+        message.files = [{ dataBase64: 'other', mediaType: 'image/png' }]
+      }
+    }
+
+    const retained = retainRecentToolImages(transcript)
+    expect(retained[1]).toMatchObject({ files: expect.any(Array) })
+    const batch = prepareAgentImageBatch(retained)!
+    expect(batch.entries).toHaveLength(8)
+    expect(batch.remainingImages).toBe(2)
+    expect(projectAgentImageBatch(retained, batch, true).every((message) =>
+      message.role === 'assistant' || !message.files?.length)).toBe(true)
+    expect(prepareAgentImageBatch([{ role: 'user', content: 'Inspect.', files: [
+      { dataBase64: 'image', mediaType: 'image/png' }
+    ] }])).toBeNull()
+  })
+
   it('reuses visible context, refreshes changed content and restores it after compaction', () => {
     const result = (id: string, content: string): AgentToolTranscriptMessage => ({
       role: 'tool', toolCallId: id, toolName: 'source',
@@ -152,6 +252,36 @@ describe('agent context budget', () => {
     appendImage('five')
     expect(retainRecentToolImages(transcript).slice(0, removed.length)).toEqual(removed)
     expect(transcript[1]).toHaveProperty('files')
+  })
+
+  it.each([5, 7])('withholds oversized previews while preserving queued inspections (%s MiB)', (size) => {
+    const image = { dataBase64: 'x'.repeat(size * 1_024 * 1_024), mediaType: 'image/png' }
+    const transcript: AgentToolTranscriptMessage[] = []
+    appendToolExchange(transcript, 'old', 'Original source remains reloadable.')
+    const old = transcript.at(-1)!
+    if (old.role === 'tool') {
+      old.files = [image]
+    }
+    const calls = ['first', 'second'].map(createToolCall)
+    transcript.push({ role: 'assistant', content: '', toolCalls: calls })
+    for (const call of calls) {
+      transcript.push({
+        role: 'tool', toolCallId: call.id, toolName: call.function.name,
+        content: 'Current source.', files: [{ ...image, inspectionPending: true }]
+      })
+    }
+
+    const retained = retainRecentToolImages(transcript)
+
+    expect(retained[1]).toEqual({ ...old, files: undefined })
+    expect(retained.slice(2, -1)).toEqual(transcript.slice(2))
+    expect(retained.at(-1)).toMatchObject({
+      runtimeContext: {
+        withheld_image_previews: [{ toolCallId: 'old' }],
+        instruction: expect.stringContaining('Do not claim to have inspected withheld images')
+      }
+    })
+    expect(old).toHaveProperty('files', [image])
   })
 
   it('keeps a default retained-result page complete in the model observation', () => {

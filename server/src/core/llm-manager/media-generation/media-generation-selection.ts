@@ -3,6 +3,7 @@ import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '@/core/llm-manager/types'
+import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import {
   getMediaProviderCapabilities,
   listMediaCapabilities
@@ -82,9 +83,9 @@ async function generationSelectionRequired(
  * HTTP tool calls lose the agent's async context, so recover the owning session's
  * model target before consulting profile defaults. No mutable global provider is used.
  */
-function inheritedProvider(sessionId?: string): LLMProviders | null {
+export function resolveMediaGenerationAgentTarget(sessionId?: string): ResolvedLLMTarget {
   if (!sessionId) {
-    return CONFIG_STATE.getModelState().getAgentTarget().provider
+    return CONFIG_STATE.getModelState().getAgentTarget()
   }
 
   const session = CONVERSATION_SESSION_MANAGER.getSession(sessionId)
@@ -95,7 +96,7 @@ function inheritedProvider(sessionId?: string): LLMProviders | null {
 
   return runWithConversationSession(
     { sessionId, modelTarget: session.modelTarget },
-    () => CONFIG_STATE.getModelState().getAgentTarget().provider
+    () => CONFIG_STATE.getModelState().getAgentTarget()
   )
 }
 
@@ -109,7 +110,7 @@ export async function resolveMediaGenerationTarget(
   const settings = await readGenerationSettings(kind)
   const provider =
     settings.provider === 'inherit'
-      ? inheritedProvider(sessionId)
+      ? resolveMediaGenerationAgentTarget(sessionId).provider
       : settings.provider
 
   const capabilities = provider ? await getMediaProviderCapabilities(provider) : null
