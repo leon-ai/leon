@@ -11,6 +11,15 @@ const MODEL_DESIGN_NAME = 'Qwen3-TTS-12Hz-1.7B-VoiceDesign'
 const MODEL_CUSTOM_NAME = 'Qwen3-TTS-12Hz-1.7B-CustomVoice'
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
+const MAX_INLINE_TEXT_BYTES = 255
+const TEXT_FIELDS = [
+  'text',
+  'reference_text',
+  'instruct',
+  'design_text',
+  'design_instruct',
+  'texts'
+]
 
 export type SupportedLanguage =
   | 'Auto'
@@ -279,9 +288,47 @@ export default class Qwen3TTSTool extends Tool {
       )
       jsonFilePath = path.join(tempDir, 'tasks.json')
 
+      // The CLI probes text as a filename. Send long literals through text files
+      // to avoid filename-length errors, while preserving existing file inputs.
+      const binaryTasks: Record<string, unknown>[] = []
+      for (const [taskIndex, task] of taskArray.entries()) {
+        const binaryTask: Record<string, unknown> = { ...task }
+
+        for (const field of TEXT_FIELDS) {
+          const value = task[field]
+          if (value === undefined) {
+            continue
+          }
+
+          const texts = Array.isArray(value) ? value : [value]
+          const stagedTexts: unknown[] = []
+          for (const [textIndex, text] of texts.entries()) {
+            if (
+              typeof text !== 'string' ||
+              Buffer.byteLength(text, 'utf8') <= MAX_INLINE_TEXT_BYTES ||
+              (await fs.promises.stat(text).catch(() => null))?.isFile()
+            ) {
+              stagedTexts.push(text)
+              continue
+            }
+
+            const textPath = path.join(
+              tempDir,
+              `${taskIndex}-${field}-${textIndex}.txt`
+            )
+            await fs.promises.writeFile(textPath, text, 'utf8')
+            stagedTexts.push(textPath)
+          }
+
+          binaryTask[field] = Array.isArray(value) ? stagedTexts : stagedTexts[0]
+        }
+
+        binaryTasks.push(binaryTask)
+      }
+
       await fs.promises.writeFile(
         jsonFilePath,
-        JSON.stringify(taskArray, null, 2),
+        JSON.stringify(binaryTasks, null, 2),
         'utf8'
       )
 
