@@ -37,6 +37,22 @@ export default class AstGrepTool extends Tool {
     if (typeof pattern !== 'string' || !pattern.trim() || pattern.includes('\0')) {
       throw new Error('pattern must be non-empty without NUL bytes')
     }
+    return this.run(['run', '--pattern', pattern], paths, language)
+  }
+
+  /**
+   * Read bundled symbol outlines before opening complete source files.
+   */
+  async outline(paths: string[], language?: string): Promise<Record<string, unknown>> {
+    return this.run(['outline', '--items', 'all', '--view', 'signatures'], paths, language)
+  }
+
+  /**
+   * Keep structural reads independent of workspace grammars and configuration.
+   */
+  private async run(
+    command: string[], paths: string[], language?: string
+  ): Promise<Record<string, unknown>> {
     if (!Array.isArray(paths) || paths.length < 1 || paths.length > MAX_PATHS) {
       throw new Error(`Provide 1 to ${MAX_PATHS} local paths`)
     }
@@ -65,7 +81,8 @@ export default class AstGrepTool extends Tool {
       // from loading custom native libraries during an ordinary read-only scan.
       const configPath = path.join(temporary, 'sgconfig.yml')
       await fs.writeFile(configPath, EMPTY_CONFIG)
-      const args = ['run', '--config', configPath, '--custom-languages', 'ignore', '--json=compact', '--color', 'never', '--pattern', pattern]
+      const args = [...command, '--config', configPath, '--custom-languages', 'ignore',
+        '--json=compact', '--color', 'never']
       if (language) {
         args.push('--lang', language)
       }
@@ -76,13 +93,28 @@ export default class AstGrepTool extends Tool {
         ...(this.executionContext?.signal ? { signal: this.executionContext.signal } : {}),
         successExitCodes: [0, 1]
       })
-      const matches = JSON.parse(output || '[]') as Record<string, unknown>[]
+      const records = JSON.parse(output || '[]') as Record<string, unknown>[]
+      const matches = records.slice(0, MAX_RESULTS)
+      let truncated = records.length > MAX_RESULTS
+
+      if (command[0] === 'outline') {
+        let remaining = MAX_RESULTS
+
+        for (const record of matches) {
+          if (Array.isArray(record['items'])) {
+            const items = record['items']
+            record['items'] = items.slice(0, remaining)
+            truncated ||= items.length > remaining
+            remaining -= Math.min(items.length, remaining)
+          }
+        }
+      }
 
       return {
-        matches: matches.slice(0, MAX_RESULTS),
+        [command[0] === 'outline' ? 'files' : 'matches']: matches,
         paths: resolved,
-        summary: { returnedRecords: Math.min(matches.length, MAX_RESULTS), complete: matches.length <= MAX_RESULTS },
-        truncated: matches.length > MAX_RESULTS
+        summary: { returnedRecords: Math.min(matches.length, MAX_RESULTS), complete: !truncated },
+        truncated
       }
     } finally {
       await fs.rm(temporary, { recursive: true, force: true })
