@@ -17,6 +17,13 @@ DEFAULT_SETTINGS = {}
 REQUIRED_SETTINGS = []
 FILE_OUTPUT_PREFIX = "leon:file:"
 PROGRESS_OUTPUT_PREFIX = "leon:progress:"
+MAX_FORMATS = 200
+FORMAT_FIELDS = (
+    "format_id", "ext", "width", "height", "fps", "vcodec", "acodec",
+    "filesize", "filesize_approx", "tbr", "abr", "language", "format_note",
+)
+FORMATS_TEMPLATE = ('{"source":%(.{id,title,webpage_url})j,"formats":%(formats.:.{'
+                    + ",".join(FORMAT_FIELDS) + '})j}')
 SUBTITLE_DESTINATION_PATTERN = re.compile(
     r"Writing (?:video subtitles|video automatic captions) to:\s+(.+)$"
 )
@@ -504,6 +511,19 @@ class YtdlpTool(BaseTool):
             for field in VIDEO_METADATA_FIELDS
             if metadata.get(field) is not None
         }
+
+    def list_formats(self, video_url: str) -> dict[str, Any]:
+        """Inspect encoding choices without exposing media URLs or headers."""
+        output = self.execute_command(ExecuteCommandOptions(
+            binary_name="yt-dlp",
+            args=self._get_config_args() + ["--simulate", "--no-playlist",
+                "--print", FORMATS_TEMPLATE, "--", video_url],
+            options={"sync": True},
+        ))
+        data = json.loads(output)
+        formats = data.get("formats") or []
+        return {"source": data.get("source"), "formats": formats[:MAX_FORMATS],
+                "totalFormats": len(formats), "truncated": len(formats) > MAX_FORMATS}
 
     def _run_download(
         self, args: list[str], on_progress: Optional[ProgressCallback] = None

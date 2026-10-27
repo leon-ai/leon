@@ -9,6 +9,12 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
 const FILE_OUTPUT_PREFIX = 'leon:file:'
 const PROGRESS_OUTPUT_PREFIX = 'leon:progress:'
+const MAX_FORMATS = 200
+const FORMAT_FIELDS = [
+  'format_id', 'ext', 'width', 'height', 'fps', 'vcodec', 'acodec',
+  'filesize', 'filesize_approx', 'tbr', 'abr', 'language', 'format_note'
+] as const
+const FORMATS_TEMPLATE = `{"source":%(.{id,title,webpage_url})j,"formats":%(formats.:.{${FORMAT_FIELDS.join(',')}})j}`
 const SUBTITLE_DESTINATION_PATTERN =
   /Writing (?:video subtitles|video automatic captions) to:\s+(.+)$/
 const YTDLP_EXT_TEMPLATE = '%(ext)s'
@@ -526,6 +532,27 @@ export default class YtdlpTool extends Tool {
     return Object.fromEntries(VIDEO_METADATA_FIELDS
       .filter((field) => metadata[field] != null)
       .map((field) => [field, metadata[field]]))
+  }
+
+  /**
+   * Inspect available encodings without returning temporary media URLs or headers.
+   */
+  async listFormats(videoUrl: string): Promise<Record<string, unknown>> {
+    const output = await this.executeCommand({
+      binaryName: 'yt-dlp',
+      args: [...this.getConfigArgs(), '--simulate', '--no-playlist',
+        '--print', FORMATS_TEMPLATE, '--', videoUrl],
+      options: { sync: true }
+    })
+    const data = JSON.parse(output) as { source: unknown, formats?: unknown[] }
+    const formats = data.formats ?? []
+
+    return {
+      source: data.source,
+      formats: formats.slice(0, MAX_FORMATS),
+      totalFormats: formats.length,
+      truncated: formats.length > MAX_FORMATS
+    }
   }
 
   /**

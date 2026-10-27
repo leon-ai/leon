@@ -198,6 +198,22 @@
       "timeout": {
         "idleMs": 120000
       }
+    },
+    "listFormats": {
+      "description": "Inspect available video/audio formats without downloading media; omit temporary media URLs and request headers.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "videoUrl"
+        ],
+        "additionalProperties": false
+      },
+      "read_only": true
     }
   }
 }
