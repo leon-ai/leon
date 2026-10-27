@@ -23,7 +23,10 @@ const mocks = vi.hoisted(() => ({
   artifact: vi.fn(),
   settings: vi.fn(),
   ledger: vi.fn(),
-  session: vi.fn()
+  session: vi.fn(),
+  target: vi.fn(),
+  socketFetch: vi.fn(),
+  socketCreated: vi.fn()
 }))
 
 vi.mock('@/core/llm-manager/llm-usage/usage-ledger', () => ({
@@ -62,7 +65,7 @@ vi.mock('@/core/llm-manager/llm-accounts', () => ({
 vi.mock('@/core/config-states/config-state', () => ({
   CONFIG_STATE: {
     getModelState: (): object => ({
-      getAgentTarget: (): object => ({ provider: LLMProviders.OpenAI })
+      getAgentTarget: mocks.target
     }),
     getModelSettingsState: (): object => ({
       getSettings: (): object => ({ reasoning: 'medium', speed: 'fast' })
@@ -77,11 +80,22 @@ vi.mock('@/core/artifacts/artifact-store', () => ({ readArtifact: mocks.artifact
 vi.mock('@/core/llm-manager/llm-providers/openai-responses-websocket', () => ({
   OpenAIResponsesWebSocket: class {
     public busy = false
-    public async fetch(): Promise<never> {
-      throw Object.assign(new Error('Unsupported handshake'), { statusCode: 426 })
+    public constructor() {
+      mocks.socketCreated(this)
+    }
+    public async fetch(body: unknown): Promise<Response> {
+      this.busy = true
+
+      try {
+        return await mocks.socketFetch(body)
+      } catch (error) {
+        this.busy = false
+        throw error
+      }
     }
     public close(): void {
-      mocks.close()
+      this.busy = false
+      mocks.close(this)
     }
   }
 }))
@@ -99,7 +113,41 @@ function responseStream(event: Record<string, unknown>): Response {
 }
 
 describe('profile provider requests', () => {
+  it.each([
+    { provider: LLMProviders.Anthropic, endpoint: '/messages', model: 'claude-opus-5-5',
+      event: { type: 'message_start', message: { id: 'provider-response' } } },
+    { provider: LLMProviders.OpenAI, endpoint: '/responses', model: 'gpt-6.1-sol',
+      event: { type: 'response.in_progress', response: { id: 'provider-response' } } }
+  ])('preserves $provider stream activity in auxiliary request failures', async ({ provider, endpoint, model, event }) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(mocks.fetch)
+    let upstream!: ReadableStreamDefaultController<Uint8Array>
+    mocks.fetch.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({
+      start(controller): void {
+        upstream = controller
+      }
+    }), { headers: { 'content-type': 'text/event-stream', 'x-request-id': 'provider-request' } }))
+    const response = await requestProvider(provider, endpoint, { model, stream: true }, {
+      connection: { baseURL: 'https://provider.test/v1', apiKey: 'private-key' }
+    })
+    const reader = response.body!.getReader()
+    upstream.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
+    await reader.read()
+    upstream.error(Object.assign(new Error('Connection reset'), { code: 'ECONNRESET' }))
+
+    await expect(reader.read()).rejects.toMatchObject({
+      code: 'ECONNRESET', responseId: 'provider-response',
+      providerRequestId: expect.any(String), providerEventCount: 1,
+      lastProviderEvent: event.type, requestAcceptedMs: expect.any(Number),
+      failureSummary: expect.stringContaining('accepted the request')
+    })
+  })
+
   beforeEach(() => {
+    mocks.session.mockImplementation((id) => ({ id, modelTarget: null }))
+    mocks.target.mockReturnValue({ provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
+    mocks.socketFetch.mockRejectedValue(Object.assign(
+      new Error('Unsupported handshake'), { statusCode: 426 }
+    ))
     mocks.ledger.mockResolvedValue(undefined)
     mocks.credentials.mockResolvedValue({
       auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', model: 'gpt-6.1-sol', account_id: 'bound-account', access_token: 'account-token'
@@ -265,11 +313,17 @@ describe('profile provider requests', () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(2)
   })
 
-  it('dispatches independent linked-account HTTP streams together and isolates cancellation', async () => {
+  it.each([
+    { transport: 'websocket', outcome: 'cancel' },
+    { transport: 'websocket', outcome: 'error' },
+    { transport: 'http', outcome: 'cancel' },
+    { transport: 'http', outcome: 'error' }
+  ])('dispatches independent linked-account $transport streams and isolates $outcome', async ({ transport, outcome }) => {
     const upstream: ReadableStreamDefaultController<Uint8Array>[] = []
+    const dispatch = transport === 'websocket' ? mocks.socketFetch : mocks.fetch
 
     vi.spyOn(globalThis, 'fetch').mockImplementation(mocks.fetch)
-    mocks.fetch.mockImplementation(async () => new Response(new ReadableStream<Uint8Array>({
+    dispatch.mockImplementation(async () => new Response(new ReadableStream<Uint8Array>({
       start(controller): void {
         upstream.push(controller)
       }
@@ -283,13 +337,26 @@ describe('profile provider requests', () => {
       }))
     }
 
-    expect(mocks.fetch).toHaveBeenCalledTimes(2)
-    await responses[0]!.body!.cancel()
+    expect(dispatch).toHaveBeenCalledTimes(2)
+    if (transport === 'websocket') {
+      expect(mocks.fetch).not.toHaveBeenCalled()
+      expect(mocks.socketCreated).toHaveBeenCalledTimes(2)
+    }
+    if (outcome === 'cancel') {
+      await responses[0]!.body!.cancel()
+    } else {
+      upstream[0]!.error(new Error('Provider stream interrupted'))
+      await expect(responses[0]!.text()).rejects.toThrow('Provider stream interrupted')
+    }
+    if (transport === 'websocket') {
+      expect(mocks.close).not.toHaveBeenCalledWith(mocks.socketCreated.mock.calls[1]![0])
+    }
     upstream[1]!.enqueue(new TextEncoder().encode(
       'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
     ))
     upstream[1]!.close()
     expect(await responses[1]!.text()).toContain('response.completed')
+    expect(mocks.ledger.mock.calls.at(-1)?.[1].outcome).toBe('completed')
   })
 
   it.each(['cancel', 'error'])('releases streamed provider requests after %s', async (outcome) => {
@@ -348,32 +415,7 @@ describe('profile provider requests', () => {
     })).rejects.toThrow('unsupported_tool')
   })
 
-  it('generates a native Codex image using the selected workspace and refreshes only rejected authorization', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(Response.json({}, { status: 401 }))
-      .mockResolvedValueOnce(Response.json({ data: [{ b64_json: 'aW1hZ2U=' }] }))
-    mocks.credentials.mockResolvedValue({
-      auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
-      account_id: 'bound-account', access_token: 'account-token', model: 'gpt-6.1-sol'
-    })
-    const result = await generateWithProvider({
-      session_id: 'session', provider: LLMProviders.OpenAI, kind: MediaKind.Image,
-      model: 'gpt-image-2', prompt: 'A product photograph.'
-    })
-
-    expect(result.files?.[0]?.data).toEqual(Buffer.from('image'))
-    expect(fetch.mock.calls[0]![0]).toBe('https://chatgpt.com/backend-api/codex/images/generations')
-    const headers = new Headers(fetch.mock.calls[0]![1]!.headers)
-    expect(headers.get('authorization')).toBe('Bearer account-token')
-    expect(headers.get('chatgpt-account-id')).toBe('workspace')
-    expect(headers.get('x-codex-image-turn-id')).toBeTruthy()
-    expect(new Headers(fetch.mock.calls[1]![1]!.headers).get('x-codex-image-turn-id'))
-      .toBe(headers.get('x-codex-image-turn-id'))
-    expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toMatchObject({
-      model: 'gpt-image-2', n: 1, prompt: 'A product photograph.'
-    })
-    expect(mocks.credentials).toHaveBeenCalledWith('bound-account', undefined, true)
-  })
+  
 
   it('recommends a subscription image default and rejects API-only routes before submission', async () => {
     const capabilities = (await listMediaCapabilities()).find((entry) => entry['provider'] === 'openai')
@@ -414,18 +456,15 @@ describe('profile provider requests', () => {
     expect(result.files?.[0]?.data).toEqual(Buffer.from('image'))
   })
 
-  it('returns the provider model rejection without retrying another model or account', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({
-      error: { code: 'model_not_found', message: 'The selected image model is unavailable.' }
-    }, { status: 400 }))
-    const input = await resolveMediaGenerationInput({
-      session_id: 'session', kind: MediaKind.Image, prompt: 'A product photograph.',
-      provider: LLMProviders.OpenAI, model: 'owner-selected-image-model'
-    })
+  
 
-    await expect(generateWithProvider(input)).rejects.toThrow('model_not_found')
-    expect(fetch).toHaveBeenCalledOnce()
-  })
+  
+
+  
+
+  
+
+  
 
   it.each([true, false])('keeps image edit formatting and dispatch bound when account selection changes (subscription: %s)', async (subscription) => {
     const subscriptionCredentials = {

@@ -8,6 +8,7 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import { requestProvider } from '@/core/llm-manager/provider-requests'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { DateHelper } from '@/helpers/date-helper'
+import { formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
 
 interface ProviderRequestBody {
   session_id?: string
@@ -121,6 +122,12 @@ export const providerRequestsPlugin: FastifyPluginAsync<APIOptions> = async (
         return await response.json()
       } catch (error) {
         reply.raw.removeListener('close', abort)
+        // HTTP errors expose their message to ordinary tools. Keep the shared
+        // diagnosis available to the agent when custom Error fields are lost.
+        if (error instanceof Error && 'failureSummary' in error &&
+          typeof error.failureSummary === 'string') {
+          error.message = formatPromptErrorForLog(error)
+        }
         throw error
       }
     }

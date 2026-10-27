@@ -1,3 +1,5 @@
+import { formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
+import { ProviderRequestActivity, attachProviderFailureDiagnostics } from '@/core/llm-manager/llm-provider/provider-request-activity'
 import { Readable } from 'node:stream'
 
 import type { AxiosResponse } from 'axios'
@@ -81,6 +83,52 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('keeps provider progress separate from transport activity and retains bounded failure evidence', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(1_000)
+      const activity = new ProviderRequestActivity()
+      activity.observe({ type: 'request-uploaded', requestBytes: 42, uploadDurationMs: 10 })
+      activity.observe({ type: 'transport-activity' })
+      expect(activity.snapshot().providerEventCount).toBe(0)
+      expect(activity.snapshot().requestAcceptedMs).toBeUndefined()
+      vi.setSystemTime(4_000)
+      activity.observe({ type: 'provider-event', providerEventType: 'request.accepted', responseId: 'response-1', requestAccepted: true })
+      vi.setSystemTime(6_000)
+      activity.observe(Object.assign({ type: 'provider-event', providerEventType: 'tool.running' }, {
+        prompt: 'private prompt', image: 'private image data', authorization: 'private credentials'
+      }))
+      vi.setSystemTime(9_000)
+      activity.observe({ type: 'transport-activity' })
+      const error = Object.assign(new Error('Connection ended'), { closeCode: 1_006, pongCount: 7 })
+      attachProviderFailureDiagnostics(error, activity.snapshot())
+
+      expect(error).toMatchObject({
+        responseId: 'response-1', requestAcceptedMs: 3_000,
+        firstProviderEventMs: 3_000, lastProviderEventMs: 5_000,
+        lastProviderEvent: 'tool.running', providerIdleMs: 3_000,
+        providerEventCount: 2, providerCompleted: false, pongCount: 7,
+        failureSummary: expect.stringContaining('accepted the request')
+      })
+      const details = formatPromptErrorForLog(error)
+      expect(details).not.toContain('private')
+      expect(details).not.toContain('local network instability')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('distinguishes completed provider work from delivery failures and preserves cancellation reasons', () => {
+    const activity = new ProviderRequestActivity()
+    activity.observe({ type: 'finish', requestAccepted: true, providerCompleted: true })
+    const failed = new Error('Delivery failed')
+    attachProviderFailureDiagnostics(failed, activity.snapshot())
+    expect(failed).toMatchObject({ failureSummary: expect.stringContaining('reported completion') })
+    const cancelled = new Error('Owner canceled')
+    attachProviderFailureDiagnostics(cancelled, activity.snapshot(), true)
+    expect(cancelled).not.toHaveProperty('failureSummary')
+  })
+
   it.each(['http', 'websocket'] as const)(
     'reports the selected %s transport before a connection opens',
     async (transport) => {

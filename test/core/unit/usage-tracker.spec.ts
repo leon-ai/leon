@@ -29,7 +29,7 @@ vi.mock('@/config', () => ({
   CONFIG_MANAGER: { getConfig: (): { time_zone: string } => ({ time_zone: 'America/New_York' }) }
 }))
 vi.mock('@/helpers/log-helper', () => ({
-  LogHelper: { warning: vi.fn() }
+  LogHelper: { warning: vi.fn(), debug: vi.fn(), error: vi.fn() }
 }))
 
 const TARGET = { provider: 'openrouter', model: 'vendor/model', purpose: 'react' }

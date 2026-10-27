@@ -401,6 +401,8 @@ export class OpenAIResponsesTransport {
               onStreamEvent?.({
                 type: 'provider-event',
                 providerEventType: event['type'],
+                ...(event['type'] === 'response.in_progress' ? { requestAccepted: true } : {}),
+                ...(event['type'] === 'response.completed' ? { providerCompleted: true } : {}),
                 transport,
                 ...(typeof result?.['id'] === 'string'
                   ? { responseId: result['id'] }

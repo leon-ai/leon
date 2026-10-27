@@ -6,7 +6,8 @@ import { getRequiredLLMProviderAccountConfig } from './llm-provider-account-conf
 import { OpenAIResponsesTransport } from './llm-providers/openai-responses-transport'
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { createMediaProviderError } from './media-generation/media-generation-provider-error'
-import { LLMProviders } from './types'
+import { LLMProviders, type CompletionParams } from './types'
+import { ProviderRequestActivity, attachProviderFailureDiagnostics } from './llm-provider/provider-request-activity'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getLLMModelDefaultReasoning } from './llm-model-catalog'
 import {
@@ -34,6 +35,7 @@ export interface ProviderConnection {
   baseURL: string
   apiKey: string
   accountId?: string
+  chatModel?: string
 }
 
 /**
@@ -78,7 +80,8 @@ export async function resolveProviderConnection(
         ? String(credentials['base_url'] || defaultBaseURL || config.baseURL)
         : defaultBaseURL || CONFIG_MANAGER.getProviderBaseURL(provider) || config.baseURL),
     ...(subscription ? {
-      accountId: String(credentials['account_id'])
+      accountId: String(credentials['account_id']),
+      ...(typeof credentials['model'] === 'string' ? { chatModel: credentials['model'] } : {})
     } : {})
   }
 }
@@ -86,14 +89,20 @@ export async function resolveProviderConnection(
 /**
  * Collects a Responses stream while retaining built-in tool evidence and files.
  */
-async function readResponsesJSON(response: Response): Promise<Record<string, unknown>> {
+export async function readResponsesJSON(
+  response: Response,
+  signal?: AbortSignal
+): Promise<Record<string, unknown>> {
   if (!response.body) {
     throw new Error('The provider returned no response stream.')
   }
 
+  signal?.throwIfAborted()
+
   const decoder = new TextDecoder()
   const outputItems = new Map<number, unknown>()
   let pending = ''
+  let result: Record<string, unknown> | undefined
   for await (const chunk of response.body) {
     pending += decoder.decode(chunk, { stream: true })
     let boundary = pending.indexOf('\n')
@@ -107,13 +116,13 @@ async function readResponsesJSON(response: Response): Promise<Record<string, unk
           outputItems.set(event['output_index'], event['item'])
         }
         if (event['type'] === 'response.completed') {
-          const result = event['response'] as Record<string, unknown>
+          const completed = event['response'] as Record<string, unknown>
           // Subscription streams deliver items separately and can leave the
           // terminal response's output empty. Keep native evidence and files.
-          return {
-            ...result,
-            output: Array.isArray(result['output']) && result['output'].length
-              ? result['output']
+          result = {
+            ...completed,
+            output: Array.isArray(completed['output']) && completed['output'].length
+              ? completed['output']
               : [...outputItems.entries()]
                   .sort(([left], [right]) => left - right)
                   .map(([, item]) => item)
@@ -121,11 +130,11 @@ async function readResponsesJSON(response: Response): Promise<Record<string, unk
         }
         if (event['type'] === 'error' || event['type'] === 'response.failed' ||
           event['type'] === 'response.incomplete') {
-          const result = event['response'] as Record<string, unknown> | undefined
-          return {
-            ...result,
+          const failed = event['response'] as Record<string, unknown> | undefined
+          result = {
+            ...failed,
             status: 'failed',
-            error: result?.['error'] || event['error'] || {
+            error: failed?.['error'] || event['error'] || {
               code: event['code'] || event['type'],
               message: event['message'] || 'The provider did not complete the response.'
             }
@@ -136,6 +145,13 @@ async function readResponsesJSON(response: Response): Promise<Record<string, unk
     }
   }
 
+  signal?.throwIfAborted()
+
+  // Drain terminal bytes so usage and cancellation follow the stream's actual outcome.
+  if (result) {
+    return result
+  }
+
   throw new Error('The provider stream ended before completing its response.')
 }
 
@@ -144,6 +160,7 @@ async function readResponsesJSON(response: Response): Promise<Record<string, unk
  */
 class ProviderRequests {
   private transport: OpenAIResponsesTransport | undefined
+  private readonly subscriptionTransports = new Set<OpenAIResponsesTransport>()
   private binding = ''
   private tail: Promise<void> = Promise.resolve()
 
@@ -152,6 +169,10 @@ class ProviderRequests {
    */
   public close(): void {
     this.transport?.close()
+    for (const transport of this.subscriptionTransports) {
+      transport.close()
+    }
+    this.subscriptionTransports.clear()
   }
 
   /**
@@ -160,10 +181,11 @@ class ProviderRequests {
   public async responses(
     connection: ProviderConnection,
     body: Record<string, unknown>,
-    signal: AbortSignal
+    signal: AbortSignal,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<Response> {
-    // Linked accounts use independent HTTP streams. Only the API-key socket
-    // needs to remain reserved while a preceding response is consumed.
+    // Subscription calls own independent sockets so concurrent generation never
+    // falls back to HTTP merely because another call is still producing output.
     const previous = connection.accountId ? Promise.resolve() : this.tail
     let release: () => void = () => undefined
 
@@ -175,12 +197,18 @@ class ProviderRequests {
 
     await previous
     const binding = JSON.stringify([connection.baseURL, connection.accountId])
-    if (this.binding !== binding) {
-      this.close()
+    if (!connection.accountId && this.binding !== binding) {
+      this.transport?.close()
       this.binding = binding
       this.transport = new OpenAIResponsesTransport(connection.baseURL, connection.accountId)
     }
-    const transport = this.transport!
+    const transport = connection.accountId
+      ? new OpenAIResponsesTransport(connection.baseURL, connection.accountId)
+      : this.transport!
+
+    if (connection.accountId) {
+      this.subscriptionTransports.add(transport)
+    }
     const abort = (): void => {
       transport.close()
     }
@@ -188,6 +216,10 @@ class ProviderRequests {
     let streaming = false
     const finish = (): void => {
       signal.removeEventListener('abort', abort)
+      if (connection.accountId) {
+        transport.close()
+        this.subscriptionTransports.delete(transport)
+      }
       release()
     }
 
@@ -202,7 +234,7 @@ class ProviderRequests {
         body: JSON.stringify({ ...body, stream: true }),
         signal,
         redirect: 'error'
-      })
+      }, onStreamEvent)
       if (!response.ok) {
         return response
       }
@@ -244,15 +276,15 @@ class ProviderRequests {
         })
       }
 
-      const data = await readResponsesJSON(response)
+      const data = await readResponsesJSON(response, signal)
       if (data['status'] === 'failed' || data['error']) {
-        this.close()
+        transport.close()
         return Response.json(data, { status: 502 })
       }
 
       return Response.json(data)
     } catch (error) {
-      this.close()
+      transport.close()
       throw error
     } finally {
       if (!streaming) {
@@ -336,12 +368,15 @@ export async function requestProvider(
   if (connection.accountId && endpoint !== '/responses') {
     headers['x-codex-image-turn-id'] = randomUUID()
   }
+  const activity = new ProviderRequestActivity()
+  const observe: NonNullable<CompletionParams['onStreamEvent']> = (event) => activity.observe(event)
   const dispatch = async (accountHeaders?: Record<string, string>): Promise<Response> => {
     // Retain the fresh credential for redaction if a later provider response fails.
     Object.assign(headers, accountHeaders)
     signal.throwIfAborted()
 
-    return fetch(requestURL, {
+    observe({ type: 'request-dispatched', transport: 'http' })
+    const response = await fetch(requestURL, {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
         ...headers,
@@ -355,11 +390,17 @@ export async function requestProvider(
       signal,
       redirect: 'error'
     })
+    observe({
+      type: 'response-headers', transport: 'http',
+      ...(response.headers.get('x-request-id') ? { requestId: response.headers.get('x-request-id')! } : {})
+    })
+
+    return response
   }
   const execute = async (): Promise<Response> => provider === LLMProviders.OpenAI && endpoint === '/responses' &&
     body && typeof body === 'object' && !(body instanceof FormData)
     ? await PROVIDER_REQUESTS.responses(
-        { ...connection, baseURL }, body as Record<string, unknown>, signal
+        { ...connection, baseURL }, body as Record<string, unknown>, signal, observe
       )
     : connection.accountId
       ? await requestChatGPTAccount(connection.accountId, dispatch)
@@ -378,13 +419,18 @@ export async function requestProvider(
         ...(account ? { connectionId: account } : {}),
         privateValues: [connection.apiKey],
         endpoint: requestURL
-      }), execute, signal)
+      }), execute, signal, {
+        activity,
+        observeProtocolEvents: !(provider === LLMProviders.OpenAI && endpoint === '/responses')
+      })
     : await execute()
 
   if (!response.ok) {
-    throw await createMediaProviderError(
+    const error = await createMediaProviderError(
       provider, response, [connection.apiKey, ...Object.values(headers)], body
     )
+    attachProviderFailureDiagnostics(error, activity.snapshot(), signal.aborted)
+    throw error
   }
 
   return response
