@@ -156,6 +156,36 @@
         ]
       },
       "deduplicate_calls": false
+    },
+    "findObjects": {
+      "description": "Find document objects by observed name, text, kind, geometry or anchor-count filters without saving or changing selection. Returns bounded matches and the total count.",
+      "progressive_guidance": "Discover document.find parameters with commands. Supply at least one filter; all supplied filters must match. Use returned IDs with inspect options.ids to read the matching objects.",
+      "read_only": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute existing source document."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": true,
+            "minProperties": 1,
+            "description": "Observed document.find filters, e.g. name, text, kind, within or minAnchors. Selection is never changed."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "inputPath",
+          "filters"
+        ],
+        "additionalProperties": false
+      }
     }
   }
 }

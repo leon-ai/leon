@@ -125,6 +125,30 @@ export default class VectorCraftTool extends Tool {
   }
 
   /**
+   * Find objects using observed engine filters without saving or changing selection.
+   */
+  public async findObjects(
+    inputPath: string, filters: Record<string, unknown>, limit = 100
+  ): Promise<unknown> {
+    if (!filters || typeof filters !== 'object' || Array.isArray(filters) ||
+        Object.keys(filters).length === 0) {
+      throw new Error('Provide document.find filters discovered through commands.')
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_INSPECT_ITEMS) {
+      throw new Error(`limit must be between 1 and ${MAX_INSPECT_ITEMS}.`)
+    }
+
+    const source = await this.resolveSource(inputPath)
+    const output = await this.runCli([
+      'run', '--in', source, '--cmd', 'document.find',
+      '--params', JSON.stringify({ ...filters, select: false, limit })
+    ])
+    const result = this.readJsonLines(output.stdout).at(-1) as { result?: unknown } | undefined
+
+    return { result: result?.result, diagnostics: output.stderr }
+  }
+
+  /**
    * Edits a source copy or a new document and delivers native, SVG and PNG files.
    */
   public async edit(steps: CraftStep[], inputPath?: string): Promise<unknown> {
