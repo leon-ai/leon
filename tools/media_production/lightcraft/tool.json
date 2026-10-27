@@ -212,6 +212,67 @@
       "timeout": {
         "idleMs": 120000
       }
+    },
+    "createContactSheet": {
+      "description": "Create and attach a PDF contact sheet for observed library photo IDs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "libraryPath": {
+            "type": "string",
+            "description": "Explicitly selected existing library directory; close it in the GUI first."
+          },
+          "photoIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "paper": {
+                "type": "string",
+                "enum": [
+                  "a4",
+                  "letter"
+                ]
+              },
+              "landscape": {
+                "type": "boolean"
+              },
+              "columns": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "rows": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "captions": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "libraryPath",
+          "photoIds"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
+      }
     }
   },
   "concurrency": "serial"

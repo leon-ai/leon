@@ -64,6 +64,17 @@ export interface DevelopOptions {
 export type LibraryExportOptions = DevelopOptions
 
 /**
+ * Layout options accepted by the PDF contact-sheet exporter.
+ */
+export interface ContactSheetOptions {
+  paper?: string
+  landscape?: boolean
+  columns?: number
+  rows?: number
+  captions?: boolean
+}
+
+/**
  * Develops photos headlessly and operates on explicitly selected photo libraries.
  */
 export default class LightCraftTool extends Tool {
@@ -285,6 +296,28 @@ export default class LightCraftTool extends Tool {
         throw new Error('LightCraft did not produce any photo exports.')
       }
       const files = await this.publishFiles(outputs)
+
+      return { ...files, result }
+    })
+  }
+
+  /**
+   * Create a PDF contact sheet for an explicit, bounded selection of library photos.
+   */
+  public async createContactSheet(
+    libraryPath: string, photoIds: number[], options: ContactSheetOptions = {}
+  ): Promise<unknown> {
+    this.validatePhotoIds(photoIds)
+
+    return this.withWorkspace(async (directory) => {
+      const target = path.join(directory, 'contact-sheet.pdf')
+      const result = await this.runLibrary(libraryPath, [{
+        command: 'export.contactSheet',
+        params: { ...options, ids: photoIds, path: target }
+      }])
+      const files = await this.publishFiles([
+        { path: target, filename: 'contact-sheet.pdf', mimeType: 'application/pdf' }
+      ])
 
       return { ...files, result }
     })
