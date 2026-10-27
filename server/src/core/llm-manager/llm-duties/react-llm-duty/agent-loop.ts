@@ -359,6 +359,7 @@ interface AgentModelCallOptions {
   isFinalizationAttempt?: boolean
   isCompletionReview?: boolean
   isCompletionReviewRetry?: boolean
+  completionReviewIntent?: 'answer' | 'clarification'
   requiresPlanReconciliation?: boolean
   isContextRecoveryAttempt?: boolean
   isImageInspection?: boolean
@@ -1533,6 +1534,7 @@ async function reviewAgentCompletion(
       params.runBudget?.throwIfExpired()
       const response = await params.callModel(messages, params.catalog.tools, {
         isRecoveryAttempt: false, isCompletionReview: true,
+        completionReviewIntent: intent,
         isCompletionReviewRetry: attempt > 0,
         ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
       }, state)

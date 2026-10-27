@@ -4770,9 +4770,11 @@ describe('model response status', () => {
       const duty = new ReActLLMDuty({ input: 'Answer the question.' })
       Object.assign(duty, { writeAgentPromptLog: vi.fn() })
 
-      for (const review of [false, true]) {
+      for (const phase of ['task', 'review', 'inspection']) {
         await duty['callAgentModel']([], 'Follow the request.', [], {
-          isRecoveryAttempt: false, isCompletionReview: review
+          isRecoveryAttempt: false,
+          isCompletionReview: phase === 'review',
+          isImageInspection: phase === 'inspection'
         })
       }
 
@@ -4782,6 +4784,7 @@ describe('model response status', () => {
         taskReasoning === 'on' ? undefined : taskReasoning === 'auto' ? 'medium' : 'high'
       )
       expect(reviewParams.reasoningEffort).toBe(reviewEffort)
+      expect(coreMocks.prompt.mock.calls[2]![1].reasoningEffort).toBe(reviewEffort)
       expect(reviewParams.reasoningUseDefaultEffort).toBe(
         reviewEffort === undefined ? true : undefined
       )

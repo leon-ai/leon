@@ -1,5 +1,5 @@
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
+import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
 import { LOCAL_SERVER_PROVIDERS } from '@/core/llm-manager/llm-provider/llm-provider-constants'
 import type {
   PreparedCompletionParams
@@ -7,7 +7,9 @@ import type {
 import { type ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import {
   LLMDuties,
+  InferencePurpose,
   LLMProviders,
+  type LLMReasoningEffort,
   type CompletionParams
 } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
@@ -17,6 +19,16 @@ const LOW_VERBOSITY_DUTIES = new Set<LLMDuties>([
   LLMDuties.ActionCalling,
   LLMDuties.SlotFilling
 ])
+const MEMORY_EXTRACTION_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const SELF_MODEL_REFLECTION_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const PULSE_PLANNING_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const PULSE_REACTION_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const INFERENCE_REASONING_EFFORTS: Partial<Record<InferencePurpose, LLMReasoningEffort>> = {
+  [InferencePurpose.Memory]: MEMORY_EXTRACTION_REASONING_EFFORT,
+  [InferencePurpose.SelfModel]: SELF_MODEL_REFLECTION_REASONING_EFFORT,
+  [InferencePurpose.PulsePlanning]: PULSE_PLANNING_REASONING_EFFORT,
+  [InferencePurpose.PulseReaction]: PULSE_REACTION_REASONING_EFFORT
+}
 
 const DEFAULT_MAX_TOKENS = 8_192
 
@@ -45,6 +57,22 @@ function applyConfiguredModelSettings(
   target: ResolvedLLMTarget
 ): void {
   const settings = CONFIG_STATE.getModelSettingsState().getSettings(target)
+  const internalReasoningEffort = completionParams.usagePurpose
+    ? INFERENCE_REASONING_EFFORTS[completionParams.usagePurpose]
+    : undefined
+  // Bounded extraction and classification should not inherit expensive task
+  // reasoning. Autonomous task execution remains an ordinary ReAct request.
+  if (completionParams.dutyType === LLMDuties.Inference &&
+    internalReasoningEffort &&
+    completionParams.disableThinking !== true &&
+    completionParams.reasoningMode !== 'off' &&
+    completionParams.reasoningEffort !== 'none' &&
+    getLLMModelCatalogEntry(target.provider, target.model)?.reasoning.includes(internalReasoningEffort)) {
+    completionParams.reasoningMode = 'on'
+    completionParams.reasoningEffort = internalReasoningEffort
+    delete completionParams.reasoningUseDefaultEffort
+  }
+
   const hasDutyReasoningOverride =
     completionParams.disableThinking === true ||
     completionParams.reasoningMode === 'off' ||

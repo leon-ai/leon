@@ -32,6 +32,7 @@ import {
   LLMProviders,
   InferencePurpose,
   CompletionFailureKind,
+  type LLMReasoningEffort,
   type ProviderActivitySnapshot,
   type AgentToolTranscriptMessage,
   type OpenAITool,
@@ -51,7 +52,9 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 
 const TRACE_SAVE_INTERVAL_MS = 1_000
 const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
-const COMPLETION_REVIEW_REASONING_EFFORT = 'low'
+const IMAGE_INSPECTION_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const COMPLETION_REVIEW_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const CLARIFICATION_REVIEW_REASONING_EFFORT: LLMReasoningEffort = 'low'
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentTarget().provider
@@ -1133,6 +1136,7 @@ export class ReActLLMDuty extends LLMDuty {
       isFinalizationAttempt?: boolean
       isCompletionReview?: boolean
       isCompletionReviewRetry?: boolean
+      completionReviewIntent?: 'answer' | 'clarification'
       isContextRecoveryAttempt?: boolean
       isImageInspection?: boolean
       hasPendingImages?: boolean
@@ -1248,15 +1252,20 @@ export class ReActLLMDuty extends LLMDuty {
       agentTarget.provider,
       agentTarget.model
     )
-    // Review checks existing evidence with low effort where supported. Models
-    // without that effort retain their normal, provider-compatible settings.
-    const useReviewReasoning = isPrivateResponse &&
-      modelCapabilities?.reasoning.includes(COMPLETION_REVIEW_REASONING_EFFORT)
-    const configuredReasoning = useReviewReasoning
-      ? COMPLETION_REVIEW_REASONING_EFFORT
+    const internalReasoningEffort = options.isImageInspection
+      ? IMAGE_INSPECTION_REASONING_EFFORT
+      : options.completionReviewIntent === 'clarification'
+        ? CLARIFICATION_REVIEW_REASONING_EFFORT
+        : COMPLETION_REVIEW_REASONING_EFFORT
+    // Apply each phase's effort only when the active model supports it.
+    // Otherwise, retain its normal provider-compatible settings.
+    const useInternalReasoning = isPrivateResponse &&
+      modelCapabilities?.reasoning.includes(internalReasoningEffort)
+    const configuredReasoning = useInternalReasoning
+      ? internalReasoningEffort
       : modelSettings.reasoning
     const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
-    const reasoningEffortBaseline = useReviewReasoning &&
+    const reasoningEffortBaseline = useInternalReasoning &&
       modelCapabilities?.supportsPerMessageReasoning &&
       modelSettings.reasoning !== 'none'
       ? modelSettings.reasoning === 'auto'
@@ -1284,7 +1293,7 @@ export class ReActLLMDuty extends LLMDuty {
       configuredReasoning === 'auto'
         ? defaultReasoning.effort
         : configuredReasoning === 'on' ? undefined : configuredReasoning
-    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = useReviewReasoning
+    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = useInternalReasoning
       ? options.isImageInspection ? 'inspection' : 'review'
       : configuredReasoning === 'auto' ? defaultReasoning.source : 'owner'
     // Auto may recover from reasoning-only exhaustion with less effort.

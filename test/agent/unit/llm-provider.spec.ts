@@ -4,6 +4,8 @@ import type { AxiosResponse } from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogHelper } from '@/helpers/log-helper'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import { FileHelper } from '@/helpers/file-helper'
 import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 
@@ -12,7 +14,7 @@ import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-p
 import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
 import { attachProviderFailureDiagnostics, formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
 import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
-import { CompletionFailureKind, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { CompletionFailureKind, InferencePurpose, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 import { appendInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
 
 vi.mock('@/core/llm-manager/llm-usage/usage-ledger', () => ({
@@ -129,11 +131,56 @@ describe('LLMProvider', () => {
     expect(cancelled).not.toHaveProperty('failureSummary')
   })
 
-  
+  it.each([InferencePurpose.Memory, InferencePurpose.SelfModel, InferencePurpose.PulsePlanning, InferencePurpose.PulseReaction])('uses supported low reasoning for %s maintenance despite owner high reasoning', (usagePurpose) => {
+    vi.spyOn(CONFIG_STATE, 'getModelSettingsState').mockReturnValue({
+      getSettings: () => ({ reasoning: 'high', speed: 'fast' })
+    } as ReturnType<typeof CONFIG_STATE.getModelSettingsState>)
+    const params: CompletionParams = {
+      dutyType: LLMDuties.Inference, usagePurpose, systemPrompt: '',
+      thoughtTokensBudget: 96, reasoningUseDefaultEffort: true
+    }
 
-  
+    prepareCompletionRequest(params, LLMProviders.OpenAI, {
+      ...celerisTarget, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
 
-  
+    expect(params.reasoningMode).toBe('on')
+    expect(params.reasoningEffort).toBe('low')
+    expect(params.reasoningUseDefaultEffort).toBeUndefined()
+    expect(params.thoughtTokensBudget).toBe(96)
+    expect(params.serviceTier).toBe('priority')
+  })
+
+  it.each([{ disableThinking: true }, { reasoningMode: 'off' as const }])('preserves explicit non-thinking maintenance settings: %j', (override) => {
+    const params: CompletionParams = {
+      dutyType: LLMDuties.Inference, usagePurpose: InferencePurpose.Memory,
+      systemPrompt: '', ...override
+    }
+
+    prepareCompletionRequest(params, LLMProviders.OpenAI, {
+      ...celerisTarget, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+
+    expect(params.reasoningEffort).not.toBe('low')
+    expect(params).toMatchObject(override)
+  })
+
+  it.each([
+    { dutyType: LLMDuties.ReAct, usagePurpose: InferencePurpose.Pulse, model: 'gpt-6.1-sol' },
+    { dutyType: LLMDuties.Inference, usagePurpose: InferencePurpose.ProviderTool, model: 'gpt-6.1-sol' },
+    { dutyType: LLMDuties.Inference, usagePurpose: InferencePurpose.Memory, model: 'uncatalogued-model' }
+  ])('preserves owner reasoning outside supported maintenance requests: %j', ({ dutyType, usagePurpose, model }) => {
+    vi.spyOn(CONFIG_STATE, 'getModelSettingsState').mockReturnValue({
+      getSettings: () => ({ reasoning: 'high', speed: 'auto' })
+    } as ReturnType<typeof CONFIG_STATE.getModelSettingsState>)
+    const params: CompletionParams = { dutyType, usagePurpose, systemPrompt: '' }
+
+    prepareCompletionRequest(params, LLMProviders.OpenAI, {
+      ...celerisTarget, provider: LLMProviders.OpenAI, model
+    })
+
+    expect(params.reasoningEffort).toBe('high')
+  })
 
   it.each([false, true])('logs nested stream diagnostics without request metadata (aggregate=%s)', (aggregate) => {
     const cause = Object.assign(new Error('The provider socket closed.'), {

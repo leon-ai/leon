@@ -900,7 +900,7 @@ export default class PulseManager {
     ].join('\n')
 
     const result = await runInference({
-      usagePurpose: InferencePurpose.Pulse,
+      usagePurpose: InferencePurpose.PulsePlanning,
       prompt,
       systemPrompt: [
         'You maintain Leon\'s autonomous pulse queue.',
@@ -1396,7 +1396,7 @@ export default class PulseManager {
     ].join('\n')
 
     const result = await runInference({
-      usagePurpose: InferencePurpose.Pulse,
+      usagePurpose: InferencePurpose.PulseReaction,
       prompt,
       systemPrompt: [
         'You classify the owner\'s reaction to Leon\'s recent autonomous pulse action.',
