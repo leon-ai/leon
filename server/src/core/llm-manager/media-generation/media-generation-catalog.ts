@@ -4,7 +4,6 @@ import { CONFIG_MANAGER } from '@/config'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { MediaKind } from './media-generation-types'
 import { getModelAccountCredentials } from '../llm-accounts'
-import { CHATGPT_CODEX_DEFAULT_IMAGE_MODEL } from '../llm-accounts/chatgpt-account-config'
 
 /**
  * Endpoint capabilities are distinct from the text-model catalog. Model access
@@ -94,8 +93,8 @@ export async function getMediaProviderCapabilities(provider: LLMProviders): Prom
       return {
         kinds: [MediaKind.Image],
         models: {
-          // Recommend a default without restricting owner-selected models.
-          image: [CHATGPT_CODEX_DEFAULT_IMAGE_MODEL]
+          // Auto follows the same maintained image catalog for either auth method.
+          image: capabilities.models.image || []
         },
         configured: true,
         auth_kind: 'chatgpt'

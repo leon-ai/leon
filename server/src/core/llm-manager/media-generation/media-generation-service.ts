@@ -5,8 +5,10 @@ import { randomUUID } from 'node:crypto'
 import { getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { registerArtifact } from '@/core/artifacts/artifact-store'
 import { attachArtifacts } from '@/core/artifacts/artifact-service'
+import { formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
 import {
   resolveMediaGenerationInput,
   GenerationSelectionRequired
@@ -77,37 +79,60 @@ export async function persistGeneratedFiles(
 export async function generateMedia(
   request: MediaGenerationInput
 ): Promise<MediaGenerationResult> {
-  if (!CONVERSATION_SESSION_MANAGER.getSession(request.session_id)) {
+  const session = CONVERSATION_SESSION_MANAGER.getSession(request.session_id)
+
+  if (!session) {
     throw new Error('Conversation session does not exist.')
   }
 
-  let input: ResolvedMediaGenerationInput
+  // HTTP tools carry the conversation explicitly; keep inference accounting and
+  // model overrides bound to that conversation throughout generation.
+  return runWithConversationSession(
+    { sessionId: request.session_id, modelTarget: session.modelTarget },
+    async () => {
+      let input: ResolvedMediaGenerationInput
 
-  try {
-    input = await resolveMediaGenerationInput(request)
-  } catch (error) {
-    if (error instanceof GenerationSelectionRequired) {
-      return {
-        status: GenerationStatus.SelectionRequired,
-        artifacts: [],
-        error: error.message,
-        choices: error.choices
+      try {
+        input = await resolveMediaGenerationInput(request)
+      } catch (error) {
+        if (error instanceof GenerationSelectionRequired) {
+          return {
+            status: GenerationStatus.SelectionRequired,
+            artifacts: [],
+            error: error.message,
+            choices: error.choices
+          }
+        }
+
+        throw error
       }
+
+      if (!input.model.trim() || !input.prompt.trim()) {
+        throw new Error('A generation model and prompt are required.')
+      }
+
+      input.signal?.throwIfAborted()
+      let output: Awaited<ReturnType<typeof generateWithProvider>>
+
+      try {
+        output = await generateWithProvider(input)
+      } catch (error) {
+        input.signal?.throwIfAborted()
+
+        // HTTP service responses otherwise discard nested transport causes and
+        // socket close details before the error reaches the tool's log.
+        throw new Error(`${input.provider} generation failed: ${formatPromptErrorForLog(error)}`, {
+          cause: error
+        })
+      }
+
+      input.signal?.throwIfAborted()
+
+      return persistGeneratedFiles(
+        input.session_id,
+        `${input.provider}:${input.model}`,
+        output.files
+      )
     }
-
-    throw error
-  }
-
-  if (!input.model.trim() || !input.prompt.trim()) {
-    throw new Error('A generation model and prompt are required.')
-  }
-
-  input.signal?.throwIfAborted()
-  const output = await generateWithProvider(input)
-
-  return persistGeneratedFiles(
-    input.session_id,
-    `${input.provider}:${input.model}`,
-    output.files
   )
 }

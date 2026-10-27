@@ -77,6 +77,20 @@ export const mediaGenerationPlugin: FastifyPluginAsync<APIOptions> = async (
         )
       }
     },
-    async (request) => generateMedia(request.body)
+    async (request, reply) => {
+      const controller = new AbortController()
+      const abort = (): void => {
+        if (!reply.raw.writableEnded) {
+          controller.abort()
+        }
+      }
+      reply.raw.once('close', abort)
+
+      try {
+        return await generateMedia({ ...request.body, signal: controller.signal })
+      } finally {
+        reply.raw.removeListener('close', abort)
+      }
+    }
   )
 }
