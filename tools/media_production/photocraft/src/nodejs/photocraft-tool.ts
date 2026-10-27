@@ -112,11 +112,22 @@ export default class PhotoCraftTool extends Tool {
   /**
    * Stages a source copy, executes edits, and publishes layered and rendered output.
    */
-  public async edit(inputPath: string, steps: PhotoCraftStep[]): Promise<unknown> {
+  public async edit(
+    inputPath: string | undefined,
+    steps: PhotoCraftStep[] = [],
+    newDocument?: Record<string, unknown>
+  ): Promise<unknown> {
     this.requireSession()
 
-    if (!Array.isArray(steps) || steps.length < 1 || steps.length > MAX_STEPS) {
-      throw new Error(`Provide between 1 and ${MAX_STEPS} PhotoCraft steps.`)
+    if (!Array.isArray(steps) || steps.length > MAX_STEPS ||
+        (inputPath !== undefined && steps.length === 0)) {
+      throw new Error(`Provide at most ${MAX_STEPS} PhotoCraft steps; existing sources need at least one edit.`)
+    }
+    if ((inputPath === undefined) === (newDocument === undefined)) {
+      throw new Error('Provide either inputPath or newDocument, using discovered file.new parameters.')
+    }
+    if (newDocument !== undefined) {
+      this.validateParams(newDocument)
     }
 
     for (const step of steps) {
@@ -126,18 +137,22 @@ export default class PhotoCraftTool extends Tool {
       this.validateParams(step.params ?? {})
     }
 
-    const source = await this.resolveSource(inputPath)
+    const source = inputPath === undefined ? undefined : await this.resolveSource(inputPath)
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-photocraft-'))
 
     try {
       // Even Save commands without a path can only write back to this staged file.
-      const staged = path.join(directory, `source${path.extname(source)}`)
       const project = path.join(directory, 'edited.pcraft')
       const image = path.join(directory, 'edited.png')
+      const args = ['run']
 
-      await fs.copyFile(source, staged, fs.constants.COPYFILE_EXCL)
-
-      const args = ['run', staged]
+      if (source) {
+        const staged = path.join(directory, `source${path.extname(source)}`)
+        await fs.copyFile(source, staged, fs.constants.COPYFILE_EXCL)
+        args.push(staged)
+      } else {
+        args.push('--new', JSON.stringify(newDocument))
+      }
 
       for (const step of steps) {
         args.push(
@@ -159,7 +174,7 @@ export default class PhotoCraftTool extends Tool {
         .split('\n')
         .filter(Boolean)
         .map((line) => JSON.parse(line))
-      const stem = path.basename(source, path.extname(source))
+      const stem = source ? path.basename(source, path.extname(source)) : 'artwork'
       const artifacts = [
         await this.publishFile(
           project,
