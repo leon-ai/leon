@@ -88,6 +88,57 @@
         },
         "additionalProperties": false
       }
+    },
+    "query": {
+      "description": "Inspect headings, labels or metadata from a Typst project without exporting a document. Results are bounded; use compile and visual inspection for layout quality.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sourcePath": {
+            "type": "string",
+            "description": "Absolute local Typst source file path."
+          },
+          "selector": {
+            "type": "string",
+            "description": "Typst selector expression, e.g. heading or <label>."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "rootPath": {
+                "type": "string",
+                "description": "Absolute project directory containing the source and allowed assets/imports. Defaults to the source directory."
+              },
+              "fontPaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Absolute local directories containing additional fonts."
+              },
+              "inputs": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "String inputs read by the source through sys.inputs."
+              },
+              "field": {
+                "type": "string",
+                "description": "Optional element field, e.g. value for metadata."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "sourcePath",
+          "selector"
+        ],
+        "additionalProperties": false
+      },
+      "read_only": true
     }
   },
   "binaries": {
