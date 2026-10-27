@@ -54,6 +54,15 @@ export interface InspectOptions {
 }
 
 /**
+ * Artboard selection and format-specific options discovered from document.export.
+ */
+export interface ExportOptions {
+  artboard?: number
+  scale?: number
+  settings?: Record<string, unknown>
+}
+
+/**
  * Creates and edits vector documents with the managed, headless VectorCraft CLI.
  */
 export default class VectorCraftTool extends Tool {
@@ -199,10 +208,22 @@ export default class VectorCraftTool extends Tool {
    */
   public async export(
     inputPath: string,
-    format = VectorFormat.Svg
+    format = VectorFormat.Svg,
+    options: ExportOptions = {}
   ): Promise<unknown> {
     if (!Object.values(VectorFormat).includes(format)) {
       throw new Error('Use svg, pdf or png for VectorCraft export.')
+    }
+    if (options.artboard !== undefined &&
+        (!Number.isSafeInteger(options.artboard) || options.artboard < 0)) {
+      throw new Error('artboard must be a non-negative index observed through inspect.')
+    }
+    if (options.scale !== undefined && (!Number.isFinite(options.scale) || options.scale <= 0)) {
+      throw new Error('scale must be positive.')
+    }
+    if (options.settings !== undefined && (!options.settings ||
+        typeof options.settings !== 'object' || Array.isArray(options.settings))) {
+      throw new Error('settings must be a document.export JSON object.')
     }
 
     const source = await this.resolveSource(inputPath)
@@ -210,11 +231,29 @@ export default class VectorCraftTool extends Tool {
     return this.withWorkspace(async (directory) => {
       const filename = `artwork.${format}`
       const target = path.join(directory, filename)
-      const output = await this.runCli(['convert', source, target])
-      const result = JSON.parse(output.stdout)
-      const files = await this.publishFiles([
-        { path: target, filename, mimeType: MIME_TYPES[format] }
-      ], format === VectorFormat.Png ? target : undefined)
+      const params = {
+        ...options.settings, ...options,
+        path: target, format
+      }
+      delete params.settings
+      const output = await this.runCli([
+        'run', '--in', source, '--cmd', 'document.export', '--params', JSON.stringify(params)
+      ])
+      const result = this.readJsonLines(output.stdout)
+      // Multi-artboard exports may replace the requested basename with one file
+      // per artboard. Deliver the files actually written into this workspace.
+      const entries = await fs.readdir(directory, { recursive: true, withFileTypes: true })
+      const outputs = entries.filter((entry) => entry.isFile()).map((entry) => {
+        const file = path.join(entry.parentPath, entry.name)
+
+        return { path: file, filename: entry.name,
+          mimeType: MIME_TYPES[path.extname(file).slice(1) as VectorFormat] ?? 'application/octet-stream' }
+      })
+      if (outputs.length === 0) {
+        throw new Error('VectorCraft did not produce an export.')
+      }
+      const files = await this.publishFiles(outputs,
+        format === VectorFormat.Png ? outputs[0]?.path : undefined)
 
       return { ...files, result, diagnostics: output.stderr }
     })

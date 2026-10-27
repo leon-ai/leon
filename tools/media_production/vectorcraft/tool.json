@@ -148,6 +148,27 @@
               "png"
             ],
             "description": "Defaults to svg. PDF includes all artboards; SVG/PNG use the first."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "artboard": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Zero-based artboard index observed through inspect."
+              },
+              "scale": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Discovered document.export parameters, such as range or SVG/PDF options. Output paths are assigned by Leon."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
           }
         },
         "additionalProperties": false,
