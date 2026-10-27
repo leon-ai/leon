@@ -29,6 +29,7 @@ const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 const RETAINED_RESULT_PREVIEW_MAX_CHARS = 4_096
+const MAX_RETAINED_TOOL_IMAGE_BYTES = 1_024 * 1_024
 
 interface AgentModelContextParams {
   transcript: AgentToolTranscriptMessage[]
@@ -165,10 +166,12 @@ function estimateAgentInputTokens(
  * Keeps recent tool images and the latest inspection batch without changing
  * saved evidence, textual results, or owner attachments. Older results leave
  * in batches, preserving the prefix between removals with bounded headroom.
+ * Oversized previews require a bounded reread; queued inspections stay intact.
  */
 export function retainRecentToolImages(
   transcript: AgentToolTranscriptMessage[]
 ): AgentToolTranscriptMessage[] {
+  const withheldPreviews: Array<{ toolCallId: string, filename?: string }> = []
   const retainedImageIndexes = new Set<number>()
   const imageIndexes = transcript.flatMap((message, index) =>
     message.role === 'tool' &&
@@ -234,7 +237,7 @@ export function retainRecentToolImages(
     }
   }
 
-  return transcript.map((message, index) => {
+  const projected = transcript.map((message, index) => {
     if (
       message.role !== 'tool' ||
       !message.files?.some((file) => file.mediaType.startsWith('image/'))
@@ -243,9 +246,21 @@ export function retainRecentToolImages(
     }
 
     const { files, ...textMessage } = message
-    const retainedFiles = files.filter((file) =>
-      !file.mediaType.startsWith('image/') || retainedImageIndexes.has(index)
-    )
+    const retainedFiles = files.filter((file) => {
+      if (!file.mediaType.startsWith('image/')) {
+        return true
+      }
+      if (!file.inspectionPending &&
+        Buffer.byteLength(file.dataBase64, 'base64') > MAX_RETAINED_TOOL_IMAGE_BYTES) {
+        withheldPreviews.push({
+          toolCallId: message.toolCallId,
+          ...(file.filename ? { filename: file.filename } : {})
+        })
+        return false
+      }
+
+      return retainedImageIndexes.has(index)
+    })
     if (retainedFiles.length === files.length) {
       return message
     }
@@ -255,6 +270,15 @@ export function retainRecentToolImages(
       : textMessage
   })
 
+  if (withheldPreviews.length > 0) {
+    const context = {
+      withheld_image_previews: withheldPreviews,
+      instruction: 'These tool previews were withheld because their encodings are too large. Their tool observations, source artifacts and canonical previews remain available. Do not claim to have inspected withheld images. Reload the relevant source with a bounded image preview before making visual judgments.'
+    }
+    projected.push({ role: 'user', content: JSON.stringify(context), runtimeContext: context })
+  }
+
+  return projected
 }
 
 /**

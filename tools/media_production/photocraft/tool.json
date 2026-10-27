@@ -97,6 +97,7 @@
     },
     "preview": {
       "description": "Attach a PNG composite of a local image/project, or capture the live desktop window when no file is supplied.",
+      "progressive_guidance": "If modelPreviewAttached is false, inspect the returned artifact with file.readImage to obtain a bounded model preview. The artifact is still available at its original resolution.",
       "deduplicate_calls": false,
       "parameters": {
         "type": "object",

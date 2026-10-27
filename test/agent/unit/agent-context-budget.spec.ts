@@ -254,7 +254,35 @@ describe('agent context budget', () => {
     expect(transcript[1]).toHaveProperty('files')
   })
 
-  
+  it.each([5, 7])('withholds oversized previews while preserving queued inspections (%s MiB)', (size) => {
+    const image = { dataBase64: 'x'.repeat(size * 1_024 * 1_024), mediaType: 'image/png' }
+    const transcript: AgentToolTranscriptMessage[] = []
+    appendToolExchange(transcript, 'old', 'Original source remains reloadable.')
+    const old = transcript.at(-1)!
+    if (old.role === 'tool') {
+      old.files = [image]
+    }
+    const calls = ['first', 'second'].map(createToolCall)
+    transcript.push({ role: 'assistant', content: '', toolCalls: calls })
+    for (const call of calls) {
+      transcript.push({
+        role: 'tool', toolCallId: call.id, toolName: call.function.name,
+        content: 'Current source.', files: [{ ...image, inspectionPending: true }]
+      })
+    }
+
+    const retained = retainRecentToolImages(transcript)
+
+    expect(retained[1]).toEqual({ ...old, files: undefined })
+    expect(retained.slice(2, -1)).toEqual(transcript.slice(2))
+    expect(retained.at(-1)).toMatchObject({
+      runtimeContext: {
+        withheld_image_previews: [{ toolCallId: 'old' }],
+        instruction: expect.stringContaining('Do not claim to have inspected withheld images')
+      }
+    })
+    expect(old).toHaveProperty('files', [image])
+  })
 
   it('keeps a default retained-result page complete in the model observation', () => {
     const content = 'x'.repeat(8_000)

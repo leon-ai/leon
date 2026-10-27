@@ -14,7 +14,8 @@ const DEFAULT_SETTINGS = {
 }
 const CLI_BINARY_NAME = 'photocraft-cli'
 const MAX_STEPS = 256
-const MAX_MODEL_IMAGE_BYTES = 8_388_608
+const MAX_SCREENSHOT_BYTES = 8_388_608
+const MAX_MODEL_IMAGE_BYTES = 1_024 * 1_024
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
 
 /**
@@ -209,7 +210,7 @@ export default class PhotoCraftTool extends Tool {
         const bytes = Buffer.from(screenshot.base64, 'base64')
 
         if (
-          bytes.length > MAX_MODEL_IMAGE_BYTES ||
+          bytes.length > MAX_SCREENSHOT_BYTES ||
           !bytes.subarray(0, 8).equals(PNG_SIGNATURE)
         ) {
           throw new Error('PhotoCraft returned an invalid or oversized PNG screenshot.')
@@ -361,6 +362,7 @@ export default class PhotoCraftTool extends Tool {
   }
 
   private async attachPreview(image: string): Promise<boolean> {
+    // Large artifacts stay available for bounded inspection through the file tool.
     if ((await fs.stat(image)).size > MAX_MODEL_IMAGE_BYTES) {
       return false
     }
