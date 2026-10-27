@@ -137,7 +137,8 @@
     "linux-aarch64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz",
     "macosx-x86_64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-apple-darwin.tar.gz",
     "macosx-arm64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
-    "win-amd64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip"
+    "win-amd64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+    "win-arm64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-pc-windows-msvc.zip"
   },
   "progressive_guidance": "Uses Leon-managed upstream rg. Searches are read-only and shell-free, skip recursive symlinks, and respect hidden/ignore rules unless requested otherwise. Include globs override ignore rules. Literal content matching is the default; set regex for Rust regex syntax. Filename discovery ignores case by default. Uses automatic threading without sorting. File and match inventories stream to session storage; files/matches contain only a small inline preview. preview.truncated means more saved records are available through system_utilities.tool_executions.read with the same .result.files/.result.matches jq paths; do not rescan for counts or groups. A storage/record limit or timeout sets truncated=true and summary.complete=false; counts are exact only when complete. Text uses {text} or base64 {bytes} for non-UTF-8 data."
 }
