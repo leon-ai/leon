@@ -25,16 +25,27 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "videoUrl": { "type": "string" },
-          "languageCode": { "type": "string", "description": "Optional caption language; omit to select the source language." },
-          "startCue": { "type": "integer", "minimum": 0, "description": "Omit for the first page; otherwise pass the previous nextCue unchanged." }
+          "videoUrl": {
+            "type": "string"
+          },
+          "languageCode": {
+            "type": "string",
+            "description": "Optional caption language; omit to select the source language."
+          },
+          "startCue": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Omit for the first page; otherwise pass the previous nextCue unchanged."
+          }
         },
-        "required": ["videoUrl"],
+        "required": [
+          "videoUrl"
+        ],
         "additionalProperties": false
       }
     },
     "getVideoMetadata": {
-      "description": "Inspect a single video's title, description, duration in seconds, chapters, creator, and music metadata (track, artist, album) when provided by the source, without downloading media. Use this for each extracted video URL to identify videos; preserve each result's ID/URL-to-title pairing rather than matching separate lists by position. If a visually transcribed URL fails, copy or re-extract it from the source before assuming the video is unavailable. Missing fields are omitted; music fields are not available for every video. Requires a video URL, not a playlist URL.",
+      "description": "Inspect one video’s title, description, duration, chapters, creator and available music metadata without downloading media. Requires a video URL, not a playlist URL.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -42,9 +53,12 @@
             "type": "string"
           }
         },
-        "required": ["videoUrl"],
+        "required": [
+          "videoUrl"
+        ],
         "additionalProperties": false
-      }
+      },
+      "progressive_guidance": "Inspect a single video's title, description, duration in seconds, chapters, creator, and music metadata (track, artist, album) when provided by the source, without downloading media. Use this for each extracted video URL to identify videos; preserve each result's ID/URL-to-title pairing rather than matching separate lists by position. If a visually transcribed URL fails, copy or re-extract it from the source before assuming the video is unavailable. Missing fields are omitted; music fields are not available for every video. Requires a video URL, not a playlist URL."
     },
     "downloadVideo": {
       "description": "Download a single video from a URL.",
@@ -62,6 +76,10 @@
           "videoUrl",
           "outputPath"
         ]
+      },
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
       }
     },
     "downloadAudioOnly": {
@@ -84,6 +102,10 @@
           "outputPath",
           "audioFormat"
         ]
+      },
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
       }
     },
     "downloadPlaylist": {
@@ -102,6 +124,10 @@
           "playlistUrl",
           "outputPath"
         ]
+      },
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
       }
     },
     "downloadVideoByQuality": {
@@ -117,27 +143,6 @@
           },
           "quality": {
             "type": "string"
-          },
-          "onProgress": {
-            "type": "object",
-            "properties": {
-              "percentage": {
-                "type": "number"
-              },
-              "status": {
-                "type": "string"
-              },
-              "eta": {
-                "type": "string"
-              },
-              "speed": {
-                "type": "string"
-              },
-              "size": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
           }
         },
         "required": [
@@ -145,6 +150,10 @@
           "outputPath",
           "quality"
         ]
+      },
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
       }
     },
     "downloadSubtitles": {
@@ -184,6 +193,10 @@
           "videoUrl",
           "outputPath"
         ]
+      },
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
       }
     }
   }
