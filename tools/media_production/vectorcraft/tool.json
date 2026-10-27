@@ -11,11 +11,12 @@
     "url": "https://x.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-linux-x86_64.tar.gz",
-    "linux-aarch64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-linux-aarch64.tar.gz",
-    "macosx-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-cli-0.4.0-macos-universal.zip",
-    "macosx-arm64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-cli-0.4.0-macos-universal.zip",
-    "win-amd64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-windows-x64-portable.zip"
+    "linux-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-cli-0.17.0-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-cli-0.17.0-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-windows-x64-portable.zip",
+    "win-arm64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-windows-arm64-portable.zip"
   },
   "progressive_guidance": "The CLI downloads automatically from the pinned release archives. Operations run headlessly without opening a window or requiring a generation-provider account. Discover command IDs and params before editing. Ordinary edits stage a source copy and publish new files. Engine commands with explicit paths can still access the local filesystem; use file, script, preference or destructive operations only when explicitly requested. Preserve originals and inspect diagnostics. A successful command is not proof of visual quality: inspect a rendered preview before delivering artwork or video.",
   "functions": {
