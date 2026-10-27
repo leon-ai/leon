@@ -247,6 +247,20 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: DOCUMENT_INPUTS
   },
   /**
+   * @see https://openrouter.ai/openai/gpt-6.1-terra
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6.1-terra',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6.1-terra',
+    defaultReasoningEffort: 'medium',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/openai/gpt-6-sol
    */
   {
@@ -733,6 +747,22 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: DOCUMENT_INPUTS
   },
   /**
+   * @see https://developers.openai.com/api/docs/models/gpt-6.1-terra
+   */
+  {
+    provider: LLMProviders.OpenAI,
+    supportsStructuredOutput: true,
+    model: 'gpt-6.1-terra',
+    supportsPromptCacheOptions: true,
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-6.1 Terra',
+    defaultReasoningEffort: 'medium',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
    * @see https://developers.openai.com/api/docs/models/gpt-6-sol
    */
   {
@@ -1139,6 +1169,22 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   },
 
   /**
+   * @see https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart
+   */
+  {
+    provider: LLMProviders.MoonshotAI,
+    model: 'kimi-k3.1-pro',
+    contextWindowTokens: 1_048_576,
+    label: 'Kimi K3.1 Pro',
+    recommended: true,
+    supportsForcedToolChoice: true,
+    supportsTemperature: false,
+    defaultReasoningEffort: 'max',
+    reasoning: MOONSHOT_KIMI_K3_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
    * @see https://platform.kimi.ai/docs/guide/use-reasoning-effort Model-specific reasoning support.
    */
   {
@@ -1146,7 +1192,6 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     model: 'kimi-k3',
     contextWindowTokens: 1_048_576,
     label: 'Kimi K3',
-    recommended: true,
     reasoning: MOONSHOT_KIMI_K3_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: IMAGE_INPUTS
