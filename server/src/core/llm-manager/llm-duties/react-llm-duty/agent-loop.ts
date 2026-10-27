@@ -1051,6 +1051,9 @@ export async function runAgentLoop(
           hasUsedContextRecovery = true
           isRecoveryAttempt = true
           isContextRecoveryAttempt = true
+          await params.onProgressMessage?.(
+            'The saved context needs to be reduced. I am rebuilding it from the retained sources and retrying once.'
+          )
           continue
         }
 

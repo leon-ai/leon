@@ -2295,6 +2295,7 @@ describe('continuous agent loop', () => {
   })
 
   it('retries one provider failure under context pressure', async () => {
+    const onProgressMessage = vi.fn()
     const callModel = vi
       .fn()
       .mockRejectedValueOnce(
@@ -2312,6 +2313,7 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoop({
       transcript: [{ role: 'user', content: 'Finish this request.' }],
       catalog: createCatalog(),
+      onProgressMessage,
       callModel,
       executeFunction: async () => ({
         execution: {
@@ -2335,6 +2337,9 @@ describe('continuous agent loop', () => {
       isContextRecoveryAttempt: true
     })
     expect(result.answer).toBe('Recovered from compact context.')
+    expect(onProgressMessage).toHaveBeenCalledWith(
+      'The saved context needs to be reduced. I am rebuilding it from the retained sources and retrying once.'
+    )
   })
 
   it('recovers before executing a truncated tool-call batch', async () => {
@@ -4415,12 +4420,27 @@ describe('agent automatic compaction', () => {
     vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
     vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({ provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
     vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({ reasoning: 'on', speed: 'auto' })
-    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Keep exact evidence.' }]
+    const transcript: AgentToolTranscriptMessage[] = [
+      {
+        role: 'assistant', content: '', compactionContext: {
+          provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'active-connection',
+          output: [{ type: 'compaction', id: 'large-window', encrypted_content: 'opaque-window' }],
+          estimatedTokens: 100,
+          sourceTranscript: [
+            { role: 'user', content: 'Keep exact evidence.' },
+            { role: 'assistant', content: 'Inspection completed.', reasoningItems: [
+              { provider: LLMProviders.OpenAI, id: 'reasoning', text: '', encryptedContent: 'signed-reasoning' }
+            ] }
+          ]
+        }
+      },
+      { role: 'user', content: 'Exclude the green-shirt reference.' }
+    ]
     coreMocks.prompt.mockImplementationOnce(async (_history, params) => {
       params.onAttempt?.({ failureKind: CompletionFailureKind.Context, outcome: 'Error' })
       return null
     })
-    coreMocks.consumeLastProviderErrorMessage.mockReturnValueOnce('Unsupported context_management')
+    coreMocks.consumeLastProviderErrorMessage.mockReturnValueOnce('The request exceeded the provider transport size limit.')
     const duty = new ReActLLMDuty({ input: 'Continue.' })
     Object.assign(duty, { writeAgentPromptLog: vi.fn() })
 
@@ -4429,6 +4449,12 @@ describe('agent automatic compaction', () => {
     await duty['callAgentModel'](transcript, 'Follow the request.', [], { isRecoveryAttempt: true, isContextRecoveryAttempt: true })
     await duty['callAgentModel'](transcript, 'Follow the request.', [], { isRecoveryAttempt: false })
     expect(coreMocks.prompt.mock.calls.slice(1).every(([, params]) => params.disableContextCompaction)).toBe(true)
+    expect(transcript.some((message) => message.role === 'assistant' && message.compactionContext)).toBe(false)
+    expect(transcript).toEqual(expect.arrayContaining([
+      { role: 'user', content: 'Keep exact evidence.' },
+      { role: 'assistant', content: 'Inspection completed.', reasoningItems: [] },
+      { role: 'user', content: 'Exclude the green-shirt reference.' }
+    ]))
   })
 
   it.each([false, true])('records compacted responses safely when tool calls are deferred ($0)', async (deferred) => {

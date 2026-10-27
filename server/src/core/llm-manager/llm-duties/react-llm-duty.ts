@@ -1155,6 +1155,12 @@ export class ReActLLMDuty extends LLMDuty {
     this.runBudget?.throwIfExpired()
     const executionSignal = this.getExecutionSignal()
     executionSignal?.throwIfAborted()
+    if (options.isContextRecoveryAttempt) {
+      // An opaque window can itself exceed the wire budget. Rebuild from its
+      // saved sources rather than carrying the same window into recovery.
+      const sources = restoreCompactionSources(transcript, null)
+      transcript.splice(0, transcript.length, ...sources)
+    }
     if (transcript.some((message) =>
       message.role === 'assistant' && message.compactionContext
     )) {
