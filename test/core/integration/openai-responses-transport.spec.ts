@@ -8,8 +8,11 @@ import { WebSocketServer } from 'ws'
 import { OpenAIResponsesTransport } from '@/core/llm-manager/llm-providers/openai-responses-transport'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
+import { formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
+import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
+import { LogHelper } from '@/helpers/log-helper'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
-import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 
@@ -74,7 +77,8 @@ describe('Responses connection lifecycle', () => {
   async function request(
     input: unknown[] = INPUT,
     options: Record<string, unknown> = {},
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<string> {
     const response = await transport.fetch(url, {
       method: 'POST',
@@ -87,10 +91,63 @@ describe('Responses connection lifecycle', () => {
         model: 'fixture', stream: true, store: false, input, ...options
       }),
       ...(signal ? { signal } : {})
-    })
+    }, onStreamEvent)
 
     return response.text()
   }
+
+  it('rejects oversized UTF-8 messages before upload and accepts a smaller request afterward', async () => {
+    const received = vi.fn()
+    const http = vi.fn()
+    server.on('request', http)
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        received(data.toString())
+        socket.send(JSON.stringify({
+          type: 'response.completed', response: { id: 'small', output: OUTPUT }
+        }))
+      })
+    })
+
+    await expect(request([{ role: 'user', content: 'é'.repeat(8 * 1_024 * 1_024) }]))
+      .rejects.toMatchObject({
+        statusCode: 413,
+        transportPhase: 'upload',
+        requestBytes: expect.any(Number),
+        uploadDurationMs: undefined
+      })
+    expect(received).not.toHaveBeenCalled()
+    expect(http).not.toHaveBeenCalled()
+    expect(await request()).toContain('small')
+    expect(received).toHaveBeenCalledOnce()
+  })
+
+  it('reports serialized request bytes and local upload completion without claiming provider acceptance', async () => {
+    const events = vi.fn()
+    const received: string[] = []
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        received.push(data.toString())
+        socket.send(JSON.stringify({
+          type: 'response.completed', response: { id: 'uploaded', output: OUTPUT }
+        }))
+      })
+    })
+
+    const response = await transport.fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({ model: 'fixture', stream: true, input: INPUT })
+    }, events)
+    await response.text()
+
+    expect(events).toHaveBeenCalledWith({
+      type: 'request-uploaded', transport: 'websocket',
+      requestBytes: Buffer.byteLength(received[0]!), uploadDurationMs: expect.any(Number)
+    })
+    expect(events).not.toHaveBeenCalledWith(expect.objectContaining({
+      providerEventType: 'response.in_progress'
+    }))
+  })
 
   it('preserves authentication and sends only new input on a matching connection', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'unrelated-key')
@@ -255,8 +312,14 @@ describe('Responses connection lifecycle', () => {
     expect(requests[1]?.['previous_response_id']).toBeUndefined()
   })
 
-  it.each([false, true])('bounds the SDK acceptance wait without canceling accepted generation (accepted=%s)', async (accepted) => {
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  it.each([
+    { accepted: false, commentary: false },
+    { accepted: true, commentary: false },
+    { accepted: true, commentary: true }
+  ])('bounds acceptance and preserves silent work after commentary ($accepted, $commentary)', async ({ accepted, commentary }) => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
     const provider = new AISDKRemoteLLMProvider({
       name: 'Fixture',
       providerName: LLMProviders.OpenAI,
@@ -272,6 +335,7 @@ describe('Responses connection lifecycle', () => {
     const onToken = vi.fn()
     const reportError = vi.fn()
     const closed = vi.fn()
+    const ping = vi.fn()
     const response = {
       id: 'response',
       model: 'gpt-6.1-sol',
@@ -283,6 +347,7 @@ describe('Responses connection lifecycle', () => {
 
     sockets.on('connection', (socket) => {
       socket.on('close', closed)
+      socket.on('ping', ping)
       socket.on('message', (data) => {
         requests.push(JSON.parse(data.toString()))
         const send = (event: Record<string, unknown>): void => {
@@ -316,6 +381,13 @@ describe('Responses connection lifecycle', () => {
           if (accepted) {
             send({ type: 'response.in_progress', response })
           }
+          if (commentary) {
+            send({ type: 'response.output_item.added', output_index: 0, item: {
+              type: 'message', id: 'progress', role: 'assistant', phase: 'commentary', content: []
+            } })
+            send({ type: 'response.output_text.delta', item_id: 'progress', output_index: 0,
+              content_index: 0, delta: 'Checking.' })
+          }
 
           return
         }
@@ -331,7 +403,7 @@ describe('Responses connection lifecycle', () => {
       temperature: 0,
       data: null,
       maxRetries: 1,
-      remoteProviderErrorRetries: 0,
+      remoteProviderErrorRetries: 1,
       onAttempt,
       onStreamEvent,
       onToken
@@ -358,10 +430,24 @@ describe('Responses connection lifecycle', () => {
       ))
 
       if (accepted) {
+        if (commentary) {
+          await vi.waitFor(() => expect(onToken).toHaveBeenCalledWith('Checking.'))
+          expect(onStreamEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'text-start', preliminary: true })
+          )
+        }
+        const activityCount = onStreamEvent.mock.calls.filter(
+          ([event]) => event.type === 'transport-activity'
+        ).length
+
         await vi.advanceTimersByTimeAsync(60_000)
+        await vi.waitFor(() => expect(ping).toHaveBeenCalled())
         expect(requests).toHaveLength(1)
         expect(onAttempt).toHaveBeenCalledTimes(1)
         expect(closed).not.toHaveBeenCalled()
+        expect(onStreamEvent.mock.calls.filter(
+          ([event]) => event.type === 'transport-activity'
+        )).toHaveLength(activityCount)
         finish()
       } else {
         expect(onStreamEvent).not.toHaveBeenCalledWith(
@@ -371,8 +457,10 @@ describe('Responses connection lifecycle', () => {
       }
 
       await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
-      expect((await pending)?.output).toBe('Ready.')
-      expect(onToken.mock.calls.map(([token]) => token).filter(Boolean)).toEqual(['Ready.'])
+      expect((await pending)?.output).toBe(commentary ? 'Checking.Ready.' : 'Ready.')
+      expect(onToken.mock.calls.map(([token]) => token).filter(Boolean)).toEqual(
+        commentary ? ['Checking.', 'Ready.'] : ['Ready.']
+      )
       expect(reportError).not.toHaveBeenCalled()
 
       if (accepted) {
@@ -398,18 +486,198 @@ describe('Responses connection lifecycle', () => {
     }
   })
 
-  it('uses HTTP after an unsupported handshake without retrying the handshake', async () => {
+  it('reconnects interrupted requests with increasing waits and completes after recovery', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    const provider = new AISDKRemoteLLMProvider({
+      name: 'Fixture', providerName: LLMProviders.OpenAI, credentials: { api_key: 'fixture' },
+      apiKeyEnv: 'LEON_OPENAI_API_KEY', model: 'gpt-6.1-sol',
+      baseURL: url.slice(0, -'/responses'.length), flavor: 'openai-responses'
+    })
+    const requests: unknown[] = []
+    const onConnectionRetry = vi.fn()
+    const onAttempt = vi.fn()
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        requests.push(JSON.parse(data.toString()))
+        if (requests.length < 3) {
+          socket.terminate()
+          return
+        }
+        for (const event of [
+          { type: 'response.output_item.added', output_index: 0, item: { ...OUTPUT[0], content: [] } },
+          { type: 'response.output_text.delta', item_id: 'message', output_index: 0, content_index: 0, delta: 'Ready.' },
+          { type: 'response.output_item.done', output_index: 0, item: OUTPUT[0] },
+          { type: 'response.completed', response: { id: 'recovered', output: OUTPUT, usage: { input_tokens: 10, output_tokens: 1 } } }
+        ]) {
+          socket.send(JSON.stringify(event))
+        }
+      })
+    })
+    const complete = (params: PreparedCompletionParams): ReturnType<typeof runCompletionAttempt> =>
+      runCompletionAttempt(provider, LLMProviders.OpenAI, 'Continue.', params, 'fixture',
+        (retry) => complete({ ...params, ...retry }), vi.fn())
+
+    try {
+      const pending = complete({
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 120_000, temperature: 0, data: null, maxRetries: 2,
+        remoteProviderErrorRetries: 1, onConnectionRetry, onAttempt
+      })
+      await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(1))
+      await vi.advanceTimersByTimeAsync(5_000)
+      await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(2))
+      await vi.advanceTimersByTimeAsync(10_000)
+      await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
+
+      expect((await pending)?.output).toBe('Ready.')
+      expect(requests).toHaveLength(3)
+      expect(requests[1]).toEqual(requests[0])
+      expect(requests[2]).toEqual(requests[0])
+      expect(onConnectionRetry.mock.calls.map(([notice]) => notice.delayMs)).toEqual([5_000, 10_000])
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      provider.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([404, 405, 426, 501])('uses HTTP after an unsupported HTTP %s handshake without retrying the handshake', async (status) => {
     server.removeAllListeners('upgrade')
     let attempts = 0
     server.on('upgrade', (_request, socket) => {
       attempts += 1
-      socket.end('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\n\r\n')
+      socket.end(`HTTP/1.1 ${status} Unsupported WebSocket\r\nConnection: close\r\n\r\n`)
     })
 
     expect(await request()).toContain('response.completed')
     expect(await request()).toContain('response.completed')
     expect(transport.transport).toBe('http')
     expect(attempts).toBe(1)
+    expect(LogHelper.debug).toHaveBeenCalledWith(expect.stringContaining(`HTTP ${status}`))
+  })
+
+  it.each(['reset', 400, 429, 503])('preserves a %s opening failure and retries WebSocket on the next request', async (failure) => {
+    server.removeAllListeners('upgrade')
+    const http = vi.fn()
+    let attempts = 0
+    server.on('request', http)
+    server.on('upgrade', (request, socket, head) => {
+      attempts += 1
+
+      if (attempts === 1) {
+        if (failure === 'reset') {
+          socket.destroy()
+        } else {
+          socket.end(`HTTP/1.1 ${failure} Rejected\r\nConnection: close\r\n\r\n`)
+        }
+
+        return
+      }
+
+      sockets.handleUpgrade(request, socket, head, (connection) => {
+        sockets.emit('connection', connection, request)
+      })
+    })
+    sockets.on('connection', (socket) => {
+      socket.on('message', () => {
+        socket.send(JSON.stringify({
+          type: 'response.completed', response: { id: 'recovered', output: OUTPUT }
+        }))
+      })
+    })
+
+    await expect(request()).rejects.toMatchObject({
+      ...(failure === 'reset' ? { code: 'ECONNRESET' } : { statusCode: failure }),
+      transportPhase: 'handshake',
+      handshakeDurationMs: expect.any(Number)
+    })
+    expect(http).not.toHaveBeenCalled()
+    expect(await request()).toContain('recovered')
+    expect(transport.transport).toBe('websocket')
+    expect(attempts).toBe(2)
+  })
+
+  it.each([true, false])('logs request-local heartbeat timing on disconnect (pong received: %s)', async (acknowledge) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    sockets.options.autoPong = false
+    const received = vi.fn()
+    sockets.on('connection', (socket) => {
+      socket.on('message', received)
+      socket.on('ping', (data) => {
+        vi.setSystemTime(Number(data.toString()) + 25)
+        socket.pong(String(Number(data.toString()) - 1))
+        if (acknowledge) {
+          socket.pong(data)
+        }
+
+        socket.close(1_011, 'Upstream failure')
+      })
+    })
+
+    try {
+      const pending = request().catch((error: unknown) => error)
+      await vi.waitFor(() => expect(received).toHaveBeenCalledOnce())
+      await vi.advanceTimersByTimeAsync(5_000)
+      const error = await pending
+
+      expect(error).toMatchObject({
+        transportPhase: 'response',
+        closeCode: 1_011,
+        pingCount: 1,
+        pongCount: acknowledge ? 1 : 0,
+        lastPingAgeMs: expect.any(Number),
+        lastPongAgeMs: acknowledge ? expect.any(Number) : undefined,
+        lastPongRttMs: acknowledge ? expect.any(Number) : undefined
+      })
+      const timing = error as {
+        lastPingAgeMs: number
+        lastPongAgeMs: number
+        lastPongRttMs: number
+      }
+
+      expect(timing.lastPingAgeMs).toBeGreaterThanOrEqual(25)
+      if (acknowledge) {
+        expect(timing.lastPongRttMs).toBeGreaterThanOrEqual(25)
+        expect(timing.lastPingAgeMs).toBe(timing.lastPongRttMs + timing.lastPongAgeMs)
+      }
+      expect(formatPromptErrorForLog(error)).toContain('"pingCount":1')
+      expect(formatPromptErrorForLog(error)).toContain(`"pongCount":${acknowledge ? 1 : 0}`)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains heartbeat evidence when a local watchdog cancels the response', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    const activity = new ProviderRequestActivity()
+    const controller = new AbortController()
+    const received = vi.fn()
+    sockets.on('connection', (socket) => {
+      socket.on('message', received)
+    })
+
+    try {
+      const pending = request(INPUT, {}, controller.signal, (event) => activity.observe(event))
+        .catch((error: unknown) => error)
+      await vi.waitFor(() => expect(received).toHaveBeenCalledOnce())
+      await vi.advanceTimersByTimeAsync(5_000)
+      await vi.waitFor(() => expect(activity.snapshot().pongCount).toBe(1))
+      vi.setSystemTime(Date.now() + 1_000)
+      const error = new Error('Model stream idle timeout')
+      controller.abort(error)
+
+      expect(await pending).toBe(error)
+      expect(activity.snapshot()).toMatchObject({
+        pingCount: 1, pongCount: 1,
+        lastPingAgeMs: expect.any(Number), lastPongAgeMs: expect.any(Number),
+        lastPongRttMs: expect.any(Number), providerEventCount: 0
+      })
+      expect(activity.snapshot().lastPongAgeMs).toBeGreaterThanOrEqual(1_000)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([
@@ -464,7 +732,7 @@ describe('Responses connection lifecycle', () => {
         }))
 
         if (ending === 'disconnect') {
-          socket.close()
+          socket.close(1_011, 'Upstream stream failed')
         } else {
           socket.send(JSON.stringify({
             type: 'error',
@@ -478,9 +746,17 @@ describe('Responses connection lifecycle', () => {
       })
     })
 
-    await expect(request()).rejects.toThrow(
+    const pending = request()
+
+    await expect(pending).rejects.toThrow(
       ending === 'disconnect' ? 'before terminal completion' : 'Connection expired.'
     )
+    if (ending === 'disconnect') {
+      await expect(pending).rejects.toMatchObject({
+        closeCode: 1_011,
+        closeReason: 'Upstream stream failed'
+      })
+    }
     expect(dispatched).toHaveBeenCalledOnce()
     expect(http).not.toHaveBeenCalled()
   })

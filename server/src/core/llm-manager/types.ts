@@ -244,6 +244,7 @@ export interface PromptCacheObservation {
 }
 
 export enum CompletionFailureKind {
+  Connection = 'connection',
   Timeout = 'timeout',
   Context = 'context',
   Unavailable = 'unavailable',
@@ -299,7 +300,7 @@ export interface ProviderActivitySnapshot {
   elapsedMs: number
 }
 
-export interface CompletionAttemptTiming extends Omit<ProviderActivitySnapshot, 'providerEventCount' | 'providerCompleted'> {
+export interface CompletionAttemptTiming extends ProviderActivitySnapshot {
   attemptId: string
   startedAt: number
   provider: LLMProviders

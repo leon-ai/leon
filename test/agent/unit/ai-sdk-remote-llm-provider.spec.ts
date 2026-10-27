@@ -212,6 +212,9 @@ describe('AISDKRemoteLLMProvider', () => {
       { type: 'response.created', response: { ...response, output: [], status: 'in_progress' } },
       ...output.flatMap((item, output_index) => [
         { type: 'response.output_item.added', output_index, item },
+        ...(item.type === 'compaction'
+          ? [{ type: 'response.compaction.compacting', output_index, item_id: item.id }]
+          : []),
         { type: 'response.output_item.done', output_index, item }
       ]),
       { type: 'response.completed', response: subscription ? { ...response, output: [] } : response }
@@ -252,7 +255,8 @@ describe('AISDKRemoteLLMProvider', () => {
       expect(onStreamEvent.mock.calls.map(([event]) => event.type).filter((type) =>
         type === 'compaction-start' || type === 'compaction-end'
       )).toEqual([
-        'compaction-start', 'compaction-end', 'compaction-start', 'compaction-end'
+        'compaction-start', 'compaction-start', 'compaction-end',
+        'compaction-start', 'compaction-start', 'compaction-end'
       ])
     }
     if (subscription) {
@@ -1988,7 +1992,7 @@ describe('AISDKRemoteLLMProvider', () => {
       type: 'stream-open', transport: 'http', requestId: 'req-test'
     })
     expect(onStreamEvent).toHaveBeenCalledWith({
-      type: 'response-metadata', responseId: 'resp-test'
+      type: 'response-metadata', responseId: 'resp-test', requestAccepted: true
     })
     expect(onStreamEvent).toHaveBeenCalledWith({ type: 'tool-input-delta' })
     expect(onReasoningToken).toHaveBeenCalledExactlyOnceWith('Thinking')

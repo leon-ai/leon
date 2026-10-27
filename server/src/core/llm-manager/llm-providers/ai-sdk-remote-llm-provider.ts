@@ -329,8 +329,8 @@ export default class AISDKRemoteLLMProvider {
       onStreamEvent?.({
         type: 'response-headers',
         transport: this.transport,
-        ...(response.headers.get('x-request-id')
-          ? { requestId: response.headers.get('x-request-id')! }
+        ...((response.headers.get('x-request-id') || response.headers.get('request-id'))
+          ? { requestId: (response.headers.get('x-request-id') || response.headers.get('request-id'))! }
           : {})
       })
 
@@ -2053,12 +2053,11 @@ export default class AISDKRemoteLLMProvider {
         const item = raw?.['item'] as Record<string, unknown> | undefined
 
         // Providers can compact context after text ends, before terminal usage.
-        if (item?.['type'] === 'compaction') {
-          if (raw?.['type'] === 'response.output_item.added') {
-            completionParams.onStreamEvent?.({ type: 'compaction-start' })
-          } else if (raw?.['type'] === 'response.output_item.done') {
-            completionParams.onStreamEvent?.({ type: 'compaction-end' })
-          }
+        if (raw?.['type'] === 'response.compaction.compacting' ||
+          (item?.['type'] === 'compaction' && raw?.['type'] === 'response.output_item.added')) {
+          completionParams.onStreamEvent?.({ type: 'compaction-start' })
+        } else if (item?.['type'] === 'compaction' && raw?.['type'] === 'response.output_item.done') {
+          completionParams.onStreamEvent?.({ type: 'compaction-end' })
         }
 
         if (
@@ -2079,6 +2078,16 @@ export default class AISDKRemoteLLMProvider {
 
       completionParams.onStreamEvent?.({
         type,
+        // Intermediate commentary can precede silent planning of tool calls.
+        // Carry that distinction into the provider-independent watchdog.
+        ...(type === 'text-start' ? {
+          preliminary: (part['providerMetadata'] as SharedV4ProviderOptions | undefined)
+            ?.['openai']?.['phase'] === 'commentary'
+        } : {}),
+        ...(this.config.flavor !== 'openai-responses' &&
+          type === 'response-metadata' && typeof part['id'] === 'string'
+          ? { requestAccepted: true }
+          : {}),
         ...(type === 'response-metadata' && typeof part['id'] === 'string'
           ? { responseId: part['id'] }
           : {}),

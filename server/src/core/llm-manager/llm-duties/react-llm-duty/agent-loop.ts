@@ -15,6 +15,7 @@ import {
   type ProviderReasoningItem,
   type ProviderMessageMetadata,
   type ProviderCompactionContext,
+  type ProviderActivitySnapshot,
   type OpenAITool,
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
@@ -236,7 +237,8 @@ export class AgentModelProviderError extends Error {
     canRetryWithCompaction: boolean,
     public readonly failureKind = canRetryWithCompaction
       ? CompletionFailureKind.Context
-      : CompletionFailureKind.Provider
+      : CompletionFailureKind.Provider,
+    public readonly diagnostics?: ProviderActivitySnapshot
   ) {
     super(message)
     this.name = 'AgentModelProviderError'
@@ -248,7 +250,7 @@ export class AgentModelProviderError extends Error {
  * Ends exhausted model recovery while preserving the task's execution state.
  */
 export class AgentModelResponseTimeoutError extends Error {
-  constructor() {
+  constructor(public readonly diagnostics?: ProviderActivitySnapshot) {
     super('The model response exceeded its time limit. The task is incomplete; the session retains the work done so far.')
     this.name = 'AgentModelResponseTimeoutError'
   }
@@ -1010,7 +1012,8 @@ export async function runAgentLoop(
           }
 
           return createResumableAgentResult(
-            CompletionFailureKind.Timeout, transcript, executionHistory, trackedSteps
+            CompletionFailureKind.Timeout, transcript, executionHistory, trackedSteps,
+            false, error.diagnostics
           )
         }
         if (
@@ -1031,7 +1034,9 @@ export async function runAgentLoop(
             : CompletionFailureKind.Provider,
           transcript,
           executionHistory,
-          trackedSteps
+          trackedSteps,
+          false,
+          error instanceof AgentModelProviderError ? error.diagnostics : undefined
         )
       }
       if (!modelResult) {
@@ -1862,15 +1867,26 @@ function createResumableAgentResult(
   transcript: AgentToolTranscriptMessage[],
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[],
-  answerDrafted = false
+  answerDrafted = false,
+  diagnostics?: ProviderActivitySnapshot
 ): AgentLoopResult {
   const answer = buildResumableAgentAnswer(
     failureKind,
     trackedSteps,
     answerDrafted
   )
+  if (diagnostics?.failureSummary) {
+    transcript.push({
+      role: 'user',
+      content: JSON.stringify({ provider_failure: diagnostics }),
+      runtimeContext: { providerFailure: diagnostics }
+    })
+  }
+
   return {
-    answer,
+    answer: diagnostics?.failureSummary && failureKind !== CompletionFailureKind.Connection
+      ? `${diagnostics.failureSummary}\n\n${answer}`
+      : answer,
     intent: 'error',
     transcript,
     executionHistory,
@@ -1884,6 +1900,7 @@ function buildResumableAgentAnswer(
   answerDrafted = false
 ): string {
   const explanations: Record<typeof failureKind, string> = {
+    [CompletionFailureKind.Connection]: 'I couldn\'t reconnect to my model provider, so I couldn\'t resume.',
     deadline: 'The task reached its run deadline.',
     review: 'The completion check failed.',
     [CompletionFailureKind.Timeout]: 'The model response exceeded its time limit.',

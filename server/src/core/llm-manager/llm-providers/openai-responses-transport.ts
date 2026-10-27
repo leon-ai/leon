@@ -11,6 +11,7 @@ import { ProviderPromptCache } from './prompt-cache'
 import { readProviderUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import type { CompletionParams, PromptCacheObservation } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { LogHelper } from '@/helpers/log-helper'
 
 const CHATGPT_UNSUPPORTED_FIELDS = [
   'background',
@@ -31,7 +32,7 @@ const CHATGPT_UNSUPPORTED_FIELDS = [
   'previous_response_id'
 ]
 const MAXIMUM_WEBSOCKET_SESSIONS = 32
-const UNSUPPORTED_WEBSOCKET_STATUSES = new Set([400, 404, 405, 426, 501])
+const UNSUPPORTED_WEBSOCKET_STATUSES = new Set([404, 405, 426, 501])
 const CONNECTION_IDENTITY_HEADERS = [
   'authorization', 'chatgpt-account-id', 'originator', 'session_id'
 ]
@@ -257,7 +258,7 @@ export class OpenAIResponsesTransport {
       try {
         this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
         onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
-        const response = await connection.socket.fetch(body, init?.signal ?? undefined)
+        const response = await connection.socket.fetch(body, init?.signal ?? undefined, onStreamEvent)
         init?.signal?.throwIfAborted()
 
         return { response, transport: 'websocket', socket: connection.socket }
@@ -266,12 +267,13 @@ export class OpenAIResponsesTransport {
         init?.signal?.throwIfAborted()
         const status = (error as { statusCode?: number }).statusCode
 
-        // Authorization and provider overload keep the existing refresh/retry
-        // policy. A failed handshake cannot have produced an accepted answer.
-        if (status !== undefined && !UNSUPPORTED_WEBSOCKET_STATUSES.has(status)) {
+        // A reset or generic rejection does not establish protocol incompatibility.
+        // Preserve it for the normal retry policy so the next attempt opens a socket.
+        if (status === undefined || !UNSUPPORTED_WEBSOCKET_STATUSES.has(status)) {
           throw error
         }
 
+        LogHelper.debug(`OpenAI Responses HTTP fallback after unsupported WebSocket handshake (HTTP ${status})`)
         connection.http = true
       }
     }

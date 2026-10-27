@@ -440,6 +440,56 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it('retains provider failure facts for the owner and the resumed agent', async () => {
+    const diagnostics = {
+      providerEventCount: 2, providerCompleted: false, elapsedMs: 20_000,
+      responseId: 'response-1', requestAcceptedMs: 100,
+      lastProviderEvent: 'tool.running', providerIdleMs: 10_000,
+      failureSummary: 'The provider accepted the request, but no completed response was confirmed.'
+    }
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish the authorized task.' }],
+      catalog: createCatalog(), executeFunction: vi.fn(), loadAgentSkill: async () => null,
+      callModel: vi.fn().mockRejectedValue(new AgentModelProviderError(
+        'Provider interrupted', false, CompletionFailureKind.Provider, diagnostics
+      ))
+    })
+
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain(diagnostics.failureSummary)
+    expect(result.transcript.at(-1)).toMatchObject({
+      role: 'user', runtimeContext: { providerFailure: diagnostics }
+    })
+  })
+
+  it('reports reconnect exhaustion with saved work and its pending step', async () => {
+    const trackedSteps = [
+      { label: 'Inspect originals', status: 'completed' as const },
+      { label: 'Review the saved edit', status: 'in_progress' as const }
+    ]
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Continue.' }], catalog: createCatalog(),
+      initialTrackedSteps: trackedSteps,
+      callModel: async () => {
+        throw new AgentModelProviderError('Connection failed', false, CompletionFailureKind.Connection)
+      },
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+
+    expect(result.answer).toContain('I couldn\'t reconnect to my model provider, so I couldn\'t resume.')
+    expect(result.answer).toContain('progress is saved')
+    expect(result.answer).toContain('Inspect originals')
+    expect(result.answer).toContain('Review the saved edit')
+    expect(result.answer).not.toContain('local network instability')
+    expect(result.trackedSteps).toEqual(trackedSteps)
+  })
+
+  
+
+  
+
+  
+
   it.each([
     'optional', 'default', 'nondefault', 'required', 'failed', 'compacted', 'partial', 'retained',
     'planned', 'resumed', 'recovered', 'steered', 'multiple'
@@ -4172,6 +4222,10 @@ describe('agent automatic compaction', () => {
     }
   })
 
+  
+
+  
+
   it('lets OpenAI decide when to compact and passes returned context to the loop', async () => {
     const source: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Evidence '.repeat(60_000) }]
     const context = {
@@ -4802,6 +4856,13 @@ describe('model response status', () => {
     }
     const startedAt = Date.now()
     try {
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        await params.onConnectionRetry?.({ attempt, maxRetries: 5, delayMs: attempt * 5_000 })
+        expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(expect.objectContaining({
+          answer: expect.stringContaining(`Retry ${attempt}/5 in ${attempt * 5} seconds`),
+          historyMode: 'system_widget'
+        }))
+      }
       params.onAttempt?.(attempt)
       params.onStreamEvent?.({ type: 'tool-input-start' })
       params.onAttempt?.({ ...attempt, outcome: 'failed', failureKind: CompletionFailureKind.Timeout })
@@ -4974,7 +5035,7 @@ describe('model response status', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it.each(['timeout', 'empty'])('bounds %s retries and silent reasoning while saving progress without another inference', async (firstResponse) => {
+  it.each(['timeout', 'empty'])('bounds %s recovery while saving progress without another inference', async (firstResponse) => {
     vi.spyOn(LogHelper, 'timeEnd').mockImplementation(() => {})
     const attempts: CompletionParams[] = []
     const runChatCompletion = vi.fn((_history, params: CompletionParams) => {
@@ -5014,13 +5075,15 @@ describe('model response status', () => {
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
     await vi.advanceTimersByTimeAsync(120_001)
-    expect(attempts).toHaveLength(2)
+    expect(attempts).toHaveLength(firstResponse === 'timeout' ? 1 : 2)
     expect(attempts[0]?.signal?.aborted).toBe(firstResponse === 'timeout')
-    expect(attempts[1]?.signal?.aborted).toBe(false)
-    // A retry gets its own inference wait instead of the original deadline's remainder.
-    expect(statuses().at(-1)?.deadlineAt).toBeGreaterThan(
-      statuses()[0]!.startedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
-    )
+    if (firstResponse === 'empty') {
+      expect(attempts[1]?.signal?.aborted).toBe(false)
+      // Empty-output recovery has its own bounded wait for actual generation.
+      expect(statuses().at(-1)?.deadlineAt).toBeGreaterThan(
+        statuses()[0]!.startedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
+      )
+    }
     await vi.advanceTimersByTimeAsync(AGENT_MODEL_RESPONSE_MAX_DURATION_MS + 1_000)
     const result = await pending
     expect(attempts.at(-1)?.signal?.aborted).toBe(true)

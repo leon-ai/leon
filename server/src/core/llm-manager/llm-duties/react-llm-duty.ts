@@ -32,6 +32,7 @@ import {
   LLMProviders,
   InferencePurpose,
   CompletionFailureKind,
+  type ProviderActivitySnapshot,
   type AgentToolTranscriptMessage,
   type OpenAITool,
   type OpenAIToolCall,
@@ -1352,6 +1353,7 @@ export class ReActLLMDuty extends LLMDuty {
     let modelAttempt = 0
     let lastModelProgressAt = modelResponseStartedAt
     let lastAttemptFailureKind: CompletionFailureKind | undefined
+    let lastAttemptDiagnostics: ProviderActivitySnapshot | undefined
     let lastActivityUpdateAt = 0
     const responseAbortController = new AbortController()
     const cancellationSignal = AbortSignal.any([
@@ -1491,7 +1493,16 @@ export class ReActLLMDuty extends LLMDuty {
             ? timeoutMs
             : Math.min(timeoutMs, Math.max(0, remaining - (this.runBudget?.finishingReserveMs ?? 0)))
         },
-        ...(isFinishingCall ? { remoteProviderErrorRetries: 0 } : {}),
+        ...(isFinishingCall ? { remoteProviderErrorRetries: 0, connectionErrorRetries: 0 } : {}),
+        onConnectionRetry: async ({ attempt, maxRetries, delayMs }): Promise<void> => {
+          cancellationSignal.throwIfAborted()
+          clearWaitDiagnostics()
+          renewModelResponseDeadline(inferenceTimeout + delayMs)
+          emitModelStatus(ModelResponseState.Retrying)
+          await this.emitProgress(
+            `Connection to my model provider failed. Retry ${attempt}/${maxRetries} in ${delayMs / 1_000} seconds.`
+          )
+        },
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
         onAttempt: (timing): void => {
@@ -1502,6 +1513,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.scheduleTraceSave()
           if (timing.outcome !== 'started') {
             lastAttemptFailureKind = timing.failureKind
+            lastAttemptDiagnostics = timing.failureSummary ? timing : undefined
           }
           if (timing.outcome === 'started') {
             if (options.isCompletionReview && modelAttempt > 0) {
@@ -1523,7 +1535,7 @@ export class ReActLLMDuty extends LLMDuty {
           }
         },
         onStreamEvent: (event): void => {
-          if (cancellationSignal.aborted) {
+          if (cancellationSignal.aborted || event.type === 'transport-heartbeat') {
             return
           }
 
@@ -1675,7 +1687,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
 
       if (!completionResult && lastAttemptFailureKind === CompletionFailureKind.Timeout) {
-        throw new AgentModelResponseTimeoutError()
+        throw new AgentModelResponseTimeoutError(lastAttemptDiagnostics)
       }
     } catch (error) {
       executionSignal?.throwIfAborted()
@@ -1706,7 +1718,8 @@ export class ReActLLMDuty extends LLMDuty {
           providerError,
           !options.isContextRecoveryAttempt &&
             lastAttemptFailureKind === CompletionFailureKind.Context,
-          lastAttemptFailureKind ?? CompletionFailureKind.Provider
+          lastAttemptFailureKind ?? CompletionFailureKind.Provider,
+          lastAttemptDiagnostics
         )
       }
       return null

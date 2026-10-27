@@ -3,10 +3,18 @@ import type { ClientRequest, IncomingMessage } from 'node:http'
 
 import WebSocket, { type RawData } from 'ws'
 
+import type { CompletionParams } from '@/core/llm-manager/types'
+
 interface CompletedResponse {
   id: string
   input: unknown[]
   options: Record<string, unknown>
+}
+
+enum WebSocketPhase {
+  Handshake = 'handshake',
+  Upload = 'upload',
+  Response = 'response'
 }
 
 const EXPIRED_CONTINUATION_CODES = new Set([
@@ -15,6 +23,9 @@ const EXPIRED_CONTINUATION_CODES = new Set([
 ])
 // Retire idle connections before the provider's 60-minute lifetime expires.
 const MAXIMUM_CONNECTION_AGE_MS = 55 * 60_000
+const KEEP_ALIVE_INTERVAL_MS = 5_000
+// Leave headroom below the authenticated route's observed 16 MiB boundary.
+const MAXIMUM_REQUEST_BYTES = 15 * 1_024 * 1_024
 const CONNECTION_LIMIT_ERROR_CODE = 'websocket_connection_limit_reached'
 const TERMINAL_EVENTS = new Set([
   'response.completed',
@@ -54,7 +65,8 @@ export class OpenAIResponsesWebSocket {
    */
   public async fetch(
     body: Record<string, unknown>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): Promise<Response> {
     signal?.throwIfAborted()
     this.busy = true
@@ -64,6 +76,8 @@ export class OpenAIResponsesWebSocket {
     signal?.addEventListener('abort', abort, { once: true })
 
     let socket: WebSocket
+    const handshakeStartedAt = Date.now()
+
     try {
       socket = await this.connect()
       signal?.throwIfAborted()
@@ -72,6 +86,13 @@ export class OpenAIResponsesWebSocket {
       this.busy = false
       this.close()
       signal?.throwIfAborted()
+      if (error instanceof Error) {
+        Object.assign(error, {
+          transportPhase: WebSocketPhase.Handshake,
+          handshakeDurationMs: Date.now() - handshakeStartedAt
+        })
+      }
+
       throw error
     }
 
@@ -102,11 +123,50 @@ export class OpenAIResponsesWebSocket {
         let hasOutput = false
         let retriedContinuation = false
         let retriedConnection = false
+        const pendingPings = new Set<string>()
+        let pingCount = 0
+        let pongCount = 0
+        let lastPingAt: number | undefined
+        let lastPongAt: number | undefined
+        let lastPongRttMs: number | undefined
+        let requestBytes = 0
+        let uploadStartedAt: number | undefined
+        let uploadDurationMs: number | undefined
+
+        // Publish heartbeat evidence independently of provider output so local
+        // watchdog failures retain socket health without extending generation.
+        const reportHeartbeat = (): void => {
+          onStreamEvent?.({
+            type: 'transport-heartbeat', transport: 'websocket',
+            heartbeat: { pingCount, pongCount, lastPingAt, lastPongAt, lastPongRttMs }
+          })
+        }
+
+        // Reasoning can be silent long enough for intermediaries to drop the
+        // socket. Protocol pings preserve transport without claiming model progress.
+        const keepAliveTimer = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            lastPingAt = Date.now()
+            pingCount += 1
+            const payload = String(lastPingAt)
+            pendingPings.add(payload)
+            reportHeartbeat()
+            socket.ping(payload, undefined, (error) => {
+              if (error) {
+                fail(error)
+              }
+            })
+          }
+        }, KEEP_ALIVE_INTERVAL_MS)
+        keepAliveTimer.unref()
+
         const cleanup = (): void => {
           finished = true
+          clearInterval(keepAliveTimer)
           socket.off('message', onMessage)
           socket.off('error', onError)
           socket.off('close', onClose)
+          socket.off('pong', onPong)
           signal?.removeEventListener('abort', onAbort)
           signal?.removeEventListener('abort', abort)
           this.busy = false
@@ -116,6 +176,29 @@ export class OpenAIResponsesWebSocket {
             return
           }
 
+          // Attach only request-local protocol diagnostics. Owner cancellation
+          // keeps its original reason, and heartbeats never renew model progress.
+          if (error instanceof Error && !signal?.aborted) {
+            const now = Date.now()
+
+            Object.assign(error, {
+              transportPhase: hasOutput || uploadDurationMs !== undefined
+                ? WebSocketPhase.Response
+                : WebSocketPhase.Upload,
+              requestBytes,
+              maximumRequestBytes: MAXIMUM_REQUEST_BYTES,
+              uploadDurationMs,
+              uploadElapsedMs: uploadStartedAt === undefined || uploadDurationMs !== undefined
+                ? undefined
+                : now - uploadStartedAt,
+              pingCount,
+              pongCount,
+              lastPingAgeMs: lastPingAt === undefined ? undefined : now - lastPingAt,
+              lastPongAgeMs: lastPongAt === undefined ? undefined : now - lastPongAt,
+              lastPongRttMs
+            })
+          }
+
           cleanup()
           this.close()
           controller.error(error)
@@ -123,16 +206,60 @@ export class OpenAIResponsesWebSocket {
         const onError = (error: Error): void => {
           fail(error)
         }
-        const onClose = (): void => {
-          fail(new Error('The provider socket closed before terminal completion.'))
+        const onClose = (closeCode: number, reason: Buffer): void => {
+          fail(Object.assign(
+            new Error('The provider socket closed before terminal completion.'),
+            { closeCode, closeReason: reason.toString() }
+          ))
         }
         const onAbort = (): void => {
           fail(signal?.reason)
         }
+        const onPong = (data: Buffer): void => {
+          const payload = data.toString()
+
+          // Ignore unsolicited pongs and echoes from a preceding request.
+          if (!pendingPings.delete(payload)) {
+            return
+          }
+
+          const now = Date.now()
+
+          pongCount += 1
+          lastPongAt = now
+          lastPongRttMs = now - Number(payload)
+          reportHeartbeat()
+        }
         const send = (request: Record<string, unknown>): void => {
-          socket.send(JSON.stringify(request), (error) => {
+          const serialized = JSON.stringify(request)
+          requestBytes = Buffer.byteLength(serialized)
+          uploadStartedAt = undefined
+          uploadDurationMs = undefined
+          onStreamEvent?.({
+            type: 'request-upload-start', transport: 'websocket', requestBytes
+          })
+
+          // Measure the actual continuation or replay, including data URLs and
+          // schemas. Token budgets cannot detect oversized WebSocket messages.
+          if (requestBytes > MAXIMUM_REQUEST_BYTES) {
+            fail(Object.assign(new Error(
+              `OpenAI WebSocket request is ${requestBytes} bytes; the request budget is ${MAXIMUM_REQUEST_BYTES} bytes. Reinspect images with compact previews or use a smaller inspection batch.`
+            ), { statusCode: 413 }))
+            return
+          }
+
+          uploadStartedAt = Date.now()
+          socket.send(serialized, (error) => {
             if (error) {
               fail(error)
+              return
+            }
+            if (!finished) {
+              uploadDurationMs = Date.now() - uploadStartedAt!
+              onStreamEvent?.({
+                type: 'request-uploaded', transport: 'websocket',
+                requestBytes, uploadDurationMs
+              })
             }
           })
         }
@@ -140,6 +267,7 @@ export class OpenAIResponsesWebSocket {
           socket.on('message', onMessage)
           socket.on('error', onError)
           socket.on('close', onClose)
+          socket.on('pong', onPong)
         }
         const onMessage = async (data: RawData): Promise<void> => {
           try {
@@ -156,6 +284,7 @@ export class OpenAIResponsesWebSocket {
               socket.off('message', onMessage)
               socket.off('error', onError)
               socket.off('close', onClose)
+              socket.off('pong', onPong)
               this.close()
               socket = await this.connect()
               signal?.throwIfAborted()
@@ -295,8 +424,11 @@ export class OpenAIResponsesWebSocket {
         cleanup()
         reject(error)
       }
-      const onClose = (): void => {
-        onError(new Error('The provider socket closed during connection.'))
+      const onClose = (closeCode: number, reason: Buffer): void => {
+        onError(Object.assign(
+          new Error('The provider socket closed during connection.'),
+          { closeCode, closeReason: reason.toString() }
+        ))
       }
       const onResponse = (_request: ClientRequest, response: IncomingMessage): void => {
         response.resume()

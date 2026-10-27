@@ -340,8 +340,10 @@ export function prepareCompletionRequest(
     completionParams.textVerbosity ??
     getDefaultTextVerbosityForDuty(completionParams.dutyType)
   completionParams.remoteProviderErrorRetries =
-    completionParams.remoteProviderErrorRetries ??
-    DEFAULT_REMOTE_PROVIDER_ERROR_RETRIES
+    Math.min(
+      completionParams.remoteProviderErrorRetries ?? DEFAULT_REMOTE_PROVIDER_ERROR_RETRIES,
+      DEFAULT_REMOTE_PROVIDER_ERROR_RETRIES
+    )
 
   applyConfiguredModelSettings(completionParams, target)
 
