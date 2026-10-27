@@ -151,6 +151,8 @@ class ChatterboxONNXTool(BaseTool):
         Returns:
             List of processed tasks (may include split tasks with _part_N suffixes)
         """
+        json_file_path = None
+
         try:
             # Normalize tasks to list
             task_list = tasks if isinstance(tasks, list) else [tasks]
@@ -239,3 +241,6 @@ class ChatterboxONNXTool(BaseTool):
 
         except Exception as e:
             raise Exception(f"Speech synthesis failed: {str(e)}")
+        finally:
+            if json_file_path and os.path.exists(json_file_path):
+                os.remove(json_file_path)

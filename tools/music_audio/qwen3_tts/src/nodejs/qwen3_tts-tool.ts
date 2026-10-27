@@ -311,6 +311,10 @@ export default class Qwen3TTSTool extends Tool {
       return taskArray
     } catch (error: unknown) {
       throw new Error(`Qwen3-TTS execution failed: ${(error as Error).message}`)
+    } finally {
+      if (tempDir) {
+        await fs.promises.rm(tempDir, { recursive: true, force: true })
+      }
     }
   }
 }

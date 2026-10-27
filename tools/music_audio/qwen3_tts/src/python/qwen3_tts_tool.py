@@ -268,6 +268,8 @@ class Qwen3TTSTool(BaseTool):
         else:
             task_list = [cast(TTask, tasks)]
 
+        temp_dir = None
+
         try:
             resource_root = self._resolve_resource_root(model_names)
             final_nvidia_libs_path = (
@@ -277,10 +279,10 @@ class Qwen3TTSTool(BaseTool):
                 torch_path if torch_path is not None else PYTORCH_TORCH_PATH
             )
 
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as temp_file:
-                json_file_path = temp_file.name
+            temp_dir = tempfile.TemporaryDirectory(prefix="qwen3_tts_tasks_")
+            json_file_path = os.path.join(temp_dir.name, "tasks.json")
+
+            with open(json_file_path, "w", encoding="utf-8") as temp_file:
                 json.dump(task_list, temp_file, indent=2, ensure_ascii=False)
 
             args = [
@@ -308,3 +310,6 @@ class Qwen3TTSTool(BaseTool):
             return task_list
         except Exception as e:
             raise Exception(f"Qwen3-TTS execution failed: {str(e)}")
+        finally:
+            if temp_dir:
+                temp_dir.cleanup()
