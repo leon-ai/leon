@@ -19,6 +19,30 @@ const MAX_MODEL_IMAGE_BYTES = 1_024 * 1_024
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
 
 /**
+ * Common document and raster formats supported by the managed exporter.
+ */
+export enum PhotoFormat {
+  Png = 'png', Jpeg = 'jpg', Tiff = 'tif', Webp = 'webp',
+  Psd = 'psd', Psb = 'psb', Exr = 'exr', OpenRaster = 'ora'
+}
+
+const EXPORT_MIME_TYPES = {
+  [PhotoFormat.Png]: 'image/png', [PhotoFormat.Jpeg]: 'image/jpeg',
+  [PhotoFormat.Tiff]: 'image/tiff', [PhotoFormat.Webp]: 'image/webp',
+  [PhotoFormat.Psd]: 'image/vnd.adobe.photoshop', [PhotoFormat.Psb]: 'application/octet-stream',
+  [PhotoFormat.Exr]: 'image/x-exr', [PhotoFormat.OpenRaster]: 'image/openraster'
+}
+
+/**
+ * Encoding options shared by PhotoCraft's conversion CLI.
+ */
+export interface ExportOptions {
+  quality?: number
+  tiffLayers?: boolean
+  tiffCompression?: string
+}
+
+/**
  * An engine operation using parameters discovered from PhotoCraft's registry.
  */
 export interface PhotoCraftStep {
@@ -192,6 +216,50 @@ export default class PhotoCraftTool extends Tool {
         commandResults,
         diagnostics: [edited.stderr, converted.stderr, document.stderr].filter(Boolean)
       }
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true })
+    }
+  }
+
+  /**
+   * Export a selected project without changing its original or layered source.
+   */
+  public async export(
+    inputPath: string, format = PhotoFormat.Png, options: ExportOptions = {}
+  ): Promise<unknown> {
+    this.requireSession()
+    if (!Object.values(PhotoFormat).includes(format)) {
+      throw new Error('Select a supported PhotoCraft export format.')
+    }
+    if (options.quality !== undefined &&
+        (!Number.isInteger(options.quality) || options.quality < 1 || options.quality > 100)) {
+      throw new Error('quality must be an integer from 1 to 100.')
+    }
+
+    const source = await this.resolveSource(inputPath)
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-photocraft-'))
+
+    try {
+      const filename = `${path.parse(source).name}.${format}`
+      const target = path.join(directory, filename)
+      const args = ['convert', source, target]
+
+      if (options.quality !== undefined) {
+        args.push('--quality', String(options.quality))
+      }
+      if (options.tiffLayers) {
+        args.push('--tiff-layers')
+      }
+      if (options.tiffCompression !== undefined) {
+        args.push('--tiff-compression', options.tiffCompression)
+      }
+
+      const output = await this.runCli(args)
+      const artifact = await this.publishFile(target, EXPORT_MIME_TYPES[format], filename)
+      const modelPreviewAttached = format === PhotoFormat.Png
+        ? await this.attachPreview(target) : false
+
+      return { artifacts: [artifact], modelPreviewAttached, diagnostics: output.stderr }
     } finally {
       await fs.rm(directory, { recursive: true, force: true })
     }

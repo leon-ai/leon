@@ -139,6 +139,58 @@
         ],
         "additionalProperties": false
       }
+    },
+    "export": {
+      "description": "Export a selected project without modifying its layered source; attach the finished file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpg",
+              "tif",
+              "webp",
+              "psd",
+              "psb",
+              "exr",
+              "ora"
+            ]
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "quality": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "tiffLayers": {
+                "type": "boolean"
+              },
+              "tiffCompression": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "lzw",
+                  "zip"
+                ]
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "inputPath"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false
     }
   }
 }
