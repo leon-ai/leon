@@ -65,7 +65,7 @@ export default class AstGrepTool extends Tool {
       // from loading custom native libraries during an ordinary read-only scan.
       const configPath = path.join(temporary, 'sgconfig.yml')
       await fs.writeFile(configPath, EMPTY_CONFIG)
-      const args = ['run', '--config', configPath, '--json=compact', '--color', 'never', '--pattern', pattern]
+      const args = ['run', '--config', configPath, '--custom-languages', 'ignore', '--json=compact', '--color', 'never', '--pattern', pattern]
       if (language) {
         args.push('--lang', language)
       }

@@ -48,12 +48,12 @@
     }
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-x86_64-unknown-linux-gnu.zip",
-    "linux-aarch64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-aarch64-unknown-linux-gnu.zip",
-    "macosx-x86_64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-x86_64-apple-darwin.zip",
-    "macosx-arm64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-aarch64-apple-darwin.zip",
-    "win-amd64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-x86_64-pc-windows-msvc.zip",
-    "win-arm64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-aarch64-pc-windows-msvc.zip"
+    "linux-x86_64": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-unknown-linux-gnu.zip",
+    "linux-aarch64": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-aarch64-unknown-linux-gnu.zip",
+    "macosx-x86_64": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-apple-darwin.zip",
+    "macosx-arm64": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-aarch64-apple-darwin.zip",
+    "win-amd64": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-pc-windows-msvc.zip",
+    "win-arm64": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-aarch64-pc-windows-msvc.zip"
   },
   "progressive_guidance": "Read-only, shell-free search. Respect hidden and ignore rules; do not follow recursive symlinks. Uses an empty configuration so workspace configuration cannot load custom grammars. Uses Leon-managed binaries with built-in execution and output limits. Large output fails explicitly rather than silently reporting an incomplete result as complete. Use file_system.ripgrep for filename discovery and literal text search."
 }
