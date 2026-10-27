@@ -154,6 +154,64 @@
       },
       "progressive_guidance": "Use library.info and catalog.query to inspect scope, observed photo IDs and pagination before changes. library.import can import explicitly selected paths; retain originals and choose copy/add instead of move unless requested. Only engine commands are accepted, not raw UI methods. Library metadata and development changes persist; ask before deletions, source/sidecar overwrites or moving owner files. The library must be closed in the GUI; do not bypass its lock. Use develop for delivered photo artifacts.",
       "deduplicate_calls": false
+    },
+    "exportPhotos": {
+      "description": "Export observed library photo IDs into completed conversation artifacts, preserving originals.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "libraryPath": {
+            "type": "string",
+            "description": "Explicitly selected existing library directory; close it in the GUI first."
+          },
+          "photoIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "png",
+                  "jpg",
+                  "tif",
+                  "webp",
+                  "avif",
+                  "dng"
+                ]
+              },
+              "longEdge": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Discovered app.export encoding settings. Leon assigns an isolated destination and disables external photo-library imports."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "libraryPath",
+          "photoIds"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
+      }
     }
   },
   "concurrency": "serial"
