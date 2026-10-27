@@ -4,7 +4,7 @@ import type {
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
-import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
+import { AGENT_IMAGE_BATCH_MAX_BYTES, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
   isLocalLLMProvider
@@ -202,24 +202,59 @@ export function retainRecentToolImages(
     }
   }
 
+  for (const index of imageIndexes) {
+    const message = transcript[index]!
+    if (message.role === 'tool' && message.files?.some((file) => file.inspectionPending)) {
+      retainedImageIndexes.add(index)
+    }
+  }
+
+  // Token estimates exclude image bytes. Remove older previews independently
+  // when their encodings grow too large, keeping the current inspection whole.
+  const imageBytes = (index: number): number => {
+    const message = transcript[index]!
+
+    return message.role === 'tool' ? message.files
+      ?.filter((file) => file.mediaType.startsWith('image/'))
+      .reduce((total, file) => total + file.dataBase64.length, 0) ?? 0 : 0
+  }
+  let retainedBytes = [...retainedImageIndexes].reduce(
+    (total, index) => total + imageBytes(index), 0
+  )
+
+  for (const index of imageIndexes) {
+    if (retainedBytes <= AGENT_IMAGE_BATCH_MAX_BYTES) {
+      break
+    }
+    if (retainedImageIndexes.has(index) &&
+      !(transcript[index] as ToolTranscriptMessage).files?.some((file) => file.inspectionPending) &&
+      (!latestImageExchange || index < latestImageExchange.startIndex)) {
+      retainedImageIndexes.delete(index)
+      retainedBytes -= imageBytes(index)
+    }
+  }
+
   return transcript.map((message, index) => {
     if (
       message.role !== 'tool' ||
-      !message.files?.some((file) => file.mediaType.startsWith('image/')) ||
-      retainedImageIndexes.has(index)
+      !message.files?.some((file) => file.mediaType.startsWith('image/'))
     ) {
       return message
     }
 
     const { files, ...textMessage } = message
     const retainedFiles = files.filter((file) =>
-      !file.mediaType.startsWith('image/')
+      !file.mediaType.startsWith('image/') || retainedImageIndexes.has(index)
     )
+    if (retainedFiles.length === files.length) {
+      return message
+    }
 
     return retainedFiles.length > 0
       ? { ...textMessage, files: retainedFiles }
       : textMessage
   })
+
 }
 
 /**
@@ -402,11 +437,23 @@ export function splitAgentTranscriptForSummary(
   recent: AgentToolTranscriptMessage[]
 } | null {
   const exchanges = findCompletedToolExchanges(transcript)
-  if (exchanges.length < SUMMARY_RECENT_EXCHANGES * 2) return null
+  // Inspection pages can produce many findings from one tool exchange. They
+  // are safe summary boundaries too, after all matching tool results settled.
+  const boundaries = [...new Set([
+    ...exchanges.map((exchange) => exchange.startIndex),
+    ...transcript.flatMap((message, index) =>
+      message.role === 'user' && message.runtimeContext?.['visualInspectionBatch']
+        ? [index]
+        : []
+    )
+  ])].sort((left, right) => left - right)
+  if (boundaries.length < SUMMARY_RECENT_EXCHANGES * 2) {
+    return null
+  }
 
   // The continuation retains the latest owner message separately. Anchoring the
   // tail to that message would retain all subsequent work in a long task.
-  const boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
+  const boundary = boundaries[boundaries.length - SUMMARY_RECENT_EXCHANGES]!
   if (boundary <= 0) return null
 
   // Keep a bounded visual reference even when the recent tail is text-only.

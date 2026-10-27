@@ -72,6 +72,7 @@ import {
   LLMDuties,
   LLMProviders,
   CompletionFailureKind,
+  InferencePurpose,
   type AgentToolTranscriptMessage,
   type ProviderReasoningItem,
   type OpenAIToolCall,
@@ -484,11 +485,122 @@ describe('continuous agent loop', () => {
     expect(result.trackedSteps).toEqual(trackedSteps)
   })
 
-  
+  it('drains large image collections through bounded inspection turns before resuming the task', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'user', content: 'Compare all nine photos and choose the best.',
+      files: Array.from({ length: 9 }, (_, index) => ({
+        dataBase64: 'x'.repeat(3 * 1_024 * 1_024),
+        mediaType: 'image/jpeg', filename: `/photos/${index}.jpg`
+      }))
+    }]
+    const inspected: string[] = []
+    const pages: number[] = []
+    const checkpoints: number[] = []
+    const executeFunction = vi.fn()
+    const result = await runAgentLoop({
+      transcript, catalog: createCatalog(), executeFunction,
+      loadAgentSkill: async () => null,
+      onInspectionCheckpoint: (state) => {
+        checkpoints.push(state.transcript.flatMap((message) =>
+          message.role === 'assistant' ? [] : message.files ?? []).length)
+      },
+      callModel: async (messages, _tools, options) => {
+        const files = messages.flatMap((message) => message.role === 'assistant' ? [] : message.files ?? [])
+        if (options.isImageInspection) {
+          expect(files.reduce((bytes, file) => bytes + file.dataBase64.length, 0))
+            .toBeLessThanOrEqual(12 * 1_024 * 1_024)
+          const { sources } = JSON.parse(messages.at(-1)!.content).image_inspection
+          pages.push(sources.length)
+          inspected.push(...sources.map((source: { filename: string }) => source.filename))
+          return { textContent: JSON.stringify({ observations: sources.map((source: { id: string, filename: string }) => ({
+            source_id: source.id, findings: `Useful visual facts from ${source.filename}`
+          })) }) }
+        }
 
-  
+        expect(files).toHaveLength(0)
+        expect(inspected).toHaveLength(9)
+        expect(messages.filter((message) => message.role === 'user' &&
+          message.runtimeContext?.visualInspectionBatch)).toHaveLength(3)
+        return { textContent: 'The comparison is complete; photo 3 is the best fit.' }
+      }
+    })
 
-  
+    expect(result.intent).toBe('answer')
+    expect(pages).toEqual([4, 4, 1])
+    expect(checkpoints).toEqual([5, 1, 0])
+    expect(new Set(inspected).size).toBe(9)
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('applies owner cancellation before another queued inspection and preserves unseen sources', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'user', content: 'Inspect the collection.',
+      files: Array.from({ length: 9 }, () => ({ dataBase64: 'image', mediaType: 'image/png' }))
+    }]
+    let cancelled = false
+    const result = await runAgentLoop({
+      transcript, catalog: createCatalog(), executeFunction: vi.fn(),
+      loadAgentSkill: async () => null,
+      drainOwnerMessages: async () => {
+        if (cancelled) {
+          return []
+        }
+
+        cancelled = true
+        return [{ role: 'user', content: 'Cancel that task.' }]
+      },
+      callModel: async (messages, _tools, options) => {
+        expect(options.isImageInspection).toBe(false)
+        expect(messages.some((message) => message.content === 'Cancel that task.')).toBe(true)
+        expect(messages.every((message) => message.role === 'assistant' || !message.files?.length)).toBe(true)
+        return { toolCalls: [toolCall('cancel', AGENT_CANCELLATION_TOOL_NAME, { acknowledgment: 'Stopped.' })] }
+      }
+    })
+
+    expect(result.intent).toBe('cancelled')
+    expect(result.transcript[0]).toMatchObject({ files: expect.any(Array) })
+    expect(result.transcript[0]!.role === 'user' && result.transcript[0]!.files).toHaveLength(9)
+  })
+
+  it('checkpoints uninspected sources at the iteration cap and resumes only the remaining images', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'user', content: 'Compare every photo.',
+      files: Array.from({ length: 9 }, (_, index) => ({
+        dataBase64: 'image', mediaType: 'image/png', filename: `${index}.png`
+      }))
+    }]
+    const seen: string[] = []
+    const callModel: AgentLoopParams['callModel'] = async (messages, _tools, options) => {
+      if (!options.isImageInspection) {
+        return { textContent: 'All nine photos have been compared.' }
+      }
+
+      const { sources } = JSON.parse(messages.at(-1)!.content).image_inspection
+      seen.push(...sources.map((source: { filename: string }) => source.filename))
+      return { textContent: JSON.stringify({ observations: sources.map((source: { id: string }) => ({
+        source_id: source.id, findings: 'Task-relevant visual facts.'
+      })) }) }
+    }
+    const params = {
+      transcript, catalog: createCatalog(), callModel, executeFunction: vi.fn(),
+      loadAgentSkill: async (): Promise<null> => null
+    }
+
+    const first = await runAgentLoop({ ...params, maxIterations: 1 })
+    expect(first.intent).toBe('error')
+    expect(first.answer).toContain('uninspected: 1')
+    expect(seen).toHaveLength(8)
+    const checkpoint = createAgentLoopContinuationState({
+      originalInput: 'Compare every photo.', clarificationQuestion: '', planWidgetId: '',
+      trackedSteps: [], executionHistory: [], loadedToolkitIds: [], activeSkillId: null,
+      transcript: first.transcript
+    })
+
+    const resumed = await runAgentLoop({ ...params, transcript: checkpoint.transcript })
+    expect(resumed.intent).toBe('answer')
+    expect(seen).toHaveLength(9)
+    expect(new Set(seen).size).toBe(9)
+  })
 
   it.each([
     'optional', 'default', 'nondefault', 'required', 'failed', 'compacted', 'partial', 'retained',
@@ -4222,9 +4334,57 @@ describe('agent automatic compaction', () => {
     }
   })
 
-  
+  it('keeps structured image findings private and disables opaque compaction while inspections are queued', async () => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({ provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
+    vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({ reasoning: 'high', speed: 'auto' })
+    const output = { observations: [{ source_id: 'photo', findings: 'A red bicycle.' }] }
+    coreMocks.prompt.mockImplementationOnce(async (_messages, params: CompletionParams) => {
+      expect(params.toolChoice).toBe('none')
+      expect(params.reasoningEffort).toBe('low')
+      expect(params.usagePurpose).toBe(InferencePurpose.ImageInspection)
+      expect(params.disableContextCompaction).toBe(true)
+      expect(params.data).toHaveProperty('properties.observations')
+      expect(params.onToolCall).toBeUndefined()
+      params.onToken?.(JSON.stringify(output))
+      params.onReasoningToken?.('Private visual inspection.')
+      return { output }
+    })
+    const duty = new ReActLLMDuty({ input: 'Compare the collection.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const push = vi.spyOn(duty['answerStream'], 'push')
 
-  
+    const result = await duty['callAgentModel']([], 'Inspect the supplied previews.', [], {
+      isRecoveryAttempt: false, isImageInspection: true, hasPendingImages: true
+    })
+
+    expect(JSON.parse(result!.textContent!)).toEqual(output)
+    expect(push).not.toHaveBeenCalled()
+    expect(duty['reviewCount']).toBe(0)
+  })
+
+  it('withholds queued previews from finalization without deleting resumable evidence', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'user', content: 'Inspect the collection.',
+      files: [{ dataBase64: 'uninspected-image', mediaType: 'image/png', inspectionPending: true }]
+    }]
+    coreMocks.prompt.mockImplementationOnce(async (messages, params: CompletionParams) => {
+      expect(messages.every((message: AgentToolTranscriptMessage) =>
+        message.role === 'assistant' || !message.files?.length)).toBe(true)
+      expect(params.disableContextCompaction).toBe(true)
+      return { output: 'Inspection remains incomplete.' }
+    })
+    const duty = new ReActLLMDuty({ input: 'Report current progress.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    await duty['callAgentModel'](transcript, 'Report the incomplete work.', [], {
+      isRecoveryAttempt: false, isFinalizationAttempt: true
+    })
+
+    expect(transcript[0]).toMatchObject({ files: [expect.objectContaining({
+      dataBase64: 'uninspected-image', inspectionPending: true
+    })] })
+  })
 
   it('lets OpenAI decide when to compact and passes returned context to the loop', async () => {
     const source: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Evidence '.repeat(60_000) }]
