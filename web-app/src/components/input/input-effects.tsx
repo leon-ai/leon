@@ -200,10 +200,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
     }
 
     function updateCaret(snap: boolean): void {
-      if (
-        composing || dragging ||
-        nativeField.selectionStart !== nativeField.selectionEnd
-      ) {
+      if (composing || dragging) {
         cancelMotion()
         caretLayer.hidden = true
         nativeField.classList.add('input-effects-native-caret')
@@ -344,10 +341,12 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
     }
 
     function synchronize(snap = false): void {
+      // Native selection must paint its own glyphs to honor global selection colors.
       const canEnhance = document.activeElement === nativeField &&
         document.hasFocus() && !document.hidden && !motionPreference.matches &&
         !nativeField.disabled && !nativeField.readOnly &&
         nativeField.selectionStart !== null &&
+        nativeField.selectionStart === nativeField.selectionEnd &&
         !(nativeField instanceof HTMLInputElement && nativeField.type === 'password')
 
       if (!canEnhance) {
