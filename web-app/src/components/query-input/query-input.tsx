@@ -17,7 +17,7 @@ import './query-input.sass'
 
 const DEFAULT_PLACEHOLDER = 'Don’t be shy'
 const DEFAULT_MAXIMUM_LINE_COUNT = 12
-const PARTICLE_COUNT = 10
+const PARTICLE_COUNT = 14
 const HEIGHT_COMPARISON_TOLERANCE = 1
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 

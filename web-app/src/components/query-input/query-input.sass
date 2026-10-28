@@ -1,6 +1,6 @@
 @use 'sass:list'
 
-$particles: ((8%, -12px, -64px, 12s, -3s), (16%, -20px, -88px, 14s, -9s), (24%, -8px, -72px, 11s, -5s), (35%, -16px, -96px, 15s, -12s), (43%, -6px, -60px, 13s, -7s), (57%, 8px, -68px, 12s, -8s), (65%, 18px, -92px, 15s, -4s), (76%, 10px, -76px, 13s, -10s), (84%, 20px, -84px, 14s, -6s), (92%, 12px, -64px, 11s, -2s))
+$particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, -20px, -88px, 14s, -9s), (24%, -8px, -72px, 11s, -5s), (30%, -12px, -84px, 14s, -11s), (35%, -16px, -96px, 15s, -12s), (43%, -6px, -60px, 13s, -7s), (57%, 8px, -68px, 12s, -8s), (65%, 18px, -92px, 15s, -4s), (70%, 14px, -84px, 14s, -5s), (76%, 10px, -76px, 13s, -10s), (84%, 20px, -84px, 14s, -6s), (88%, 16px, -72px, 12s, -9s), (92%, 12px, -64px, 11s, -2s))
 
 .query-input-container
   position: relative
@@ -45,16 +45,16 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (16%, -20px, -88px, 14s, -9s), (24%, 
 .query-input-particle
   position: absolute
   top: var(--space-sm)
-  width: 2px
-  height: 2px
+  width: 2.5px
+  height: 2.5px
   border-radius: var(--border-radius-pill)
   background-color: currentColor
-  box-shadow: 0 0 6px currentColor
+  box-shadow: 0 0 3px currentColor
   color: var(--color-accent)
   opacity: 0
   animation: query-input-particle-drift ease-in-out infinite
 
-  &:nth-child(n + 6)
+  &:nth-child(n + #{list.length($particles) * .5 + 1})
     color: var(--color-accent-pink)
 
 // Stagger stable paths so particles remain sparse without a JavaScript frame loop.
@@ -178,7 +178,7 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (16%, -20px, -88px, 14s, -9s), (24%, 
     transform: translate3d(0, 0, 0)
 
   25%
-    opacity: .4
+    opacity: .35
 
   65%
     opacity: .2
