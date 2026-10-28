@@ -769,7 +769,8 @@ export class ReActLLMDuty extends LLMDuty {
       this.hasExplicitMemoryWrite = executionHistory.some(
         (execution) =>
           execution.status === 'success' &&
-          execution.function === 'structured_knowledge.memory.write'
+          (execution.function === 'structured_knowledge.memory.write' ||
+            execution.function === 'structured_knowledge.memory.forget')
       )
 
       if (result.intent !== 'answer' && result.intent !== 'cancelled') {

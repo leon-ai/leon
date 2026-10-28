@@ -149,7 +149,7 @@ function renderRecallPrompt(result: RecallResult): string {
   if (result.facts.length > 0) {
     lines.push('Facts:')
     for (const fact of result.facts) {
-      lines.push(`- ${fact.text}`)
+      lines.push(`- [${fact.sourceType}] ${fact.text}`)
     }
   }
 
@@ -159,7 +159,8 @@ function renderRecallPrompt(result: RecallResult): string {
       const sourceLabel = hit.sourcePath
         ? path.basename(hit.sourcePath)
         : hit.title || hit.namespace
-      lines.push(`${index + 1}. [${sourceLabel}] ${hit.content}`)
+      const provenance = hit.sourceType ? `; ${hit.sourceType}` : ''
+      lines.push(`${index + 1}. [${sourceLabel}${provenance}] ${hit.content}`)
     }
   }
 
@@ -702,35 +703,48 @@ export default class MemoryManager {
       () => randomUUID()
     )
 
-    if (saved.scope === 'persistent') {
-      const filePath = this.getPersistentEntryFilePath(saved.id, saved.createdAt)
-      const markdown = `> Persistent memory entry (${saved.kind})\n\n# ${saved.title || saved.kind}\n\nID: ${saved.id}\nCreated At: ${new Date(saved.createdAt).toISOString()}\n\n${saved.content}\n`
-      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-      await fs.promises.writeFile(filePath, markdown, 'utf8')
-      this.qmdBackend.markDirty('memory_persistent')
-    }
-
-    if (saved.scope === 'daily' && saved.kind === 'summary' && saved.dayKey) {
-      const filePath = path.join(this.dailyPath, `${saved.dayKey}.md`)
-      await fs.promises.writeFile(filePath, saved.content, 'utf8')
-      this.qmdBackend.markDirty('memory_daily')
-    }
-
-    if (saved.scope === 'discussion' && saved.dayKey) {
-      const dayDiscussionPath = path.join(this.discussionPath, `${saved.dayKey}.md`)
-      const discussionHeader = `> Discussion memory for ${saved.dayKey}. Short-term rolling conversation context.\n# ${saved.dayKey}\n\n`
-      const line = `- ${new Date(saved.createdAt).toISOString()} | ${saved.content.replace(/\n/g, ' | ')}\n`
-
-      if (!fs.existsSync(dayDiscussionPath)) {
-        await fs.promises.writeFile(dayDiscussionPath, `${discussionHeader}${line}`, 'utf8')
-      } else {
-        await fs.promises.appendFile(dayDiscussionPath, line, 'utf8')
+    if (input.supersedesItemId && input.supersedesItemId !== saved.id) {
+      const previous = this.repository.getMemoryItem(input.supersedesItemId)
+      if (previous) {
+        await this.refreshMemoryMirror(previous)
       }
-
-      this.qmdBackend.markDirty('memory_discussion')
     }
+    await this.refreshMemoryMirror(saved)
 
     return saved
+  }
+
+  /**
+   * Rebuild a projection from current rows so retired content cannot survive a rewrite.
+   */
+  private async refreshMemoryMirror(record: MemoryRecord): Promise<void> {
+    const key = record.scope === 'persistent' ? record.id : record.dayKey
+    if (!key || (record.scope === 'daily' && record.kind !== 'summary')) {
+      return
+    }
+
+    const records = this.repository.getMirrorRecords(record.scope, key)
+    const filePath = record.scope === 'persistent'
+      ? this.getPersistentEntryFilePath(record.id, record.createdAt)
+      : record.scope === 'daily'
+        ? this.getDailySummaryFilePath(key)
+        : this.getDiscussionDayFilePath(key)
+    const current = records[0]
+    if (!current) {
+      await fs.promises.rm(filePath, { force: true })
+    } else {
+      const markdown = record.scope === 'persistent'
+        ? this.renderPersistentEntryMarkdown(current)
+        : record.scope === 'daily'
+          ? current.content
+          : this.renderDiscussionHeader(key) + records
+              .sort((a, b) => a.createdAt - b.createdAt)
+              .map((item) => this.renderDiscussionLine(item)).join('')
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+      await fs.promises.writeFile(filePath, markdown, 'utf8')
+    }
+
+    this.qmdBackend.markDirty(`memory_${record.scope}`)
   }
 
   public async rememberExplicit(
@@ -754,7 +768,13 @@ export default class MemoryManager {
       await this.load()
     }
 
-    return this.repository.softDeleteById(id)
+    const record = this.repository.getMemoryItem(id)
+    if (!record || !this.repository.softDeleteById(id)) {
+      return false
+    }
+
+    await this.refreshMemoryMirror(record)
+    return true
   }
 
   public async forgetByQuery(query: string): Promise<number> {
@@ -767,7 +787,14 @@ export default class MemoryManager {
       return 0
     }
 
-    return this.repository.softDeleteByQuery(normalizedQuery)
+    const records = this.repository.findMemoryItems(normalizedQuery)
+    let deleted = 0
+    for (const record of records) {
+      if (await this.forgetById(record.id)) {
+        deleted += 1
+      }
+    }
+    return deleted
   }
 
   public async recall(input: RecallQuery): Promise<RecallResult> {
@@ -798,31 +825,58 @@ export default class MemoryManager {
       query: input.query,
       namespaces,
       topK,
+      resolveHit: (hit) => {
+        if (hit.namespace === 'context') {
+          return [hit]
+        }
+
+        const scope = hit.namespace === 'memory_persistent'
+          ? 'persistent'
+          : hit.namespace === 'memory_discussion' ? 'discussion' : 'daily'
+        const records = hit.authoritative
+          ? [this.repository.getActiveMemoryItem(hit.id)].filter((record): record is MemoryRecord => record !== null)
+          : this.repository.getMirrorRecords(scope, path.basename(hit.path, '.md'))
+
+        return records.filter((record) =>
+          (!input.scopes?.length || input.scopes.includes(record.scope)) &&
+          (!input.kinds?.length || input.kinds.includes(record.kind)) &&
+          (!input.dayKeys?.length || (record.dayKey !== null && input.dayKeys.includes(record.dayKey)))
+        ).map((record) => ({
+          ...hit,
+          id: record.id,
+          title: record.title || record.kind,
+          content: record.content,
+          authoritative: true
+        }))
+      },
       ...(input.retrievalMode ? { retrievalMode: input.retrievalMode } : {}),
       ...(input.contextFilenames && input.contextFilenames.length > 0
         ? { contextFilenames: input.contextFilenames }
         : {})
     })
 
-    const hits: RecallHit[] = qmdHits.map((hit, index) => ({
-      chunkId: hit.id || `${hit.namespace}:${index}`,
-      itemId: hit.path || hit.id,
-      namespace: hit.namespace,
-      scope:
-        hit.namespace === 'memory_persistent'
-          ? 'persistent'
-          : hit.namespace === 'memory_daily'
-            ? 'daily'
-            : hit.namespace === 'memory_discussion'
-              ? 'discussion'
-              : null,
-      kind: null,
-      title: hit.title || path.basename(hit.path || '') || null,
-      content: normalizeContent(hit.content),
-      bm25Score: hit.score,
-      createdAt: Date.now(),
-      sourcePath: hit.path || null
-    }))
+    const hits: RecallHit[] = qmdHits.flatMap((hit) => {
+      const record = hit.namespace === 'context'
+        ? null
+        : this.repository.getActiveMemoryItem(hit.id)
+      if (hit.namespace !== 'context' && !record) {
+        return []
+      }
+
+      return [{
+        chunkId: hit.id,
+        itemId: record?.id || hit.id,
+        namespace: hit.namespace,
+        scope: record?.scope || null,
+        kind: record?.kind || null,
+        title: record?.title || hit.title || null,
+        content: normalizeContent(hit.content),
+        bm25Score: hit.score,
+        createdAt: record?.createdAt || 0,
+        sourcePath: hit.path || null,
+        ...(record ? { sourceType: record.sourceType, sourceRef: record.sourceRef } : {})
+      }]
+    })
 
     const queryTokens = new Set(tokenizeWords(input.query))
     const contextFilenameBoost = (hit: RecallHit): number => {

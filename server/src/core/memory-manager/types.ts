@@ -48,6 +48,8 @@ export interface MemoryRecord {
   kind: MemoryKind
   title: string | null
   content: string
+  sourceType: MemorySourceType
+  sourceRef: string | null
   importance: number
   confidence: number
   dayKey: string | null
@@ -84,11 +86,16 @@ export interface RecallHit {
   rerankScore?: number
   createdAt: number
   sourcePath?: string | null
+  sourceType?: MemorySourceType
+  sourceRef?: string | null
 }
 
 export interface RecallResult {
   hits: RecallHit[]
   facts: Array<{
+    itemId: string
+    sourceType: MemorySourceType
+    sourceRef: string | null
     key: string
     value: unknown
     text: string

@@ -14,6 +14,7 @@ export interface RetrievedHit<TNamespace extends string = string> {
   content: string
   score: number
   namespace: TNamespace
+  authoritative?: boolean
 }
 
 export interface RankedRetrievedHit<TNamespace extends string = string> {
@@ -825,6 +826,11 @@ export function hydrateBridgeSeedHit<TNamespace extends string>(
   collections: Record<TNamespace, QMDCollectionSpec>,
   bridgeSourceContentCap = 96_000
 ): RetrievedHit<TNamespace> {
+  // Database-backed hits already contain current content; file mirrors can lag.
+  if (hit.authoritative) {
+    return hit
+  }
+
   const namespace = String(hit.namespace)
   if (!canHydrateBridgeSource(namespace)) {
     return hit
