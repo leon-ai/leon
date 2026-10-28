@@ -22,10 +22,14 @@
   border: var(--button-border-width) solid transparent
   border-radius: var(--border-radius-lg)
   background-color: var(--button-background)
+  box-shadow: inset 0 0 0 transparent
   color: var(--color-text-secondary)
   font-weight: var(--font-weight-semi-bold)
   text-decoration: none
-  transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main)
+  transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), box-shadow var(--transition-duration-main) var(--transition-timing-main)
+
+  &:active:not(:disabled):not([aria-disabled='true'])
+    box-shadow: inset 0 2px 4px var(--color-button-pressed-shadow)
 
   &:not(.button-ghost)
     // The opaque padding layer keeps translucent states from revealing the border gradient.
