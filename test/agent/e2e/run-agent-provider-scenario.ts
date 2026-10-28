@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { once } from 'node:events'
 import { createServer } from 'node:net'
 
@@ -9,6 +10,7 @@ import { createCodingFixture, type CodingEvidence } from './coding-fixture'
 
 import type { LLMModelReasoning } from '../../../server/src/core/llm-manager/llm-model-catalog'
 import type { MessageLog } from '../../../server/src/types'
+import type { ToolExecutionInput, ToolExecutionResult } from '../../../server/src/core/tool-manager/tool-executor'
 import type { AgentProvider } from './provider-matrix'
 import { PROVIDER_MATRIX, PROVIDER_REQUIRED_ENV } from './provider-matrix'
 import {
@@ -41,7 +43,7 @@ const PROVIDER_UNAVAILABLE_PATTERNS = [
 ]
 
 interface AgentProgressEvent {
-  provider: AgentProvider
+  provider: string
   stage:
     | 'bootstrap'
     | 'turn_start'
@@ -53,7 +55,7 @@ interface AgentProgressEvent {
   data?: Record<string, unknown>
 }
 
-interface AgentTurnResult {
+export interface AgentTurnResult {
   input: string
   output: string
   finalIntent: string | null
@@ -74,14 +76,32 @@ interface AgentTurnResult {
   }>
 }
 
+export interface RealScenarioTurn extends AgentTurnResult {
+  sessionId: string
+  historyBeforeTurn: number
+}
+
+/**
+ * An opt-in workflow with real agent turns and explicit external-service fixtures.
+ */
+export interface RealAgentScenario {
+  prepareProfile?(profilePath: string): Promise<void>
+  toolResult?(input: ToolExecutionInput): ToolExecutionResult | undefined
+  run(context: {
+    profilePath: string
+    runTurn(input: string, sessionId?: string): Promise<RealScenarioTurn>
+  }): Promise<Record<string, unknown>>
+}
+
 interface AgentRunnerResult {
-  provider: AgentProvider
-  scenarioId: ProviderScenarioId
+  provider: string
+  scenarioId: string
   skipped: boolean
   reason?: string
   assetPath?: string
   coding?: CodingEvidence
   turn?: AgentTurnResult
+  evidence?: Record<string, unknown>
 }
 
 type ConversationLoggerRecord = Omit<MessageLog, 'sentAt'>
@@ -231,7 +251,8 @@ async function prepareTestProfileConfig(
   sourceConfigPath: string,
   targetConfigPath: string,
   llmTarget: string,
-  reasoning: LLMModelReasoning | null
+  reasoning: LLMModelReasoning | null,
+  useProfileModel = false
 ): Promise<void> {
   if (!sourceConfigPath || !await fs.stat(sourceConfigPath).then(
     (stat) => stat.isFile(),
@@ -251,14 +272,16 @@ async function prepareTestProfileConfig(
     )
   }
 
-  // Keep real provider settings while making the matrix target authoritative.
+  // Use the selected target while preserving its profile model settings.
   document.setIn(['server', 'port'], await getTestServerPort())
   document.setIn(['llm', 'default'], llmTarget)
   document.setIn(['llm', 'workflow'], null)
   document.setIn(['llm', 'agent'], null)
 
-  // Isolated profiles use the matrix API key, not an owner's encrypted account.
-  document.deleteIn(['llm', 'providers', llmTarget.split('/')[0], 'account'])
+  if (!useProfileModel) {
+    // Provider matrix tests explicitly select an API-key-backed target.
+    document.deleteIn(['llm', 'providers', llmTarget.split('/')[0], 'account'])
+  }
 
   if (reasoning) {
     document.setIn(
@@ -268,16 +291,48 @@ async function prepareTestProfileConfig(
   }
 
   await fs.mkdir(path.dirname(targetConfigPath), { recursive: true })
-  await fs.writeFile(targetConfigPath, String(document), 'utf8')
+  await fs.writeFile(targetConfigPath, String(document), { mode: 0o600 })
+
+  if (useProfileModel) {
+    // Copy authentication into the disposable profile, never owner memory or history.
+    // Account refreshes and generated tokens must stay in the test profile.
+    const sourceProfile = path.dirname(sourceConfigPath)
+    const targetProfile = path.dirname(targetConfigPath)
+
+    for (const relativePath of ['.env', 'connections/llm-accounts']) {
+      const source = path.join(sourceProfile, relativePath)
+
+      try {
+        await fs.cp(source, path.join(targetProfile, relativePath), {
+          recursive: true
+        })
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
+        }
+      }
+    }
+  }
 }
 
 async function main(): Promise<void> {
   const providerArg = process.argv[2] as AgentProvider | undefined
   const scenarioArg = process.argv[3]
-  const scenario = getProviderScenario(scenarioArg)
+  let realScenario: RealAgentScenario | null = null
+  if (process.argv.includes('--real-scenario')) {
+    const directory = fileURLToPath(new URL('../scenarios/', import.meta.url))
+    const filename = `${scenarioArg}.scenario.ts`
+    if (!(await fs.readdir(directory)).includes(filename)) {
+      throw new Error('Select a named real scenario.')
+    }
+    realScenario = (await import(pathToFileURL(path.join(directory, filename)).href)).default as RealAgentScenario
+  }
+  const scenario = realScenario
+    ? { id: scenarioArg as string, buildInput: (): string => '' }
+    : getProviderScenario(scenarioArg)
   const resultScenarioId = (scenarioArg || 'direct_answer') as ProviderScenarioId
 
-  if (!providerArg || !(providerArg in PROVIDER_REQUIRED_ENV) || !scenario) {
+  if (!providerArg || (!realScenario && !(providerArg in PROVIDER_REQUIRED_ENV)) || !scenario) {
     printResult({
       provider: (providerArg || 'openai') as AgentProvider,
       scenarioId: resultScenarioId,
@@ -291,21 +346,30 @@ async function main(): Promise<void> {
   const providerConfig = PROVIDER_MATRIX.find(
     (item) => item.provider === provider
   )
-  const llmTarget = providerConfig?.llmTarget || provider
+  const llmTarget = realScenario
+    ? process.env['LEON_AGENT_SCENARIO_TARGET'] || ''
+    : providerConfig?.llmTarget || provider
+  if (!llmTarget) {
+    throw new Error('No active profile model was selected for the scenario.')
+  }
   const requiredEnv = PROVIDER_REQUIRED_ENV[provider]
   const testRunId = `${provider}-${scenario.id}-${process.pid}-${Date.now()}`
   const testProfileName = `${TEST_PROFILE_PREFIX}-${testRunId}`
-  const testHomePath = path.join(
+  const testHomePath = (realScenario && process.env['LEON_AGENT_SCENARIO_HOME']) || path.join(
     os.tmpdir(),
     `${TEST_HOME_PREFIX}-${testRunId}`
   )
+  if (path.dirname(path.resolve(testHomePath)) !== os.tmpdir() ||
+      !path.basename(testHomePath).startsWith(`${TEST_HOME_PREFIX}-`)) {
+    throw new Error('Agent scenarios require an isolated temporary Leon home.')
+  }
   const testProfilePath = path.join(
     testHomePath,
     'profiles',
     testProfileName
   )
   const testConfigPath = path.join(testProfilePath, 'config.yml')
-  if (!process.env[requiredEnv]) {
+  if (!realScenario && !process.env[requiredEnv]) {
     printResult({
       provider,
       scenarioId: scenario.id,
@@ -325,7 +389,8 @@ async function main(): Promise<void> {
     String(process.env[SOURCE_CONFIG_PATH_ENV] || '').trim(),
     testConfigPath,
     llmTarget,
-    providerConfig?.reasoning || null
+    realScenario ? null : providerConfig?.reasoning || null,
+    Boolean(realScenario)
   )
 
   const tempAssetPath = path.join(
@@ -377,6 +442,7 @@ async function main(): Promise<void> {
     ],
     PROFILE_DISABLED_PATH
   )
+  await realScenario?.prepareProfile?.(testProfilePath)
 
   const continuationStatePath = path.join(
     PROFILE_CONTEXT_PATH,
@@ -421,8 +487,8 @@ async function main(): Promise<void> {
     '../../../server/src/core/session-manager/session-context'
   )
 
-  const codingFixture = scenario.id.startsWith('coding_')
-    ? await createCodingFixture(path.join(testHomePath, 'repository'), scenario.id)
+  const codingFixture = !realScenario && scenario.id.startsWith('coding_')
+    ? await createCodingFixture(path.join(testHomePath, 'repository'), scenario.id as ProviderScenarioId)
     : null
   const input = scenario.buildInput(codingFixture?.root || tempAssetPath)
   const toolCalls: AgentTurnResult['toolCalls'] = []
@@ -441,7 +507,7 @@ async function main(): Promise<void> {
   TOOL_EXECUTOR.executeTool = async (
     input: ToolExecutionInput
   ): Promise<ToolExecutionResult> => {
-    const toolResult = await originalExecuteTool(input)
+    const toolResult = realScenario?.toolResult?.(input) ?? await originalExecuteTool(input)
     const toolName = `${input.toolkitId}.${input.toolId}.${input.functionName || 'unknown'}`
     const serializedInput = input.toolInput || ''
     const serializedOutput = serializeToolOutput(toolResult)
@@ -516,6 +582,43 @@ async function main(): Promise<void> {
     await CONVERSATION_LOGGER.clear()
     await fs.rm(continuationStatePath, { force: true })
     await fs.rm(historyCompactionStatePath, { force: true })
+
+    if (realScenario) {
+      const { CONVERSATION_SESSION_MANAGER } = await import('../../../server/src/core/session-manager')
+      let turnNumber = 0
+      const evidence = await realScenario.run({
+        profilePath: testProfilePath,
+        runTurn: async (ownerInput, existingSessionId) => {
+          const sessionId = existingSessionId || CONVERSATION_SESSION_MANAGER.createSession().id
+          return runWithConversationSession({ sessionId }, async () => {
+            const historyBeforeTurn = (await CONVERSATION_LOGGER.loadAll({ sessionId })).length
+            const callOffset = toolCalls.length
+            turnNumber += 1
+            printProgress({ provider, stage: 'turn_start', turn: turnNumber, message: scenario.id, data: { input: ownerInput } })
+            await CONVERSATION_LOGGER.push(createConversationLoggerRecord('owner', ownerInput))
+            const duty = new ReActLLMDuty({ input: ownerInput })
+            await duty.init({ force: true })
+            const result = await duty.execute()
+            if (!result) {
+              throw new Error('Agent scenario returned no result.')
+            }
+            const output = typeof result.output === 'string' ? result.output : ''
+            const turn: RealScenarioTurn = {
+              sessionId, historyBeforeTurn, input: ownerInput, output,
+              finalIntent: typeof result.data?.['finalIntent'] === 'string' ? result.data['finalIntent'] : null,
+              executionHistory: Array.isArray(result.data?.['executionHistory'])
+                ? result.data['executionHistory'] as AgentTurnResult['executionHistory'] : [],
+              toolCalls: toolCalls.slice(callOffset)
+            }
+            await CONVERSATION_LOGGER.push(createConversationLoggerRecord('leon', output))
+            printProgress({ provider, stage: 'turn_result', turn: turnNumber, message: scenario.id, data: { output, finalIntent: turn.finalIntent } })
+            return turn
+          })
+        }
+      })
+      printResult({ provider, scenarioId: scenario.id, skipped: false, evidence })
+      return
+    }
 
     printProgress({
       provider,

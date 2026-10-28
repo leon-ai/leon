@@ -42,6 +42,7 @@
     "test:unit": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/core/unit test/agent/unit test/controlled/unit test/onboarding/unit",
     "test:agent:unit": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts unit",
     "test:agent:e2e": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts e2e",
+    "test:agent:scenario": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts scenario",
     "test:core:unit": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/core/unit",
     "test:integration": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/core/integration --maxWorkers=2",
     "test:controlled:unit": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/controlled/unit",
