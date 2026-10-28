@@ -202,7 +202,7 @@ export async function generateWithProvider(
   }
 
   if (provider === LLMProviders.OpenRouter) {
-    // Chat image models return mixed text/images, unlike the Images API shape.
+    // OpenRouter returns images in chat messages, including image-only output.
     const providerResponse = await providerRequest(
       provider,
       '/chat/completions',
@@ -225,7 +225,7 @@ export async function generateWithProvider(
               : prompt
           }
         ],
-        modalities: ['image', 'text'],
+        modalities: options['modalities'] ?? ['image', 'text'],
         stream: false
       },
       signal
