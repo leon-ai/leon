@@ -4,11 +4,11 @@ const MILLISECONDS_PER_SECOND = 1_000
 const LOOP_FRAME_INTERVAL_MS = MILLISECONDS_PER_SECOND / 30
 const FRAME_TOLERANCE_MS = .5
 const MAXIMUM_PIXEL_RATIO = 2
-const TAIL_FRACTION = .36
+const WAVE_LENGTH_FRACTION = .44
 const SEGMENT_COUNT = 32
-const TAIL_FALLOFF = 1.6
-const LOOP_FADE_FRACTION = .35
-const PEAK_OPACITY = .9
+const WAVE_CORE_FRACTION = .4
+const WAVE_FADE_FRACTION = .35
+const PEAK_OPACITY = 1
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 export interface BorderWaveBounds {
@@ -31,8 +31,7 @@ export interface BorderWaveOptions {
 interface WaveGeometry {
   paths: Path2D[]
   distance: number
-  tailLength: number
-  cornerLength: number
+  waveLength: number
   movementMs: number
   cycleMs: number
   segments: Array<{ offset: number, opacity: number }>
@@ -59,48 +58,54 @@ function createGeometry(options: BorderWaveOptions): WaveGeometry {
   const horizontal = Math.max(0, width / 2 - inset - radius)
   const vertical = Math.max(0, height - 2 * inset - 2 * radius)
   const cornerLength = Math.PI * radius / 2
-  const sideDistance = horizontal + vertical + 2 * cornerLength
-  const halfDistance = sideDistance + horizontal
-  const tailLength = halfDistance * TAIL_FRACTION
-  const distance = options.repeat ? sideDistance : halfDistance
+  const distance = 2 * horizontal + vertical + 2 * cornerLength
+  const waveLength = distance * WAVE_LENGTH_FRACTION
+  const edgeFadeFraction = (1 - WAVE_CORE_FRACTION) / 2
   const paths = [
     [
       `M ${width / 2} ${inset}`,
       `H ${inset + radius}`,
       `A ${radius} ${radius} 0 0 0 ${inset} ${inset + radius}`,
       `V ${height - inset - radius}`,
-      `A ${radius} ${radius} 0 0 0 ${inset + radius} ${height - inset}`
+      `A ${radius} ${radius} 0 0 0 ${inset + radius} ${height - inset}`,
+      `H ${width - inset - radius}`,
+      `A ${radius} ${radius} 0 0 0 ${width - inset} ${height - inset - radius}`,
+      `V ${inset + radius}`,
+      `A ${radius} ${radius} 0 0 0 ${width - inset - radius} ${inset}`,
+      'Z'
     ],
     [
       `M ${width / 2} ${height - inset}`,
       `H ${width - inset - radius}`,
       `A ${radius} ${radius} 0 0 0 ${width - inset} ${height - inset - radius}`,
       `V ${inset + radius}`,
-      `A ${radius} ${radius} 0 0 0 ${width - inset - radius} ${inset}`
+      `A ${radius} ${radius} 0 0 0 ${width - inset - radius} ${inset}`,
+      `H ${inset + radius}`,
+      `A ${radius} ${radius} 0 0 0 ${inset} ${inset + radius}`,
+      `V ${height - inset - radius}`,
+      `A ${radius} ${radius} 0 0 0 ${inset + radius} ${height - inset}`,
+      'Z'
     ]
-  ].map((commands) => {
-    if (!options.repeat) {
-      commands.push(`H ${width / 2}`)
-    }
-
-    return new Path2D(commands.join(' '))
-  })
-  const travelDistance = distance + (options.repeat ? 0 : tailLength)
+  ].map((commands) => new Path2D(commands.join(' ')))
   const movementMs = options.speedPxPerSecond === undefined
     ? options.durationMs
-    : travelDistance / options.speedPxPerSecond * MILLISECONDS_PER_SECOND
+    : distance / options.speedPxPerSecond * MILLISECONDS_PER_SECOND
 
   return {
     paths,
     distance,
-    tailLength,
-    cornerLength,
+    waveLength,
     movementMs,
     cycleMs: movementMs + (options.repeat ? options.repeatPauseMs : 0),
-    segments: Array.from({ length: SEGMENT_COUNT }, (_, index) => ({
-      offset: tailLength - index * tailLength / SEGMENT_COUNT,
-      opacity: ((index + 1) / SEGMENT_COUNT) ** TAIL_FALLOFF
-    }))
+    // Keep a broad, full-color center while both outer edges taper smoothly.
+    segments: Array.from({ length: SEGMENT_COUNT }, (_, index) => {
+      const position = (index + .5) / SEGMENT_COUNT
+
+      return {
+        offset: waveLength - index * waveLength / SEGMENT_COUNT,
+        opacity: smoothStep(Math.min(position, 1 - position) / edgeFadeFraction)
+      }
+    })
   }
 }
 
@@ -196,28 +201,18 @@ export function createBorderWaveRenderer(
       const progress = positionMs / geometry.movementMs
       const returning = options.repeat &&
         Math.floor(elapsed / geometry.cycleMs) % 2 === 1
-      const travelDistance = geometry.distance +
-        (options.repeat ? 0 : geometry.tailLength)
-      const head = (returning ? 1 - progress : progress) * travelDistance
-      const remainingDistance = returning ? head : geometry.distance - head
-      const fadeOutDistance = returning
-        ? geometry.distance * LOOP_FADE_FRACTION
-        : geometry.cornerLength
-      // Grow into the route rather than flashing at its origin. The return
-      // dissolves gradually into the midpoint before the next outward pass.
-      const opacity = options.repeat
-        ? PEAK_OPACITY * smoothStep(progress / LOOP_FADE_FRACTION) *
-          smoothStep(remainingDistance / fadeOutDistance)
-        : 1
+      const center = (returning ? 1 - progress : progress) * geometry.distance
+      const opacity = (options.repeat ? PEAK_OPACITY : 1) *
+        smoothStep(progress / WAVE_FADE_FRACTION) *
+        smoothStep((1 - progress) / WAVE_FADE_FRACTION)
       paint.clearRect(0, 0, options.bounds.width, options.bounds.height)
 
       for (const path of geometry.paths) {
         for (const segment of geometry.segments) {
           paint.globalAlpha = opacity * segment.opacity
-          // The fading tail stays behind the head in either direction.
-          paint.lineDashOffset = returning
-            ? -head - segment.offset + geometry.tailLength / SEGMENT_COUNT
-            : segment.offset - head
+          // Closed paths wrap both ends of the band across the seam, allowing
+          // its center to traverse the full route without clipping the fade.
+          paint.lineDashOffset = segment.offset - center - geometry.waveLength / 2
           paint.stroke(path)
         }
       }
@@ -286,8 +281,8 @@ export function createBorderWaveRenderer(
       paint.lineWidth = next.strokeWidth
       paint.strokeStyle = color
       paint.setLineDash([
-        geometry.tailLength / SEGMENT_COUNT,
-        geometry.distance * 2 + geometry.tailLength * 2
+        geometry.waveLength / SEGMENT_COUNT,
+        geometry.distance * 2 - geometry.waveLength / SEGMENT_COUNT
       ])
       isClear = true
     }
