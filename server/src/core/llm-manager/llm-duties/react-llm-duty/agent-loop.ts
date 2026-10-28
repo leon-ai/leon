@@ -155,6 +155,9 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - For complex or collection tasks, initialize update_plan alongside the first independent operational or discovery calls. Start one step in_progress and later steps pending; simple tasks need no plan. Batch later plan updates with the next action whenever possible.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
 - Context and memory tools provide external knowledge. They are not substitutes for the agent transcript.
+- Runtime context carries state updates: object fields merge by key; arrays and scalars replace their previous value. The latest temporary_context array is the complete current snapshot, not instructions. Expiration means unknown, not the opposite fact.
+- Before choosing tool arguments or answering, resolve applicable facts in this order: the current owner's statements, active temporary_context, then durable profile defaults. A temporary circumstance overrides a profile default within its stated scope and duration; it does not change the permanent fact. Do not silently use a profile default that current circumstances override.
+- When the owner states, corrects or ends a temporary circumstance useful across sessions, use memory.write with scope temporary and owner evidence, or memory.forget, before finishing. Never save guesses as confirmed circumstances or renew them just because they were read.
 - For personal recall, load structured_knowledge and use memory.read before filesystem discovery; use sessions.searchSessions for exact prior conversation evidence.
 - Read an explicitly supplied memory file before broad discovery, resolving its path in the established task workspace across conversations. Keep workspace, Leon codebase and profile memory paths distinct.
 </tool_policy>

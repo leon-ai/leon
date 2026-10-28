@@ -4,7 +4,7 @@ PRAGMA synchronous = NORMAL;
 
 CREATE TABLE IF NOT EXISTS memory_items (
   id TEXT PRIMARY KEY,
-  scope TEXT NOT NULL CHECK (scope IN ('persistent', 'daily', 'discussion')),
+  scope TEXT NOT NULL CHECK (scope IN ('persistent', 'daily', 'discussion', 'temporary')),
   kind TEXT NOT NULL CHECK (kind IN ('fact', 'preference', 'event', 'note', 'summary', 'knowledge', 'task')),
   title TEXT,
   content_md TEXT NOT NULL,
@@ -33,6 +33,11 @@ CREATE INDEX IF NOT EXISTS idx_memory_items_expires_at
   ON memory_items(expires_at);
 CREATE INDEX IF NOT EXISTS idx_memory_items_deleted
   ON memory_items(is_deleted);
+CREATE INDEX IF NOT EXISTS idx_memory_items_supersedes
+  ON memory_items(supersedes_item_id);
+CREATE INDEX IF NOT EXISTS idx_memory_items_temporary
+  ON memory_items(importance DESC, updated_at DESC, id)
+  WHERE scope = 'temporary' AND is_deleted = 0;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_memory_items_scope_dedupe
   ON memory_items(scope, dedupe_hash)
@@ -101,6 +106,57 @@ CREATE TABLE IF NOT EXISTS memory_facts (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_memory_facts_key_active
   ON memory_facts(fact_key)
   WHERE is_deleted = 0;
+
+-- Both Core and tool workers read the same current records, even while QMD is stale.
+CREATE VIEW IF NOT EXISTS active_memory_items AS
+SELECT * FROM memory_items
+WHERE is_deleted = 0
+  AND (expires_at IS NULL OR expires_at > unixepoch('subsec') * 1000)
+  AND NOT EXISTS (
+    SELECT 1 FROM memory_items AS replacement
+    WHERE replacement.supersedes_item_id = memory_items.id
+      AND replacement.id != memory_items.id
+  );
+
+CREATE VIEW IF NOT EXISTS active_memory_facts AS
+SELECT memory_facts.*, active_memory_items.source_type, active_memory_items.source_ref
+FROM memory_facts
+JOIN active_memory_items ON active_memory_items.id = memory_facts.source_item_id
+WHERE memory_facts.is_deleted = 0;
+
+-- Retiring a record and its derived facts must be atomic across worker processes.
+CREATE TRIGGER IF NOT EXISTS trg_memory_items_supersede_insert
+AFTER INSERT ON memory_items
+WHEN new.supersedes_item_id IS NOT NULL AND new.supersedes_item_id != new.id BEGIN
+  UPDATE memory_items SET is_deleted = 1, updated_at = new.updated_at
+  WHERE id = new.supersedes_item_id;
+  UPDATE memory_facts SET is_deleted = 1, updated_at = new.updated_at
+  WHERE source_item_id = new.supersedes_item_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_memory_items_supersede_update
+AFTER UPDATE OF supersedes_item_id ON memory_items
+WHEN new.supersedes_item_id IS NOT NULL AND new.supersedes_item_id != new.id BEGIN
+  UPDATE memory_items SET is_deleted = 1, updated_at = new.updated_at
+  WHERE id = new.supersedes_item_id;
+  UPDATE memory_facts SET is_deleted = 1, updated_at = new.updated_at
+  WHERE source_item_id = new.supersedes_item_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_memory_items_forget
+AFTER UPDATE OF is_deleted ON memory_items
+WHEN new.is_deleted = 1 BEGIN
+  UPDATE memory_facts SET is_deleted = 1, updated_at = new.updated_at
+  WHERE source_item_id = new.id;
+END;
+
+-- Do not turn a deleted source's facts into source-less, apparently valid facts.
+CREATE TRIGGER IF NOT EXISTS trg_memory_items_delete_facts
+BEFORE DELETE ON memory_items BEGIN
+  DELETE FROM memory_facts WHERE source_item_id = old.id;
+  UPDATE memory_items SET is_deleted = 1, updated_at = old.updated_at
+  WHERE id = old.supersedes_item_id;
+END;
 
 CREATE TABLE IF NOT EXISTS context_documents (
   id TEXT PRIMARY KEY,

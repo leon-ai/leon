@@ -8,8 +8,11 @@ import {
   CODEBASE_PATH,
   PROFILE_CONTEXT_PATH,
   PROFILE_MEMORY_DB_PATH,
-  PROFILE_MEMORY_PATH
+  PROFILE_MEMORY_PATH,
+  PROFILE_SESSIONS_PATH
 } from '@bridge/constants'
+import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
+import { getTemporaryContextSize, resolveTemporaryExpiration, resolveTemporaryMemoryPolicy } from '@@/bridges/runtime/nodejs/temporary-memory'
 import {
   type QMDCollectionDefinition,
   type QMDStoreRow,
@@ -52,7 +55,7 @@ const BRIDGE_SOURCE_CONTENT_CAP = 96_000
 const MIN_HIT_TOKEN_BUDGET = 48
 const INDEX_UPDATE_MIN_INTERVAL_MS = 10_000
 
-type MemoryScope = 'persistent' | 'daily' | 'discussion'
+type MemoryScope = 'persistent' | 'daily' | 'discussion' | 'temporary'
 type MemoryKind =
   | 'fact'
   | 'preference'
@@ -96,6 +99,8 @@ interface MemoryWriteOptions {
   expiresAt?: number
   isPinned?: boolean
   metadata?: Record<string, unknown>
+  supersedesItemId?: string
+  evidence?: string
 }
 
 interface QMDHit {
@@ -105,6 +110,11 @@ interface QMDHit {
   content: string
   score: number
   namespace: KnowledgeNamespace
+  authoritative?: boolean
+  sourceType?: string
+  sourceRef?: string | null
+  scope?: MemoryScope
+  kind?: MemoryKind
 }
 
 const MEMORY_PERSISTENT_PATH = path.join(PROFILE_MEMORY_PATH, 'persistent')
@@ -331,7 +341,7 @@ export default class MemoryTool extends Tool {
       hitsInput: QMDHit[]
     ): Array<{ hit: QMDHit, rankingScore: number, overlapCount: number }> => {
       return rankRetrievedHits(
-        hitsInput,
+        hitsInput.flatMap((hit) => this.resolveMemoryHit(hit)),
         queryTokens,
         COLLECTIONS,
         namespaceWeights,
@@ -635,6 +645,11 @@ export default class MemoryTool extends Tool {
     }
 
     const selected: Array<{
+      id: string
+      sourceType?: string
+      sourceRef?: string | null
+      scope?: MemoryScope
+      kind?: MemoryKind
       namespace: KnowledgeNamespace
       title: string | null
       content: string
@@ -675,6 +690,9 @@ export default class MemoryTool extends Tool {
       }
 
       selected.push({
+        id: hit.id,
+        ...(hit.scope && hit.kind ? { scope: hit.scope, kind: hit.kind } : {}),
+        ...(hit.sourceType ? { sourceType: hit.sourceType, sourceRef: hit.sourceRef ?? null } : {}),
         namespace: hit.namespace,
         title: hit.title || null,
         content:
@@ -775,96 +793,179 @@ export default class MemoryTool extends Tool {
 
     const db = this.getDb()
     const now = Date.now()
+    const newItemId = randomUUID()
     const scope = this.normalizeScope(options.scope)
     const kind = this.normalizeKind(options.kind)
-    const sourceType = this.normalizeSourceType(options.sourceType)
+    const sourceType = scope === 'temporary' ? 'explicit_user' : this.normalizeSourceType(options.sourceType)
+    const sessionId = this.executionContext?.conversationSessionId
+    let sourceRef = options.sourceRef || (sessionId ? `session:${sessionId}` : null)
+    if (scope === 'temporary') {
+      const policy = resolveTemporaryMemoryPolicy(this.settings)
+      const evidence = options.evidence?.trim()
+      if (!sessionId || !evidence) {
+        return { success: false, error: 'Temporary memory requires an exact quote from the current owner message.' }
+      }
+      const log = JSON.parse(await fs.promises.readFile(
+        path.join(PROFILE_SESSIONS_PATH, sessionId, 'conversation_log.json'), 'utf8'
+      )) as Array<{ who: string, message: unknown, sentAt: number, messageId?: string }>
+      const owner = log.findLast((message) => message.who === 'owner')
+      if (typeof owner?.message !== 'string' || !owner.message.includes(evidence)) {
+        return { success: false, error: 'Evidence must occur verbatim in the latest owner message; assistant text and guesses are not evidence.' }
+      }
+      if (Buffer.byteLength(normalizedContent, 'utf8') > policy.tokenBudget / 2) {
+        return { success: false, error: 'Temporary memory must be a concise fact; shorten its content without losing qualifications.' }
+      }
+      sourceRef = `session:${sessionId}:message:${owner.messageId || owner.sentAt}`
+      options = {
+        ...options,
+        expiresAt: resolveTemporaryExpiration(now, options.expiresAt, policy),
+        isPinned: false,
+        metadata: { ...options.metadata, evidence }
+      }
+      if (getTemporaryContextSize([{
+        id: newItemId, content: normalizedContent, source: sourceRef, sourceType,
+        expiresAt: new Date(options.expiresAt as number).toISOString()
+      }]) > policy.tokenBudget) {
+        return { success: false, error: 'This fact and its source exceed the temporary context budget. Shorten the content while preserving its meaning.' }
+      }
+    }
     const dayKey = options.dayKey || toDayKey(now)
     const dedupeHash = createHash('sha256')
       .update(`${scope}|${kind}|${normalizedContent.toLowerCase()}`)
       .digest('hex')
 
-    const existing = db
-      .prepare(
-        `SELECT * FROM memory_items
+    const { itemId, createdAt, previous } = db.transaction(() => {
+      const previous = options.supersedesItemId
+        ? db.prepare('SELECT * FROM active_memory_items WHERE id = ?').get(options.supersedesItemId)
+        : undefined
+      if (options.supersedesItemId && (!previous || previous['scope'] !== scope)) {
+        throw new Error('The memory to correct must be active and in the same scope.')
+      }
+
+      // Retired content must release its dedupe key without reviving old evidence.
+      db.prepare(
+        `UPDATE memory_items SET is_deleted = 1, updated_at = ?
          WHERE scope = ? AND dedupe_hash = ? AND is_deleted = 0
-         LIMIT 1`
-      )
-      .get(scope, dedupeHash) as Record<string, unknown> | undefined
+           AND NOT EXISTS (
+           SELECT 1 FROM active_memory_items AS current_item
+           WHERE current_item.id = memory_items.id
+         )`
+      ).run(now, scope, dedupeHash)
 
-    const itemId = existing && typeof existing['id'] === 'string'
-      ? String(existing['id'])
-      : randomUUID()
+      const existing = db
+        .prepare(
+          `SELECT * FROM memory_items
+           WHERE scope = ? AND dedupe_hash = ? AND is_deleted = 0
+           LIMIT 1`
+        )
+        .get(scope, dedupeHash) as Record<string, unknown> | undefined
 
-    if (existing) {
-      db.prepare(
-        `UPDATE memory_items
-         SET title = ?,
-             content_md = ?,
-             content_text = ?,
-             source_type = ?,
-             source_ref = ?,
-             importance = ?,
-             confidence = ?,
-             day_key = ?,
-             updated_at = ?,
-             expires_at = ?,
-             is_pinned = ?,
-             metadata_json = ?
-         WHERE id = ?`
-      ).run(
-        options.title || null,
-        normalizedContent,
-        normalizedContent,
-        sourceType,
-        options.sourceRef || null,
-        this.normalizeScore(options.importance, 0.5),
-        this.normalizeScore(options.confidence, 0.7),
-        dayKey,
-        now,
-        typeof options.expiresAt === 'number' ? options.expiresAt : null,
-        options.isPinned ? 1 : 0,
-        JSON.stringify(options.metadata || {}),
-        itemId
-      )
-    } else {
-      db.prepare(
-        `INSERT INTO memory_items (
-          id, scope, kind, title, content_md, content_text,
-          source_type, source_ref, importance, confidence, day_key,
-          created_at, updated_at, expires_at, is_pinned,
-          supersedes_item_id, dedupe_hash, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        itemId,
+      const itemId = existing && typeof existing['id'] === 'string'
+        ? String(existing['id'])
+        : newItemId
+
+      if (scope === 'temporary' && existing?.['source_ref'] === sourceRef && !options.supersedesItemId) {
+        // Retrying the same evidence must not extend its lifetime.
+        return { itemId, createdAt: Number(existing['created_at']), previous }
+      }
+
+      if (
+        existing?.['source_type'] === 'explicit_user' &&
+        sourceType === 'inferred' &&
+        !options.supersedesItemId
+      ) {
+        return { itemId, createdAt: Number(existing['created_at']), previous }
+      }
+
+      if (existing) {
+        db.prepare(
+          `UPDATE memory_items
+           SET title = ?,
+               content_md = ?,
+               content_text = ?,
+               source_type = ?,
+               source_ref = ?,
+               importance = ?,
+               confidence = ?,
+               day_key = ?,
+               updated_at = ?,
+               expires_at = ?,
+               is_pinned = ?,
+               supersedes_item_id = COALESCE(?, supersedes_item_id),
+               metadata_json = ?
+           WHERE id = ?`
+        ).run(
+          options.title || null,
+          normalizedContent,
+          normalizedContent,
+          existing['source_type'] === 'explicit_user' && sourceType === 'inferred'
+            ? existing['source_type'] : sourceType,
+          existing['source_type'] === 'explicit_user' && sourceType === 'inferred'
+            ? existing['source_ref'] : sourceRef,
+          this.normalizeScore(options.importance, 0.5),
+          this.normalizeScore(options.confidence, 0.7),
+          dayKey,
+          now,
+          typeof options.expiresAt === 'number' ? options.expiresAt : null,
+          options.isPinned ? 1 : 0,
+          options.supersedesItemId !== itemId ? options.supersedesItemId || null : null,
+          JSON.stringify(options.metadata || {}),
+          itemId
+        )
+      } else {
+        db.prepare(
+          `INSERT INTO memory_items (
+            id, scope, kind, title, content_md, content_text,
+            source_type, source_ref, importance, confidence, day_key,
+            created_at, updated_at, expires_at, is_pinned,
+            supersedes_item_id, dedupe_hash, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          itemId,
+          scope,
+          kind,
+          options.title || null,
+          normalizedContent,
+          normalizedContent,
+          sourceType,
+          sourceRef,
+          this.normalizeScore(options.importance, 0.5),
+          this.normalizeScore(options.confidence, 0.7),
+          dayKey,
+          now,
+          now,
+          typeof options.expiresAt === 'number' ? options.expiresAt : null,
+          options.isPinned ? 1 : 0,
+          options.supersedesItemId || null,
+          dedupeHash,
+          JSON.stringify(options.metadata || {})
+        )
+      }
+
+      if (scope === 'persistent' && (kind === 'fact' || kind === 'preference')) {
+        const factRecord = this.buildStructuredFactRecord({
+          kind,
+          title: options.title || null,
+          content: normalizedContent,
+          metadata: options.metadata || {},
+          sourceItemId: itemId
+        })
+        this.upsertFact(factRecord)
+      }
+
+      return { itemId, createdAt: Number(existing?.['created_at'] ?? now), previous }
+    })()
+
+    if (previous && previous['id'] !== itemId) {
+      await this.writeMarkdownMirror({
+        id: String(previous['id']),
         scope,
-        kind,
-        options.title || null,
-        normalizedContent,
-        normalizedContent,
-        sourceType,
-        options.sourceRef || null,
-        this.normalizeScore(options.importance, 0.5),
-        this.normalizeScore(options.confidence, 0.7),
-        dayKey,
-        now,
-        now,
-        typeof options.expiresAt === 'number' ? options.expiresAt : null,
-        options.isPinned ? 1 : 0,
-        null,
-        dedupeHash,
-        JSON.stringify(options.metadata || {})
-      )
-    }
-
-    if (scope === 'persistent' && (kind === 'fact' || kind === 'preference')) {
-      const factRecord = this.buildStructuredFactRecord({
-        kind,
-        title: options.title || null,
-        content: normalizedContent,
-        metadata: options.metadata || {},
-        sourceItemId: itemId
+        kind: this.normalizeKind(previous['kind']),
+        title: previous['title'] ? String(previous['title']) : null,
+        content: String(previous['content_md']),
+        dayKey: String(previous['day_key'] || dayKey),
+        createdAt: Number(previous['created_at'])
       })
-      this.upsertFact(factRecord)
     }
 
     await this.writeMarkdownMirror({
@@ -874,13 +975,14 @@ export default class MemoryTool extends Tool {
       title: options.title || null,
       content: normalizedContent,
       dayKey,
-      createdAt: existing && typeof existing['created_at'] === 'number'
-        ? Number(existing['created_at'])
-        : now
+      createdAt
     })
 
-    await this.ensureCollections()
-    await this.updateIndex()
+    if (scope !== 'temporary') {
+      MemoryTool.lastIndexUpdateAt = 0
+      await this.ensureCollections()
+      await this.updateIndex()
+    }
 
     return {
       success: true,
@@ -890,12 +992,87 @@ export default class MemoryTool extends Tool {
         kind,
         title: options.title || null,
         content: normalizedContent,
-        createdAt: existing && typeof existing['created_at'] === 'number'
-          ? Number(existing['created_at'])
-          : now,
-        updatedAt: now
+        createdAt,
+        updatedAt: now,
+        supersedesItemId: options.supersedesItemId || null,
+        expiresAt: db.prepare('SELECT expires_at FROM memory_items WHERE id = ?').get(itemId)?.['expires_at'] ?? null
       }
     }
+  }
+
+  /**
+   * Retire a selected memory and its derived facts without erasing source transcripts.
+   */
+  public async forget(id: string): Promise<Record<string, unknown>> {
+    await this.ensureStorage()
+    const db = this.getDb()
+    const record = db.prepare('SELECT * FROM memory_items WHERE id = ?').get(id)
+    if (!record) {
+      return { success: false, error: 'Memory ID was not found.' }
+    }
+
+    db.prepare('UPDATE memory_items SET is_deleted = 1, updated_at = ? WHERE id = ?')
+      .run(Date.now(), id)
+    await this.writeMarkdownMirror({
+      id,
+      scope: this.normalizeScope(record['scope']),
+      kind: this.normalizeKind(record['kind']),
+      title: record['title'] ? String(record['title']) : null,
+      content: String(record['content_md']),
+      dayKey: String(record['day_key'] || ''),
+      createdAt: Number(record['created_at'])
+    })
+    if (record['scope'] !== 'temporary') {
+      MemoryTool.lastIndexUpdateAt = 0
+      await this.ensureCollections()
+      await this.updateIndex()
+    }
+
+    return {
+      success: true,
+      data: { id, forgotten: true, sourceTranscriptsRetained: true }
+    }
+  }
+
+  /**
+   * Resolve indexed file candidates to current records before ranking or excerpting.
+   */
+  private resolveMemoryHit(hit: QMDHit): QMDHit[] {
+    if (hit.namespace === 'context') {
+      return [hit]
+    }
+
+    const scope = hit.namespace === 'memory_persistent'
+      ? 'persistent'
+      : hit.namespace === 'memory_discussion' ? 'discussion' : 'daily'
+    const rows = hit.authoritative
+      ? this.getDb().prepare('SELECT * FROM active_memory_items WHERE id = ?').all(hit.id)
+      : this.readMirrorRecords(scope, path.basename(hit.path, '.md'))
+
+    return rows.map((row) => ({
+      ...hit,
+      id: String(row['id']),
+      title: String(row['title'] || row['kind']),
+      content: String(row['content_md']),
+      sourceType: String(row['source_type']),
+      sourceRef: row['source_ref'] ? String(row['source_ref']) : null,
+      scope: this.normalizeScope(row['scope']),
+      kind: this.normalizeKind(row['kind']),
+      authoritative: true
+    }))
+  }
+
+  /**
+   * Read the current contents of one persistent or aggregate day projection.
+   */
+  private readMirrorRecords(scope: MemoryScope, key: string): Record<string, unknown>[] {
+    return scope === 'persistent'
+      ? this.getDb().prepare('SELECT * FROM active_memory_items WHERE scope = ? AND id = ?').all(scope, key)
+      : this.getDb().prepare(
+          `SELECT * FROM active_memory_items
+           WHERE scope = ? AND day_key = ? ${scope === 'daily' ? 'AND kind = \'summary\'' : ''}
+           ORDER BY updated_at DESC ${scope === 'daily' ? 'LIMIT 1' : ''}`
+        ).all(scope, key)
   }
 
   private normalizePositiveInt(value: unknown, fallback: number): number {
@@ -907,7 +1084,7 @@ export default class MemoryTool extends Tool {
   }
 
   private normalizeScope(value: unknown): MemoryScope {
-    if (value === 'daily' || value === 'discussion' || value === 'persistent') {
+    if (value === 'daily' || value === 'discussion' || value === 'persistent' || value === 'temporary') {
       return value
     }
     return 'persistent'
@@ -936,7 +1113,7 @@ export default class MemoryTool extends Tool {
     ])
     return allowed.has(value as MemorySourceType)
       ? (value as MemorySourceType)
-      : 'explicit_user'
+      : 'inferred'
   }
 
   private buildStructuredFactRecord(input: {
@@ -1037,9 +1214,18 @@ export default class MemoryTool extends Tool {
     ])
 
     if (!MemoryTool.db) {
-      MemoryTool.db = new SQLite(PROFILE_MEMORY_DB_PATH)
       const schemaSQL = await fs.promises.readFile(MEMORY_SCHEMA_PATH, 'utf8')
-      MemoryTool.db.exec(schemaSQL)
+      if (!MemoryTool.db) {
+        const db = new SQLite(PROFILE_MEMORY_DB_PATH)
+        try {
+          upgradeMemoryScope(db, schemaSQL)
+          db.exec(schemaSQL)
+          MemoryTool.db = db
+        } catch (error) {
+          db.close()
+          throw error
+        }
+      }
     }
 
     MemoryTool.storageReady = true
@@ -1116,12 +1302,18 @@ export default class MemoryTool extends Tool {
     }
   }
 
-  private readFacts(limit: number): Array<{ key: string, text: string }> {
+  private readFacts(limit: number): Array<{
+    key: string
+    text: string
+    id: string
+    sourceType: string
+    sourceRef: string | null
+  }> {
     const db = this.getDb()
     const rows = db
       .prepare(
-        `SELECT fact_key, canonical_text
-         FROM memory_facts
+        `SELECT fact_key, canonical_text, source_item_id, source_type, source_ref
+         FROM active_memory_facts
          WHERE is_deleted = 0
          ORDER BY priority DESC, updated_at DESC
          LIMIT ?`
@@ -1130,6 +1322,9 @@ export default class MemoryTool extends Tool {
 
     return rows.map((row) => ({
       key: String(row['fact_key'] || ''),
+      id: String(row['source_item_id']),
+      sourceType: String(row['source_type']),
+      sourceRef: row['source_ref'] ? String(row['source_ref']) : null,
       text: String(row['canonical_text'] || '')
     }))
   }
@@ -1201,44 +1396,39 @@ export default class MemoryTool extends Tool {
     dayKey: string
     createdAt: number
   }): Promise<void> {
-    if (input.scope === 'persistent') {
-      const date = new Date(input.createdAt)
-      const year = String(date.getUTCFullYear())
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-      const day = String(date.getUTCDate()).padStart(2, '0')
-      const filePath = path.join(
-        MEMORY_PERSISTENT_PATH,
-        year,
-        month,
-        day,
-        `${input.id}.md`
-      )
-      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-      const markdown = `> Persistent memory entry (${input.kind})\n\n# ${
-        input.title || input.kind
-      }\n\nID: ${input.id}\nCreated At: ${new Date(
-        input.createdAt
-      ).toISOString()}\n\n${input.content}\n`
-      await fs.promises.writeFile(filePath, markdown, 'utf8')
+    if (input.scope === 'temporary' || (input.scope === 'daily' && input.kind !== 'summary')) {
       return
     }
 
-    if (input.scope === 'daily' && input.kind === 'summary') {
-      const filePath = path.join(MEMORY_DAILY_PATH, `${input.dayKey}.md`)
-      await fs.promises.writeFile(filePath, input.content, 'utf8')
+    const key = input.scope === 'persistent' ? input.id : input.dayKey
+    const rows = this.readMirrorRecords(input.scope, key)
+    const current = rows[0]
+    const date = new Date(input.createdAt)
+    const filePath = input.scope === 'persistent'
+      ? path.join(
+          MEMORY_PERSISTENT_PATH,
+          String(date.getUTCFullYear()),
+          String(date.getUTCMonth() + 1).padStart(2, '0'),
+          String(date.getUTCDate()).padStart(2, '0'),
+          `${input.id}.md`
+        )
+      : path.join(input.scope === 'daily' ? MEMORY_DAILY_PATH : MEMORY_DISCUSSION_PATH, `${input.dayKey}.md`)
+
+    if (!current) {
+      await fs.promises.rm(filePath, { force: true })
       return
     }
 
-    if (input.scope === 'discussion') {
-      const filePath = path.join(MEMORY_DISCUSSION_PATH, `${input.dayKey}.md`)
-      const line = `- ${new Date(input.createdAt).toISOString()} | ${input.content.replace(/\n/g, ' | ')}\n`
-      if (!fs.existsSync(filePath)) {
-        const header = `> Discussion memory for ${input.dayKey}. Short-term rolling conversation context.\n# ${input.dayKey}\n\n`
-        await fs.promises.writeFile(filePath, `${header}${line}`, 'utf8')
-      } else {
-        await fs.promises.appendFile(filePath, line, 'utf8')
-      }
-    }
+    const markdown = input.scope === 'persistent'
+      ? `> Persistent memory entry (${current['kind']})\n\n# ${current['title'] || current['kind']}\n\nID: ${current['id']}\nCreated At: ${date.toISOString()}\n\n${current['content_md']}\n`
+      : input.scope === 'daily'
+        ? String(current['content_md'])
+        : `> Discussion memory for ${input.dayKey}. Short-term rolling conversation context.\n# ${input.dayKey}\n\n` + rows
+            .sort((a, b) => Number(a['created_at']) - Number(b['created_at']))
+            .map((row) => `- ${new Date(Number(row['created_at'])).toISOString()} | ${String(row['content_md']).replace(/\n/g, ' | ')}\n`)
+            .join('')
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.promises.writeFile(filePath, markdown, 'utf8')
   }
 
   public static dispose(): void {

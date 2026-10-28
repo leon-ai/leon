@@ -51,6 +51,7 @@ export interface QMDRecallHit {
   content: string
   score: number
   namespace: KnowledgeNamespace
+  authoritative?: boolean
 }
 
 interface QMDQueryInput {
@@ -59,6 +60,7 @@ interface QMDQueryInput {
   topK: number
   contextFilenames?: string[]
   retrievalMode?: RecallRetrievalMode
+  resolveHit?: (hit: QMDRecallHit) => QMDRecallHit[]
 }
 
 type QMDSearchMode = 'query' | 'search'
@@ -380,7 +382,7 @@ export default class QMDBackend {
       hitsInput: QMDRecallHit[]
     ): Array<{ hit: QMDRecallHit, rankingScore: number, overlapCount: number }> => {
       return rankRetrievedHits(
-        hitsInput,
+        input.resolveHit ? hitsInput.flatMap(input.resolveHit) : hitsInput,
         queryTokens,
         this.collections,
         namespaceWeights,

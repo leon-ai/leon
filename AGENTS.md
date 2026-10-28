@@ -13,6 +13,8 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Do not create test files or add test cases for SDKs, tools or skills unless the owner explicitly requests them, regardless of where the tests would live. Run existing affected tests and adjust them for compatibility when necessary.
 - Review only affected tests. Retain unique runtime contracts regardless of bug-fix origin; remove obsolete or duplicate reproductions.
 - Use `pnpm test:unit` for fast feedback and `pnpm test:integration` for real worker, download, capture, and rendering changes; `pnpm test` includes both.
+- When introducing a new Core concept or mechanism, add a real scenario test in `test/agent/scenarios/<concept>.scenario.ts`, named for the mechanism and asserting its observable behavior with isolated fixtures. Keep these separate from the provider matrix. For SDKs, tools and skills, obtain the explicit test authorization required above.
+- Run all real scenarios with `pnpm test:agent:scenario`, one with `pnpm test:agent:scenario -- <concept>`, or list them with `--list`. They use the latest-used profile’s active model; `LEON_PROFILE` selects a specific profile.
 - Agent e2e tests must use `pnpm test:agent:e2e -- -t openai` unless the owner explicitly requests other providers.
 - Suggest a commit message matching `scripts/commit-msg.js`; do not commit unless asked.
 

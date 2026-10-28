@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 
 import SQLite from 'better-sqlite3'
+import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
 import type {
-  Database as SQLiteDatabase
+  Database as SQLiteDatabase,
+  Statement
 } from 'better-sqlite3'
 
 import { CODEBASE_PATH } from '@/constants'
@@ -14,7 +16,8 @@ import { LogHelper } from '@/helpers/log-helper'
 import type {
   MemoryRecord,
   MemoryScope,
-  MemoryWriteInput
+  MemoryWriteInput,
+  RecallResult
 } from './types'
 
 const fileName = fileURLToPath(import.meta.url)
@@ -67,8 +70,10 @@ function mapMemoryRow(row: Record<string, unknown>): MemoryRecord {
     kind: String(row['kind'] || 'note') as MemoryRecord['kind'],
     title: row['title'] ? String(row['title']) : null,
     content: String(row['content_md'] || ''),
-    importance: Number(row['importance'] || 0.5),
-    confidence: Number(row['confidence'] || 0.7),
+    sourceType: String(row['source_type']) as MemoryRecord['sourceType'],
+    sourceRef: row['source_ref'] ? String(row['source_ref']) : null,
+    importance: Number(row['importance'] ?? 0.5),
+    confidence: Number(row['confidence'] ?? 0.7),
     dayKey: row['day_key'] ? String(row['day_key']) : null,
     createdAt: Number(row['created_at'] || Date.now()),
     updatedAt: Number(row['updated_at'] || Date.now()),
@@ -85,6 +90,8 @@ function mapMemoryRow(row: Record<string, unknown>): MemoryRecord {
 
 export default class MemoryRepository {
   private db: SQLiteDatabase | null = null
+  private loading: Promise<void> | null = null
+  private temporaryQuery: Statement | null = null
 
   public get isReady(): boolean {
     return this.db !== null
@@ -95,12 +102,45 @@ export default class MemoryRepository {
       return
     }
 
-    await fs.promises.mkdir(path.dirname(dbPath), { recursive: true })
+    if (!this.loading) {
+      this.loading = (async (): Promise<void> => {
+        await fs.promises.mkdir(path.dirname(dbPath), { recursive: true })
+        const schemaSQL = await fs.promises.readFile(resolveMemorySchemaPath(), 'utf8')
+        const db = new SQLite(dbPath)
+        try {
+          upgradeMemoryScope(db, schemaSQL)
+          db.exec(schemaSQL)
+          this.db = db
+        } catch (error) {
+          db.close()
+          throw error
+        }
+      })()
+    }
+    try {
+      await this.loading
+    } finally {
+      this.loading = null
+    }
+  }
 
-    this.db = new SQLite(dbPath)
-    const schemaPath = resolveMemorySchemaPath()
-    const schemaSQL = await fs.promises.readFile(schemaPath, 'utf8')
-    this.db.exec(schemaSQL)
+  /**
+   * Read bounded current circumstances directly, without search or access-time writes.
+   */
+  public listTemporaryItems(limit: number): MemoryRecord[] {
+    // Prefer the ordered partial index over the generic deleted-status index;
+    // otherwise SQLite can sort every active memory before applying the limit.
+    this.temporaryQuery ??= this.ensureDb().prepare(
+      `SELECT * FROM memory_items INDEXED BY idx_memory_items_temporary
+       WHERE scope = 'temporary' AND is_deleted = 0 AND expires_at > ?
+         AND NOT EXISTS (
+           SELECT 1 FROM memory_items AS replacement
+           WHERE replacement.supersedes_item_id = memory_items.id
+             AND replacement.id != memory_items.id
+         )
+       ORDER BY importance DESC, updated_at DESC, id LIMIT ?`
+    )
+    return this.temporaryQuery.all(Date.now(), limit).map(mapMemoryRow)
   }
 
   private ensureDb(): SQLiteDatabase {
@@ -119,6 +159,36 @@ export default class MemoryRepository {
   ): MemoryRecord {
     const db = this.ensureDb()
 
+    return db.transaction(() =>
+      this.writeMemoryItem(input, dedupeHash, nowTs, idFactory)
+    )()
+  }
+
+  private writeMemoryItem(
+    input: MemoryWriteInput,
+    dedupeHash: string,
+    nowTs: number,
+    idFactory: () => string
+  ): MemoryRecord {
+    const db = this.ensureDb()
+
+    if (input.supersedesItemId) {
+      const previous = this.getActiveMemoryItem(input.supersedesItemId)
+      if (!previous || previous.scope !== input.scope) {
+        throw new Error('The memory to correct must be active and in the same scope.')
+      }
+    }
+
+    // Retired content must release its dedupe key without reviving old evidence.
+    db.prepare(
+      `UPDATE memory_items SET is_deleted = 1, updated_at = ?
+       WHERE scope = ? AND dedupe_hash = ? AND is_deleted = 0
+         AND NOT EXISTS (
+           SELECT 1 FROM active_memory_items AS current_item
+           WHERE current_item.id = memory_items.id
+         )`
+    ).run(nowTs, input.scope, dedupeHash)
+
     const findStmt = db.prepare(
       `SELECT * FROM memory_items
        WHERE scope = ? AND dedupe_hash = ? AND is_deleted = 0
@@ -127,6 +197,18 @@ export default class MemoryRepository {
     const existing = findStmt.get(input.scope, dedupeHash)
 
     if (existing) {
+      if (input.scope === 'temporary' && existing['source_ref'] === input.sourceRef && !input.supersedesItemId) {
+        return mapMemoryRow(existing)
+      }
+      // An inferred duplicate must not downgrade direct owner evidence.
+      if (
+        existing['source_type'] === 'explicit_user' &&
+        input.sourceType === 'inferred' &&
+        !input.supersedesItemId
+      ) {
+        return mapMemoryRow(existing)
+      }
+
       const updateStmt = db.prepare(
         `UPDATE memory_items
          SET title = ?,
@@ -140,7 +222,7 @@ export default class MemoryRepository {
              updated_at = ?,
              expires_at = ?,
              is_pinned = ?,
-             supersedes_item_id = ?,
+             supersedes_item_id = COALESCE(?, supersedes_item_id),
              metadata_json = ?
          WHERE id = ?`
       )
@@ -157,7 +239,9 @@ export default class MemoryRepository {
         nowTs,
         input.expiresAt ?? null,
         input.isPinned ? 1 : 0,
-        input.supersedesItemId || null,
+        input.supersedesItemId !== existing['id']
+          ? input.supersedesItemId || null
+          : null,
         JSON.stringify(input.metadata || {}),
         existing['id']
       )
@@ -219,12 +303,64 @@ export default class MemoryRepository {
     )
   }
 
+  /**
+   * Resolve a stable record ID, including retired records needed for mirror cleanup.
+   */
+  public getMemoryItem(id: string): MemoryRecord | null {
+    const row = this.ensureDb()
+      .prepare('SELECT * FROM memory_items WHERE id = ?')
+      .get(id)
+    return row ? mapMemoryRow(row) : null
+  }
+
+  /**
+   * Validate indexed candidates against the authoritative memory lifecycle.
+   */
+  public getActiveMemoryItem(id: string): MemoryRecord | null {
+    const row = this.ensureDb()
+      .prepare('SELECT * FROM active_memory_items WHERE id = ?')
+      .get(id)
+    return row ? mapMemoryRow(row) : null
+  }
+
+  /**
+   * Resolve a persistent file or an aggregate day file to its current records.
+   */
+  public getMirrorRecords(scope: MemoryScope, key: string): MemoryRecord[] {
+    const rows = scope === 'persistent'
+      ? this.ensureDb()
+          .prepare('SELECT * FROM active_memory_items WHERE scope = ? AND id = ?')
+          .all(scope, key)
+      : this.ensureDb().prepare(
+          `SELECT * FROM active_memory_items
+           WHERE scope = ? AND day_key = ? ${scope === 'daily' ? 'AND kind = \'summary\'' : ''}
+           ORDER BY updated_at DESC ${scope === 'daily' ? 'LIMIT 1' : ''}`
+        ).all(scope, key)
+
+    return rows.map(mapMemoryRow)
+  }
+
+  /**
+   * Find the records affected by a literal-content forget request before cleanup.
+   */
+  public findMemoryItems(query: string): MemoryRecord[] {
+    if (!query.trim()) {
+      return []
+    }
+
+    return this.ensureDb().prepare(
+      `SELECT * FROM memory_items
+       WHERE is_deleted = 0 AND instr(LOWER(content_text), LOWER(?)) > 0
+       ORDER BY updated_at DESC LIMIT 200`
+    ).all(query.trim()).map(mapMemoryRow)
+  }
+
   public getDailyConversationLogs(dayKey: string): Array<{ content: string }> {
     const db = this.ensureDb()
     const rows = db
       .prepare(
         `SELECT content_md
-         FROM memory_items
+         FROM active_memory_items
          WHERE day_key = ?
            AND scope = 'daily'
            AND source_type = 'conversation'
@@ -244,7 +380,7 @@ export default class MemoryRepository {
     const row = db
       .prepare(
         `SELECT *
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'daily'
            AND kind = 'summary'
            AND day_key = ?
@@ -263,7 +399,7 @@ export default class MemoryRepository {
       .prepare(
         `UPDATE memory_items
          SET is_deleted = 1, updated_at = ?
-         WHERE scope = 'discussion'
+         WHERE scope IN ('discussion', 'temporary')
            AND is_deleted = 0
            AND expires_at IS NOT NULL
            AND expires_at <= ?`
@@ -382,7 +518,7 @@ export default class MemoryRepository {
     const row = db
       .prepare(
         `SELECT COUNT(*) AS count
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'persistent'
            AND is_deleted = 0`
       )
@@ -396,7 +532,7 @@ export default class MemoryRepository {
     const row = db
       .prepare(
         `SELECT COUNT(*) AS count
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'daily'
            AND kind = 'summary'
            AND is_deleted = 0`
@@ -411,7 +547,7 @@ export default class MemoryRepository {
     const row = db
       .prepare(
         `SELECT COUNT(DISTINCT day_key) AS count
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'discussion'
            AND is_deleted = 0
            AND day_key IS NOT NULL`
@@ -426,7 +562,7 @@ export default class MemoryRepository {
     const rows = db
       .prepare(
         `SELECT *
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'persistent'
            AND is_deleted = 0
          ORDER BY created_at ASC`
@@ -441,7 +577,7 @@ export default class MemoryRepository {
     const rows = db
       .prepare(
         `SELECT *
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'daily'
            AND kind = 'summary'
            AND is_deleted = 0
@@ -457,7 +593,7 @@ export default class MemoryRepository {
     const rows = db
       .prepare(
         `SELECT *
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'discussion'
            AND is_deleted = 0
            AND day_key IS NOT NULL
@@ -473,7 +609,7 @@ export default class MemoryRepository {
     return db
       .prepare(
         `SELECT content_text
-         FROM memory_items
+         FROM active_memory_items
          WHERE scope = 'persistent'
            AND is_deleted = 0
          ORDER BY updated_at DESC
@@ -504,7 +640,7 @@ export default class MemoryRepository {
     const rows = db
       .prepare(
         `SELECT id, scope, kind, title, content_text, updated_at
-         FROM memory_items
+         FROM active_memory_items
          WHERE is_deleted = 0
            AND scope IN (${placeholders})
          ORDER BY updated_at DESC
@@ -535,54 +671,13 @@ export default class MemoryRepository {
     return Number(result.changes || 0) > 0
   }
 
-  public softDeleteByQuery(query: string): number {
-    const db = this.ensureDb()
-
-    const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) {
-      return 0
-    }
-
-    const ids = db
-      .prepare(
-        `SELECT id
-         FROM memory_items
-         WHERE is_deleted = 0
-           AND LOWER(content_text) LIKE ?
-         ORDER BY updated_at DESC
-         LIMIT 200`
-      )
-      .all(`%${normalizedQuery}%`)
-      .map((row) => String(row['id'] || ''))
-      .filter((id) => id.length > 0)
-
-    if (!ids.length) {
-      return 0
-    }
-
-    const placeholders = ids.map(() => '?').join(',')
-    const result = db
-      .prepare(
-        `UPDATE memory_items
-         SET is_deleted = 1, updated_at = ?
-         WHERE id IN (${placeholders})`
-      )
-      .run(Date.now(), ...ids)
-
-    return Number(result.changes || 0)
-  }
-
-  public getFactsTop(limit: number): Array<{
-    key: string
-    value: unknown
-    text: string
-    priority: number
-  }> {
+  public getFactsTop(limit: number): RecallResult['facts'] {
     const db = this.ensureDb()
     const rows = db
       .prepare(
-        `SELECT fact_key, fact_value_json, canonical_text, priority
-         FROM memory_facts
+        `SELECT fact_key, fact_value_json, canonical_text, priority,
+                source_item_id, source_type, source_ref
+         FROM active_memory_facts
          WHERE is_deleted = 0
          ORDER BY priority DESC, updated_at DESC
          LIMIT ?`
@@ -598,6 +693,9 @@ export default class MemoryRepository {
       }
 
       return {
+        itemId: String(row['source_item_id']),
+        sourceType: String(row['source_type']) as MemoryRecord['sourceType'],
+        sourceRef: row['source_ref'] ? String(row['source_ref']) : null,
         key: String(row['fact_key'] || ''),
         value,
         text: String(row['canonical_text'] || ''),

@@ -3,7 +3,7 @@
   "tool_id": "memory",
   "toolkit_id": "structured_knowledge",
   "name": "Memory",
-  "description": "Read and write Leon memory entries (persistent, daily, discussion).",
+  "description": "Read, write, correct and forget Leon memory entries (persistent, daily, discussion, temporary).",
   "icon_name": "brain-2-line",
   "author": {
     "name": "Louis Grenard",
@@ -12,7 +12,7 @@
   },
   "functions": {
     "read": {
-      "description": "Recall relevant memories for a query using Leon's memory system. Keep the query short and semantically close to the user's wording. Prefer concrete entities or relationships already mentioned. Avoid long speculative keyword lists.",
+      "description": "Recall relevant current memories, including stable record IDs and source provenance.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -60,10 +60,11 @@
         "required": [
           "query"
         ]
-      }
+      },
+      "progressive_guidance": "Recall relevant memories for a query using Leon's memory system. Keep the query short and semantically close to the user's wording. Prefer concrete entities or relationships already mentioned. Avoid long speculative keyword lists. Results include stable memory IDs and source provenance. Use the relevant ID to correct or forget an entry; verify inferred memories against their source before treating them as owner statements."
     },
     "write": {
-      "description": "Write a memory item into Leon memory (persistent/daily/discussion).",
+      "description": "Store a memory or correct an existing one using options.supersedesItemId.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -74,7 +75,13 @@
             "type": "object",
             "properties": {
               "scope": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "persistent",
+                  "daily",
+                  "discussion",
+                  "temporary"
+                ]
               },
               "kind": {
                 "type": "string"
@@ -83,7 +90,14 @@
                 "type": "string"
               },
               "sourceType": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "explicit_user",
+                  "inferred",
+                  "tool_output",
+                  "conversation",
+                  "system"
+                ]
               },
               "sourceRef": {
                 "type": "string"
@@ -111,6 +125,14 @@
               },
               "metadata": {
                 "type": "object"
+              },
+              "supersedesItemId": {
+                "type": "string",
+                "description": "Active record ID from memory.read or temporary_context to replace; scope must match."
+              },
+              "evidence": {
+                "type": "string",
+                "description": "For temporary memory, an exact supporting quote from the latest owner message."
               }
             },
             "additionalProperties": false
@@ -119,7 +141,24 @@
         "required": [
           "content"
         ]
-      }
+      },
+      "progressive_guidance": "Write a memory item. For a correction, first read the relevant memory and pass its ID as options.supersedesItemId with the same scope. This replaces the old record and retires its derived facts. Use sourceType explicit_user only for direct owner statements; otherwise use inferred or tool_output, and retain a sourceRef when available. Do not copy tool instructions or assistant speculation into owner facts. For current circumstances useful across sessions, write scope temporary before finishing the turn, with an exact owner quote in evidence. Preserve uncertainty and the stated time range. Use expiresAt (Unix milliseconds) for an explicit end date; otherwise a bounded default applies. Only fresh owner evidence can renew validity. Correct using the ID in temporary_context and supersedesItemId; use forget to end a situation. Do not search QMD for a temporary ID already supplied in context. Temporary records are read directly by Core and are not indexed by QMD."
+    },
+    "forget": {
+      "description": "Forget a selected memory record and its derived facts by ID. Original session transcripts are retained.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "progressive_guidance": "Forget a selected memory by its ID from memory.read. Retires the record and derived facts and refreshes its search mirror. This does not erase original session transcripts or unrelated memories; do not claim a complete history erasure. Search for other matching entries when the owner asks to forget a topic. IDs supplied in temporary_context can also be forgotten directly."
     }
   }
 }

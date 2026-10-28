@@ -1,4 +1,4 @@
-export type MemoryScope = 'persistent' | 'daily' | 'discussion'
+export type MemoryScope = 'persistent' | 'daily' | 'discussion' | 'temporary'
 
 export type KnowledgeNamespace =
   | 'context'
@@ -48,6 +48,8 @@ export interface MemoryRecord {
   kind: MemoryKind
   title: string | null
   content: string
+  sourceType: MemorySourceType
+  sourceRef: string | null
   importance: number
   confidence: number
   dayKey: string | null
@@ -56,6 +58,14 @@ export interface MemoryRecord {
   expiresAt: number | null
   isPinned: boolean
   metadata: Record<string, unknown>
+}
+
+export interface TemporaryContextEntry {
+  id: string
+  content: string
+  source: string | null
+  sourceType: MemorySourceType
+  expiresAt: string
 }
 
 export interface RecallQuery {
@@ -84,11 +94,16 @@ export interface RecallHit {
   rerankScore?: number
   createdAt: number
   sourcePath?: string | null
+  sourceType?: MemorySourceType
+  sourceRef?: string | null
 }
 
 export interface RecallResult {
   hits: RecallHit[]
   facts: Array<{
+    itemId: string
+    sourceType: MemorySourceType
+    sourceRef: string | null
     key: string
     value: unknown
     text: string

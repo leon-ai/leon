@@ -4267,6 +4267,49 @@ describe('agent automatic compaction', () => {
     expect(compacted.at(-1)).toMatchObject({ runtimeContext: state })
   })
 
+  it('deduplicates turn grounding and revokes temporary state without rewriting the cached prefix', async () => {
+    const duty = Object.create(ReActLLMDuty.prototype) as {
+      buildAgentGrounding(caller: Record<string, unknown>): Promise<Record<string, unknown>>
+    }
+    const caller = {
+      getContextManifest: (): string => 'OWNER.md: Owner facts.',
+      getSelfModelSnapshot: (): string => 'Preserve verified outcomes.',
+      agentSkillCatalog: 'coding: Investigate and verify repository changes.',
+      getPreviousToolArtifacts: async (): Promise<string> => 'Prior evidence.json'
+    }
+    const persona = Object.create(Persona.prototype) as Persona
+    Object.assign(persona, {
+      whoYouAre: 'Leon identity', whatYouDo: 'Help the owner', contextInfo: 'Clock one',
+      _mood: { description: 'Curious' }
+    })
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Bonjour.' }]
+    const initial = {
+      ...await duty.buildAgentGrounding(caller),
+      persona: persona.getDutyRuntimeContextFields({ includeMood: true }),
+      temporary_context: [{ id: 'current', content: 'Je séjourne à Lyon.' }]
+    }
+    appendAgentRuntimeContext(transcript, initial)
+    const prefix = structuredClone(transcript)
+    transcript.push({ role: 'user', content: '天气怎么样？' })
+    Object.assign(persona, { contextInfo: 'Clock two' })
+    appendAgentRuntimeContext(transcript, {
+      ...await duty.buildAgentGrounding(caller),
+      persona: persona.getDutyRuntimeContextFields({ includeMood: true }),
+      temporary_context: []
+    })
+    expect(transcript.slice(0, prefix.length)).toEqual(prefix)
+    expect(transcript.at(-1)?.runtimeContext).toEqual({
+      persona: { clock: 'Clock two' }, temporary_context: []
+    })
+    expect(transcript.at(-1)?.content).not.toContain('Owner facts')
+    const compacted: AgentToolTranscriptMessage[] = []
+    appendAgentRuntimeContext(compacted, {
+      ...await duty.buildAgentGrounding(caller), temporary_context: []
+    })
+    expect(compacted.at(-1)?.content).toContain('Owner facts')
+    expect(compacted.at(-1)?.runtimeContext?.['temporary_context']).toEqual([])
+  })
+
   it.each([false, true])('preserves completed writes through provider overload (recovers=%s)', async (recovers) => {
     vi.useFakeTimers()
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'leon-recovery-'))

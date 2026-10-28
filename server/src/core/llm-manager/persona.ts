@@ -427,6 +427,18 @@ ${dutySystemPrompt}`
   }
 
   /**
+   * Separate clock changes from identity and mood to avoid resending unchanged facts.
+   */
+  public getDutyRuntimeContextFields(options: Pick<CompactPromptOptions, 'includeMood'> = {}): Record<string, string | null> {
+    return {
+      identity: this.whoYouAre,
+      clock: this.contextInfo,
+      purpose: this.whatYouDo,
+      mood: options.includeMood ? `${YOUR_CURRENT_MOOD}\n${this._mood.description}` : null
+    }
+  }
+
+  /**
    * Builds duty rules, optionally leaving current facts for later messages.
    */
   public getCompactDutySystemPrompt(
