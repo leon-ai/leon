@@ -1975,7 +1975,7 @@ function buildResumableAgentAnswer(
   answerDrafted = false
 ): string {
   const explanations: Record<typeof failureKind, string> = {
-    [CompletionFailureKind.Connection]: 'I couldn\'t reconnect to my model provider, so I couldn\'t resume.',
+    [CompletionFailureKind.Connection]: 'The connection to my model provider was interrupted before I could finish.',
     deadline: 'The task reached its run deadline.',
     review: 'The completion check failed.',
     [CompletionFailureKind.Timeout]: 'The model response exceeded its time limit.',
@@ -1994,7 +1994,9 @@ function buildResumableAgentAnswer(
   const nextAction = nextStep?.label ||
     (answerDrafted
       ? 'Verify the drafted final answer'
-      : 'Produce the final answer from the verified findings')
+      : trackedSteps.length > 0 && isAgentPlanComplete(trackedSteps)
+        ? 'Produce the final answer from the verified findings'
+        : 'Check the saved progress and continue the unfinished task')
   const taskState = answerDrafted
     ? 'The final answer was drafted, but completion could not be verified; progress is saved in this session.'
     : trackedSteps.length > 0 && isAgentPlanComplete(trackedSteps)

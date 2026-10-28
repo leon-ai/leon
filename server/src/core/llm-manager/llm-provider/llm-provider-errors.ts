@@ -517,14 +517,17 @@ export function prepareCompletionRetry(
   if (details['providerCompleted'] === true) {
     return stop(ProviderRetryReason.Completed)
   }
-  if (typeof details['firstOutputMs'] === 'number') {
+  const connectionCode = getConnectionErrorCode(error)
+  const canRetryInterruptedResponse = Boolean(
+    connectionCode && completionParams.retryInterruptedResponse
+  )
+  if (typeof details['firstOutputMs'] === 'number' && !canRetryInterruptedResponse) {
     return stop(ProviderRetryReason.Output)
   }
-  const connectionCode = getConnectionErrorCode(error)
   if (connectionCode) {
-    // An accepted request may already have performed provider-owned work.
-    // Recovery reconnects only when no acceptance or output was confirmed.
-    if (details['requestAcceptedMs'] !== undefined) {
+    // Acceptance alone does not execute Leon's local tools. Callers that retain
+    // provisional output or permit provider-owned work must still stop here.
+    if (details['requestAcceptedMs'] !== undefined && !canRetryInterruptedResponse) {
       return stop(ProviderRetryReason.Accepted)
     }
     const remaining = completionParams.connectionErrorRetries ??

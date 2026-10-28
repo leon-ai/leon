@@ -40,6 +40,7 @@ import {
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
   COMPUTER_USE_WINDOW_MAX_DEPTH,
   CUA_FOREGROUND_DELIVERY_MODE,
+  CUA_SCREENSHOT_CONTEXT_MISSING_ERROR_CODE,
   CUA_SESSION_ENDED_ERROR_CODE,
   CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE
 } from './constants'
@@ -449,6 +450,11 @@ export class CuaRuntime {
         launchResolution?.ready !== false
       const failureCode = structuredFailure?.code ||
         launchResolution?.errorCode || result.errorCode
+      if (failureCode === CUA_SCREENSHOT_CONTEXT_MISSING_ERROR_CODE) {
+        // An observation-only image may not establish the driver's input frame.
+        // Discard our matching transform rather than repeatedly submitting it.
+        this.forgetVisualState(input, actionParameters)
+      }
       if (succeeded && action === 'start_recording') {
         runtime.recordingSessionId = input.conversationSessionId
       } else if (succeeded && action === 'stop_recording') {
@@ -523,6 +529,11 @@ export class CuaRuntime {
   ): string | null {
     if (failureCode === CUA_SESSION_ENDED_ERROR_CODE) {
       return 'Automatic session recovery failed. Report this technical blocker and preserve completed work; do not ask the owner to restart an unspecified computer-use session.'
+    }
+    const exactWindow = asRecord(asRecord(result['background_input'])?.['exact_window'])
+    if (failureCode === CUA_SCREENSHOT_CONTEXT_MISSING_ERROR_CODE ||
+      exactWindow?.['status'] === 'ax_unresolved') {
+      return 'The window image is observation-only; the driver has no reliable window input frame. Do not repeat a pixel action against this window image. If foreground interaction is permitted, bring the intended window forward, inspect a fresh get_desktop_state screenshot, and use its desktop target and pixels with delivery_mode:"foreground". If activation fails, inspect the current desktop and target the visible task dialog before continuing. Never convert the window image coordinates to desktop coordinates.'
     }
     if (failureCode === 'delivery_failed') {
       return 'Input delivery failed or was partial. Inspect the resulting field before retrying. Target the actual dialog if one is open. For unreliable character entry, use type_text with method=paste and mode=replace on the verified field; do not append another copy or start a shell clipboard helper.'

@@ -418,10 +418,16 @@ export interface CompletionParams {
    */
   remoteProviderErrorRetries?: number
   /**
-   * Remaining connection recovery attempts before provider acceptance.
+   * Remaining connection recovery attempts within the caller's work budget.
    */
   connectionErrorRetries?: number
   connectionRetryAttempt?: number
+  /**
+   * Allows connection recovery after acceptance or provisional output when the
+   * caller discards interrupted drafts and executes only completed local calls.
+   * Requests that execute provider-owned tools cannot use this recovery.
+   */
+  retryInterruptedResponse?: boolean
   /**
    * Reports each connection retry before waiting, without another model call.
    */
