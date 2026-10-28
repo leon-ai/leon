@@ -91,7 +91,7 @@ describe('LLM model catalog', () => {
     )?.reasoning).toEqual(['auto', 'none', 'low', 'high', 'max'])
     expect(getLLMModelCatalogEntry(
       LLMProviders.MoonshotAI,
-      'kimi-k3'
+      'kimi-k3.1-pro'
     )?.reasoning).toEqual(['auto', 'low', 'high', 'max'])
   })
 
@@ -139,6 +139,8 @@ describe('LLM model catalog', () => {
   })
 
   it.each([
+    [LLMProviders.OpenAI, 'gpt-6.1-terra'],
+    [LLMProviders.OpenRouter, 'openai/gpt-6.1-terra'],
     [LLMProviders.OpenAI, 'gpt-6-sol'],
     [LLMProviders.OpenAI, 'gpt-6-luna'],
     [LLMProviders.OpenRouter, 'openai/gpt-6-sol'],

@@ -1,4 +1,5 @@
 import os
+import hashlib
 import uuid
 import json
 from urllib.request import Request, urlopen
@@ -42,6 +43,8 @@ import shutil
 
 # Progress callback type for reporting tool progress
 ProgressCallback = Callable[[Dict[str, Optional[Union[str, int, float]]]], None]
+VERSIONED_FILENAME_PATTERN = re.compile(r"\d+\.\d+\.\d+")
+SOURCE_HASH_LENGTH = 12
 
 NVIDIA_LIBRARY_FOLDERS = [
     "cublas",
@@ -890,6 +893,16 @@ class BaseTool(ABC):
             if is_windows() and not actual_filename.endswith(".exe")
             else actual_filename
         )
+
+        # Versionless assets need source identity to distinguish releases. Preserve
+        # existing cache paths when the asset already includes a version.
+        if not VERSIONED_FILENAME_PATTERN.search(executable):
+            suffix = ".exe" if is_windows() else ""
+            name = executable[: -len(suffix)] if suffix else executable
+            source = hashlib.sha256(binary_url.encode("utf-8")).hexdigest()[
+                :SOURCE_HASH_LENGTH
+            ]
+            executable = f"{name}-{source}{suffix}"
 
         bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
         binary_path = os.path.join(bins_path, executable)

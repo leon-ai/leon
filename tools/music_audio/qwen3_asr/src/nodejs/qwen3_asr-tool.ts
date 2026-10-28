@@ -171,6 +171,10 @@ export default class Qwen3ASRTool extends Tool {
       return outputPath
     } catch (error: unknown) {
       throw new Error(`Audio transcription failed: ${(error as Error).message}`)
+    } finally {
+      if (tempDir) {
+        await fs.promises.rm(tempDir, { recursive: true, force: true })
+      }
     }
   }
 

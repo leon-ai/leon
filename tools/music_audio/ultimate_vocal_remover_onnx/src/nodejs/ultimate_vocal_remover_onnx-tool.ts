@@ -62,6 +62,8 @@ export default class UltimateVocalRemoverONNXTool extends Tool {
     tasks: VocalSeparationTask | VocalSeparationTask[],
     cudaRuntimePath?: string
   ): Promise<void> {
+    let tempDir: string | undefined
+
     try {
       // Normalize tasks to array
       const taskArray = Array.isArray(tasks) ? tasks : [tasks]
@@ -71,7 +73,7 @@ export default class UltimateVocalRemoverONNXTool extends Tool {
       const modelPath = path.join(resourceDir, 'UVR-MDX-NET-Inst_HQ_3.onnx')
 
       // Create a temporary JSON file for the tasks
-      const tempDir = await fs.promises.mkdtemp(
+      tempDir = await fs.promises.mkdtemp(
         path.join(os.tmpdir(), 'ultimate_vocal_remover_onnx_tasks_')
       )
       const jsonFilePath = path.join(tempDir, 'tasks.json')
@@ -109,6 +111,10 @@ export default class UltimateVocalRemoverONNXTool extends Tool {
       })
     } catch (error: unknown) {
       throw new Error(`Vocal separation failed: ${(error as Error).message}`)
+    } finally {
+      if (tempDir) {
+        await fs.promises.rm(tempDir, { recursive: true, force: true })
+      }
     }
   }
 }

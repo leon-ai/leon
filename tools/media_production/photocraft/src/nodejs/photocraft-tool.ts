@@ -19,6 +19,30 @@ const MAX_MODEL_IMAGE_BYTES = 1_024 * 1_024
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
 
 /**
+ * Common document and raster formats supported by the managed exporter.
+ */
+export enum PhotoFormat {
+  Png = 'png', Jpeg = 'jpg', Tiff = 'tif', Webp = 'webp',
+  Psd = 'psd', Psb = 'psb', Exr = 'exr', OpenRaster = 'ora'
+}
+
+const EXPORT_MIME_TYPES = {
+  [PhotoFormat.Png]: 'image/png', [PhotoFormat.Jpeg]: 'image/jpeg',
+  [PhotoFormat.Tiff]: 'image/tiff', [PhotoFormat.Webp]: 'image/webp',
+  [PhotoFormat.Psd]: 'image/vnd.adobe.photoshop', [PhotoFormat.Psb]: 'application/octet-stream',
+  [PhotoFormat.Exr]: 'image/x-exr', [PhotoFormat.OpenRaster]: 'image/openraster'
+}
+
+/**
+ * Encoding options shared by PhotoCraft's conversion CLI.
+ */
+export interface ExportOptions {
+  quality?: number
+  tiffLayers?: boolean
+  tiffCompression?: string
+}
+
+/**
  * An engine operation using parameters discovered from PhotoCraft's registry.
  */
 export interface PhotoCraftStep {
@@ -112,11 +136,22 @@ export default class PhotoCraftTool extends Tool {
   /**
    * Stages a source copy, executes edits, and publishes layered and rendered output.
    */
-  public async edit(inputPath: string, steps: PhotoCraftStep[]): Promise<unknown> {
+  public async edit(
+    inputPath: string | undefined,
+    steps: PhotoCraftStep[] = [],
+    newDocument?: Record<string, unknown>
+  ): Promise<unknown> {
     this.requireSession()
 
-    if (!Array.isArray(steps) || steps.length < 1 || steps.length > MAX_STEPS) {
-      throw new Error(`Provide between 1 and ${MAX_STEPS} PhotoCraft steps.`)
+    if (!Array.isArray(steps) || steps.length > MAX_STEPS ||
+        (inputPath !== undefined && steps.length === 0)) {
+      throw new Error(`Provide at most ${MAX_STEPS} PhotoCraft steps; existing sources need at least one edit.`)
+    }
+    if ((inputPath === undefined) === (newDocument === undefined)) {
+      throw new Error('Provide either inputPath or newDocument, using discovered file.new parameters.')
+    }
+    if (newDocument !== undefined) {
+      this.validateParams(newDocument)
     }
 
     for (const step of steps) {
@@ -126,18 +161,22 @@ export default class PhotoCraftTool extends Tool {
       this.validateParams(step.params ?? {})
     }
 
-    const source = await this.resolveSource(inputPath)
+    const source = inputPath === undefined ? undefined : await this.resolveSource(inputPath)
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-photocraft-'))
 
     try {
       // Even Save commands without a path can only write back to this staged file.
-      const staged = path.join(directory, `source${path.extname(source)}`)
       const project = path.join(directory, 'edited.pcraft')
       const image = path.join(directory, 'edited.png')
+      const args = ['run']
 
-      await fs.copyFile(source, staged, fs.constants.COPYFILE_EXCL)
-
-      const args = ['run', staged]
+      if (source) {
+        const staged = path.join(directory, `source${path.extname(source)}`)
+        await fs.copyFile(source, staged, fs.constants.COPYFILE_EXCL)
+        args.push(staged)
+      } else {
+        args.push('--new', JSON.stringify(newDocument))
+      }
 
       for (const step of steps) {
         args.push(
@@ -159,7 +198,7 @@ export default class PhotoCraftTool extends Tool {
         .split('\n')
         .filter(Boolean)
         .map((line) => JSON.parse(line))
-      const stem = path.basename(source, path.extname(source))
+      const stem = source ? path.basename(source, path.extname(source)) : 'artwork'
       const artifacts = [
         await this.publishFile(
           project,
@@ -177,6 +216,50 @@ export default class PhotoCraftTool extends Tool {
         commandResults,
         diagnostics: [edited.stderr, converted.stderr, document.stderr].filter(Boolean)
       }
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true })
+    }
+  }
+
+  /**
+   * Export a selected project without changing its original or layered source.
+   */
+  public async export(
+    inputPath: string, format = PhotoFormat.Png, options: ExportOptions = {}
+  ): Promise<unknown> {
+    this.requireSession()
+    if (!Object.values(PhotoFormat).includes(format)) {
+      throw new Error('Select a supported PhotoCraft export format.')
+    }
+    if (options.quality !== undefined &&
+        (!Number.isInteger(options.quality) || options.quality < 1 || options.quality > 100)) {
+      throw new Error('quality must be an integer from 1 to 100.')
+    }
+
+    const source = await this.resolveSource(inputPath)
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-photocraft-'))
+
+    try {
+      const filename = `${path.parse(source).name}.${format}`
+      const target = path.join(directory, filename)
+      const args = ['convert', source, target]
+
+      if (options.quality !== undefined) {
+        args.push('--quality', String(options.quality))
+      }
+      if (options.tiffLayers) {
+        args.push('--tiff-layers')
+      }
+      if (options.tiffCompression !== undefined) {
+        args.push('--tiff-compression', options.tiffCompression)
+      }
+
+      const output = await this.runCli(args)
+      const artifact = await this.publishFile(target, EXPORT_MIME_TYPES[format], filename)
+      const modelPreviewAttached = format === PhotoFormat.Png
+        ? await this.attachPreview(target) : false
+
+      return { artifacts: [artifact], modelPreviewAttached, diagnostics: output.stderr }
     } finally {
       await fs.rm(directory, { recursive: true, force: true })
     }

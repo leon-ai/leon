@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = { timeout_ms: 120_000 }
 const MAX_DIAGNOSTIC_CHARS = 4_000
 const MAX_FONT_LIST_CHARS = 40_000
 const DEFAULT_PPI = 144
+const MAX_QUERY_RESULTS = 1_000
 
 /**
  * Supported artifact formats for local Typst compilation.
@@ -35,6 +36,16 @@ export interface CompileOptions {
   inputs?: Record<string, string>
   pages?: string
   ppi?: number
+}
+
+/**
+ * Project context and an optional field selected from Typst query results.
+ */
+export interface QueryOptions {
+  rootPath?: string
+  fontPaths?: string[]
+  inputs?: Record<string, string>
+  field?: string
 }
 
 /**
@@ -86,28 +97,7 @@ export default class TypstTool extends Tool {
     if (!Number.isInteger(ppi) || ppi < 1) {
       throw new Error('ppi must be a positive integer.')
     }
-    if (!path.isAbsolute(sourcePath)) {
-      throw new Error('sourcePath must be an absolute local file path.')
-    }
-
-    const source = await fs.realpath(sourcePath)
-
-    if (!(await fs.stat(source)).isFile()) {
-      throw new Error('sourcePath must be a regular file.')
-    }
-
-    const root = await this.resolveDirectory(
-      options.rootPath ?? path.dirname(source)
-    )
-    const relative = path.relative(root, source)
-
-    if (
-      relative === '..' ||
-      relative.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(relative)
-    ) {
-      throw new Error('sourcePath must be inside rootPath.')
-    }
+    const { source, root } = await this.resolveProject(sourcePath, options.rootPath)
 
     const args = [
       'compile',
@@ -117,13 +107,7 @@ export default class TypstTool extends Tool {
       ...await this.getFontArgs(options.fontPaths)
     ]
 
-    for (const [key, value] of Object.entries(options.inputs ?? {})) {
-      if (!key || key.includes('=') || typeof value !== 'string') {
-        throw new Error('inputs must contain non-empty keys without = and string values.')
-      }
-
-      args.push('--input', `${key}=${value}`)
-    }
+    args.push(...this.getInputArgs(options.inputs))
     if (options.pages !== undefined) {
       args.push('--pages', options.pages)
     }
@@ -179,6 +163,47 @@ export default class TypstTool extends Tool {
   }
 
   /**
+   * Inspect headings, labels or metadata from the same project used for compilation.
+   */
+  public async query(
+    sourcePath: string, selector: string, options: QueryOptions = {}
+  ): Promise<unknown> {
+    if (typeof selector !== 'string' || !selector.trim()) {
+      throw new Error('selector must be a Typst selector expression.')
+    }
+
+    const { source, root } = await this.resolveProject(sourcePath, options.rootPath)
+    const args = ['query', '--root', root, '--format', 'json',
+      ...await this.getFontArgs(options.fontPaths), ...this.getInputArgs(options.inputs)]
+
+    if (options.field !== undefined) {
+      args.push('--field', options.field)
+    }
+
+    let stdout = ''
+    let diagnostics = ''
+    await this.executeCommand({
+      binaryName: 'typst', args: [...args, '--', source, selector],
+      options: { cwd: root, timeout: this.getTimeout() },
+      onOutput: (text, isError) => {
+        if (isError) {
+          diagnostics += text
+        } else {
+          stdout += text
+        }
+      }
+    })
+    const matches: unknown[] = JSON.parse(stdout)
+
+    return {
+      matches: matches.slice(0, MAX_QUERY_RESULTS), totalMatches: matches.length,
+      truncated: matches.length > MAX_QUERY_RESULTS,
+      diagnostics: diagnostics.slice(0, MAX_DIAGNOSTIC_CHARS),
+      diagnosticsTruncated: diagnostics.length > MAX_DIAGNOSTIC_CHARS
+    }
+  }
+
+  /**
    * Lists locally available font families before choosing document typography.
    */
   public async listFonts(fontPaths: string[] = []): Promise<unknown> {
@@ -210,6 +235,45 @@ export default class TypstTool extends Tool {
     }
 
     return resolved
+  }
+
+  /**
+   * Constrain compilation and introspection to the selected project directory.
+   */
+  private async resolveProject(sourcePath: string, rootPath?: string): Promise<{
+    source: string
+    root: string
+  }> {
+    if (!path.isAbsolute(sourcePath)) {
+      throw new Error('sourcePath must be an absolute local file path.')
+    }
+    const source = await fs.realpath(sourcePath)
+    if (!(await fs.stat(source)).isFile()) {
+      throw new Error('sourcePath must be a regular file.')
+    }
+
+    const root = await this.resolveDirectory(rootPath ?? path.dirname(source))
+    const relative = path.relative(root, source)
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error('sourcePath must be inside rootPath.')
+    }
+
+    return { source, root }
+  }
+
+  /**
+   * Pass the same validated template inputs to compilation and document queries.
+   */
+  private getInputArgs(inputs: Record<string, string> = {}): string[] {
+    const args: string[] = []
+    for (const [key, value] of Object.entries(inputs)) {
+      if (!key || key.includes('=') || typeof value !== 'string') {
+        throw new Error('inputs must contain non-empty keys without = and string values.')
+      }
+      args.push('--input', `${key}=${value}`)
+    }
+
+    return args
   }
 
   /**

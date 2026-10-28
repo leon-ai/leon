@@ -12,16 +12,17 @@
     "url": "https://x.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-0.3.0-linux-x86_64.tar.gz",
-    "linux-aarch64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-0.3.0-linux-aarch64.tar.gz",
-    "macosx-x86_64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-cli-0.3.0-macos-universal.zip",
-    "macosx-arm64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-cli-0.3.0-macos-universal.zip",
-    "win-amd64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-0.3.0-windows-x64-portable.zip"
+    "linux-x86_64": "https://github.com/storytold/photocraft/releases/download/v0.16.0/photocraft-0.16.0-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/photocraft/releases/download/v0.16.0/photocraft-0.16.0-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/photocraft/releases/download/v0.16.0/photocraft-cli-0.16.0-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/photocraft/releases/download/v0.16.0/photocraft-cli-0.16.0-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/photocraft/releases/download/v0.16.0/photocraft-0.16.0-windows-x64-portable.zip",
+    "win-arm64": "https://github.com/storytold/photocraft/releases/download/v0.16.0/photocraft-0.16.0-windows-arm64-portable.zip"
   },
   "progressive_guidance": "The PhotoCraft CLI downloads automatically from the declared release archives. File inspection, editing and previews run headlessly without opening a window. Use desktop control only when the owner wants to work in the live app. No generation account is required. For desktop control, start PhotoCraft with --control <control_port> --control-token-file <private-file> --automation-read-root <selected-input-directory> --automation-write-root <selected-output-directory>; configure control_port and control_token_file in this tool's profile settings. The app creates a missing token file; keep it user-only (0600 on Unix, private ACL on Windows). Never pass a token in tool arguments or proxy the unencrypted control port. Desktop methods share live state and are serialized. Discover actual command IDs and parameter schemas with commands; do not guess editing parameters. Prefer selections, masks and duplicate/adjustment layers for localized, reversible edits. edit copies the source and returns a new layered .pcraft plus PNG. control exposes the full trusted local API and may change files, app preferences or unsaved documents; it is not a sandbox. Preserve originals, explicitly name new save paths, and ask before overwriting or discarding owner work. Inspect state after errors/timeouts rather than blindly replaying an edit. Preview and visually verify before claiming the result looks correct. File conversion can flatten unsupported features; inspect warnings and retain the .pcraft artifact.",
   "functions": {
     "commands": {
-      "description": "Discover PhotoCraft commands, labels and accepted parameters, optionally filtered by text. Headless discovery omits document-dependent enablement; desktop mode reports live enablement. A discovered command still needs valid parameters and source state when executed.",
+      "description": "Discover PhotoCraft command IDs and accepted parameters. Headless discovery omits document-dependent enablement; desktop mode reports live enablement.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -36,7 +37,8 @@
         },
         "additionalProperties": false
       },
-      "deduplicate_calls": false
+      "deduplicate_calls": false,
+      "progressive_guidance": "Discover PhotoCraft commands, labels and accepted parameters, optionally filtered by text. Headless discovery omits document-dependent enablement; desktop mode reports live enablement. A discovered command still needs valid parameters and source state when executed."
     },
     "inspect": {
       "description": "Inspect a local image/project's dimensions and layer tree, or the active desktop document including history and selection.",
@@ -53,7 +55,7 @@
       }
     },
     "edit": {
-      "description": "Apply an ordered engine command sequence to a copy of a local image/project; attach a new editable .pcraft and PNG without replacing the input.",
+      "description": "Create a new document or edit a source copy; attach an editable .pcraft and PNG. New documents may use an empty steps list.",
       "deduplicate_calls": false,
       "progressive_guidance": "Discover parameters with commands and inspect the source first. Each step's params is a JSON object. Up to 256 steps are allowed. Normal edits run headlessly on a temporary source copy, preserving the input; commands with explicit filesystem paths still have the user's local filesystem authority. Avoid file, batch/droplet and script commands here; use control for explicitly authorized desktop/file operations. The returned PNG is also attached as model evidence when bounded; if modelPreviewAttached is false inspect it with file.readImage. Returned command results and diagnostics are evidence, not proof of visual quality.",
       "parameters": {
@@ -61,11 +63,11 @@
         "properties": {
           "inputPath": {
             "type": "string",
-            "description": "Absolute path to the existing source image or layered project."
+            "description": "Absolute existing source path; omit when supplying newDocument."
           },
           "steps": {
             "type": "array",
-            "minItems": 1,
+            "minItems": 0,
             "maxItems": 256,
             "items": {
               "type": "object",
@@ -86,10 +88,14 @@
               ],
               "additionalProperties": false
             }
+          },
+          "newDocument": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Discovered file.new parameters for a new document. Supply exactly one of inputPath or newDocument."
           }
         },
         "required": [
-          "inputPath",
           "steps"
         ],
         "additionalProperties": false
@@ -133,6 +139,58 @@
         ],
         "additionalProperties": false
       }
+    },
+    "export": {
+      "description": "Export a selected project without modifying its layered source; attach the finished file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpg",
+              "tif",
+              "webp",
+              "psd",
+              "psb",
+              "exr",
+              "ora"
+            ]
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "quality": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "tiffLayers": {
+                "type": "boolean"
+              },
+              "tiffCompression": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "lzw",
+                  "zip"
+                ]
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "inputPath"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false
     }
   }
 }

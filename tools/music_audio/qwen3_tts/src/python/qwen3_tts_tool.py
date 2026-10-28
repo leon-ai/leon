@@ -24,6 +24,15 @@ MODEL_DESIGN_NAME = "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
 MODEL_CUSTOM_NAME = "Qwen3-TTS-12Hz-1.7B-CustomVoice"
 DEFAULT_SETTINGS = {}
 REQUIRED_SETTINGS = []
+MAX_INLINE_TEXT_BYTES = 255
+TEXT_FIELDS = (
+    "text",
+    "reference_text",
+    "instruct",
+    "design_text",
+    "design_instruct",
+    "texts",
+)
 
 SupportedLanguage = Literal[
     "Auto",
@@ -268,6 +277,8 @@ class Qwen3TTSTool(BaseTool):
         else:
             task_list = [cast(TTask, tasks)]
 
+        temp_dir = None
+
         try:
             resource_root = self._resolve_resource_root(model_names)
             final_nvidia_libs_path = (
@@ -277,11 +288,44 @@ class Qwen3TTSTool(BaseTool):
                 torch_path if torch_path is not None else PYTORCH_TORCH_PATH
             )
 
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as temp_file:
-                json_file_path = temp_file.name
-                json.dump(task_list, temp_file, indent=2, ensure_ascii=False)
+            temp_dir = tempfile.TemporaryDirectory(prefix="qwen3_tts_tasks_")
+            json_file_path = os.path.join(temp_dir.name, "tasks.json")
+
+            # The CLI probes text as a filename. Send long literals through text
+            # files to avoid filename-length errors, preserving existing file inputs.
+            binary_tasks = []
+            for task_index, task in enumerate(task_list):
+                binary_task = dict(task)
+                for field in TEXT_FIELDS:
+                    if field not in task:
+                        continue
+
+                    value = task[field]
+                    texts = value if isinstance(value, list) else [value]
+                    staged_texts = []
+                    for text_index, text in enumerate(texts):
+                        if (
+                            not isinstance(text, str)
+                            or len(text.encode("utf-8")) <= MAX_INLINE_TEXT_BYTES
+                            or os.path.isfile(text)
+                        ):
+                            staged_texts.append(text)
+                            continue
+
+                        text_path = os.path.join(
+                            temp_dir.name, f"{task_index}-{field}-{text_index}.txt"
+                        )
+                        with open(text_path, "w", encoding="utf-8") as text_file:
+                            text_file.write(text)
+                        staged_texts.append(text_path)
+
+                    binary_task[field] = (
+                        staged_texts if isinstance(value, list) else staged_texts[0]
+                    )
+                binary_tasks.append(binary_task)
+
+            with open(json_file_path, "w", encoding="utf-8") as temp_file:
+                json.dump(binary_tasks, temp_file, indent=2, ensure_ascii=False)
 
             args = [
                 "--function",
@@ -308,3 +352,6 @@ class Qwen3TTSTool(BaseTool):
             return task_list
         except Exception as e:
             raise Exception(f"Qwen3-TTS execution failed: {str(e)}")
+        finally:
+            if temp_dir:
+                temp_dir.cleanup()

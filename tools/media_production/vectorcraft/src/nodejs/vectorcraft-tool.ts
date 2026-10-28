@@ -34,10 +34,32 @@ export enum VectorFormat {
 const MAX_MODEL_PREVIEW_BYTES = 8_388_608
 const DEFAULT_SETTINGS = { timeout_ms: 120_000 }
 const MAX_STEPS = 256
+const MAX_INSPECT_ITEMS = 500
 const MIME_TYPES = {
   [VectorFormat.Svg]: 'image/svg+xml',
   [VectorFormat.Pdf]: 'application/pdf',
   [VectorFormat.Png]: 'image/png'
+}
+
+/**
+ * Bounded document queries using the engine's native scope and paging fields.
+ */
+export interface InspectOptions {
+  ids?: number[]
+  kind?: string
+  offset?: number
+  limit?: number
+  depth?: number
+  childLimit?: number
+}
+
+/**
+ * Artboard selection and format-specific options discovered from document.export.
+ */
+export interface ExportOptions {
+  artboard?: number
+  scale?: number
+  settings?: Record<string, unknown>
 }
 
 /**
@@ -84,11 +106,55 @@ export default class VectorCraftTool extends Tool {
   /**
    * Inspects artboards, object kinds and fonts without changing the source.
    */
-  public async inspect(inputPath: string): Promise<unknown> {
-    const source = await this.resolveSource(inputPath)
-    const output = await this.runCli(['info', source])
+  public async inspect(inputPath: string, options: InspectOptions = {}): Promise<unknown> {
+    const params = { depth: 2, childLimit: 20, limit: 100, offset: 0, ...options }
 
-    return { document: JSON.parse(output.stdout), diagnostics: output.stderr }
+    for (const [name, maximum] of [
+      ['depth', 4], ['childLimit', 100], ['limit', MAX_INSPECT_ITEMS],
+      ['offset', Number.MAX_SAFE_INTEGER]
+    ] as const) {
+      const value = params[name]
+      if (!Number.isSafeInteger(value) || value < (name === 'offset' ? 0 : 1) || value > maximum) {
+        throw new Error(`Invalid ${name} for bounded document inspection.`)
+      }
+    }
+    if (options.ids && (options.ids.length > MAX_INSPECT_ITEMS ||
+        options.ids.some((id) => !Number.isSafeInteger(id) || id < 0))) {
+      throw new Error('ids must contain at most 500 non-negative object IDs.')
+    }
+
+    const source = await this.resolveSource(inputPath)
+    const output = await this.runCli([
+      'run', '--in', source, '--cmd', 'document.inspect', '--params', JSON.stringify(params)
+    ])
+
+    const result = this.readJsonLines(output.stdout).at(-1) as { result?: unknown } | undefined
+
+    return { document: result?.result, diagnostics: output.stderr }
+  }
+
+  /**
+   * Find objects using observed engine filters without saving or changing selection.
+   */
+  public async findObjects(
+    inputPath: string, filters: Record<string, unknown>, limit = 100
+  ): Promise<unknown> {
+    if (!filters || typeof filters !== 'object' || Array.isArray(filters) ||
+        Object.keys(filters).length === 0) {
+      throw new Error('Provide document.find filters discovered through commands.')
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_INSPECT_ITEMS) {
+      throw new Error(`limit must be between 1 and ${MAX_INSPECT_ITEMS}.`)
+    }
+
+    const source = await this.resolveSource(inputPath)
+    const output = await this.runCli([
+      'run', '--in', source, '--cmd', 'document.find',
+      '--params', JSON.stringify({ ...filters, select: false, limit })
+    ])
+    const result = this.readJsonLines(output.stdout).at(-1) as { result?: unknown } | undefined
+
+    return { result: result?.result, diagnostics: output.stderr }
   }
 
   /**
@@ -142,10 +208,22 @@ export default class VectorCraftTool extends Tool {
    */
   public async export(
     inputPath: string,
-    format = VectorFormat.Svg
+    format = VectorFormat.Svg,
+    options: ExportOptions = {}
   ): Promise<unknown> {
     if (!Object.values(VectorFormat).includes(format)) {
       throw new Error('Use svg, pdf or png for VectorCraft export.')
+    }
+    if (options.artboard !== undefined &&
+        (!Number.isSafeInteger(options.artboard) || options.artboard < 0)) {
+      throw new Error('artboard must be a non-negative index observed through inspect.')
+    }
+    if (options.scale !== undefined && (!Number.isFinite(options.scale) || options.scale <= 0)) {
+      throw new Error('scale must be positive.')
+    }
+    if (options.settings !== undefined && (!options.settings ||
+        typeof options.settings !== 'object' || Array.isArray(options.settings))) {
+      throw new Error('settings must be a document.export JSON object.')
     }
 
     const source = await this.resolveSource(inputPath)
@@ -153,11 +231,29 @@ export default class VectorCraftTool extends Tool {
     return this.withWorkspace(async (directory) => {
       const filename = `artwork.${format}`
       const target = path.join(directory, filename)
-      const output = await this.runCli(['convert', source, target])
-      const result = JSON.parse(output.stdout)
-      const files = await this.publishFiles([
-        { path: target, filename, mimeType: MIME_TYPES[format] }
-      ], format === VectorFormat.Png ? target : undefined)
+      const params = {
+        ...options.settings, ...options,
+        path: target, format
+      }
+      delete params.settings
+      const output = await this.runCli([
+        'run', '--in', source, '--cmd', 'document.export', '--params', JSON.stringify(params)
+      ])
+      const result = this.readJsonLines(output.stdout)
+      // Multi-artboard exports may replace the requested basename with one file
+      // per artboard. Deliver the files actually written into this workspace.
+      const entries = await fs.readdir(directory, { recursive: true, withFileTypes: true })
+      const outputs = entries.filter((entry) => entry.isFile()).map((entry) => {
+        const file = path.join(entry.parentPath, entry.name)
+
+        return { path: file, filename: entry.name,
+          mimeType: MIME_TYPES[path.extname(file).slice(1) as VectorFormat] ?? 'application/octet-stream' }
+      })
+      if (outputs.length === 0) {
+        throw new Error('VectorCraft did not produce an export.')
+      }
+      const files = await this.publishFiles(outputs,
+        format === VectorFormat.Png ? outputs[0]?.path : undefined)
 
       return { ...files, result, diagnostics: output.stderr }
     })

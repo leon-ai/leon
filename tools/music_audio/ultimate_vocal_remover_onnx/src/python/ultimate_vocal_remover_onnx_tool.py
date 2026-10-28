@@ -72,6 +72,8 @@ class UltimateVocalRemoverONNXTool(BaseTool):
         Returns:
             None
         """
+        json_file_path = None
+
         try:
             # Normalize tasks to list
             task_list = tasks if isinstance(tasks, list) else [tasks]
@@ -118,3 +120,6 @@ class UltimateVocalRemoverONNXTool(BaseTool):
 
         except Exception as e:
             raise Exception(f"Vocal separation failed: {str(e)}")
+        finally:
+            if json_file_path and os.path.exists(json_file_path):
+                os.remove(json_file_path)

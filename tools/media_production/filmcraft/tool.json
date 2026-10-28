@@ -11,11 +11,12 @@
     "url": "https://x.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-0.2.1-linux-x86_64.tar.gz",
-    "linux-aarch64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-0.2.1-linux-aarch64.tar.gz",
-    "macosx-x86_64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-cli-0.2.1-macos-universal.zip",
-    "macosx-arm64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-cli-0.2.1-macos-universal.zip",
-    "win-amd64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-0.2.1-windows-x64-portable.zip"
+    "linux-x86_64": "https://github.com/storytold/filmcraft/releases/download/v0.13.0/filmcraft-0.13.0-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/filmcraft/releases/download/v0.13.0/filmcraft-0.13.0-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/filmcraft/releases/download/v0.13.0/filmcraft-cli-0.13.0-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/filmcraft/releases/download/v0.13.0/filmcraft-cli-0.13.0-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/filmcraft/releases/download/v0.13.0/filmcraft-0.13.0-windows-x64-portable.zip",
+    "win-arm64": "https://github.com/storytold/filmcraft/releases/download/v0.13.0/filmcraft-0.13.0-windows-arm64-portable.zip"
   },
   "progressive_guidance": "The CLI downloads automatically from the pinned release archives. Operations run headlessly without opening a window or requiring a generation-provider account. Discover command IDs and params before editing. Ordinary edits stage a source copy and publish new files. Engine commands with explicit paths can still access the local filesystem; use file, script, preference or destructive operations only when explicitly requested. Preserve originals and inspect diagnostics. A successful command is not proof of visual quality: inspect a rendered preview before delivering artwork or video.",
   "functions": {
@@ -135,11 +136,31 @@
               },
               "startSeconds": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Provide together with endSeconds for a custom range."
               },
               "endSeconds": {
                 "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Provide together with startSeconds."
+              },
+              "preset": {
+                "type": "string",
+                "description": "Observed export preset name; discover export.presets.list through commands."
+              },
+              "quality": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "scale": {
+                "type": "number",
                 "exclusiveMinimum": 0
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "ExportSettings discovered from the installed command registry."
               }
             },
             "additionalProperties": false

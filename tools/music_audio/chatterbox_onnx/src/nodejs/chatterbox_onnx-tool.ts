@@ -133,6 +133,8 @@ export default class ChatterboxONNXTool extends Tool {
     tasks: SynthesisTask | SynthesisTask[],
     cudaRuntimePath?: string
   ): Promise<Omit<SynthesisTask, 'auto_split'>[]> {
+    let tempDir: string | undefined
+
     try {
       // Normalize tasks to array
       const taskArray = Array.isArray(tasks) ? tasks : [tasks]
@@ -189,7 +191,7 @@ export default class ChatterboxONNXTool extends Tool {
       const modelPath = await this.getResourcePath(MODEL_NAME)
 
       // Create a temporary JSON file for the tasks
-      const tempDir = await fs.promises.mkdtemp(
+      tempDir = await fs.promises.mkdtemp(
         path.join(os.tmpdir(), 'chatterbox_onnx_tasks_')
       )
       const jsonFilePath = path.join(tempDir, 'tasks.json')
@@ -230,6 +232,10 @@ export default class ChatterboxONNXTool extends Tool {
       return tasksToSynthesize
     } catch (error: unknown) {
       throw new Error(`Speech synthesis failed: ${(error as Error).message}`)
+    } finally {
+      if (tempDir) {
+        await fs.promises.rm(tempDir, { recursive: true, force: true })
+      }
     }
   }
 }

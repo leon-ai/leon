@@ -82,6 +82,8 @@ class Qwen3ASRTool(BaseTool):
         Returns:
             The path to the transcription file
         """
+        json_file_path = None
+
         try:
             if not os.path.isfile(input_path):
                 raise FileNotFoundError(f"Input audio file does not exist: {input_path}")
@@ -161,6 +163,9 @@ class Qwen3ASRTool(BaseTool):
             return output_path
         except Exception as e:
             raise Exception(f"Audio transcription failed: {str(e)}")
+        finally:
+            if json_file_path and os.path.exists(json_file_path):
+                os.remove(json_file_path)
 
     def parse_transcription(self, raw_output: str) -> TranscriptionOutput:
         lines = [line.strip() for line in raw_output.split("\n") if line.strip()]

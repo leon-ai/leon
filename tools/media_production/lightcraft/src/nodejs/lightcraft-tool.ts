@@ -9,6 +9,7 @@ const MAX_MODEL_PREVIEW_BYTES = 8_388_608
 const DEFAULT_SETTINGS = { timeout_ms: 120_000 }
 const MAX_STEPS = 256
 const DEFAULT_LONG_EDGE = 2_048
+const MAX_EXPORT_PHOTOS = 100
 
 /**
  * A completed file to publish into conversation artifact storage.
@@ -55,6 +56,22 @@ export interface DevelopOptions {
   format?: PhotoFormat
   longEdge?: number
   settings?: Record<string, unknown>
+}
+
+/**
+ * Photo export settings discovered from the installed app.export registry entry.
+ */
+export type LibraryExportOptions = DevelopOptions
+
+/**
+ * Layout options accepted by the PDF contact-sheet exporter.
+ */
+export interface ContactSheetOptions {
+  paper?: string
+  landscape?: boolean
+  columns?: number
+  rows?: number
+  captions?: boolean
 }
 
 /**
@@ -238,6 +255,82 @@ export default class LightCraftTool extends Tool {
 
       return { results: this.readJsonLines(output.stdout), diagnostics: output.stderr }
     })
+  }
+
+  /**
+   * Deliver exports for observed photo IDs without writing beside library originals.
+   */
+  public async exportPhotos(
+    libraryPath: string, photoIds: number[], options: LibraryExportOptions = {}
+  ): Promise<unknown> {
+    this.validatePhotoIds(photoIds)
+    const format = options.format ?? PhotoFormat.Jpeg
+    if (!Object.values(PhotoFormat).includes(format)) {
+      throw new Error('Select a supported photo output format.')
+    }
+    if (options.longEdge !== undefined && (!Number.isInteger(options.longEdge) || options.longEdge < 0)) {
+      throw new Error('longEdge must be a non-negative integer.')
+    }
+    if (options.settings !== undefined && (!options.settings ||
+        typeof options.settings !== 'object' || Array.isArray(options.settings))) {
+      throw new Error('settings must be an app.export JSON object.')
+    }
+
+    return this.withWorkspace(async (directory) => {
+      // Output authority stays in the temporary workspace even when supplied
+      // settings were copied from a saved library preset.
+      const params: Record<string, unknown> = {
+        ...options.settings, ids: photoIds, format,
+        dir: directory, destinationMode: 'specificFolder', subfolder: '',
+        conflict: 'unique', addToPhotos: false,
+        longEdge: options.longEdge ?? DEFAULT_LONG_EDGE
+      }
+      delete params['path']
+      const result = await this.runLibrary(libraryPath, [{ command: 'app.export', params }])
+      const entries = await fs.readdir(directory, { recursive: true, withFileTypes: true })
+      const outputs = entries.filter((entry) => entry.isFile()).map((entry) => ({
+        path: path.join(entry.parentPath, entry.name), filename: entry.name,
+        mimeType: MIME_TYPES[format]
+      }))
+      if (outputs.length === 0) {
+        throw new Error('LightCraft did not produce any photo exports.')
+      }
+      const files = await this.publishFiles(outputs)
+
+      return { ...files, result }
+    })
+  }
+
+  /**
+   * Create a PDF contact sheet for an explicit, bounded selection of library photos.
+   */
+  public async createContactSheet(
+    libraryPath: string, photoIds: number[], options: ContactSheetOptions = {}
+  ): Promise<unknown> {
+    this.validatePhotoIds(photoIds)
+
+    return this.withWorkspace(async (directory) => {
+      const target = path.join(directory, 'contact-sheet.pdf')
+      const result = await this.runLibrary(libraryPath, [{
+        command: 'export.contactSheet',
+        params: { ...options, ids: photoIds, path: target }
+      }])
+      const files = await this.publishFiles([
+        { path: target, filename: 'contact-sheet.pdf', mimeType: 'application/pdf' }
+      ])
+
+      return { ...files, result }
+    })
+  }
+
+  /**
+   * Require observed photo IDs rather than exporting an implicit library selection.
+   */
+  private validatePhotoIds(ids: number[]): void {
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_EXPORT_PHOTOS ||
+        ids.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+      throw new Error(`Provide between 1 and ${MAX_EXPORT_PHOTOS} positive photo IDs from catalog.query.`)
+    }
   }
 
   /**

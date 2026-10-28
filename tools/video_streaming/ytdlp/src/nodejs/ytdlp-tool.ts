@@ -12,15 +12,18 @@ const QUALITY_FORMAT_SELECTORS: Record<string, string> = {
   worst: 'wv*+wa/w'
 }
 const RESOLUTION_QUALITY_PATTERN = /^[1-9][0-9]*p$/
-const DOWNLOAD_DESTINATION_PATTERN = /Destination:\s+(.+)$/
-const ALREADY_DOWNLOADED_PATTERN =
-  /\[download\]\s+(.+)\s+has already been downloaded/
-const MERGED_FILE_PATTERN = /\[Merger\]\s+Merging formats into\s+"(.+)"$/
-const MOVED_FILE_PATTERN = /\[MoveFiles\]\s+Moving file\s+".+"\s+to\s+"(.+)"$/
+const FILE_OUTPUT_PREFIX = 'leon:file:'
+const PROGRESS_OUTPUT_PREFIX = 'leon:progress:'
+const MAX_FORMATS = 200
+const MAX_PLAYLIST_PAGE = 100
+const FORMAT_FIELDS = [
+  'format_id', 'ext', 'width', 'height', 'fps', 'vcodec', 'acodec',
+  'filesize', 'filesize_approx', 'tbr', 'abr', 'language', 'format_note'
+] as const
+const FORMATS_TEMPLATE = `{"source":%(.{id,title,webpage_url})j,"formats":%(formats.:.{${FORMAT_FIELDS.join(',')}})j}`
+const PLAYLIST_TEMPLATE = '%(.{id,url,webpage_url,title,duration,channel,uploader,playlist_index})j'
 const SUBTITLE_DESTINATION_PATTERN =
   /Writing (?:video subtitles|video automatic captions) to:\s+(.+)$/
-const DOWNLOAD_PROGRESS_PATTERN =
-  /\[download\]\s+(\d+\.?\d*)%\s+of\s+(?:~?\s*)([\d.]+\w+)\s+at\s+([\d.]+\w+\/s)\s+ETA\s+([\d:]+)/
 const YTDLP_EXT_TEMPLATE = '%(ext)s'
 const YTDLP_TITLE_TEMPLATE = '%(title)s'
 const YTDLP_PLAYLIST_INDEX_TEMPLATE = '%(playlist_index)s'
@@ -117,7 +120,7 @@ export default class YtdlpTool extends Tool {
 
   private getConfigArgs(): string[] {
     const configPath = join(this.getToolDir(import.meta.url), 'yt-dlp.conf')
-    return ['--config-locations', configPath]
+    return ['--ignore-config', '--config-locations', configPath]
   }
 
   /**
@@ -149,7 +152,8 @@ export default class YtdlpTool extends Tool {
       ? join(directoryPath, `${stem}.${expectedExtension}`)
       : undefined
 
-    return { directoryPath, outputTemplate, predictedFilePath }
+    return { directoryPath, outputTemplate,
+      ...(predictedFilePath === undefined ? {} : { predictedFilePath }) }
   }
 
   /**
@@ -224,12 +228,15 @@ export default class YtdlpTool extends Tool {
     let parsedPath: string | null = null
 
     for (const line of output.split('\n')) {
-      const match =
-        line.match(DOWNLOAD_DESTINATION_PATTERN) ||
-        line.match(ALREADY_DOWNLOADED_PATTERN) ||
-        line.match(MERGED_FILE_PATTERN) ||
-        line.match(MOVED_FILE_PATTERN) ||
-        line.match(SUBTITLE_DESTINATION_PATTERN)
+      if (line.startsWith(FILE_OUTPUT_PREFIX)) {
+        const value: unknown = JSON.parse(line.slice(FILE_OUTPUT_PREFIX.length))
+        if (typeof value === 'string') {
+          parsedPath = value
+        }
+        continue
+      }
+
+      const match = line.match(SUBTITLE_DESTINATION_PATTERN)
 
       if (match?.[1]) {
         parsedPath = match[1].trim()
@@ -535,6 +542,108 @@ export default class YtdlpTool extends Tool {
   }
 
   /**
+   * Inspect available encodings without returning temporary media URLs or headers.
+   */
+  async listFormats(videoUrl: string): Promise<Record<string, unknown>> {
+    const output = await this.executeCommand({
+      binaryName: 'yt-dlp',
+      args: [...this.getConfigArgs(), '--simulate', '--no-playlist',
+        '--print', FORMATS_TEMPLATE, '--', videoUrl],
+      options: { sync: true }
+    })
+    const data = JSON.parse(output) as { source: unknown, formats?: unknown[] }
+    const formats = data.formats ?? []
+
+    return {
+      source: data.source,
+      formats: formats.slice(0, MAX_FORMATS),
+      totalFormats: formats.length,
+      truncated: formats.length > MAX_FORMATS
+    }
+  }
+
+  /**
+   * Page through playlist metadata without extracting or downloading each video.
+   */
+  async listPlaylistItems(
+    playlistUrl: string, startIndex = 0, limit = 50
+  ): Promise<Record<string, unknown>> {
+    if (!Number.isSafeInteger(startIndex) || startIndex < 0 ||
+        !Number.isInteger(limit) || limit < 1 || limit > MAX_PLAYLIST_PAGE ||
+        !Number.isSafeInteger(startIndex + limit + 1)) {
+      throw new Error(`Use a non-negative startIndex and a limit from 1 to ${MAX_PLAYLIST_PAGE}.`)
+    }
+
+    const output = await this.executeCommand({
+      binaryName: 'yt-dlp',
+      args: [...this.getConfigArgs(), '--flat-playlist', '--skip-download',
+        '--playlist-start', String(startIndex + 1),
+        '--playlist-end', String(startIndex + limit + 1),
+        '--print', PLAYLIST_TEMPLATE, '--', playlistUrl],
+      options: { sync: true }
+    })
+    const items = output.split('\n').filter(Boolean).map((line) => JSON.parse(line))
+
+    return {
+      items: items.slice(0, limit), startIndex,
+      nextIndex: items.length > limit ? startIndex + limit : null
+    }
+  }
+
+  /**
+   * Read machine output across chunk boundaries and report actual download work.
+   */
+  private async runDownload(args: string[], onProgress?: ProgressCallback): Promise<string> {
+    const pending = ['', '']
+    let downloadedBytes = 0
+    const readLine = (line: string): void => {
+      if (!line.startsWith(PROGRESS_OUTPUT_PREFIX)) {
+        return
+      }
+
+      let progress: { downloaded_bytes?: number, total_bytes?: number, total_bytes_estimate?: number }
+
+      try {
+        progress = JSON.parse(line.slice(PROGRESS_OUTPUT_PREFIX.length))
+      } catch {
+        return
+      }
+      const current = progress.downloaded_bytes ?? 0
+      const total = progress.total_bytes ?? progress.total_bytes_estimate
+
+      if (current > downloadedBytes) {
+        downloadedBytes = current
+        this.emitProgress(`Downloaded ${current} bytes${total ? ` of ${total}` : ''}`)
+        onProgress?.({
+          ...(total ? { percentage: Math.min(100, current / total * 100) } : {}),
+          status: 'downloading'
+        })
+      }
+    }
+    const output = await this.executeCommand({
+      binaryName: 'yt-dlp',
+      args: [...this.getConfigArgs(), '--no-simulate', '--newline', '--progress',
+        '--progress-template', `download:${PROGRESS_OUTPUT_PREFIX}%(progress)j`,
+        '--print', `after_move:${FILE_OUTPUT_PREFIX}%(filepath)j`, ...args],
+      onOutput: (text, isError) => {
+        const stream = isError ? 1 : 0
+        const lines = (pending[stream] + text).split('\n')
+        pending[stream] = lines.pop() ?? ''
+        for (const line of lines) {
+          readLine(line)
+        }
+      }
+    })
+
+    for (const line of pending) {
+      readLine(line)
+    }
+    onProgress?.({ percentage: 100, status: 'completed' })
+
+    return output
+  }
+
+  /**
    * Downloads a single video from the provided URL.
    * @param videoUrl The URL of the video to download.
    * @param outputPath The directory where the video will be saved.
@@ -546,11 +655,9 @@ export default class YtdlpTool extends Tool {
       mkdirSync(target.directoryPath, { recursive: true })
       const commandStartedAtMs = Date.now()
 
-      const result = await this.executeCommand({
-        binaryName: 'yt-dlp',
-        args: [...this.getConfigArgs(), videoUrl, '-o', target.outputTemplate],
-        options: { sync: true }
-      })
+      const result = await this.runDownload([
+        '--no-playlist', '-o', target.outputTemplate, '--', videoUrl
+      ])
 
       return YtdlpTool.resolveDownloadedMediaPath(
         result,
@@ -579,19 +686,10 @@ export default class YtdlpTool extends Tool {
       mkdirSync(target.directoryPath, { recursive: true })
       const commandStartedAtMs = Date.now()
 
-      const result = await this.executeCommand({
-        binaryName: 'yt-dlp',
-        args: [
-          ...this.getConfigArgs(),
-          videoUrl,
-          '-x',
-          '--audio-format',
-          audioFormat,
-          '-o',
-          target.outputTemplate
-        ],
-        options: { sync: true }
-      })
+      const result = await this.runDownload([
+        '--no-playlist', '-x', '--audio-format', audioFormat,
+        '-o', target.outputTemplate, '--', videoUrl
+      ])
 
       return YtdlpTool.resolveDownloadedMediaPath(
         result,
@@ -622,11 +720,7 @@ export default class YtdlpTool extends Tool {
         outputPath,
         `${YTDLP_PLAYLIST_INDEX_TEMPLATE} - ${YTDLP_TITLE_TEMPLATE}.${YTDLP_EXT_TEMPLATE}`
       )
-      await this.executeCommand({
-        binaryName: 'yt-dlp',
-        args: [...this.getConfigArgs(), playlistUrl, '-o', outputTemplate],
-        options: { sync: true }
-      })
+      await this.runDownload(['-o', outputTemplate, '--', playlistUrl])
 
       return outputPath
     } catch (error: unknown) {
@@ -670,66 +764,12 @@ export default class YtdlpTool extends Tool {
       const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
       mkdirSync(target.directoryPath, { recursive: true })
       const commandStartedAtMs = Date.now()
-      let downloadedFilePath = ''
-
-      const result = await this.executeCommand({
-        binaryName: 'yt-dlp',
-        args: [
-          ...this.getConfigArgs(),
-          '--no-playlist',
-          '-f',
-          formatSelector,
-          '-o',
-          target.outputTemplate,
-          '--newline',
-          '--',
-          videoUrl
-        ],
-        options: { sync: false },
-        onProgress,
-        onOutput: (output, isError) => {
-          const lines = output.split('\n')
-
-          for (const line of lines) {
-            // Parse download progress
-            if (!isError && line.includes('[download]')) {
-              const progressMatch = line.match(DOWNLOAD_PROGRESS_PATTERN)
-              if (
-                progressMatch &&
-                progressMatch[1] &&
-                progressMatch[2] &&
-                progressMatch[3] &&
-                progressMatch[4] &&
-                onProgress
-              ) {
-                onProgress({
-                  percentage: parseFloat(progressMatch[1]),
-                  size: progressMatch[2],
-                  speed: progressMatch[3],
-                  eta: progressMatch[4],
-                  status: 'downloading'
-                })
-              }
-            }
-
-            const pathMatch = YtdlpTool.parseOutputFilePath(line)
-            if (pathMatch) {
-              downloadedFilePath = pathMatch
-            }
-
-            // Check for download completion
-            if (!isError && line.includes('[download] 100%') && onProgress) {
-              onProgress({
-                percentage: 100,
-                status: 'completed'
-              })
-            }
-          }
-        }
-      })
+      const result = await this.runDownload([
+        '--no-playlist', '-f', formatSelector, '-o', target.outputTemplate, '--', videoUrl
+      ], onProgress)
 
       return YtdlpTool.resolveDownloadedMediaPath(
-        [downloadedFilePath, result].filter(Boolean).join('\n'),
+        result,
         target,
         commandStartedAtMs
       )
@@ -877,18 +917,10 @@ export default class YtdlpTool extends Tool {
       mkdirSync(target.directoryPath, { recursive: true })
       const commandStartedAtMs = Date.now()
 
-      const result = await this.executeCommand({
-        binaryName: 'yt-dlp',
-        args: [
-          ...this.getConfigArgs(),
-          videoUrl,
-          '--embed-thumbnail',
-          '--write-thumbnail',
-          '-o',
-          target.outputTemplate
-        ],
-        options: { sync: true }
-      })
+      const result = await this.runDownload([
+        '--no-playlist', '--embed-thumbnail', '--write-thumbnail',
+        '-o', target.outputTemplate, '--', videoUrl
+      ])
 
       return YtdlpTool.resolveDownloadedMediaPath(
         result,

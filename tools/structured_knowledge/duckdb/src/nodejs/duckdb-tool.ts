@@ -9,6 +9,10 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 const MAX_SOURCES = 20
 const SAMPLE_ROWS = 5
 const QUERY_TIMEOUT_MS = 120_000
+const WRITABLE_CTE_NODE_TYPES = new Set([
+  'INSERT_QUERY_NODE', 'UPDATE_QUERY_NODE', 'DELETE_QUERY_NODE', 'COPY_QUERY_NODE',
+  'MERGE_INTO_QUERY_NODE'
+])
 const DEFAULT_SETTINGS = {
   maxRows: 1_000,
   memoryMB: 512
@@ -92,7 +96,7 @@ export default class DuckDBTool extends Tool {
 
     const binary = await this.getBinaryPath('duckdb')
     // Ask DuckDB's own parser, rather than matching SQL keywords. Its JSON
-    // serializer only supports SELECT statements; reject multiple statements.
+    // serializer validates SELECT statements; writable CTEs must also be rejected.
     const validation = await this.execute(binary, `
       WITH input AS (SELECT json_serialize_sql(${this.literal(sql)}) AS ast)
       SELECT ast, CASE WHEN NOT CAST(ast->>'error' AS BOOLEAN)
@@ -102,7 +106,8 @@ export default class DuckDBTool extends Tool {
       ast?: { error?: boolean, statements?: unknown[] }
       sql?: string
     } | undefined
-    if (parsed?.ast?.error || parsed?.ast?.statements?.length !== 1 || !parsed.sql) {
+    if (parsed?.ast?.error || parsed?.ast?.statements?.length !== 1 || !parsed.sql ||
+        this.hasWritableCTE(parsed.ast)) {
       throw new Error('Only one read-only SELECT statement is allowed')
     }
 
@@ -120,6 +125,32 @@ export default class DuckDBTool extends Tool {
       truncated: rows.length > maxRows,
       sources: resolved
     }
+  }
+
+  /**
+   * Reject data-modifying CTEs even when their outer statement is a SELECT.
+   */
+  private hasWritableCTE(ast: unknown): boolean {
+    const pending: unknown[] = [ast]
+
+    while (pending.length > 0) {
+      const node = pending.pop()
+
+      if (!node || typeof node !== 'object') {
+        continue
+      }
+
+      const record = node as Record<string, unknown>
+      if (typeof record['type'] === 'string' && WRITABLE_CTE_NODE_TYPES.has(record['type'])) {
+        return true
+      }
+
+      for (const value of Object.values(record)) {
+        pending.push(value)
+      }
+    }
+
+    return false
   }
 
   private async resolveSources(sources: Source[]): Promise<Source[]> {
@@ -174,7 +205,7 @@ export default class DuckDBTool extends Tool {
   }
 
   private async execute(binary: string, sql: string): Promise<Record<string, unknown>[]> {
-    const output = await RuntimeHelper.runBinary(binary, ['-no-init', '-batch', '-bail', '-json', ':memory:', '-c', sql], {
+    const output = await RuntimeHelper.runBinary(binary, ['-no-agent', '-no-init', '-batch', '-bail', '-json', ':memory:', '-c', sql], {
       timeoutMs: QUERY_TIMEOUT_MS,
       ...(this.executionContext?.signal ? { signal: this.executionContext.signal } : {})
     })

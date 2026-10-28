@@ -20,19 +20,19 @@ QUALITY_FORMAT_SELECTORS = {
     "worst": "wv*+wa/w",
 }
 RESOLUTION_QUALITY_PATTERN = re.compile(r"[1-9][0-9]*p")
-DOWNLOAD_DESTINATION_PATTERN = re.compile(r"Destination:\s+(.+)$")
-ALREADY_DOWNLOADED_PATTERN = re.compile(
-    r"\[download\]\s+(.+)\s+has already been downloaded"
+FILE_OUTPUT_PREFIX = "leon:file:"
+PROGRESS_OUTPUT_PREFIX = "leon:progress:"
+MAX_FORMATS = 200
+MAX_PLAYLIST_PAGE = 100
+FORMAT_FIELDS = (
+    "format_id", "ext", "width", "height", "fps", "vcodec", "acodec",
+    "filesize", "filesize_approx", "tbr", "abr", "language", "format_note",
 )
-MERGED_FILE_PATTERN = re.compile(r'\[Merger\]\s+Merging formats into\s+"(.+)"$')
-MOVED_FILE_PATTERN = re.compile(
-    r'\[MoveFiles\]\s+Moving file\s+".+"\s+to\s+"(.+)"$'
-)
+FORMATS_TEMPLATE = ('{"source":%(.{id,title,webpage_url})j,"formats":%(formats.:.{'
+                    + ",".join(FORMAT_FIELDS) + '})j}')
+PLAYLIST_TEMPLATE = "%(.{id,url,webpage_url,title,duration,channel,uploader,playlist_index})j"
 SUBTITLE_DESTINATION_PATTERN = re.compile(
     r"Writing (?:video subtitles|video automatic captions) to:\s+(.+)$"
-)
-DOWNLOAD_PROGRESS_PATTERN = re.compile(
-    r"\[download\]\s+(\d+\.?\d*)%\s+of\s+(?:~?\s*)([\d.]+\w+)\s+at\s+([\d.]+\w+/s)\s+ETA\s+([\d:]+)"
 )
 YTDLP_EXT_TEMPLATE = "%(ext)s"
 YTDLP_TITLE_TEMPLATE = "%(title)s"
@@ -121,7 +121,7 @@ class YtdlpTool(BaseTool):
 
     def _get_config_args(self):
         config_path = os.path.join(self._get_tool_dir(__file__), "yt-dlp.conf")
-        return ["--config-locations", config_path]
+        return ["--ignore-config", "--config-locations", config_path]
 
     @staticmethod
     def _resolve_media_output_target(
@@ -246,13 +246,12 @@ class YtdlpTool(BaseTool):
         parsed_path = None
 
         for line in output.split("\n"):
-            match = (
-                DOWNLOAD_DESTINATION_PATTERN.search(line)
-                or ALREADY_DOWNLOADED_PATTERN.search(line)
-                or MERGED_FILE_PATTERN.search(line)
-                or MOVED_FILE_PATTERN.search(line)
-                or SUBTITLE_DESTINATION_PATTERN.search(line)
-            )
+            if line.startswith(FILE_OUTPUT_PREFIX):
+                value = json.loads(line[len(FILE_OUTPUT_PREFIX):])
+                if isinstance(value, str):
+                    parsed_path = value
+                continue
+            match = SUBTITLE_DESTINATION_PATTERN.search(line)
             if match and match.group(1):
                 parsed_path = match.group(1).strip()
 
@@ -520,6 +519,83 @@ class YtdlpTool(BaseTool):
             if metadata.get(field) is not None
         }
 
+    def list_formats(self, video_url: str) -> dict[str, Any]:
+        """Inspect encoding choices without exposing media URLs or headers."""
+        output = self.execute_command(ExecuteCommandOptions(
+            binary_name="yt-dlp",
+            args=self._get_config_args() + ["--simulate", "--no-playlist",
+                "--print", FORMATS_TEMPLATE, "--", video_url],
+            options={"sync": True},
+        ))
+        data = json.loads(output)
+        formats = data.get("formats") or []
+        return {"source": data.get("source"), "formats": formats[:MAX_FORMATS],
+                "totalFormats": len(formats), "truncated": len(formats) > MAX_FORMATS}
+
+    def list_playlist_items(
+        self, playlist_url: str, start_index: int = 0, limit: int = 50
+    ) -> dict[str, Any]:
+        """Read one bounded page of playlist entries without downloading media."""
+        if (type(start_index) is not int or start_index < 0 or
+                type(limit) is not int or not 1 <= limit <= MAX_PLAYLIST_PAGE or
+                start_index + limit + 1 > 9_007_199_254_740_991):
+            raise ValueError(f"Use a non-negative startIndex and a limit from 1 to {MAX_PLAYLIST_PAGE}.")
+        output = self.execute_command(ExecuteCommandOptions(
+            binary_name="yt-dlp",
+            args=self._get_config_args() + ["--flat-playlist", "--skip-download",
+                "--playlist-start", str(start_index + 1),
+                "--playlist-end", str(start_index + limit + 1),
+                "--print", PLAYLIST_TEMPLATE, "--", playlist_url],
+            options={"sync": True},
+        ))
+        items = [json.loads(line) for line in output.splitlines() if line]
+        return {"items": items[:limit], "startIndex": start_index,
+                "nextIndex": start_index + limit if len(items) > limit else None}
+
+    def _run_download(
+        self, args: list[str], on_progress: Optional[ProgressCallback] = None
+    ) -> str:
+        """Read structured progress across chunks and retain final output paths."""
+        pending = ["", ""]
+        downloaded_bytes = 0
+
+        def read_line(line: str) -> None:
+            nonlocal downloaded_bytes
+            if not line.startswith(PROGRESS_OUTPUT_PREFIX):
+                return
+            try:
+                progress = json.loads(line[len(PROGRESS_OUTPUT_PREFIX):])
+            except ValueError:
+                return
+            current = progress.get("downloaded_bytes") or 0
+            total = progress.get("total_bytes") or progress.get("total_bytes_estimate")
+            if current > downloaded_bytes:
+                downloaded_bytes = current
+                self.emit_progress(f"Downloaded {current} bytes" + (f" of {total}" if total else ""))
+                if on_progress:
+                    on_progress({"status": "downloading", **(
+                        {"percentage": min(100, current / total * 100)} if total else {})})
+
+        def handle_output(text: str, is_error: bool) -> None:
+            stream = 1 if is_error else 0
+            lines = (pending[stream] + text).split("\n")
+            pending[stream] = lines.pop()
+            for line in lines:
+                read_line(line)
+
+        result = self.execute_command(ExecuteCommandOptions(
+            binary_name="yt-dlp",
+            args=self._get_config_args() + ["--no-simulate", "--newline", "--progress",
+                "--progress-template", f"download:{PROGRESS_OUTPUT_PREFIX}%(progress)j",
+                "--print", f"after_move:{FILE_OUTPUT_PREFIX}%(filepath)j"] + args,
+            on_output=handle_output,
+        ))
+        for line in pending:
+            read_line(line)
+        if on_progress:
+            on_progress({"percentage": 100, "status": "completed"})
+        return result
+
     def download_video(self, video_url: str, output_path: str) -> str:
         """
         Downloads a single video from the provided URL.
@@ -536,16 +612,7 @@ class YtdlpTool(BaseTool):
             os.makedirs(target["directory_path"], exist_ok=True)
             command_started_at_ms = time.time() * 1000
 
-            args = self._get_config_args() + [
-                video_url,
-                "-o",
-                target["output_template"],
-            ]
-            result = self.execute_command(
-                ExecuteCommandOptions(
-                    binary_name="yt-dlp", args=args, options={"sync": True}
-                )
-            )
+            result = self._run_download(["--no-playlist", "-o", target["output_template"], "--", video_url])
 
             return self._resolve_downloaded_media_path(
                 result, target, command_started_at_ms
@@ -573,20 +640,7 @@ class YtdlpTool(BaseTool):
             os.makedirs(target["directory_path"], exist_ok=True)
             command_started_at_ms = time.time() * 1000
 
-            args = self._get_config_args() + [
-                video_url,
-                "-x",
-                "--audio-format",
-                audio_format,
-                "-o",
-                target["output_template"],
-            ]
-
-            result = self.execute_command(
-                ExecuteCommandOptions(
-                    binary_name="yt-dlp", args=args, options={"sync": True}
-                )
-            )
+            result = self._run_download(["--no-playlist", "-x", "--audio-format", audio_format, "-o", target["output_template"], "--", video_url])
 
             return self._resolve_downloaded_media_path(
                 result, target, command_started_at_ms
@@ -613,13 +667,7 @@ class YtdlpTool(BaseTool):
                 output_path,
                 f"{YTDLP_PLAYLIST_INDEX_TEMPLATE} - {YTDLP_TITLE_TEMPLATE}.{YTDLP_EXT_TEMPLATE}",
             )
-            args = self._get_config_args() + [playlist_url, "-o", output_template]
-
-            self.execute_command(
-                ExecuteCommandOptions(
-                    binary_name="yt-dlp", args=args, options={"sync": True}
-                )
-            )
+            self._run_download(["-o", output_template, "--", playlist_url])
 
             return output_path
 
@@ -665,54 +713,13 @@ class YtdlpTool(BaseTool):
             target = self._resolve_media_output_target(output_path)
             os.makedirs(target["directory_path"], exist_ok=True)
             command_started_at_ms = time.time() * 1000
-            downloaded_file_path = ""
-
-            def handle_output(output: str, is_error: bool):
-                nonlocal downloaded_file_path
-
-                for line in output.split("\n"):
-                    if not is_error and "[download]" in line:
-                        progress_match = DOWNLOAD_PROGRESS_PATTERN.search(line)
-                        if progress_match and on_progress:
-                            on_progress(
-                                {
-                                    "percentage": float(progress_match.group(1)),
-                                    "size": progress_match.group(2),
-                                    "speed": progress_match.group(3),
-                                    "eta": progress_match.group(4),
-                                    "status": "downloading",
-                                }
-                            )
-
-                    path_match = self._parse_output_file_path(line)
-                    if path_match:
-                        downloaded_file_path = path_match
-
-                    if not is_error and "[download] 100%" in line and on_progress:
-                        on_progress({"percentage": 100, "status": "completed"})
-
-            args = self._get_config_args() + [
-                "--no-playlist",
-                "-f",
-                format_selector,
-                "-o",
-                target["output_template"],
-                "--newline",
-                "--",
-                video_url,
-            ]
-            result = self.execute_command(
-                ExecuteCommandOptions(
-                    binary_name="yt-dlp",
-                    args=args,
-                    options={"sync": False},
-                    on_progress=on_progress,
-                    on_output=handle_output,
-                )
-            )
+            result = self._run_download([
+                "--no-playlist", "-f", format_selector, "-o", target["output_template"],
+                "--", video_url,
+            ], on_progress)
 
             return self._resolve_downloaded_media_path(
-                "\n".join([downloaded_file_path, result]),
+                result,
                 target,
                 command_started_at_ms,
             )
@@ -872,19 +879,7 @@ class YtdlpTool(BaseTool):
             os.makedirs(target["directory_path"], exist_ok=True)
             command_started_at_ms = time.time() * 1000
 
-            args = self._get_config_args() + [
-                video_url,
-                "--embed-thumbnail",
-                "--write-thumbnail",
-                "-o",
-                target["output_template"],
-            ]
-
-            result = self.execute_command(
-                ExecuteCommandOptions(
-                    binary_name="yt-dlp", args=args, options={"sync": True}
-                )
-            )
+            result = self._run_download(["--no-playlist", "--embed-thumbnail", "--write-thumbnail", "-o", target["output_template"], "--", video_url])
 
             return self._resolve_downloaded_media_path(
                 result, target, command_started_at_ms

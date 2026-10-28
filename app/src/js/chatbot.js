@@ -1005,10 +1005,8 @@ export default class Chatbot {
       `<span class="bubble-metric-item" title="Observed agent model calls only">${label}</span>`
     ).join('')
     const reviewCount = Number(metrics.reviewCount || 0)
-    const reviewRetryCount = Number(metrics.reviewRetryCount || 0)
-    const reviewRetryLabel = reviewRetryCount === 1 ? 'retry' : 'retries'
     const reviewMarkup = reviewCount > 0
-      ? `<span class="bubble-metric-item" title="${reviewCount} completion ${reviewCount === 1 ? 'review' : 'reviews'}; included in turn duration">Review ${this.formatTurnDuration(metrics.reviewDurationMs)} · ${reviewRetryCount} ${reviewRetryLabel}</span>`
+      ? `<span class="bubble-metric-item" title="${reviewCount} completion ${reviewCount === 1 ? 'review' : 'reviews'}; included in turn duration">Review ${this.formatTurnDuration(metrics.reviewDurationMs)}</span>`
       : ''
 
     return `

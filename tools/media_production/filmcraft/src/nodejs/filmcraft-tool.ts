@@ -43,6 +43,10 @@ export interface RenderOptions {
   format?: RenderFormat
   startSeconds?: number
   endSeconds?: number
+  preset?: string
+  quality?: number
+  scale?: number
+  settings?: Record<string, unknown>
 }
 
 export const RENDER_FORMATS = {
@@ -287,6 +291,34 @@ export default class FilmCraftTool extends Tool {
     }
 
     const args = ['--format', RENDER_FORMATS[format].cliFormat]
+
+    if ((options.startSeconds === undefined) !== (options.endSeconds === undefined)) {
+      throw new Error('Provide both startSeconds and endSeconds for a custom range.')
+    }
+    if (options.preset !== undefined) {
+      if (!options.preset.trim()) {
+        throw new Error('preset must name a discovered export preset.')
+      }
+      args.push('--preset', options.preset)
+    }
+    if (options.quality !== undefined) {
+      if (!Number.isFinite(options.quality) || options.quality < 0 || options.quality > 100) {
+        throw new Error('quality must be between 0 and 100.')
+      }
+      args.push('--quality', String(options.quality))
+    }
+    if (options.scale !== undefined) {
+      if (!Number.isFinite(options.scale) || options.scale <= 0) {
+        throw new Error('scale must be positive.')
+      }
+      args.push('--scale', String(options.scale))
+    }
+    if (options.settings !== undefined) {
+      if (!options.settings || typeof options.settings !== 'object' || Array.isArray(options.settings)) {
+        throw new Error('settings must be an ExportSettings JSON object.')
+      }
+      args.push('--settings', JSON.stringify(options.settings))
+    }
 
     for (const [flag, seconds] of [
       ['--start', options.startSeconds],

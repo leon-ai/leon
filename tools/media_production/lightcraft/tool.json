@@ -11,11 +11,12 @@
     "url": "https://x.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-0.2.1-linux-x86_64.tar.gz",
-    "linux-aarch64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-0.2.1-linux-aarch64.tar.gz",
-    "macosx-x86_64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-cli-0.2.1-macos-universal.zip",
-    "macosx-arm64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-cli-0.2.1-macos-universal.zip",
-    "win-amd64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-0.2.1-windows-x64-portable.zip"
+    "linux-x86_64": "https://github.com/storytold/lightcraft/releases/download/v0.14.0/lightcraft-0.14.0-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/lightcraft/releases/download/v0.14.0/lightcraft-0.14.0-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/lightcraft/releases/download/v0.14.0/lightcraft-cli-0.14.0-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/lightcraft/releases/download/v0.14.0/lightcraft-cli-0.14.0-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/lightcraft/releases/download/v0.14.0/lightcraft-0.14.0-windows-x64-portable.zip",
+    "win-arm64": "https://github.com/storytold/lightcraft/releases/download/v0.14.0/lightcraft-0.14.0-windows-arm64-portable.zip"
   },
   "progressive_guidance": "The CLI downloads automatically from the pinned release archives. Operations run headlessly without opening a window or requiring a generation-provider account. Discover command IDs and params before editing. Ordinary edits stage a source copy and publish new files. Engine commands with explicit paths can still access the local filesystem; use file, script, preference or destructive operations only when explicitly requested. Preserve originals and inspect diagnostics. A successful command is not proof of visual quality: inspect a rendered preview before delivering artwork or video.",
   "functions": {
@@ -153,6 +154,125 @@
       },
       "progressive_guidance": "Use library.info and catalog.query to inspect scope, observed photo IDs and pagination before changes. library.import can import explicitly selected paths; retain originals and choose copy/add instead of move unless requested. Only engine commands are accepted, not raw UI methods. Library metadata and development changes persist; ask before deletions, source/sidecar overwrites or moving owner files. The library must be closed in the GUI; do not bypass its lock. Use develop for delivered photo artifacts.",
       "deduplicate_calls": false
+    },
+    "exportPhotos": {
+      "description": "Export observed library photo IDs into completed conversation artifacts, preserving originals.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "libraryPath": {
+            "type": "string",
+            "description": "Explicitly selected existing library directory; close it in the GUI first."
+          },
+          "photoIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "png",
+                  "jpg",
+                  "tif",
+                  "webp",
+                  "avif",
+                  "dng"
+                ]
+              },
+              "longEdge": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Discovered app.export encoding settings. Leon assigns an isolated destination and disables external photo-library imports."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "libraryPath",
+          "photoIds"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
+      }
+    },
+    "createContactSheet": {
+      "description": "Create and attach a PDF contact sheet for observed library photo IDs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "libraryPath": {
+            "type": "string",
+            "description": "Explicitly selected existing library directory; close it in the GUI first."
+          },
+          "photoIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "paper": {
+                "type": "string",
+                "enum": [
+                  "a4",
+                  "letter"
+                ]
+              },
+              "landscape": {
+                "type": "boolean"
+              },
+              "columns": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "rows": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "captions": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "libraryPath",
+          "photoIds"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "background": true,
+      "timeout": {
+        "idleMs": 120000
+      }
     }
   },
   "concurrency": "serial"

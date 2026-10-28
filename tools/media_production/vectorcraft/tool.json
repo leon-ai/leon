@@ -11,11 +11,12 @@
     "url": "https://x.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-linux-x86_64.tar.gz",
-    "linux-aarch64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-linux-aarch64.tar.gz",
-    "macosx-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-cli-0.4.0-macos-universal.zip",
-    "macosx-arm64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-cli-0.4.0-macos-universal.zip",
-    "win-amd64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-windows-x64-portable.zip"
+    "linux-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-cli-0.17.0-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-cli-0.17.0-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-windows-x64-portable.zip",
+    "win-arm64": "https://github.com/storytold/vectorcraft/releases/download/v0.17.0/vectorcraft-0.17.0-windows-arm64-portable.zip"
   },
   "progressive_guidance": "The CLI downloads automatically from the pinned release archives. Operations run headlessly without opening a window or requiring a generation-provider account. Discover command IDs and params before editing. Ordinary edits stage a source copy and publish new files. Engine commands with explicit paths can still access the local filesystem; use file, script, preference or destructive operations only when explicitly requested. Preserve originals and inspect diagnostics. A successful command is not proof of visual quality: inspect a rendered preview before delivering artwork or video.",
   "functions": {
@@ -33,13 +34,52 @@
       }
     },
     "inspect": {
-      "description": "Inspect document artboards, object counts and fonts without modifying the file.",
+      "description": "Read bounded document artboards, objects and fonts; options support IDs, kind and pagination. Results report total and childCount when sliced.",
       "parameters": {
         "type": "object",
         "properties": {
           "inputPath": {
             "type": "string",
             "description": "Absolute local source file path."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "ids": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 1,
+                "maxItems": 500
+              },
+              "kind": {
+                "type": "string",
+                "description": "Observed object kind; returns matching nodes."
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "depth": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              },
+              "childLimit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              }
+            },
+            "required": [],
+            "additionalProperties": false
           }
         },
         "additionalProperties": false,
@@ -108,6 +148,27 @@
               "png"
             ],
             "description": "Defaults to svg. PDF includes all artboards; SVG/PNG use the first."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "artboard": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Zero-based artboard index observed through inspect."
+              },
+              "scale": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Discovered document.export parameters, such as range or SVG/PDF options. Output paths are assigned by Leon."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
           }
         },
         "additionalProperties": false,
@@ -116,6 +177,36 @@
         ]
       },
       "deduplicate_calls": false
+    },
+    "findObjects": {
+      "description": "Find document objects by observed name, text, kind, geometry or anchor-count filters without saving or changing selection. Returns bounded matches and the total count.",
+      "progressive_guidance": "Discover document.find parameters with commands. Supply at least one filter; all supplied filters must match. Use returned IDs with inspect options.ids to read the matching objects.",
+      "read_only": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute existing source document."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": true,
+            "minProperties": 1,
+            "description": "Observed document.find filters, e.g. name, text, kind, within or minAnchors. Selection is never changed."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "inputPath",
+          "filters"
+        ],
+        "additionalProperties": false
+      }
     }
   }
 }
