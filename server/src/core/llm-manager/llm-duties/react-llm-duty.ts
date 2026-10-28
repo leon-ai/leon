@@ -542,7 +542,7 @@ export class ReActLLMDuty extends LLMDuty {
             .join('\n')
         })
       } else {
-        const agentRequest = await this.buildAgentRequest(caller, originalInput)
+        const agentRequest = `<user_request>\n${originalInput}\n</user_request>`
         transcript.push({
           role: 'user',
           ...(this.files?.length ? { files: this.files } : {}),
@@ -551,6 +551,8 @@ export class ReActLLMDuty extends LLMDuty {
             .join('\n\n')
         })
       }
+
+      const grounding = await this.buildAgentGrounding(caller)
 
       LogHelper.title(this.name)
       LogHelper.debug(
@@ -628,10 +630,9 @@ export class ReActLLMDuty extends LLMDuty {
           // Keep changing task state after the conversation prefix. Rewriting
           // the system prompt prevents reuse of the history that follows it.
           appendAgentRuntimeContext(messages, {
+            ...grounding,
             temporary_context: await MEMORY_MANAGER.getTemporaryContext(),
-            persona: options.isCompletionReview
-              ? PERSONA.getContextInfo()
-              : PERSONA.getDutyRuntimeContext({ includeMood: true }),
+            persona: PERSONA.getDutyRuntimeContextFields({ includeMood: !options.isCompletionReview }),
             tool_guidance: progressiveGuidance,
             connection_guidance: buildAgentConnectionGuidance(state.executionHistory),
             elapsed_ms: options.elapsedMs,
@@ -934,76 +935,37 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   /**
-   * Adds stable turn-level grounding to the first user message. Subsequent
-   * agent calls reuse this message and append tool protocol messages only.
+   * Supply grounding as runtime fields so unchanged facts survive across turns
+   * without repetition, and the latest snapshot is restored after compaction.
    */
-  private async buildAgentRequest(
-    caller: LLMCaller,
-    input: string
-  ): Promise<string> {
-    const sections = [
-      '<user_request>',
-      input,
-      '</user_request>',
-      '',
-      '<local_workspace>',
-      `Default local working directory: ${process.cwd()}`,
-      'Resolve relative task paths here unless the owner establishes another workspace. For Satellite, inspect that device\'s working directory first.',
-      '</local_workspace>',
-      '',
-      '<context_manifest>',
-      'Context filenames are identifiers, not workspace paths. Read them with structured_knowledge.context.readContextFile.',
-      caller.getContextManifest(),
-      '</context_manifest>',
-      '',
-      '<self_model>',
-      caller.getSelfModelSnapshot(),
-      '</self_model>'
-    ]
-
-    if (caller.agentSkillCatalog.trim()) {
-      sections.push(
-        '',
-        '<available_agent_skills>',
-        caller.agentSkillCatalog,
-        '</available_agent_skills>'
-      )
-    }
-
-    if (caller.agentSkillContext) {
-      sections.push(
-        '',
-        '<active_agent_skill>',
-        `Name: ${caller.agentSkillContext.name}`,
-        `Path: ${caller.agentSkillContext.skillPath}`,
-        '',
-        caller.agentSkillContext.instructions,
-        '</active_agent_skill>'
-      )
+  private async buildAgentGrounding(caller: LLMCaller): Promise<Record<string, unknown>> {
+    const grounding: Record<string, unknown> = {
+      local_workspace: [
+        `Default local working directory: ${process.cwd()}`,
+        'Resolve relative task paths here unless the owner establishes another workspace. For Satellite, inspect that device\'s working directory first.'
+      ].join('\n'),
+      context_manifest: [
+        'Context filenames are identifiers, not workspace paths. Read them with structured_knowledge.context.readContextFile.',
+        caller.getContextManifest()
+      ].join('\n'),
+      self_model: caller.getSelfModelSnapshot(),
+      available_agent_skills: caller.agentSkillCatalog,
+      previous_tool_artifacts: ''
     }
 
     if (caller.getPreviousToolArtifacts) {
       try {
-        const previousToolArtifacts =
-          await caller.getPreviousToolArtifacts()
-        if (previousToolArtifacts.trim()) {
-          sections.push(
-            '',
-            '<previous_tool_artifacts>',
-            'These artifacts come from earlier turns, not the current agent transcript.',
-            previousToolArtifacts,
-            '</previous_tool_artifacts>'
-          )
-        }
+        const artifacts = await caller.getPreviousToolArtifacts()
+        grounding['previous_tool_artifacts'] = artifacts.trim()
+          ? `These artifacts come from earlier turns, not the current agent transcript.\n${artifacts}`
+          : ''
       } catch (error) {
         LogHelper.title(this.name)
-        LogHelper.warning(
-          `Failed to load previous tool artifacts: ${String(error)}`
-        )
+        LogHelper.warning(`Failed to load previous tool artifacts: ${String(error)}`)
       }
     }
 
-    return sections.join('\n')
+    return grounding
   }
 
   private loadValidAgentLoopContinuation(): AgentLoopContinuationState | null {
