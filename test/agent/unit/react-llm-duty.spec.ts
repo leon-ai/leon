@@ -4523,6 +4523,37 @@ describe('model response status', () => {
     .filter(([event]) => event === 'model-response-status')
     .map(([, status]) => status)
 
+  it('allows accepted reasoning to finish within the advertised response deadline', async () => {
+    const runChatCompletion = vi.fn(async (_messages, params: CompletionParams) => {
+      params.onStreamEvent?.({
+        type: 'provider-event', providerEventType: 'response.in_progress', requestAccepted: true
+      })
+      await new Promise((resolve) => setTimeout(resolve, 135_000))
+      return { data: { choices: [{ message: { content: 'Done.' }, finish_reason: 'stop' }] } }
+    })
+    coreMocks.prompt.mockImplementation((history, params) => runCompletionAttempt(
+      { modelName: 'test-model', runChatCompletion }, LLMProviders.OpenAI, history,
+      { ...params, data: null, remoteProviderErrorRetries: 0 } as PreparedCompletionParams,
+      'reasoning-deadline-test', vi.fn(), vi.fn()
+    ))
+    const duty = new ReActLLMDuty({ input: 'Review the evidence.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    let settled = false
+    const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+      isRecoveryAttempt: false
+    }).finally(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(120_001)
+    expect(settled).toBe(false)
+    expect(runChatCompletion).toHaveBeenCalledOnce()
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect((await pending)?.textContent).toBe('Done.')
+    expect(runChatCompletion).toHaveBeenCalledOnce()
+    expect(statuses().at(-1)?.state).toBe(ModelResponseState.Completed)
+  })
+
   it('lets productive tool generation finish after the finishing reserve begins', async () => {
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
     const budget = new AgentRunBudget(Date.now() + 180_000)
@@ -5263,7 +5294,9 @@ describe('model response status', () => {
       ),
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
-    await vi.advanceTimersByTimeAsync(120_001)
+    await vi.advanceTimersByTimeAsync(firstResponse === 'timeout'
+      ? AGENT_MODEL_RESPONSE_TIMEOUT_MS + 1
+      : 120_001)
     expect(attempts).toHaveLength(firstResponse === 'timeout' ? 1 : 2)
     expect(attempts[0]?.signal?.aborted).toBe(firstResponse === 'timeout')
     if (firstResponse === 'empty') {

@@ -58,6 +58,7 @@ export default class LLMProvider {
   private workflowLLMProviderTargetLabel: string | null = null
   private agentLLMProviderTargetLabel: string | null = null
   private readonly sessionLLMProviders = new Map<string, Provider>()
+  private readonly activeCompletions = new Map<Provider, Set<Promise<CompletionResult | null>>>()
   private lastProviderErrorMessage: string | null = null
   private llamaCPPServerBootErrorMessage: string | null = null
   private promptSequence = 0
@@ -267,6 +268,9 @@ export default class LLMProvider {
     return true
   }
 
+  /**
+   * Retires provider bindings while allowing their current responses to finish.
+   */
   public dispose(): void {
     this.disposeCurrentProviders()
     this.workflowLLMProvider = undefined
@@ -317,13 +321,23 @@ export default class LLMProvider {
 
   private disposeCurrentProviders(): void {
     const providers = new Set([
-      this.workflowLLMProvider as { dispose?: () => void } | undefined,
-      this.agentLLMProvider as { dispose?: () => void } | undefined,
+      this.workflowLLMProvider,
+      this.agentLLMProvider,
       ...this.sessionLLMProviders.values()
     ])
 
     for (const provider of providers) {
-      provider?.dispose?.()
+      if (!provider) {
+        continue
+      }
+
+      const active = this.activeCompletions.get(provider)
+      if (active?.size) {
+        // Runtime refresh retires the binding without interrupting its responses.
+        void Promise.allSettled([...active]).then(() => provider.dispose?.())
+      } else {
+        provider.dispose?.()
+      }
     }
 
     this.sessionLLMProviders.clear()
@@ -526,7 +540,7 @@ export default class LLMProvider {
       this.getTargetForDuty(completionParams.dutyType)
     )
 
-    return trackInferenceUsage(
+    const completion = trackInferenceUsage(
       {
         provider: providerName,
         model: provider.modelName ||
@@ -548,5 +562,18 @@ export default class LLMProvider {
         }
       )
     )
+
+    const active = this.activeCompletions.get(provider) ?? new Set<Promise<CompletionResult | null>>()
+    this.activeCompletions.set(provider, active)
+    active.add(completion)
+
+    try {
+      return await completion
+    } finally {
+      active.delete(completion)
+      if (active.size === 0) {
+        this.activeCompletions.delete(provider)
+      }
+    }
   }
 }
