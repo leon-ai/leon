@@ -4,7 +4,7 @@ PRAGMA synchronous = NORMAL;
 
 CREATE TABLE IF NOT EXISTS memory_items (
   id TEXT PRIMARY KEY,
-  scope TEXT NOT NULL CHECK (scope IN ('persistent', 'daily', 'discussion')),
+  scope TEXT NOT NULL CHECK (scope IN ('persistent', 'daily', 'discussion', 'temporary')),
   kind TEXT NOT NULL CHECK (kind IN ('fact', 'preference', 'event', 'note', 'summary', 'knowledge', 'task')),
   title TEXT,
   content_md TEXT NOT NULL,
@@ -35,6 +35,9 @@ CREATE INDEX IF NOT EXISTS idx_memory_items_deleted
   ON memory_items(is_deleted);
 CREATE INDEX IF NOT EXISTS idx_memory_items_supersedes
   ON memory_items(supersedes_item_id);
+CREATE INDEX IF NOT EXISTS idx_memory_items_temporary
+  ON memory_items(importance DESC, updated_at DESC, id)
+  WHERE scope = 'temporary' AND is_deleted = 0;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_memory_items_scope_dedupe
   ON memory_items(scope, dedupe_hash)

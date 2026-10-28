@@ -1,4 +1,4 @@
-export type MemoryScope = 'persistent' | 'daily' | 'discussion'
+export type MemoryScope = 'persistent' | 'daily' | 'discussion' | 'temporary'
 
 export type KnowledgeNamespace =
   | 'context'
@@ -58,6 +58,14 @@ export interface MemoryRecord {
   expiresAt: number | null
   isPinned: boolean
   metadata: Record<string, unknown>
+}
+
+export interface TemporaryContextEntry {
+  id: string
+  content: string
+  source: string | null
+  sourceType: MemorySourceType
+  expiresAt: string
 }
 
 export interface RecallQuery {

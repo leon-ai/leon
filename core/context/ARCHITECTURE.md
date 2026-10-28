@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-10-20T01:56:47+08:00
+- Generated at: 2026-10-29T15:47:06+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -56,6 +56,7 @@
 - Context-first policy: for runtime/environment questions (VPN, system state, apps, browsing), Leon inspects context before memory/shell.
 - Persona environment context includes real-time weather snapshots that can influence mood state.
 ## Memory System
+- Profile-scoped temporary context is stored in SQLite, filtered by validity before each turn, and injected within a fixed token budget through append-only runtime updates.
 - Memory is layered into persistent, daily, and discussion stores, with context files available as a separate grounding source.
 - `OWNER.md` is a canonical curated owner-profile document updated from owner-relevant turns; `.owner-profile.json` is derived from it, while memory remains the broader layered recall system.
 - Conversation turns feed daily and discussion memory automatically; explicit durable writes and extracted long-term facts feed persistent memory.

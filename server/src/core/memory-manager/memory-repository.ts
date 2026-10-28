@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 
 import SQLite from 'better-sqlite3'
+import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
 import type {
-  Database as SQLiteDatabase
+  Database as SQLiteDatabase,
+  Statement
 } from 'better-sqlite3'
 
 import { CODEBASE_PATH } from '@/constants'
@@ -88,6 +90,8 @@ function mapMemoryRow(row: Record<string, unknown>): MemoryRecord {
 
 export default class MemoryRepository {
   private db: SQLiteDatabase | null = null
+  private loading: Promise<void> | null = null
+  private temporaryQuery: Statement | null = null
 
   public get isReady(): boolean {
     return this.db !== null
@@ -98,12 +102,45 @@ export default class MemoryRepository {
       return
     }
 
-    await fs.promises.mkdir(path.dirname(dbPath), { recursive: true })
+    if (!this.loading) {
+      this.loading = (async (): Promise<void> => {
+        await fs.promises.mkdir(path.dirname(dbPath), { recursive: true })
+        const schemaSQL = await fs.promises.readFile(resolveMemorySchemaPath(), 'utf8')
+        const db = new SQLite(dbPath)
+        try {
+          upgradeMemoryScope(db, schemaSQL)
+          db.exec(schemaSQL)
+          this.db = db
+        } catch (error) {
+          db.close()
+          throw error
+        }
+      })()
+    }
+    try {
+      await this.loading
+    } finally {
+      this.loading = null
+    }
+  }
 
-    this.db = new SQLite(dbPath)
-    const schemaPath = resolveMemorySchemaPath()
-    const schemaSQL = await fs.promises.readFile(schemaPath, 'utf8')
-    this.db.exec(schemaSQL)
+  /**
+   * Read bounded current circumstances directly, without search or access-time writes.
+   */
+  public listTemporaryItems(limit: number): MemoryRecord[] {
+    // Prefer the ordered partial index over the generic deleted-status index;
+    // otherwise SQLite can sort every active memory before applying the limit.
+    this.temporaryQuery ??= this.ensureDb().prepare(
+      `SELECT * FROM memory_items INDEXED BY idx_memory_items_temporary
+       WHERE scope = 'temporary' AND is_deleted = 0 AND expires_at > ?
+         AND NOT EXISTS (
+           SELECT 1 FROM memory_items AS replacement
+           WHERE replacement.supersedes_item_id = memory_items.id
+             AND replacement.id != memory_items.id
+         )
+       ORDER BY importance DESC, updated_at DESC, id LIMIT ?`
+    )
+    return this.temporaryQuery.all(Date.now(), limit).map(mapMemoryRow)
   }
 
   private ensureDb(): SQLiteDatabase {
@@ -160,6 +197,9 @@ export default class MemoryRepository {
     const existing = findStmt.get(input.scope, dedupeHash)
 
     if (existing) {
+      if (input.scope === 'temporary' && existing['source_ref'] === input.sourceRef && !input.supersedesItemId) {
+        return mapMemoryRow(existing)
+      }
       // An inferred duplicate must not downgrade direct owner evidence.
       if (
         existing['source_type'] === 'explicit_user' &&

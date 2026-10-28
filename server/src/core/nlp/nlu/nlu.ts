@@ -1042,14 +1042,14 @@ export default class NLU {
         )
         LogHelper.title('NLU')
         LogHelper.debug(
-          'Skipping automatic persistent extraction: explicit memory.write already executed in this turn'
+          'Skipping automatic memory extraction: explicit memory mutation already executed in this turn'
         )
       } else {
         POST_TURN_MAINTENANCE_QUEUE.enqueue(
-          'persistent memory extraction',
+          'memory extraction',
           async () => {
             const savedCount =
-              await MEMORY_MANAGER.savePersistentMemoryCandidatesFromTurn(
+              await MEMORY_MANAGER.saveMemoryCandidatesFromTurn(
                 utterance,
                 String(output),
                 sentAt

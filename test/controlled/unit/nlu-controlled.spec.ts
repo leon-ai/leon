@@ -60,7 +60,7 @@ const coreMocks = vi.hoisted(() => ({
   },
   memoryManager: {
     observeTurn: vi.fn(async () => undefined),
-    savePersistentMemoryCandidatesFromTurn: vi.fn(async () => undefined)
+    saveMemoryCandidatesFromTurn: vi.fn(async () => undefined)
   },
   selfModelManager: {
     observeTurn: vi.fn(async () => undefined)

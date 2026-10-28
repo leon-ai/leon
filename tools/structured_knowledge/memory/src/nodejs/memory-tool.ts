@@ -8,8 +8,11 @@ import {
   CODEBASE_PATH,
   PROFILE_CONTEXT_PATH,
   PROFILE_MEMORY_DB_PATH,
-  PROFILE_MEMORY_PATH
+  PROFILE_MEMORY_PATH,
+  PROFILE_SESSIONS_PATH
 } from '@bridge/constants'
+import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
+import { getTemporaryContextSize, resolveTemporaryExpiration, resolveTemporaryMemoryPolicy } from '@@/bridges/runtime/nodejs/temporary-memory'
 import {
   type QMDCollectionDefinition,
   type QMDStoreRow,
@@ -52,7 +55,7 @@ const BRIDGE_SOURCE_CONTENT_CAP = 96_000
 const MIN_HIT_TOKEN_BUDGET = 48
 const INDEX_UPDATE_MIN_INTERVAL_MS = 10_000
 
-type MemoryScope = 'persistent' | 'daily' | 'discussion'
+type MemoryScope = 'persistent' | 'daily' | 'discussion' | 'temporary'
 type MemoryKind =
   | 'fact'
   | 'preference'
@@ -97,6 +100,7 @@ interface MemoryWriteOptions {
   isPinned?: boolean
   metadata?: Record<string, unknown>
   supersedesItemId?: string
+  evidence?: string
 }
 
 interface QMDHit {
@@ -792,9 +796,39 @@ export default class MemoryTool extends Tool {
     const newItemId = randomUUID()
     const scope = this.normalizeScope(options.scope)
     const kind = this.normalizeKind(options.kind)
-    const sourceType = this.normalizeSourceType(options.sourceType)
+    const sourceType = scope === 'temporary' ? 'explicit_user' : this.normalizeSourceType(options.sourceType)
     const sessionId = this.executionContext?.conversationSessionId
-    const sourceRef = options.sourceRef || (sessionId ? `session:${sessionId}` : null)
+    let sourceRef = options.sourceRef || (sessionId ? `session:${sessionId}` : null)
+    if (scope === 'temporary') {
+      const policy = resolveTemporaryMemoryPolicy(this.settings)
+      const evidence = options.evidence?.trim()
+      if (!sessionId || !evidence) {
+        return { success: false, error: 'Temporary memory requires an exact quote from the current owner message.' }
+      }
+      const log = JSON.parse(await fs.promises.readFile(
+        path.join(PROFILE_SESSIONS_PATH, sessionId, 'conversation_log.json'), 'utf8'
+      )) as Array<{ who: string, message: unknown, sentAt: number, messageId?: string }>
+      const owner = log.findLast((message) => message.who === 'owner')
+      if (typeof owner?.message !== 'string' || !owner.message.includes(evidence)) {
+        return { success: false, error: 'Evidence must occur verbatim in the latest owner message; assistant text and guesses are not evidence.' }
+      }
+      if (Buffer.byteLength(normalizedContent, 'utf8') > policy.tokenBudget / 2) {
+        return { success: false, error: 'Temporary memory must be a concise fact; shorten its content without losing qualifications.' }
+      }
+      sourceRef = `session:${sessionId}:message:${owner.messageId || owner.sentAt}`
+      options = {
+        ...options,
+        expiresAt: resolveTemporaryExpiration(now, options.expiresAt, policy),
+        isPinned: false,
+        metadata: { ...options.metadata, evidence }
+      }
+      if (getTemporaryContextSize([{
+        id: newItemId, content: normalizedContent, source: sourceRef, sourceType,
+        expiresAt: new Date(options.expiresAt as number).toISOString()
+      }]) > policy.tokenBudget) {
+        return { success: false, error: 'This fact and its source exceed the temporary context budget. Shorten the content while preserving its meaning.' }
+      }
+    }
     const dayKey = options.dayKey || toDayKey(now)
     const dedupeHash = createHash('sha256')
       .update(`${scope}|${kind}|${normalizedContent.toLowerCase()}`)
@@ -829,6 +863,11 @@ export default class MemoryTool extends Tool {
       const itemId = existing && typeof existing['id'] === 'string'
         ? String(existing['id'])
         : newItemId
+
+      if (scope === 'temporary' && existing?.['source_ref'] === sourceRef && !options.supersedesItemId) {
+        // Retrying the same evidence must not extend its lifetime.
+        return { itemId, createdAt: Number(existing['created_at']), previous }
+      }
 
       if (
         existing?.['source_type'] === 'explicit_user' &&
@@ -939,9 +978,11 @@ export default class MemoryTool extends Tool {
       createdAt
     })
 
-    MemoryTool.lastIndexUpdateAt = 0
-    await this.ensureCollections()
-    await this.updateIndex()
+    if (scope !== 'temporary') {
+      MemoryTool.lastIndexUpdateAt = 0
+      await this.ensureCollections()
+      await this.updateIndex()
+    }
 
     return {
       success: true,
@@ -981,9 +1022,11 @@ export default class MemoryTool extends Tool {
       dayKey: String(record['day_key'] || ''),
       createdAt: Number(record['created_at'])
     })
-    MemoryTool.lastIndexUpdateAt = 0
-    await this.ensureCollections()
-    await this.updateIndex()
+    if (record['scope'] !== 'temporary') {
+      MemoryTool.lastIndexUpdateAt = 0
+      await this.ensureCollections()
+      await this.updateIndex()
+    }
 
     return {
       success: true,
@@ -1041,7 +1084,7 @@ export default class MemoryTool extends Tool {
   }
 
   private normalizeScope(value: unknown): MemoryScope {
-    if (value === 'daily' || value === 'discussion' || value === 'persistent') {
+    if (value === 'daily' || value === 'discussion' || value === 'persistent' || value === 'temporary') {
       return value
     }
     return 'persistent'
@@ -1175,6 +1218,7 @@ export default class MemoryTool extends Tool {
       if (!MemoryTool.db) {
         const db = new SQLite(PROFILE_MEMORY_DB_PATH)
         try {
+          upgradeMemoryScope(db, schemaSQL)
           db.exec(schemaSQL)
           MemoryTool.db = db
         } catch (error) {
@@ -1352,7 +1396,7 @@ export default class MemoryTool extends Tool {
     dayKey: string
     createdAt: number
   }): Promise<void> {
-    if (input.scope === 'daily' && input.kind !== 'summary') {
+    if (input.scope === 'temporary' || (input.scope === 'daily' && input.kind !== 'summary')) {
       return
     }
 

@@ -4267,6 +4267,18 @@ describe('agent automatic compaction', () => {
     expect(compacted.at(-1)).toMatchObject({ runtimeContext: state })
   })
 
+  it('revokes temporary state without rewriting the cached prefix', () => {
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Bonjour.' }]
+    appendAgentRuntimeContext(transcript, {
+      temporary_context: [{ id: 'current', content: 'Je séjourne à Lyon.' }]
+    })
+    const prefix = structuredClone(transcript)
+    transcript.push({ role: 'user', content: '天气怎么样？' })
+    appendAgentRuntimeContext(transcript, { temporary_context: [] })
+    expect(transcript.slice(0, prefix.length)).toEqual(prefix)
+    expect(transcript.at(-1)?.runtimeContext).toEqual({ temporary_context: [] })
+  })
+
   it.each([false, true])('preserves completed writes through provider overload (recovers=%s)', async (recovers) => {
     vi.useFakeTimers()
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'leon-recovery-'))

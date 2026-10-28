@@ -22,6 +22,7 @@ import {
   TOOLKIT_REGISTRY,
   CONTEXT_MANAGER,
   SELF_MODEL_MANAGER,
+  MEMORY_MANAGER,
   CONVERSATION_LOGGER,
   SOCKET_SERVER,
   TOOL_CALL_LOGGER,
@@ -627,6 +628,7 @@ export class ReActLLMDuty extends LLMDuty {
           // Keep changing task state after the conversation prefix. Rewriting
           // the system prompt prevents reuse of the history that follows it.
           appendAgentRuntimeContext(messages, {
+            temporary_context: await MEMORY_MANAGER.getTemporaryContext(),
             persona: options.isCompletionReview
               ? PERSONA.getContextInfo()
               : PERSONA.getDutyRuntimeContext({ includeMood: true }),
