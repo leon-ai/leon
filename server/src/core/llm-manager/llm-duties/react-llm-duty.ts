@@ -1344,6 +1344,7 @@ export class ReActLLMDuty extends LLMDuty {
       )
     }
     this.logAgentPromptDispatch({
+      estimatedInputTokens: preparedContext.estimatedInputTokens,
       prompt: promptForLog,
       systemPrompt: activeSystemPrompt,
       tools: preparedTools,
@@ -1484,8 +1485,7 @@ export class ReActLLMDuty extends LLMDuty {
         }
 
         this.logLongToolCallDiagnosis(
-          promptForLog,
-          activeSystemPrompt,
+          preparedContext.estimatedInputTokens,
           preparedTools,
           phase,
           toolChoice
@@ -1498,10 +1498,14 @@ export class ReActLLMDuty extends LLMDuty {
     const isFinishingCall = options.isCompletionReview ||
       options.isFinalizationAttempt || this.runBudget?.isFinishing
     const remainingMs = this.runBudget?.remainingMs
-    const inferenceTimeout = remainingMs === undefined
+    // Operational reasoning gets the same initial wait advertised by the loop.
+    const inferenceLimit = isPrivateResponse
       ? AGENT_INFERENCE_TIMEOUT_MS
+      : AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    const inferenceTimeout = remainingMs === undefined
+      ? inferenceLimit
       : Math.min(
-          AGENT_INFERENCE_TIMEOUT_MS,
+          inferenceLimit,
           isFinishingCall ? remainingMs : remainingMs / 2
         )
 
@@ -2031,6 +2035,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private logAgentPromptDispatch(params: {
+    estimatedInputTokens: number
     prompt: string
     systemPrompt: string
     phasePolicySummary?: string
@@ -2038,12 +2043,12 @@ export class ReActLLMDuty extends LLMDuty {
     toolChoice: 'auto' | 'none' | 'required'
     shouldStream?: boolean
   }): void {
-    const promptTokens = this.estimateTokensFromText(params.prompt)
     const systemTokens = this.estimateTokensFromText(params.systemPrompt)
     const toolsTokens = this.estimateTokensFromText(
       this.safeJSONStringify(params.tools)
     )
-    const totalEstimated = promptTokens + systemTokens + toolsTokens
+    const totalEstimated = params.estimatedInputTokens
+    const promptTokens = Math.max(0, totalEstimated - systemTokens - toolsTokens)
 
     this.logTitle('agent')
     LogHelper.debug(
@@ -2156,17 +2161,13 @@ export class ReActLLMDuty extends LLMDuty {
    * Keeps pending-request diagnostics in server logs rather than owner messages.
    */
   private logLongToolCallDiagnosis(
-    prompt: string,
-    systemPrompt: string,
+    totalEstimatedTokens: number,
     tools: OpenAITool[],
     phase: AgentPhase,
     toolChoice: string
   ): void {
-    const promptTokens =
-      this.estimateTokensFromText(prompt) +
-      this.estimateTokensFromText(systemPrompt)
     const toolSchemaTokens = this.estimateTokensFromText(JSON.stringify(tools))
-    const totalEstimatedTokens = promptTokens + toolSchemaTokens
+    const promptTokens = Math.max(0, totalEstimatedTokens - toolSchemaTokens)
 
     this.logTitle('execution')
     LogHelper.warning(

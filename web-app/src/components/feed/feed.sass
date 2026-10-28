@@ -55,26 +55,31 @@
   left: 0
   z-index: 2
   width: 100%
-  background-color: var(--color-feed-mask)
-  -webkit-backdrop-filter: var(--feed-mask-backdrop-filter)
-  backdrop-filter: var(--feed-mask-backdrop-filter)
   pointer-events: none
-  transition: background-color var(--transition-duration-main) var(--transition-timing-main)
+
+  &::before
+    content: ''
+    position: absolute
+    // Extend the feather beyond the text column to avoid visible side seams.
+    inset: 0 calc(var(--feed-scrim-edge-width) * -1)
+    background-color: var(--color-feed-mask)
+    -webkit-backdrop-filter: var(--feed-mask-backdrop-filter)
+    backdrop-filter: var(--feed-mask-backdrop-filter)
+    -webkit-mask-image: var(--feed-mask-gradient), linear-gradient(90deg, transparent, #000 var(--feed-scrim-edge-width), #000 calc(100% - var(--feed-scrim-edge-width)), transparent)
+    mask-image: var(--feed-mask-gradient), linear-gradient(90deg, transparent, #000 var(--feed-scrim-edge-width), #000 calc(100% - var(--feed-scrim-edge-width)), transparent)
+    -webkit-mask-composite: source-in
+    mask-composite: intersect
+    transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
 .feed-mask-top
+  --feed-mask-gradient: linear-gradient(to bottom, #000, transparent)
   top: 0
   height: var(--feed-top-clearance)
-  mask-image: linear-gradient(to bottom, #000, #000 0%, transparent)
-  -webkit-mask-image: linear-gradient(to bottom, #000, #000 0%, transparent)
 
 .feed-mask-bottom
+  --feed-mask-gradient: linear-gradient(to top, #000, transparent)
   bottom: 0
   height: var(--feed-bottom-clearance)
-  mask-image: linear-gradient(to bottom, transparent, #000 var(--feed-bottom-mask-stop), #000)
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--feed-bottom-mask-stop), #000)
-
-[data-theme='light'] .feed-mask-bottom
-  display: none
 
 @media (max-width: 680px)
   .feed
@@ -82,5 +87,5 @@
     --feed-top-clearance: var(--space-xl)
 
 @media (prefers-reduced-motion: reduce)
-  .feed-mask
+  .feed-mask::before
     transition: none

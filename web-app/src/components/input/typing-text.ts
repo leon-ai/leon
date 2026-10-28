@@ -1,4 +1,4 @@
-export const TYPING_FADE_DURATION_MS = 1_000
+export const TYPING_FADE_DURATION_MS = 700
 
 const TYPING_INITIAL_OPACITY = 0.15
 const TYPING_INITIAL_COLOR = `color-mix(in srgb, var(--color-text) ${TYPING_INITIAL_OPACITY * 100}%, transparent)`

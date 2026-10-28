@@ -5,10 +5,10 @@ import { BorderWave, type BorderWaveBounds } from '@/components/border-wave'
 
 import './session-work-indicator.sass'
 
-const PARTICLE_COUNT = 6
+const PARTICLE_COUNT = 8
 const STROKE_WIDTH_PX = 1
 const WAVE_SPEED_PX_PER_SECOND = 60
-const WAVE_REPEAT_PAUSE_MS = 500
+const WAVE_REPEAT_PAUSE_MS = 0
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 /**

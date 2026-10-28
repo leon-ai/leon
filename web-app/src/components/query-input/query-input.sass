@@ -1,3 +1,7 @@
+@use 'sass:list'
+
+$particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, -20px, -88px, 14s, -9s), (24%, -8px, -72px, 11s, -5s), (30%, -12px, -84px, 14s, -11s), (35%, -16px, -96px, 15s, -12s), (43%, -6px, -60px, 13s, -7s), (57%, 8px, -68px, 12s, -8s), (65%, 18px, -92px, 15s, -4s), (70%, 14px, -84px, 14s, -5s), (76%, 10px, -76px, 13s, -10s), (84%, 20px, -84px, 14s, -6s), (88%, 16px, -72px, 12s, -9s), (92%, 12px, -64px, 11s, -2s))
+
 .query-input-container
   position: relative
   z-index: 3
@@ -31,6 +35,36 @@
       filter: blur(48px)
       transform-origin: center bottom
       content: ''
+
+.query-input-particles
+  position: absolute
+  inset: 0
+  z-index: -1
+  pointer-events: none
+
+.query-input-particle
+  position: absolute
+  top: var(--space-sm)
+  width: 2.5px
+  height: 2.5px
+  border-radius: var(--border-radius-pill)
+  background-color: currentColor
+  box-shadow: 0 0 3px currentColor
+  color: var(--color-accent)
+  opacity: 0
+  animation: query-input-particle-drift ease-in-out infinite
+
+  &:nth-child(n + #{list.length($particles) * .5 + 1})
+    color: var(--color-accent-pink)
+
+// Stagger stable paths so particles remain sparse without a JavaScript frame loop.
+@each $left, $drift, $rise, $duration, $delay in $particles
+  .query-input-particle:nth-child(#{list.index($particles, ($left, $drift, $rise, $duration, $delay))})
+    --query-input-particle-drift: #{$drift}
+    --query-input-particle-rise: #{$rise}
+    left: $left
+    animation-duration: $duration
+    animation-delay: $delay
 
 .query-input
   --query-input-action-gap: var(--space-sm)
@@ -138,6 +172,21 @@
   z-index: 4
   color: var(--query-input-focus-wave-color)
 
+@keyframes query-input-particle-drift
+  0%
+    opacity: 0
+    transform: translate3d(0, 0, 0)
+
+  25%
+    opacity: .35
+
+  65%
+    opacity: .2
+
+  100%
+    opacity: 0
+    transform: translate3d(var(--query-input-particle-drift), var(--query-input-particle-rise), 0)
+
 @keyframes query-input-glow-breathe
   0%,
   100%
@@ -153,3 +202,7 @@
 
     &:focus-within .query-input-glow::before
       animation: none
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active)
+  .query-input-particles
+    display: none

@@ -40,7 +40,13 @@
   animation: input-caret-blink 1.8s linear 1.2s infinite
 
   &.input-effects-moving
+    // Let glyphs retain their fade above the traveling block.
+    z-index: 0
     animation: none
+
+    .input-effects-caret-ink
+      // The opaque contrasting copy belongs only to the settled caret cell.
+      visibility: hidden
 
   &[hidden]
     display: none

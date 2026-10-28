@@ -406,6 +406,36 @@ describe('LLMProvider', () => {
     }
   })
 
+  it('finishes concurrent responses before retiring their provider', async () => {
+    const finish: Array<() => void> = []
+    const dispose = vi.fn()
+    const runChatCompletion = vi.fn(() => new Promise((resolve) => {
+      finish.push(() => resolve({ data: {
+        choices: [{ message: { content: 'Done.' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 10, completion_tokens: 1 }
+      } }))
+    }))
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    state.agentLLMProvider = Object.assign({ modelName: 'celeris-1', runChatCompletion }, { dispose })
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+    const first = manager.prompt('First.', { dutyType: LLMDuties.ReAct, systemPrompt: '' })
+    const second = manager.prompt('Second.', { dutyType: LLMDuties.ReAct, systemPrompt: '' })
+    await vi.waitFor(() => expect(runChatCompletion).toHaveBeenCalledTimes(2))
+
+    manager.dispose()
+    expect(manager.isLLMProviderReady).toBe(false)
+    expect(dispose).not.toHaveBeenCalled()
+
+    finish[0]!()
+    expect((await first)?.output).toBe('Done.')
+    expect(dispose).not.toHaveBeenCalled()
+
+    finish[1]!()
+    expect((await second)?.output).toBe('Done.')
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce())
+  })
+
   it.each([1, 2])('keeps initialization recoverable when account lookup %s fails', async (failedLookup) => {
     const dispose = vi.fn()
     class ReadyProvider {

@@ -549,6 +549,39 @@ describe('profile provider requests', () => {
     expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toMatchObject({ model: 'owner-image-model' })
   })
 
+  it.each([
+    { label: 'default', options: {}, modalities: ['image', 'text'] },
+    { label: 'image-only', options: { modalities: ['image'] }, modalities: ['image'] },
+    { label: 'mixed', options: { modalities: ['text', 'image'] }, modalities: ['text', 'image'] }
+  ])('preserves OpenRouter $label output modalities and image references', async ({ options, modalities }) => {
+    mocks.credentials.mockResolvedValue({ auth_kind: 'api_key', api_key: 'bound-key' })
+    mocks.artifact.mockResolvedValue({
+      path: '/reference.png', artifact: { mime_type: 'image/png', filename: 'reference.png' }
+    })
+    vi.spyOn(fs, 'readFile').mockResolvedValueOnce(Buffer.from('reference'))
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({
+      choices: [{ message: { images: [{ image_url: { url: 'data:image/png;base64,aW1hZ2U=' } }] } }]
+    }))
+    const result = await generateWithProvider({
+      session_id: 'session', provider: LLMProviders.OpenRouter, kind: MediaKind.Image,
+      model: 'owner-image-model', prompt: 'Improve the product lighting.',
+      reference_artifact_ids: ['reference'], options
+    })
+
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(fetch.mock.calls[0]![0]).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toMatchObject({
+      model: 'owner-image-model', modalities, stream: false,
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: 'Improve the product lighting.' },
+        { type: 'image_url', image_url: { url: `data:image/png;base64,${Buffer.from('reference').toString('base64')}` } }
+      ] }]
+    })
+    expect(result.files[0]).toMatchObject({
+      data: Buffer.from('image'), mime_type: 'image/png', filename: 'image-1.png'
+    })
+  })
+
   it('retains image bytes and terminal usage when media exceeds the accounting preview', async () => {
     const image = Buffer.alloc(1_100_000, 1)
     mocks.socketFetch.mockResolvedValueOnce(new Response([

@@ -1,6 +1,6 @@
 @use 'sass:list'
 
-$particles: ((12%, 74%, -.6s), (27%, 38%, -2.4s), (43%, 78%, -1.5s), (61%, 29%, -3.2s), (76%, 65%, -.1s), (89%, 43%, -2s))
+$particles: ((12%, 74%, -.6s), (22%, 34%, -1.8s), (32%, 62%, -2.4s), (43%, 78%, -1.5s), (55%, 39%, -3.5s), (67%, 29%, -3.2s), (79%, 65%, -.1s), (90%, 43%, -2s))
 
 .session-work-indicator
   position: absolute
@@ -25,12 +25,16 @@ $particles: ((12%, 74%, -.6s), (27%, 38%, -2.4s), (43%, 78%, -1.5s), (61%, 29%, 
   width: 100%
   height: 100%
 
+.session-work-paths
+  color: var(--color-accent)
+
 .session-work-particle
   position: absolute
-  width: 2px
-  height: 2px
+  width: 2.5px
+  height: 2.5px
   border-radius: 50%
   background-color: currentColor
+  box-shadow: 0 0 2px currentColor
   opacity: 0
   animation: session-work-drift 4s ease-in-out infinite
 
@@ -50,7 +54,7 @@ $particles: ((12%, 74%, -.6s), (27%, 38%, -2.4s), (43%, 78%, -1.5s), (61%, 29%, 
     transform: translate(0, 5px)
 
   40%
-    opacity: .66
+    opacity: .5
 
   100%
     opacity: 0
