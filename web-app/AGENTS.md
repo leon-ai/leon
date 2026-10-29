@@ -27,6 +27,28 @@
 - Keep necessary component geometry local rather than creating a global token
   for every measurement. `currentColor`, transparency, and black/white mask
   values used for coverage are not new palette colors.
+- Treat shared component defaults as starting points, not a requirement that
+  every context look identical. Keep foundations and behavior consistent while
+  allowing deliberate differences in density, hierarchy, and emphasis.
+- Express contextual differences through a small, explicit reusable variant or
+  modifier owned by the relevant component or pattern. Reuse existing tokens;
+  do not change app-wide defaults to solve a local layout or scatter equivalent
+  overrides across individual controls. Preserve shared interaction states and
+  accessibility behavior when adding a visual variant.
+- Decide label typography, icon size, control geometry, and hit area separately.
+  Align related controls and balance their visual weight; main icons, brand
+  marks, and secondary indicators need not match the label's font size. Permit
+  intentional optical corrections after checking the rendered result.
+- Keep pointer targets accessible independently of visible glyph size. Meet
+  WCAG 2.2 AA target-size requirements; consider the enhanced 44px target for
+  touch interaction where feasible. Expanded hit areas must not overlap nearby
+  controls. Check narrow layouts, long labels, both themes, and keyboard focus
+  without shrinking individual controls inconsistently.
+- See [Fluent layout guidance](https://fluent2.microsoft.design/layout),
+  [GOV.UK component modifications](https://design-system.service.gov.uk/get-started/extending-and-modifying-components/),
+  and WCAG's [minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+  and [enhanced](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html)
+  target-size guidance for these principles.
 
 ## Performance and lifecycle
 
