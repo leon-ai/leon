@@ -1,5 +1,12 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import {
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref
+} from 'react'
+import { observeElementOffset, useVirtualizer } from '@tanstack/react-virtual'
 import { clsx } from 'clsx'
 
 import type { FeedEntry } from '@/data/feed'
@@ -16,9 +23,19 @@ const OWNER_MESSAGE_REVEAL_SCROLL_PROGRESS = .33
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SCROLL_POSITION_TOLERANCE_PX = 1
 const SCROLL_SETTLE_DELAY_MS = 100
+const SCROLL_TO_BOTTOM_THRESHOLD_PX = 64
+
+/**
+ * Exposes feed navigation without duplicating its virtualized scroll lifecycle.
+ */
+export interface FeedHandle {
+  scrollToBottom: () => void
+}
 
 interface FeedProps {
   entries: FeedEntry[]
+  onScrollToBottomVisibilityChange?: (visible: boolean) => void
+  ref?: Ref<FeedHandle>
 }
 
 interface FeedTurn {
@@ -50,12 +67,18 @@ function supportsScrollEnd(element: HTMLElement): boolean {
   return 'onscrollend' in element
 }
 
-export function Feed({ entries }: FeedProps) {
+export function Feed({
+  entries,
+  onScrollToBottomVisibilityChange,
+  ref
+}: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
   const bottomMaskRef = useRef<HTMLDivElement>(null)
   const previousTurnCountRef = useRef<number | null>(null)
   const scrimRef = useRef<HTMLDivElement>(null)
   const topMaskRef = useRef<HTMLDivElement>(null)
+  const scrollToBottomVisibleRef = useRef(false)
+  const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const turnCount = turns.length
   const virtualizer = useVirtualizer({
@@ -67,8 +90,50 @@ export function Feed({ entries }: FeedProps) {
     getItemKey: (index) => turns[index]?.id ?? index,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
     overscan: FEED_OVERSCAN_COUNT,
-    useAnimationFrameWithResizeObserver: true
+    useAnimationFrameWithResizeObserver: true,
+    observeElementOffset: (instance, onOffsetChange) =>
+      observeElementOffset(instance, (offset, isScrolling) => {
+        onOffsetChange(offset, isScrolling)
+
+        // Reuse the virtualizer's observer; only visibility changes enter React.
+        // Once revealed, keep the control available until the owner reaches the end.
+        const visible = instance.options.count > 0 &&
+          !instance.isAtEnd(SCROLL_TO_BOTTOM_THRESHOLD_PX) &&
+          (scrollToBottomVisibleRef.current ||
+            (isScrolling && instance.scrollDirection === 'backward'))
+
+        if (visible !== scrollToBottomVisibleRef.current) {
+          scrollToBottomVisibleRef.current = visible
+          setIsScrollToBottomVisible(visible)
+        }
+      })
   })
+
+  useImperativeHandle(ref, () => ({
+    scrollToBottom: () => {
+      virtualizer.scrollToEnd({
+        behavior: window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
+          ? 'auto'
+          : 'smooth'
+      })
+    }
+  }), [virtualizer])
+
+  useLayoutEffect(() => {
+    // Disclosure resizing can reach the end without emitting a scroll event.
+    if (
+      scrollToBottomVisibleRef.current &&
+      (previousTurnCountRef.current !== turnCount ||
+        virtualizer.isAtEnd(SCROLL_TO_BOTTOM_THRESHOLD_PX))
+    ) {
+      scrollToBottomVisibleRef.current = false
+      setIsScrollToBottomVisible(false)
+    }
+  })
+
+  useLayoutEffect(() => {
+    onScrollToBottomVisibilityChange?.(isScrollToBottomVisible)
+  }, [isScrollToBottomVisible, onScrollToBottomVisibilityChange])
 
   useLayoutEffect(() => {
     const feed = feedRef.current
