@@ -3,15 +3,38 @@
   width: 100%
   min-height: 100vh
 
-  .query-input-container
+  .session-page-composer
     position: fixed
     bottom: var(--space-xl)
     left: calc(50% + (var(--active-sidebar-width) / 2))
+    z-index: 3
     width: var(--content-width)
     max-width: calc(100vw - var(--active-sidebar-width) - var(--app-main-inline-padding) - var(--app-main-inline-padding))
     transform: translateX(-50%)
     transition: left var(--transition-duration-sidebar) var(--transition-timing-sidebar), max-width var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
+.session-page-scroll-to-bottom
+  position: absolute
+  bottom: calc(100% + var(--space-lg))
+  left: 50%
+  z-index: 2
+  opacity: 0
+  visibility: hidden
+  pointer-events: none
+  transform: translate3d(-50%, var(--space-lg), 0)
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main), visibility 0s var(--transition-duration-main)
+
+.session-page-scroll-to-bottom-visible
+  opacity: 1
+  visibility: visible
+  pointer-events: auto
+  transform: translate3d(-50%, 0, 0)
+  transition-delay: 0s
+
 @media (prefers-reduced-motion: reduce)
-  .session-page .query-input-container
+  .session-page .session-page-composer,
+  .session-page-scroll-to-bottom
     transition: none
+
+  .session-page-scroll-to-bottom
+    transform: translate3d(-50%, 0, 0)
