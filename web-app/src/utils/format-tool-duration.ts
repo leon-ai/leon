@@ -1,10 +1,20 @@
 const MILLISECONDS_PER_SECOND = 1_000
 const SECONDS_PER_MINUTE = 60
+const MINUTES_PER_HOUR = 60
+
+export enum DurationFormat {
+  Precise = 'precise',
+  Compact = 'compact'
+}
 
 /**
- * Formats elapsed durations for Leon clients; missing timings stay blank.
+ * Formats elapsed durations with precise tool timings by default, or compact
+ * whole-second labels. Missing and invalid timings stay blank.
  */
-export function formatToolDuration(durationMs?: number): string {
+export function formatToolDuration(
+  durationMs?: number,
+  format: DurationFormat = DurationFormat.Precise
+): string {
   if (
     durationMs === undefined ||
     !Number.isFinite(durationMs) ||
@@ -13,13 +23,13 @@ export function formatToolDuration(durationMs?: number): string {
     return ''
   }
 
-  if (durationMs < MILLISECONDS_PER_SECOND) {
+  if (format === DurationFormat.Precise && durationMs < MILLISECONDS_PER_SECOND) {
     return `${Math.round(durationMs)} ms`
   }
 
   const seconds = durationMs / MILLISECONDS_PER_SECOND
 
-  if (seconds < SECONDS_PER_MINUTE) {
+  if (format === DurationFormat.Precise && seconds < SECONDS_PER_MINUTE) {
     return `${Number(seconds.toFixed(1))} s`
   }
 
@@ -27,6 +37,17 @@ export function formatToolDuration(durationMs?: number): string {
   const roundedSeconds = Math.round(seconds)
   const minutes = Math.floor(roundedSeconds / SECONDS_PER_MINUTE)
   const remainingSeconds = roundedSeconds % SECONDS_PER_MINUTE
+
+  if (format === DurationFormat.Compact) {
+    const hours = Math.floor(minutes / MINUTES_PER_HOUR)
+    const remainingMinutes = minutes % MINUTES_PER_HOUR
+
+    return [
+      hours > 0 ? `${hours}h` : '',
+      remainingMinutes > 0 ? `${remainingMinutes}m` : '',
+      remainingSeconds > 0 || roundedSeconds === 0 ? `${remainingSeconds}s` : ''
+    ].filter(Boolean).join(' ')
+  }
 
   return `${minutes}m ${remainingSeconds}s`
 }

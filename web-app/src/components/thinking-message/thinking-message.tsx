@@ -1,5 +1,6 @@
 import { clsx } from 'clsx'
 
+import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { ProcessGroup } from '@/components/process-group'
 import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
 import { ThoughtIcon } from '@/components/thought-icon'
@@ -13,33 +14,6 @@ interface ThinkingMessageProps {
   isActive: boolean
 }
 
-const MILLISECONDS_PER_SECOND = 1_000
-const MILLISECONDS_PER_MINUTE = 60_000
-const MILLISECONDS_PER_HOUR = 3_600_000
-function formatDuration(durationMs: number): string {
-  if (durationMs < MILLISECONDS_PER_MINUTE) {
-    const seconds = Math.max(
-      1,
-      Math.round(durationMs / MILLISECONDS_PER_SECOND)
-    )
-
-    return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`
-  }
-
-  if (durationMs < MILLISECONDS_PER_HOUR) {
-    const minutes = Math.max(
-      1,
-      Math.round(durationMs / MILLISECONDS_PER_MINUTE)
-    )
-
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`
-  }
-
-  const hours = Math.max(1, Math.round(durationMs / MILLISECONDS_PER_HOUR))
-
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-}
-
 export function ThinkingMessage({
   animationId,
   details,
@@ -48,6 +22,7 @@ export function ThinkingMessage({
 }: ThinkingMessageProps) {
   const shouldAnimateHeading = useAnimateOnce(`${animationId}:heading`)
   const detailText = details.join('\n')
+  const duration = formatToolDuration(durationMs, DurationFormat.Compact)
 
   return (
     <div className={clsx('thinking-message', {
@@ -58,7 +33,7 @@ export function ThinkingMessage({
         activeLabel="Thinking..."
         animateWhileActive
         ariaLabel="Leon’s thinking"
-        completedLabel={`Thought for ${formatDuration(durationMs)}`}
+        completedLabel={`Thought for ${duration}`}
         indicator={<ThoughtIcon />}
       >
         {isActive ? (
