@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 
+import { useExitCleanup } from '@/hooks/use-exit-cleanup'
+
 import './dropdown.sass'
 
 type DropdownPlacement = 'top' | 'bottom'
@@ -72,6 +74,8 @@ export function Dropdown({
   const [open, setOpen] = useState(false)
   const [placement, setPlacement] = useState<DropdownPlacement>('bottom')
   const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>()
+
+  useExitCleanup(dropdownRef, mounted && !open, () => setMounted(false))
 
   const updateDropdownPosition = useCallback((): void => {
     if (triggerRef.current === null) {
@@ -174,11 +178,6 @@ export function Dropdown({
           )}
           role="menu"
           style={dropdownStyle}
-          onTransitionEnd={(event) => {
-            if (event.propertyName === 'opacity' && !open) {
-              setMounted(false)
-            }
-          }}
         >
           {items.map((item) => (
             <button
