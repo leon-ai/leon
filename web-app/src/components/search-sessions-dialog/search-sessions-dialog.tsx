@@ -213,7 +213,7 @@ export function SearchSessionsDialog({
 
               return (
                 <li
-                  className="search-sessions-dialog-item"
+                  className="search-sessions-dialog-item list-item-slot"
                   key={session.id}
                   style={{
                     height: `${virtualRow.size}px`,

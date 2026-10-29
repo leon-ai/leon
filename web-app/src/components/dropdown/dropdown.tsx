@@ -243,6 +243,7 @@ export function Dropdown({
           id={contentId}
           className={clsx(
             'dropdown-content',
+            { 'list-items': content === undefined },
             className,
             `dropdown-content-${placement}`,
             { 'dropdown-content-open': open }

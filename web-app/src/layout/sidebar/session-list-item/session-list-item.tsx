@@ -266,7 +266,7 @@ export function SessionListItem({
 
   return (
     <li
-      className={clsx('session-list-item', {
+      className={clsx('session-list-item list-item-slot', {
         'session-list-item-editing': editing,
         'session-list-item-pinned': isPinned,
         'session-list-item-wip': isWorking
