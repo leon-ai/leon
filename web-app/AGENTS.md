@@ -1,79 +1,70 @@
 # Working on the web app
 
-## Architecture and packages
+## Reuse and architecture
 
-- Before adding routing, server-state, long-list, form, shortcut,
-  debouncing/throttling, or interaction-heavy logic, inspect the installed
-  TanStack packages. Prefer Router for routing, Query for server state and
-  request lifecycle, and Virtual for long or dynamic lists.
-- Reuse an installed package when it fits. Propose a missing TanStack package
-  before adding it, explaining the complexity it avoids and the benefit to
-  maintainability or performance. Do not install packages by default or build
-  custom replacements for installed facilities that already solve the task.
+- Before adding code or dependencies, search existing utilities, hooks, shared
+  components, styles, and installed packages. Inspect implementations, call sites,
+  and relevant tests, not just names.
+- Prefer reuse or small, backward-compatible options/variants over duplication;
+  preserve defaults and runtime boundaries. Add focused abstractions/dependencies
+  only when existing code cannot reasonably fit; remove superseded implementations.
+- Inspect installed TanStack packages before routing, server-state, long-list,
+  form, shortcut, debounce/throttle, or interaction-heavy work. Prefer Router for
+  routing, Query for server state/request lifecycle, Virtual for long/dynamic lists.
+- Reuse suitable installed facilities instead of custom replacements. Propose
+  missing TanStack packages first, explaining avoided complexity and maintainability
+  or performance benefits; never install packages by default.
 
 ## Design tokens and shared styles
 
-- Check `src/styles/_includes/themes.sass`, `variables.sass`, and existing
-  components before adding visual styles. Reuse semantic tokens and shared
-  components for colors, gradients, spacing, typography, radii, shadows, and
-  motion whenever they fit.
-- Choose tokens by their purpose, not just a matching color or number. Do not
-  substitute an overlay or pressed-shadow color for an unrelated surface or
-  floating shadow, or add component-specific copies of shared styling.
-- Explain and agree on genuinely missing semantic tokens before introducing
-  them. Define shared tokens centrally, with appropriate dark/light theme
-  values; do not add one-off colors, derived palette variants, or redundant
-  aliases in component styles.
-- Keep necessary component geometry local rather than creating a global token
-  for every measurement. `currentColor`, transparency, and black/white mask
-  values used for coverage are not new palette colors.
-- Treat shared component defaults as starting points, not a requirement that
-  every context look identical. Keep foundations and behavior consistent while
-  allowing deliberate differences in density, hierarchy, and emphasis.
-- Express contextual differences through a small, explicit reusable variant or
-  modifier owned by the relevant component or pattern. Reuse existing tokens;
-  do not change app-wide defaults to solve a local layout or scatter equivalent
-  overrides across individual controls. Preserve shared interaction states and
-  accessibility behavior when adding a visual variant.
-- Decide label typography, icon size, control geometry, and hit area separately.
-  Align related controls and balance their visual weight; main icons, brand
-  marks, and secondary indicators need not match the label's font size. Permit
-  intentional optical corrections after checking the rendered result.
-- Keep pointer targets accessible independently of visible glyph size. Meet
-  WCAG 2.2 AA target-size requirements; consider the enhanced 44px target for
-  touch interaction where feasible. Expanded hit areas must not overlap nearby
-  controls. Check narrow layouts, long labels, both themes, and keyboard focus
-  without shrinking individual controls inconsistently.
-- See [Fluent layout guidance](https://fluent2.microsoft.design/layout),
-  [GOV.UK component modifications](https://design-system.service.gov.uk/get-started/extending-and-modifying-components/),
-  and WCAG's [minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
-  and [enhanced](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html)
-  target-size guidance for these principles.
+- Check `src/styles/_includes/themes.sass`, `variables.sass`, and existing components
+  first. Reuse semantic tokens/shared components for colors, gradients, spacing,
+  typography, radii, shadows, and motion where suitable.
+- Choose tokens by purpose, not matching values: overlay/pressed-shadow colors are
+  not unrelated surfaces/floating shadows. Avoid component-local copies, one-off
+  colors, derived palette variants, and redundant aliases. Explain and agree on
+  genuinely missing tokens before defining them centrally with dark/light values.
+- Keep necessary geometry local, not a global token per measurement. `currentColor`,
+  transparency, and black/white coverage masks are not new palette colors.
+- Defaults are starting points: keep foundations/behavior consistent while allowing
+  deliberate density, hierarchy, and emphasis differences. Use small, explicit,
+  reusable variants/modifiers owned by the component/pattern, with existing tokens
+  and preserved interaction states/accessibility behavior. Do not change global
+  defaults for local layouts or scatter equivalent overrides across controls.
+- Decide label typography, icon size, geometry, and hit area separately; align
+  controls and balance visual weight. Main icons, brand marks, and secondary
+  indicators need not match label size; verify rendered optical corrections.
+- Keep targets accessible regardless of glyph size: meet WCAG 2.2 AA target sizing,
+  consider enhanced 44px touch targets where feasible, and prevent overlapping
+  hit areas.
+  Check narrow layouts, long labels, both themes, and keyboard focus without
+  inconsistently shrinking controls.
+
+References: [Fluent layout](https://fluent2.microsoft.design/layout),
+[GOV.UK modifications](https://design-system.service.gov.uk/get-started/extending-and-modifying-components/),
+WCAG [minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+and [enhanced](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html) target sizing.
 
 ## Performance and lifecycle
 
-- Treat smooth interaction, bounded memory, and idle efficiency as requirements.
-  Reuse shared components and installed facilities before adding custom effects
-  or interaction infrastructure. Profile suspected bottlenecks before adding
-  speculative optimizations.
-- Every listener, observer, timer, animation frame, browser animation, and async
-  operation needs a clear owner and cleanup path. Cancel obsolete work, prevent
-  stale async completions, and release resources when their owner unmounts.
-- Do not rely solely on animation/transition events for cleanup. Closing must
-  release content and effects with reduced motion, interrupted animations,
-  zero-duration styles, and rapid open/close sequences too.
-- Prefer CSS or browser-managed animations when they fit. Keep per-frame work
-  outside React state, run loops only while useful, and pause unnecessary work
-  when hidden, off-screen, inactive, or under reduced-motion preferences. Bound
-  canvas resolution, particle counts, and drawing frequency.
-- Keep hot paths such as typing, scrolling, pointer movement, and resize small.
-  Batch layout reads before writes, coalesce repeated measurements, and avoid
-  broad event listeners that trigger unrelated layout work or React renders.
-- Virtualize long or dynamic collections and keep rendered DOM bounded,
-  including large text and structured payloads within individual rows. Give
-  caches and registries explicit scope and eviction policies; visually hiding
-  entries does not bound their memory use.
-- Verify relevant changes in a production build with realistic content and
-  repeated navigation, open/close, typing, and scrolling. Check cleanup and
-  reduced motion, and distinguish retained caches or normal heap fluctuation
-  from reproducible leaks. Report measured findings and verification limits.
+- Require smooth interaction, bounded memory, and idle efficiency. Reuse facilities
+  before custom effects/interaction infrastructure; profile suspected bottlenecks
+  before speculative optimization.
+- Explicitly own and clean up every listener, observer, timer, animation frame,
+  browser animation, and async operation. Cancel obsolete work, prevent stale async
+  completions, and release resources on unmount.
+- Never rely solely on animation/transition events for cleanup: closing must release
+  content/effects with reduced motion, interruptions, zero durations, and rapid toggles.
+- Prefer suitable CSS/browser-managed animations. Keep per-frame work outside React
+  state; run loops only while useful, pausing unnecessary work when hidden,
+  off-screen, inactive, or under reduced motion. Bound canvas resolution, particle
+  counts, and drawing frequency.
+- Keep typing/scroll/pointer/resize hot paths small: batch layout reads before writes,
+  coalesce measurements, and avoid broad listeners causing unrelated layout/renders.
+- Virtualize long/dynamic collections; bound DOM, including large text and structured
+  row payloads. Scope caches/registries and define eviction; hiding entries does not
+  bound memory.
+- Verify relevant changes in production builds with realistic content and repeated
+  navigation, open/close, typing, and scrolling. Check cleanup/reduced motion;
+  distinguish retained caches/normal heap fluctuation from reproducible leaks.
+  Report measurements and verification limits.
