@@ -1,17 +1,25 @@
+.model-selector-control
+  display: inline-flex
+  align-items: center
+  min-width: 0
+  max-width: 100%
+  border-radius: var(--border-radius-lg)
+
+  > .dropdown-trigger:first-child
+    flex: 1 1 auto
+    min-width: 0
+
+  > .dropdown-trigger > .button[aria-expanded='true']
+    --button-background: var(--color-surface-hover)
+
 .button.model-selector-trigger
   max-width: 208px
+  padding-inline-end: var(--space-xs)
+  border-start-end-radius: 0
+  border-end-end-radius: 0
 
   &:not(:disabled)
     color: var(--color-text)
-
-  &[aria-expanded='true']
-    --button-background: var(--color-surface-hover)
-
-.model-selector-chevron
-  transition: transform var(--transition-duration-main) var(--transition-timing-main)
-
-  [aria-expanded='true'] &
-    transform: rotate(180deg)
 
 .model-selector-selected
   color: var(--color-text)
@@ -114,7 +122,3 @@
 @media (max-width: 560px)
   .model-selector-trigger-label
     display: none
-
-@media (prefers-reduced-motion: reduce)
-  .model-selector-chevron
-    transition: none

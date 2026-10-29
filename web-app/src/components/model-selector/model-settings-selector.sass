@@ -1,19 +1,16 @@
 .button.model-settings-trigger
-  &:not(:disabled)
-    color: var(--color-text)
+  padding-inline-start: var(--space-xs)
+  border-start-start-radius: 0
+  border-end-start-radius: 0
 
-  &[aria-expanded='true']
-    --button-background: var(--color-surface-hover)
+  &:not(:disabled)
+    .model-settings-label,
+    .model-settings-fast
+      color: var(--color-text-secondary)
 
 .model-settings-fast
   flex: 0 0 auto
   line-height: 1
-
-.model-settings-chevron
-  transition: transform var(--transition-duration-main) var(--transition-timing-main)
-
-  [aria-expanded='true'] &
-    transform: rotate(180deg)
 
 .dropdown-content.model-settings-dropdown
   gap: 0
@@ -57,7 +54,3 @@
   &:focus-visible
     outline: 2px solid var(--color-accent)
     outline-offset: -2px
-
-@media (prefers-reduced-motion: reduce)
-  .model-settings-chevron
-    transition: none

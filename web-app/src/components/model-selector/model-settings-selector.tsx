@@ -79,11 +79,12 @@ interface ModelSettingsSelectorProps {
   model: ModelOption
   settings: ModelSettings
   disabled?: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onChange: (settings: Partial<ModelSettings>) => void
 }
 
-interface ModelSettingsMenuProps extends ModelSettingsSelectorProps {
-  open: boolean
+interface ModelSettingsMenuProps extends Omit<ModelSettingsSelectorProps, 'onOpenChange'> {
   reasoningOptions: SettingsOption<ModelReasoning>[]
   speedOptions: SettingsOption<ModelSpeed>[]
 }
@@ -235,6 +236,8 @@ export function ModelSettingsSelector({
   model,
   settings,
   disabled = false,
+  open,
+  onOpenChange,
   onChange
 }: ModelSettingsSelectorProps) {
   const policy = SERVICE_TIER_POLICIES[provider.id]
@@ -271,6 +274,8 @@ export function ModelSettingsSelector({
       height={menuHeight}
       preferredPlacement="top"
       disabled={disabled}
+      open={open}
+      onOpenChange={onOpenChange}
       content={(_close, open) => (
         <ModelSettingsMenu
           provider={provider}
@@ -294,12 +299,10 @@ export function ModelSettingsSelector({
           aria-expanded={open}
           aria-controls={open ? contentId : undefined}
         >
-          <i className="button-icon ri-speed-up-line" aria-hidden="true" />
           <span className="button-label model-settings-label">{reasoningLabel}</span>
           {settings.speed === 'fast' && (
             <i className="ri-flashlight-fill model-settings-fast" aria-hidden="true" />
           )}
-          <i className="ri-arrow-down-s-line button-chevron model-settings-chevron" aria-hidden="true" />
         </button>
       )}
     </Dropdown>

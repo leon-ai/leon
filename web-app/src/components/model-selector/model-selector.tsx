@@ -20,6 +20,12 @@ const MAXIMUM_RECENT_MODELS = 3
 const MAXIMUM_MODEL_HISTORY = MAXIMUM_RECENT_MODELS + 1
 const RECENT_MODELS_STORAGE_KEY = 'leon.web-app.recent-models'
 
+enum SelectorPanel {
+  Closed,
+  Models,
+  Settings
+}
+
 interface ModelSelectorProps {
   disabled?: boolean
 }
@@ -80,6 +86,7 @@ function getInitialChoice(): ModelChoice {
  * Previews a model and its supported settings without mutating the agent config.
  */
 export function ModelSelector({ disabled = false }: ModelSelectorProps) {
+  const [panel, setPanel] = useState(SelectorPanel.Closed)
   const [modelHistory, setModelHistory] = useState(readModelHistory)
   const [choice, setChoice] = useState(() => modelHistory[0] ?? getInitialChoice())
   const [settingsByModel, setSettingsByModel] = useState<Record<string, ModelSettings>>({})
@@ -117,8 +124,19 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
     })
   }
 
+  function changePanel(target: SelectorPanel, open: boolean): void {
+    // A sibling's delayed close must not clear the panel that just opened.
+    setPanel((current) => {
+      if (open) {
+        return target
+      }
+
+      return current === target ? SelectorPanel.Closed : current
+    })
+  }
+
   return (
-    <>
+    <div className="model-selector-control" role="group" aria-label="Model and reasoning settings">
       <Dropdown
         className="model-selector-dropdown"
         contentLabel="Choose a model"
@@ -126,6 +144,8 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
         height={SELECTOR_HEIGHT_PX}
         preferredPlacement="top"
         disabled={disabled}
+        open={panel === SelectorPanel.Models}
+        onOpenChange={(open) => changePanel(SelectorPanel.Models, open)}
         content={(close, open) => (
           <ModelSelectorMenu
             choice={choice}
@@ -148,7 +168,6 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
           >
             <LLMProviderIcon provider={choice.provider.id} className="button-icon" />
             <span className="button-label model-selector-trigger-label">{choice.model.label}</span>
-            <i className="ri-arrow-down-s-line button-chevron model-selector-chevron" aria-hidden="true" />
           </button>
         )}
       </Dropdown>
@@ -157,6 +176,8 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
         model={choice.model}
         settings={settings}
         disabled={disabled}
+        open={panel === SelectorPanel.Settings}
+        onOpenChange={(open) => changePanel(SelectorPanel.Settings, open)}
         onChange={(next) => {
           setSettingsByModel((current) => ({
             ...current,
@@ -164,6 +185,6 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
           }))
         }}
       />
-    </>
+    </div>
   )
 }
