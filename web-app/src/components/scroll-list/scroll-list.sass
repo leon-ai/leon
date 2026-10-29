@@ -1,0 +1,42 @@
+.scroll-list
+  position: relative
+  display: flex
+  flex: 1 1 auto
+  flex-direction: column
+  min-height: 0
+  overflow: hidden
+
+.scroll-list-viewport
+  flex: 1 1 auto
+  min-height: 0
+  overflow: auto
+  overscroll-behavior: contain
+  scrollbar-width: thin
+  scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
+
+.scroll-list-content
+  display: flow-root
+
+.scroll-list-mask
+  position: absolute
+  right: 0
+  left: 0
+  z-index: 1
+  height: min(var(--scroll-list-mask-height), 50%)
+  background-color: var(--color-surface-elevated)
+  pointer-events: none
+  transition: background-color var(--transition-duration-main) var(--transition-timing-main)
+
+.scroll-list-mask-top
+  top: 0
+  mask-image: linear-gradient(to bottom, #000, transparent)
+  opacity: var(--scroll-list-top-opacity, 0)
+
+.scroll-list-mask-bottom
+  bottom: 0
+  mask-image: linear-gradient(to top, #000, transparent)
+  opacity: var(--scroll-list-bottom-opacity, 0)
+
+@media (prefers-reduced-motion: reduce)
+  .scroll-list-mask
+    transition: none
