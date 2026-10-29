@@ -653,37 +653,58 @@ describe('LLMProvider', () => {
     })
   })
 
-  it('resumes the original request when the connection recovers before retry exhaustion', async () => {
-    vi.useFakeTimers()
-    try {
-      const manager = new LLMProvider()
-      const state = manager as unknown as LLMProviderTestState
-      const onConnectionRetry = vi.fn()
-      const runChatCompletion = vi.fn()
-        .mockRejectedValueOnce(Object.assign(new Error('Disconnected'), { code: 'ECONNRESET' }))
-        .mockRejectedValueOnce(Object.assign(new Error('Disconnected'), { closeCode: 1_006 }))
-        .mockResolvedValue({ data: {
-          choices: [{ message: { content: 'Recovered' } }],
-          usage: { prompt_tokens: 10, completion_tokens: 1 }
-        } })
-      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
-      state.agentLLMProviderTargetLabel = celerisTarget.label
-      const pending = manager.prompt('Resume the original task.', {
-        dutyType: LLMDuties.ReAct, systemPrompt: '', onConnectionRetry
-      })
+  it.each(['unaccepted', 'accepted', 'tool input', 'text'])(
+    'resumes the original request after interrupted %s without returning partial calls',
+    async (stage) => {
+      vi.useFakeTimers()
+      try {
+        const manager = new LLMProvider()
+        const state = manager as unknown as LLMProviderTestState
+        const onConnectionRetry = vi.fn()
+        const runChatCompletion = vi.fn()
+          .mockImplementationOnce((_prompt, params: CompletionParams) => {
+            if (stage !== 'unaccepted') {
+              params.onStreamEvent?.({ type: 'provider-event', requestAccepted: true })
+            }
+            if (stage === 'tool input') {
+              params.onStreamEvent?.({ type: 'tool-input-delta' })
+              params.onToolCall?.({
+                id: 'unfinished', type: 'function',
+                function: { name: 'inspect', arguments: '{' }
+              })
+            } else if (stage === 'text') {
+              params.onToken?.('Unfinished draft')
+            }
 
-      await vi.runAllTimersAsync()
-      expect((await pending)?.output).toBe('Recovered')
-      expect(runChatCompletion).toHaveBeenCalledTimes(3)
-      expect(runChatCompletion.mock.calls.every(([prompt]) => prompt === 'Resume the original task.')).toBe(true)
-      expect(onConnectionRetry).toHaveBeenCalledTimes(2)
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
+            return Promise.reject(Object.assign(new Error('Disconnected'), { code: 'ECONNRESET' }))
+          })
+          .mockRejectedValueOnce(Object.assign(new Error('Disconnected'), { closeCode: 1_006 }))
+          .mockResolvedValue({ data: {
+            choices: [{ message: { content: 'Recovered' } }],
+            usage: { prompt_tokens: 10, completion_tokens: 1 }
+          } })
+        state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+        state.agentLLMProviderTargetLabel = celerisTarget.label
+        const pending = manager.prompt('Resume the original task.', {
+          dutyType: LLMDuties.ReAct, systemPrompt: '', onConnectionRetry,
+          retryInterruptedResponse: true
+        })
+
+        await vi.runAllTimersAsync()
+        const result = await pending
+        expect(result?.output).toBe('Recovered')
+        expect(result?.toolCalls).toBeUndefined()
+        expect(runChatCompletion).toHaveBeenCalledTimes(3)
+        expect(runChatCompletion.mock.calls.every(([prompt]) => prompt === 'Resume the original task.')).toBe(true)
+        expect(onConnectionRetry).toHaveBeenCalledTimes(2)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 
-  it.each(['accepted', 'output', 'deadline'])('does not reconnect when blocked by %s evidence', async (blocker) => {
+  it.each(['accepted', 'output', 'hosted tool', 'completed', 'deadline'])('does not reconnect when blocked by %s evidence', async (blocker) => {
     const manager = new LLMProvider()
     const state = manager as unknown as LLMProviderTestState
     const onConnectionRetry = vi.fn()
@@ -692,6 +713,12 @@ describe('LLMProvider', () => {
         params.onStreamEvent?.({ type: 'provider-event', requestAccepted: true })
       } else if (blocker === 'output') {
         params.onToken?.('Partial output')
+      } else if (blocker === 'hosted tool') {
+        params.onStreamEvent?.({ type: 'provider-event', requestAccepted: true })
+        params.onStreamEvent?.({ type: 'tool-call', toolCallId: 'hosted', providerExecuted: true })
+        params.onStreamEvent?.({ type: 'tool-result', toolCallId: 'hosted' })
+      } else if (blocker === 'completed') {
+        params.onStreamEvent?.({ type: 'finish', providerCompleted: true })
       }
       return Promise.reject(Object.assign(new Error('Connection failed'), { code: 'ECONNRESET' }))
     })
@@ -700,6 +727,7 @@ describe('LLMProvider', () => {
 
     expect(await manager.prompt('Continue.', {
       dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true, onConnectionRetry,
+      retryInterruptedResponse: !['accepted', 'output'].includes(blocker),
       ...(blocker === 'deadline' ? { getRetryTimeout: (timeout: number): number => Math.min(timeout, 4_000) } : {})
     })).toBeNull()
     expect(runChatCompletion).toHaveBeenCalledOnce()

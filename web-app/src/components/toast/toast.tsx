@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 
 import { Button } from '@/components/button'
+import { useExitCleanup } from '@/hooks/use-exit-cleanup'
 
 import './toast.sass'
 
@@ -67,6 +68,10 @@ function ToastCard({
   onClose,
   onExited
 }: ToastCardProps) {
+  const toastRef = useRef<HTMLElement>(null)
+
+  useExitCleanup(toastRef, toast.exiting, () => onExited(toast.id))
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       onClose(toast.id)
@@ -79,6 +84,7 @@ function ToastCard({
 
   return (
     <article
+      ref={toastRef}
       className={clsx(
         'toast',
         `toast-${toast.type}`,
@@ -92,11 +98,6 @@ function ToastCard({
       } as CSSProperties}
       onPointerEnter={onActivate}
       onFocus={onActivate}
-      onTransitionEnd={(event) => {
-        if (event.propertyName === 'opacity' && toast.exiting) {
-          onExited(toast.id)
-        }
-      }}
     >
       <div className="toast-content-container">
         <div className="toast-header">

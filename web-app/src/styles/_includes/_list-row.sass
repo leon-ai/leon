@@ -1,0 +1,24 @@
+// Action rows and navigation links share feedback without changing their semantics.
+@mixin interactions
+  transition: none
+
+  &:where(:not(:disabled):not([aria-disabled='true']))
+    &:hover,
+    &[aria-selected='true'],
+    &[aria-checked='true'],
+    &[aria-current='page'],
+    &[data-highlighted='true']
+      background-color: var(--list-row-hover-background, var(--color-surface-hover))
+
+    &:active
+      background-color: var(--list-row-pressed-background, var(--color-surface-active))
+      box-shadow: var(--shadow-control-pressed)
+
+    &:focus-visible
+      outline: 2px solid var(--color-accent)
+      outline-offset: -2px
+
+  &:disabled,
+  &[aria-disabled='true']
+    color: var(--color-text-disabled)
+    cursor: not-allowed

@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 
 import { Button, type ButtonVariant } from '@/components/button'
+import { useExitCleanup } from '@/hooks/use-exit-cleanup'
 
 import './dialog.sass'
 
@@ -46,6 +47,9 @@ export function Dialog({
   const titleId = useId()
   const descriptionId = useId()
   const [mounted, setMounted] = useState(open)
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useExitCleanup(overlayRef, mounted && !open, () => setMounted(false))
 
   useEffect(() => {
     if (open) {
@@ -77,18 +81,10 @@ export function Dialog({
 
   return createPortal(
     <div
+      ref={overlayRef}
       className={clsx('dialog-overlay', {
         'dialog-overlay-open': open
       })}
-      onTransitionEnd={(event) => {
-        if (
-          event.target === event.currentTarget &&
-          event.propertyName === 'opacity' &&
-          !open
-        ) {
-          setMounted(false)
-        }
-      }}
       onMouseDown={(event) => {
         if (closeOnOverlayClick && event.target === event.currentTarget) {
           onClose()

@@ -1,0 +1,11 @@
+$item-gap: 1px
+
+.list-items
+  display: flex
+  flex-direction: column
+  gap: $item-gap
+
+// Virtualizers position whole slots; reserve the gap without changing offsets.
+.list-item-slot
+  box-sizing: border-box
+  padding-bottom: $item-gap

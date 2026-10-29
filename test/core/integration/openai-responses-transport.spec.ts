@@ -486,60 +486,93 @@ describe('Responses connection lifecycle', () => {
     }
   })
 
-  it('reconnects interrupted requests with increasing waits and completes after recovery', async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
-    const provider = new AISDKRemoteLLMProvider({
-      name: 'Fixture', providerName: LLMProviders.OpenAI, credentials: { api_key: 'fixture' },
-      apiKeyEnv: 'LEON_OPENAI_API_KEY', model: 'gpt-6.1-sol',
-      baseURL: url.slice(0, -'/responses'.length), flavor: 'openai-responses'
-    })
-    const requests: unknown[] = []
-    const onConnectionRetry = vi.fn()
-    const onAttempt = vi.fn()
-    sockets.on('connection', (socket) => {
-      socket.on('message', (data) => {
-        requests.push(JSON.parse(data.toString()))
-        if (requests.length < 3) {
-          socket.terminate()
-          return
-        }
-        for (const event of [
-          { type: 'response.output_item.added', output_index: 0, item: { ...OUTPUT[0], content: [] } },
-          { type: 'response.output_text.delta', item_id: 'message', output_index: 0, content_index: 0, delta: 'Ready.' },
-          { type: 'response.output_item.done', output_index: 0, item: OUTPUT[0] },
-          { type: 'response.completed', response: { id: 'recovered', output: OUTPUT, usage: { input_tokens: 10, output_tokens: 1 } } }
-        ]) {
-          socket.send(JSON.stringify(event))
-        }
+  it.each(['unaccepted', 'accepted', 'tool input'])(
+    'reconnects interrupted %s requests with the full transcript and bounded waits',
+    async (stage) => {
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+      const provider = new AISDKRemoteLLMProvider({
+        name: 'Fixture', providerName: LLMProviders.OpenAI, credentials: { api_key: 'fixture' },
+        apiKeyEnv: 'LEON_OPENAI_API_KEY', model: 'gpt-6.1-sol',
+        baseURL: url.slice(0, -'/responses'.length), flavor: 'openai-responses'
       })
-    })
-    const complete = (params: PreparedCompletionParams): ReturnType<typeof runCompletionAttempt> =>
-      runCompletionAttempt(provider, LLMProviders.OpenAI, 'Continue.', params, 'fixture',
-        (retry) => complete({ ...params, ...retry }), vi.fn())
-
-    try {
-      const pending = complete({
-        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
-        timeout: 120_000, temperature: 0, data: null, maxRetries: 2,
-        remoteProviderErrorRetries: 1, onConnectionRetry, onAttempt
+      const requests: unknown[] = []
+      const onConnectionRetry = vi.fn()
+      const onAttempt = vi.fn()
+      sockets.on('connection', (socket) => {
+        socket.on('message', (data) => {
+          requests.push(JSON.parse(data.toString()))
+          if (requests.length < 3) {
+            if (stage !== 'unaccepted') {
+            const response = {
+              id: `interrupted-${requests.length}`, model: 'gpt-6.1-sol',
+              created_at: 1, status: 'in_progress', output: []
+            }
+            for (const type of ['response.created', 'response.in_progress']) {
+              socket.send(JSON.stringify({ type, response }))
+            }
+            }
+            if (stage === 'tool input') {
+              socket.send(JSON.stringify({
+                type: 'response.output_item.added', output_index: 0,
+                item: { type: 'function_call', id: 'unfinished', call_id: 'unfinished', name: 'inspect', arguments: '' }
+              }))
+              socket.send(JSON.stringify({
+                type: 'response.function_call_arguments.delta',
+                item_id: 'unfinished', output_index: 0, delta: '{'
+              }))
+            }
+            // Flush protocol evidence before interrupting the response transport.
+            socket.ping('flush', () => socket.terminate())
+            return
+          }
+          for (const event of [
+            { type: 'response.output_item.added', output_index: 0, item: { ...OUTPUT[0], content: [] } },
+            { type: 'response.output_text.delta', item_id: 'message', output_index: 0, content_index: 0, delta: 'Ready.' },
+            { type: 'response.output_item.done', output_index: 0, item: OUTPUT[0] },
+            { type: 'response.completed', response: { id: 'recovered', output: OUTPUT, usage: { input_tokens: 10, output_tokens: 1 } } }
+          ]) {
+            socket.send(JSON.stringify(event))
+          }
+        })
       })
-      await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(1))
-      await vi.advanceTimersByTimeAsync(5_000)
-      await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(2))
-      await vi.advanceTimersByTimeAsync(10_000)
-      await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
+      const complete = (params: PreparedCompletionParams): ReturnType<typeof runCompletionAttempt> =>
+        runCompletionAttempt(provider, LLMProviders.OpenAI, 'Continue.', params, 'fixture',
+          (retry) => complete({ ...params, ...retry }), vi.fn())
 
-      expect((await pending)?.output).toBe('Ready.')
-      expect(requests).toHaveLength(3)
-      expect(requests[1]).toEqual(requests[0])
-      expect(requests[2]).toEqual(requests[0])
-      expect(onConnectionRetry.mock.calls.map(([notice]) => notice.delayMs)).toEqual([5_000, 10_000])
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      provider.dispose()
-      vi.useRealTimers()
+      try {
+        const pending = complete({
+          dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+          timeout: 120_000, temperature: 0, data: null, maxRetries: 2,
+          remoteProviderErrorRetries: 1, onConnectionRetry, onAttempt,
+          retryInterruptedResponse: true
+        })
+        await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(1))
+        await vi.advanceTimersByTimeAsync(5_000)
+        await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(2))
+        await vi.advanceTimersByTimeAsync(10_000)
+        await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
+
+        expect((await pending)?.output).toBe('Ready.')
+        expect(requests).toHaveLength(3)
+        expect(requests[1]).toEqual(requests[0])
+        expect(requests[2]).toEqual(requests[0])
+        const failures = onAttempt.mock.calls.map(([timing]) => timing)
+          .filter((timing) => timing.retryDecision === 'retry')
+        expect(failures).toHaveLength(2)
+        if (stage !== 'unaccepted') {
+          expect(failures.every((timing) => typeof timing.requestAcceptedMs === 'number')).toBe(true)
+        }
+        if (stage === 'tool input') {
+          expect(failures.every((timing) => typeof timing.firstToolInputMs === 'number')).toBe(true)
+        }
+        expect(onConnectionRetry.mock.calls.map(([notice]) => notice.delayMs)).toEqual([5_000, 10_000])
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        provider.dispose()
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 
   it.each([404, 405, 426, 501])('uses HTTP after an unsupported HTTP %s handshake without retrying the handshake', async (status) => {
     server.removeAllListeners('upgrade')

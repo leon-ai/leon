@@ -9,6 +9,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
+import { ScrollList } from '@/components/scroll-list'
 import {
   sessionIndex,
   type ConversationSession
@@ -194,9 +195,9 @@ export function SearchSessionsDialog({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
-      <div
+      <ScrollList
         className="search-sessions-dialog-results"
-        ref={scrollElementRef}
+        scrollRef={scrollElementRef}
       >
         {searchResults.length > 0 ? (
           <ul
@@ -212,7 +213,7 @@ export function SearchSessionsDialog({
 
               return (
                 <li
-                  className="search-sessions-dialog-item"
+                  className="search-sessions-dialog-item list-item-slot"
                   key={session.id}
                   style={{
                     height: `${virtualRow.size}px`,
@@ -262,7 +263,7 @@ export function SearchSessionsDialog({
             </Button>
           </div>
         )}
-      </div>
+      </ScrollList>
     </div>
   )
 }

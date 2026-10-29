@@ -1505,8 +1505,14 @@ export class ReActLLMDuty extends LLMDuty {
             : Math.min(timeoutMs, Math.max(0, remaining - (this.runBudget?.finishingReserveMs ?? 0)))
         },
         ...(isFinishingCall ? { remoteProviderErrorRetries: 0, connectionErrorRetries: 0 } : {}),
+        // This loop executes local tools only after the whole response succeeds.
+        retryInterruptedResponse: true,
         onConnectionRetry: async ({ attempt, maxRetries, delayMs }): Promise<void> => {
           cancellationSignal.throwIfAborted()
+          if (!isPrivateResponse) {
+            this.answerStream.discard()
+            this.closeStreamedToolCalls()
+          }
           clearWaitDiagnostics()
           renewModelResponseDeadline(inferenceTimeout + delayMs)
           emitModelStatus(ModelResponseState.Retrying)

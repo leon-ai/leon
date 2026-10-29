@@ -1,3 +1,5 @@
+@use '../../styles/_includes/list-row'
+
 .search-sessions-dialog
   display: flex
   flex-direction: column
@@ -8,8 +10,6 @@
     font-size: var(--font-size-md)
 
 .search-sessions-dialog-results
-  overflow: auto
-  min-height: 0
   max-height: 320px
 
 .search-sessions-dialog-list
@@ -28,18 +28,13 @@
   gap: var(--space-lg)
   box-sizing: border-box
   width: 100%
-  height: 46px
+  height: 100%
   padding: 0 var(--space-md)
   border-radius: var(--border-radius-md)
   color: var(--color-text)
   text-decoration: none
-  transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
-  &:hover
-    background-color: var(--color-surface-hover)
-
-  &:active
-    background-color: var(--color-surface-active)
+  @include list-row.interactions
 
 .search-sessions-dialog-title
   min-width: 0

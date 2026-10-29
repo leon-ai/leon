@@ -120,6 +120,7 @@ export async function runCompletionAttempt(
   let isCompacting = false
   let isAwaitingContinuation = false
   const pendingHostedTools = new Set<string>()
+  let hasProviderExecutedTools = false
   const attemptId = randomUUID()
   let retryDiagnostics: Pick<CompletionAttemptTiming, 'retryDecision' | 'retryReason'> | undefined
   const idleTimeout = completionParams.streamIdleTimeout ?? (
@@ -314,6 +315,10 @@ export async function runCompletionAttempt(
     }
 
     activity.observe(event)
+    if (event.providerExecuted) {
+      // Completed hosted work also makes replay unsafe after a later disconnect.
+      hasProviderExecutedTools = true
+    }
 
     if (event.type === 'transport-heartbeat') {
       completionParams.onStreamEvent?.(event)
@@ -539,7 +544,11 @@ export async function runCompletionAttempt(
     clearStreamStallTimeout()
   } catch (e) {
     attachProviderFailureDiagnostics(e, activity.snapshot(), callerAbortSignal?.aborted)
-    const recovery = prepareCompletionRetry(e, completionParams, isRemoteProvider)
+    const recovery = prepareCompletionRetry(e, {
+      ...completionParams,
+      retryInterruptedResponse: completionParams.retryInterruptedResponse === true &&
+        !hasProviderExecutedTools
+    }, isRemoteProvider)
     retryDiagnostics = { retryDecision: recovery.retryDecision, retryReason: recovery.retryReason }
     if (e instanceof Error) {
       Object.assign(e, retryDiagnostics)

@@ -463,7 +463,7 @@ describe('continuous agent loop', () => {
     })
   })
 
-  it('reports reconnect exhaustion with saved work and its pending step', async () => {
+  it('reports an interrupted connection with saved work and its pending step', async () => {
     const trackedSteps = [
       { label: 'Inspect originals', status: 'completed' as const },
       { label: 'Review the saved edit', status: 'in_progress' as const }
@@ -477,12 +477,27 @@ describe('continuous agent loop', () => {
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
 
-    expect(result.answer).toContain('I couldn\'t reconnect to my model provider, so I couldn\'t resume.')
+    expect(result.answer).toContain('The connection to my model provider was interrupted before I could finish.')
     expect(result.answer).toContain('progress is saved')
     expect(result.answer).toContain('Inspect originals')
     expect(result.answer).toContain('Review the saved edit')
     expect(result.answer).not.toContain('local network instability')
     expect(result.trackedSteps).toEqual(trackedSteps)
+  })
+
+  it('keeps unplanned work unfinished when the provider disconnects', async () => {
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Finish the authorized task.' }],
+      catalog: createCatalog(),
+      callModel: async () => {
+        throw new AgentModelProviderError('Connection failed', false, CompletionFailureKind.Connection)
+      },
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+
+    expect(result.answer).toContain('Check the saved progress and continue the unfinished task')
+    expect(result.answer).not.toContain('Produce the final answer')
+    expect(result.intent).toBe('error')
   })
 
   it('drains large image collections through bounded inspection turns before resuming the task', async () => {
@@ -2750,7 +2765,7 @@ describe('continuous agent loop', () => {
     expect(result.executionHistory[0]?.observation).toBe('Partial progress saved.')
     expect(result.transcript[0]?.content).toContain('CONTEXT_CANARY_7812')
     expect(result.answer).toContain(
-      'Produce the final answer from the verified findings'
+      'Check the saved progress and continue the unfinished task'
     )
     expect(result.answer).not.toContain('May I continue')
   })
@@ -5119,6 +5134,8 @@ describe('model response status', () => {
     }
     const startedAt = Date.now()
     try {
+      expect(params.retryInterruptedResponse).toBe(true)
+      params.onToken?.('Unfinished draft')
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         await params.onConnectionRetry?.({ attempt, maxRetries: 5, delayMs: attempt * 5_000 })
         expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(expect.objectContaining({
@@ -5126,6 +5143,9 @@ describe('model response status', () => {
           historyMode: 'system_widget'
         }))
       }
+      expect(coreMocks.emitToChatClients).toHaveBeenCalledWith('llm-token', expect.objectContaining({
+        token: '', reset: true
+      }))
       params.onAttempt?.(attempt)
       params.onStreamEvent?.({ type: 'tool-input-start' })
       params.onAttempt?.({ ...attempt, outcome: 'failed', failureKind: CompletionFailureKind.Timeout })

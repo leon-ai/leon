@@ -10,6 +10,7 @@ import {
 
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
+import { ModelSelector } from '@/components/model-selector'
 
 import { QueryInputFocusWave } from './query-input-focus-wave'
 
@@ -107,6 +108,7 @@ export function QueryInput({
       actions.offsetWidth -
       (gap * 2)
     )
+    form.style.setProperty('--query-input-actions-width', `${actions.offsetWidth}px`)
     measurementTextarea.style.width = `${inlineFieldWidth}px`
 
     const inlineContentHeight =
@@ -158,6 +160,21 @@ export function QueryInput({
   useLayoutEffect(() => {
     updateTextareaHeight()
   }, [query, updateTextareaHeight])
+
+  useLayoutEffect(() => {
+    const actions = actionsRef.current
+
+    if (actions === null) {
+      return
+    }
+
+    // A different model label changes the inline space available to the text.
+    const observer = new ResizeObserver(updateTextareaHeight)
+
+    observer.observe(actions)
+
+    return () => observer.disconnect()
+  }, [updateTextareaHeight])
 
   useLayoutEffect(() => {
     const form = formRef.current
@@ -279,6 +296,7 @@ export function QueryInput({
           readOnly
         />
         <div ref={actionsRef} className="query-input-actions">
+          <ModelSelector disabled={disabled || loading} />
           <Button
             className="query-input-submit"
             type="submit"
