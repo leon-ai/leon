@@ -17,6 +17,7 @@ import {
   type ModelOption,
   type ModelProvider
 } from '@/data/model-catalog'
+import { createSearchIndex, searchIndex } from '@/utils/search'
 
 import { ProviderLogo } from './provider-logo'
 
@@ -24,6 +25,10 @@ const ROW_HEIGHT_PX = 48
 const ROW_OVERSCAN = 3
 const SECTION_HEIGHT_PX = 36
 const SEPARATOR_HEIGHT_PX = 17
+const MODEL_SEARCH_INDEX = createSearchIndex(
+  modelProviders.flatMap((provider) => provider.models.map((model) => ({ provider, model }))),
+  ({ provider, model }) => [model.label, model.model, provider.label, provider.id]
+)
 
 enum PickerRowKind {
   Section = 'section',
@@ -83,7 +88,7 @@ export function ModelSelectorMenu({
   const searchRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const listId = useId()
-  const search = query.trim().toLocaleLowerCase()
+  const search = query.trim()
   const rows = useMemo<PickerRow[]>(() => {
     if (search === '' && provider === null) {
       const providers: PickerOption[] = modelProviders.map((candidate) => ({
@@ -122,17 +127,16 @@ export function ModelSelectorMenu({
     }
 
     // Search spans providers even while browsing one provider's model layer.
-    const providers = search !== '' ? modelProviders : provider === null ? [] : [provider]
+    const choices = search !== ''
+      ? searchIndex(MODEL_SEARCH_INDEX, search).map((result) => result.item)
+      : provider === null ? [] : provider.models.map((model) => ({ provider, model }))
 
-    return providers.flatMap((candidate) => candidate.models
-      .filter((model) => `${candidate.label} ${model.label} ${model.model}`
-        .toLocaleLowerCase().includes(search))
-      .map((model) => ({
-        kind: PickerRowKind.Model,
-        key: `${candidate.id}/${model.model}`,
-        provider: candidate,
-        model
-      })))
+    return choices.map(({ provider, model }) => ({
+      kind: PickerRowKind.Model,
+      key: `${provider.id}/${model.model}`,
+      provider,
+      model
+    }))
   }, [provider, recentModels, search])
   const activeRowIndex = isPickerOption(rows[activeIndex]) ? activeIndex : -1
   const virtualizer = useVirtualizer({
