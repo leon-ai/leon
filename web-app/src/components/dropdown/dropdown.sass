@@ -1,3 +1,5 @@
+@use '../../styles/_includes/list-row'
+
 .dropdown-trigger
   display: inline-flex
 
@@ -54,22 +56,13 @@
   font-size: var(--font-size-md)
   line-height: var(--line-height-md)
   text-align: left
-  transition: color var(--transition-duration-main) var(--transition-timing-main), background-color var(--transition-duration-main) var(--transition-timing-main)
 
-  &:hover
-    background-color: var(--color-surface-hover)
-
-  &:active
-    background-color: var(--color-surface-active)
+  @include list-row.interactions
 
 .dropdown-item-danger
+  --list-row-hover-background: var(--color-danger-soft)
+  --list-row-pressed-background: var(--color-danger-active)
   color: var(--color-danger)
-
-  &:hover
-    background-color: var(--color-danger-soft)
-
-  &:active
-    background-color: var(--color-danger-active)
 
 .dropdown-item-icon
   flex: 0 0 auto
@@ -83,6 +76,5 @@
   white-space: nowrap
 
 @media (prefers-reduced-motion: reduce)
-  .dropdown-content,
-  .dropdown-item
+  .dropdown-content
     transition: none

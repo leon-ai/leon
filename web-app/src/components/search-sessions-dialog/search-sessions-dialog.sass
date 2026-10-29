@@ -1,3 +1,5 @@
+@use '../../styles/_includes/list-row'
+
 .search-sessions-dialog
   display: flex
   flex-direction: column
@@ -31,13 +33,8 @@
   border-radius: var(--border-radius-md)
   color: var(--color-text)
   text-decoration: none
-  transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
-  &:hover
-    background-color: var(--color-surface-hover)
-
-  &:active
-    background-color: var(--color-surface-active)
+  @include list-row.interactions
 
 .search-sessions-dialog-title
   min-width: 0

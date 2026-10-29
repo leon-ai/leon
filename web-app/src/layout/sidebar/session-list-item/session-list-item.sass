@@ -1,3 +1,5 @@
+@use '../../../styles/_includes/list-row'
+
 .session-list-item
   position: absolute
   top: 0
@@ -15,19 +17,13 @@
     min-height: 40px
     padding: var(--space-sm)
     border-radius: var(--border-radius-md)
-    transition: color var(--transition-duration-main) var(--transition-timing-main), background-color var(--transition-duration-main) var(--transition-timing-main)
 
   .session-list-item-link
     color: var(--color-text)
     text-decoration: none
 
-    &:hover,
     &.session-list-item-active
       padding-right: 44px
-      background-color: var(--color-surface-hover)
-      color: var(--color-text)
-    &:active
-      background-color: var(--color-surface-active)
 
   &.session-list-item-wip
     .session-list-item-link
@@ -62,7 +58,7 @@
 
   &:hover,
   &:focus-within
-    .session-list-item-link
+    .session-list-item-link:where(:not([aria-disabled='true']))
       padding-right: 44px
       background-color: var(--color-surface-hover)
 
@@ -84,8 +80,8 @@
   .session-list-item-active ~ .session-list-item-pinned-icon
     right: 44px
 
-  .session-list-item-link:active
-    background-color: var(--color-surface-active)
+  .session-list-item-link
+    @include list-row.interactions
 
   .session-list-item-input
     height: 100%
@@ -150,9 +146,8 @@
     background-color: var(--color-sidebar-background)
     opacity: 0
     pointer-events: none
-    transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
-  .session-list-item-link:active .session-list-item-title-mask
+  .session-list-item-link:active:where(:not([aria-disabled='true'])) .session-list-item-title-mask
     background-color: var(--color-sidebar-background-active)
 
   .session-list-item-active .session-list-item-title-mask
@@ -179,14 +174,8 @@
       background-color: var(--color-sidebar-background-hover)
 
 @media (prefers-reduced-motion: reduce)
-  .session-list-item .session-list-item-link
-    transition: none
-
   .session-list-item .session-list-item-actions
     transition: none
 
   .session-list-item .session-list-item-pinned-icon
-    transition: none
-
-  .session-list-item .session-list-item-title-mask
     transition: none

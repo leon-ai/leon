@@ -29,7 +29,7 @@
   transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), box-shadow var(--transition-duration-main) var(--transition-timing-main)
 
   &:active:not(:disabled):not([aria-disabled='true'])
-    box-shadow: inset 0 2px 4px var(--color-button-pressed-shadow)
+    box-shadow: var(--shadow-control-pressed)
 
   &:not(.button-ghost)
     // The opaque padding layer keeps translucent states from revealing the border gradient.
