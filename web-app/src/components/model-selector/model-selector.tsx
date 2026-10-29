@@ -3,16 +3,19 @@ import { useEffect, useState } from 'react'
 import { Dropdown } from '@/components/dropdown'
 import {
   modelProviders,
-  type ModelChoice
+  type ModelChoice,
+  type ModelSettings
 } from '@/data/model-catalog'
 
 import { ModelSelectorMenu } from './model-selector-menu'
+import { ModelSettingsSelector } from './model-settings-selector'
 import { ProviderLogo } from './provider-logo'
 
 import './model-selector.sass'
 
 const SELECTOR_WIDTH_PX = 352
 const SELECTOR_HEIGHT_PX = 540
+const DEFAULT_SETTINGS: ModelSettings = { reasoning: 'auto', speed: 'auto' }
 const MAXIMUM_RECENT_MODELS = 3
 const MAXIMUM_MODEL_HISTORY = MAXIMUM_RECENT_MODELS + 1
 const RECENT_MODELS_STORAGE_KEY = 'leon.web-app.recent-models'
@@ -79,6 +82,9 @@ function getInitialChoice(): ModelChoice {
 export function ModelSelector({ disabled = false }: ModelSelectorProps) {
   const [modelHistory, setModelHistory] = useState(readModelHistory)
   const [choice, setChoice] = useState(() => modelHistory[0] ?? getInitialChoice())
+  const [settingsByModel, setSettingsByModel] = useState<Record<string, ModelSettings>>({})
+  const targetKey = `${choice.provider.id}/${choice.model.model}`
+  const settings = settingsByModel[targetKey] ?? DEFAULT_SETTINGS
   const recentModels = modelHistory.filter((recent) =>
     recent.provider.id !== choice.provider.id || recent.model.model !== choice.model.model
   ).slice(0, MAXIMUM_RECENT_MODELS)
@@ -146,6 +152,18 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
           </button>
         )}
       </Dropdown>
+      <ModelSettingsSelector
+        provider={choice.provider}
+        model={choice.model}
+        settings={settings}
+        disabled={disabled}
+        onChange={(next) => {
+          setSettingsByModel((current) => ({
+            ...current,
+            [targetKey]: { ...(current[targetKey] ?? DEFAULT_SETTINGS), ...next }
+          }))
+        }}
+      />
     </>
   )
 }
