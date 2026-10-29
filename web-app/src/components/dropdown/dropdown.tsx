@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 
@@ -27,6 +27,8 @@ interface DropdownProps {
   height?: number
   preferredPlacement?: DropdownPlacement
   disabled?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 const DROPDOWN_OFFSET = 6
@@ -82,6 +84,10 @@ function getDropdownPosition(
   }
 }
 
+/**
+ * Anchors a popup with local visibility or a controlled open/onOpenChange pair.
+ * Closing content stays mounted until its own exit transition completes.
+ */
 export function Dropdown({
   children,
   items = [],
@@ -91,15 +97,27 @@ export function Dropdown({
   width = DROPDOWN_WIDTH,
   height,
   preferredPlacement,
-  disabled = false
+  disabled = false,
+  open: controlledOpen,
+  onOpenChange
 }: DropdownProps) {
   const contentId = useId()
   const triggerRef = useRef<HTMLSpanElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const controlled = controlledOpen !== undefined
   const [placement, setPlacement] = useState<DropdownPlacement>('bottom')
   const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>()
+
+  const setOpen = useCallback((next: boolean): void => {
+    if (!controlled) {
+      setInternalOpen(next)
+    }
+
+    onOpenChange?.(next)
+  }, [controlled, onOpenChange])
 
   useExitCleanup(dropdownRef, mounted && !open, () => setMounted(false))
 
@@ -133,13 +151,15 @@ export function Dropdown({
     }
 
     setOpen(false)
-  }, [open])
+  }, [open, setOpen])
 
-  const openDropdown = useCallback((): void => {
-    updateDropdownPosition()
-    setMounted(true)
-    setOpen(true)
-  }, [updateDropdownPosition])
+  // Controlled and local opening both position and mount before the next paint.
+  useLayoutEffect(() => {
+    if (open) {
+      updateDropdownPosition()
+      setMounted(true)
+    }
+  }, [open, updateDropdownPosition])
 
   function toggleDropdown(): void {
     if (disabled) {
@@ -151,7 +171,7 @@ export function Dropdown({
       return
     }
 
-    openDropdown()
+    setOpen(true)
   }
 
   useEffect(() => {
