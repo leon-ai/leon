@@ -22,7 +22,7 @@ interface ProcessGroupProps {
   children: ReactNode
   className?: string
   completedLabel: string
-  indicator: ReactNode
+  indicator?: ReactNode
 }
 
 const NestedDisclosureDefaultContext = createContext(true)
@@ -95,9 +95,11 @@ export function ProcessGroup({
             active={active && animateWhileActive}
             className="process-group-heading-layer"
           >
-            <span className="process-group-indicator" aria-hidden="true">
-              {indicator}
-            </span>
+            {indicator !== undefined && indicator !== null && (
+              <span className="process-group-indicator" aria-hidden="true">
+                {indicator}
+              </span>
+            )}
             <span className="process-group-title">{label}</span>
           </ActivityWave>
           <i

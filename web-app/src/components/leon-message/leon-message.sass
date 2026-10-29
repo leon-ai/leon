@@ -15,11 +15,21 @@
   font-size: var(--font-size-lg)
   line-height: var(--line-height-lg)
 
+.leon-message-activities
+  display: flex
+  min-width: 0
+  flex-direction: column
+  gap: var(--activity-node-gap)
+
 .leon-message-execution
   opacity: 1
 
 .leon-message > .final-answer
   margin-top: var(--space-md)
+
+.leon-message-work + .final-answer
+  margin-top: 0
+  padding-top: var(--activity-node-gap)
 
 .leon-message > .bonus-response
   margin-top: var(--space-md)

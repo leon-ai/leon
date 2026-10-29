@@ -6,6 +6,8 @@ import type {
   LeonFeedActivity,
   LeonFeedEntry
 } from '@/data/feed'
+import { FeedTurnStatus } from '@/data/feed'
+import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { ArtifactAttachments } from '@/components/artifact-attachments'
 import { BonusResponse } from '@/components/bonus-response'
 import { FinalAnswer } from '@/components/final-answer'
@@ -109,11 +111,25 @@ function renderActivity(activity: LeonFeedActivity) {
 
 export function LeonMessage({ entry }: LeonMessageProps) {
   const bonusResponse = entry.bonusResponse
+  const activities = entry.activities.map(renderActivity)
+  const duration = formatToolDuration(entry.durationMs, DurationFormat.Compact)
 
   return (
     <div className="leon-message">
-      {entry.activities.map(renderActivity)}
-      <ArtifactAttachments artifacts={entry.artifacts || []} />
+      {entry.status === FeedTurnStatus.Completed && activities.length > 0 ? (
+        <ProcessGroup
+          active={false}
+          activeLabel="Working..."
+          ariaLabel="Leon’s completed work"
+          className="leon-message-work"
+          completedLabel={`Worked for ${duration}`}
+        >
+          <div className="leon-message-activities">{activities}</div>
+        </ProcessGroup>
+      ) : activities}
+      {entry.artifacts !== undefined && entry.artifacts.length > 0 && (
+        <ArtifactAttachments artifacts={entry.artifacts} />
+      )}
       {entry.finalAnswer.trim().length > 0 && (
         <FinalAnswer animationId={`${entry.id}:final-answer`}>
           {entry.finalAnswer}

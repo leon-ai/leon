@@ -1,5 +1,10 @@
 import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
 
+export enum FeedTurnStatus {
+  InProgress = 'in_progress',
+  Completed = 'completed'
+}
+
 export type FeedPlanStepStatus =
   | 'pending'
   | 'in_progress'
@@ -80,6 +85,9 @@ export interface LeonFeedEntry {
   artifacts?: Artifact[]
   id: string
   role: 'leon'
+  status: FeedTurnStatus
+  // Whole-turn wall-clock time, not a sum of overlapping activity durations.
+  durationMs: number
   activities: LeonFeedActivity[]
   finalAnswer: string
   bonusResponse?: string

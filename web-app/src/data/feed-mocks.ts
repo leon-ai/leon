@@ -11,6 +11,7 @@ import type {
   JsonValue,
   LeonFeedEntry
 } from './feed'
+import { FeedTurnStatus } from './feed'
 
 type MockFeedScenario =
   | 'completed-no-plan'
@@ -47,6 +48,8 @@ const FOLLOW_UP_THINKING_DETAILS = [
   'I need to verify the remaining value before finalizing the change.'
 ]
 const FOLLOW_UP_THINKING_DURATION_MS = 3_600
+const TURN_DURATION_MS = 24_800
+const PLAN_TURN_DURATION_MS = 75_400
 
 const FINAL_ANSWER = [
   'Fixed it.',
@@ -253,11 +256,16 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
   const summary = hasPlan
     ? 'I’ll inspect the current setup, apply the required configuration changes, and verify that Ghostty resolves them correctly.'
     : 'I’ll inspect the configuration and supporting documentation, then apply and verify the smallest safe change.'
+  const status = isInProgress
+    ? FeedTurnStatus.InProgress
+    : FeedTurnStatus.Completed
 
   if (hasPlan) {
     return {
       id: window.crypto.randomUUID(),
       role: 'leon',
+      status,
+      durationMs: PLAN_TURN_DURATION_MS,
       activities: [
         createThinkingActivity(
           THINKING_DETAILS,
@@ -288,6 +296,8 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
   return {
     id: window.crypto.randomUUID(),
     role: 'leon',
+    status,
+    durationMs: TURN_DURATION_MS,
     activities: [
       createThinkingActivity(THINKING_DETAILS, THINKING_DURATION_MS, false),
       createSummaryActivity(summary),
