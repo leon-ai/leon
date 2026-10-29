@@ -258,7 +258,7 @@ export function ModelSelectorMenu({
         className="model-selector-search"
         fieldRef={searchRef}
         iconName="search"
-        placeholder="Search models or providers…"
+        placeholder="Search models..."
         autoComplete="off"
         spellCheck={false}
         role="combobox"
