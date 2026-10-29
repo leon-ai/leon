@@ -19,6 +19,7 @@
   justify-content: center
   gap: var(--space-sm)
   box-sizing: border-box
+  min-width: 0
   border: var(--button-border-width) solid transparent
   border-radius: var(--border-radius-lg)
   background-color: var(--button-background)
@@ -56,11 +57,31 @@
     line-height: var(--line-height-md)
 
     &.button-icon-only
+      flex: 0 0 auto
       box-sizing: border-box
       width: var(--button-md-icon-only-size)
       height: var(--button-md-icon-only-size)
       min-height: 0
       padding: 8px
+
+  // Composer actions share a compact toolbar rhythm without changing general buttons.
+  &.button-composer
+    height: var(--button-md-icon-only-size)
+    min-height: 0
+    font-size: var(--font-size-md)
+    font-weight: var(--font-weight-regular)
+
+    &.button-icon-only
+      padding: 0
+
+    .button-icon
+      font-size: var(--font-size-xl)
+
+    .button-chevron
+      flex: 0 0 auto
+      font-size: var(--font-size-sm)
+      font-weight: var(--font-weight-regular)
+      line-height: 1
 
   &.button-ghost:hover:not(:disabled):not([aria-disabled='true']),
   &.button-secondary:hover:not(:disabled):not([aria-disabled='true'])

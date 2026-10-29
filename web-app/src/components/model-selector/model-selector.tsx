@@ -139,16 +139,16 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
         {(open, contentId) => (
           <button
             type="button"
-            className="button button-ghost button-md model-selector-trigger"
+            className="button button-ghost button-md button-composer model-selector-trigger"
             disabled={disabled}
             aria-label={`Choose model, current: ${choice.provider.label}, ${choice.model.label}`}
             aria-haspopup="dialog"
             aria-expanded={open}
             aria-controls={open ? contentId : undefined}
           >
-            <LLMProviderIcon provider={choice.provider.id} />
-            <span className="model-selector-trigger-label">{choice.model.label}</span>
-            <i className="ri-arrow-down-s-line model-selector-chevron" aria-hidden="true" />
+            <LLMProviderIcon provider={choice.provider.id} className="button-icon" />
+            <span className="button-label model-selector-trigger-label">{choice.model.label}</span>
+            <i className="ri-arrow-down-s-line button-chevron model-selector-chevron" aria-hidden="true" />
           </button>
         )}
       </Dropdown>

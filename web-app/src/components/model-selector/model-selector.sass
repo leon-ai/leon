@@ -1,25 +1,13 @@
 .button.model-selector-trigger
-  gap: 6px
-  height: var(--button-md-icon-only-size)
-  min-height: 0
   max-width: 208px
-  padding: 0 var(--space-sm)
-  color: var(--color-text-secondary)
-  font-size: inherit
-  font-weight: var(--font-weight-regular)
+
+  &:not(:disabled)
+    color: var(--color-text)
 
   &[aria-expanded='true']
     --button-background: var(--color-surface-hover)
-    color: var(--color-text)
-
-.model-selector-trigger-label
-  min-width: 0
-  overflow: hidden
-  text-overflow: ellipsis
-  white-space: nowrap
 
 .model-selector-chevron
-  flex: 0 0 auto
   transition: transform var(--transition-duration-main) var(--transition-timing-main)
 
   [aria-expanded='true'] &

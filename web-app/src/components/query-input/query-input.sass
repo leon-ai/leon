@@ -105,19 +105,17 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, 
     transform: translateY(-50%)
     transition: top var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
 
-    .button-icon
-      font-size: 20px
-
   .query-input-leading-action
     left: var(--query-input-padding-inline)
 
   .query-input-actions
     right: var(--query-input-padding-inline)
     gap: var(--space-xs)
+    // Reserve the leading action's hit area when selector labels need to truncate.
+    max-width: calc(100% - var(--query-input-padding-inline) * 2 - var(--button-md-icon-only-size) - var(--query-input-action-gap))
 
-  .query-input-submit
-    .button-icon
-      transform: translateY(2px)
+    .dropdown-trigger
+      min-width: 0
 
   .query-input-field
     width: auto

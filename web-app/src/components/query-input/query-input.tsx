@@ -251,7 +251,7 @@ export function QueryInput({
       >
         <div ref={leadingActionRef} className="query-input-leading-action">
           <Button
-            className="query-input-add"
+            className="button-composer query-input-add"
             iconName="add-large"
             tooltipMessage="Add attachment"
             tooltipPosition="top"
@@ -298,7 +298,7 @@ export function QueryInput({
         <div ref={actionsRef} className="query-input-actions">
           <ModelSelector disabled={disabled || loading} />
           <Button
-            className="query-input-submit"
+            className="button-composer query-input-submit"
             type="submit"
             variant="primary"
             iconName="send-ins"

@@ -286,7 +286,7 @@ export function ModelSettingsSelector({
       {(open, contentId) => (
         <button
           type="button"
-          className="button button-ghost button-md model-settings-trigger"
+          className="button button-ghost button-md button-composer model-settings-trigger"
           disabled={disabled}
           title={'Model settings · ' + description}
           aria-label={'Model settings, ' + description}
@@ -295,11 +295,11 @@ export function ModelSettingsSelector({
           aria-controls={open ? contentId : undefined}
         >
           <i className="button-icon ri-speed-up-line" aria-hidden="true" />
-          <span className="model-settings-label">{reasoningLabel}</span>
+          <span className="button-label model-settings-label">{reasoningLabel}</span>
           {settings.speed === 'fast' && (
             <i className="ri-flashlight-fill model-settings-fast" aria-hidden="true" />
           )}
-          <i className="ri-arrow-down-s-line model-settings-chevron" aria-hidden="true" />
+          <i className="ri-arrow-down-s-line button-chevron model-settings-chevron" aria-hidden="true" />
         </button>
       )}
     </Dropdown>
