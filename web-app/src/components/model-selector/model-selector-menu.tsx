@@ -352,8 +352,6 @@ export function ModelSelectorMenu({
                       <i className="ri-arrow-right-s-line" aria-hidden="true" />
                     ) : selected ? (
                       <i className="ri-check-fill model-selector-selected" aria-hidden="true" />
-                    ) : row.model?.recommended ? (
-                      <i className="ri-star-line model-selector-recommended" aria-label="Recommended" />
                     ) : null}
                   </button>
                 </div>
