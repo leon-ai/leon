@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { Dropdown } from '@/components/dropdown'
+import { LLMProviderIcon } from '@/components/llm-provider-icon'
 import {
   modelProviders,
   type ModelChoice,
@@ -9,7 +10,6 @@ import {
 
 import { ModelSelectorMenu } from './model-selector-menu'
 import { ModelSettingsSelector } from './model-settings-selector'
-import { ProviderLogo } from './provider-logo'
 
 import './model-selector.sass'
 
@@ -146,7 +146,7 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
             aria-expanded={open}
             aria-controls={open ? contentId : undefined}
           >
-            <ProviderLogo provider={choice.provider.id} />
+            <LLMProviderIcon provider={choice.provider.id} />
             <span className="model-selector-trigger-label">{choice.model.label}</span>
             <i className="ri-arrow-down-s-line model-selector-chevron" aria-hidden="true" />
           </button>

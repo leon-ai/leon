@@ -10,6 +10,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { Input } from '@/components/input'
+import { LLMProviderIcon } from '@/components/llm-provider-icon'
 import { ScrollList } from '@/components/scroll-list'
 import {
   modelProviders,
@@ -18,8 +19,6 @@ import {
   type ModelProvider
 } from '@/data/model-catalog'
 import { createSearchIndex, searchIndex } from '@/utils/search'
-
-import { ProviderLogo } from './provider-logo'
 
 const ROW_HEIGHT_PX = 48
 const ROW_OVERSCAN = 3
@@ -342,7 +341,7 @@ export function ModelSelectorMenu({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => chooseRow(row)}
                   >
-                    <ProviderLogo provider={row.provider.id} />
+                    <LLMProviderIcon provider={row.provider.id} />
                     <span className="model-selector-row-copy">
                       <span className="model-selector-row-label">{row.model?.label ?? row.provider.label}</span>
                       {row.model !== undefined && search !== '' && (
