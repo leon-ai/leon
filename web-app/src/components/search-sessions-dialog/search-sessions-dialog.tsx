@@ -14,16 +14,12 @@ import {
   sessionIndex,
   type ConversationSession
 } from '@/data/sessions'
+import { createSearchIndex, getSearchSegments, searchIndex } from '@/utils/search'
 
 import './search-sessions-dialog.sass'
 
 interface SearchSessionsDialogProps {
   onSessionSelect?: () => void
-}
-
-interface HighlightedTitleSegment {
-  highlighted: boolean
-  text: string
 }
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -41,6 +37,10 @@ const DATE_WITH_YEAR_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   year: 'numeric'
 })
+const SESSION_SEARCH_INDEX = createSearchIndex(
+  sortSessionsByLastMessage(sessionIndex.sessions),
+  (session) => [session.title]
+)
 
 function useDebouncedValue<TValue>(
   value: TValue,
@@ -116,66 +116,16 @@ function sortSessionsByLastMessage(
   )
 }
 
-function getHighlightedTitleSegments(
-  title: string,
-  query: string
-): HighlightedTitleSegment[] {
-  const normalizedQuery = query.trim().toLowerCase()
-
-  if (normalizedQuery.length === 0) {
-    return [{ highlighted: false, text: title }]
-  }
-
-  const normalizedTitle = title.toLowerCase()
-  const segments: HighlightedTitleSegment[] = []
-  let searchIndex = 0
-
-  while (searchIndex < title.length) {
-    const matchIndex = normalizedTitle.indexOf(normalizedQuery, searchIndex)
-
-    if (matchIndex === -1) {
-      segments.push({
-        highlighted: false,
-        text: title.slice(searchIndex)
-      })
-      break
-    }
-
-    if (matchIndex > searchIndex) {
-      segments.push({
-        highlighted: false,
-        text: title.slice(searchIndex, matchIndex)
-      })
-    }
-
-    segments.push({
-      highlighted: true,
-      text: title.slice(matchIndex, matchIndex + normalizedQuery.length)
-    })
-    searchIndex = matchIndex + normalizedQuery.length
-  }
-
-  return segments
-}
-
 export function SearchSessionsDialog({
   onSessionSelect
 }: SearchSessionsDialogProps) {
   const scrollElementRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
-  const searchResults = useMemo(() => {
-    const normalizedQuery = debouncedQuery.trim().toLowerCase()
-    const sessions = sortSessionsByLastMessage(sessionIndex.sessions)
-
-    if (normalizedQuery.length === 0) {
-      return sessions
-    }
-
-    return sessions.filter((session) =>
-      session.title.toLowerCase().includes(normalizedQuery)
-    )
-  }, [debouncedQuery])
+  const searchResults = useMemo(
+    () => searchIndex(SESSION_SEARCH_INDEX, debouncedQuery),
+    [debouncedQuery]
+  )
   const rowVirtualizer = useVirtualizer({
     count: searchResults.length,
     getScrollElement: () => scrollElementRef.current,
@@ -205,11 +155,13 @@ export function SearchSessionsDialog({
             style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const session = searchResults[virtualRow.index]
+              const result = searchResults[virtualRow.index]
 
-              if (session === undefined) {
+              if (result === undefined) {
                 return null
               }
+
+              const session = result.item
 
               return (
                 <li
@@ -227,10 +179,7 @@ export function SearchSessionsDialog({
                     onClick={onSessionSelect}
                   >
                     <span className="search-sessions-dialog-title">
-                      {getHighlightedTitleSegments(
-                        session.title,
-                        debouncedQuery
-                      ).map((segment, segmentIndex) => (
+                      {getSearchSegments(result).map((segment, segmentIndex) => (
                         <span
                           className={segment.highlighted
                             ? 'search-sessions-dialog-title-highlight'
