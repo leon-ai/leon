@@ -240,6 +240,9 @@ export interface HTTPPluginConversationSessionMutationResult {
 }
 
 export type HTTPPluginAgentEventType =
+  | 'text_stream'
+  | 'turn_status'
+  | 'owner_message'
   | 'artifacts'
   | 'widget'
   | 'progress_message'

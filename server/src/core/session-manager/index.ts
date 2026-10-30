@@ -171,11 +171,11 @@ function getTitleReasoningParams(
   return {}
 }
 
-function createSession(title = DEFAULT_SESSION_TITLE): ConversationSession {
+function createSession(title = DEFAULT_SESSION_TITLE, id: string = randomUUID()): ConversationSession {
   const createdAt = now()
 
   return {
-    id: randomUUID(),
+    id,
     title,
     isTitleGenerated: title !== DEFAULT_SESSION_TITLE,
     isPinned: false,
@@ -314,9 +314,13 @@ export class ConversationSessionManager {
     return this.findSession(sessionId)
   }
 
-  public createSession(): ConversationSession {
+  public createSession(sessionId?: string): ConversationSession {
     const index = this.ensureReady()
-    const session = createSession()
+    const existing = sessionId ? this.findSession(sessionId) : null
+    if (existing) {
+      return cloneSession(existing)
+    }
+    const session = createSession(DEFAULT_SESSION_TITLE, sessionId)
 
     index.sessions.unshift(session)
     index.activeSessionId = session.id
