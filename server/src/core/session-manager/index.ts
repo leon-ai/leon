@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
 import type { MessageLog } from '@/types'
+import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LogHelper } from '@/helpers/log-helper'
 import {
   LLMDuties,
@@ -61,6 +63,7 @@ export interface ConversationSession {
   lastMessageAt: number | null
   messageCount: number
   modelTarget: string | null
+  modelSettings?: Record<string, Partial<LLMModelSettings>>
 }
 
 interface ConversationSessionIndex {
@@ -72,6 +75,7 @@ interface SessionUpdateInput {
   title?: string
   isPinned?: boolean
   modelTarget?: string | null
+  modelSettings?: Record<string, Partial<LLMModelSettings>>
 }
 
 interface PendingAgentMessage {
@@ -86,7 +90,8 @@ function now(): number {
 
 function cloneSession(session: ConversationSession): ConversationSession {
   return {
-    ...session
+    ...session,
+    ...(session.modelSettings ? { modelSettings: structuredClone(session.modelSettings) } : {})
   }
 }
 
@@ -194,6 +199,7 @@ export class ConversationSessionManager {
   private readonly agentMessageQueues = new Map<string, {
     pending: PendingAgentMessage[]
     controller: AbortController
+    executionController: AbortController
   }>()
 
   /**
@@ -213,8 +219,8 @@ export class ConversationSessionManager {
     }
 
     const pending: PendingAgentMessage[] = []
-    const turn = { pending, controller: new AbortController() }
     const executionController = new AbortController()
+    const turn = { pending, controller: new AbortController(), executionController }
     this.agentMessageQueues.set(sessionId, turn)
 
     return {
@@ -287,6 +293,15 @@ export class ConversationSessionManager {
     return this.agentMessageQueues.has(sessionId)
   }
 
+  /**
+   * Cancels only the addressed session, including retained tool executions.
+   */
+  public cancelAgentTurn(sessionId: string): void {
+    const turn = this.agentMessageQueues.get(sessionId)
+    turn?.executionController.abort(new Error('Stopped by the owner.'))
+    turn?.controller.abort(new Error('Stopped by the owner.'))
+  }
+
   public ensureReady(): ConversationSessionIndex {
     if (this.index) {
       return this.index
@@ -356,6 +371,10 @@ export class ConversationSessionManager {
         : null
     }
 
+    if (input.modelSettings) {
+      session.modelSettings = structuredClone(input.modelSettings)
+    }
+
     session.updatedAt = now()
     this.persistIndex(session)
     this.emitUpdated()
@@ -383,6 +402,10 @@ export class ConversationSessionManager {
   }
 
   public deleteSession(sessionId: string): ConversationSession {
+    if (this.isAgentTurnActive(sessionId)) {
+      throw new Error('Stop this session’s active turn before deleting it.')
+    }
+
     const index = this.ensureReady()
     const sessionIndex = index.sessions.findIndex(
       (session) => session.id === sessionId
@@ -513,26 +536,36 @@ export class ConversationSessionManager {
 
     // Nested operations already belong to the same ordered turn.
     if (getActiveConversationSessionId() === session.id) {
-      return runWithConversationSession(
-        {
-          sessionId: session.id,
-          modelTarget: session.modelTarget
-        },
-        callback
-      )
+      return callback()
     }
+
+    // Capture before queueing: later UI/profile edits affect the next turn only.
+    const modelTarget = session.modelTarget || CONFIG_STATE.getModelState().getAgentTargetValue()
+    const context = { sessionId: session.id, modelTarget }
+    const modelSettings = runWithConversationSession(context, () => {
+      const target = CONFIG_STATE.getModelState().getAgentTarget()
+      const defaults = CONFIG_STATE.getModelSettingsState().getSettings(target)
+
+      return {
+        target: target.label,
+        settings: { ...defaults, ...session.modelSettings?.[target.label] }
+      }
+    })
 
     const previousOperation = this.sessionQueues.get(session.id) ||
       Promise.resolve()
-    const operation = previousOperation.then(() =>
-      runWithConversationSession(
+    const operation = previousOperation.then(() => {
+      // A queued background duty must not start after its owner deletes the session.
+      this.requireSession(session.id)
+
+      return runWithConversationSession(
         {
-          sessionId: session.id,
-          modelTarget: session.modelTarget
+          ...context,
+          modelSettings
         },
         callback
       )
-    )
+    })
     const queueTail = operation.then(
       () => undefined,
       () => undefined
@@ -587,6 +620,10 @@ export class ConversationSessionManager {
     const title = normalizeTitle(
       stripLeadingTitleTemplateTags(String(titleResult?.output || ''))
     )
+
+    if (!this.findSession(sessionId)) {
+      return
+    }
 
     if (!title) {
       session.title = createFallbackTitle(message)
@@ -665,7 +702,8 @@ export class ConversationSessionManager {
       modelTarget:
         typeof session.modelTarget === 'string' && session.modelTarget.trim()
           ? session.modelTarget.trim()
-          : null
+          : null,
+      ...(session.modelSettings ? { modelSettings: session.modelSettings } : {})
     }))
 
     const activeSessionId = sessions.some(

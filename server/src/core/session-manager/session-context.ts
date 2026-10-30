@@ -6,10 +6,12 @@ import type {
   InferenceMetadata,
   TurnInference
 } from '@/core/llm-manager/inference-metadata'
+import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
 
 interface ConversationSessionContext {
   sessionId: string
   modelTarget?: string | null
+  modelSettings?: { target: string, settings: LLMModelSettings }
 }
 
 interface StoredConversationSessionContext extends ConversationSessionContext {
@@ -29,7 +31,20 @@ export function getActiveConversationSessionId(): string | null {
 }
 
 export function getActiveConversationSessionModelTarget(): string | null {
-  return conversationSessionStorage.getStore()?.modelTarget || null
+  const context = conversationSessionStorage.getStore()
+
+  return context?.profileName === getActiveProfileName() ? context.modelTarget || null : null
+}
+
+/**
+ * Returns immutable settings only for the model captured by this turn.
+ */
+export function getActiveConversationModelSettings(target: string): LLMModelSettings | undefined {
+  const context = conversationSessionStorage.getStore()
+
+  return context?.profileName === getActiveProfileName() && context.modelSettings?.target === target
+    ? { ...context.modelSettings.settings }
+    : undefined
 }
 
 /**
