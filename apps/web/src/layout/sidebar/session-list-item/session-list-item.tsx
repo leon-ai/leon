@@ -33,6 +33,7 @@ interface SessionListItemProps {
   status: SessionStatus
   onDelete: (sessionId: string) => void
   onRename: (sessionId: string, title: string) => void
+  onPin: (sessionId: string) => void
   title: string
   style?: CSSProperties
 }
@@ -43,6 +44,7 @@ export function SessionListItem({
   status,
   onDelete,
   onRename,
+  onPin,
   title,
   style
 }: SessionListItemProps) {
@@ -351,7 +353,7 @@ export function SessionListItem({
               label: 'Rename',
               onSelect: startEditing
             },
-            pinDropdownItem,
+            { ...pinDropdownItem, onSelect: () => onPin(id) },
             {
               iconName: 'delete-bin',
               label: 'Delete',

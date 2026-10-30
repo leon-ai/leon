@@ -11,9 +11,10 @@ import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import { ScrollList } from '@/components/scroll-list'
 import {
-  sessionIndex,
+  useSessions,
   type ConversationSession
 } from '@/data/sessions'
+import { useProfile } from '@/data/profile'
 import { createSearchIndex, getSearchSegments, searchIndex } from '@/utils/search'
 
 import './search-sessions-dialog.sass'
@@ -37,10 +38,6 @@ const DATE_WITH_YEAR_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   year: 'numeric'
 })
-const SESSION_SEARCH_INDEX = createSearchIndex(
-  sortSessionsByLastMessage(sessionIndex.sessions),
-  (session) => [session.title]
-)
 
 function useDebouncedValue<TValue>(
   value: TValue,
@@ -108,30 +105,34 @@ function formatSessionDate(timestamp: number): string {
   return DATE_WITH_YEAR_FORMATTER.format(date)
 }
 
-function sortSessionsByLastMessage(
-  sessions: ConversationSession[]
-): ConversationSession[] {
-  return [...sessions].sort((firstSession, secondSession) =>
-    getSessionTimestamp(secondSession) - getSessionTimestamp(firstSession)
-  )
-}
-
 export function SearchSessionsDialog({
   onSessionSelect
 }: SearchSessionsDialogProps) {
   const scrollElementRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
+  const sessionsQuery = useSessions(useProfile(), debouncedQuery)
+  const sessions = sessionsQuery.sessions
   const searchResults = useMemo(
-    () => searchIndex(SESSION_SEARCH_INDEX, debouncedQuery),
-    [debouncedQuery]
+    () => new Map(searchIndex(createSearchIndex(sessions, (session) => [session.title]), debouncedQuery)
+      .map((result) => [result.item.id, result])),
+    [debouncedQuery, sessions]
   )
   const rowVirtualizer = useVirtualizer({
-    count: searchResults.length,
+    count: sessions.length,
+    getItemKey: (index) => sessions[index]?.id ?? index,
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => SEARCH_RESULT_ITEM_HEIGHT,
     overscan: SEARCH_RESULT_OVERSCAN
   })
+  const lastVisibleIndex = rowVirtualizer.getVirtualItems().at(-1)?.index ?? -1
+  useEffect(() => {
+    if (lastVisibleIndex >= sessions.length - SEARCH_RESULT_OVERSCAN &&
+      sessionsQuery.hasNextPage && !sessionsQuery.isFetching && !sessionsQuery.isError) {
+      void sessionsQuery.fetchNextPage()
+    }
+  }, [lastVisibleIndex, sessions.length, sessionsQuery.hasNextPage, sessionsQuery.isFetching,
+    sessionsQuery.isError, sessionsQuery.fetchNextPage])
 
   return (
     <div className="search-sessions-dialog">
@@ -149,19 +150,20 @@ export function SearchSessionsDialog({
         className="search-sessions-dialog-results"
         scrollRef={scrollElementRef}
       >
-        {searchResults.length > 0 ? (
+        {sessions.length > 0 ? (
           <ul
             className="search-sessions-dialog-list"
             style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const result = searchResults[virtualRow.index]
+              const session = sessions[virtualRow.index]
 
-              if (result === undefined) {
+              if (session === undefined) {
                 return null
               }
 
-              const session = result.item
+              const result = searchResults.get(session.id)
+              const segments = result ? getSearchSegments(result) : [{ text: session.title, highlighted: false }]
 
               return (
                 <li
@@ -179,7 +181,7 @@ export function SearchSessionsDialog({
                     onClick={onSessionSelect}
                   >
                     <span className="search-sessions-dialog-title">
-                      {getSearchSegments(result).map((segment, segmentIndex) => (
+                      {segments.map((segment, segmentIndex) => (
                         <span
                           className={segment.highlighted
                             ? 'search-sessions-dialog-title-highlight'
@@ -201,15 +203,18 @@ export function SearchSessionsDialog({
         ) : (
           <div className="search-sessions-dialog-empty">
             <p className="search-sessions-dialog-empty-text">
-              No session found.
+              {sessionsQuery.isPending ? 'Searching…' : sessionsQuery.isError
+                ? sessionsQuery.error.message : 'No session found.'}
             </p>
-            <Button
+            {sessionsQuery.isError ? (
+              <Button onClick={() => void sessionsQuery.refetch()}>Retry search</Button>
+            ) : <Button
               to="/"
               variant="primary"
               {...(onSessionSelect === undefined ? {} : { onClick: onSessionSelect })}
             >
               New session
-            </Button>
+            </Button>}
           </div>
         )}
       </ScrollList>

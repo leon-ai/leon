@@ -1,14 +1,15 @@
 import {
   useLayoutEffect,
-  useMemo,
+  useEffect,
   useRef,
   useState,
   type RefObject
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useNavigate, useParams } from '@tanstack/react-router'
 
-import { sessionIndex, type ConversationSession } from '@/data/sessions'
-import { useToast } from '@/components/toast'
+import { useSessions, useSessionMutation } from '@/data/sessions'
+import { useProfile } from '@/data/profile'
 import { SessionListItem } from '@/layout/sidebar/session-list-item'
 
 import './session-list.sass'
@@ -22,40 +23,34 @@ interface SessionListProps {
   scrollElementRef: RefObject<HTMLDivElement | null>
 }
 
-function sortPinnedSessionsFirst(
-  sessions: ConversationSession[]
-): ConversationSession[] {
-  return [...sessions].sort((firstSession, secondSession) => {
-    if (firstSession.isPinned === secondSession.isPinned) {
-      return 0
-    }
-
-    return firstSession.isPinned ? -1 : 1
-  })
-}
-
 export function SessionList({
   collapsed = false,
   scrollElementRef
 }: SessionListProps) {
-  const { showToast } = useToast()
+  const navigate = useNavigate()
+  const { sessionId: viewedSessionId } = useParams({ strict: false })
+  const profile = useProfile()
+  const query = useSessions(profile)
+  const mutation = useSessionMutation(profile)
   const scrollMaskRef = useRef<HTMLDivElement>(null)
   const virtualListRef = useRef<HTMLUListElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
-  const [sessions, setSessions] = useState<ConversationSession[]>(
-    () => sessionIndex.sessions
-  )
-  const sortedSessions = useMemo(
-    () => sortPinnedSessionsFirst(sessions),
-    [sessions]
-  )
+  const sessions = query.sessions
   const rowVirtualizer = useVirtualizer({
-    count: sortedSessions.length,
+    count: sessions.length,
+    getItemKey: (index) => sessions[index]?.id ?? index,
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => SESSION_ITEM_ESTIMATED_HEIGHT,
     overscan: SESSION_LIST_OVERSCAN,
     scrollMargin
   })
+  const lastVisibleIndex = rowVirtualizer.getVirtualItems().at(-1)?.index ?? -1
+  useEffect(() => {
+    if (!collapsed && lastVisibleIndex >= sessions.length - SESSION_LIST_OVERSCAN &&
+      query.hasNextPage && !query.isFetching && !query.isError) {
+      void query.fetchNextPage()
+    }
+  }, [collapsed, lastVisibleIndex, sessions.length, query.hasNextPage, query.isFetching, query.isError, query.fetchNextPage])
 
   function renameSession(sessionId: string, nextTitle: string): void {
     const title = nextTitle.trim()
@@ -71,28 +66,17 @@ export function SessionList({
       return
     }
 
-    setSessions((currentSessions) =>
-      currentSessions.map((currentSession) =>
-        currentSession.id === sessionId
-          ? {
-              ...currentSession,
-              title,
-              updatedAt: Date.now()
-            }
-          : currentSession
-      )
-    )
-    showToast({
-      type: 'success',
-      title: 'Session title edited',
-      description: `I edited your session title to "${title}".`
-    })
+    mutation.mutate({ id: sessionId, changes: { title } })
   }
 
   function deleteSession(sessionId: string): void {
-    setSessions((currentSessions) =>
-      currentSessions.filter((currentSession) => currentSession.id !== sessionId)
-    )
+    mutation.mutate({ id: sessionId }, {
+      onSuccess: () => {
+        if (sessionId === viewedSessionId) {
+          void navigate({ to: '/' })
+        }
+      }
+    })
   }
 
   useLayoutEffect(() => {
@@ -170,7 +154,7 @@ export function SessionList({
         style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
       >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const session = sortedSessions[virtualRow.index]
+          const session = sessions[virtualRow.index]
 
           if (session === undefined) {
             return null
@@ -185,6 +169,7 @@ export function SessionList({
               title={session.title}
               onDelete={deleteSession}
               onRename={renameSession}
+              onPin={(id) => mutation.mutate({ id, changes: { is_pinned: !session.isPinned } })}
               style={{
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`
@@ -193,6 +178,8 @@ export function SessionList({
           )
         })}
       </ul>
+      {profile && query.isPending && <p role="status">Loading sessions…</p>}
+      {query.isError && <button type="button" onClick={() => void query.refetch()}>Retry loading sessions</button>}
       <div
         ref={scrollMaskRef}
         className="session-list-mask"
