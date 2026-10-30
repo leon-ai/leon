@@ -4,6 +4,7 @@ import { Vibes } from '@/components/vibes'
 import { PageContainer } from '@/layout/page-container'
 import { Sidebar } from '@/layout/sidebar'
 import { useAmbientConditions } from '@/data/ambient-conditions'
+import { ProfileAccessGate, ProfileBoundary } from '@/data/profile'
 import {
   getVibesPreviewConfiguration,
   parseVibesPreviewSearch,
@@ -13,6 +14,15 @@ import {
 import './app-layout.sass'
 
 export function AppLayout() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  if (import.meta.env.DEV && pathname === VIBES_PREVIEW_PATH) {
+    return <AuthenticatedAppLayout previewOnly />
+  }
+
+  return <ProfileBoundary><AuthenticatedAppLayout /></ProfileBoundary>
+}
+
+function AuthenticatedAppLayout({ previewOnly = false }: { previewOnly?: boolean }) {
   const location = useRouterState({
     select: (state) => state.location
   })
@@ -42,7 +52,7 @@ export function AppLayout() {
       <Sidebar />
       <main className="app-main">
         <PageContainer>
-          <Outlet />
+          {previewOnly ? <Outlet /> : <ProfileAccessGate><Outlet /></ProfileAccessGate>}
         </PageContainer>
       </main>
     </div>
