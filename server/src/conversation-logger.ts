@@ -1,14 +1,8 @@
-import path from 'node:path'
-import fs from 'node:fs'
-
-import type {
-  AgentResponseTrace,
-  ConversationWidgetData,
-  LLMAnswerMetrics,
-  MessageLog
-} from '@/types'
+import type { MessageLog } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
+import type { ConversationWriteOptions } from '@/core/session-manager/conversation-repository'
 import {
   getActiveConversationSessionId,
   getActiveTurnInference
@@ -28,338 +22,94 @@ interface LoadParams {
   sortBySentAt?: boolean
 }
 
-interface UpsertParams {
-  replaceMessageId?: string | null
-  refreshSentAt?: boolean
-  sentAt?: number
-  sessionId?: string
-  activity?: boolean
-}
-
 /**
- * The goal of this class is to log the conversation data between the
- * owner and Leon.
- * This data is saved on the owner's machine.
- * This data can then be used to provide more context to the LLM to achieve
- * better results.
+ * Preserves the logging API while retaining owner history separately from the
+ * bounded model window. SQLite orders writes without an asynchronous file queue
+ * holding unrelated sessions behind full-history reads and rewrites.
  */
 export class ConversationLogger {
-  private readonly settings: ConversationLoggerSettings
-  private operations = Promise.resolve()
-  private static readonly WIDGET_PLACEHOLDER_PREFIX =
-    '__LEON_INLINE_WIDGET__'
-  private static readonly LLM_METRICS_PLACEHOLDER_PREFIX =
-    '__LEON_INLINE_LLM_METRICS__'
-  private static readonly AGENT_TRACE_PLACEHOLDER_PREFIX =
-    '__LEON_INLINE_AGENT_TRACE__'
+  public constructor(private readonly settings: ConversationLoggerSettings) {
+    LogHelper.title(settings.loggerName)
+    LogHelper.success('New instance')
+  }
 
-  get loggerName(): string {
+  public get loggerName(): string {
     return this.settings.loggerName
   }
 
-  constructor(settings: ConversationLoggerSettings) {
-    LogHelper.title(settings.loggerName)
-    LogHelper.success('New instance')
-
-    this.settings = settings
-  }
-
-  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const nextOperation = this.operations.then(operation, operation)
-
-    this.operations = nextOperation.then(
-      () => undefined,
-      () => undefined
-    )
-
-    return nextOperation
-  }
-
-  private resolveConversationLogPath(sessionId?: string | null): string {
-    return CONVERSATION_SESSION_MANAGER.resolveConversationLogPath(
-      sessionId || null
-    )
-  }
-
-  private async createConversationLogFile(
-    conversationLogPath: string
-  ): Promise<void> {
-    try {
-      if (!fs.existsSync(conversationLogPath)) {
-        await fs.promises.mkdir(path.dirname(conversationLogPath), {
-          recursive: true
-        })
-        await fs.promises.writeFile(conversationLogPath, '[]', 'utf-8')
-      }
-    } catch (e) {
-      LogHelper.title(this.settings.loggerName)
-      LogHelper.error(`Failed to create conversation log file: ${e})`)
-    }
-  }
-
-  private async getAllLogs(sessionId?: string | null): Promise<MessageLog[]> {
-    let conversationLog: MessageLog[] = []
-    const conversationLogPath = this.resolveConversationLogPath(sessionId)
-
-    if (fs.existsSync(conversationLogPath)) {
-      conversationLog = JSON.parse(
-        await fs.promises.readFile(conversationLogPath, 'utf-8')
-      )
-    } else {
-      await this.createConversationLogFile(conversationLogPath)
+  private resolveSessionId(sessionId?: string): string {
+    const resolved = sessionId || getActiveConversationSessionId() ||
+      CONVERSATION_SESSION_MANAGER.getActiveSessionId()
+    if (!CONVERSATION_SESSION_MANAGER.getSession(resolved)) {
+      throw new Error('The conversation session no longer exists.')
     }
 
-    return conversationLog
+    return resolved
   }
 
   /**
-   * Keep the conversation log readable while forcing widget payloads to stay
-   * on one line in the JSON file.
+   * Appends a visible message or updates its stable trace identity.
    */
-  private serializeLogs(conversationLogs: MessageLog[]): string {
-    const serializedWidgets = new Map<string, string>()
-    const serializedLLMMetrics = new Map<string, string>()
-    const serializedAgentTraces = new Map<string, string>()
-    const preparedLogs = conversationLogs.map((conversationLog, index) => {
-      let widgetPlaceholder: string | null = null
-      let llmMetricsPlaceholder: string | null = null
-      let agentTracePlaceholder: string | null = null
-      const preparedConversationLog: MessageLog = {
-        ...('inference' in conversationLog
-          ? { inference: conversationLog.inference }
-          : {}),
-        who: conversationLog.who,
-        sentAt: conversationLog.sentAt,
-        message: conversationLog.message,
-        ...(conversationLog.artifacts?.length
-          ? { artifacts: conversationLog.artifacts }
-          : {}),
-        isAddedToHistory: conversationLog.isAddedToHistory,
-        ...(conversationLog.messageId
-          ? { messageId: conversationLog.messageId }
-          : {})
-      }
-
-      if (conversationLog.widget) {
-        widgetPlaceholder = `${ConversationLogger.WIDGET_PLACEHOLDER_PREFIX}_${index}`
-        serializedWidgets.set(
-          widgetPlaceholder,
-          JSON.stringify(conversationLog.widget)
-        )
-      }
-
-      if (conversationLog.llmMetrics) {
-        llmMetricsPlaceholder = `${ConversationLogger.LLM_METRICS_PLACEHOLDER_PREFIX}_${index}`
-        serializedLLMMetrics.set(
-          llmMetricsPlaceholder,
-          JSON.stringify(conversationLog.llmMetrics)
-        )
-      }
-
-      if (conversationLog.agentResponseTrace) {
-        agentTracePlaceholder = `${ConversationLogger.AGENT_TRACE_PLACEHOLDER_PREFIX}_${index}`
-        serializedAgentTraces.set(
-          agentTracePlaceholder,
-          JSON.stringify(conversationLog.agentResponseTrace)
-        )
-      }
-
-      return {
-        ...preparedConversationLog,
-        ...(widgetPlaceholder
-          ? {
-              widget:
-                widgetPlaceholder as unknown as ConversationWidgetData | null
-            }
-          : {}),
-        ...(llmMetricsPlaceholder
-          ? {
-              llmMetrics:
-                llmMetricsPlaceholder as unknown as LLMAnswerMetrics
-            }
-          : {}),
-        ...(agentTracePlaceholder
-          ? {
-              agentResponseTrace:
-                agentTracePlaceholder as unknown as AgentResponseTrace
-            }
-          : {})
-      }
-    })
-
-    let serializedLogs = JSON.stringify(preparedLogs, null, 2)
-    const replacePlaceholder = (
-      placeholder: string,
-      serializedValue: string
-    ): void => {
-      // A function replacement keeps `$` sequences in arbitrary payloads literal.
-      serializedLogs = serializedLogs.replace(
-        `"${placeholder}"`,
-        () => serializedValue
-      )
-    }
-
-    for (const [placeholder, serializedWidget] of serializedWidgets.entries()) {
-      replacePlaceholder(placeholder, serializedWidget)
-    }
-
-    for (const [placeholder, serializedMetrics] of serializedLLMMetrics.entries()) {
-      replacePlaceholder(placeholder, serializedMetrics)
-    }
-
-    for (const [placeholder, serializedTrace] of serializedAgentTraces.entries()) {
-      replacePlaceholder(placeholder, serializedTrace)
-    }
-
-    return serializedLogs
+  public async push(record: Omit<MessageLog, 'sentAt'>): Promise<void> {
+    await this.upsert(record)
   }
 
-  public async push(newRecord: Omit<MessageLog, 'sentAt'>): Promise<void> {
-    await this.upsert(newRecord)
-  }
-
+  /**
+   * Captures attribution before persistence; failed writes must reach the caller.
+   */
   public async upsert(
-    newRecord: Omit<MessageLog, 'sentAt'>,
-    params?: UpsertParams
+    record: Omit<MessageLog, 'sentAt'>,
+    options: ConversationWriteOptions = {}
   ): Promise<void> {
-    // Capture the caller's turn before the serialized writer awaits other sessions.
+    const sessionId = this.resolveSessionId(options.sessionId)
     const inference = getActiveTurnInference()
-
-    if (
-      newRecord.who === 'leon' &&
-      !('inference' in newRecord) &&
+    const attributed = record.who === 'leon' && !('inference' in record) &&
       inference !== undefined &&
-      (!params?.sessionId || params.sessionId === getActiveConversationSessionId())
-    ) {
-      newRecord = { ...newRecord, inference }
+      (!options.sessionId || options.sessionId === getActiveConversationSessionId())
+      ? { ...record, inference }
+      : record
+
+    CONVERSATION_REPOSITORY.upsertMessage(sessionId, attributed, options)
+    CONVERSATION_SESSION_MANAGER.updateSessionFromStoredMessages(sessionId)
+  }
+
+  /**
+   * Loads only the requested recent model-context window.
+   */
+  public async load(options: LoadParams = {}): Promise<MessageLog[]> {
+    const messages = CONVERSATION_REPOSITORY.readRecentMessages(
+      this.resolveSessionId(options.sessionId),
+      options.nbOfLogsToLoad || this.settings.nbOfLogsToLoad,
+      options.sortBySentAt ?? false
+    )
+    if (options.sortBySentAt) {
+      messages.sort((left, right) => left.sentAt - right.sentAt)
     }
 
-    await this.enqueue(async () => {
-      try {
-        const conversationLogs = await this.getAllLogs(params?.sessionId)
-        const targetMessageId =
-          params?.replaceMessageId || newRecord.messageId || newRecord.agentResponseTrace?.id || null
-
-        if (targetMessageId) {
-          const existingConversationLogIndex = conversationLogs.findIndex(
-            (conversationLog) => conversationLog.messageId === targetMessageId || (
-              newRecord.agentResponseTrace?.id !== undefined &&
-              conversationLog.agentResponseTrace?.id === newRecord.agentResponseTrace.id
-            )
-          )
-
-          if (existingConversationLogIndex !== -1) {
-            const existingConversationLog =
-              conversationLogs[existingConversationLogIndex]
-
-            if (existingConversationLog) {
-              // Delayed activity must not replace a completed answer. Activity
-              // snapshots share its ID but remain outside the model transcript.
-              if (params?.activity && existingConversationLog.isAddedToHistory) {
-                return
-              }
-              conversationLogs[existingConversationLogIndex] = {
-                ...existingConversationLog,
-                ...newRecord,
-                messageId: targetMessageId,
-                // Keep replay order aligned with the time an update was displayed.
-                sentAt: params?.sentAt ?? (
-                  params?.refreshSentAt || (
-                    !existingConversationLog.isAddedToHistory && newRecord.isAddedToHistory
-                  )
-                    ? Date.now()
-                    : existingConversationLog.sentAt
-                )
-              }
-            }
-          } else {
-            conversationLogs.push({
-              ...newRecord,
-              messageId: targetMessageId,
-              sentAt: params?.sentAt ?? Date.now()
-            })
-          }
-        } else {
-          if (conversationLogs.length >= this.settings.nbOfLogsToKeep) {
-            conversationLogs.shift()
-          }
-
-          conversationLogs.push({
-            ...newRecord,
-            sentAt: params?.sentAt ?? Date.now()
-          })
-        }
-
-        if (conversationLogs.length > this.settings.nbOfLogsToKeep) {
-          conversationLogs.splice(
-            0,
-            conversationLogs.length - this.settings.nbOfLogsToKeep
-          )
-        }
-
-        await fs.promises.writeFile(
-          this.resolveConversationLogPath(params?.sessionId),
-          this.serializeLogs(conversationLogs),
-          'utf-8'
-        )
-        CONVERSATION_SESSION_MANAGER.updateSessionFromLogs(
-          params?.sessionId,
-          conversationLogs
-        )
-      } catch (e) {
-        LogHelper.title(this.settings.loggerName)
-        LogHelper.error(`Failed to upsert record: ${e})`)
-      }
-    })
+    return messages
   }
 
-  public async load(params?: LoadParams): Promise<MessageLog[]> {
-    return this.enqueue(async () => {
-      try {
-        const conversationLog = await this.getAllLogs(params?.sessionId)
-        const nbOfLogsToLoad =
-          params?.nbOfLogsToLoad || this.settings.nbOfLogsToLoad
-
-        if (params?.sortBySentAt) {
-          conversationLog.sort((left, right) => left.sentAt - right.sentAt)
-        }
-
-        return conversationLog.slice(-nbOfLogsToLoad)
-      } catch (e) {
-        LogHelper.title(this.settings.loggerName)
-        LogHelper.error(`Failed to load conversation log: ${e})`)
-      }
-
-      return []
-    })
+  /**
+   * Supports explicit archive consumers; UI reads use cursor pages instead.
+   */
+  public async loadAll(options: { sessionId?: string } = {}): Promise<MessageLog[]> {
+    return CONVERSATION_REPOSITORY.readAllMessages(this.resolveSessionId(options.sessionId))
   }
 
-  public async loadAll(params?: { sessionId?: string }): Promise<MessageLog[]> {
-    return this.enqueue(async () => {
-      try {
-        return await this.getAllLogs(params?.sessionId)
-      } catch (e) {
-        LogHelper.title(this.settings.loggerName)
-        LogHelper.error(`Failed to load all conversation logs: ${e})`)
-      }
-
-      return []
-    })
+  /**
+   * Keeps compaction's rolling window independent from indefinite archive retention.
+   */
+  public async loadContextWindow(): Promise<MessageLog[]> {
+    return CONVERSATION_REPOSITORY.readContextMessages(this.resolveSessionId(), this.settings.nbOfLogsToKeep)
   }
 
-  public async clear(params?: { sessionId?: string }): Promise<void> {
-    await this.enqueue(async () => {
-      try {
-        await fs.promises.writeFile(
-          this.resolveConversationLogPath(params?.sessionId),
-          '[]',
-          'utf-8'
-        )
-        CONVERSATION_SESSION_MANAGER.updateSessionFromLogs(params?.sessionId, [])
-      } catch (e) {
-        LogHelper.title(this.settings.loggerName)
-        LogHelper.error(`Failed to clear conversation log: ${e})`)
-      }
-    })
+  /**
+   * Clears only the requested conversation without touching other sessions.
+   */
+  public async clear(options: { sessionId?: string } = {}): Promise<void> {
+    const sessionId = this.resolveSessionId(options.sessionId)
+
+    CONVERSATION_REPOSITORY.clearMessages(sessionId)
+    CONVERSATION_SESSION_MANAGER.updateSessionFromStoredMessages(sessionId)
   }
 }

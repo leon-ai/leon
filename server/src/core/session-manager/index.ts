@@ -18,6 +18,7 @@ import {
 } from '@/core/session-manager/session-context'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { CONVERSATION_REPOSITORY } from './conversation-repository'
 
 const SESSION_CONVERSATION_LOG_FILENAME = 'conversation_log.json'
 const DEFAULT_SESSION_TITLE = 'New session'
@@ -292,7 +293,7 @@ export class ConversationSessionManager {
     }
 
     this.index = this.loadOrCreateIndex()
-    this.persistIndex()
+    CONVERSATION_REPOSITORY.saveActiveSession(this.index.activeSessionId)
 
     return this.index
   }
@@ -320,7 +321,7 @@ export class ConversationSessionManager {
     index.sessions.unshift(session)
     index.activeSessionId = session.id
     this.ensureSessionDirectory(session.id)
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
 
     return cloneSession(session)
@@ -352,7 +353,7 @@ export class ConversationSessionManager {
     }
 
     session.updatedAt = now()
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
 
     return cloneSession(session)
@@ -393,19 +394,21 @@ export class ConversationSessionManager {
       throw new Error(`The session "${sessionId}" does not exist.`)
     }
 
-    if (index.sessions.length === 0) {
-      index.sessions.push(createSession())
+    const replacement = index.sessions.length === 0 ? createSession() : undefined
+    if (replacement) {
+      index.sessions.push(replacement)
     }
 
     if (index.activeSessionId === sessionId) {
       index.activeSessionId = index.sessions[0]!.id
     }
 
+    CONVERSATION_REPOSITORY.deleteSession(sessionId)
     fs.rmSync(this.getSessionPath(sessionId), {
       recursive: true,
       force: true
     })
-    this.persistIndex()
+    this.persistIndex(replacement)
     this.emitUpdated()
 
     return cloneSession(deletedSession)
@@ -447,8 +450,30 @@ export class ConversationSessionManager {
     session.lastMessageAt =
       typeof lastLog?.sentAt === 'number' ? lastLog.sentAt : session.lastMessageAt
     session.updatedAt = updatedAt
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
+  }
+
+  /**
+   * Updates sidebar metadata without loading a conversation's message bodies.
+   */
+  public updateSessionFromStoredMessages(sessionId: string): void {
+    const session = this.requireSession(sessionId)
+    const stored = CONVERSATION_REPOSITORY.readSession(sessionId)
+
+    if (!stored) {
+      throw new Error('The conversation session no longer exists.')
+    }
+
+    if (JSON.stringify(session) === JSON.stringify(stored)) {
+      return
+    }
+
+    Object.assign(session, stored)
+    this.events.emit('updated', {
+      activeSessionId: this.getActiveSessionId(),
+      session: cloneSession(session)
+    })
   }
 
   public maybeSetFallbackTitle(sessionId: string, message: string): void {
@@ -460,7 +485,7 @@ export class ConversationSessionManager {
 
     session.title = createFallbackTitle(message)
     session.updatedAt = now()
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
   }
 
@@ -563,7 +588,7 @@ export class ConversationSessionManager {
       session.title = createFallbackTitle(message)
       session.isTitleGenerated = true
       session.updatedAt = now()
-      this.persistIndex()
+      this.persistIndex(session)
       this.emitUpdated()
 
       LogHelper.title('Session Manager')
@@ -576,7 +601,7 @@ export class ConversationSessionManager {
     session.title = title
     session.isTitleGenerated = true
     session.updatedAt = now()
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
 
     LogHelper.title('Session Manager')
@@ -584,24 +609,9 @@ export class ConversationSessionManager {
   }
 
   private loadOrCreateIndex(): ConversationSessionIndex {
-    const sessionsIndexPath = path.join(
-      getProfilePaths().sessions,
-      'index.json'
-    )
-
-    if (fs.existsSync(sessionsIndexPath)) {
-      try {
-        const index = JSON.parse(
-          fs.readFileSync(sessionsIndexPath, 'utf-8')
-        ) as ConversationSessionIndex
-
-        if (Array.isArray(index.sessions) && index.sessions.length > 0) {
-          return this.normalizeIndex(index)
-        }
-      } catch (error) {
-        LogHelper.title('Session Manager')
-        LogHelper.warning(`Failed to load sessions index: ${error}`)
-      }
+    const index = CONVERSATION_REPOSITORY.readIndex()
+    if (index) {
+      return this.normalizeIndex(index)
     }
 
     return this.createInitialIndex()
@@ -624,13 +634,11 @@ export class ConversationSessionManager {
 
     this.ensureSessionDirectory(session.id)
 
-    if (legacyLogs.length > 0) {
-      fs.writeFileSync(
-        path.join(this.getSessionPath(session.id), SESSION_CONVERSATION_LOG_FILENAME),
-        JSON.stringify(legacyLogs, null, 2),
-        'utf-8'
-      )
+    CONVERSATION_REPOSITORY.saveSession({ ...session, messageCount: 0, lastMessageAt: null })
+    for (const record of legacyLogs) {
+      CONVERSATION_REPOSITORY.upsertMessage(session.id, record, { sentAt: record.sentAt })
     }
+    Object.assign(session, CONVERSATION_REPOSITORY.readSession(session.id))
 
     return {
       activeSessionId: session.id,
@@ -714,25 +722,20 @@ export class ConversationSessionManager {
     fs.mkdirSync(this.getSessionPath(sessionId), { recursive: true })
   }
 
-  private persistIndex(): void {
+  private persistIndex(changedSession?: ConversationSession): void {
     if (!this.index) {
       return
     }
 
-    const sessionsPath = getProfilePaths().sessions
-
-    fs.mkdirSync(sessionsPath, { recursive: true })
-    fs.writeFileSync(
-      path.join(sessionsPath, 'index.json'),
-      `${JSON.stringify(this.index, null, 2)}\n`,
-      'utf-8'
-    )
+    if (changedSession) {
+      CONVERSATION_REPOSITORY.saveSession(changedSession)
+    }
+    CONVERSATION_REPOSITORY.saveActiveSession(this.index.activeSessionId)
   }
 
   private emitUpdated(): void {
     this.events.emit('updated', {
-      activeSessionId: this.getActiveSessionId(),
-      sessions: this.listSessions()
+      activeSessionId: this.getActiveSessionId()
     })
   }
 }

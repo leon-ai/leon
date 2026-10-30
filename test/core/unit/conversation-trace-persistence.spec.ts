@@ -24,8 +24,26 @@ import {
   InferenceCredentialSource
 } from '@/core/llm-manager/inference-metadata'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 
-const sessions = vi.hoisted(() => ({ root: '', selectedSession: 'pulse-session' }))
+const sessions = vi.hoisted(() => ({
+  root: '', selectedSession: 'pulse-session', repository: null as ConversationRepository | null
+}))
+vi.mock('@/core/session-manager/conversation-repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/core/session-manager/conversation-repository')>()
+
+  return {
+    ...actual,
+    CONVERSATION_REPOSITORY: new Proxy({} as ConversationRepository, {
+      get: (_target, property): unknown => {
+        const repository = sessions.repository!
+        const value = Reflect.get(repository, property)
+
+        return typeof value === 'function' ? value.bind(repository) : value
+      }
+    })
+  }
+})
 const answerRuntime = vi.hoisted(() => ({
   CONVERSATION_LOGGER: null as ConversationLogger | null,
   NLU: { currentResponseRoute: 'controlled', nluResult: {} },
@@ -41,6 +59,9 @@ vi.mock('@/core', () => {
 })
 vi.mock('@/core/session-manager', () => ({
   CONVERSATION_SESSION_MANAGER: {
+    getSession: (sessionId: string): ReturnType<ConversationRepository['readSession']> | undefined => sessions.repository?.readSession(sessionId),
+    getActiveSessionId: (): string => sessions.selectedSession,
+    updateSessionFromStoredMessages: vi.fn(),
     getCurrentSessionId: (): string => getActiveConversationSessionId() || sessions.selectedSession,
     runWithSession: async (sessionId: string, callback: () => Promise<void>): Promise<void> => {
       await runWithConversationSession({ sessionId }, callback)
@@ -61,11 +82,20 @@ describe('conversation trace persistence', () => {
   beforeEach(async () => {
     sessions.root = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-trace-'))
     sessions.selectedSession = 'pulse-session'
+    sessions.repository = new ConversationRepository(sessions.root)
+    for (const id of ['first', 'second', 'pulse-session', 'other-session']) {
+      sessions.repository.saveSession({
+        id, title: id, isTitleGenerated: false, isPinned: false, createdAt: 0,
+        updatedAt: 0, lastMessageAt: null, messageCount: 0, modelTarget: null
+      })
+    }
   })
 
   afterEach(async () => {
     vi.clearAllTimers()
     vi.useRealTimers()
+    sessions.repository?.close()
+    sessions.repository = null
     await fs.rm(sessions.root, { recursive: true, force: true })
   })
 
