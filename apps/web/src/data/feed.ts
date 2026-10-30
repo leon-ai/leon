@@ -1,4 +1,4 @@
-import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
+import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
 
 export enum FeedTurnStatus {
   InProgress = 'in_progress',

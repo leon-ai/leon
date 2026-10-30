@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import Client from '../../../app/src/js/client.js'
+import Client from '../../../apps/web-legacy/src/js/client.js'
 import { ModelResponseState } from '../../../server/src/core/leon-interface/types.ts'
 import { CompletionFailureKind } from '../../../server/src/core/llm-manager/types.ts'
 
 vi.mock('socket.io-client', () => ({ io: vi.fn() }))
-vi.mock('../../../app/src/js/chatbot', () => ({ default: vi.fn() }))
-vi.mock('../../../app/src/js/voice-energy', () => ({ default: vi.fn() }))
-vi.mock('../../../app/src/js/suggestion-handler.js', () => ({ default: vi.fn() }))
+vi.mock('../../../apps/web-legacy/src/js/chatbot', () => ({ default: vi.fn() }))
+vi.mock('../../../apps/web-legacy/src/js/voice-energy', () => ({ default: vi.fn() }))
+vi.mock('../../../apps/web-legacy/src/js/suggestion-handler.js', () => ({ default: vi.fn() }))
 
 describe('chat client answer streams', () => {
   let client

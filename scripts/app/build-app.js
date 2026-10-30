@@ -8,7 +8,7 @@ import { LogHelper } from '@/helpers/log-helper'
 export default async function buildApp(options = {}) {
   const { quiet = false } = options
 
-  await execa('vite', ['build', '--config', 'app/vite.config.js'], {
+  await execa('vite', ['build', '--config', 'apps/web-legacy/vite.config.js'], {
     stdio: quiet ? 'ignore' : 'inherit'
   })
 

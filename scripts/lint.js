@@ -9,10 +9,10 @@ import buildAurora from './build-aurora.js'
 const ESLINT_CACHE_PATH = 'node_modules/.cache/eslint/full'
 
 const globs = [
-  'app/src/js/*.{ts,js}',
+  'apps/web-legacy/src/js/*.{ts,js}',
   'aurora/src/**/*.{ts,tsx,js,jsx}',
-  'web-app/src/**/*.{ts,tsx}',
-  'web-app/vite.config.ts',
+  'apps/web/src/**/*.{ts,tsx}',
+  'apps/web/vite.config.ts',
   // TODO: deal with it once handling new hotword
   // '"hotword/index.{ts,js}"',
   'skills/**/*.{ts,js}',
@@ -46,7 +46,7 @@ const globs = [
     await execa('tsc', ['--noEmit', '-p', 'tsconfig.json'], {
       stdio: 'inherit'
     })
-    await execa('tsc', ['--noEmit', '-p', 'web-app/tsconfig.json'], {
+    await execa('tsc', ['--noEmit', '-p', 'apps/web/tsconfig.json'], {
       stdio: 'inherit'
     })
 

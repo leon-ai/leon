@@ -1,4 +1,4 @@
-import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+import { formatToolDuration } from '../../../web/src/utils/format-tool-duration.ts'
 
 const COMMAND_OUTPUT_MAX_DISPLAY_CHARS = 80_000
 const LIVE_PROGRESS_INTERVAL_MS = 1_000

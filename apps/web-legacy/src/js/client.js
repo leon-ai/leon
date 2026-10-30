@@ -4,13 +4,13 @@ import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
-import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
-import { CompletionFailureKind } from '../../../server/src/core/llm-manager/types.ts'
+import { formatToolDuration } from '../../../web/src/utils/format-tool-duration.ts'
+import { CompletionFailureKind } from '../../../../server/src/core/llm-manager/types.ts'
 import {
   LEON_CLIENT_INTERFACE_EVENTS as LEON_EVENTS,
   LEON_CLIENT_INTERFACE_PROTOCOL_VERSION,
   ModelResponseState
-} from '../../../server/src/core/leon-interface/types.ts'
+} from '../../../../server/src/core/leon-interface/types.ts'
 
 const MODEL_STATUS_INTERVAL_MS = 1_000
 const MODEL_STATUS_LABELS = {

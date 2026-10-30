@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { expandConversationTimeline } from '../../../app/src/js/conversation-timeline.js'
-import ToolUIHandler from '../../../app/src/js/tool-ui-handler.js'
-import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+import { expandConversationTimeline } from '../../../apps/web-legacy/src/js/conversation-timeline.js'
+import ToolUIHandler from '../../../apps/web-legacy/src/js/tool-ui-handler.js'
+import { formatToolDuration } from '../../../apps/web/src/utils/format-tool-duration.ts'
 
 describe('conversation activity replay', () => {
   it('restores thinking and tools in time order without draft bubbles or duplicate cards', () => {

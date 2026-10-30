@@ -84,11 +84,11 @@ export default [
     }
   },
   {
-    files: ['web-app/**/*.{ts,tsx}'],
+    files: ['apps/web/**/*.{ts,tsx}'],
     settings: {
       'import-x/resolver-next': [
         createTypeScriptImportResolver({
-          project: 'web-app/tsconfig.json'
+          project: 'apps/web/tsconfig.json'
         }),
         createNodeResolver()
       ]

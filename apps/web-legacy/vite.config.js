@@ -10,7 +10,7 @@ import YAML from 'yaml'
 import {
   PROFILE_CONFIG_PATH,
   PROFILE_DOT_ENV_PATH
-} from '../server/src/leon-roots.ts'
+} from '../../server/src/leon-roots.ts'
 
 const APP_DEV_SERVER_PORT = 5_173
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/'
@@ -77,19 +77,19 @@ process.env.VITE_LEON_HOST = leonConfig.host
 process.env.VITE_LEON_PORT = String(leonConfig.port)
 
 export default defineConfig({
-  root: 'app/src',
+  root: 'apps/web-legacy/src',
   resolve: {
     alias: [
       {
         find: '@aurora/style.css',
         replacement: fileURLToPath(
-          new URL('../aurora/style.css', import.meta.url)
+          new URL('../../aurora/style.css', import.meta.url)
         )
       },
       {
         find: '@aurora',
         replacement: fileURLToPath(
-          new URL('../aurora/src/index.ts', import.meta.url)
+          new URL('../../aurora/src/index.ts', import.meta.url)
         )
       }
     ]

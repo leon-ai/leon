@@ -1,5 +1,5 @@
 {
-  "extends": "../tsconfig.json",
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
@@ -13,5 +13,5 @@
     }
   },
   "include": ["./src/**/*", "./vite.config.ts"],
-  "exclude": ["./dist", "../node_modules"]
+  "exclude": ["./dist", "../../node_modules"]
 }

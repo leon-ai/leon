@@ -173,8 +173,8 @@ export default class HTTPServer {
    * Bootstrap API
    */
   private async bootstrap(): Promise<void> {
-    const legacyWebAppDistPath = join(CODEBASE_PATH, 'app', 'dist')
-    const webAppDistPath = join(CODEBASE_PATH, 'web-app', 'dist')
+    const legacyWebAppDistPath = join(CODEBASE_PATH, 'apps', 'web-legacy', 'dist')
+    const webAppDistPath = join(CODEBASE_PATH, 'apps', 'web', 'dist')
 
     // Render the web app
     this.fastify.register(fastifyStatic, {

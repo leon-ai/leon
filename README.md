@@ -119,7 +119,8 @@ By default, Leon runs locally and the app is available on `http://localhost:5366
 At a high level, Leon currently consists of:
 
 - `server/`: the main runtime, routing, memory, context management, HTTP API, and agent/controlled execution
-- `app/`: the web application
+- `apps/web-legacy/`: the legacy web application, served at `/`
+- `apps/web/`: the new web application, served at `/web-app/`
 - `aurora/`: UI components and preview environment
 - `skills/`: built-in capabilities, split between `native/` skills and `agent/` skills
 - `bridges/`: Node.js and Python bridges plus toolkit definitions and tool runtimes

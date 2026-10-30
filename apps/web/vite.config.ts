@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 import YAML from 'yaml'
 import { tsImport } from 'tsx/esm/api'
 
-import { PROFILE_CONFIG_PATH } from '../server/src/leon-roots.ts'
+import { PROFILE_CONFIG_PATH } from '../../server/src/leon-roots.ts'
 import type { ModelOption, ModelProvider } from './src/data/model-catalog.ts'
 
 const WEB_APP_DEV_SERVER_PORT = 5_173
@@ -34,14 +34,14 @@ async function readModelProviders(): Promise<ModelProvider[]> {
   // identically named alias. Serialize just the public selector metadata.
   const options = {
     parentURL: import.meta.url,
-    tsconfig: fileURLToPath(new URL('../tsconfig.json', import.meta.url))
+    tsconfig: fileURLToPath(new URL('../../tsconfig.json', import.meta.url))
   }
   const catalog = await tsImport(
-    '../server/src/core/llm-manager/llm-model-catalog.ts',
+    '../../server/src/core/llm-manager/llm-model-catalog.ts',
     options
   ) as ModelCatalogModule
   const accounts = await tsImport(
-    '../server/src/core/llm-manager/llm-provider-account-configs.ts',
+    '../../server/src/core/llm-manager/llm-provider-account-configs.ts',
     options
   ) as ProviderAccountsModule
 
@@ -96,7 +96,7 @@ process.env['VITE_LEON_HOST'] = leonServer.host
 process.env['VITE_LEON_PORT'] = String(leonServer.port)
 
 export default defineConfig(async ({ command }) => ({
-  root: 'web-app',
+  root: 'apps/web',
   base: command === 'build' ? '/web-app/' : '/',
   define: {
     LEON_MODEL_PROVIDERS: JSON.stringify(await readModelProviders())

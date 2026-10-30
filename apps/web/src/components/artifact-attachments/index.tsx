@@ -1,4 +1,4 @@
-import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
+import type { Artifact } from '../../../../../server/src/core/artifacts/artifact-types'
 
 /**
  * Displays the same portable artifact contract consumed by external clients.
