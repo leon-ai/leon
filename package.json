@@ -40,6 +40,7 @@
     "lint": "tsx scripts/lint.js",
     "test": "pnpm run test:unit && pnpm run test:integration && pnpm run test:controlled:e2e",
     "test:unit": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/core/unit test/agent/unit test/controlled/unit test/onboarding/unit",
+    "test:web-app:e2e": "playwright test --config test/web-app/playwright.config.ts",
     "test:agent:unit": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts unit",
     "test:agent:e2e": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts e2e",
     "test:agent:scenario": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts scenario",
@@ -131,6 +132,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
     "@stylistic/eslint-plugin": "5.10.0",
     "@tsconfig/node16": "16.1.8",
     "@tsconfig/strictest": "2.0.8",

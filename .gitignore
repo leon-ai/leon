@@ -10,6 +10,8 @@ __pycache__/
 **/.last-source-deps-sync
 skills/**/reports/*
 test/coverage/
+test/web-app/results/
+test/web-app/report/
 **/tmp/*
 core/config/**/*.json
 scripts/out/*.md

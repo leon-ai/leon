@@ -49,6 +49,9 @@ const globs = [
     await execa('tsc', ['--noEmit', '-p', 'apps/web/tsconfig.json'], {
       stdio: 'inherit'
     })
+    await execa('tsc', ['--noEmit', '-p', 'test/web-app/tsconfig.json'], {
+      stdio: 'inherit'
+    })
 
     LogHelper.success('Looks great')
     LoaderHelper.stop()

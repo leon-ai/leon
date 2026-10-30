@@ -29,6 +29,7 @@ type AmbientWeatherCondition =
   | 'snow'
 
 export interface AmbientConditions {
+  mood?: 'default' | 'sad' | 'cocky' | 'tired' | 'angry'
   season: AmbientSeason
   solarPhase: AmbientSolarPhase
   timeZone: string
@@ -41,6 +42,12 @@ export interface AmbientConditions {
     observationTime: string
     temperatureC: number
     weatherCode: number
+    solar?: {
+      date: string
+      timeZone: string
+      sunrise: number
+      sunset: number
+    } | null
   } | null
 }
 

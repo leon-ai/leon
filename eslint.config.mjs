@@ -14,7 +14,7 @@ import js from '@eslint/js'
 
 export default [
   {
-    ignores: ['**/*.spec.js', 'aurora/dist/**']
+    ignores: ['**/*.spec.js', 'aurora/dist/**', 'test/web-app/results/**', 'test/web-app/report/**']
   },
   js.configs.recommended,
   ...typescriptEslint.configs['flat/recommended'],
