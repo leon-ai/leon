@@ -14,6 +14,7 @@ import { LeonMessage } from '@/components/leon-message'
 import { Message } from '@/components/message'
 import { OwnerMessage } from '@/components/owner-message'
 import { FeedAnimationProvider } from '@/components/streaming-text'
+import { ConversationDetailsProvider } from '@/data/conversation-details'
 
 import './feed.sass'
 
@@ -36,6 +37,9 @@ interface FeedProps {
   entries: FeedEntry[]
   onScrollToBottomVisibilityChange?: (visible: boolean) => void
   ref?: Ref<FeedHandle>
+  historicalIds?: readonly string[]
+  sessionId?: string
+  onLoadEarlier?: () => void
 }
 
 interface FeedTurn {
@@ -70,11 +74,15 @@ function supportsScrollEnd(element: HTMLElement): boolean {
 export function Feed({
   entries,
   onScrollToBottomVisibilityChange,
-  ref
+  ref,
+  historicalIds,
+  sessionId,
+  onLoadEarlier
 }: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
   const bottomMaskRef = useRef<HTMLDivElement>(null)
   const previousTurnCountRef = useRef<number | null>(null)
+  const previousFirstTurnRef = useRef<string | undefined>(undefined)
   const scrimRef = useRef<HTMLDivElement>(null)
   const topMaskRef = useRef<HTMLDivElement>(null)
   const scrollToBottomVisibleRef = useRef(false)
@@ -90,10 +98,16 @@ export function Feed({
     getItemKey: (index) => turns[index]?.id ?? index,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
     overscan: FEED_OVERSCAN_COUNT,
+    // TanStack preserves visible keys when history is prepended and tracks
+    // dynamic response growth without competing custom scroll observers.
+    anchorTo: 'end',
     useAnimationFrameWithResizeObserver: true,
     observeElementOffset: (instance, onOffsetChange) =>
       observeElementOffset(instance, (offset, isScrolling) => {
         onOffsetChange(offset, isScrolling)
+        if (isScrolling && instance.scrollDirection === 'backward' && offset < FEED_TURN_ESTIMATED_HEIGHT) {
+          onLoadEarlier?.()
+        }
 
         // Reuse the virtualizer's observer; only visibility changes enter React.
         // Once revealed, keep the control available until the owner reaches the end.
@@ -178,6 +192,17 @@ export function Feed({
 
   useLayoutEffect(() => {
     const previousTurnCount = previousTurnCountRef.current
+    const previousFirstTurn = previousFirstTurnRef.current
+    previousFirstTurnRef.current = turns[0]?.id
+
+    if (previousFirstTurn && previousFirstTurn !== turns[0]?.id) {
+      const previousFirstIndex = turns.findIndex((turn) => turn.id === previousFirstTurn)
+      if (previousFirstIndex > 0) {
+        previousTurnCountRef.current = turnCount
+        // Preserve the visible anchor when older history is prepended.
+        return
+      }
+    }
 
     if (turnCount === 0) {
       previousTurnCountRef.current = 0
@@ -193,10 +218,7 @@ export function Feed({
     previousTurnCountRef.current = turnCount
 
     if (isInitialPosition) {
-      virtualizer.scrollToIndex(latestTurnIndex, {
-        align: 'end',
-        behavior: 'auto'
-      })
+      virtualizer.scrollToIndex(latestTurnIndex, { align: 'end', behavior: 'auto' })
       return
     }
 
@@ -346,7 +368,7 @@ export function Feed({
   }, [turnCount, virtualizer])
 
   return (
-    <FeedAnimationProvider>
+    <FeedAnimationProvider live={Boolean(sessionId)} {...(historicalIds ? { historicalIds } : {})}>
       <section ref={feedRef} className="feed" aria-label="Session messages">
         <div
           ref={scrimRef}
@@ -385,7 +407,9 @@ export function Feed({
                           {entry.content}
                         </OwnerMessage>
                       ) : (
-                        <LeonMessage entry={entry} />
+                        <ConversationDetailsProvider sessionId={sessionId} messageId={entry.id}>
+                          <LeonMessage entry={entry} />
+                        </ConversationDetailsProvider>
                       )}
                     </Message>
                   </div>

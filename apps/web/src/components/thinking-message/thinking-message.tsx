@@ -1,4 +1,6 @@
 import { clsx } from 'clsx'
+import { useState } from 'react'
+import { useConversationDetails } from '@/data/conversation-details'
 
 import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { ProcessGroup } from '@/components/process-group'
@@ -21,7 +23,11 @@ export function ThinkingMessage({
   isActive
 }: ThinkingMessageProps) {
   const shouldAnimateHeading = useAnimateOnce(`${animationId}:heading`)
-  const detailText = details.join('\n')
+  const [detailsOpen, setDetailsOpen] = useState(isActive)
+  // Live reasoning arrives through events; its optimistic response may not exist on disk yet.
+  const disclosure = useConversationDetails(!isActive && detailsOpen && details.length === 0)
+  const savedBlock = disclosure.data?.message?.agentResponseTrace?.reasoning?.find((block) => block.id === animationId)
+  const detailText = details.length > 0 ? details.join('\n') : savedBlock?.text ?? ''
   const duration = formatToolDuration(durationMs, DurationFormat.Compact)
 
   return (
@@ -35,17 +41,19 @@ export function ThinkingMessage({
         ariaLabel="Leon’s thinking"
         completedLabel={`Thought for ${duration}`}
         indicator={<ThoughtIcon />}
+        onExpandedChange={setDetailsOpen}
       >
         {isActive ? (
-          <StreamingText
-            animationId={animationId}
-            className="thinking-message-details"
-            startDelay={120}
-            text={detailText}
-          />
+        <StreamingText
+          animationId={animationId}
+          className="thinking-message-details"
+          startDelay={120}
+          text={disclosure.isFetching && !detailText ? 'Loading reasoning…' : detailText}
+        />
         ) : (
           <span className="thinking-message-details">{detailText}</span>
         )}
+        {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading reasoning</button>}
       </ProcessGroup>
     </div>
   )

@@ -1,10 +1,14 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useMemo, useRef, type ReactNode } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 import type { JsonValue } from '@/data/feed'
 
 import './json-view.sass'
 
 const JSON_INDENTATION_SIZE = 2
+const LARGE_JSON_CHARACTER_COUNT = 16_384
+const MAXIMUM_LINE_CHARACTERS = 160
+const JSON_LINE_HEIGHT_PX = 18
 
 interface JsonViewProps {
   label: string
@@ -81,13 +85,47 @@ function renderJsonValue(value: JsonValue, depth = 0): ReactNode {
   )
 }
 
+function VirtualJson({ text, label }: { text: string, label: string }) {
+  const scrollRef = useRef<HTMLPreElement>(null)
+  const lines = useMemo(() => text.split('\n').flatMap((line) => {
+    const chunks: string[] = []
+    for (let offset = 0; offset < Math.max(1, line.length); offset += MAXIMUM_LINE_CHARACTERS) {
+      chunks.push(line.slice(offset, offset + MAXIMUM_LINE_CHARACTERS))
+    }
+
+    return chunks
+  }), [text])
+  const virtualizer = useVirtualizer({
+    count: lines.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => JSON_LINE_HEIGHT_PX,
+    overscan: 5
+  })
+
+  return (
+    <pre ref={scrollRef} className="json-view-code" aria-label={`${label} JSON`}>
+      <code className="json-view-virtual" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+        {virtualizer.getVirtualItems().map((row) => (
+          <span key={row.index} className="json-view-line" style={{
+            height: `${row.size}px`, transform: `translateY(${row.start}px)`
+          }}>{lines[row.index]}</span>
+        ))}
+      </code>
+    </pre>
+  )
+}
+
 export function JsonView({ label, value }: JsonViewProps) {
+  const serialized = useMemo(() => JSON.stringify(value, null, JSON_INDENTATION_SIZE), [value])
+
   return (
     <div className="json-view">
       <span className="json-view-label">{label}</span>
-      <pre className="json-view-code" aria-label={`${label} JSON`}>
+      {serialized.length > LARGE_JSON_CHARACTER_COUNT ? <VirtualJson text={serialized} label={label} /> : (
+        <pre className="json-view-code" aria-label={`${label} JSON`}>
         <code>{renderJsonValue(value)}</code>
-      </pre>
+        </pre>
+      )}
     </div>
   )
 }

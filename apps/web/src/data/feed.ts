@@ -67,13 +67,60 @@ export interface FeedToolsActivity {
   toolCalls: FeedToolCall[]
 }
 
+export interface FeedWorkingActivity {
+  id: string
+  type: 'working'
+}
+
+export interface FeedReviewActivity {
+  id: string
+  type: 'review'
+  durationMs: number
+}
+
+export interface FeedAnswerActivity {
+  id: string
+  type: 'answer'
+  durationMs: number
+}
+
+export interface FeedRetryActivity {
+  id: string
+  type: 'retry'
+  count: number
+}
+
+export interface FeedOtherProcessingActivity {
+  id: string
+  type: 'other'
+  durationMs: number
+}
+
+export interface FeedModelProcessingActivity {
+  id: string
+  type: 'processing'
+  durationMs: number
+  requests?: {
+    id: string
+    label: string
+    iconName: string
+    durationMs: number
+  }[]
+}
+
 // Preserve agent-loop chronology by representing each phase as its own node.
 // In particular, later reasoning must create another thinking activity.
 export type LeonFeedActivity =
+  | FeedWorkingActivity
   | FeedThinkingActivity
   | FeedSummaryActivity
   | FeedPlanActivity
   | FeedToolsActivity
+  | FeedReviewActivity
+  | FeedAnswerActivity
+  | FeedRetryActivity
+  | FeedOtherProcessingActivity
+  | FeedModelProcessingActivity
 
 export interface OwnerFeedEntry {
   id: string
@@ -82,6 +129,7 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  answerGenerationId?: string
   artifacts?: Artifact[]
   id: string
   role: 'leon'

@@ -19,10 +19,11 @@ interface ProcessGroupProps {
   activeLabel: string
   animateWhileActive?: boolean
   ariaLabel: string
-  children: ReactNode
+  children?: ReactNode
   className?: string
   completedLabel: string
   indicator?: ReactNode
+  onExpandedChange?: (expanded: boolean) => void
 }
 
 const NestedDisclosureDefaultContext = createContext(true)
@@ -35,7 +36,7 @@ export function useProcessGroupNestedDisclosureDefault(): boolean {
 }
 
 /**
- * Groups one progressive agent activity behind a shared status disclosure.
+ * Shows an activity heading, with a disclosure only when details are provided.
  */
 export function ProcessGroup({
   active,
@@ -45,7 +46,8 @@ export function ProcessGroup({
   children,
   className,
   completedLabel,
-  indicator
+  indicator,
+  onExpandedChange
 }: ProcessGroupProps) {
   const contentId = useId()
   const previousActiveRef = useRef(active)
@@ -70,9 +72,23 @@ export function ProcessGroup({
     }
 
     setIsExpanded(!isExpanded)
+    onExpandedChange?.(!isExpanded)
   }
 
   const label = active ? activeLabel : completedLabel
+  const heading = (
+    <ActivityWave
+      active={active && animateWhileActive}
+      className="process-group-heading-layer"
+    >
+      {indicator !== undefined && indicator !== null && (
+        <span className="process-group-indicator" aria-hidden="true">
+          {indicator}
+        </span>
+      )}
+      <span className="process-group-title">{label}</span>
+    </ActivityWave>
+  )
 
   return (
     <NestedDisclosureDefaultContext.Provider
@@ -84,36 +100,32 @@ export function ProcessGroup({
         })}
         aria-label={ariaLabel}
       >
-        <button
-          type="button"
-          className="process-group-trigger"
-          aria-controls={contentId}
-          aria-expanded={isExpanded}
-          onClick={handleToggle}
-        >
-          <ActivityWave
-            active={active && animateWhileActive}
-            className="process-group-heading-layer"
+        {children === undefined ? (
+          <div className="process-group-trigger">{heading}</div>
+        ) : (
+          <button
+            type="button"
+            className="process-group-trigger"
+            aria-controls={contentId}
+            aria-expanded={isExpanded}
+            onClick={handleToggle}
           >
-            {indicator !== undefined && indicator !== null && (
-              <span className="process-group-indicator" aria-hidden="true">
-                {indicator}
-              </span>
-            )}
-            <span className="process-group-title">{label}</span>
-          </ActivityWave>
-          <i
-            className="process-group-chevron ri-arrow-right-s-line"
-            aria-hidden="true"
-          />
-        </button>
-        <Collapse
-          id={contentId}
-          className="process-group-content"
-          isOpen={isExpanded}
-        >
-          {children}
-        </Collapse>
+            {heading}
+            <i
+              className="process-group-chevron ri-arrow-right-s-line"
+              aria-hidden="true"
+            />
+          </button>
+        )}
+        {children !== undefined && (
+          <Collapse
+            id={contentId}
+            className="process-group-content"
+            isOpen={isExpanded}
+          >
+            {children}
+          </Collapse>
+        )}
       </section>
     </NestedDisclosureDefaultContext.Provider>
   )

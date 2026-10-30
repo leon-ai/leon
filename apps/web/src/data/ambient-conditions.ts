@@ -7,7 +7,7 @@ import { LEON_SERVER_URL } from '@/config'
 
 const AMBIENT_CONDITIONS_API_PATH = '/api/v1/ambient'
 const AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS = 10 * 60 * 1_000
-const AMBIENT_CONDITIONS_QUERY_KEY = ['ambient-conditions'] as const
+export const AMBIENT_CONDITIONS_QUERY_KEY = ['ambient-conditions'] as const
 
 type AmbientSeason = 'spring' | 'summer' | 'autumn' | 'winter'
 type AmbientSolarPhase =

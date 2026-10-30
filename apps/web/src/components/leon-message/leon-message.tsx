@@ -1,4 +1,5 @@
 import { clsx } from 'clsx'
+import { memo } from 'react'
 
 import type {
   FeedPlanActivity,
@@ -43,7 +44,8 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           active={planIsActive}
           activeLabel="Executing plan..."
           ariaLabel="Leon’s execution plan"
-          completedLabel="Completed plan"
+          completedLabel={activity.steps.every((step) => step.status === 'completed')
+            ? 'Completed plan' : 'Execution plan'}
           indicator={<i className="ri-map-2-line" aria-hidden="true" />}
         >
           <TaskList steps={activity.steps} />
@@ -82,6 +84,10 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
 }
 
 function renderActivity(activity: LeonFeedActivity) {
+  if (activity.type === 'working') {
+    return <ProcessGroup key={activity.id} active animateWhileActive activeLabel="Working..." ariaLabel="Leon’s work" completedLabel="Worked" />
+  }
+
   if (activity.type === 'thinking') {
     return (
       <ThinkingMessage
@@ -106,10 +112,11 @@ function renderActivity(activity: LeonFeedActivity) {
     )
   }
 
-  return <ExecutionActivity key={activity.id} activity={activity} />
+  return activity.type === 'plan' || activity.type === 'tools'
+    ? <ExecutionActivity key={activity.id} activity={activity} /> : null
 }
 
-export function LeonMessage({ entry }: LeonMessageProps) {
+export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps) {
   const bonusResponse = entry.bonusResponse
   const activities = entry.activities.map(renderActivity)
   const duration = formatToolDuration(entry.durationMs, DurationFormat.Compact)
@@ -144,4 +151,4 @@ export function LeonMessage({ entry }: LeonMessageProps) {
       )}
     </div>
   )
-}
+})

@@ -5,6 +5,7 @@ import { PageContainer } from '@/layout/page-container'
 import { Sidebar } from '@/layout/sidebar'
 import { useAmbientConditions } from '@/data/ambient-conditions'
 import { ProfileAccessGate, ProfileBoundary } from '@/data/profile'
+import { ConversationConnection } from '@/data/conversation-connection'
 import {
   getVibesPreviewConfiguration,
   parseVibesPreviewSearch,
@@ -43,6 +44,7 @@ function AuthenticatedAppLayout({ previewOnly = false }: { previewOnly?: boolean
         })
   return (
     <div className="app-layout">
+      {!previewOnly && <ConversationConnection />}
       <Vibes
         animateTransitions={previewConfiguration === undefined}
         {...(vibeEnvironment === undefined

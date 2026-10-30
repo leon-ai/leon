@@ -25,21 +25,25 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 interface QueryInputProps {
   autoFocus?: boolean
   disabled?: boolean
+  canSubmit?: boolean
   loading?: boolean
   maximumLineCount?: number
   placeholder?: string
   onAddAttachment?: () => void
   onSubmit?: (query: string) => void
+  onStop?: () => void
 }
 
 export function QueryInput({
   autoFocus = false,
   disabled = false,
+  canSubmit = true,
   loading = false,
   maximumLineCount = DEFAULT_MAXIMUM_LINE_COUNT,
   placeholder = DEFAULT_PLACEHOLDER,
   onAddAttachment,
-  onSubmit
+  onSubmit,
+  onStop
 }: QueryInputProps) {
   const [query, setQuery] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
@@ -53,7 +57,7 @@ export function QueryInput({
   const measurementTextareaRef = useRef<HTMLTextAreaElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const normalizedQuery = query.trim()
-  const submitDisabled = disabled || normalizedQuery.length === 0
+  const submitDisabled = disabled || !canSubmit || normalizedQuery.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
 
   const updateTextareaHeight = useCallback((): void => {
@@ -297,6 +301,9 @@ export function QueryInput({
         />
         <div ref={actionsRef} className="query-input-actions">
           <ModelSelector disabled={disabled || loading} />
+          {onStop && (
+            <Button className="button-composer" iconName="stop" ariaLabel="Stop this session" onClick={onStop} />
+          )}
           <Button
             className="button-composer query-input-submit"
             type="submit"

@@ -6,6 +6,8 @@ import { formatToolDuration } from '@/utils/format-tool-duration'
 import { ActivityWave } from '@/components/activity-wave'
 import { Collapse } from '@/components/collapse'
 import { JsonView } from '@/components/json-view'
+import { useConversationDetails } from '@/data/conversation-details'
+import { toFeedTool } from '@/data/conversation-feed'
 
 import './tool-call.sass'
 
@@ -47,6 +49,9 @@ function formatFunctionName(functionName: string): string {
  */
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const disclosure = useConversationDetails(isExpanded)
+  const saved = disclosure.data?.message?.agentResponseTrace?.toolCalls.find((call) => call.id === toolCall.id)
+  const details = saved ? toFeedTool(saved) : toolCall
   const detailsId = useId()
   const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
   const duration = isActive
@@ -104,10 +109,12 @@ export function ToolCall({ toolCall }: ToolCallProps) {
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">
           <p className="tool-call-details-title">{technicalTitle}</p>
-          <JsonView label="Input" value={toolCall.input} />
+          {disclosure.isFetching && <p role="status">Loading tool details…</p>}
+          {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
+          <JsonView label="Input" value={details.input} />
           <JsonView
             label="Output"
-            value={toolCall.output ?? { status: toolCall.status }}
+            value={details.output ?? { status: toolCall.status }}
           />
         </div>
       </Collapse>

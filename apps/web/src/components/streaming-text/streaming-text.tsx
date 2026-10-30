@@ -25,22 +25,32 @@ interface StreamingTextState {
 
 interface FeedAnimationProviderProps {
   children: ReactNode
+  historicalIds?: readonly string[]
+  live?: boolean
 }
 
 interface FeedAnimationRegistry {
   startedAnimationIds: Set<string>
   streamedCharacterCounts: Map<string, number>
+  historicalIds: readonly string[]
+  live: boolean
 }
 
 const FeedAnimationContext = createContext<FeedAnimationRegistry | null>(null)
 
 export function FeedAnimationProvider({
-  children
+  children,
+  historicalIds = [],
+  live = false
 }: FeedAnimationProviderProps) {
   const registryRef = useRef<FeedAnimationRegistry>({
     startedAnimationIds: new Set(),
-    streamedCharacterCounts: new Map()
+    streamedCharacterCounts: new Map(),
+    historicalIds,
+    live
   })
+  registryRef.current.historicalIds = historicalIds
+  registryRef.current.live = live
 
   return (
     <FeedAnimationContext.Provider value={registryRef.current}>
@@ -71,7 +81,8 @@ export function useAnimateOnce(animationId: string): boolean {
     registry?.startedAnimationIds.add(animationId)
   }, [animationId, registry])
 
-  return stateRef.current.shouldAnimate
+  return stateRef.current.shouldAnimate &&
+    !(registry?.historicalIds.some((id) => animationId.startsWith(id)) ?? false)
 }
 
 export function StreamingText({
