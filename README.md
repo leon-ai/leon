@@ -114,6 +114,9 @@ pnpm run check
 
 By default, Leon runs locally and the app is available on `http://localhost:5366`.
 
+The new web app is available at `/web-app/` on the same server; the legacy app
+remains at `/`.
+
 ## 🏗️ Architecture Snapshot
 
 At a high level, Leon currently consists of:

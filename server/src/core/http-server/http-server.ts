@@ -43,6 +43,7 @@ import { PERSONA } from '@/core'
 import { SystemHelper } from '@/helpers/system-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { webAppPlugin } from '@/core/http-server/web-app'
 
 const LEON_OPEN_BROWSER_GUARD_PREFIX = 'open-browser'
 
@@ -189,25 +190,7 @@ export default class HTTPServer {
     })
 
     // Keep the in-progress 2.0 app isolated until it replaces the legacy app.
-    this.fastify.register(async (webApp) => {
-      await webApp.register(fastifyStatic, {
-        root: webAppDistPath,
-        prefix: '/',
-        decorateReply: false
-      })
-      webApp.setNotFoundHandler((request, reply) => {
-        const requestPath = request.url.split('?')[0] || ''
-
-        if (
-          request.method === 'GET' &&
-          path.extname(requestPath) === ''
-        ) {
-          return reply.type('text/html').sendFile('index.html', webAppDistPath)
-        }
-
-        return reply.code(404).send()
-      })
-    }, { prefix: '/web-app' })
+    this.fastify.register(webAppPlugin, { prefix: '/web-app', root: webAppDistPath })
 
     this.fastify.register(profileAuthRoutes, { apiVersion: API_VERSION })
     this.fastify.addHook('onRequest', async (request, reply) => {
@@ -225,7 +208,15 @@ export default class HTTPServer {
         return
       }
 
-      await authenticateProfileHTTPRequest(request, reply)
+      const sessionsPath = `/api/${API_VERSION}/sessions`
+      const isConversationMetadata = requestPath === sessionsPath ||
+        requestPath.startsWith(`${sessionsPath}/`) ||
+        requestPath === `/api/${API_VERSION}/conversation-history`
+
+      // Session browsing must remain usable while a model is booting or offline.
+      await authenticateProfileHTTPRequest(request, reply, {
+        initializeRuntime: !isConversationMetadata
+      })
     })
 
     this.fastify.register(runActionPlugin, { apiVersion: API_VERSION })
@@ -248,32 +239,22 @@ export default class HTTPServer {
     this.fastify.register(ambientPlugin, { apiVersion: API_VERSION })
     await registerHTTPPlugins(this.fastify, { apiVersion: API_VERSION })
 
-    try {
-      await this.listen()
-    } catch (e) {
-      LogHelper.error((e as Error).message)
-    }
+    await this.listen()
   }
 
   /**
    * Launch server
    */
   private async listen(): Promise<void> {
-    this.fastify.listen(
-      {
-        port: this.port,
-        host: '0.0.0.0'
-      },
-      () => {
-        LogHelper.title('Initialization')
-        LogHelper.success(`Server is available at ${this.host}:${this.port}`)
+    await this.fastify.listen({ port: this.port, host: '0.0.0.0' })
 
-        void this.openBrowserOnStartup().catch((error: Error) => {
-          LogHelper.warning(
-            `Could not open Leon in the browser automatically: ${error.message}`
-          )
-        })
-      }
-    )
+    LogHelper.title('Initialization')
+    LogHelper.success(`Server is available at ${this.host}:${this.port}`)
+
+    void this.openBrowserOnStartup().catch((error: Error) => {
+      LogHelper.warning(
+        `Could not open Leon in the browser automatically: ${error.message}`
+      )
+    })
   }
 }
