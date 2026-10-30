@@ -8,6 +8,7 @@ import type { FeedHandle } from '@/components/feed'
 import { Button } from '@/components/button'
 import { QueryInput } from '@/components/query-input'
 import { useConversation, useSendMessage } from '@/data/conversation-queries'
+import { useComposerModel } from '@/data/composer-model'
 import { requestAPI } from '@/data/api'
 import { useProfile } from '@/data/profile'
 
@@ -21,6 +22,7 @@ export function SessionPage() {
 function SessionContent({ sessionId }: { sessionId: string }) {
   const conversation = useConversation(sessionId)
   const send = useSendMessage(sessionId)
+  const model = useComposerModel(sessionId, conversation.latest?.selection)
   const profile = useProfile()
   const stop = useMutation({
     meta: { errorTitle: 'Could not stop this session', profile },
@@ -99,7 +101,8 @@ function SessionContent({ sessionId }: { sessionId: string }) {
         </div>
         <QueryInput
           autoFocus
-          canSubmit={Boolean(conversation.latest)}
+          model={model}
+          canSubmit={Boolean(conversation.latest && !model.pending)}
           onSubmit={handleSubmit}
           {...(conversation.latest?.is_running ? {
             onStop: () => {

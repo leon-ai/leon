@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import { ModelSelector } from '@/components/model-selector'
+import type { useComposerModel } from '@/data/composer-model'
 
 import { QueryInputFocusWave } from './query-input-focus-wave'
 
@@ -31,6 +32,7 @@ interface QueryInputProps {
   placeholder?: string
   onAddAttachment?: () => void
   onSubmit?: (query: string) => void
+  model?: ReturnType<typeof useComposerModel>
   onStop?: () => void
 }
 
@@ -43,6 +45,7 @@ export function QueryInput({
   placeholder = DEFAULT_PLACEHOLDER,
   onAddAttachment,
   onSubmit,
+  model,
   onStop
 }: QueryInputProps) {
   const [query, setQuery] = useState('')
@@ -300,7 +303,7 @@ export function QueryInput({
           readOnly
         />
         <div ref={actionsRef} className="query-input-actions">
-          <ModelSelector disabled={disabled || loading} />
+          <ModelSelector disabled={disabled || loading || Boolean(model?.pending)} {...(model ? { binding: model } : {})} />
           {onStop && (
             <Button className="button-composer" iconName="stop" ariaLabel="Stop this session" onClick={onStop} />
           )}

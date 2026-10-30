@@ -6,6 +6,7 @@ import { QueryInput } from '@/components/query-input'
 import { Button } from '@/components/button'
 import { requestAPI } from '@/data/api'
 import { useProfile } from '@/data/profile'
+import { useComposerModel } from '@/data/composer-model'
 import { conversationQueryOptions, useSendMessage } from '@/data/conversation-queries'
 import type { ConversationSession } from '@/data/sessions'
 import { queryClient } from '@/query-client'
@@ -17,6 +18,7 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 export function NewSessionPage() {
   const navigate = useNavigate()
   const profile = useProfile()
+  const model = useComposerModel()
   const [sessionId] = useState(() => crypto.randomUUID())
   const send = useSendMessage(sessionId)
   const create = useMutation({
@@ -25,6 +27,13 @@ export function NewSessionPage() {
       await requestAPI<{ session: ConversationSession }>('sessions?compact=true', {
         method: 'POST', body: JSON.stringify({ id: sessionId })
       })
+      if (model.hasChanges && model.selection) {
+        await requestAPI(`sessions/${sessionId}/model`, {
+          method: 'PATCH', body: JSON.stringify({
+            provider: model.selection.provider, model: model.selection.model, ...model.selection.settings
+          })
+        })
+      }
       await queryClient.fetchInfiniteQuery(conversationQueryOptions(profile, sessionId))
       await send.mutateAsync({ id, query })
     },
@@ -51,7 +60,7 @@ export function NewSessionPage() {
   return (
     <div className="new-session-page">
       <div className="new-session-page-composer">
-        <QueryInput autoFocus loading={create.isPending}
+        <QueryInput autoFocus model={model} loading={create.isPending} canSubmit={!model.pending}
           onSubmit={(query) => create.mutate({ id: crypto.randomUUID(), query })} />
         {create.isError && (
           <div role="alert">

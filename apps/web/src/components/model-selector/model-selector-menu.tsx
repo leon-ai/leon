@@ -24,10 +24,6 @@ const ROW_HEIGHT_PX = 48
 const ROW_OVERSCAN = 3
 const SECTION_HEIGHT_PX = 36
 const SEPARATOR_HEIGHT_PX = 17
-const MODEL_SEARCH_INDEX = createSearchIndex(
-  modelProviders.flatMap((provider) => provider.models.map((model) => ({ provider, model }))),
-  ({ provider, model }) => [model.label, model.model, provider.label, provider.id]
-)
 
 enum PickerRowKind {
   Section = 'section',
@@ -58,6 +54,7 @@ type PickerRow = PickerOption | PickerSection | PickerSeparator
 
 interface ModelSelectorMenuProps {
   choice: ModelChoice
+  providers?: readonly ModelProvider[]
   recentModels: readonly ModelChoice[]
   open: boolean
   onChoose: (choice: ModelChoice) => void
@@ -76,6 +73,7 @@ function isPickerOption(row: PickerRow | undefined): row is PickerOption {
  */
 export function ModelSelectorMenu({
   choice,
+  providers = modelProviders,
   recentModels,
   open,
   onChoose,
@@ -88,9 +86,13 @@ export function ModelSelectorMenu({
   const scrollRef = useRef<HTMLDivElement>(null)
   const listId = useId()
   const search = query.trim()
+  const modelSearchIndex = useMemo(() => createSearchIndex(
+    providers.flatMap((provider) => provider.models.map((model) => ({ provider, model }))),
+    ({ provider, model }) => [model.label, model.model, provider.label, provider.id]
+  ), [providers])
   const rows = useMemo<PickerRow[]>(() => {
     if (search === '' && provider === null) {
-      const providers: PickerOption[] = modelProviders.map((candidate) => ({
+      const providerRows: PickerOption[] = providers.map((candidate) => ({
         kind: PickerRowKind.Provider,
         key: candidate.id,
         provider: candidate
@@ -121,13 +123,13 @@ export function ModelSelectorMenu({
           key: 'providers',
           label: 'Providers'
         },
-        ...providers
+        ...providerRows
       ]
     }
 
     // Search spans providers even while browsing one provider's model layer.
     const choices = search !== ''
-      ? searchIndex(MODEL_SEARCH_INDEX, search).map((result) => result.item)
+      ? searchIndex(modelSearchIndex, search).map((result) => result.item)
       : provider === null ? [] : provider.models.map((model) => ({ provider, model }))
 
     return choices.map(({ provider, model }) => ({
@@ -136,7 +138,7 @@ export function ModelSelectorMenu({
       provider,
       model
     }))
-  }, [provider, recentModels, search])
+  }, [provider, providers, modelSearchIndex, recentModels, search])
   const activeRowIndex = isPickerOption(rows[activeIndex]) ? activeIndex : -1
   const virtualizer = useVirtualizer({
     count: rows.length,

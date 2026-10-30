@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Dropdown } from '@/components/dropdown'
 import { LLMProviderIcon } from '@/components/llm-provider-icon'
 import {
   modelProviders,
   type ModelChoice,
+  type ModelProvider,
   type ModelSettings
 } from '@/data/model-catalog'
+import type { useComposerModel } from '@/data/composer-model'
 
 import { ModelSelectorMenu } from './model-selector-menu'
 import { ModelSettingsSelector } from './model-settings-selector'
@@ -28,12 +30,13 @@ enum SelectorPanel {
 
 interface ModelSelectorProps {
   disabled?: boolean
+  binding?: ReturnType<typeof useComposerModel>
 }
 
-function readModelHistory(): ModelChoice[] {
+function readModelHistory(storageKey: string, providers: readonly ModelProvider[]): ModelChoice[] {
   try {
     const stored: unknown = JSON.parse(
-      window.localStorage.getItem(RECENT_MODELS_STORAGE_KEY) ?? '[]'
+      window.localStorage.getItem(storageKey) ?? '[]'
     )
 
     if (!Array.isArray(stored)) {
@@ -47,7 +50,7 @@ function readModelHistory(): ModelChoice[] {
         continue
       }
 
-      const provider = modelProviders.find((candidate) => candidate.id === target.provider)
+      const provider = providers.find((candidate) => candidate.id === target.provider)
       const model = provider?.models.find((candidate) => candidate.model === target.model)
       const alreadyIncluded = choices.some((choice) =>
         choice.provider.id === provider?.id && choice.model.model === model?.model
@@ -83,22 +86,45 @@ function getInitialChoice(): ModelChoice {
 }
 
 /**
- * Previews a model and its supported settings without mutating the agent config.
+ * Shares one control for session model and supported inference settings.
  */
-export function ModelSelector({ disabled = false }: ModelSelectorProps) {
+export function ModelSelector({ disabled = false, binding }: ModelSelectorProps) {
+  const storageKey = `${RECENT_MODELS_STORAGE_KEY}.${binding?.profile ?? 'preview'}`
+  const providers = useMemo(() => {
+    const catalog = binding?.providers ?? modelProviders
+    const selection = binding?.selection
+    if (!selection?.provider || catalog.some((provider) => provider.id === selection.provider &&
+      provider.models.some((model) => model.model === selection.model))) {
+      return catalog
+    }
+    // Configured local/custom models remain visible even outside the curated catalog.
+    const existing = catalog.find((provider) => provider.id === selection.provider)
+    const provider: ModelProvider = {
+      id: selection.provider, label: existing?.label ?? selection.provider,
+      models: [...(existing?.models ?? []), {
+        model: selection.model, label: selection.model, recommended: false,
+        reasoning: ['auto'], speed: ['auto'], defaultReasoningLabel: 'Managed'
+      }]
+    }
+
+    return [...catalog.filter((item) => item.id !== provider.id), provider]
+  }, [binding?.providers, binding?.selection])
   const [panel, setPanel] = useState(SelectorPanel.Closed)
-  const [modelHistory, setModelHistory] = useState(readModelHistory)
-  const [choice, setChoice] = useState(() => modelHistory[0] ?? getInitialChoice())
+  const [modelHistory, setModelHistory] = useState(() => readModelHistory(storageKey, providers))
+  const [localChoice, setChoice] = useState(() => getInitialChoice())
+  const provider = providers.find((item) => item.id === binding?.selection?.provider)
+  const model = provider?.models.find((item) => item.model === binding?.selection?.model)
+  const choice = provider && model ? { provider, model } : localChoice
   const [settingsByModel, setSettingsByModel] = useState<Record<string, ModelSettings>>({})
   const targetKey = `${choice.provider.id}/${choice.model.model}`
-  const settings = settingsByModel[targetKey] ?? DEFAULT_SETTINGS
+  const settings = binding?.selection?.settings ?? settingsByModel[targetKey] ?? DEFAULT_SETTINGS
   const recentModels = modelHistory.filter((recent) =>
     recent.provider.id !== choice.provider.id || recent.model.model !== choice.model.model
   ).slice(0, MAXIMUM_RECENT_MODELS)
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(RECENT_MODELS_STORAGE_KEY, JSON.stringify(
+      window.localStorage.setItem(storageKey, JSON.stringify(
         modelHistory.map((recent) => ({
           provider: recent.provider.id,
           model: recent.model.model
@@ -107,10 +133,11 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
     } catch {
       // Keep this tab's history usable when browser storage is unavailable.
     }
-  }, [modelHistory])
+  }, [modelHistory, storageKey])
 
   function chooseModel(next: ModelChoice): void {
     setChoice(next)
+    binding?.update(next)
     setModelHistory((current) => {
       // The initially active model also becomes a recent when switching away.
       const previous = current.length === 0 ? [choice] : current
@@ -149,6 +176,7 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
         content={(close, open) => (
           <ModelSelectorMenu
             choice={choice}
+            providers={providers}
             recentModels={recentModels}
             open={open}
             onChoose={chooseModel}
@@ -179,6 +207,7 @@ export function ModelSelector({ disabled = false }: ModelSelectorProps) {
         open={panel === SelectorPanel.Settings}
         onOpenChange={(open) => changePanel(SelectorPanel.Settings, open)}
         onChange={(next) => {
+          binding?.update(choice, { ...settings, ...next })
           setSettingsByModel((current) => ({
             ...current,
             [targetKey]: { ...(current[targetKey] ?? DEFAULT_SETTINGS), ...next }
