@@ -68,3 +68,15 @@ and [enhanced](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.
   navigation, open/close, typing, and scrolling. Check cleanup/reduced motion;
   distinguish retained caches/normal heap fluctuation from reproducible leaks.
   Report measurements and verification limits.
+
+## Verification
+
+- Use Playwright browser E2E flows for web-app behavior, not unit/component tests.
+  Keep independent tests fully parallel with bounded workers, isolated contexts/data,
+  user-facing locators, and auto-waiting assertions. Exercise normal/reduced motion
+  and retain useful failure traces. Never use an owner's profile or paid live LLMs;
+  distinguish deterministic API-fixture UI coverage from full-stack coverage.
+- Review affected tests and fixtures with each change; remove obsolete, redundant
+  or superseded coverage while preserving distinct, still-relevant behavioral
+  contracts. Do not keep tests solely because they already exist or expand cleanup
+  into unrelated suites.
