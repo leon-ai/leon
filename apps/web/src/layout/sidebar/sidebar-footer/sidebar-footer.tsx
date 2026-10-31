@@ -2,11 +2,11 @@ import type { CSSProperties } from 'react'
 
 import { Tooltip } from '@/components/tooltip'
 import { getPublicAssetPath } from '@/config'
+import { useAmbientConditions } from '@/data/ambient-conditions'
 
 import './sidebar-footer.sass'
 
 const DISCORD_URL = 'https://discord.gg/MNQqqKg'
-const DEFAULT_MOOD = 'happy'
 const LEON_VERSION = '2.0.0-alpha.1+dev'
 
 export type Mood = 'sad' | 'cocky' | 'tired' | 'angry' | 'happy'
@@ -28,12 +28,16 @@ interface SidebarFooterProps {
 }
 
 export function SidebarFooter({
-  mood = DEFAULT_MOOD
+  mood: previewMood
 }: SidebarFooterProps) {
-  const moodLabel = `${mood.charAt(0).toUpperCase()}${mood.slice(1)} mood`
-  const moodIconStyle: MoodIconStyle = {
+  const ambient = useAmbientConditions()
+  const currentMood = ambient.data?.mood
+  // Leon's upbeat default uses the existing happy artwork.
+  const mood = previewMood ?? (currentMood === 'default' ? 'happy' : currentMood)
+  const moodLabel = mood ? `${mood.charAt(0).toUpperCase()}${mood.slice(1)} mood` : 'Mood unavailable'
+  const moodIconStyle: MoodIconStyle | undefined = mood ? {
     '--sidebar-footer-mood-icon': `url("${MOOD_ASSET_PATHS[mood]}")`
-  }
+  } : undefined
 
   return (
     <footer className="sidebar-footer sidebar-footer-slot">

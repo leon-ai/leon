@@ -253,6 +253,7 @@ export type HTTPPluginAgentEventType =
   | 'metrics'
   | 'error'
   | 'session_changed'
+  | 'mood_changed'
 
 export interface HTTPPluginAgentEvent {
   sequence: number

@@ -4,6 +4,7 @@ import {
 } from '@tanstack/react-query'
 
 import { LEON_SERVER_URL } from '@/config'
+import { useProfile } from './profile'
 
 const AMBIENT_CONDITIONS_API_PATH = '/api/v1/ambient'
 const AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS = 10 * 60 * 1_000
@@ -56,9 +57,9 @@ interface AmbientConditionsResponse {
   success: boolean
 }
 
-async function fetchAmbientConditions(): Promise<AmbientConditions> {
+async function fetchAmbientConditions(signal: AbortSignal): Promise<AmbientConditions> {
   const response = await fetch(`${LEON_SERVER_URL}${AMBIENT_CONDITIONS_API_PATH}`, {
-    credentials: 'include'
+    credentials: 'include', signal
   })
 
   if (!response.ok) {
@@ -80,10 +81,13 @@ async function fetchAmbientConditions(): Promise<AmbientConditions> {
 export function useAmbientConditions(
   enabled = true
 ): UseQueryResult<AmbientConditions, Error> {
+  const profile = useProfile()
+
   return useQuery({
-    queryKey: AMBIENT_CONDITIONS_QUERY_KEY,
-    queryFn: fetchAmbientConditions,
-    enabled,
+    queryKey: [...AMBIENT_CONDITIONS_QUERY_KEY, profile],
+    meta: { errorTitle: 'Could not load ambient conditions' },
+    queryFn: ({ signal }) => fetchAmbientConditions(signal),
+    enabled: enabled && Boolean(profile),
     refetchInterval: AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     staleTime: AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS

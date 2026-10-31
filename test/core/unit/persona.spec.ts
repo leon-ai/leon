@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Persona from '@/core/llm-manager/persona'
 import AmbientConditionsManager from '@/core/ambient-conditions-manager'
 import { ToolExecutionOrigin } from '@/types'
+import Fastify from 'fastify'
+import { getAmbientConditions } from '@/core/http-server/api/ambient/get'
 
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   getSnapshot: vi.fn(),
   owner: {} as Record<string, string>,
-  timeZone: 'UTC'
+  timeZone: 'UTC',
+  mood: 'sad'
 }))
 
 vi.mock('@/core', () => ({
@@ -16,7 +19,12 @@ vi.mock('@/core', () => ({
   SOCKET_SERVER: null,
   TOOLKIT_REGISTRY: { isLoaded: true },
   TOOL_EXECUTOR: { executeTool: mocks.execute },
-  AMBIENT_CONDITIONS_MANAGER: { getSnapshot: mocks.getSnapshot }
+  AMBIENT_CONDITIONS_MANAGER: { getSnapshot: mocks.getSnapshot },
+  PERSONA: {
+    get mood(): { type: string } {
+      return { type: mocks.mood }
+    }
+  }
 }))
 vi.mock('@/core/config-states/config-state', () => ({ CONFIG_STATE: {} }))
 vi.mock('@/core/context-manager/owner-profile', () => ({
@@ -41,6 +49,20 @@ interface WeatherPersona {
   refreshWeatherSnapshot(): Promise<void>
   weatherSnapshot: unknown
 }
+
+it('returns the current persona mood with ambient conditions rather than a cached mood', async () => {
+  const app = Fastify()
+  mocks.getSnapshot.mockResolvedValue({ season: 'autumn' })
+  await app.register(getAmbientConditions, { apiVersion: 'v1' })
+  try {
+    mocks.mood = 'sad'
+    expect((await app.inject('/api/v1/ambient')).json().ambient.mood).toBe('sad')
+    mocks.mood = 'cocky'
+    expect((await app.inject('/api/v1/ambient')).json().ambient.mood).toBe('cocky')
+  } finally {
+    await app.close()
+  }
+})
 
 describe('ambient weather grounding', () => {
   beforeEach(() => {
