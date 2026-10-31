@@ -50,6 +50,112 @@ test('replaces send with a danger stop action without submitting or losing the d
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
+  test(`binds activity to its starting step and appends plan continuations around unrelated progress (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const startedAt = Date.now()
+    const responseId = 'plan-response'
+    const owner: ConversationRecord = { who: 'owner', messageId: 'plan-owner', message: 'Work through these steps.',
+      sentAt: startedAt, isAddedToHistory: true }
+    let sequence = 0
+    const emit = (type: string, data: Record<string, unknown>, offset: number): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: owner.messageId, response_id: responseId, created_at: startedAt + offset
+    }])
+    const first = { id: 'first', label: 'Gather the sources', status: 'in_progress' }
+    const second = { id: 'second', label: 'Check the sources', status: 'pending' }
+    const request = { id: 'first-request', goal: TurnPhase.ToolRequest, startedAt: startedAt + 20,
+      durationMs: 0, outcome: 'started', planStepId: first.id }
+    const firstTool = { id: 'source', name: 'test.lookup.run', tool_call_title: 'Read the source', plan_step_id: first.id }
+    const parallel = { ...firstTool, id: 'parallel', tool_call_title: 'Read another source' }
+    await emit('owner_message', { message: owner }, 0)
+    await emit('turn_status', { status: 'accepted' }, 1)
+    await emit('plan_step', { step: first }, 10)
+    await emit('plan_step', { step: second }, 10)
+    await emit('inference_activity', { activity: request }, 20)
+    await emit('text_stream', { kind: 'reasoning', generationId: 'first-thought', phase: 'agent',
+      token: 'I will read the sources.', planStepId: first.id }, 30)
+    const plans = page.getByRole('region', { name: 'Leon’s execution plan', exact: true })
+    await expect(plans).toHaveCount(1)
+    const original = await plans.first().elementHandle()
+    await expect(plans.first().getByRole('button', { name: 'Thinking...', exact: true })).toBeVisible()
+    await emit('tool_call', { tool_call: { ...firstTool, status: 'running', preparation_started_at: startedAt + 40,
+      started_at: startedAt + 50 } }, 50)
+    await emit('tool_call', { tool_call: { ...parallel, status: 'running', started_at: startedAt + 60 } }, 60)
+    await emit('inference_activity', { activity: { ...request, outcome: 'completed', durationMs: 50 } }, 70)
+    await expect(plans.first().getByRole('region', { name: 'Leon’s thinking', exact: true })).toBeVisible()
+    await expect(plans.first().getByRole('region', { name: 'Leon’s inference', exact: true })).toContainText('Prepared tool calls in 50ms')
+    await emit('plan_step', { step: { ...first, status: 'completed' } }, 100)
+    await emit('progress_message', { message: { id: 'unrelated', content: 'A separate update.',
+      created_at: startedAt + 110, plan_step_id: null } }, 110)
+    await emit('plan_step', { step: { ...second, status: 'in_progress' } }, 120)
+    const next = { ...request, id: 'second-request', startedAt: startedAt + 130, planStepId: second.id }
+    await emit('inference_activity', { activity: next }, 130)
+    await emit('text_stream', { kind: 'reasoning', generationId: 'second-thought', phase: 'agent',
+      token: 'I will check the result.', planStepId: second.id }, 140)
+    const secondTool = { ...firstTool, id: 'verification', tool_call_title: 'Check the result', plan_step_id: second.id }
+    await emit('tool_call', { tool_call: { ...secondTool, status: 'running', started_at: startedAt + 150 } }, 150)
+    await expect(plans).toHaveCount(2)
+    expect(await original!.evaluate((element) => element.isConnected)).toBe(true)
+    const response = page.locator('.leon-message').last()
+    expect(await response.evaluate((element) => Array.from(element.children).map((child) => child.classList[0])))
+      .toEqual(['leon-message-execution', 'leon-message-summary', 'leon-message-execution'])
+    await emit('tool_call', { tool_call: { ...firstTool, status: 'success', duration_ms: 100 } }, 160)
+    await emit('tool_call', { tool_call: { ...parallel, status: 'success', duration_ms: 80 } }, 170)
+    await emit('inference_activity', { activity: { ...next, outcome: 'completed', durationMs: 50 } }, 180)
+    await emit('tool_call', { tool_call: { ...secondTool, status: 'success', duration_ms: 40 } }, 190)
+    await emit('plan_step', { step: { ...second, status: 'completed' } }, 200)
+    const review = { ...request, id: 'review-request', goal: TurnPhase.Review,
+      startedAt: startedAt + 210, planStepId: null }
+    await emit('inference_activity', { activity: review }, 210)
+    await expect(response.getByRole('region', { name: 'Leon’s inference', exact: true }).last().locator('.process-group-title')).toHaveText('Reviewing...')
+    await emit('inference_activity', { activity: { ...review, outcome: 'completed', durationMs: 10 } }, 220)
+    const saved: ConversationRecord = { who: 'leon', messageId: responseId, message: 'Checked and ready.',
+      sentAt: startedAt + 230, isAddedToHistory: true, agentResponseTrace: {
+        id: responseId, metrics: { durationMs: 230 },
+        planSteps: [{ ...first, status: 'completed' }, { ...second, status: 'completed' }],
+        planTransitions: [{ ...first, status: 'in_progress', changedAt: startedAt + 10 },
+          { ...first, status: 'completed', changedAt: startedAt + 100 },
+          { ...second, status: 'in_progress', changedAt: startedAt + 120 },
+          { ...second, status: 'completed', changedAt: startedAt + 200 }],
+        reasoning: [{ id: 'first-thought', phase: 'agent', startedAt: startedAt + 30,
+          text: 'I will read the sources.', planStepId: first.id },
+        { id: 'second-thought', phase: 'agent', startedAt: startedAt + 140,
+          text: 'I will check the result.', planStepId: second.id }],
+        progressMessages: [{ id: 'unrelated', content: 'A separate update.', createdAt: startedAt + 110, planStepId: null }],
+        toolCalls: [{ id: firstTool.id, name: firstTool.name, toolCallTitle: firstTool.tool_call_title,
+          status: 'success', preparationStartedAt: startedAt + 40, startedAt: startedAt + 50, durationMs: 100, planStepId: first.id },
+        { id: parallel.id, name: parallel.name, toolCallTitle: parallel.tool_call_title,
+          status: 'success', startedAt: startedAt + 60, durationMs: 80, planStepId: first.id },
+        { id: secondTool.id, name: secondTool.name, toolCallTitle: secondTool.tool_call_title,
+          status: 'success', startedAt: startedAt + 150, durationMs: 40, planStepId: second.id }],
+        timings: [request, next, review].map((activity) => ({ ...activity,
+          kind: 'inference', outcome: 'completed', durationMs: activity.id === review.id ? 10 : 50 }))
+      } }
+    ui.history.get(SESSION_ID)!.push(owner, saved)
+    await emit('final_answer', { content: saved.message, response_trace: saved.agentResponseTrace }, 230)
+    await emit('session_changed', { is_running: false }, 231)
+    for (const reload of [false, true]) {
+      if (reload) {
+        await page.reload()
+      }
+      await page.getByRole('button', { name: 'Worked for 230ms', exact: true }).click()
+      await expect(plans).toHaveCount(2)
+      for (const plan of await plans.all()) {
+        await plan.getByRole('button', { name: 'Completed plan for 190ms', exact: true }).click()
+        await plan.locator('.task-list-item-trigger').click()
+      }
+      await plans.first().getByRole('button', { name: 'Used 2 tools for 180ms', exact: true }).click()
+      await plans.last().getByRole('button', { name: 'Used 1 tool for 40ms', exact: true }).click()
+      await expect(plans.first().locator('.tool-call-title')).toHaveText(['Read the source', 'Read another source'])
+      await expect(plans.last().getByRole('region', { name: 'Leon’s thinking', exact: true })).toBeVisible()
+      await expect(plans.last().locator('.tool-call-title')).toHaveText(['Check the result'])
+      await expect(response.locator('.leon-message-summary .streaming-text-characters')).toHaveText('A separate update.')
+      await expect(response.getByRole('region', { name: 'Leon’s processing', exact: true })).toContainText('Processed for 10ms')
+    }
+    await original?.dispose()
+  })
+
   test(`reveals tool previews only when their action title is available (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)

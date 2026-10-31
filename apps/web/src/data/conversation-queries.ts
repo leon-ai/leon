@@ -7,7 +7,7 @@ import { useToast } from '@/components/toast'
 import { requestAPI } from './api'
 import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
 import { applyConversationEvent } from './conversation-events'
-import { toFeedEntry } from './conversation-feed'
+import { toFeedEntries } from './conversation-feed'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
 import { ConnectionError, requestErrors } from './request-errors'
 import { sessionsQueryKey, SESSION_PAGE_SIZE, SessionStatus, type SessionsPage } from './sessions'
@@ -158,7 +158,7 @@ export function useConversation(sessionId: string): UseInfiniteQueryResult<Cache
 
     return [...unique.values()].sort((left, right) => left.sentAt - right.sentAt)
   }, [result.data])
-  const entries = useMemo(() => records.map((record) => toFeedEntry(record, latest?.is_running ?? false)),
+  const entries = useMemo(() => toFeedEntries(records, latest?.is_running ?? false),
     [records, latest?.is_running])
   const historicalIds = useMemo(() => records.filter((record) => record.historical).flatMap((record) => [
     record.messageId,

@@ -1,5 +1,5 @@
 import { FeedTurnStatus } from './feed'
-import type { FeedEntry, FeedToolCall, LeonFeedActivity, FeedModelProcessingActivity } from './feed'
+import type { FeedEntry, FeedToolCall, LeonFeedActivity, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep } from './feed'
 import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
 import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import { getProcessingCategory } from './processing-categories'
@@ -7,6 +7,7 @@ import { getActivityLabel, getProcessingLabel } from './activity-labels'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
+const LEGACY_PLAN_WIDGET = 'PlanWidget'
 
 /**
  * Measures coverage of start-sorted requests, excluding overlap and idle gaps.
@@ -163,21 +164,7 @@ function toActivities(
       planStepId: message.planStepId
     } })
   }
-  if (trace.planSteps.length > 0) {
-    const planAt = trace.planTransitions?.[0]?.changedAt ??
-      trace.toolCalls.find((call) => call.stepLabel)?.startedAt ?? sentAt
-    items.push({ timestamp: planAt, activity: {
-      id: `${trace.id}:plan`, type: 'plan', steps: trace.planSteps.map((step) => ({
-        ...step,
-        status: !active && (step.status === 'pending' || step.status === 'in_progress') ? 'error' : step.status,
-        toolCalls: trace.toolCalls.filter((call) => call.stepLabel === step.label).map((call) => toFeedTool(call, active))
-      }))
-    } })
-  }
   for (const call of trace.toolCalls) {
-    if (call.stepLabel && trace.planSteps.some((step) => step.label === call.stepLabel)) {
-      continue
-    }
     items.push({ timestamp: call.preparationStartedAt ?? call.startedAt ?? sentAt, activity: {
       id: call.id, type: 'tools', toolCalls: [toFeedTool(call, active)],
       startedAt: call.preparationStartedAt ?? call.startedAt
@@ -264,7 +251,168 @@ function toActivities(
     }
   }
 
-  return activities
+  return trace.planSteps.length ? attachPlanActivities(trace, activities, processing, active, sentAt) : activities
+}
+
+/**
+ * Replays step ownership at the activity's start, not at completion. Contiguous
+ * plan work shares one disclosure; interruptions create a later continuation
+ * instead of inserting new work above unrelated activity. Legacy traces without
+ * transitions retain explicit tool assignments without guessing other ownership.
+ */
+function attachPlanActivities(
+  trace: ConversationTrace,
+  activities: LeonFeedActivity[],
+  processing: FeedModelProcessingActivity | undefined,
+  active: boolean,
+  sentAt: number
+): LeonFeedActivity[] {
+  const transitions = [...(trace.planTransitions ?? [])].sort((left, right) => left.changedAt - right.changedAt)
+  const planComplete = trace.planSteps.every((step) => step.status === 'completed')
+  const planStart = transitions.find((transition) => transition.status === 'in_progress')?.changedAt
+  const planEnd = transitions.findLast((transition) => transition.status === 'completed')?.changedAt
+  const hasRecordedCompletion = planComplete && trace.planSteps.every((step) =>
+    transitions.some((transition) => transition.id === step.id && transition.status === 'completed'))
+  // Plan time is elapsed execution, not a sum of overlapping child requests.
+  const planDuration = hasRecordedCompletion && planStart !== undefined && planEnd !== undefined && planEnd >= planStart
+    ? planEnd - planStart : undefined
+  const ownership: { startedAt: number, stepId: string | undefined }[] = []
+  let currentStep: string | undefined
+  for (const transition of transitions) {
+    const next = transition.status === 'in_progress' ? transition.id
+      : transition.id === currentStep ? undefined : currentStep
+    if (next !== currentStep) {
+      currentStep = next
+      ownership.push({ startedAt: transition.changedAt, stepId: currentStep })
+    }
+  }
+  const ownerAt = (timestamp: number | undefined): string | undefined => timestamp === undefined
+    ? undefined : ownership.findLast((entry) => entry.startedAt <= timestamp)?.stepId
+  const tools = new Map(trace.toolCalls.map((call) => [call.id, call]))
+  const steps = new Map<string, FeedPlanStep>(trace.planSteps.map((step) => [step.id, {
+    ...step, toolCalls: [],
+    status: !active && (step.status === 'pending' || step.status === 'in_progress') ? 'error' : step.status,
+    startedAt: transitions.find((transition) => transition.id === step.id && transition.status === 'in_progress')?.changedAt
+  }]))
+  const timeline: { activity?: LeonFeedActivity, stepId?: string | undefined, timestamp: number }[] = []
+  const summaries: LeonFeedActivity[] = []
+
+  for (const step of steps.values()) {
+    if (step.startedAt !== undefined || step.status !== 'pending') {
+      const firstTool = trace.toolCalls.find((call) => call.planStepId === step.id || call.stepLabel === step.label)
+      const hasOwnedWork = Boolean(firstTool) || activities.some((activity) => activity.planStepId === step.id) ||
+        processing?.requests?.some((request) => request.planStepId === step.id)
+      if (step.startedAt === undefined && hasOwnedWork) {
+        continue
+      }
+      timeline.push({ stepId: step.id, timestamp: step.startedAt ??
+        firstTool?.preparationStartedAt ?? firstTool?.startedAt ?? sentAt })
+    }
+  }
+
+  for (const activity of activities) {
+    if (activity.type === 'processing') {
+      if (!processing) {
+        summaries.push(activity)
+      }
+      continue
+    }
+    if (activity.type === 'working') {
+      continue
+    }
+    if (activity.startedAt === undefined && (activity.type === 'review' || activity.type === 'answer' ||
+      activity.type === 'retry' || activity.type === 'other')) {
+      summaries.push(activity)
+      continue
+    }
+    const tool = activity.type === 'tools' ? tools.get(activity.toolCalls[0]!.id) : undefined
+    const explicitStep = tool?.stepLabel
+      ? trace.planSteps.find((step) => step.label === tool.stepLabel)?.id : undefined
+    timeline.push({ activity, timestamp: activity.startedAt ?? sentAt,
+      stepId: explicitStep ?? (tool?.planStepId !== undefined ? tool.planStepId ?? undefined
+        : activity.planStepId !== undefined ? activity.planStepId ?? undefined : ownerAt(activity.startedAt)) })
+  }
+
+  const unownedRequests: NonNullable<FeedModelProcessingActivity['requests']> = []
+  const visibleWork = active && activities.some((activity) =>
+    activity.type === 'thinking' && activity.isActive ||
+    activity.type === 'tools' && activity.toolCalls.some((call) =>
+      call.status === 'preparing' || call.status === 'running')
+  )
+  for (const request of processing?.requests ?? []) {
+    const stepId = request.planStepId !== undefined ? request.planStepId ?? undefined : ownerAt(request.startedAt)
+    if (!stepId) {
+      unownedRequests.push(request)
+      continue
+    }
+    if (request.isActive && visibleWork) {
+      continue
+    }
+    timeline.push({ stepId, timestamp: request.startedAt ?? sentAt, activity: {
+      id: request.id, type: 'processing', inline: true, durationMs: request.durationMs,
+      isActive: Boolean(request.isActive), startedAt: request.startedAt, requests: [request]
+    } })
+  }
+
+  timeline.sort((left, right) => left.timestamp - right.timestamp)
+  const result: LeonFeedActivity[] = []
+  for (const item of timeline) {
+    const step = item.stepId ? steps.get(item.stepId) : undefined
+    if (!step) {
+      if (item.activity) {
+        result.push(item.activity)
+      }
+      continue
+    }
+
+    const previous = result.at(-1)
+    let group: FeedPlanActivity
+    if (previous?.type === 'plan') {
+      group = previous
+    } else {
+      group = { id: `${trace.id}:plan:${step.id}:${item.activity?.id ?? 'start'}`,
+        type: 'plan', steps: [], startedAt: step.startedAt,
+        complete: planComplete, durationMs: planDuration }
+      result.push(group)
+    }
+    let segment = group.steps.at(-1)
+    if (segment?.id !== step.id) {
+      segment = { ...step, toolCalls: [], activities: [] }
+      group.steps.push(segment)
+    }
+    if (item.activity) {
+      const previousActivity = segment.activities!.at(-1)
+      if (item.activity.type === 'tools' && previousActivity?.type === 'tools') {
+        previousActivity.toolCalls.push(...item.activity.toolCalls)
+      } else {
+        segment.activities!.push(item.activity)
+      }
+    }
+  }
+
+  if (!result.length && steps.size) {
+    result.push({ id: `${trace.id}:plan`, type: 'plan', steps: [...steps.values()] })
+  }
+  result.push(...summaries)
+  // Turn-level accounting remains last; step requests already live at their
+  // original position and must not be counted or displayed a second time.
+  if (unownedRequests.length && (!active || !visibleWork && unownedRequests.some((request) => request.isActive))) {
+    result.push({ ...processing!, requests: unownedRequests,
+      isActive: unownedRequests.some((request) => request.isActive), durationMs: getProcessingDuration(unownedRequests) })
+  } else if (active && !processing?.requests?.some((request) => request.isActive)) {
+    const waiting = activities.find((activity) => activity.type === 'working')
+    if (waiting) {
+      const plan = result.at(-1)
+      const step = plan?.type === 'plan' ? plan.steps.at(-1) : undefined
+      if (step?.status === 'in_progress') {
+        step.activities!.push(waiting)
+      } else {
+        result.push(waiting)
+      }
+    }
+  }
+
+  return result
 }
 
 /**
@@ -300,3 +448,30 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
   return entry
 }
 
+/**
+ * Keeps legacy-only plans visible without duplicating structured plan widgets.
+ */
+export function toFeedEntries(records: readonly ConversationRecord[], running: boolean): FeedEntry[] {
+  const structuredPlanTurns = new Set<string | undefined>()
+  let turnId: string | undefined
+  for (const record of records) {
+    if (record.who === 'owner') {
+      turnId = record.messageId
+    } else if (record.agentResponseTrace?.planSteps.length) {
+      structuredPlanTurns.add(turnId)
+    }
+  }
+
+  turnId = undefined
+  const entries: FeedEntry[] = []
+  for (const record of records) {
+    if (record.who === 'owner') {
+      turnId = record.messageId
+    } else if (!record.isAddedToHistory && record.widget?.widget === LEGACY_PLAN_WIDGET && structuredPlanTurns.has(turnId)) {
+      continue
+    }
+    entries.push(toFeedEntry(record, running))
+  }
+
+  return entries
+}

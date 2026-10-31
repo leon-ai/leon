@@ -704,6 +704,44 @@ test('omits absent or unmeasured phases instead of estimating their duration', a
   await expect(page.getByRole('region', { name: 'Leon’s answer generation' })).toHaveCount(0)
 })
 
+test('shows structured plans without duplicate legacy widget answers while retaining other widget content', async ({ page, ui }) => {
+  ui.history.set(SESSION_ID, [{
+    who: 'owner', messageId: 'old-owner', message: 'An older request.', sentAt: 0, isAddedToHistory: true
+  }, {
+    who: 'leon', messageId: 'old-plan', message: 'Legacy-only plan', sentAt: 1,
+    isAddedToHistory: false, widget: { widget: 'PlanWidget' }
+  }, {
+    who: 'owner', messageId: 'new-owner', message: 'A planned request.', sentAt: 2, isAddedToHistory: true
+  }, {
+    who: 'leon', messageId: 'other-widget', message: 'Another widget result', sentAt: 3,
+    isAddedToHistory: false, widget: { widget: 'OtherWidget' }
+  }, {
+    who: 'leon', messageId: 'duplicate-plan', message: 'Verify playback paths', sentAt: 4,
+    isAddedToHistory: false, widget: { widget: 'PlanWidget' }
+  }, {
+    who: 'leon', messageId: 'planned-answer', message: 'The final answer.', sentAt: 5,
+    isAddedToHistory: true, agentResponseTrace: {
+      id: 'planned-answer', planSteps: [{ id: 'step', label: 'Verify playback paths', status: 'completed' }],
+      toolCalls: [], metrics: { durationMs: 5_000 }
+    }
+  }])
+  await page.goto(SESSION_URL)
+  for (const reload of [false, true]) {
+    if (reload) {
+      await page.reload()
+    }
+    const answers = page.getByRole('region', { name: 'Leon’s final answer', exact: true })
+    await expect(answers).toHaveCount(3)
+    await expect(answers.nth(0)).toContainText('Legacy-only plan')
+    await expect(answers.nth(1)).toContainText('Another widget result')
+    await expect(answers.nth(2)).toContainText('The final answer.')
+    await expect(answers.filter({ hasText: 'Verify playback paths' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Worked for 5s', exact: true }).click()
+    await page.getByRole('button', { name: 'Completed plan', exact: true }).click()
+    await expect(page.getByRole('list', { name: 'Execution plan' })).toContainText('Verify playback paths')
+  }
+})
+
 test('shows phase summaries from saved message metrics without a detailed trace', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.llmMetrics = {

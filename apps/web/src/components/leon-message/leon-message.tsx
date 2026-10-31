@@ -55,6 +55,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   const shouldAnimate = useAnimateOnce(`${activity.id}:execution`)
 
   if (activity.type === 'plan') {
+    const planDuration = formatToolDuration(activity.durationMs, DurationFormat.Compact)
     const planIsActive = activity.steps.some((step) =>
       step.status === 'in_progress' || step.status === 'pending'
     )
@@ -67,11 +68,11 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           active={planIsActive}
           activeLabel="Executing plan..."
           ariaLabel="Leon’s execution plan"
-          completedLabel={activity.steps.every((step) => step.status === 'completed')
-            ? 'Completed plan' : 'Execution plan'}
+          completedLabel={(activity.complete ?? activity.steps.every((step) => step.status === 'completed'))
+            ? `Completed plan${planDuration ? ` for ${planDuration}` : ''}` : 'Execution plan'}
           indicator={<i className="ri-map-2-line" aria-hidden="true" />}
         >
-          <TaskList steps={activity.steps} />
+          <TaskList steps={activity.steps} renderActivity={renderActivity} />
         </ProcessGroup>
       </div>
     )
