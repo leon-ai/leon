@@ -8,7 +8,7 @@ import type {
   LeonFeedActivity,
   LeonFeedEntry
 } from '@/data/feed'
-import { FeedTurnStatus } from '@/data/feed'
+import { FeedTurnStatus, isToolCallVisible } from '@/data/feed'
 import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { ArtifactAttachments } from '@/components/artifact-attachments'
 import { BonusResponse } from '@/components/bonus-response'
@@ -83,6 +83,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   const toolsAreRunning = activity.toolCalls.some((toolCall) =>
     toolCall.status === 'running'
   )
+  const hasVisibleToolCalls = activity.toolCalls.some(isToolCallVisible)
   const toolCount = activity.toolCalls.length
   const duration = formatToolDuration(getToolGroupDuration(activity.toolCalls), DurationFormat.Compact)
 
@@ -92,6 +93,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
     })}>
       <ProcessGroup
         active={toolsAreActive}
+        animateWhileActive={!hasVisibleToolCalls}
         activeLabel={toolsAreRunning ? 'Using tools...' : 'Preparing tool calls...'}
         ariaLabel="Leon’s tool usage"
         completedLabel={`Used ${toolCount} ${
@@ -101,7 +103,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           <i className="ri-pencil-ruler-2-line" aria-hidden="true" />
         )}
       >
-        <ToolCallList toolCalls={activity.toolCalls} />
+        {hasVisibleToolCalls ? <ToolCallList toolCalls={activity.toolCalls} /> : undefined}
       </ProcessGroup>
     </div>
   )

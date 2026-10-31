@@ -97,10 +97,11 @@ function getRetryCount(trace: ConversationTrace, metrics: ConversationMetrics): 
  */
 export function toFeedTool(call: ConversationTool, active = true): FeedToolCall {
   const parts = call.name.split('.')
+  const title = call.toolCallTitle?.trim()
 
   return {
     id: call.id,
-    toolCallTitle: call.toolCallTitle || call.name,
+    toolCallTitle: title && title !== call.name ? title : '',
     toolkitName: call.toolkitName ?? parts[0] ?? '',
     toolName: call.toolName ?? parts[1] ?? '',
     functionName: parts.at(-1) ?? call.name,

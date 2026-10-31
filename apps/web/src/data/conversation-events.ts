@@ -116,8 +116,15 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     trace.planTransitions = [...(trace.planTransitions ?? []), { ...step, changedAt: event.created_at }]
   } else if (event.type === 'tool_call') {
     const call = readEventTool(data['tool_call'] as Record<string, unknown>)
-    const found = trace.toolCalls.some((item) => item.id === call.id)
-    trace.toolCalls = found ? trace.toolCalls.map((item) => item.id === call.id ? { ...item, ...call } : item)
+    const existing = trace.toolCalls.find((item) => item.id === call.id)
+    // Older events lack trace timestamps. Anchor them to their first event,
+    // never to the turn start or a later output/completion update.
+    call.preparationStartedAt ??= existing?.preparationStartedAt ?? call.startedAt ?? existing?.startedAt ?? event.created_at
+    if (call.status === 'running') {
+      call.startedAt ??= existing?.startedAt ?? event.created_at
+    }
+
+    trace.toolCalls = existing ? trace.toolCalls.map((item) => item.id === call.id ? { ...item, ...call } : item)
       : [...trace.toolCalls, call]
   } else if (event.type === 'metrics') {
     trace.metrics = data['metrics'] as NonNullable<ConversationTrace['metrics']>

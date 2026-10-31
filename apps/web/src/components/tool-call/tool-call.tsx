@@ -86,7 +86,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
             className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
             aria-hidden="true"
           />
-          <span className="tool-call-title">{toolCall.toolCallTitle}</span>
+          <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
         </ActivityWave>
         {toolCall.status === 'preparing' && (
           <span className="tool-call-duration">Preparing call</span>

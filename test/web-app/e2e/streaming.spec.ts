@@ -1,5 +1,5 @@
 import type { ElementHandle, Locator } from '@playwright/test'
-import type { ConversationEvent } from '../../../apps/web/src/data/conversation'
+import type { ConversationEvent, ConversationRecord } from '../../../apps/web/src/data/conversation'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL } from './fixtures'
@@ -49,6 +49,65 @@ test('replaces send with a danger stop action without submitting or losing the d
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+
+  test(`reveals tool previews only when their action title is available (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const startedAt = Date.now()
+    let sequence = 0
+    const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: 'title-owner', response_id: 'title-response', created_at: startedAt + sequence
+    }])
+    const tool = { id: 'weather-preview', name: 'weather.openmeteo.getWeather' }
+    const group = page.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+    await emit('turn_status', { status: 'accepted' })
+    for (const title of [undefined, '', ' ', tool.name]) {
+      await emit('tool_call', { tool_call: {
+        ...tool, status: 'preparing', input: '{"location":',
+        ...(title === undefined ? {} : { tool_call_title: title })
+      } })
+      await expect(group).toContainText('Preparing tool calls...')
+      await expect(group.locator('.activity-wave-active')).toHaveCount(1)
+      await expect(group.locator('.tool-call')).toHaveCount(0)
+      await expect(group.getByRole('button')).toHaveCount(0)
+      await expect(group.getByText(tool.name, { exact: true })).toHaveCount(0)
+    }
+
+    const originalGroup = await group.elementHandle()
+    await emit('tool_call', { tool_call: {
+      ...tool, status: 'preparing', tool_call_title: 'Check tomorrow’s weather',
+      input: '{"location":"Haarlem"}'
+    } })
+    const row = group.locator('.tool-call')
+    await expect(row).toHaveCount(1)
+    await expect(row.locator('.tool-call-title')).toHaveText('Check tomorrow’s weather')
+    expect(await originalGroup!.evaluate((element) => element.isConnected)).toBe(true)
+    const originalRow = await row.elementHandle()
+    await emit('tool_call', { tool_call: { ...tool, status: 'running' } })
+    await expect(row.locator('.tool-call-title')).toHaveText('Check tomorrow’s weather')
+    expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
+
+    // A call that executes without a title still needs a readable, inspectable row.
+    await emit('tool_call', { tool_call: {
+      id: 'untitled-execution', name: tool.name, status: 'running'
+    } })
+    await expect(group.locator('.tool-call-title')).toHaveText(['Check tomorrow’s weather', 'Get Weather'])
+    await expect(group.getByText(tool.name, { exact: true })).toHaveCount(0)
+
+    await emit('plan_step', { step: { id: 'weather-step', label: 'Compare forecasts', status: 'in_progress' } })
+    const nested = { ...tool, id: 'planned-preview', step_label: 'Compare forecasts', status: 'preparing' }
+    await emit('tool_call', { tool_call: nested })
+    const step = page.locator('.task-list-item')
+    await expect(step).toContainText('Compare forecasts')
+    await expect(step.locator('.tool-call')).toHaveCount(0)
+    await expect(step.getByRole('button', { name: 'Preparing tool calls...', exact: true })).toHaveCount(0)
+    await emit('tool_call', { tool_call: { ...nested, tool_call_title: 'Compare tomorrow’s forecasts' } })
+    await expect(step.locator('.tool-call-title')).toHaveText('Compare tomorrow’s forecasts')
+
+    await originalRow?.dispose()
+    await originalGroup?.dispose()
+  })
 
   test(`shows live reviews with stable copy, snapshot recovery and completed accounting (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
@@ -109,6 +168,74 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await processing.getByRole('button', { name: 'Processed for 3s', exact: true }).click()
     await expect(review.locator('.process-group-title')).toHaveText('Reviewed for 3s')
     await expect(review.locator('.activity-wave-active')).toHaveCount(0)
+  })
+
+  test(`hands off one visible status to tools and thinking without delayed tool entrances (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    let sequence = 0
+    const startedAt = Date.now()
+    const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: 'handoff-owner', response_id: 'handoff-response', created_at: startedAt + sequence
+    }])
+    const waiting = page.getByRole('region', { name: 'Leon’s work', exact: true })
+    const inference = page.getByRole('region', { name: 'Leon’s inference', exact: true })
+    const tool = {
+      id: 'handoff-tool', name: 'search_web.hosted.searchWeb', tool_call_title: 'Search the web'
+    }
+    const request = {
+      id: 'd', goal: TurnPhase.Request, startedAt, durationMs: 0, outcome: 'started'
+    }
+
+    await emit('turn_status', { status: 'accepted' })
+    await emit('inference_activity', { activity: request })
+    await expect(inference).toBeVisible()
+    await emit('tool_call', { tool_call: { ...tool, status: 'preparing' } })
+    const execution = page.locator('.leon-message-execution').last()
+    await expect(execution.getByRole('button', { name: 'Preparing tool calls...', exact: true })).toBeVisible()
+    await expect(execution).toHaveCSS('animation-delay', '0s')
+    await expect(execution).toHaveCSS('animation-name',
+      reducedMotion === 'reduce' ? 'none' : 'leon-message-execution-enter')
+    await expect(inference).toHaveCount(0)
+    await expect(waiting).toHaveCount(0)
+    await emit('inference_activity', { activity: { ...request, outcome: 'completed', durationMs: 100 } })
+    await emit('tool_call', { tool_call: { ...tool, status: 'running' } })
+    await expect(execution.getByRole('button', { name: 'Using tools...', exact: true })).toBeVisible()
+    await expect(waiting).toHaveCount(0)
+    await emit('tool_call', { tool_call: { ...tool, status: 'success', duration_ms: 100 } })
+    await expect(waiting).toBeVisible()
+
+    const next = { ...request, id: 'dd', startedAt: startedAt + sequence + 1 }
+    await emit('inference_activity', { activity: next })
+    await expect(inference).toBeVisible()
+    await expect(waiting).toHaveCount(0)
+    await emit('text_stream', {
+      kind: 'reasoning', generationId: 'handoff-thinking', phase: 'agent', token: 'Checking the result.'
+    })
+    await expect(page.getByRole('button', { name: 'Thinking...', exact: true })).toBeVisible()
+    await expect(inference).toHaveCount(0)
+    await expect(waiting).toHaveCount(0)
+    await emit('tool_call', { tool_call: { ...tool, id: 'followup-tool', status: 'preparing' } })
+    const thought = page.getByRole('region', { name: 'Leon’s thinking', exact: true }).last()
+    await expect(thought.getByRole('button', { name: 'Thought', exact: true })).toBeVisible()
+    await expect(thought).not.toContainText('Thought for 0')
+    await emit('inference_activity', { activity: { ...next, outcome: 'completed', durationMs: 618 } })
+    await expect(thought.getByRole('button', { name: 'Thought for 618ms', exact: true })).toBeVisible()
+    await emit('tool_call', { tool_call: { ...tool, id: 'followup-tool', status: 'success', duration_ms: 100 } })
+    await expect(waiting).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Thinking...', exact: true })).toHaveCount(0)
+
+    const review = { ...request, id: 'ddd', goal: TurnPhase.Review, startedAt: startedAt + sequence + 1 }
+    await emit('inference_activity', { activity: review })
+    await expect(inference.locator('.process-group-title')).toHaveText('Reviewing...')
+    await expect(waiting).toHaveCount(0)
+    await emit('inference_activity', { activity: { ...review, outcome: 'completed', durationMs: 100 } })
+    await expect(waiting).toBeVisible()
+    await emit('final_answer', { content: 'The result is ready.' })
+    await expect(waiting).toHaveCount(0)
+    await expect(inference).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()).toBeVisible()
   })
 
   test(`keeps character reveals alive across real SSE chunks and completion (${reducedMotion})`, async ({ page, ui }) => {
@@ -190,6 +317,103 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.reload()
     await expect(answer).toContainText(finalText.trim())
     await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
+  })
+}
+
+for (const recordedTimestamps of [true, false]) {
+  test(`preserves tool and thinking chronology while streaming and after reload (recorded timestamps: ${recordedTimestamps})`, async ({ page, ui }) => {
+    await page.goto(SESSION_URL)
+    const createdAt = Date.now()
+    const responseId = 'ordered-response'
+    const owner = {
+      who: 'owner' as const, messageId: 'ordered-owner', message: 'Search and read two pages.',
+      sentAt: createdAt, isAddedToHistory: true
+    }
+    const tools = [
+      { id: 'search', name: 'search_web.hosted.searchWeb', toolCallTitle: 'Search the web',
+        preparationStartedAt: createdAt + 100, startedAt: createdAt + 200 },
+      { id: 'fetch-first', name: 'search_web.crawlberg.fetchUrl', toolCallTitle: 'Read first page',
+        preparationStartedAt: createdAt + 400, startedAt: createdAt + 600 },
+      { id: 'fetch-second', name: 'search_web.crawlberg.fetchUrl', toolCallTitle: 'Read second page',
+        preparationStartedAt: createdAt + 500, startedAt: createdAt + 1_000 }
+    ]
+    const reasoning = {
+      id: 'between-tools', phase: 'agent', startedAt: createdAt + 300,
+      text: 'I will read these two sources.'
+    }
+    let sequence = 0
+    const emit = (type: string, data: Record<string, unknown>, offset: number): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: owner.messageId, response_id: responseId, created_at: createdAt + offset
+    }])
+    const emitTool = (index: number, status: string, offset: number): Promise<void> => {
+      const tool = tools[index]!
+
+      return emit('tool_call', { tool_call: {
+        id: tool.id, name: tool.name, tool_call_title: tool.toolCallTitle, status,
+        ...(recordedTimestamps && status !== 'success' ? {
+          preparation_started_at: tool.preparationStartedAt,
+          ...(status === 'running' ? { started_at: tool.startedAt } : {})
+        } : {}),
+        ...(status === 'success' ? { duration_ms: 50 } : {})
+      } }, offset)
+    }
+    const assertOrder = async (container: Locator): Promise<void> => {
+      const rows = container.locator(':scope > .leon-message-execution, :scope > .thinking-message')
+      await expect(rows).toHaveCount(3)
+      expect(await rows.evaluateAll((elements) => elements.map((element) =>
+        element.classList.contains('thinking-message') ? 'thinking' : 'tools'
+      ))).toEqual(['tools', 'thinking', 'tools'])
+    }
+
+    await emit('owner_message', { message: owner }, 0)
+    await emit('turn_status', { status: 'accepted' }, 1)
+    await emitTool(0, 'preparing', 100)
+    await emitTool(0, 'running', 200)
+    await emitTool(0, 'success', 250)
+    await emit('text_stream', {
+      kind: 'reasoning', generationId: reasoning.id, phase: reasoning.phase, token: reasoning.text
+    }, 300)
+    const message = page.locator('.leon-message').last()
+    await expect(message.getByRole('region', { name: 'Leon’s thinking', exact: true })).toBeVisible()
+    // Output or completion updates cannot move an earlier tool past thinking.
+    await emitTool(0, 'success', 350)
+    await emitTool(1, 'preparing', 400)
+    await emitTool(2, 'preparing', 500)
+    await assertOrder(message)
+    const groups = message.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+    await expect(groups).toHaveCount(2)
+    await expect(groups.nth(1).getByRole('button', { name: 'Preparing tool calls...', exact: true })).toBeVisible()
+    await emitTool(1, 'running', 600)
+    await emitTool(2, 'running', 1_000)
+    await assertOrder(message)
+    await expect(groups.nth(1).locator('.tool-call')).toHaveCount(2)
+    await expect(groups.nth(1).getByText('Read first page', { exact: true })).toBeVisible()
+    await expect(groups.nth(1).getByText('Read second page', { exact: true })).toBeVisible()
+    await emitTool(1, 'success', 1_100)
+    await emitTool(2, 'success', 1_200)
+    await assertOrder(message)
+    await expect(groups.nth(0).getByRole('button', { name: 'Used 1 tool for 50ms', exact: true })).toBeVisible()
+    await expect(groups.nth(1).getByRole('button', { name: 'Used 2 tools for 100ms', exact: true })).toBeVisible()
+
+    const saved: ConversationRecord = {
+      who: 'leon', messageId: responseId, message: 'Both pages are checked.',
+      sentAt: createdAt + 2_000, isAddedToHistory: true,
+      agentResponseTrace: {
+        id: responseId, planSteps: [], reasoning: [reasoning],
+        toolCalls: tools.map((tool) => ({ ...tool, status: 'success', durationMs: 50 })),
+        metrics: { durationMs: 2_000 }
+      }
+    }
+    ui.history.get(SESSION_ID)!.push(owner, saved)
+    await emit('final_answer', { content: saved.message, response_trace: saved.agentResponseTrace }, 2_000)
+    const work = message.getByRole('region', { name: 'Leon’s completed work', exact: true })
+    await work.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+    await assertOrder(work.locator('.leon-message-activities').first())
+    await emit('session_changed', { is_running: false }, 2_001)
+    await page.reload()
+    await work.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+    await assertOrder(work.locator('.leon-message-activities').first())
   })
 }
 

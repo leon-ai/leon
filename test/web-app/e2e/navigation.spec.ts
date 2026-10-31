@@ -415,6 +415,9 @@ test('preserves sub-second tool totals in milliseconds after reloading', async (
   await page.reload()
   await work.getByRole('button', { name: 'Worked for 400ms', exact: true }).click()
   await expect(work.getByRole('button', { name: 'Used 2 tools for 210ms', exact: true })).toBeVisible()
+  await work.getByRole('button', { name: 'Used 2 tools for 210ms', exact: true }).click()
+  await expect(work.locator('.tool-call-title')).toHaveText(['Run', 'Run'])
+  await expect(work.getByText('test.lookup.run', { exact: true })).toHaveCount(0)
 })
 
 for (const completeTiming of [true, false]) {
@@ -493,6 +496,7 @@ test('omits absent or unmeasured phases instead of estimating their duration', a
   }
   await page.goto(SESSION_URL)
   await page.getByRole('button', { name: 'Worked for 4s', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Thought', exact: true })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Leon’s review' })).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Leon’s answer generation' })).toHaveCount(0)
 })
@@ -538,12 +542,12 @@ for (const retryCount of [0, 1, 4]) {
       await expect(retries).toHaveCount(0)
     } else {
       const label = `Retried ${retryCount} ${retryCount === 1 ? 'time' : 'times'}`
-      await expect(retries).toHaveText(label)
+      await expect(retries.locator('.process-group-title')).toHaveText(label)
       await expect(retries.locator('.ri-refresh-line')).toHaveCount(1)
       await expect(retries.getByRole('button')).toHaveCount(0)
       await page.reload()
       await work.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
-      await expect(retries).toHaveText(label)
+      await expect(retries.locator('.process-group-title')).toHaveText(label)
     }
   })
 }
@@ -571,7 +575,7 @@ test('shows retries from the final live trace without refreshing history', async
   })
   await page.goto(SESSION_URL)
   await page.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
-  await expect(page.getByRole('region', { name: 'Leon’s retries' })).toHaveText('Retried 2 times')
+  await expect(page.getByRole('region', { name: 'Leon’s retries' }).locator('.process-group-title')).toHaveText('Retried 2 times')
   await expect(page.getByRole('region', { name: 'Leon’s other processing' })).toHaveText('Other processing for 3s')
   expect(ui.completedRequests.filter((url) => url.pathname.endsWith(SESSION_ID))).toHaveLength(1)
 })
