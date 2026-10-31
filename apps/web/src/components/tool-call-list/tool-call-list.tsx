@@ -16,7 +16,7 @@ export function ToolCallList({
   toolCalls
 }: ToolCallListProps) {
   return (
-    <div className={clsx('tool-call-list', {
+    <div className={clsx('tool-call-list activity-timeline', {
       'tool-call-list-nested': nested
     })}>
       {toolCalls.filter(isToolCallVisible).map((toolCall) => (

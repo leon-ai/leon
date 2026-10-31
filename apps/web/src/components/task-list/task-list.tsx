@@ -11,7 +11,7 @@ interface TaskListProps {
 
 export function TaskList({ steps, renderActivity }: TaskListProps) {
   return (
-    <ol className="task-list" aria-label="Execution plan">
+    <ol className="task-list activity-timeline" aria-label="Execution plan">
       {steps.map((step, index) => (
         <TaskListItem key={`${step.id}:${index}`} step={step} renderActivity={renderActivity} />
       ))}

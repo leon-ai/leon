@@ -564,6 +564,13 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await tool.focus()
     await expect(tooltip).toHaveCount(0)
     const thought = work.getByRole('region', { name: 'Leon’s thinking', exact: true })
+    await thought.getByRole('button').click()
+    await expect(thought.locator('.thinking-message-details')).toBeVisible()
+    expect(await thought.evaluate((element) => {
+      const details = element.querySelector('.thinking-message-details')!.getBoundingClientRect()
+      const label = element.querySelector('.process-group-title')!.getBoundingClientRect()
+      return Math.abs(details.left - label.left)
+    })).toBeLessThanOrEqual(1)
     await thought.hover()
     await thought.locator('.activity-timestamp time').hover()
     await expect(tooltip).toContainText('2026-10-30 14:32:15')

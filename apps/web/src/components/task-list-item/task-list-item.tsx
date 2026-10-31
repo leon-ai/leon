@@ -66,7 +66,9 @@ export function TaskListItem({ step, renderActivity }: TaskListItemProps) {
         {hasToolCalls ? (
           <button
             type="button"
-            className="task-list-item-trigger"
+            className={clsx('task-list-item-trigger', {
+              'task-list-item-direct-tools': !(step.activities && renderActivity)
+            })}
             aria-controls={toolCallsId}
             aria-expanded={isExpanded}
             onClick={() => setIsExpanded((isOpen) => !isOpen)}
@@ -83,7 +85,7 @@ export function TaskListItem({ step, renderActivity }: TaskListItemProps) {
             isOpen={isExpanded}
           >
             {step.activities && renderActivity ? (
-              <div className="leon-message-activities">
+              <div className="leon-message-activities activity-timeline">
                 {step.activities.map(renderActivity)}
               </div>
             ) : <ToolCallList toolCalls={step.toolCalls} nested />}

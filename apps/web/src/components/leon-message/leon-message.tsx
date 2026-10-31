@@ -69,6 +69,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           active={planIsActive}
           activeLabel="Executing plan..."
           ariaLabel="Leon’s execution plan"
+          className="activity-timeline-parent"
           completedLabel={(activity.complete ?? activity.steps.every((step) => step.status === 'completed'))
             ? `Completed plan${planDuration ? ` for ${planDuration}` : ''}` : 'Execution plan'}
           indicator={<i className="ri-map-2-line" aria-hidden="true" />}
@@ -98,6 +99,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
         animateWhileActive={!hasVisibleToolCalls}
         activeLabel={toolsAreRunning ? 'Using tools...' : 'Preparing tool calls...'}
         ariaLabel="Leon’s tool usage"
+        className="activity-timeline-parent"
         completedLabel={`Used ${toolCount} ${
           toolCount === 1 ? 'tool' : 'tools'
         }${duration ? ` for ${duration}` : ''}`}
@@ -158,11 +160,12 @@ function renderActivity(activity: LeonFeedActivity) {
         active={false}
         activeLabel="Processing..."
         ariaLabel="Leon’s processing"
+        className="activity-timeline-parent"
         completedLabel={`Processed for ${formatToolDuration(activity.durationMs, DurationFormat.Compact)}`}
         indicator={<i className="ri-cpu-line" aria-hidden="true" />}
       >
         {activity.requests?.length ? (
-          <div className="leon-message-activities">
+          <div className="leon-message-activities activity-timeline">
             {activity.requests.map((request) => (
               <ProcessGroup
                 key={request.id}

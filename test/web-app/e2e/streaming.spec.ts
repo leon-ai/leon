@@ -50,7 +50,154 @@ test('replaces send with a danger stop action without submitting or losing the d
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
-  test(`binds activity to its starting step and appends plan continuations around unrelated progress (${reducedMotion})`, async ({ page, ui }) => {
+  test(`connects groups within their scope and stops child links at the last tool (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    const startedAt = Date.now() - 4_000
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    const first = { id: 'first', label: 'Gather the sources', status: 'completed' as const }
+    const second = { id: 'second', label: 'Check the sources', status: 'completed' as const }
+    answer.sentAt = startedAt + 4_000
+    answer.agentResponseTrace = {
+      id: answer.messageId, metrics: { durationMs: 4_000 },
+      planSteps: [first, second],
+      planTransitions: [{ ...first, status: 'in_progress', changedAt: startedAt },
+        { ...first, changedAt: startedAt + 1_000 },
+        { ...second, status: 'in_progress', changedAt: startedAt + 1_100 },
+        { ...second, changedAt: startedAt + 3_000 }],
+      toolCalls: [{ id: 'first-source', name: 'test.lookup.run', toolCallTitle: 'Read first source',
+        status: 'success', startedAt: startedAt + 100, durationMs: 100, planStepId: first.id,
+        input: { source: 'first' }, output: { sources: Array.from({ length: 40 }, (_, index) => `Source ${index}`) } },
+      { id: 'second-source', name: 'test.lookup.run', toolCallTitle: 'Read second source',
+        status: 'success', startedAt: startedAt + 300, durationMs: 100, planStepId: first.id }],
+      reasoning: [{ id: 'compare-sources', text: 'Compare source details.\nKeep the conclusion grounded.',
+        phase: 'agent', startedAt: startedAt + 600, planStepId: first.id }]
+    }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 4s', exact: true }).click()
+    const plan = page.getByRole('region', { name: 'Leon’s execution plan', exact: true })
+    await plan.getByRole('button', { name: 'Completed plan for 3s', exact: true }).click()
+    await expect(plan.locator('.task-list-item')).toHaveCount(2)
+    await plan.getByRole('button', { name: first.label, exact: true }).click()
+    await plan.getByRole('button', { name: 'Used 2 tools for 200ms', exact: true }).click()
+    const thought = plan.getByRole('region', { name: 'Leon’s thinking', exact: true })
+    await thought.getByRole('button').click()
+    const tool = plan.locator('.tool-call').first()
+    const initialTop = await tool.evaluate((element) => getComputedStyle(element, '::after').top)
+    await tool.getByRole('button', { name: 'Read first source' }).click()
+    await expect(tool.locator('.json-view')).toHaveCount(2)
+    await expect.poll(() => tool.locator('.tool-call-details').evaluate((element) =>
+      element.getBoundingClientRect().height
+    )).toBeGreaterThan(200)
+    await plan.evaluate(async (element) => {
+      await Promise.allSettled(element.getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished))
+    })
+    const geometry = await plan.evaluate((element) => {
+      const tools = element.querySelectorAll('.tool-call')
+      const firstTool = tools[0]!
+      const line = getComputedStyle(firstTool, '::after')
+      const row = firstTool.getBoundingClientRect()
+      const firstIcon = firstTool.querySelector('.tool-call-tool-icon')!.getBoundingClientRect()
+      const nextIcon = tools[1]!.querySelector('.tool-call-tool-icon')!.getBoundingClientRect()
+      const group = firstTool.closest('.leon-message-execution')!
+      const groupBounds = group.getBoundingClientRect()
+      const continuation = getComputedStyle(group, '::after')
+      const nextActivity = group.nextElementSibling!.querySelector('.process-group-indicator')!.getBoundingClientRect()
+      const step = element.querySelector('.task-list-item')!
+      const stepBounds = step.getBoundingClientRect()
+      const stepLink = getComputedStyle(step, '::after')
+      const nextStep = step.nextElementSibling!.querySelector('.task-list-item-marker')!.getBoundingClientRect()
+      return { top: line.top, width: line.width,
+        startGap: row.top + Number.parseFloat(line.top) - firstIcon.bottom,
+        endGap: nextIcon.top - (row.bottom - Number.parseFloat(line.bottom)),
+        length: row.height - Number.parseFloat(line.top) - Number.parseFloat(line.bottom),
+        entries: [
+          [element.querySelector(':scope > .process-group-heading')!,
+            element.querySelector(':scope > .process-group-heading .process-group-indicator')!,
+            element.querySelector('.task-list-item-marker')!],
+          [element.querySelector('.task-list-item-trigger')!,
+            element.querySelector('.task-list-item-marker')!,
+            element.querySelector('.task-list-item-tool-calls .process-group-indicator')!],
+          [firstTool.closest('.process-group')!.querySelector('.process-group-heading')!,
+            firstTool.closest('.process-group')!.querySelector('.process-group-indicator')!,
+            firstTool.querySelector('.tool-call-tool-icon')!]
+        ].map(([heading, marker, child]) => {
+          const link = getComputedStyle(heading!, '::before')
+          const bounds = heading!.getBoundingClientRect()
+          const parent = marker!.getBoundingClientRect()
+          const firstChild = child!.getBoundingClientRect()
+          return { content: link.content,
+            startGap: bounds.top + Number.parseFloat(link.top) - parent.bottom,
+            endGap: firstChild.top - (bounds.top + Number.parseFloat(link.top) + Number.parseFloat(link.height)) }
+        }),
+        continuation: { content: continuation.content,
+          boundaryGap: Number.parseFloat(continuation.top) - groupBounds.height,
+          endGap: nextActivity.top - (groupBounds.bottom - Number.parseFloat(continuation.bottom)) },
+        steps: Array.from(element.querySelectorAll('.task-list-item'))
+          .map((step) => getComputedStyle(step, '::after').content),
+        stepContinuation: {
+          boundaryGap: Number.parseFloat(stepLink.top) - stepBounds.height,
+          endGap: nextStep.top - (stepBounds.bottom - Number.parseFloat(stepLink.bottom))
+        },
+        last: getComputedStyle(tools[1]!, '::after').content }
+    })
+    expect(geometry.top).toBe(initialTop)
+    expect(geometry.width).toBe('1px')
+    expect(geometry.startGap).toBeCloseTo(4, 0)
+    expect(geometry.endGap).toBeCloseTo(4, 0)
+    expect(geometry.length).toBeGreaterThan(220)
+    for (const entry of geometry.entries) {
+      expect(entry.content).toBe('""')
+      expect(entry.startGap).toBeCloseTo(4, 0)
+      expect(entry.endGap).toBeCloseTo(4, 0)
+    }
+    expect(geometry.continuation.content).toBe('""')
+    expect(geometry.continuation.boundaryGap).toBeCloseTo(4, 0)
+    expect(geometry.continuation.endGap).toBeCloseTo(4, 0)
+    expect(geometry.steps).toEqual(['""', 'none'])
+    expect(geometry.stepContinuation.boundaryGap).toBeCloseTo(4, 0)
+    expect(geometry.stepContinuation.endGap).toBeCloseTo(4, 0)
+    expect(geometry.last).toBe('none')
+    const path = testInfo.outputPath('expanded-tool-connector.png')
+    await page.screenshot({ path })
+    await testInfo.attach('expanded-tool-connector', { path, contentType: 'image/png' })
+    await plan.getByRole('button', { name: 'Used 2 tools for 200ms', exact: true }).click()
+    await expect(plan.locator('.tool-call')).toHaveCount(0)
+    const collapsed = await plan.getByRole('region', { name: 'Leon’s tool usage', exact: true }).evaluate((element) => {
+      const header = element.querySelector('.process-group-heading')!
+      const group = element.parentElement!
+      const line = getComputedStyle(group, '::after')
+      const icon = element.querySelector('.process-group-indicator')!.getBoundingClientRect()
+      return { entry: getComputedStyle(header, '::before').content, continuation: line.content,
+        startGap: group.getBoundingClientRect().top + Number.parseFloat(line.top) - icon.bottom }
+    })
+    expect(collapsed.entry).toBe('none')
+    expect(collapsed.continuation).toBe('""')
+    expect(collapsed.startGap).toBeCloseTo(4, 0)
+    await plan.getByRole('button', { name: first.label, exact: true }).click()
+    await expect(thought).toHaveCount(0)
+    // Nested content can unmount before the enclosing row finishes shrinking.
+    await expect.poll(() => plan.locator('.task-list-item').first().evaluate((element) =>
+      element.getBoundingClientRect().height - element.querySelector('.task-list-item-trigger')!.getBoundingClientRect().height
+    )).toBeLessThanOrEqual(1)
+    const collapsedStep = await plan.locator('.task-list-item').first().evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      const line = getComputedStyle(element, '::after')
+      const marker = element.querySelector('.task-list-item-marker')!.getBoundingClientRect()
+      const next = element.nextElementSibling!.querySelector('.task-list-item-marker')!.getBoundingClientRect()
+      return { content: line.content,
+        startGap: bounds.top + Number.parseFloat(line.top) - marker.bottom,
+        endGap: next.top - (bounds.bottom - Number.parseFloat(line.bottom)),
+        last: getComputedStyle(element.nextElementSibling!, '::after').content }
+    })
+    expect(collapsedStep.content).toBe('""')
+    expect(collapsedStep.startGap).toBeCloseTo(4, 0)
+    expect(collapsedStep.endGap).toBeCloseTo(4, 0)
+    expect(collapsedStep.last).toBe('none')
+  })
+
+  test(`binds activity to its starting step and appends plan continuations around unrelated progress (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     const startedAt = Date.now()
@@ -85,6 +232,50 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await emit('inference_activity', { activity: { ...request, outcome: 'completed', durationMs: 50 } }, 70)
     await expect(plans.first().getByRole('region', { name: 'Leon’s thinking', exact: true })).toBeVisible()
     await expect(plans.first().getByRole('region', { name: 'Leon’s inference', exact: true })).toContainText('Prepared tool calls in 50ms')
+    await page.locator('.leon-message').last().evaluate(async (element) => {
+      await Promise.allSettled(element.getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished))
+    })
+    const geometry = await plans.first().evaluate((element) => {
+      const icons = Array.from(element.querySelectorAll('.process-group-indicator, .task-list-item-marker, .tool-call-tool-icon'))
+      const columns = icons.map((icon) => icon.getBoundingClientRect().left)
+      const incoming = Array.from(element.querySelectorAll('.activity-timeline-parent > .process-group-heading:has(> [aria-expanded="true"]), .task-list-item-trigger[aria-expanded="true"]'))
+        .map((heading) => getComputedStyle(heading, '::before').content)
+      const stepLines = Array.from(element.querySelectorAll('.task-list-item'))
+        .map((step) => getComputedStyle(step, '::after').content)
+      const marker = element.querySelector('.task-list-item-in_progress .task-list-item-marker')!
+      const dot = getComputedStyle(marker, '::before')
+      return { spread: Math.max(...columns) - Math.min(...columns),
+        incoming, stepLines, dot: { color: dot.backgroundColor, accent: getComputedStyle(marker).color,
+          width: dot.width, animation: dot.animationName, duration: dot.animationDuration } }
+    })
+    expect(geometry.spread).toBeLessThanOrEqual(1)
+    expect(geometry.incoming).toHaveLength(3)
+    expect(geometry.incoming.every((content) => content === '""')).toBe(true)
+    expect(geometry.stepLines.every((content) => content === 'none')).toBe(true)
+    expect(geometry.dot.width).toBe('6px')
+    expect(geometry.dot.color).toBe(geometry.dot.accent)
+    expect(geometry.dot.animation).toBe(reducedMotion === 'reduce' ? 'none' : 'task-list-item-dot-pulse')
+    if (reducedMotion === 'no-preference') {
+      expect(geometry.dot.duration).toBe('3s')
+    }
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await page.evaluate(async () => {
+        await Promise.allSettled(document.getAnimations().filter((animation) => animation instanceof CSSTransition)
+          .map((animation) => animation.finished))
+      })
+      const prepared = plans.first().getByRole('region', { name: 'Leon’s inference', exact: true })
+      expect(await prepared.locator('.process-group-title').evaluate((element) =>
+        getComputedStyle(element).color === getComputedStyle(element.closest('.leon-message')!).color
+      )).toBe(false)
+      const screenshotPath = testInfo.outputPath(`running-plan-${theme}.png`)
+      await page.screenshot({ path: screenshotPath })
+      await testInfo.attach(`running-plan-${theme}`, { path: screenshotPath, contentType: 'image/png' })
+    }
     await emit('plan_step', { step: { ...first, status: 'completed' } }, 100)
     await emit('progress_message', { message: { id: 'unrelated', content: 'A separate update.',
       created_at: startedAt + 110, plan_step_id: null } }, 110)
