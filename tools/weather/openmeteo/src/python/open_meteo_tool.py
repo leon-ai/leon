@@ -30,6 +30,7 @@ HOURLY_FORECAST_VARIABLES = [
 DAILY_FORECAST_VARIABLES = [
     "weather_code", "temperature_2m_min", "temperature_2m_max",
     "precipitation_sum", "precipitation_probability_max", "wind_speed_10m_max",
+    "sunrise", "sunset",
 ]
 
 
