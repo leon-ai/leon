@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { expandConversationTimeline } from '../../../app/src/js/conversation-timeline.js'
-import ToolUIHandler from '../../../app/src/js/tool-ui-handler.js'
-import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+import { expandConversationTimeline } from '../../../apps/web-legacy/src/js/conversation-timeline.js'
+import ToolUIHandler from '../../../apps/web-legacy/src/js/tool-ui-handler.js'
+import { formatToolDuration } from '../../../apps/web/src/utils/format-tool-duration.ts'
 
 describe('conversation activity replay', () => {
   it('restores thinking and tools in time order without draft bubbles or duplicate cards', () => {
@@ -58,9 +58,9 @@ describe('conversation activity replay', () => {
   })
 
   it.each([
-    [138, '138 ms'],
-    [0, '0 ms'],
-    [1_400, '1.4 s'],
+    [138, '138ms'],
+    [0, '0ms'],
+    [1_400, '1.4s'],
     [130_000, '2m 10s'],
     [119_999, '2m 0s'],
     [undefined, ''],
@@ -108,7 +108,7 @@ describe('conversation activity replay', () => {
       expect(card.title.textContent).toBe('Look up the requested value')
       expect(card.subtitle.textContent).toBe('Test Toolkit toolkit • Official Lookup • Run')
       expect(card.durationLabel.textContent).toBe(
-        outcome === 'background' ? '1.4 s to return' : '1.4 s'
+        outcome === 'background' ? '1.4s to return' : '1.4s'
       )
     }
   )
@@ -138,7 +138,7 @@ describe('conversation activity replay', () => {
       handler.updateActivityCard(card, { toolPhase: 'input', status: 'running' }, 'run')
       vi.advanceTimersByTime(3_000)
       expect(card.summary.textContent).toBe('Running run...')
-      expect(card.liveProgress.textContent).toBe('Elapsed: 3 s · No new output for 3 s')
+      expect(card.liveProgress.textContent).toBe('Elapsed: 3s · No new output for 3s')
 
       handler.updateActivityCard(card, {
         toolPhase: 'output_delta', outputDelta: 'Python fixture\nDownloading 10%\r'
@@ -150,7 +150,7 @@ describe('conversation activity replay', () => {
         card.outputBody, 'Python fixture\nDownloading 20%'
       )
       vi.advanceTimersByTime(2_000)
-      expect(card.liveProgress.textContent).toBe('Elapsed: 5 s · No new output for 2 s')
+      expect(card.liveProgress.textContent).toBe('Elapsed: 5s · No new output for 2s')
       expect(vi.getTimerCount()).toBe(1)
 
       handler.updateActivityCard(card, {
@@ -161,7 +161,7 @@ describe('conversation activity replay', () => {
         toolPhase: 'output', status: 'success', durationMs: 5_000
       }, 'run')
       expect(card.liveProgress.hidden).toBe(true)
-      expect(card.durationLabel.textContent).toBe('5 s')
+      expect(card.durationLabel.textContent).toBe('5s')
       expect(vi.getTimerCount()).toBe(0)
 
       handler.startLiveProgress(card, {})

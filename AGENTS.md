@@ -5,13 +5,13 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 ## Workflow
 
 - For a new goal, inspect the existing implementation and confirm the plan with the owner before changing code.
-- Use `pnpm`, never npm. Keep changes minimal; reuse existing SDK facilities and `server/src/helpers/` before adding abstractions. Remove superseded logic rather than maintaining parallel implementations.
+- Use `pnpm`, never npm. Keep changes minimal. Before implementing anything, search for existing functions, methods, utilities, types, components and installed facilities, especially `server/src/helpers/` and SDK utilities; inspect their implementations and call sites. Reuse them directly or extend them compatibly instead of duplicating, rewriting or wrapping equivalent behavior. Add new code only for a demonstrated gap, respect runtime boundaries, and remove superseded implementations rather than keeping parallel paths.
 - Keep registry dependencies at least 36 hours old through root pnpm/uv policy, including standalone installs. Exceptions require explicit owner approval, exact version pins and package-scoped overrides; never disable the global cooldown.
 - Preserve unrelated working-tree changes and profile isolation. Use existing profile/path/runtime utilities instead of hardcoded owner paths, runtime versions, or global mutable owner state.
 - Run `pnpm lint`, fix warnings/errors, and run checks relevant to the change.
 - Test current behavior with minimal coverage; extend existing suites. Trivial changes need no new tests.
 - Do not create test files or add test cases for SDKs, tools or skills unless the owner explicitly requests them, regardless of where the tests would live. Run existing affected tests and adjust them for compatibility when necessary.
-- Review only affected tests. Retain unique runtime contracts regardless of bug-fix origin; remove obsolete or duplicate reproductions.
+- Review affected tests as part of each change and remove obsolete, redundant or superseded tests and fixtures. Do not retain tests merely because they were added previously; preserve every distinct, still-relevant behavioral contract regardless of bug-fix origin. Do not expand cleanup into unrelated suites.
 - Use `pnpm test:unit` for fast feedback and `pnpm test:integration` for real worker, download, capture, and rendering changes; `pnpm test` includes both.
 - When introducing a new Core concept or mechanism, add a real scenario test in `test/agent/scenarios/<concept>.scenario.ts`, named for the mechanism and asserting its observable behavior with isolated fixtures. Keep these separate from the provider matrix. For SDKs, tools and skills, obtain the explicit test authorization required above.
 - Run all real scenarios with `pnpm test:agent:scenario`, one with `pnpm test:agent:scenario -- <concept>`, or list them with `--list`. They use the latest-used profile’s active model; `LEON_PROFILE` selects a specific profile.
@@ -70,7 +70,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Avoid hardcoded behavioral keywords, regex rules, paths, and configuration when existing schemas/settings/utilities provide them.
 - Put file-local constants near the top; shared server constants belong in `server/src/constants.ts`. Use numeric separators (`3_600`) and enums for meaningful states.
 - Comment non-trivial decisions and edge cases, not obvious assignments. Use `//` for JS/TS implementation comments, including multiline implementation comments; preserve existing double-slash comments. Use multiline JSDoc for exported APIs and reusable helpers, never single-line `/** ... */`. Use Python comments/docstrings where appropriate.
-- Web-app-specific conventions live in [web-app/AGENTS.md](web-app/AGENTS.md).
+- Web-app-specific conventions live in [apps/web/AGENTS.md](apps/web/AGENTS.md).
 
 JSDoc format:
 

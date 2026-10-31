@@ -7,6 +7,7 @@ import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { ToolExecutionOrigin } from '@/types'
+import dayjs from 'dayjs'
 
 export const AMBIENT_WEATHER_REFRESH_INTERVAL_MS = 60 * 60 * 1_000
 
@@ -18,6 +19,8 @@ const AFTERNOON_START_HOUR = 14
 const SUNSET_START_HOUR = 17
 const BLUE_HOUR_START_HOUR = 19
 const NIGHT_START_HOUR = 20
+const SOLAR_TRANSITION_WINDOW_MS = 30 * 60 * 1_000
+const SOLAR_DATE_FORMAT = 'YYYY-MM-DD'
 
 export enum AmbientSeason {
   Spring = 'spring',
@@ -91,6 +94,14 @@ export interface AmbientWeatherSnapshot {
   observationTime: string
   temperatureC: number
   weatherCode: number
+  solar?: AmbientSolarTimes | null
+}
+
+export interface AmbientSolarTimes {
+  date: string
+  timeZone: string
+  sunrise: number
+  sunset: number
 }
 
 export interface AmbientConditionsSnapshot {
@@ -109,6 +120,12 @@ interface WeatherToolResult {
   success?: boolean
   data?: {
     location?: string
+    timezone?: string
+    daily?: {
+      time?: string[]
+      sunrise?: (string | null)[]
+      sunset?: (string | null)[]
+    }
     current?: {
       description?: string
       feelsLikeC?: string
@@ -153,12 +170,12 @@ export default class AmbientConditionsManager {
   public async getSnapshot(date = new Date()): Promise<AmbientConditionsSnapshot> {
     await this.refreshWeatherIfNeeded()
 
-    const timeZone = DateHelper.getTimeZone()
+    const timeZone = this.weather?.solar?.timeZone ?? DateHelper.getTimeZone()
     const localDateParts = this.getLocalDateParts(date, timeZone)
 
     return {
       season: this.getSeason(localDateParts.month),
-      solarPhase: this.getSolarPhase(localDateParts.hour),
+      solarPhase: this.getSolarPhase(date, localDateParts.hour),
       timeZone,
       weather: this.weather
     }
@@ -206,7 +223,10 @@ export default class AmbientConditionsManager {
 
     const now = Date.now()
     const isWeatherFresh = this.weather !== null &&
-      now - this.weather.fetchedAt < AMBIENT_WEATHER_REFRESH_INTERVAL_MS
+      this.weather.solar !== undefined &&
+      now - this.weather.fetchedAt < AMBIENT_WEATHER_REFRESH_INTERVAL_MS &&
+      (!this.weather.solar || this.weather.solar.date ===
+        dayjs(now).tz(this.weather.solar.timeZone).format(SOLAR_DATE_FORMAT))
     const shouldWaitBeforeRetry = this.lastWeatherAttemptAt !== null &&
       now - this.lastWeatherAttemptAt < AMBIENT_WEATHER_RETRY_INTERVAL_MS
 
@@ -306,7 +326,34 @@ export default class AmbientConditionsManager {
       location: toolResult.data?.location || locationQuery,
       observationTime,
       temperatureC,
-      weatherCode
+      weatherCode,
+      // Cache unavailable solar data too, so ordinary weather freshness still applies.
+      solar: this.parseSolarTimes(toolResult.data) ?? null
+    }
+  }
+
+  private parseSolarTimes(data: WeatherToolResult['data']): AmbientSolarTimes | undefined {
+    const date = data?.daily?.time?.[0]
+    const sunrise = data?.daily?.sunrise?.[0]
+    const sunset = data?.daily?.sunset?.[0]
+    const timeZone = data?.timezone
+    if (!date || !sunrise || !sunset || !timeZone) {
+      return undefined
+    }
+
+    try {
+      // Forecast timestamps are local to the weather location, not the server.
+      const rise = dayjs.tz(sunrise, timeZone)
+      const set = dayjs.tz(sunset, timeZone)
+      if (!rise.isValid() || !set.isValid() || set.valueOf() <= rise.valueOf() ||
+        rise.format(SOLAR_DATE_FORMAT) !== date || set.format(SOLAR_DATE_FORMAT) !== date) {
+        return undefined
+      }
+
+      return { date, timeZone, sunrise: rise.valueOf(), sunset: set.valueOf() }
+    } catch {
+      // Missing/polar-day data or invalid zones must not discard usable weather.
+      return undefined
     }
   }
 
@@ -345,7 +392,39 @@ export default class AmbientConditionsManager {
     return AmbientSeason.Winter
   }
 
-  private getSolarPhase(hour: number): AmbientSolarPhase {
+  private getSolarPhase(date: Date, hour: number): AmbientSolarPhase {
+    const solar = this.weather?.solar
+    if (solar && dayjs(date).tz(solar.timeZone).format(SOLAR_DATE_FORMAT) === solar.date) {
+      const now = date.getTime()
+      const daylight = solar.sunset - solar.sunrise
+      const transition = Math.min(SOLAR_TRANSITION_WINDOW_MS, daylight / 6)
+      const noon = (solar.sunrise + solar.sunset) / 2
+
+      // Artistic dawn/dusk windows follow real solar events; daylight phases
+      // scale with day length rather than assuming fixed local clock hours.
+      if (now < solar.sunrise - transition || now >= solar.sunset + transition * 3) {
+        return AmbientSolarPhase.Night
+      }
+      if (now < solar.sunrise + transition) {
+        return AmbientSolarPhase.Sunrise
+      }
+      if (now < noon - daylight / 12) {
+        return AmbientSolarPhase.Morning
+      }
+      if (now < noon + daylight / 12) {
+        return AmbientSolarPhase.Noon
+      }
+      if (now < solar.sunset - transition) {
+        return AmbientSolarPhase.Afternoon
+      }
+      if (now < solar.sunset + transition) {
+        return AmbientSolarPhase.Sunset
+      }
+
+      return AmbientSolarPhase.BlueHour
+    }
+
+    // Keep a stable clock-based scene when today's solar times are unavailable.
     if (hour >= NIGHT_START_HOUR || hour < SUNRISE_START_HOUR) {
       return AmbientSolarPhase.Night
     }

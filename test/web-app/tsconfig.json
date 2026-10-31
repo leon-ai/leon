@@ -1,0 +1,8 @@
+{
+  "extends": "../../apps/web/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["./results", "./report", "../../node_modules"]
+}

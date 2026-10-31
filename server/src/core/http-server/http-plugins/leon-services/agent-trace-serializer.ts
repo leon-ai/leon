@@ -10,6 +10,7 @@ export function serializeAgentTrace(
   includeDeveloperProvenance: boolean
 ): HTTPPluginAgentTrace {
   return {
+    ...(trace.timings ? { timings: trace.timings.map((timing) => ({ ...timing })) } : {}),
     ...(trace.inferences
       ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
       : {}),
@@ -81,6 +82,7 @@ export function deserializeAgentTrace(
   trace: HTTPPluginAgentTrace
 ): AgentResponseTrace {
   return {
+    ...(trace.timings ? { timings: trace.timings.map((timing) => ({ ...timing })) } : {}),
     ...(trace.inferences
       ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
       : {}),

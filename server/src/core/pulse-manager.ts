@@ -13,6 +13,7 @@ import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
 import { InferencePurpose } from '@/core/llm-manager/types'
 import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
+import { runOutsideTurnTiming } from '@/core/llm-manager/turn-timing'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { DateHelper } from '@/helpers/date-helper'
@@ -348,7 +349,7 @@ export default class PulseManager {
     this.isTickPending = true
     this.queue = this.queue
       .then(async () => {
-        await this.tickInternal(reason)
+        await runOutsideTurnTiming(() => this.tickInternal(reason))
       })
       .catch((error: unknown) => {
         LogHelper.title('Pulse Manager')

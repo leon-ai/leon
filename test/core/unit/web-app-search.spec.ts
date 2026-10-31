@@ -4,7 +4,7 @@ import {
   createSearchIndex,
   getSearchSegments,
   searchIndex
-} from '../../../web-app/src/utils/search.ts'
+} from '../../../apps/web/src/utils/search.ts'
 
 const MODEL_CHOICES = [
   { name: 'GPT-6.1 Sol', id: 'gpt-6.1-sol', provider: 'OpenAI' },

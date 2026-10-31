@@ -319,20 +319,22 @@ async function main(): Promise<void> {
   const providerArg = process.argv[2] as AgentProvider | undefined
   const scenarioArg = process.argv[3]
   let realScenario: RealAgentScenario | null = null
+  let realScenarioPath: string | undefined
   if (process.argv.includes('--real-scenario')) {
     const directory = fileURLToPath(new URL('../scenarios/', import.meta.url))
     const filename = `${scenarioArg}.scenario.ts`
     if (!(await fs.readdir(directory)).includes(filename)) {
       throw new Error('Select a named real scenario.')
     }
-    realScenario = (await import(pathToFileURL(path.join(directory, filename)).href)).default as RealAgentScenario
+    realScenarioPath = pathToFileURL(path.join(directory, filename)).href
   }
-  const scenario = realScenario
+  const isRealScenario = realScenarioPath !== undefined
+  const scenario = isRealScenario
     ? { id: scenarioArg as string, buildInput: (): string => '' }
     : getProviderScenario(scenarioArg)
   const resultScenarioId = (scenarioArg || 'direct_answer') as ProviderScenarioId
 
-  if (!providerArg || (!realScenario && !(providerArg in PROVIDER_REQUIRED_ENV)) || !scenario) {
+  if (!providerArg || (!isRealScenario && !(providerArg in PROVIDER_REQUIRED_ENV)) || !scenario) {
     printResult({
       provider: (providerArg || 'openai') as AgentProvider,
       scenarioId: resultScenarioId,
@@ -346,7 +348,7 @@ async function main(): Promise<void> {
   const providerConfig = PROVIDER_MATRIX.find(
     (item) => item.provider === provider
   )
-  const llmTarget = realScenario
+  const llmTarget = isRealScenario
     ? process.env['LEON_AGENT_SCENARIO_TARGET'] || ''
     : providerConfig?.llmTarget || provider
   if (!llmTarget) {
@@ -355,7 +357,7 @@ async function main(): Promise<void> {
   const requiredEnv = PROVIDER_REQUIRED_ENV[provider]
   const testRunId = `${provider}-${scenario.id}-${process.pid}-${Date.now()}`
   const testProfileName = `${TEST_PROFILE_PREFIX}-${testRunId}`
-  const testHomePath = (realScenario && process.env['LEON_AGENT_SCENARIO_HOME']) || path.join(
+  const testHomePath = (isRealScenario && process.env['LEON_AGENT_SCENARIO_HOME']) || path.join(
     os.tmpdir(),
     `${TEST_HOME_PREFIX}-${testRunId}`
   )
@@ -369,7 +371,7 @@ async function main(): Promise<void> {
     testProfileName
   )
   const testConfigPath = path.join(testProfilePath, 'config.yml')
-  if (!realScenario && !process.env[requiredEnv]) {
+  if (!isRealScenario && !process.env[requiredEnv]) {
     printResult({
       provider,
       scenarioId: scenario.id,
@@ -389,9 +391,15 @@ async function main(): Promise<void> {
     String(process.env[SOURCE_CONFIG_PATH_ENV] || '').trim(),
     testConfigPath,
     llmTarget,
-    realScenario ? null : providerConfig?.reasoning || null,
-    Boolean(realScenario)
+    isRealScenario ? null : providerConfig?.reasoning || null,
+    isRealScenario
   )
+
+  // Scenario imports may resolve environment-derived Core paths. Load them only
+  // after the disposable profile is configured, never in the owner environment.
+  if (realScenarioPath) {
+    realScenario = (await import(realScenarioPath)).default as RealAgentScenario
+  }
 
   const tempAssetPath = path.join(
     os.tmpdir(),
@@ -415,6 +423,12 @@ async function main(): Promise<void> {
     PROFILE_TOOLS_PATH,
     TMP_PATH
   } = await import('../../../server/src/constants')
+
+  // Refuse fixture writes if any earlier dependency loaded owner-owned Core roots.
+  if (path.resolve(LEON_HOME_PATH) !== path.resolve(testHomePath) ||
+      path.resolve(LEON_PROFILE_PATH) !== path.resolve(testProfilePath)) {
+    throw new Error('Core was loaded before the isolated scenario profile was configured.')
+  }
 
   // Retained-output queries need the managed binary in the isolated home too.
   const { RuntimeHelper } = await import('../../../server/src/helpers/runtime-helper')

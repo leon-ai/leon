@@ -3,12 +3,12 @@ import { execa } from 'execa'
 import { LogHelper } from '@/helpers/log-helper'
 
 /**
- * Build web app
+ * Build the selected client bundle for Leon's HTTP server.
  */
 export default async function buildApp(options = {}) {
-  const { quiet = false } = options
+  const { quiet = false, configFile = 'apps/web-legacy/vite.config.js' } = options
 
-  await execa('vite', ['build', '--config', 'app/vite.config.js'], {
+  await execa('vite', ['build', '--config', configFile], {
     stdio: quiet ? 'ignore' : 'inherit'
   })
 

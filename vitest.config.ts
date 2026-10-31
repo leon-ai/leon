@@ -20,7 +20,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    exclude: [...configDefaults.exclude, '**/tmp/**'],
+    exclude: [...configDefaults.exclude, '**/tmp/**', 'test/web-app/**'],
     fileParallelism: true,
     maxWorkers: 4,
     disableConsoleIntercept: true,

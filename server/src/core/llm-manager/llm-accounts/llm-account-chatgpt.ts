@@ -32,7 +32,7 @@ const CALLBACK_PORT = 1_455
 const CALLBACK_PATH = '/auth/callback'
 const AUTH_TIMEOUT_MS = 600_000
 const REQUEST_TIMEOUT_MS = 30_000
-const LOGO_PATH = path.join(CODEBASE_PATH, 'web-app', 'public', 'img', 'logo-for-dark-bg.svg')
+const LOGO_PATH = path.join(CODEBASE_PATH, 'apps', 'web', 'public', 'img', 'logo-for-dark-bg.svg')
 const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`))
 
 enum ChatGPTSignInStage {

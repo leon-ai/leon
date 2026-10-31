@@ -47,6 +47,7 @@ import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { getConnectionRequirements } from '@/core/connections/connection-catalog'
+import { CONNECTION_SETUP_TOOL_NAME } from '@/core/connections/connection-tool'
 import { CONFIG_MANAGER } from '@/config'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
@@ -109,6 +110,11 @@ import {
 } from './react-llm-duty/tool-execution'
 import {
   AGENT_COMPLETION_REVIEW_SCHEMA,
+  AGENT_TOOLKIT_LOADER_NAME,
+  AGENT_SKILL_TOOL_NAME,
+  AGENT_PLAN_TOOL_NAME,
+  AGENT_CLARIFICATION_TOOL_NAME,
+  AGENT_CANCELLATION_TOOL_NAME,
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
@@ -123,11 +129,13 @@ import {
 import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/agent-loop'
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
+import { runTurnPhase, TurnPhase, setTurnPhaseGoal } from '../turn-timing'
 import {
   type AccumulatedLLMMetricsState,
   type FinalAnswerMetricsSnapshot,
   type RawPhaseMetrics,
   deriveLLMMetrics,
+  measureOtherProcessingDuration,
   observeCompletionMetrics
 } from './react-llm-duty/agent-metrics'
 import {
@@ -146,6 +154,31 @@ import {
   resolveAgentMaxOutputTokens
 } from './react-llm-duty/agent-context-budget'
 import { AgentHistoryManager } from './react-llm-duty/agent-history-manager'
+
+const TOOL_REQUEST_GOALS: ReadonlyMap<string, TurnPhase> = new Map([
+  [AGENT_TOOLKIT_LOADER_NAME, TurnPhase.ToolSchemas],
+  [AGENT_SKILL_TOOL_NAME, TurnPhase.Skill],
+  [AGENT_PLAN_TOOL_NAME, TurnPhase.Plan],
+  [AGENT_CLARIFICATION_TOOL_NAME, TurnPhase.Clarification],
+  [AGENT_CANCELLATION_TOOL_NAME, TurnPhase.Cancellation],
+  [CONNECTION_SETUP_TOOL_NAME, TurnPhase.Connection]
+])
+
+/**
+ * Describes the returned actions without inventing separate model requests.
+ * Mixed-purpose batches retain a neutral label rather than claiming one goal.
+ */
+function getRequestGoal(calls: OpenAIToolCall[] | undefined): TurnPhase {
+  if (!calls?.length) {
+    return TurnPhase.Answer
+  }
+
+  const goals = new Set(calls.map((call) =>
+    TOOL_REQUEST_GOALS.get(call.function.name) ?? TurnPhase.ToolRequest
+  ))
+
+  return goals.size === 1 ? goals.values().next().value! : TurnPhase.Request
+}
 import { AgentResponseTraceCollector } from './react-llm-duty/agent-response-trace-collector'
 import { AgentSessionState } from './react-llm-duty/agent-session-state'
 import {
@@ -204,6 +237,7 @@ export class ReActLLMDuty extends LLMDuty {
   private totalVisibleOutputTokens = 0
   private totalOutputChars = 0
   private totalGenerationDurationMs = 0
+  private readonly measuredModelIntervals: { startedAt: number, durationMs: number }[] = []
   private phaseMetrics: RawPhaseMetrics = {
     agent: { outputTokens: 0, durationMs: 0 },
     final_answer: { outputTokens: 0, durationMs: 0 }
@@ -227,7 +261,10 @@ export class ReActLLMDuty extends LLMDuty {
     if (payload.token) {
       this.firstOutputAt ??= Date.now()
     }
-    SOCKET_SERVER.emitToChatClients('llm-token', payload)
+    SOCKET_SERVER.emitToChatClients('llm-token', payload, {
+      sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    })
+    this.onTextStream?.('answer', payload)
   })
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
@@ -246,6 +283,8 @@ export class ReActLLMDuty extends LLMDuty {
   private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
+  private readonly responseId: string | undefined
+  private readonly onTextStream: ReactLLMDutyParams['onTextStream']
 
   constructor(params: ReactLLMDutyParams) {
     super()
@@ -266,6 +305,8 @@ export class ReActLLMDuty extends LLMDuty {
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
     this.additionalInstructions = params.additionalInstructions?.trim() || ''
     this.onProgressEvent = params.onProgressEvent
+    this.responseId = params.responseId
+    this.onTextStream = params.onTextStream
     this.systemPrompt = this.appendAdditionalInstructions(
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
         includePersonality: false,
@@ -281,11 +322,11 @@ export class ReActLLMDuty extends LLMDuty {
   ): Promise<void> {
     this.signal?.throwIfAborted()
     if (!TOOLKIT_REGISTRY.isLoaded) {
-      await TOOLKIT_REGISTRY.load()
+      await runTurnPhase(TurnPhase.Catalog, () => TOOLKIT_REGISTRY.load())
     }
 
     if (!CONTEXT_MANAGER.isLoaded || params.force) {
-      await CONTEXT_MANAGER.load()
+      await runTurnPhase(TurnPhase.Context, () => CONTEXT_MANAGER.load())
     }
   }
 
@@ -312,6 +353,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.totalVisibleOutputTokens = 0
     this.totalOutputChars = 0
     this.totalGenerationDurationMs = 0
+    this.measuredModelIntervals.length = 0
     this.phaseMetrics = {
       agent: { outputTokens: 0, durationMs: 0 },
       final_answer: { outputTokens: 0, durationMs: 0 }
@@ -325,7 +367,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
-    const traceId = randomUUID()
+    const traceId = this.responseId || randomUUID()
     this.responseTraceCollector.reset(traceId)
     // Capture the session and profile-bound writer before any deferred saves.
     const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
@@ -336,7 +378,7 @@ export class ReActLLMDuty extends LLMDuty {
       messageId: traceId,
       isAddedToHistory: false,
       agentResponseTrace: this.responseTraceCollector.snapshot({})
-    }, { sessionId })
+    }, { sessionId, activity: true })
     this.reportProgressEvent({
       type: 'reasoning_summary',
       summary: 'Understanding your request'
@@ -354,7 +396,7 @@ export class ReActLLMDuty extends LLMDuty {
     try {
       const ownerInput = this.getInputAsText(this.input)
       const { messageLogs: history, conversationState } =
-        await ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput)
+        await runTurnPhase(TurnPhase.History, () => ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput))
       const continuation = this.consumeAgentLoopContinuation()
       const loadedState = continuation ?? conversationState
       const originalInput = continuation?.originalInput || ownerInput
@@ -420,7 +462,7 @@ export class ReActLLMDuty extends LLMDuty {
         progressiveToolkitLoading
           ? findHighConfidenceAgentToolSelection(originalInput)
           : null
-      let catalog = buildAgentToolCatalog(
+      let catalog = runTurnPhase(TurnPhase.Catalog, () => buildAgentToolCatalog(
         this.activeForcedToolName,
         loadedState?.loadedToolkitIds,
         progressiveToolkitLoading,
@@ -432,7 +474,7 @@ export class ReActLLMDuty extends LLMDuty {
               planTracking: loadedState.planTracking ?? false
             }
           : undefined
-      )
+      ))
 
       let preloadedToolkitContext = ''
       if (matchedSelection) {
@@ -913,7 +955,9 @@ export class ReActLLMDuty extends LLMDuty {
     // Coalesce streamed tokens instead of rewriting history for every token.
     this.traceSaveTimer = setTimeout(() => {
       this.traceSaveTimer = null
-      void this.persistResponseTrace?.()
+      void this.persistResponseTrace?.().catch((error: unknown) => {
+        LogHelper.error(`Could not save agent activity: ${error}`)
+      })
     }, TRACE_SAVE_INTERVAL_MS)
   }
 
@@ -1048,7 +1092,7 @@ export class ReActLLMDuty extends LLMDuty {
       const startedAt = Date.now()
       try {
         const cancellationSignal = this.getExecutionSignal()
-        const result = await LLM_PROVIDER.prompt(history, {
+        const result = await runTurnPhase(TurnPhase.Compaction, () => LLM_PROVIDER.prompt(history, {
           ...(cancellationSignal ? { cancellationSignal } : {}),
           dutyType: LLMDuties.ReAct,
           systemPrompt: AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT,
@@ -1062,7 +1106,7 @@ export class ReActLLMDuty extends LLMDuty {
           disableThinking: true,
           trackProviderErrors: false,
           disableContextCompaction: true
-        })
+        }))
         this.signal?.throwIfAborted()
         if (result) {
           this.observeCompletionMetrics({
@@ -1091,7 +1135,13 @@ export class ReActLLMDuty extends LLMDuty {
     }, checkpointInput)
   }
 
-  private async callAgentModel(
+  private callAgentModel(
+    ...args: Parameters<ReActLLMDuty['callAgentModelInternal']>
+  ): ReturnType<ReActLLMDuty['callAgentModelInternal']> {
+    return runTurnPhase(TurnPhase.Lifecycle, () => this.callAgentModelInternal(...args))
+  }
+
+  private async callAgentModelInternal(
     transcript: AgentToolTranscriptMessage[],
     systemPrompt: string,
     tools: OpenAITool[],
@@ -1325,7 +1375,7 @@ export class ReActLLMDuty extends LLMDuty {
       shouldStream: inferencePolicy.streamToProvider
     })
 
-    let completionResult: Awaited<ReturnType<typeof LLM_PROVIDER.prompt>>
+    let completionResult: Awaited<ReturnType<typeof LLM_PROVIDER.prompt>> = null
     let completed = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
     let diagnosisTimer: NodeJS.Timeout | null = null
@@ -1484,7 +1534,9 @@ export class ReActLLMDuty extends LLMDuty {
       } else if (options.isCompletionReview) {
         this.reviewCount += 1
       }
-      completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
+      const requestGoal = options.isCompletionReview ? TurnPhase.Review
+        : options.isImageInspection ? TurnPhase.Inspection : TurnPhase.Request
+      completionResult = await runTurnPhase(requestGoal, () => LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         ...(options.isImageInspection ? { usagePurpose: InferencePurpose.ImageInspection } : {}),
         systemPrompt: activeSystemPrompt,
@@ -1690,7 +1742,13 @@ export class ReActLLMDuty extends LLMDuty {
         toolChoice,
         signal: toolCallAbortController.signal,
         cancellationSignal
-      })
+      }).then((result) => {
+        if (result && !isPrivateResponse) {
+          const calls = (result as unknown as { toolCalls?: OpenAIToolCall[] }).toolCalls
+          setTurnPhaseGoal(getRequestGoal(calls))
+        }
+        return result
+      }))
       if (completionResult) {
         this.contextUsage = captureContextUsage({
           // Agent prompts include system instructions. A zero count from an
@@ -1716,8 +1774,16 @@ export class ReActLLMDuty extends LLMDuty {
 
       throw error
     } finally {
+      const elapsedMs = Math.max(0, Date.now() - completionStartedAt)
+      // Successful requests are timed by observeCompletionMetrics. Failed
+      // requests still occupy measured time, including review and retry waits.
+      if (!completionResult) {
+        this.measuredModelIntervals.push({
+          startedAt: completionStartedAt, durationMs: elapsedMs
+        })
+      }
       if (options.isCompletionReview) {
-        this.reviewDurationMs += Math.max(0, Date.now() - completionStartedAt)
+        this.reviewDurationMs += elapsedMs
       }
       completed = true
       clearTimeout(responseDeadlineTimer)
@@ -2068,6 +2134,10 @@ export class ReActLLMDuty extends LLMDuty {
     providerTokensPerSecond?: number | undefined
     firstTokenAt?: number | null | undefined
   }): void {
+    this.measuredModelIntervals.push({
+      startedAt: params.completionStartedAt,
+      durationMs: Math.max(0, params.completedAt - params.completionStartedAt)
+    })
     const observedMetrics = observeCompletionMetrics({
       providerName: getLLMProviderName(),
       accumulator: {
@@ -2219,15 +2289,20 @@ export class ReActLLMDuty extends LLMDuty {
       finalAnswerMetrics: this.finalAnswerMetrics,
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
+    const agentResponseTrace = this.responseTraceCollector.snapshot({})
+    const otherProcessingDurationMs = measureOtherProcessingDuration(
+      this.executionStartedAt,
+      generationMetrics.durationMs,
+      [...this.measuredModelIntervals, ...this.lastExecutionHistory]
+    )
     const llmMetrics = {
       ...generationMetrics,
+      ...(otherProcessingDurationMs === undefined ? {} : { otherProcessingDurationMs }),
       reviewCount: this.reviewCount,
       reviewRetryCount: this.reviewRetryCount,
       reviewDurationMs: this.reviewDurationMs
     }
-    const agentResponseTrace = this.responseTraceCollector.snapshot({
-      ...llmMetrics
-    })
+    agentResponseTrace.metrics = { ...llmMetrics }
 
     return {
       dutyType: LLMDuties.ReAct,
@@ -2270,6 +2345,7 @@ export class ReActLLMDuty extends LLMDuty {
       token,
       generationId,
       phase
-    })
+    }, { sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId() })
+    this.onTextStream?.('reasoning', { token, generationId, phase })
   }
 }

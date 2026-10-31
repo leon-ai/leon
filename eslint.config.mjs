@@ -14,7 +14,7 @@ import js from '@eslint/js'
 
 export default [
   {
-    ignores: ['**/*.spec.js', 'aurora/dist/**']
+    ignores: ['**/*.spec.js', 'aurora/dist/**', 'test/web-app/results/**', 'test/web-app/report/**']
   },
   js.configs.recommended,
   ...typescriptEslint.configs['flat/recommended'],
@@ -84,11 +84,11 @@ export default [
     }
   },
   {
-    files: ['web-app/**/*.{ts,tsx}'],
+    files: ['apps/web/**/*.{ts,tsx}'],
     settings: {
       'import-x/resolver-next': [
         createTypeScriptImportResolver({
-          project: 'web-app/tsconfig.json'
+          project: 'apps/web/tsconfig.json'
         }),
         createNodeResolver()
       ]

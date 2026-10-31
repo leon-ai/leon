@@ -4,6 +4,7 @@ import type {
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { runTurnPhase, TurnPhase } from '../../turn-timing'
 import { AGENT_IMAGE_BATCH_MAX_BYTES, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
@@ -652,6 +653,12 @@ function pruneInactiveToolkitSchemas(
  * call. Short prompts are returned unchanged, keeping the normal path fast.
  */
 export function prepareAgentModelContext(
+  params: AgentModelContextParams
+): PreparedAgentModelContext {
+  return runTurnPhase(TurnPhase.Context, () => prepareModelContext(params))
+}
+
+function prepareModelContext(
   params: AgentModelContextParams
 ): PreparedAgentModelContext {
   const imageBoundedTranscript = retainRecentToolImages(

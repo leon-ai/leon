@@ -4,11 +4,38 @@ import {
   extractFinalAnswerFromToolResult,
   extractOwnerActionHandoffFromToolResult
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-utils'
-import { deriveLLMMetrics } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-metrics'
+import { deriveLLMMetrics, measureOtherProcessingDuration } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-metrics'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { captureContextUsage, readContextUsage } from '@/core/llm-manager/llm-usage/context-usage'
 
 describe('ReAct LLM duty utilities', () => {
+  it('excludes the union of measured intervals from the turn remainder', () => {
+    expect(measureOtherProcessingDuration(1_000, 10_000, [
+      { startedAt: 3_000, durationMs: 4_000 },
+      { startedAt: 1_000, durationMs: 3_000 },
+      { startedAt: 8_000, durationMs: 1_000 },
+      { startedAt: 8_500, durationMs: 2_000 },
+      { startedAt: 4_000, durationMs: 500 }
+    ])).toBe(1_500)
+  })
+
+  it('bounds coverage to the current turn and omits incomplete accounting', () => {
+    expect(measureOtherProcessingDuration(1_000, 10_000, [
+      { startedAt: 0, durationMs: 3_000 },
+      { startedAt: 10_000, durationMs: 4_000 }
+    ])).toBe(7_000)
+    expect(measureOtherProcessingDuration(1_000, 10_000, [
+      { startedAt: 0, durationMs: 14_000 }
+    ])).toBe(0)
+    expect(measureOtherProcessingDuration(1_000, 10_000, [])).toBe(10_000)
+    expect(measureOtherProcessingDuration(1_000, 10_000, [
+      { startedAt: 1_000 }
+    ])).toBeUndefined()
+    expect(measureOtherProcessingDuration(1_000, 10_000, [
+      { startedAt: 1_000, durationMs: -1 }
+    ])).toBeUndefined()
+  })
+
   it('keeps prompt occupancy separate from accumulated turn consumption', () => {
     const contextUsage = captureContextUsage({
       usedInputTokens: 200,

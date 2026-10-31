@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import Client from '../../../app/src/js/client.js'
+import Client from '../../../apps/web-legacy/src/js/client.js'
 import { ModelResponseState } from '../../../server/src/core/leon-interface/types.ts'
 import { CompletionFailureKind } from '../../../server/src/core/llm-manager/types.ts'
 
 vi.mock('socket.io-client', () => ({ io: vi.fn() }))
-vi.mock('../../../app/src/js/chatbot', () => ({ default: vi.fn() }))
-vi.mock('../../../app/src/js/voice-energy', () => ({ default: vi.fn() }))
-vi.mock('../../../app/src/js/suggestion-handler.js', () => ({ default: vi.fn() }))
+vi.mock('../../../apps/web-legacy/src/js/chatbot', () => ({ default: vi.fn() }))
+vi.mock('../../../apps/web-legacy/src/js/voice-energy', () => ({ default: vi.fn() }))
+vi.mock('../../../apps/web-legacy/src/js/suggestion-handler.js', () => ({ default: vi.fn() }))
 
 describe('chat client answer streams', () => {
   let client
@@ -124,13 +124,13 @@ describe('chat client answer streams', () => {
     const update = handlers.get('leon:model-response-status')
     update(status)
     vi.advanceTimersByTime(20_000)
-    expect(element.textContent).toBe('Waiting for model response · Elapsed: 20 s')
+    expect(element.textContent).toBe('Waiting for model response · Elapsed: 20s')
     update({ ...status, state: ModelResponseState.Connected })
     expect(element.textContent).toContain('stream connected')
     update({ ...status, state: ModelResponseState.Reasoning })
-    expect(element.textContent).toBe('Model is reasoning · Elapsed: 20 s')
+    expect(element.textContent).toBe('Model is reasoning · Elapsed: 20s')
     update({ ...status, state: ModelResponseState.Reviewing })
-    expect(element.textContent).toBe('Checking answer · Elapsed: 20 s')
+    expect(element.textContent).toBe('Checking answer · Elapsed: 20s')
     update({ ...status, sessionId: 'session-b' })
     update({ ...status, requestId: 'old-request', state: ModelResponseState.Completed })
     expect(element.hidden).toBe(false)
@@ -180,7 +180,7 @@ describe('chat client answer streams', () => {
     vi.advanceTimersByTime(1_000)
     expect(element.textContent).toContain('Attempt 2')
     expect(element.textContent).toContain('Elapsed: 2m 1s')
-    expect(element.textContent).toContain('Time left: 59 s')
+    expect(element.textContent).toContain('Time left: 59s')
     expect(element.textContent).toContain('No provider activity yet')
     expect(client.chatbot.saveBubble).not.toHaveBeenCalled()
   })

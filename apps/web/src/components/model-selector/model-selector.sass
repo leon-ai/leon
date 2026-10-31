@@ -1,0 +1,124 @@
+.model-selector-control
+  display: inline-flex
+  align-items: center
+  min-width: 0
+  max-width: 100%
+  border-radius: var(--border-radius-lg)
+
+  > .dropdown-trigger:first-child
+    flex: 1 1 auto
+    min-width: 0
+
+  > .dropdown-trigger > .button[aria-expanded='true']
+    --button-background: var(--color-surface-hover)
+
+.button.model-selector-trigger
+  max-width: 208px
+  padding-inline-end: var(--space-xs)
+  border-start-end-radius: 0
+  border-end-end-radius: 0
+
+  &:not(:disabled)
+    color: var(--color-text)
+
+.model-selector-selected
+  color: var(--color-text)
+
+.dropdown-content.model-selector-dropdown
+  gap: 0
+  padding: var(--space-sm)
+  overflow: hidden
+
+.model-selector-search
+  flex: 0 0 auto
+
+.model-selector-breadcrumb
+  display: flex
+  flex: 0 0 auto
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-sm)
+  min-height: 36px
+  padding: 0 var(--space-sm)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+
+.model-selector-back
+  display: inline-flex
+  align-items: center
+  gap: var(--space-xs)
+  padding: var(--space-xs) 0
+  color: var(--color-text-secondary)
+  font: inherit
+
+  &:hover
+    color: var(--color-text)
+
+.model-selector-list
+  min-height: 48px
+
+.model-selector-list-inner
+  position: relative
+
+.model-selector-section-title,
+.model-selector-separator
+  position: absolute
+  top: 0
+  left: 0
+  display: flex
+  align-items: center
+  box-sizing: border-box
+  width: 100%
+  padding: 0 var(--space-sm)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+.model-selector-separator::before
+  content: ''
+  width: 100%
+  border-top: 1px solid var(--color-border)
+
+.model-selector-row-slot
+  position: absolute
+  top: 0
+  left: 0
+  width: 100%
+
+.dropdown-item.model-selector-row
+  height: 100%
+  min-height: 0
+  gap: var(--space-md)
+  font-size: var(--font-size-md)
+
+.model-selector-row-copy
+  display: flex
+  flex: 1 1 auto
+  flex-direction: column
+  min-width: 0
+  gap: 1px
+
+.model-selector-row-label
+  overflow: hidden
+  text-overflow: ellipsis
+  white-space: nowrap
+
+.model-selector-row-provider
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+
+.model-selector-empty
+  margin: var(--space-xl) var(--space-sm)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-md)
+  text-align: center
+
+.model-selector-trigger,
+.model-selector-back
+  &:focus-visible
+    outline: 2px solid var(--color-accent)
+    outline-offset: -2px
+
+@media (max-width: 560px)
+  .model-selector-trigger-label
+    display: none

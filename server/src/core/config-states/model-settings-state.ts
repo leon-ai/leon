@@ -1,4 +1,5 @@
 import { CONFIG_MANAGER } from '@/config'
+import { getActiveConversationModelSettings } from '@/core/session-manager/session-context'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import {
   getLLMModelCatalogEntry,
@@ -29,6 +30,11 @@ function getTargetKey(target: ResolvedLLMTarget): string {
  */
 export class ModelSettingsState {
   public getSettings(target: ResolvedLLMTarget): LLMModelSettings {
+    const snapshot = getActiveConversationModelSettings(target.label)
+    if (snapshot) {
+      return snapshot
+    }
+
     if (!target.isEnabled || !target.isResolved || !target.provider || !target.model) {
       return {
         reasoning: DEFAULT_REASONING,

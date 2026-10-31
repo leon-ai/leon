@@ -10,13 +10,11 @@ import {
   buildProfileAuthCookie,
   readProfileCredentialFromHeaders
 } from '@/core/profile-auth'
-import {
-  enterProfileContext,
-  getActiveProfileName
-} from '@/core/profile-runtime/profile-context'
+import { enterProfileContext } from '@/core/profile-runtime/profile-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { IS_CLIENT_INTERFACE_AUTH_ENABLED } from '@/constants'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
+import type { ProfileAuthentication } from './profile-auth-contract'
 
 interface ProfileAuthBody {
   token?: string
@@ -43,40 +41,42 @@ function rejectProfileAuthentication(reply: FastifyReply): void {
 }
 
 /**
+ * Validates request credentials without initializing the agent/profile runtime.
+ * Explicitly rejected credentials never fall back to anonymous local access.
+ */
+export function readProfileAuthentication(request: Pick<FastifyRequest, 'headers'>): ProfileAuthentication {
+  const value = readProfileCredentialFromHeaders({
+    authorization: request.headers.authorization,
+    cookie: request.headers.cookie,
+    'x-leon-profile-token': String(request.headers['x-leon-profile-token'] || '')
+  })
+  const credential = authenticateProfileCredential(value)
+  const authenticated = value ? Boolean(credential) : !IS_CLIENT_INTERFACE_AUTH_ENABLED
+
+  return {
+    authenticated,
+    profile_name: authenticated ? credential?.profileName ?? LEON_PROFILE_NAME : null
+  }
+}
+
+/**
  * Resolve the authenticated profile before any profile-owned HTTP API runs.
  */
 export async function authenticateProfileHTTPRequest(
   request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
+  options: { initializeRuntime?: boolean } = {}
 ): Promise<void> {
-  const credentialValue = readProfileCredentialFromHeaders({
-    authorization: request.headers.authorization,
-    cookie: request.headers.cookie,
-    'x-leon-profile-token': String(
-      request.headers['x-leon-profile-token'] || ''
-    )
-  })
-
-  if (credentialValue) {
-    const credential = authenticateProfileCredential(credentialValue)
-
-    if (!credential) {
-      rejectProfileAuthentication(reply)
-      return
-    }
-
-    enterProfileContext({ profileName: credential.profileName })
-    await ensureActiveProfileRuntime()
-    return
-  }
-
-  if (IS_CLIENT_INTERFACE_AUTH_ENABLED) {
+  const auth = readProfileAuthentication(request)
+  if (!auth.authenticated || !auth.profile_name) {
     rejectProfileAuthentication(reply)
     return
   }
 
-  enterProfileContext({ profileName: LEON_PROFILE_NAME })
-  await ensureActiveProfileRuntime()
+  enterProfileContext({ profileName: auth.profile_name })
+  if (options.initializeRuntime !== false) {
+    await ensureActiveProfileRuntime()
+  }
 }
 
 export const profileAuthRoutes: FastifyPluginAsync<APIOptions> = async (
@@ -86,28 +86,16 @@ export const profileAuthRoutes: FastifyPluginAsync<APIOptions> = async (
   const authPath = `/api/${options.apiVersion}/profile-auth`
 
   fastify.get(authPath, async (request, reply) => {
-    const credentialValue = readProfileCredentialFromHeaders({
-      authorization: request.headers.authorization,
-      cookie: request.headers.cookie,
-      'x-leon-profile-token': String(
-        request.headers['x-leon-profile-token'] || ''
-      )
-    })
-    const credential = authenticateProfileCredential(credentialValue)
-    const authenticated =
-      Boolean(credential) || !IS_CLIENT_INTERFACE_AUTH_ENABLED
-
-    if (authenticated) {
-      enterProfileContext({
-        profileName: credential?.profileName || LEON_PROFILE_NAME
-      })
+    const auth = readProfileAuthentication(request)
+    if (auth.authenticated && auth.profile_name) {
+      enterProfileContext({ profileName: auth.profile_name })
     }
 
+    reply.header('Cache-Control', 'private, no-store')
     reply.send({
       success: true,
       status: 200,
-      authenticated,
-      profile_name: authenticated ? getActiveProfileName() : null
+      ...auth
     })
   })
 

@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
-import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
+import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
 
 import type {
   HTTPPluginAgentEvent,
@@ -10,17 +10,16 @@ import type {
 } from '../types'
 
 const MAXIMUM_REPLAY_EVENTS = 500
+const REPLAY_PAGE_SIZE = 100
 const MAXIMUM_AGENT_EVENT_CHANNELS = 128
 const INACTIVE_CHANNEL_TTL_MS = 3_600_000
 
 interface AgentEventChannel {
-  events: HTTPPluginAgentEvent[]
   emitter: EventEmitter
   lastAccessedAt: number
 }
 
 const agentEventChannels = new Map<string, AgentEventChannel>()
-let latestSequence = 0
 
 function pruneInactiveAgentEventChannels(
   now: number,
@@ -49,7 +48,6 @@ function getAgentEventChannel(profileId: string): AgentEventChannel {
   if (!channel) {
     pruneInactiveAgentEventChannels(now)
     channel = {
-      events: [],
       emitter: new EventEmitter(),
       lastAccessedAt: now
     }
@@ -74,24 +72,22 @@ export function publishAgentEvent(
   >
 ): HTTPPluginAgentEvent {
   const channel = getAgentEventChannel(profileId)
-  const published: HTTPPluginAgentEvent = {
-    ...event,
-    sequence: ++latestSequence,
-    profile_id: profileId,
-    created_at: Date.now()
-  }
+  const published = runWithProfileContext({ profileName: profileId }, () =>
+    CONVERSATION_REPOSITORY.appendEvent<HTTPPluginAgentEvent>({
+      ...event,
+      profile_id: profileId,
+      created_at: Date.now()
+    })
+  )
   channel.lastAccessedAt = published.created_at
-  channel.events.push(published)
-  if (channel.events.length > MAXIMUM_REPLAY_EVENTS) {
-    channel.events.splice(0, channel.events.length - MAXIMUM_REPLAY_EVENTS)
-  }
   channel.emitter.emit('event', published)
 
   return published
 }
 
 /**
- * Replays buffered events and then subscribes to live owner-scoped events.
+ * Replays durable events and subscribes without a gap between snapshot and live
+ * delivery. Missing retained history is reported instead of silently skipped.
  */
 export async function subscribeAgentEvents(
   input: HTTPPluginSubscribeAgentEventsInput,
@@ -101,18 +97,69 @@ export async function subscribeAgentEvents(
   if (!isValidProfileName(profileName)) {
     throw new Error(`Invalid Leon profile name "${profileName}".`)
   }
-  await runWithProfileContext({ profileName }, ensureActiveProfileRuntime)
   const channel = getAgentEventChannel(profileName)
   const matches = (event: HTTPPluginAgentEvent): boolean =>
-    (!input.session_id || event.session_id === input.session_id) &&
+    (!input.session_id || !event.session_id || event.session_id === input.session_id) &&
     event.sequence > (input.after_sequence || 0)
 
-  for (const event of channel.events.filter(matches)) listener(event)
-
+  let replaying = true
+  const pending: HTTPPluginAgentEvent[] = []
   const onEvent = (event: HTTPPluginAgentEvent): void => {
-    if (matches(event)) listener(event)
+    if (matches(event)) {
+      if (replaying) {
+        pending.push(event)
+      } else {
+        listener(event)
+      }
+    }
   }
   channel.emitter.on('event', onEvent)
+
+  try {
+    runWithProfileContext({ profileName }, () => {
+      const bounds = CONVERSATION_REPOSITORY.getReplayBounds()
+      const after = input.after_sequence ?? Math.max(0, bounds.oldest - 1, bounds.latest - MAXIMUM_REPLAY_EVENTS)
+      if (!Number.isSafeInteger(after) || after < 0) {
+        throw new Error('Invalid event replay cursor.')
+      }
+
+      if (after > bounds.latest || after < bounds.oldest - 1) {
+        listener({
+          sequence: bounds.latest,
+          profile_id: profileName,
+          session_id: input.session_id ?? '',
+          turn_id: null,
+          response_id: null,
+          created_at: Date.now(),
+          type: 'error',
+          data: { code: 'replay_snapshot_required' }
+        })
+        return
+      }
+
+      let cursor = after
+      while (cursor < bounds.latest) {
+        const page = CONVERSATION_REPOSITORY.readEvents<HTTPPluginAgentEvent>(
+          cursor, input.session_id, REPLAY_PAGE_SIZE, bounds.latest
+        )
+        for (const event of page.items) {
+          listener(event)
+        }
+        if (page.nextCursor === null) {
+          break
+        }
+        cursor = Number(page.nextCursor)
+      }
+    })
+
+    replaying = false
+    for (const event of pending) {
+      listener(event)
+    }
+  } catch (error) {
+    channel.emitter.off('event', onEvent)
+    throw error
+  }
 
   return () => {
     channel.emitter.off('event', onEvent)

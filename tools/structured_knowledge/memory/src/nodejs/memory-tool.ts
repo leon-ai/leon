@@ -48,6 +48,7 @@ import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
 const QMD_INDEX_NAME = 'leon-memory'
+const CONVERSATION_DATABASE_FILENAME = 'conversations.sqlite'
 const DEFAULT_TOP_K = 12
 const DEFAULT_TOKEN_BUDGET = 480
 const CONTEXT_FULL_CONTENT_CAP = 8_000
@@ -805,10 +806,26 @@ export default class MemoryTool extends Tool {
       if (!sessionId || !evidence) {
         return { success: false, error: 'Temporary memory requires an exact quote from the current owner message.' }
       }
-      const log = JSON.parse(await fs.promises.readFile(
-        path.join(PROFILE_SESSIONS_PATH, sessionId, 'conversation_log.json'), 'utf8'
-      )) as Array<{ who: string, message: unknown, sentAt: number, messageId?: string }>
-      const owner = log.findLast((message) => message.who === 'owner')
+      const archivePath = path.join(PROFILE_SESSIONS_PATH, CONVERSATION_DATABASE_FILENAME)
+      let owner: { message: unknown, sentAt: number, messageId?: string } | undefined
+
+      // Evidence must come from current storage, not the preserved migration backup.
+      if (fs.existsSync(archivePath)) {
+        const archive = new SQLite(archivePath, { readonly: true, fileMustExist: true })
+        try {
+          const row = archive.prepare(`SELECT payload FROM conversation_messages
+            WHERE session_id = ? AND role = 'owner'
+            ORDER BY sequence DESC LIMIT 1`).get(sessionId)
+          owner = row ? JSON.parse(String(row['payload'])) : undefined
+        } finally {
+          archive.close()
+        }
+      } else {
+        const log = JSON.parse(await fs.promises.readFile(
+          path.join(PROFILE_SESSIONS_PATH, sessionId, 'conversation_log.json'), 'utf8'
+        )) as Array<{ who: string, message: unknown, sentAt: number, messageId?: string }>
+        owner = log.findLast((message) => message.who === 'owner')
+      }
       if (typeof owner?.message !== 'string' || !owner.message.includes(evidence)) {
         return { success: false, error: 'Evidence must occur verbatim in the latest owner message; assistant text and guesses are not evidence.' }
       }

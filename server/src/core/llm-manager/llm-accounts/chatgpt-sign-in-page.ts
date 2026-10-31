@@ -9,7 +9,7 @@ enum SignInState {
 
 const MESSAGES = {
   [SignInState.Connecting]: {
-    title: 'Connecting your ChatGPT account…',
+    title: 'Connecting your ChatGPT account...',
     detail: 'Leon is finishing your sign-in. Please keep this tab open.'
   },
   [SignInState.Connected]: {

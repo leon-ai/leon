@@ -477,6 +477,14 @@ export default class SocketServer {
     payload?: unknown,
     options?: { sessionId?: string | null }
   ): void {
+    if (eventName === NEW_MOOD_EVENT) {
+      // Profile-wide state shares the existing replayable browser stream.
+      publishAgentEvent(getActiveProfileName(), {
+        type: 'mood_changed', session_id: '', turn_id: null, response_id: null,
+        data: { mood: payload }
+      })
+    }
+
     for (const chatClient of this.chatClients.values()) {
       if (chatClient.profileName !== getActiveProfileName()) {
         continue

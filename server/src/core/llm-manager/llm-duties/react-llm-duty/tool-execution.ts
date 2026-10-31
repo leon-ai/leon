@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { runTurnPhase, TurnPhase } from '../../turn-timing'
 
 import {
   BRAIN,
@@ -643,7 +644,7 @@ export async function runToolExecution(
   let toolExecutionResult: Awaited<ReturnType<typeof TOOL_EXECUTOR.executeTool>>
 
   try {
-    toolExecutionResult = await TOOL_EXECUTOR.executeTool(toolExecutionInput)
+    toolExecutionResult = await runTurnPhase(TurnPhase.Tool, () => TOOL_EXECUTOR.executeTool(toolExecutionInput))
     signal?.throwIfAborted()
   } catch (error) {
     didFinishToolCall = true

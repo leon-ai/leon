@@ -1,5 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import SQLite from 'better-sqlite3'
+
+import { CONVERSATION_DATABASE_FILENAME } from '@@/scripts/setup/migrations/2026103008000293-add-conversation-archive.js'
 
 const SESSION_INDEX_FILENAME = 'index.json'
 const CONVERSATION_LOG_FILENAME = 'conversation_log.json'
@@ -105,7 +108,10 @@ function normalizeText(value: string): string {
   return value.normalize('NFKC').trim().toLocaleLowerCase()
 }
 
-function tokenize(value: string): string[] {
+/**
+ * Uses the same Unicode word boundaries for indexed and legacy archive search.
+ */
+export function getSessionSearchTerms(value: string): string[] {
   const tokens = new Set<string>()
 
   for (const segment of WORD_SEGMENTER.segment(normalizeText(value))) {
@@ -206,6 +212,36 @@ async function readSessionDocuments(
   includeCurrentSession: boolean,
   currentSessionId?: string
 ): Promise<SessionDocument[]> {
+  const databasePath = path.join(sessionsPath, CONVERSATION_DATABASE_FILENAME)
+  if (fs.existsSync(databasePath)) {
+    const db = new SQLite(databasePath, { readonly: true, fileMustExist: true })
+    try {
+      const active = db.prepare('SELECT value FROM conversation_state WHERE key = ?')
+        .get('active_session_id')
+      const excluded = currentSessionId || String(active?.['value'] ?? '')
+      const rows = db.prepare('SELECT id, payload FROM conversation_sessions').all()
+
+      return rows.flatMap((row): SessionDocument[] => {
+        const id = String(row['id'])
+        if (!includeCurrentSession && id === excluded) {
+          return []
+        }
+
+        const session = JSON.parse(String(row['payload'])) as SessionIndexEntry
+        const messages = parseConversationLog(db.prepare(`SELECT id, role, content, sent_at FROM conversation_messages
+          WHERE session_id = ? AND visible = 1 ORDER BY sequence`).all(id)
+          .map((message) => ({
+            who: message['role'], message: message['content'], sentAt: message['sent_at'],
+            messageId: message['id'], isAddedToHistory: true
+          })))
+
+        return messages.length > 0 ? [{ session, messages }] : []
+      })
+    } finally {
+      db.close()
+    }
+  }
+
   const index = parseSessionIndex(
     await readJSONFile(path.join(sessionsPath, SESSION_INDEX_FILENAME))
   )
@@ -359,7 +395,7 @@ export async function searchConversationSessions(
     options.includeCurrentSession === true,
     options.currentSessionId
   )
-  const queryTerms = tokenize(query)
+  const queryTerms = getSessionSearchTerms(query)
   const normalizedQuery = normalizeText(query)
   const searchableMessages = documents.flatMap((document) =>
     document.messages
@@ -370,7 +406,7 @@ export async function searchConversationSessions(
 
   for (const { document, message } of searchableMessages) {
     const targetTerms = new Set(
-      tokenize(`${document.session.title}\n${message.message}`)
+      getSessionSearchTerms(`${document.session.title}\n${message.message}`)
     )
 
     for (const term of queryTerms) {
@@ -398,8 +434,8 @@ export async function searchConversationSessions(
   for (const { document, message, position } of searchableMessages) {
     const normalizedMessage = normalizeText(message.message)
     const normalizedTitle = normalizeText(document.session.title)
-    const messageTerms = new Set(tokenize(message.message))
-    const titleTerms = new Set(tokenize(document.session.title))
+    const messageTerms = new Set(getSessionSearchTerms(message.message))
+    const titleTerms = new Set(getSessionSearchTerms(document.session.title))
     const matchedMessageTerms = queryTerms.filter((term) =>
       messageTerms.has(term)
     )

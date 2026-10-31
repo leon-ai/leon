@@ -1,0 +1,129 @@
+// A typed fill color lets gradient-backed buttons interpolate their state changes.
+@property --button-background
+  syntax: '<color>'
+  inherits: false
+  initial-value: transparent
+
+.button-icon-only.button-tone-default
+  color: var(--color-text)
+
+.button-icon-only.button-tone-muted
+  color: var(--color-text-secondary)
+
+.button
+  --button-background: var(--color-surface)
+  --button-border-gradient: var(--gradient-secondary-button-border)
+  --button-border-width: 1px
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  gap: var(--space-sm)
+  box-sizing: border-box
+  min-width: 0
+  border: var(--button-border-width) solid transparent
+  border-radius: var(--border-radius-lg)
+  background-color: var(--button-background)
+  box-shadow: inset 0 0 0 transparent
+  color: var(--color-text-secondary)
+  font-weight: var(--font-weight-semi-bold)
+  text-decoration: none
+  transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), box-shadow var(--transition-duration-main) var(--transition-timing-main)
+
+  &:active:not(:disabled):not([aria-disabled='true'])
+    box-shadow: var(--shadow-control-pressed)
+
+  &:not(.button-ghost)
+    // The opaque padding layer keeps translucent states from revealing the border gradient.
+    background: linear-gradient(var(--button-background), var(--button-background)) padding-box, linear-gradient(var(--color-surface), var(--color-surface)) padding-box, var(--button-border-gradient) border-box
+
+  &.button-ghost
+    --button-background: transparent
+
+  .button-icon
+    flex: 0 0 auto
+    font-weight: var(--font-weight-regular)
+    line-height: 1
+
+  .button-label
+    min-width: 0
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+
+  &.button-md
+    min-height: 34px
+    padding: 0 12px
+    font-size: var(--font-size-md)
+    line-height: var(--line-height-md)
+
+    &.button-icon-only
+      flex: 0 0 auto
+      box-sizing: border-box
+      width: var(--button-md-icon-only-size)
+      height: var(--button-md-icon-only-size)
+      min-height: 0
+      padding: 8px
+
+  // Composer actions share a compact toolbar rhythm without changing general buttons.
+  &.button-composer
+    height: var(--button-md-icon-only-size)
+    min-height: 0
+    font-size: var(--font-size-md)
+    font-weight: var(--font-weight-regular)
+
+    &.button-icon-only
+      padding: 0
+
+    .button-icon
+      font-size: var(--font-size-xl)
+
+  &.button-ghost:hover:not(:disabled):not([aria-disabled='true']),
+  &.button-secondary:hover:not(:disabled):not([aria-disabled='true'])
+    --button-background: var(--color-surface-hover)
+    color: var(--color-text)
+
+  &.button-secondary:not(.button-icon-only)
+    color: var(--color-text)
+
+  &.button-ghost:active:not(:disabled):not([aria-disabled='true']),
+  &.button-secondary:active:not(:disabled):not([aria-disabled='true'])
+    --button-background: var(--color-surface-active)
+    color: var(--color-text)
+
+  &.button-primary
+    --button-background: var(--color-primary-button)
+    --button-border-gradient: var(--gradient-primary-button-border)
+    color: var(--color-primary-button-text)
+
+  &.button-primary:hover:not(:disabled):not([aria-disabled='true'])
+    --button-background: var(--color-primary-button-hover)
+
+  &.button-primary:active:not(:disabled):not([aria-disabled='true'])
+    --button-background: var(--color-primary-button-active)
+
+  &.button-primary:disabled,
+  &.button-primary[aria-disabled='true']
+    --button-background: var(--color-primary-button-disabled)
+
+  &.button-danger
+    --button-background: var(--color-danger)
+    --button-border-gradient: var(--gradient-danger-button-border)
+    color: var(--color-danger-contrast)
+
+  &.button-danger:hover:not(:disabled):not([aria-disabled='true'])
+    --button-background: var(--color-danger-hover)
+
+  &.button-danger:active:not(:disabled):not([aria-disabled='true'])
+    --button-background: var(--color-danger-pressed)
+
+  &:disabled
+    color: var(--color-text-disabled)
+
+    &:not([aria-busy='true'])
+      cursor: not-allowed !important
+
+  &[aria-disabled='true']
+    color: var(--color-text-disabled)
+
+    &:not([aria-busy='true'])
+      cursor: not-allowed !important

@@ -72,7 +72,7 @@ export class AgentHistoryManager {
     const historyConfig = this.getHistoryCompactionConfig()
     const historyScope = this.getHistoryCompactionScope()
     const conversationLogs = this.getHistoryEligibleConversationLogs(
-      await CONVERSATION_LOGGER.loadAll()
+      await CONVERSATION_LOGGER.loadContextWindow()
     )
     const currentState = this.loadHistoryCompactionProviderState(historyScope)
     const synchronizedState = this.synchronizeHistoryCompactionState(
@@ -152,7 +152,7 @@ export class AgentHistoryManager {
     }
 
     const logs = this.getHistoryEligibleConversationLogs(
-      await CONVERSATION_LOGGER.loadAll()
+      await CONVERSATION_LOGGER.loadContextWindow()
     )
     const history = [
       ...buildAgentTranscriptHistory(logs, ''),
@@ -520,7 +520,7 @@ export class AgentHistoryManager {
     const historyConfig = this.getHistoryCompactionConfig()
     const historyScope = this.getHistoryCompactionScope()
     const conversationLogs = this.getHistoryEligibleConversationLogs(
-      await CONVERSATION_LOGGER.loadAll()
+      await CONVERSATION_LOGGER.loadContextWindow()
     )
     const currentState = this.loadHistoryCompactionProviderState(historyScope)
     const synchronizedState = this.synchronizeHistoryCompactionState(

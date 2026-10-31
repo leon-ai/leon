@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
 import type { MessageLog } from '@/types'
+import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LogHelper } from '@/helpers/log-helper'
 import {
   LLMDuties,
@@ -18,6 +20,7 @@ import {
 } from '@/core/session-manager/session-context'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { CONVERSATION_REPOSITORY } from './conversation-repository'
 
 const SESSION_CONVERSATION_LOG_FILENAME = 'conversation_log.json'
 const DEFAULT_SESSION_TITLE = 'New session'
@@ -60,6 +63,7 @@ export interface ConversationSession {
   lastMessageAt: number | null
   messageCount: number
   modelTarget: string | null
+  modelSettings?: Record<string, Partial<LLMModelSettings>>
 }
 
 interface ConversationSessionIndex {
@@ -71,6 +75,7 @@ interface SessionUpdateInput {
   title?: string
   isPinned?: boolean
   modelTarget?: string | null
+  modelSettings?: Record<string, Partial<LLMModelSettings>>
 }
 
 interface PendingAgentMessage {
@@ -85,7 +90,8 @@ function now(): number {
 
 function cloneSession(session: ConversationSession): ConversationSession {
   return {
-    ...session
+    ...session,
+    ...(session.modelSettings ? { modelSettings: structuredClone(session.modelSettings) } : {})
   }
 }
 
@@ -170,11 +176,11 @@ function getTitleReasoningParams(
   return {}
 }
 
-function createSession(title = DEFAULT_SESSION_TITLE): ConversationSession {
+function createSession(title = DEFAULT_SESSION_TITLE, id: string = randomUUID()): ConversationSession {
   const createdAt = now()
 
   return {
-    id: randomUUID(),
+    id,
     title,
     isTitleGenerated: title !== DEFAULT_SESSION_TITLE,
     isPinned: false,
@@ -193,6 +199,7 @@ export class ConversationSessionManager {
   private readonly agentMessageQueues = new Map<string, {
     pending: PendingAgentMessage[]
     controller: AbortController
+    executionController: AbortController
   }>()
 
   /**
@@ -212,8 +219,8 @@ export class ConversationSessionManager {
     }
 
     const pending: PendingAgentMessage[] = []
-    const turn = { pending, controller: new AbortController() }
     const executionController = new AbortController()
+    const turn = { pending, controller: new AbortController(), executionController }
     this.agentMessageQueues.set(sessionId, turn)
 
     return {
@@ -286,13 +293,22 @@ export class ConversationSessionManager {
     return this.agentMessageQueues.has(sessionId)
   }
 
+  /**
+   * Cancels only the addressed session, including retained tool executions.
+   */
+  public cancelAgentTurn(sessionId: string): void {
+    const turn = this.agentMessageQueues.get(sessionId)
+    turn?.executionController.abort(new Error('Stopped by the owner.'))
+    turn?.controller.abort(new Error('Stopped by the owner.'))
+  }
+
   public ensureReady(): ConversationSessionIndex {
     if (this.index) {
       return this.index
     }
 
     this.index = this.loadOrCreateIndex()
-    this.persistIndex()
+    CONVERSATION_REPOSITORY.saveActiveSession(this.index.activeSessionId)
 
     return this.index
   }
@@ -313,14 +329,18 @@ export class ConversationSessionManager {
     return this.findSession(sessionId)
   }
 
-  public createSession(): ConversationSession {
+  public createSession(sessionId?: string): ConversationSession {
     const index = this.ensureReady()
-    const session = createSession()
+    const existing = sessionId ? this.findSession(sessionId) : null
+    if (existing) {
+      return cloneSession(existing)
+    }
+    const session = createSession(DEFAULT_SESSION_TITLE, sessionId)
 
     index.sessions.unshift(session)
     index.activeSessionId = session.id
     this.ensureSessionDirectory(session.id)
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
 
     return cloneSession(session)
@@ -351,8 +371,12 @@ export class ConversationSessionManager {
         : null
     }
 
+    if (input.modelSettings) {
+      session.modelSettings = structuredClone(input.modelSettings)
+    }
+
     session.updatedAt = now()
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
 
     return cloneSession(session)
@@ -378,6 +402,10 @@ export class ConversationSessionManager {
   }
 
   public deleteSession(sessionId: string): ConversationSession {
+    if (this.isAgentTurnActive(sessionId)) {
+      throw new Error('Stop this session’s active turn before deleting it.')
+    }
+
     const index = this.ensureReady()
     const sessionIndex = index.sessions.findIndex(
       (session) => session.id === sessionId
@@ -393,19 +421,21 @@ export class ConversationSessionManager {
       throw new Error(`The session "${sessionId}" does not exist.`)
     }
 
-    if (index.sessions.length === 0) {
-      index.sessions.push(createSession())
+    const replacement = index.sessions.length === 0 ? createSession() : undefined
+    if (replacement) {
+      index.sessions.push(replacement)
     }
 
     if (index.activeSessionId === sessionId) {
       index.activeSessionId = index.sessions[0]!.id
     }
 
+    CONVERSATION_REPOSITORY.deleteSession(sessionId)
     fs.rmSync(this.getSessionPath(sessionId), {
       recursive: true,
       force: true
     })
-    this.persistIndex()
+    this.persistIndex(replacement)
     this.emitUpdated()
 
     return cloneSession(deletedSession)
@@ -447,8 +477,30 @@ export class ConversationSessionManager {
     session.lastMessageAt =
       typeof lastLog?.sentAt === 'number' ? lastLog.sentAt : session.lastMessageAt
     session.updatedAt = updatedAt
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
+  }
+
+  /**
+   * Updates sidebar metadata without loading a conversation's message bodies.
+   */
+  public updateSessionFromStoredMessages(sessionId: string): void {
+    const session = this.requireSession(sessionId)
+    const stored = CONVERSATION_REPOSITORY.readSession(sessionId)
+
+    if (!stored) {
+      throw new Error('The conversation session no longer exists.')
+    }
+
+    if (JSON.stringify(session) === JSON.stringify(stored)) {
+      return
+    }
+
+    Object.assign(session, stored)
+    this.events.emit('updated', {
+      activeSessionId: this.getActiveSessionId(),
+      session: cloneSession(session)
+    })
   }
 
   public maybeSetFallbackTitle(sessionId: string, message: string): void {
@@ -460,7 +512,7 @@ export class ConversationSessionManager {
 
     session.title = createFallbackTitle(message)
     session.updatedAt = now()
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
   }
 
@@ -484,26 +536,36 @@ export class ConversationSessionManager {
 
     // Nested operations already belong to the same ordered turn.
     if (getActiveConversationSessionId() === session.id) {
-      return runWithConversationSession(
-        {
-          sessionId: session.id,
-          modelTarget: session.modelTarget
-        },
-        callback
-      )
+      return callback()
     }
+
+    // Capture before queueing: later UI/profile edits affect the next turn only.
+    const modelTarget = session.modelTarget || CONFIG_STATE.getModelState().getAgentTargetValue()
+    const context = { sessionId: session.id, modelTarget }
+    const modelSettings = runWithConversationSession(context, () => {
+      const target = CONFIG_STATE.getModelState().getAgentTarget()
+      const defaults = CONFIG_STATE.getModelSettingsState().getSettings(target)
+
+      return {
+        target: target.label,
+        settings: { ...defaults, ...session.modelSettings?.[target.label] }
+      }
+    })
 
     const previousOperation = this.sessionQueues.get(session.id) ||
       Promise.resolve()
-    const operation = previousOperation.then(() =>
-      runWithConversationSession(
+    const operation = previousOperation.then(() => {
+      // A queued background duty must not start after its owner deletes the session.
+      this.requireSession(session.id)
+
+      return runWithConversationSession(
         {
-          sessionId: session.id,
-          modelTarget: session.modelTarget
+          ...context,
+          modelSettings
         },
         callback
       )
-    )
+    })
     const queueTail = operation.then(
       () => undefined,
       () => undefined
@@ -559,11 +621,15 @@ export class ConversationSessionManager {
       stripLeadingTitleTemplateTags(String(titleResult?.output || ''))
     )
 
+    if (!this.findSession(sessionId)) {
+      return
+    }
+
     if (!title) {
       session.title = createFallbackTitle(message)
       session.isTitleGenerated = true
       session.updatedAt = now()
-      this.persistIndex()
+      this.persistIndex(session)
       this.emitUpdated()
 
       LogHelper.title('Session Manager')
@@ -576,7 +642,7 @@ export class ConversationSessionManager {
     session.title = title
     session.isTitleGenerated = true
     session.updatedAt = now()
-    this.persistIndex()
+    this.persistIndex(session)
     this.emitUpdated()
 
     LogHelper.title('Session Manager')
@@ -584,24 +650,9 @@ export class ConversationSessionManager {
   }
 
   private loadOrCreateIndex(): ConversationSessionIndex {
-    const sessionsIndexPath = path.join(
-      getProfilePaths().sessions,
-      'index.json'
-    )
-
-    if (fs.existsSync(sessionsIndexPath)) {
-      try {
-        const index = JSON.parse(
-          fs.readFileSync(sessionsIndexPath, 'utf-8')
-        ) as ConversationSessionIndex
-
-        if (Array.isArray(index.sessions) && index.sessions.length > 0) {
-          return this.normalizeIndex(index)
-        }
-      } catch (error) {
-        LogHelper.title('Session Manager')
-        LogHelper.warning(`Failed to load sessions index: ${error}`)
-      }
+    const index = CONVERSATION_REPOSITORY.readIndex()
+    if (index) {
+      return this.normalizeIndex(index)
     }
 
     return this.createInitialIndex()
@@ -624,13 +675,11 @@ export class ConversationSessionManager {
 
     this.ensureSessionDirectory(session.id)
 
-    if (legacyLogs.length > 0) {
-      fs.writeFileSync(
-        path.join(this.getSessionPath(session.id), SESSION_CONVERSATION_LOG_FILENAME),
-        JSON.stringify(legacyLogs, null, 2),
-        'utf-8'
-      )
+    CONVERSATION_REPOSITORY.saveSession({ ...session, messageCount: 0, lastMessageAt: null })
+    for (const record of legacyLogs) {
+      CONVERSATION_REPOSITORY.upsertMessage(session.id, record, { sentAt: record.sentAt })
     }
+    Object.assign(session, CONVERSATION_REPOSITORY.readSession(session.id))
 
     return {
       activeSessionId: session.id,
@@ -653,7 +702,8 @@ export class ConversationSessionManager {
       modelTarget:
         typeof session.modelTarget === 'string' && session.modelTarget.trim()
           ? session.modelTarget.trim()
-          : null
+          : null,
+      ...(session.modelSettings ? { modelSettings: session.modelSettings } : {})
     }))
 
     const activeSessionId = sessions.some(
@@ -714,25 +764,20 @@ export class ConversationSessionManager {
     fs.mkdirSync(this.getSessionPath(sessionId), { recursive: true })
   }
 
-  private persistIndex(): void {
+  private persistIndex(changedSession?: ConversationSession): void {
     if (!this.index) {
       return
     }
 
-    const sessionsPath = getProfilePaths().sessions
-
-    fs.mkdirSync(sessionsPath, { recursive: true })
-    fs.writeFileSync(
-      path.join(sessionsPath, 'index.json'),
-      `${JSON.stringify(this.index, null, 2)}\n`,
-      'utf-8'
-    )
+    if (changedSession) {
+      CONVERSATION_REPOSITORY.saveSession(changedSession)
+    }
+    CONVERSATION_REPOSITORY.saveActiveSession(this.index.activeSessionId)
   }
 
   private emitUpdated(): void {
     this.events.emit('updated', {
-      activeSessionId: this.getActiveSessionId(),
-      sessions: this.listSessions()
+      activeSessionId: this.getActiveSessionId()
     })
   }
 }

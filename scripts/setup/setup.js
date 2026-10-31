@@ -400,13 +400,14 @@ async function syncLLMSetupChoice(preferences) {
     await setupGitHooks()
     currentStep = 'buildApp'
     {
-      const status = createSetupStatus('Building app...').start()
+      const status = createSetupStatus('Building apps...').start()
 
       try {
         await buildApp({ quiet: true })
-        status.succeed('App: ready')
+        await buildApp({ quiet: true, configFile: 'apps/web/vite.config.ts' })
+        status.succeed('Apps: ready')
       } catch (error) {
-        status.fail('Failed to build app')
+        status.fail('Failed to build apps')
         throw error
       }
     }

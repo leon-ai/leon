@@ -1,0 +1,84 @@
+@use '../../styles/_includes/list-row'
+
+.dropdown-trigger
+  display: inline-flex
+
+.dropdown-trigger.dropdown-trigger-pointer-focus
+  :is(button, a):focus-visible
+    outline: none
+
+.dropdown-content
+  position: fixed
+  z-index: 110
+  display: flex
+  flex-direction: column
+  box-sizing: border-box
+  padding: var(--space-xs)
+  background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
+  border: 1px solid transparent
+  border-radius: var(--border-radius-md)
+  opacity: 0
+  pointer-events: none
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
+
+.dropdown-content-open
+  opacity: 1
+  pointer-events: auto
+
+.dropdown-content-bottom
+  transform: translate3d(0, -4px, 0)
+
+  &.dropdown-content-open
+    transform: translate3d(0, 0, 0)
+
+.dropdown-content-top
+  transform: translate3d(0, 4px, 0)
+
+  &.dropdown-content-open
+    transform: translate3d(0, 0, 0)
+
+@starting-style
+  .dropdown-content-open
+    opacity: 0
+
+  .dropdown-content-bottom.dropdown-content-open
+    transform: translate3d(0, -4px, 0)
+
+  .dropdown-content-top.dropdown-content-open
+    transform: translate3d(0, 4px, 0)
+
+.dropdown-item
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  box-sizing: border-box
+  width: 100%
+  min-height: 40px
+  padding: var(--space-sm)
+  border-radius: var(--border-radius-md)
+  color: var(--color-text)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+  text-align: left
+
+  @include list-row.interactions
+
+.dropdown-item-danger
+  --list-row-hover-background: var(--color-danger-soft)
+  --list-row-pressed-background: var(--color-danger-active)
+  color: var(--color-danger)
+
+.dropdown-item-icon
+  flex: 0 0 auto
+  color: currentColor
+  font-size: var(--font-size-xl)
+
+.dropdown-item-label
+  min-width: 0
+  overflow: hidden
+  text-overflow: ellipsis
+  white-space: nowrap
+
+@media (prefers-reduced-motion: reduce)
+  .dropdown-content
+    transition: none

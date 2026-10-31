@@ -9,6 +9,48 @@ export interface RawPhaseMetric {
   durationMs: number
 }
 
+/**
+ * Measures time outside recorded work, clipping to the current turn and counting
+ * overlapping intervals once. Incomplete measurements cannot define a remainder.
+ */
+export function measureOtherProcessingDuration(
+  turnStartedAt: number,
+  turnDurationMs: number,
+  measurements: readonly { startedAt?: number, durationMs?: number }[]
+): number | undefined {
+  const turnEndedAt = turnStartedAt + turnDurationMs
+  if (!Number.isFinite(turnStartedAt) || !Number.isFinite(turnEndedAt) || turnDurationMs < 0) {
+    return undefined
+  }
+
+  const intervals: { start: number, end: number }[] = []
+  for (const measurement of measurements) {
+    const { startedAt, durationMs } = measurement
+    if (
+      startedAt === undefined || !Number.isFinite(startedAt) ||
+      durationMs === undefined || !Number.isFinite(durationMs) || durationMs < 0
+    ) {
+      return undefined
+    }
+
+    const start = Math.max(turnStartedAt, startedAt)
+    const end = Math.min(turnEndedAt, startedAt + durationMs)
+    if (end > start) {
+      intervals.push({ start, end })
+    }
+  }
+
+  intervals.sort((left, right) => left.start - right.start)
+  let coveredUntil = turnStartedAt
+  let measuredDuration = 0
+  for (const interval of intervals) {
+    measuredDuration += Math.max(0, interval.end - Math.max(coveredUntil, interval.start))
+    coveredUntil = Math.max(coveredUntil, interval.end)
+  }
+
+  return Math.max(0, turnDurationMs - measuredDuration)
+}
+
 export type RawPhaseMetrics = Record<AgentPhase, RawPhaseMetric>
 
 export interface VisibleOutputParams {

@@ -1,0 +1,219 @@
+import { useEffect, useMemo, useState } from 'react'
+
+import { Dropdown } from '@/components/dropdown'
+import { LLMProviderIcon } from '@/components/llm-provider-icon'
+import {
+  modelProviders,
+  type ModelChoice,
+  type ModelProvider,
+  type ModelSettings
+} from '@/data/model-catalog'
+import type { useComposerModel } from '@/data/composer-model'
+
+import { ModelSelectorMenu } from './model-selector-menu'
+import { ModelSettingsSelector } from './model-settings-selector'
+
+import './model-selector.sass'
+
+const SELECTOR_WIDTH_PX = 352
+const SELECTOR_HEIGHT_PX = 540
+const DEFAULT_SETTINGS: ModelSettings = { reasoning: 'auto', speed: 'auto' }
+const MAXIMUM_RECENT_MODELS = 3
+const MAXIMUM_MODEL_HISTORY = MAXIMUM_RECENT_MODELS + 1
+const RECENT_MODELS_STORAGE_KEY = 'leon.web-app.recent-models'
+
+enum SelectorPanel {
+  Closed,
+  Models,
+  Settings
+}
+
+interface ModelSelectorProps {
+  disabled?: boolean
+  binding?: ReturnType<typeof useComposerModel>
+}
+
+function readModelHistory(storageKey: string, providers: readonly ModelProvider[]): ModelChoice[] {
+  try {
+    const stored: unknown = JSON.parse(
+      window.localStorage.getItem(storageKey) ?? '[]'
+    )
+
+    if (!Array.isArray(stored)) {
+      return []
+    }
+
+    const choices: ModelChoice[] = []
+
+    for (const target of stored) {
+      if (target === null || typeof target !== 'object') {
+        continue
+      }
+
+      const provider = providers.find((candidate) => candidate.id === target.provider)
+      const model = provider?.models.find((candidate) => candidate.model === target.model)
+      const alreadyIncluded = choices.some((choice) =>
+        choice.provider.id === provider?.id && choice.model.model === model?.model
+      )
+
+      // Stored IDs can outlive catalog entries; never restore stale options.
+      if (provider !== undefined && model !== undefined && !alreadyIncluded) {
+        choices.push({ provider, model })
+      }
+
+      if (choices.length === MAXIMUM_MODEL_HISTORY) {
+        break
+      }
+    }
+
+    return choices
+  } catch {
+    // Blocked storage and invalid browser data must not prevent model selection.
+    return []
+  }
+}
+
+function getInitialChoice(): ModelChoice {
+  const provider = modelProviders[0]
+  const model = provider?.models.find((candidate) => candidate.recommended) ??
+    provider?.models[0]
+
+  if (provider === undefined || model === undefined) {
+    throw new Error('The model selector requires a cataloged model.')
+  }
+
+  return { provider, model }
+}
+
+/**
+ * Shares one control for session model and supported inference settings.
+ */
+export function ModelSelector({ disabled = false, binding }: ModelSelectorProps) {
+  const storageKey = `${RECENT_MODELS_STORAGE_KEY}.${binding?.profile ?? 'preview'}`
+  const providers = useMemo(() => {
+    const catalog = binding?.providers ?? modelProviders
+    const selection = binding?.selection
+    if (!selection?.provider || catalog.some((provider) => provider.id === selection.provider &&
+      provider.models.some((model) => model.model === selection.model))) {
+      return catalog
+    }
+    // Configured local/custom models remain visible even outside the curated catalog.
+    const existing = catalog.find((provider) => provider.id === selection.provider)
+    const provider: ModelProvider = {
+      id: selection.provider, label: existing?.label ?? selection.provider,
+      models: [...(existing?.models ?? []), {
+        model: selection.model, label: selection.model, recommended: false,
+        reasoning: ['auto'], speed: ['auto'], defaultReasoningLabel: 'Managed'
+      }]
+    }
+
+    return [...catalog.filter((item) => item.id !== provider.id), provider]
+  }, [binding?.providers, binding?.selection])
+  const [panel, setPanel] = useState(SelectorPanel.Closed)
+  const [modelHistory, setModelHistory] = useState(() => readModelHistory(storageKey, providers))
+  const [localChoice, setChoice] = useState(() => getInitialChoice())
+  const provider = providers.find((item) => item.id === binding?.selection?.provider)
+  const model = provider?.models.find((item) => item.model === binding?.selection?.model)
+  const choice = provider && model ? { provider, model } : localChoice
+  const [settingsByModel, setSettingsByModel] = useState<Record<string, ModelSettings>>({})
+  const targetKey = `${choice.provider.id}/${choice.model.model}`
+  const settings = binding?.selection?.settings ?? settingsByModel[targetKey] ?? DEFAULT_SETTINGS
+  const recentModels = modelHistory.filter((recent) =>
+    recent.provider.id !== choice.provider.id || recent.model.model !== choice.model.model
+  ).slice(0, MAXIMUM_RECENT_MODELS)
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(
+        modelHistory.map((recent) => ({
+          provider: recent.provider.id,
+          model: recent.model.model
+        }))
+      ))
+    } catch {
+      // Keep this tab's history usable when browser storage is unavailable.
+    }
+  }, [modelHistory, storageKey])
+
+  function chooseModel(next: ModelChoice): void {
+    setChoice(next)
+    binding?.update(next)
+    setModelHistory((current) => {
+      // The initially active model also becomes a recent when switching away.
+      const previous = current.length === 0 ? [choice] : current
+
+      return [
+        next,
+        ...previous.filter((recent) =>
+          recent.provider.id !== next.provider.id || recent.model.model !== next.model.model
+        )
+      ].slice(0, MAXIMUM_MODEL_HISTORY)
+    })
+  }
+
+  function changePanel(target: SelectorPanel, open: boolean): void {
+    // A sibling's delayed close must not clear the panel that just opened.
+    setPanel((current) => {
+      if (open) {
+        return target
+      }
+
+      return current === target ? SelectorPanel.Closed : current
+    })
+  }
+
+  return (
+    <div className="model-selector-control" role="group" aria-label="Model and reasoning settings">
+      <Dropdown
+        className="model-selector-dropdown"
+        contentLabel="Choose a model"
+        width={SELECTOR_WIDTH_PX}
+        height={SELECTOR_HEIGHT_PX}
+        preferredPlacement="top"
+        disabled={disabled}
+        open={panel === SelectorPanel.Models}
+        onOpenChange={(open) => changePanel(SelectorPanel.Models, open)}
+        content={(close, open) => (
+          <ModelSelectorMenu
+            choice={choice}
+            providers={providers}
+            recentModels={recentModels}
+            open={open}
+            onChoose={chooseModel}
+            onClose={close}
+          />
+        )}
+      >
+        {(open, contentId) => (
+          <button
+            type="button"
+            className="button button-ghost button-md button-composer model-selector-trigger"
+            disabled={disabled}
+            aria-label={`Choose model, current: ${choice.provider.label}, ${choice.model.label}`}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            aria-controls={open ? contentId : undefined}
+          >
+            <LLMProviderIcon provider={choice.provider.id} className="button-icon" />
+            <span className="button-label model-selector-trigger-label">{choice.model.label}</span>
+          </button>
+        )}
+      </Dropdown>
+      <ModelSettingsSelector
+        provider={choice.provider}
+        model={choice.model}
+        settings={settings}
+        disabled={disabled}
+        open={panel === SelectorPanel.Settings}
+        onOpenChange={(open) => changePanel(SelectorPanel.Settings, open)}
+        onChange={(next) => {
+          binding?.update(choice, { ...settings, ...next })
+          setSettingsByModel((current) => ({
+            ...current,
+            [targetKey]: { ...(current[targetKey] ?? DEFAULT_SETTINGS), ...next }
+          }))
+        }}
+      />
+    </div>
+  )
+}
