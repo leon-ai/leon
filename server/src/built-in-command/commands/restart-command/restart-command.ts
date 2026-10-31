@@ -35,7 +35,7 @@ export class RestartCommand extends BuiltInCommand {
         tone: 'info',
         items: [
           {
-            label: 'Leon is restarting now.'
+            label: 'I’m restarting now.'
           }
         ]
       })

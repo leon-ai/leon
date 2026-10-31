@@ -185,7 +185,7 @@ export default class LLMProvider {
 
       LogHelper.title('LLM Provider')
       LogHelper.warning(
-        'No LLM is enabled. Leon will start without AI responses until you enable local AI or configure an online provider.'
+        'No LLM is enabled. I’ll start without AI responses until you enable local AI or configure an online provider.'
       )
 
       return false

@@ -308,7 +308,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
           }
           requestErrors.report(new Error(isNewError && typeof event.data['message'] === 'string'
             ? event.data['message'] : 'Open this session to review the saved error and try again.'), {
-            errorTitle: 'Leon could not finish the turn', profile
+            errorTitle: 'I could not finish the turn', profile
           })
         }
       }

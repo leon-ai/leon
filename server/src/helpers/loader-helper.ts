@@ -12,7 +12,7 @@ export class LoaderHelper {
     'This may take a while, grab a drink and come back later',
     'Go for a walk, this action takes time',
     'That may take some time, let\'s chill and relax',
-    'Leon will be ready for you in a moment'
+    'I’ll be ready for you in a moment'
   ]
 
   private static spinner = new Spinner('\x1b[95m%s\x1b[0m\r').setSpinnerString(

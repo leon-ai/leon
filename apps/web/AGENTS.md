@@ -17,6 +17,7 @@
 
 ## Design tokens and shared styles
 
+- Write user-facing messages spoken by Leon in first person (“I”, “me”, “my”), not third person; preserve branding, technical identifiers, and neutral descriptive/accessibility labels.
 - Check `src/styles/_includes/themes.sass`, `variables.sass`, and existing components
   first. Reuse semantic tokens/shared components for colors, gradients, spacing,
   typography, radii, shadows, and motion where suitable.

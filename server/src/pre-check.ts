@@ -137,7 +137,7 @@ async function validateProfileConfigSchema(): Promise<void> {
 
   if (freeRAMInGB < MINIMUM_REQUIRED_RAM) {
     LogHelper.warning(
-      `Free RAM: ${freeRAMInGB} GB | Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM. It may not work as expected.`
+      `Free RAM: ${freeRAMInGB} GB | Total RAM: ${totalRAMInGB} GB. I need at least ${MINIMUM_REQUIRED_RAM} GB of RAM. I may not work as expected.`
     )
   } else {
     LogHelper.success(

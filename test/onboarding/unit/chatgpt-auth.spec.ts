@@ -162,7 +162,7 @@ describe('ChatGPT sign-in', () => {
       const signIn = await startChatGPTSignIn()
       pending.push(signIn.cancel)
       const expired = expect(signIn.complete).rejects.toThrow(
-        'during browser authorization: Browser authorization timed out before Leon received the callback.'
+        'during browser authorization: Browser authorization timed out before I received the callback.'
       )
 
       await vi.advanceTimersByTimeAsync(600_000)

@@ -53,7 +53,7 @@ export async function executeAIConnectionCommand(
         return result('AI connection selected', [{ label: `I will use ${argument}.` }])
       }
       await unlinkModelAccount(argument)
-      return result('AI connection removed', [{ label: 'I removed this connection from Leon. Your fellow app is still connected.' }])
+      return result('AI connection removed', [{ label: 'I removed this connection. Your fellow app is still connected.' }])
     }
 
     const savedAccount = subcommand === 'connect' && argument

@@ -209,7 +209,7 @@ async function createChatGPTSignIn(
     reject(new Error(message))
   }
   const timer = setTimeout(() => {
-    cancel('Browser authorization timed out before Leon received the callback.')
+    cancel('Browser authorization timed out before I received the callback.')
   }, AUTH_TIMEOUT_MS)
   const cancel = (detail?: string): void => {
     if (settled) {
