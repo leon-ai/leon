@@ -191,6 +191,15 @@ export function Feed({
   }, [])
 
   useLayoutEffect(() => {
+    return () => {
+      // A detached virtualizer drops its pending scroll. Reattachment must
+      // establish the initial position even when the turn data is unchanged.
+      previousTurnCountRef.current = null
+      previousFirstTurnRef.current = undefined
+    }
+  }, [])
+
+  useLayoutEffect(() => {
     const previousTurnCount = previousTurnCountRef.current
     const previousFirstTurn = previousFirstTurnRef.current
     previousFirstTurnRef.current = turns[0]?.id
@@ -205,7 +214,8 @@ export function Feed({
     }
 
     if (turnCount === 0) {
-      previousTurnCountRef.current = 0
+      // An empty loading frame is not an initial conversation position.
+      previousTurnCountRef.current = null
       return
     }
 
@@ -218,7 +228,7 @@ export function Feed({
     previousTurnCountRef.current = turnCount
 
     if (isInitialPosition) {
-      virtualizer.scrollToIndex(latestTurnIndex, { align: 'end', behavior: 'auto' })
+      virtualizer.scrollToEnd({ behavior: 'auto' })
       return
     }
 

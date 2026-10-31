@@ -1,6 +1,7 @@
 import { clsx } from 'clsx'
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -25,6 +26,8 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 interface QueryInputProps {
   autoFocus?: boolean
+  autoFocusKey?: string
+  introWave?: boolean
   disabled?: boolean
   canSubmit?: boolean
   loading?: boolean
@@ -38,6 +41,8 @@ interface QueryInputProps {
 
 export function QueryInput({
   autoFocus = false,
+  autoFocusKey,
+  introWave = false,
   disabled = false,
   canSubmit = true,
   loading = false,
@@ -51,7 +56,8 @@ export function QueryInput({
   const [query, setQuery] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
   const [isScrollable, setIsScrollable] = useState(false)
-  const [showFocusWave, setShowFocusWave] = useState(false)
+  const [showFocusWave, setShowFocusWave] = useState(() => introWave &&
+    !window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches)
   const [focusWaveKey, setFocusWaveKey] = useState(0)
   const [formHeight, setFormHeight] = useState<number>()
   const actionsRef = useRef<HTMLDivElement>(null)
@@ -59,9 +65,63 @@ export function QueryInput({
   const leadingActionRef = useRef<HTMLDivElement>(null)
   const measurementTextareaRef = useRef<HTMLTextAreaElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const keyboardFocusIntentRef = useRef(false)
   const normalizedQuery = query.trim()
   const submitDisabled = disabled || !canSubmit || normalizedQuery.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
+
+  useLayoutEffect(() => {
+    if (autoFocus && !disabled && !loading) {
+      // Navigation should focus drafting without moving the conversation viewport.
+      keyboardFocusIntentRef.current = false
+      textareaRef.current?.focus({ preventScroll: true })
+    }
+  }, [autoFocus, autoFocusKey, disabled, loading])
+
+  const playFocusWave = useCallback((): void => {
+    if (disabled || loading || window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches) {
+      return
+    }
+    setFocusWaveKey((current) => current + 1)
+    setShowFocusWave(true)
+  }, [disabled, loading])
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent): void {
+      keyboardFocusIntentRef.current = event.isTrusted && event.key === 'Tab'
+    }
+
+    function clearFocusIntent(): void {
+      keyboardFocusIntentRef.current = false
+    }
+
+    function handleFocus(event: FocusEvent): void {
+      const keyboardIntent = keyboardFocusIntentRef.current
+      clearFocusIntent()
+      if (keyboardIntent && event.target === textareaRef.current) {
+        playFocusWave()
+      }
+    }
+
+    function handleWindowBlur(): void {
+      clearFocusIntent()
+      setShowFocusWave(false)
+    }
+
+    // Focus events alone also include autofocus and browser-tab restoration.
+    // Consume keyboard intent at its next focus target; pointer focus is local.
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('focusin', handleFocus, true)
+    document.addEventListener('pointerdown', clearFocusIntent, true)
+    window.addEventListener('blur', handleWindowBlur)
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('focusin', handleFocus, true)
+      document.removeEventListener('pointerdown', clearFocusIntent, true)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [playFocusWave])
 
   const updateTextareaHeight = useCallback((): void => {
     const textarea = textareaRef.current
@@ -281,14 +341,11 @@ export function QueryInput({
           placeholder={placeholder}
           value={query}
           autoComplete="off"
-          autoFocus={autoFocus}
           disabled={disabled || loading}
-          onFocus={() => {
-            // A fresh clock is needed even when blur and refocus are batched.
-            setFocusWaveKey((current) => current + 1)
-            setShowFocusWave(
-              !window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
-            )
+          onPointerDown={(event) => {
+            if (event.isTrusted && event.button === 0 && document.activeElement !== event.currentTarget) {
+              playFocusWave()
+            }
           }}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}

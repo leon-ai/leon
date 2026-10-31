@@ -60,7 +60,7 @@ export function NewSessionPage() {
   return (
     <div className="new-session-page">
       <div className="new-session-page-composer">
-        <QueryInput autoFocus model={model} loading={create.isPending} canSubmit={!model.pending}
+        <QueryInput autoFocus introWave model={model} loading={create.isPending} canSubmit={!model.pending}
           onSubmit={(query) => create.mutate({ id: crypto.randomUUID(), query })} />
         {create.isError && (
           <div role="alert">

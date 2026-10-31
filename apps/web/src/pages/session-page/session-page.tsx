@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useParams } from '@tanstack/react-router'
+import { useLocation, useParams } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 
@@ -16,10 +16,13 @@ import './session-page.sass'
 
 export function SessionPage() {
   const { sessionId } = useParams({ from: '/session/$sessionId' })
-  return <SessionContent key={sessionId} sessionId={sessionId} />
+  // A history key also identifies selecting the already-active session.
+  const navigationKey = useLocation({ select: (location) => location.state['__TSR_key'] }) ?? sessionId
+
+  return <SessionContent key={sessionId} sessionId={sessionId} navigationKey={navigationKey} />
 }
 
-function SessionContent({ sessionId }: { sessionId: string }) {
+function SessionContent({ sessionId, navigationKey }: { sessionId: string, navigationKey: string }) {
   const conversation = useConversation(sessionId)
   const send = useSendMessage(sessionId)
   const model = useComposerModel(sessionId, conversation.latest?.selection)
@@ -32,6 +35,7 @@ function SessionContent({ sessionId }: { sessionId: string }) {
   })
   const feedRef = useRef<FeedHandle>(null)
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0)
 
   function handleSubmit(query: string): void {
     send.mutate({ id: crypto.randomUUID(), query })
@@ -66,6 +70,7 @@ function SessionContent({ sessionId }: { sessionId: string }) {
         <Button onClick={() => send.variables && send.mutate(send.variables)}>Retry sending message</Button>
       )}
       <Feed
+        key={navigationKey}
         ref={feedRef}
         entries={conversation.entries}
         historicalIds={conversation.historicalIds}
@@ -96,11 +101,14 @@ function SessionContent({ sessionId }: { sessionId: string }) {
                 feedRef.current?.scrollToBottom()
               }
 
+              // Reuse silent autofocus without interrupting the feed's scrolling.
+              setComposerFocusRequest((request) => request + 1)
             }}
           />
         </div>
         <QueryInput
           autoFocus
+          autoFocusKey={`${navigationKey}:${composerFocusRequest}`}
           model={model}
           canSubmit={Boolean(conversation.latest && !model.pending)}
           onSubmit={handleSubmit}
