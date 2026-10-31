@@ -1,10 +1,42 @@
-import type { Page } from '@playwright/test'
-
+import type { Locator, Page } from '@playwright/test'
+import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 
 import { test, expect, SESSION_URL, SESSION_ID, OTHER_SESSION_ID, LATEST_ANSWER } from './fixtures'
 
 async function countWaves(page: Page): Promise<number> {
   return page.evaluate(() => Reflect.get(window, 'composerWaveCount') as number)
+}
+
+interface ScrollTiming {
+  durationMs: number
+  gaps: number[]
+  landed: boolean
+}
+
+/**
+ * Measures the actual click-to-landing motion independently of driver latency.
+ */
+async function captureScrollTiming(button: Locator): Promise<void> {
+  await button.evaluate((element) => {
+    element.addEventListener('click', () => {
+      Reflect.set(window, 'scrollTiming', new Promise((resolve) => {
+        const startedAt = performance.now()
+        const main = document.querySelector<HTMLElement>('.app-main')!
+        const gaps = [main.scrollHeight - main.clientHeight - main.scrollTop]
+        const sample = (now: number): void => {
+          const gap = main.scrollHeight - main.clientHeight - main.scrollTop
+          gaps.push(gap)
+          if (gap < 2 || now - startedAt > 1_000) {
+            resolve({ durationMs: now - startedAt, gaps, landed: gap < 2 })
+          } else {
+            requestAnimationFrame(sample)
+          }
+        }
+
+        requestAnimationFrame(sample)
+      }))
+    }, { once: true })
+  })
 }
 
 test.beforeEach(async ({ page, ui }) => {
@@ -239,7 +271,7 @@ test('bounds long-query text without truncating recalled input', async ({ page, 
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`returns to drafting after scrolling to the bottom with ${reducedMotion} motion`, async ({ page }) => {
+  test(`quickly returns to drafting after scrolling to the bottom with ${reducedMotion} motion`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
@@ -248,12 +280,16 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const main = page.locator('.app-main')
     const scrollButton = page.getByRole('button', { name: 'Scroll to bottom' })
 
-    for (const activation of ['pointer', 'keyboard']) {
+    const timings: ScrollTiming[] = []
+    for (const [activation, distance] of [
+      ['pointer', 800], ['keyboard', 800], ['pointer', 5_000], ['keyboard', 5_000]
+    ] as const) {
       await expect.poll(() => main.evaluate((element) =>
         Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop)
       )).toBeLessThanOrEqual(2)
-      await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 800 }))
+      await main.evaluate((element, amount) => element.scrollTo({ top: element.scrollTop - amount }), distance)
       await expect(scrollButton).toBeVisible()
+      await captureScrollTiming(scrollButton)
       if (activation === 'pointer') {
         await scrollButton.click()
       } else {
@@ -266,8 +302,16 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await expect.poll(() => main.evaluate((element) =>
         Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop)
       )).toBeLessThanOrEqual(2)
+      const timing = await page.evaluate(async () => await Reflect.get(window, 'scrollTiming')) as ScrollTiming
+      timings.push(timing)
+      expect(timing.landed).toBe(true)
+      expect(timing.durationMs).toBeLessThan(320)
+      const hadIntermediatePosition = timing.gaps.some((gap) => gap > 2 && gap < timing.gaps[0]! - 2)
+      expect(hadIntermediatePosition).toBe(reducedMotion === 'no-preference')
       expect(await countWaves(page)).toBe(0)
     }
+
+    await testInfo.attach('scroll-timings', { body: JSON.stringify(timings), contentType: 'application/json' })
   })
 }
 
@@ -286,6 +330,61 @@ test('plays one entrance wave on each new-session landing, including refresh', a
   await expect.poll(() => countWaves(page)).toBe(2)
   await page.reload()
   await expect.poll(() => countWaves(page)).toBe(1)
+})
+
+test('lets a wheel gesture interrupt the fast return without pulling the owner back down', async ({ page }) => {
+  await page.goto(SESSION_URL)
+  await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+  const main = page.locator('.app-main')
+  const scrollButton = page.getByRole('button', { name: 'Scroll to bottom', exact: true })
+  await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 4_000 }))
+  await expect(scrollButton).toBeVisible()
+  await scrollButton.click()
+  expect(await main.evaluate((element) =>
+    element.scrollHeight - element.clientHeight - element.scrollTop
+  )).toBeGreaterThan(64)
+  await page.mouse.wheel(0, -400)
+  const remaining = await main.evaluate(async (element) => {
+    // Observe beyond the animation's deadline; a cancelled target must not resume.
+    for (let frame = 0; frame < 20; frame++) {
+      await new Promise(requestAnimationFrame)
+    }
+
+    return element.scrollHeight - element.clientHeight - element.scrollTop
+  })
+  expect(remaining).toBeGreaterThan(64)
+  await expect(scrollButton).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+})
+
+test('retargets the fast return when streamed content grows before landing', async ({ page, ui }) => {
+  const record = ui.history.get(SESSION_ID)!.at(-1)!
+  record.message = 'A line in a streamed answer.\n'.repeat(80)
+  record.isAddedToHistory = false
+  record.draftGeneration = 'growing-answer'
+  ui.sessions[0]!.status = 'wip' as SessionStatus
+  await page.goto(SESSION_URL)
+  const main = page.locator('.app-main')
+  const scrollButton = page.getByRole('button', { name: 'Scroll to bottom', exact: true })
+  await expect.poll(() => main.evaluate((element) =>
+    element.scrollHeight - element.clientHeight - element.scrollTop
+  )).toBeLessThanOrEqual(2)
+  await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 1_500 }))
+  await expect(scrollButton).toBeVisible()
+  await captureScrollTiming(scrollButton)
+  await scrollButton.click()
+  await ui.emit([{
+    type: 'text_stream', sequence: 1, session_id: SESSION_ID,
+    turn_id: 'growing-owner', response_id: record.messageId, created_at: Date.now(),
+    data: { kind: 'answer', generationId: 'growing-answer', token: 'More arriving content.\n'.repeat(25) }
+  }])
+  await expect.poll(() => main.evaluate((element) =>
+    element.scrollHeight - element.clientHeight - element.scrollTop
+  )).toBeLessThanOrEqual(2)
+  const timing = await page.evaluate(async () => await Reflect.get(window, 'scrollTiming')) as ScrollTiming
+  expect(timing.landed).toBe(true)
+  expect(timing.durationMs).toBeLessThan(320)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
 })
 
 for (const panel of ['models', 'settings']) {

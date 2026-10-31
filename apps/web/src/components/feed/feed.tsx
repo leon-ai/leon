@@ -15,6 +15,7 @@ import { Message } from '@/components/message'
 import { OwnerMessage } from '@/components/owner-message'
 import { FeedAnimationProvider } from '@/components/streaming-text'
 import { ConversationDetailsProvider } from '@/data/conversation-details'
+import { createFastScrollDriver } from './fast-scroll'
 
 import './feed.sass'
 
@@ -87,10 +88,12 @@ export function Feed({
   const topMaskRef = useRef<HTMLDivElement>(null)
   const scrollToBottomVisibleRef = useRef(false)
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
+  const fastScroll = useMemo(createFastScrollDriver, [])
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const turnCount = turns.length
   const virtualizer = useVirtualizer({
     count: turnCount,
+    scrollToFn: fastScroll.scrollToFn,
     // The page owns vertical scrolling so its scrollbar remains at the
     // viewport edge instead of being constrained to the content column.
     getScrollElement: () =>
@@ -101,7 +104,8 @@ export function Feed({
     // TanStack preserves visible keys when history is prepended and tracks
     // dynamic response growth without competing custom scroll observers.
     anchorTo: 'end',
-    // ResizeObserver measurements must reach the virtual extent before paint.
+    // ResizeObserver already runs before paint. Deferring it another frame
+    // lets streamed content outgrow the virtual height and scroll anchor.
     useAnimationFrameWithResizeObserver: false,
     observeElementOffset: (instance, onOffsetChange) =>
       observeElementOffset(instance, (offset, isScrolling) => {
@@ -126,13 +130,14 @@ export function Feed({
 
   useImperativeHandle(ref, () => ({
     scrollToBottom: () => {
+      fastScroll.cancel()
       virtualizer.scrollToEnd({
         behavior: window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
           ? 'auto'
           : 'smooth'
       })
     }
-  }), [virtualizer])
+  }), [fastScroll, virtualizer])
 
   useLayoutEffect(() => {
     // Disclosure resizing can reach the end without emitting a scroll event.
@@ -197,8 +202,9 @@ export function Feed({
       // establish the initial position even when the turn data is unchanged.
       previousTurnCountRef.current = null
       previousFirstTurnRef.current = undefined
+      fastScroll.cancel()
     }
-  }, [])
+  }, [fastScroll])
 
   useLayoutEffect(() => {
     const previousTurnCount = previousTurnCountRef.current
@@ -235,6 +241,7 @@ export function Feed({
 
     // Each turn owns its reveal scroll; an older virtualizer target must not
     // keep correcting the viewport after a new turn takes over.
+    fastScroll.cancel()
     virtualizer.cancelScroll()
 
     const feedElement = feedRef.current
@@ -376,7 +383,7 @@ export function Feed({
         window.clearTimeout(scrollSettleTimeout)
       }
     }
-  }, [turnCount, virtualizer])
+  }, [turnCount, fastScroll, virtualizer])
 
   return (
     <FeedAnimationProvider live={Boolean(sessionId)} {...(historicalIds ? { historicalIds } : {})}>
