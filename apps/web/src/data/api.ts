@@ -28,6 +28,10 @@ export async function requestAPI<T>(path: string, options: RequestInit = {}): Pr
     if (options.signal?.aborted || error instanceof Error && error.name === 'AbortError') {
       throw error
     }
+    // A response body can fail after headers arrive when the connection drops.
+    if (!navigator.onLine || error instanceof TypeError) {
+      throw new ConnectionError()
+    }
     if (!response.ok) {
       throw new Error('I could not complete this request. Please try again.')
     }

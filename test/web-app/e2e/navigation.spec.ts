@@ -10,7 +10,7 @@ async function expectBottom(page: Page): Promise<void> {
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
 }
 
-test('drafts immediately while history loads and opens the latest messages at the bottom', async ({ page, ui }) => {
+test('drafts immediately while history loads and opens the latest messages at the bottom', async ({ page, ui }, testInfo) => {
   const release = ui.holdHistory()
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
@@ -19,10 +19,35 @@ test('drafts immediately while history loads and opens the latest messages at th
   await composer.press('Enter')
   await expect(composer).toHaveValue('Draft before loading')
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toHaveCount(0)
+  const loading = page.getByRole('status').filter({ hasText: 'Loading conversation…' })
+  await expect(loading).toBeVisible()
+  await expect(loading.getByRole('button')).toHaveCount(0)
+  for (const theme of ['light', 'dark']) {
+    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+    await expect.poll(() => loading.evaluate((element) => {
+      const form = document.querySelector('.query-input')!.getBoundingClientRect()
+      const main = document.querySelector('.app-main')!.getBoundingClientRect()
+      const top = main.top + Number.parseFloat(getComputedStyle(document.querySelector('.feed')!).paddingTop)
+      const text = element.querySelector('p')!.getBoundingClientRect()
+      return Math.max(Math.abs(text.top + text.height / 2 - (top + form.top) / 2),
+        Math.abs(text.left + text.width / 2 - form.left - form.width / 2))
+    })).toBeLessThanOrEqual(2)
+    await page.evaluate(async () => {
+      await Promise.allSettled(document.getAnimations().filter((animation) => animation instanceof CSSTransition)
+        .map((animation) => animation.finished))
+    })
+    const path = testInfo.outputPath(`loading-${theme}.png`)
+    await page.screenshot({ path })
+    await testInfo.attach(`loading-${theme}`, { path, contentType: 'image/png' })
+  }
+  await composer.focus()
   release()
   await expectBottom(page)
   await expect(composer).toHaveValue('Draft before loading')
   await expect(composer).toBeFocused()
+  await expect(loading).toHaveCount(0)
   expect(ui.completedRequests.filter((url) => url.pathname.endsWith(SESSION_ID))).toHaveLength(1)
   expect(ui.historyRequests[0]!.searchParams.has('before')).toBe(false)
 })
@@ -38,6 +63,46 @@ test('reselects the current session at the bottom without discarding its draft',
   await expectBottom(page)
   await expect(composer).toHaveValue('Keep this draft')
   await expect(composer).toBeFocused()
+})
+
+test('centers general errors in the usable feed area on session and new-session pages', async ({ page, ui }, testInfo) => {
+  ui.failure = { path: '/api/v1/profile-auth', status: 503, message: 'I could not complete this request. Please try again.' }
+  for (const url of [SESSION_URL, './']) {
+    if (url === SESSION_URL) {
+      await page.goto(url)
+    } else {
+      await page.getByRole('link', { name: 'New session', exact: true }).click()
+    }
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    const alert = page.getByRole('alert')
+    await expect(alert).toBeVisible()
+    for (const draft of ['', 'A restored draft\nwith several lines\nand more room to type.']) {
+      await composer.fill(draft)
+      await page.getByRole('form', { name: 'Send a message to Leon' }).evaluate(async (element) => {
+        await Promise.allSettled(element.getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+          .map((animation) => animation.finished))
+      })
+      await expect.poll(() => alert.evaluate((element) => {
+        const form = document.querySelector('.query-input')!.getBoundingClientRect()
+        const main = document.querySelector('.app-main')!.getBoundingClientRect()
+        const feed = document.querySelector('.feed')
+        const top = main.top + (feed ? Number.parseFloat(getComputedStyle(feed).paddingTop) : 0)
+        const text = element.querySelector('p')!.getBoundingClientRect()
+        const button = element.querySelector('button')!.getBoundingClientRect()
+        return Math.max(
+          Math.abs((text.top + button.bottom) / 2 - (top + form.top) / 2),
+          Math.abs(text.left + text.width / 2 - form.left - form.width / 2),
+          Math.abs(button.left + button.width / 2 - form.left - form.width / 2)
+        )
+      })).toBeLessThanOrEqual(2)
+      await expect(alert).toHaveCSS('text-align', 'center')
+      await expect(page.getByText('Loading conversation…', { exact: true })).toHaveCount(0)
+    }
+    const path = testInfo.outputPath(url === './' ? 'new-session-error.png' : 'session-error.png')
+    await page.screenshot({ path })
+    await testInfo.attach(url === './' ? 'new-session-error' : 'session-error', { path, contentType: 'image/png' })
+  }
 })
 
 test('updates session titles from metadata-only notifications during and after a turn', async ({ page, ui }) => {
@@ -331,6 +396,42 @@ test('rolls back a rejected model setting and reports it through the shared toas
   await page.getByRole('radio', { name: 'Low', exact: true }).click()
   await expect(page.locator('.toast-title')).toHaveText(['Model settings were not saved'])
   await expect(page.locator('.model-settings-trigger')).toContainText('High')
+})
+
+test('gives network-specific feedback and keeps drafting available through offline recovery', async ({ page, context, ui }) => {
+  let disconnected = true
+  await page.route(`**/api/v1/sessions/${SESSION_ID}?*`, async (route) => {
+    if (disconnected) {
+      await route.abort('internetdisconnected')
+    } else {
+      await route.fallback()
+    }
+  })
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await composer.fill('A draft during an outage')
+  const notice = page.getByRole('alert')
+  await expect(notice).toContainText('I couldn’t reach the server. Check your network connection and try again.')
+  const retry = notice.getByRole('button', { name: 'Retry', exact: true })
+  await expect(retry).toBeEnabled()
+  const text = await notice.locator('p').boundingBox()
+  const button = await retry.boundingBox()
+  expect(button!.y).toBeGreaterThanOrEqual(text!.y + text!.height)
+  await expect(page.locator('.toast-error')).toHaveCount(1)
+  disconnected = false
+  await retry.click()
+  await expectBottom(page)
+  await expect(notice).toHaveCount(0)
+  await expect(composer).toHaveValue('A draft during an outage')
+  await context.setOffline(true)
+  await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+  await expect(notice).toContainText('Check your network connection and try again.')
+  await expect(notice.getByRole('button', { name: 'Retry', exact: true })).toBeDisabled()
+  await composer.fill('Another offline draft')
+  await context.setOffline(false)
+  await expect(notice).toHaveCount(0)
+  await expect(composer).toHaveValue('Another offline draft')
+  void ui
 })
 
 test('confirms session management actions once and only after the server accepts them', async ({ page, ui }) => {

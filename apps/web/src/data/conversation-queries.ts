@@ -362,7 +362,8 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
       }
       if (!disconnectedRef.current) {
         disconnectedRef.current = true
-        requestErrors.report(new ConnectionError('Live updates are disconnected. I’ll reconnect automatically.'), {
+        requestErrors.report(new ConnectionError(navigator.onLine
+          ? 'Live updates are disconnected. I’ll reconnect automatically.' : undefined), {
           errorTitle: 'Connection interrupted', errorType: 'warning', profile
         })
       }

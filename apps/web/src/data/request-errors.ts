@@ -32,7 +32,7 @@ export class APIError extends Error {
 }
 
 export class ConnectionError extends Error {
-  public constructor(message = 'Unable to reach Leon. Check your connection and try again.') {
+  public constructor(message = 'I couldn’t reach the server. Check your network connection and try again.') {
     super(message)
   }
 }

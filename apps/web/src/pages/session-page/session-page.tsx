@@ -11,6 +11,7 @@ import { useConversation, useSendMessage } from '@/data/conversation-queries'
 import { useComposerModel } from '@/data/composer-model'
 import { requestAPI } from '@/data/api'
 import { useProfile } from '@/data/profile'
+import { RequestFeedback } from '@/components/request-feedback/request-feedback'
 
 import './session-page.sass'
 
@@ -28,7 +29,7 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
   const model = useComposerModel(sessionId, conversation.latest?.selection)
   const profile = useProfile()
   const stop = useMutation({
-    meta: { errorTitle: 'Could not stop this session', profile },
+    meta: { errorTitle: 'Could not stop this turn', profile },
     // Stopping must attempt immediately rather than wait for an online signal.
     networkMode: 'always',
     mutationFn: () => requestAPI(`sessions/${encodeURIComponent(sessionId)}/stop`, { method: 'POST' })
@@ -48,12 +49,16 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
 
   return (
     <div className="session-page">
-      {conversation.isPending && <p role="status">Loading conversation…</p>}
-      {conversation.isError && (
-        <div role="alert">
-          <p>{conversation.error.message}</p>
-          <Button onClick={() => void conversation.refetch()}>Retry</Button>
-        </div>
+      {conversation.isPending && conversation.fetchStatus === 'fetching' && (
+        <RequestFeedback role="status" message="Loading conversation…" />
+      )}
+      {(conversation.isError || conversation.fetchStatus === 'paused') && (
+        <RequestFeedback
+          error={conversation.error}
+          paused={conversation.fetchStatus === 'paused'}
+          retrying={conversation.isFetching}
+          onRetry={() => void conversation.refetch()}
+        />
       )}
       {conversation.hasNextPage && (
         <Button disabled={conversation.isFetchingNextPage} onClick={() => void conversation.fetchNextPage()}>
