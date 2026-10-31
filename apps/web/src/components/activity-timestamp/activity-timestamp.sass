@@ -1,0 +1,36 @@
+.activity-metadata
+  // Small metadata shares the duration's optical baseline correction.
+  position: relative
+  top: 1px
+  flex: 0 0 auto
+  color: var(--color-text-tertiary)
+  font-size: var(--font-size-xs)
+  font-weight: var(--font-weight-regular)
+  line-height: var(--line-height-xs)
+  font-variant-numeric: tabular-nums
+  white-space: nowrap
+
+.activity-timestamp
+  flex: 0 0 auto
+  align-items: center
+  // Reserve metadata space so revealing a date never moves its activity label.
+  opacity: 0
+  pointer-events: none
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main)
+
+  time:focus-visible
+    outline: 1px solid var(--color-accent)
+    outline-offset: var(--space-xs)
+
+.tool-call:hover > .tool-call-heading > .activity-timestamp,
+.tool-call:focus-within > .tool-call-heading > .activity-timestamp,
+.process-group:hover > .process-group-heading > .activity-timestamp,
+.process-group:focus-within > .process-group-heading > .activity-timestamp,
+.leon-message-summary:hover > .activity-timestamp,
+.activity-timestamp:focus-within
+  opacity: 1
+  pointer-events: auto
+
+@media (prefers-reduced-motion: reduce)
+  .activity-timestamp
+    transition: none

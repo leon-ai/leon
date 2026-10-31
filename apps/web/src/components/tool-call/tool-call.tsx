@@ -8,6 +8,7 @@ import { Collapse } from '@/components/collapse'
 import { JsonView } from '@/components/json-view'
 import { useConversationDetails } from '@/data/conversation-details'
 import { toFeedTool } from '@/data/conversation-feed'
+import { ActivityTimestamp } from '@/components/activity-timestamp'
 
 import './tool-call.sass'
 
@@ -71,41 +72,44 @@ export function ToolCall({ toolCall }: ToolCallProps) {
 
   return (
     <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
-      <button
-        type="button"
-        className="tool-call-trigger"
-        aria-expanded={isExpanded}
-        aria-controls={detailsId}
-        onClick={() => setIsExpanded((isOpen) => !isOpen)}
-      >
-        <ActivityWave
-          active={isActive}
-          className="tool-call-heading-layer"
+      <div className="tool-call-heading">
+        <button
+          type="button"
+          className="tool-call-trigger"
+          aria-expanded={isExpanded}
+          aria-controls={detailsId}
+          onClick={() => setIsExpanded((isOpen) => !isOpen)}
         >
+          <ActivityWave
+            active={isActive}
+            className="tool-call-heading-layer"
+          >
+            <i
+              className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
+              aria-hidden="true"
+            />
+            <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
+          </ActivityWave>
+          {toolCall.status === 'preparing' && (
+            <span className="tool-call-duration activity-metadata">Preparing call</span>
+          )}
+          {duration && (
+            <span
+              className="tool-call-duration activity-metadata"
+              title={isBackground
+                ? 'Time to return the execution handle; the job is still running.'
+                : 'Execution time, including tool setup and transport.'}
+            >
+              {isBackground ? `${duration} to return` : duration}
+            </span>
+          )}
           <i
-            className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
+            className="tool-call-chevron ri-arrow-right-s-line"
             aria-hidden="true"
           />
-          <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
-        </ActivityWave>
-        {toolCall.status === 'preparing' && (
-          <span className="tool-call-duration">Preparing call</span>
-        )}
-        {duration && (
-          <span
-            className="tool-call-duration"
-            title={isBackground
-              ? 'Time to return the execution handle; the job is still running.'
-              : 'Execution time, including tool setup and transport.'}
-          >
-            {isBackground ? `${duration} to return` : duration}
-          </span>
-        )}
-        <i
-          className="tool-call-chevron ri-arrow-right-s-line"
-          aria-hidden="true"
-        />
-      </button>
+        </button>
+        <ActivityTimestamp timestamp={toolCall.startedAt ?? toolCall.preparationStartedAt} />
+      </div>
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">
           <p className="tool-call-details-title">{technicalTitle}</p>

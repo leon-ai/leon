@@ -19,6 +19,7 @@ import { TaskList } from '@/components/task-list'
 import { ThinkingMessage } from '@/components/thinking-message'
 import { ToolCallList } from '@/components/tool-call-list'
 import { WorkingMessage } from '@/components/working-message'
+import { ActivityTimestamp } from '@/components/activity-timestamp'
 
 import './leon-message.sass'
 
@@ -117,6 +118,7 @@ function renderActivity(activity: LeonFeedActivity) {
         key={activity.id}
         phaseId={activity.id}
         {...(activity.label === undefined ? {} : { label: activity.label })}
+        startedAt={activity.startedAt}
       />
     )
   }
@@ -130,6 +132,7 @@ function renderActivity(activity: LeonFeedActivity) {
           phaseId={activity.id}
           label={currentRequest.activeLabel ?? 'Processing...'}
           iconName={currentRequest.iconName}
+          startedAt={currentRequest.startedAt}
         />
       )
     }
@@ -144,6 +147,7 @@ function renderActivity(activity: LeonFeedActivity) {
           ariaLabel="Leon’s inference"
           completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
           indicator={<i className={`ri-${request.iconName}`} aria-hidden="true" />}
+          startedAt={request.startedAt}
         />
       )
     }
@@ -167,6 +171,7 @@ function renderActivity(activity: LeonFeedActivity) {
                 ariaLabel="Leon’s inference"
                 completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
                 indicator={<i className={`ri-${request.iconName}`} aria-hidden="true" />}
+                startedAt={request.startedAt}
               />
             ))}
           </div>
@@ -194,6 +199,7 @@ function renderActivity(activity: LeonFeedActivity) {
         active={false}
         activeLabel="Retrying..."
         ariaLabel="Leon’s retries"
+        startedAt={activity.startedAt}
         completedLabel={`Retried ${activity.count} ${activity.count === 1 ? 'time' : 'times'}`}
         indicator={<i className="ri-refresh-line" aria-hidden="true" />}
       />
@@ -210,6 +216,7 @@ function renderActivity(activity: LeonFeedActivity) {
         active={false}
         activeLabel={isReview ? 'Reviewing...' : 'Generating answer...'}
         ariaLabel={isReview ? 'Leon’s review' : 'Leon’s answer generation'}
+        startedAt={activity.startedAt}
         completedLabel={isReview ? `Reviewed for ${duration}` : `Generated answer in ${duration}`}
         indicator={<i className={isReview ? 'ri-search-eye-line' : 'ri-pencil-ai-line'} aria-hidden="true" />}
       />
@@ -224,6 +231,7 @@ function renderActivity(activity: LeonFeedActivity) {
         details={activity.details}
         durationMs={activity.durationMs}
         isActive={activity.isActive}
+        startedAt={activity.startedAt}
       />
     )
   }
@@ -236,6 +244,8 @@ function renderActivity(activity: LeonFeedActivity) {
           startDelay={420}
           text={activity.content}
         />
+        {' '}
+        <ActivityTimestamp timestamp={activity.startedAt} />
       </p>
     )
   }

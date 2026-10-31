@@ -65,6 +65,33 @@ test('reselects the current session at the bottom without discarding its draft',
   await expect(composer).toBeFocused()
 })
 
+test('keeps owner text directly selectable with its bubble selection colors and no tooltip', async ({ page, ui }) => {
+  const text = 'A message whose text can be selected.'
+  ui.history.get(SESSION_ID)!.at(-2)!.message = text
+  await page.goto(SESSION_URL)
+  const owner = page.locator('.owner-message').last()
+  await expect(owner).toHaveText(text)
+  await owner.hover()
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  for (const theme of ['light', 'dark']) {
+    await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+    const selected = await owner.evaluate((element) => {
+      const textNode = element.firstChild!
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
+      const highlight = getComputedStyle(element, '::selection')
+      return { text: selection.toString(), plainText: textNode.nodeType === Node.TEXT_NODE && element.childNodes.length === 1,
+        background: highlight.backgroundColor, foreground: getComputedStyle(element).color }
+    })
+    expect(selected.text).toBe(text)
+    expect(selected.plainText).toBe(true)
+    expect(selected.background).toBe(selected.foreground)
+  }
+})
+
 test('centers general errors in the usable feed area on session and new-session pages', async ({ page, ui }, testInfo) => {
   ui.failure = { path: '/api/v1/profile-auth', status: 503, message: 'I could not complete this request. Please try again.' }
   for (const url of [SESSION_URL, './']) {
@@ -465,6 +492,95 @@ test('gives network-specific feedback and keeps drafting available through offli
   await expect(composer).toHaveValue('Another offline draft')
   void ui
 })
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`shows leaf dates as metadata and reveals full dates only from the timestamp (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    await page.clock.setFixedTime(new Date('2026-10-31T12:00:00+08:00'))
+    const startedAt = await page.evaluate(() => new Date(2026, 9, 30, 14, 32, 15).getTime())
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.sentAt = startedAt + 3_000
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [],
+      toolCalls: [{ id: 'dated-tool', name: 'test.lookup.run', toolCallTitle: 'Look up details',
+        status: 'success', startedAt, durationMs: 618 }],
+      reasoning: [{ id: 'dated-thought', text: 'Check the details.', phase: 'agent', startedAt }],
+      timings: [{ id: 'dated-request', kind: 'inference', goal: TurnPhase.Tools,
+        startedAt, durationMs: 1_000, outcome: 'completed' }],
+      answerStartedAt: startedAt + 2_000, metrics: { durationMs: 3_000 }
+    }
+    await page.goto(SESSION_URL)
+    const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true })
+    await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
+    await work.getByRole('button', { name: 'Used 1 tool for 618ms', exact: true }).click()
+    const tool = work.getByRole('button', { name: 'Look up details' })
+    const timestamp = work.locator('.tool-call-heading .activity-timestamp time')
+    const badge = timestamp.locator('..')
+    const tooltip = page.getByRole('tooltip')
+    await expect(timestamp).toHaveText('Yesterday, 14:32')
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(badge).toHaveCSS('opacity', '0')
+    const reservedWidth = (await badge.boundingBox())!.width
+    expect(reservedWidth).toBeGreaterThan(0)
+    expect(await timestamp.evaluate((element) => {
+      const date = getComputedStyle(element)
+      const duration = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-duration')!)
+      return date.color === duration.color && date.fontSize === duration.fontSize && date.lineHeight === duration.lineHeight
+    })).toBe(true)
+    const motion = await badge.evaluate((element) => {
+      const date = getComputedStyle(element)
+      const chevron = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-chevron')!)
+      return { property: date.transitionProperty, duration: date.transitionDuration, easing: date.transitionTimingFunction,
+        chevronDuration: chevron.transitionDuration.split(', ')[0], chevronEasing: chevron.transitionTimingFunction }
+    })
+    if (reducedMotion === 'reduce') {
+      expect(motion.property).toBe('none')
+    } else {
+      expect(motion.property).toBe('opacity')
+      expect(motion.duration).toBe(motion.chevronDuration)
+      expect(motion.chevronEasing).toContain(motion.easing)
+    }
+    await tool.hover()
+    await expect(badge).toHaveCSS('opacity', '1')
+    expect((await badge.boundingBox())!.width).toBe(reservedWidth)
+    await expect(tooltip).toHaveCount(0)
+    await timestamp.hover()
+    await expect(tooltip).toHaveText('2026-10-30 14:32:15')
+    const bounds = await tooltip.boundingBox()
+    expect(bounds!.y).toBeGreaterThanOrEqual(0)
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(badge).toHaveCSS('opacity', '0')
+    await expect(tooltip).toHaveCount(0)
+    await tool.focus()
+    await expect(badge).toHaveCSS('opacity', '1')
+    await expect(tooltip).toHaveCount(0)
+    await tool.press('Enter')
+    await expect(tool).toBeFocused()
+    await expect(tool).toHaveAttribute('aria-expanded', 'true')
+    await expect(tooltip).toHaveCount(0)
+    await timestamp.focus()
+    await expect(tooltip).toHaveText('2026-10-30 14:32:15')
+    await tool.focus()
+    await expect(tooltip).toHaveCount(0)
+    const thought = work.getByRole('region', { name: 'Leon’s thinking', exact: true })
+    await thought.hover()
+    await thought.locator('.activity-timestamp time').hover()
+    await expect(tooltip).toContainText('2026-10-30 14:32:15')
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(tooltip).toHaveCount(0)
+    await page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+      .locator('.streaming-text-characters').hover()
+    await expect(tooltip).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last().locator('.activity-timestamp')).toHaveCount(0)
+    await page.reload()
+    await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
+    await work.getByRole('button', { name: 'Used 1 tool for 618ms', exact: true }).click()
+    await tool.hover()
+    await timestamp.hover()
+    await expect(tooltip).toContainText('2026-10-30 14:32:15')
+  })
+}
 
 test('confirms session management actions once and only after the server accepts them', async ({ page, ui }) => {
   let pending = Promise.withResolvers<Route>()

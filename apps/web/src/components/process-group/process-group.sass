@@ -41,11 +41,17 @@
     outline-offset: var(--space-xs)
 
 .process-group-active
-  .process-group-trigger
+  > .process-group-heading > .process-group-trigger
     color: var(--color-text)
 
     &:has(> .activity-wave-active)
       color: var(--color-text-secondary)
+
+.process-group-heading
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  min-width: 0
 
 .process-group-heading-layer
   display: flex

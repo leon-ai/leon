@@ -11,6 +11,7 @@ import { clsx } from 'clsx'
 
 import { Collapse } from '@/components/collapse'
 import { ActivityWave } from '@/components/activity-wave'
+import { ActivityTimestamp } from '@/components/activity-timestamp'
 
 import './process-group.sass'
 
@@ -24,6 +25,7 @@ interface ProcessGroupProps {
   completedLabel: string
   indicator?: ReactNode
   onExpandedChange?: (expanded: boolean) => void
+  startedAt?: number | undefined
 }
 
 const NestedDisclosureDefaultContext = createContext(true)
@@ -47,7 +49,8 @@ export function ProcessGroup({
   className,
   completedLabel,
   indicator,
-  onExpandedChange
+  onExpandedChange,
+  startedAt
 }: ProcessGroupProps) {
   const contentId = useId()
   const previousActiveRef = useRef(active)
@@ -100,23 +103,26 @@ export function ProcessGroup({
         })}
         aria-label={ariaLabel}
       >
-        {children === undefined ? (
-          <div className="process-group-trigger">{heading}</div>
-        ) : (
-          <button
-            type="button"
-            className="process-group-trigger"
-            aria-controls={contentId}
-            aria-expanded={isExpanded}
-            onClick={handleToggle}
-          >
-            {heading}
-            <i
-              className="process-group-chevron ri-arrow-right-s-line"
-              aria-hidden="true"
-            />
-          </button>
-        )}
+        <div className="process-group-heading">
+          {children === undefined ? (
+            <div className="process-group-trigger">{heading}</div>
+          ) : (
+            <button
+              type="button"
+              className="process-group-trigger"
+              aria-controls={contentId}
+              aria-expanded={isExpanded}
+              onClick={handleToggle}
+            >
+              {heading}
+              <i
+                className="process-group-chevron ri-arrow-right-s-line"
+                aria-hidden="true"
+              />
+            </button>
+          )}
+          <ActivityTimestamp timestamp={startedAt} />
+        </div>
         {children !== undefined && (
           <Collapse
             id={contentId}

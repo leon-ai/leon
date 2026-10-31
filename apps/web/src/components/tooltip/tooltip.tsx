@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
+import { useExitCleanup } from '@/hooks/use-exit-cleanup'
 
 import './tooltip.sass'
 
@@ -9,9 +10,13 @@ export type TooltipPosition = 'top' | 'right' | 'bottom' | 'left'
 
 interface TooltipProps {
   children: ReactNode
-  hint?: ReactNode
-  message: string
+  hint?: ReactNode | (() => ReactNode)
+  message: string | (() => string)
   position?: TooltipPosition
+  className?: string
+  multiline?: boolean
+  blurOnClick?: boolean
+  disabled?: boolean
 }
 
 const TOOLTIP_OFFSET = 8
@@ -51,15 +56,22 @@ export function Tooltip({
   children,
   hint,
   message,
-  position = 'bottom'
+  position = 'bottom',
+  className,
+  multiline = false,
+  blurOnClick = true,
+  disabled = false
 }: TooltipProps) {
   const [rendered, setRendered] = useState(false)
   const [open, setOpen] = useState(false)
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties>()
   const triggerRef = useRef<HTMLSpanElement>(null)
+  const contentRef = useRef<HTMLSpanElement>(null)
+  const [content, setContent] = useState<{ message: string, hint: ReactNode }>({ message: '', hint: null })
+  useExitCleanup(contentRef, rendered && !open, () => setRendered(false))
 
   function openTooltip(): void {
-    if (triggerRef.current === null) {
+    if (disabled || triggerRef.current === null) {
       return
     }
 
@@ -68,6 +80,10 @@ export function Tooltip({
       position
     ))
     setRendered(true)
+    setContent({
+      message: typeof message === 'function' ? message() : message,
+      hint: typeof hint === 'function' ? hint() : hint
+    })
     setOpen(true)
   }
 
@@ -79,7 +95,7 @@ export function Tooltip({
     closeTooltip()
 
     if (
-      document.activeElement instanceof HTMLElement &&
+      blurOnClick && document.activeElement instanceof HTMLElement &&
       triggerRef.current?.contains(document.activeElement)
     ) {
       document.activeElement.blur()
@@ -116,7 +132,7 @@ export function Tooltip({
     <>
       <span
         ref={triggerRef}
-        className="tooltip"
+        className={clsx('tooltip', className)}
         onMouseEnter={openTooltip}
         onMouseLeave={closeTooltip}
         onFocus={openTooltip}
@@ -127,22 +143,18 @@ export function Tooltip({
       </span>
       {rendered && createPortal(
         <span
+          ref={contentRef}
           className={clsx(
             'tooltip-content',
             `tooltip-content-${position}`,
-            { 'tooltip-content-open': open }
+            { 'tooltip-content-open': open, 'tooltip-content-multiline': multiline }
           )}
           role="tooltip"
           style={tooltipStyle}
-          onTransitionEnd={(event) => {
-            if (event.propertyName === 'opacity' && !open) {
-              setRendered(false)
-            }
-          }}
         >
-          <span className="tooltip-message">{message}</span>
+          <span className="tooltip-message">{typeof message === 'function' ? content.message : message}</span>
           {hint !== undefined && (
-            <span className="tooltip-hint">{hint}</span>
+            <span className="tooltip-hint">{typeof hint === 'function' ? content.hint : hint}</span>
           )}
         </span>,
         document.body
