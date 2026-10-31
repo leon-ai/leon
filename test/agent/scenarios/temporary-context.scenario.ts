@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import SQLite from 'better-sqlite3'
 import type { RealAgentScenario } from '../e2e/run-agent-provider-scenario'
@@ -11,6 +12,8 @@ const TEMPORARY_CITY = 'Lyon'
 const OWNER_STATEMENT = 'I\'m staying in Lyon, France, where I studied, for a while.'
 const WEATHER_REQUEST = 'What\'s the weather like?'
 const MAXIMUM_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000
+const CONTEXT_TOKEN_BUDGET = 600
+const INFERRED_CIRCUMSTANCE_COUNT = 12
 
 const scenario: RealAgentScenario = {
   async prepareProfile(profilePath) {
@@ -19,6 +22,11 @@ const scenario: RealAgentScenario = {
       owner_current_city: HOME_CITY,
       owner_current_country: 'China',
       homeAndImportantPlaces: [`Lives in ${HOME_CITY}, China.`]
+    }))
+    const settingsPath = path.join(profilePath, 'tools', 'structured_knowledge', 'memory')
+    await fs.mkdir(settingsPath, { recursive: true })
+    await fs.writeFile(path.join(settingsPath, 'settings.json'), JSON.stringify({
+      temporaryContext: { tokenBudget: CONTEXT_TOKEN_BUDGET }
     }))
   },
 
@@ -55,7 +63,7 @@ const scenario: RealAgentScenario = {
     // Inspect immediately: background extraction must not hide a failure to
     // capture a circumstance before finishing the foreground turn.
     const db = new SQLite(path.join(profilePath, 'memory', 'index.sqlite'), {
-      readonly: true, fileMustExist: true
+      fileMustExist: true
     })
     try {
       const records = db.prepare('SELECT * FROM active_memory_items WHERE scope = \'temporary\'').all()
@@ -66,6 +74,23 @@ const scenario: RealAgentScenario = {
       assert.ok(String(location['source_ref']).includes(first.sessionId))
       const metadata = JSON.parse(String(location['metadata_json'])) as { evidence?: string }
       assert.ok(metadata.evidence && OWNER_STATEMENT.includes(metadata.evidence))
+
+      // A current stay must survive newer inferred facts even when the owner
+      // chooses a small budget and there are more candidates than item slots.
+      const now = Date.now()
+      const insert = db.prepare(`INSERT INTO memory_items (
+        id, scope, kind, content_md, content_text, source_type, source_ref,
+        created_at, updated_at, expires_at
+      ) VALUES (?, 'temporary', 'note', ?, ?, 'inferred', ?, ?, ?, ?)`)
+      db.transaction(() => {
+        for (let index = 0; index < INFERRED_CIRCUMSTANCE_COUNT; index += 1) {
+          const content = `The owner is comparing options for upcoming purchase ${index + 1}.`
+          insert.run(
+            randomUUID(), content, content, `fixture:${index}`,
+            now + index, now + index, now + MAXIMUM_LIFETIME_MS
+          )
+        }
+      })()
 
       const second = await runTurn(WEATHER_REQUEST)
       assert.notEqual(second.sessionId, first.sessionId)

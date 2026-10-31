@@ -316,6 +316,27 @@ describe('memory lifecycle', () => {
     await expect(remember('Unverified', { scope: 'temporary' })).rejects.toThrow('evidence')
   })
 
+  it('keeps explicit circumstances ahead of newer inferences under item and size limits', async () => {
+    state.settings = { temporaryContext: { tokenBudget: 600 } }
+    const location = await remember('I am staying in Lyon for a while.', {
+      scope: 'temporary', metadata: { evidence: 'I am staying in Lyon for a while.' }
+    })
+    const db = (repository as unknown as { db: Database }).db
+    db.prepare('UPDATE memory_items SET updated_at = ? WHERE id = ?').run(location.updatedAt - 1_000, location.id)
+
+    for (let index = 0; index < 12; index += 1) {
+      await remember(`The owner is considering a new post about topic ${index}.`, {
+        scope: 'temporary', sourceType: 'inferred',
+        metadata: { evidence: `Considering topic ${index}.` }
+      })
+    }
+
+    expect(repository.listTemporaryItems(1).map((record) => record.id)).toEqual([location.id])
+    const snapshot = await manager.getTemporaryContext()
+    expect(snapshot[0]?.id).toBe(location.id)
+    expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(600)
+  })
+
   it('fits ten concise multilingual circumstances in the default context budget', async () => {
     const contents = [
       'I am staying in Lyon with my family until the end of the week.',
