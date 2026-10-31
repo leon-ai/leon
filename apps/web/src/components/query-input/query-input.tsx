@@ -361,18 +361,17 @@ export function QueryInput({
         />
         <div ref={actionsRef} className="query-input-actions">
           <ModelSelector disabled={disabled || loading || Boolean(model?.pending)} {...(model ? { binding: model } : {})} />
-          {onStop && (
-            <Button className="button-composer" iconName="stop" ariaLabel="Stop this session" onClick={onStop} />
-          )}
           <Button
             className="button-composer query-input-submit"
-            type="submit"
-            variant="primary"
-            iconName="send-ins"
-            tooltipMessage="Send message"
+            type={onStop ? 'button' : 'submit'}
+            variant={onStop ? 'danger' : 'primary'}
+            iconName={onStop ? 'stop-mini' : 'send-ins'}
+            iconType={onStop ? 'fill' : 'line'}
+            tooltipMessage={onStop ? 'Stop this session' : 'Send message'}
             tooltipPosition="top"
-            disabled={submitDisabled}
-            loading={loading}
+            disabled={onStop ? disabled : submitDisabled}
+            loading={!onStop && loading}
+            {...(onStop ? { onClick: onStop } : {})}
           />
         </div>
       </form>

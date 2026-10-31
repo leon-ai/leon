@@ -2,6 +2,47 @@ import type { Locator } from '@playwright/test'
 import type { ConversationEvent } from '../../../apps/web/src/data/conversation'
 import { test, expect, SESSION_ID, SESSION_URL } from './fixtures'
 
+test('replaces send with a danger stop action without submitting or losing the draft', async ({ page, ui }) => {
+  const stopPath = `/api/v1/sessions/${SESSION_ID}/stop`
+  await page.route(`**${stopPath}`, (route) => route.fulfill({ json: { success: true } }))
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  const send = page.getByRole('button', { name: 'Send message', exact: true })
+  await expect(composer).toBeFocused()
+  const sendBounds = await send.boundingBox()
+  expect(sendBounds).not.toBeNull()
+  let sequence = 0
+  const emit = async (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID,
+    turn_id: 'active-turn', response_id: 'active-response', created_at: Date.now()
+  }])
+
+  await emit('turn_status', { status: 'accepted' })
+  const stop = page.getByRole('button', { name: 'Stop this session', exact: true })
+  await expect(stop).toBeEnabled()
+  await expect(send).toHaveCount(0)
+  await expect(stop).toHaveClass(/button-danger/)
+  await expect(stop).toHaveAttribute('type', 'button')
+  await expect(stop.locator('.ri-stop-mini-fill')).toBeVisible()
+  const stopBounds = await stop.boundingBox()
+  expect(stopBounds?.width).toBe(sendBounds!.width)
+  expect(stopBounds?.height).toBe(sendBounds!.height)
+
+  await composer.fill('Draft for later')
+  const stopped = page.waitForRequest((request) =>
+    request.method() === 'POST' && new URL(request.url()).pathname === stopPath
+  )
+  await stop.click()
+  await stopped
+  await expect(composer).toHaveValue('Draft for later')
+  expect(ui.requests.filter((url) => url.pathname.endsWith('/messages'))).toHaveLength(0)
+  await emit('session_changed', { is_running: false })
+  await expect(stop).toHaveCount(0)
+  await expect(send).toBeEnabled()
+  await expect(send.locator('.ri-send-ins-line')).toBeVisible()
+  await expect(composer).toHaveValue('Draft for later')
+})
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`keeps character reveals alive across real SSE chunks and completion (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
