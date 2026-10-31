@@ -49,6 +49,141 @@ test('replaces send with a danger stop action without submitting or losing the d
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  for (const withPlan of [false, true]) {
+    test(`continues work below follow-ups without duplicating the turn (${reducedMotion}, plan: ${withPlan})`, async ({ page, ui }, testInfo) => {
+      await page.emulateMedia({ reducedMotion })
+      const startedAt = Date.now() - 10_000
+      const owner: ConversationRecord = { who: 'owner', messageId: 'followup-root', message: 'Inspect the sources.',
+        sentAt: startedAt, isAddedToHistory: true }
+      const responseId = `${owner.messageId}:leon`
+      const step = { id: 'sources', label: 'Inspect the sources carefully', status: 'in_progress' as const }
+      const firstCall = { id: 'source-one', name: 'test.lookup.run', toolCallTitle: 'Read first source',
+        status: 'running' as const, startedAt: startedAt + 100, preparationStartedAt: startedAt + 90,
+        input: { source: 'first' }, commandOutput: 'Initial source output', ...(withPlan ? { planStepId: step.id } : {}) }
+      const saved: ConversationRecord = { who: 'leon', messageId: responseId, message: '',
+        sentAt: startedAt + 1, isAddedToHistory: false, agentResponseTrace: { id: responseId,
+          toolCalls: [firstCall], planSteps: withPlan ? [step] : [],
+          planTransitions: withPlan ? [{ ...step, changedAt: startedAt + 50 }] : [] } }
+      ui.history.set(SESSION_ID, [owner, saved])
+      ui.sessions[0]!.status = 'wip' as SessionStatus
+      await page.route(`**/api/v1/sessions/${SESSION_ID}/messages`, (route) => {
+        const input = route.request().postDataJSON() as { id: string }
+        return route.fulfill({ json: { command: { id: input.id, status: 'accepted' } } })
+      })
+      await page.goto(SESSION_URL)
+      const composer = page.getByRole('textbox', { name: 'Message Leon' })
+      let sequence = 0
+      const emit = (type: string, data: Record<string, unknown>, offset: number): Promise<void> => ui.emit([{
+        type, data, sequence: ++sequence, session_id: SESSION_ID, turn_id: owner.messageId,
+        response_id: responseId, created_at: startedAt + offset
+      }])
+      const sendFollowup = async (query: string, offset: number): Promise<void> => {
+        const posted = page.waitForRequest((request) => request.method() === 'POST' &&
+          new URL(request.url()).pathname === `/api/v1/sessions/${SESSION_ID}/messages`)
+        await composer.fill(query)
+        await composer.press('Enter')
+        const input = (await posted).postDataJSON() as { id: string }
+        const message: ConversationRecord = { who: 'owner', messageId: input.id, message: query,
+          sentAt: startedAt + offset, isAddedToHistory: true }
+        ui.history.get(SESSION_ID)!.push(message)
+        await emit('owner_message', { message }, offset)
+        await ui.emit([{ type: 'turn_status', data: { status: 'completed', consumed: true },
+          sequence: ++sequence, session_id: SESSION_ID, turn_id: input.id,
+          response_id: `${input.id}:leon`, created_at: startedAt + offset + 1 }])
+      }
+      const root = page.locator('.feed-turn').filter({ has: page.getByText(owner.message, { exact: true }) })
+      await expect(root.locator('.tool-call-title')).toHaveText('Read first source')
+      await sendFollowup('Also inspect the second source.', 400)
+      const middle = page.locator('.feed-turn').filter({ has: page.getByText('Also inspect the second source.', { exact: true }) })
+      const secondCall = { id: 'source-two', name: firstCall.name, toolCallTitle: 'Read second source',
+        status: 'running' as const, startedAt: startedAt + 500, ...(withPlan ? { planStepId: step.id } : {}) }
+      saved.agentResponseTrace!.toolCalls.push(secondCall)
+      await emit('tool_call', { tool_call: { id: secondCall.id, name: secondCall.name, tool_call_title: secondCall.toolCallTitle,
+        status: secondCall.status, started_at: secondCall.startedAt, ...(withPlan ? { plan_step_id: step.id } : {}) } }, 500)
+      await expect(middle.locator('.tool-call-title')).toHaveText('Read second source')
+      await expect(root.locator('.tool-call-title')).toHaveText('Read first source')
+      await expect(middle.locator('.leon-message')).toHaveCount(1)
+      saved.agentResponseTrace!.toolCalls[0] = { ...firstCall, status: 'success', durationMs: 600, commandOutput: 'Finished first source' }
+      await emit('tool_call', { tool_call: { id: firstCall.id, name: firstCall.name,
+        status: 'success', duration_ms: 600, command_output: 'Finished first source' } }, 700)
+      const openTools = async (turn: Locator): Promise<void> => {
+        const work = turn.getByRole('region', { name: 'Leon’s completed work', exact: true }).locator(':scope > .process-group-heading > button')
+        if (await work.count() && await work.getAttribute('aria-expanded') === 'false') {
+          await work.click()
+        }
+        if (withPlan) {
+          const plan = turn.getByRole('region', { name: 'Leon’s execution plan', exact: true })
+          const trigger = plan.locator(':scope > .process-group-heading > button')
+          if (await trigger.getAttribute('aria-expanded') === 'false') {
+            await trigger.click()
+          }
+          const stepTrigger = plan.locator('.task-list-item-trigger')
+          if (await stepTrigger.getAttribute('aria-expanded') === 'false') {
+            await stepTrigger.click()
+          }
+        }
+        const tools = turn.getByRole('region', { name: 'Leon’s tool usage', exact: true }).locator(':scope > .process-group-heading > button')
+        if (await tools.getAttribute('aria-expanded') === 'false') {
+          await tools.click()
+        }
+      }
+      await openTools(root)
+      await root.getByRole('button', { name: 'Read first source' }).click()
+      await expect(root.getByLabel('Output JSON')).toContainText('Finished first source')
+      await expect(page.getByRole('alert')).toHaveCount(0)
+      expect(ui.requests.some((url) => decodeURIComponent(url.pathname).endsWith(`/messages/${responseId}`))).toBe(true)
+      saved.agentResponseTrace!.toolCalls[1] = { ...secondCall, status: 'success', durationMs: 300 }
+      await emit('tool_call', { tool_call: { id: secondCall.id, name: secondCall.name, status: 'success', duration_ms: 300 } }, 800)
+      await sendFollowup('Please check the conclusion too.', 900)
+      const tail = page.locator('.feed-turn').filter({ has: page.getByText('Please check the conclusion too.', { exact: true }) })
+      const review = { id: 'dddd', goal: TurnPhase.Review, kind: 'inference' as const,
+        startedAt: startedAt + 1_000, durationMs: 0, outcome: 'started' as const,
+        ...(withPlan ? { planStepId: step.id } : {}) }
+      await emit('inference_activity', { activity: review }, 1_000)
+      await expect(tail.getByRole('region', { name: 'Leon’s inference', exact: true }).locator('.process-group-title')).toHaveText('Reviewing...')
+      await expect(tail.locator('.tool-call')).toHaveCount(0)
+      const completedReview = { ...review, outcome: 'completed' as const, durationMs: 300 }
+      saved.agentResponseTrace!.timings = [completedReview]
+      await emit('inference_activity', { activity: completedReview }, 1_300)
+      if (withPlan) {
+        saved.agentResponseTrace!.planSteps = [{ ...step, status: 'completed' }]
+        saved.agentResponseTrace!.planTransitions!.push({ ...step, status: 'completed', changedAt: startedAt + 1_400 })
+        await emit('plan_step', { step: { ...step, status: 'completed' } }, 1_400)
+      }
+      saved.message = 'Both sources are checked.\nThe conclusion is ready.'
+      saved.isAddedToHistory = true
+      saved.sentAt = startedAt + 2_000
+      saved.agentResponseTrace!.metrics = { durationMs: 2_000 }
+      ui.sessions[0]!.status = 'idle' as SessionStatus
+      await emit('final_answer', { content: saved.message, response_trace: saved.agentResponseTrace }, 2_000)
+      await emit('session_changed', { is_running: false }, 2_001)
+      for (const reload of [false, true]) {
+        if (reload) {
+          await page.reload()
+        }
+        await expect(page.getByRole('region', { name: 'Leon’s completed work', exact: true })).toHaveCount(1)
+        await expect(tail.getByRole('button', { name: 'Worked for 2s', exact: true })).toBeVisible()
+        await expect(tail.getByRole('region', { name: 'Leon’s final answer', exact: true })).toHaveText(saved.message)
+        await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+        await openTools(root)
+        await expect(root.locator('.tool-call-title')).toHaveText('Read first source')
+        await openTools(middle)
+        await expect(middle.locator('.tool-call-title')).toHaveText('Read second source')
+        await expect(root.locator('.leon-message-work')).toHaveCount(0)
+        await expect(middle.locator('.leon-message-work')).toHaveCount(0)
+      }
+      await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+      await expect(root.getByText(owner.message, { exact: true })).toBeVisible()
+      await page.locator('.feed').evaluate(async (element) => {
+        await Promise.allSettled(element.getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+          .map((animation) => animation.finished))
+      })
+      const path = testInfo.outputPath('followup-order.png')
+      await page.screenshot({ path })
+      await testInfo.attach('followup-order', { path, contentType: 'image/png' })
+    })
+  }
 
   test(`connects groups within their scope and stops child links at the last tool (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion })

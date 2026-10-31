@@ -155,6 +155,10 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  // Presentation segments share one durable response and its lazy disclosures.
+  responseId?: string
+  continues?: boolean
+  hasTurnWork?: boolean
   answerStartedAt?: number | undefined
   answerGenerationId?: string
   artifacts?: Artifact[]

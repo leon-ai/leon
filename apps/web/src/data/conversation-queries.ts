@@ -200,7 +200,11 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
         const messages = [...page.messages]
         if (!messages.some((message) => message.messageId === input.id)) {
           messages.push({ who: 'owner', messageId: input.id, message: input.query, sentAt: Date.now(), isAddedToHistory: true })
-          messages.push({ who: 'leon', messageId: `${input.id}:leon`, message: '', sentAt: Date.now(), isAddedToHistory: false })
+          // A running turn can consume this input. Its existing response supplies
+          // the continuation; a separate response is created by real events only.
+          if (!page.is_running) {
+            messages.push({ who: 'leon', messageId: `${input.id}:leon`, message: '', sentAt: Date.now(), isAddedToHistory: false })
+          }
         }
 
         return { ...previous, pages: [{ ...page, messages, is_running: true }, ...previous.pages.slice(1)] }

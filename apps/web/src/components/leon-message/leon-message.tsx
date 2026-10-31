@@ -263,7 +263,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
 
   return (
     <div className="leon-message">
-      {entry.status === FeedTurnStatus.Completed && activities.length > 0 ? (
+      {entry.status === FeedTurnStatus.Completed && !entry.continues && (activities.length > 0 || entry.hasTurnWork) ? (
         <ProcessGroup
           active={false}
           activeLabel="Working..."
@@ -271,7 +271,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
           className="leon-message-work"
           completedLabel={`Worked for ${duration}`}
         >
-          <div className="leon-message-activities">{activities}</div>
+          {activities.length > 0 ? <div className="leon-message-activities">{activities}</div> : undefined}
         </ProcessGroup>
       ) : activities}
       {entry.artifacts !== undefined && entry.artifacts.length > 0 && (

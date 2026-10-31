@@ -433,7 +433,7 @@ export function Feed({
                           {entry.content}
                         </OwnerMessage>
                       ) : (
-                        <ConversationDetailsProvider sessionId={sessionId} messageId={entry.id}>
+                        <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id}>
                           <LeonMessage entry={entry} />
                         </ConversationDetailsProvider>
                       )}

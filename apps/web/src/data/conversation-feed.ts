@@ -1,5 +1,5 @@
 import { FeedTurnStatus } from './feed'
-import type { FeedEntry, FeedToolCall, LeonFeedActivity, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep } from './feed'
+import type { FeedEntry, FeedToolCall, LeonFeedActivity, LeonFeedEntry, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep } from './feed'
 import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
 import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import { getProcessingCategory } from './processing-categories'
@@ -191,7 +191,8 @@ function toActivities(
   const hasVisibleWork = active && activities.some((activity) =>
     activity.type === 'thinking' && activity.isActive ||
     activity.type === 'tools' && activity.toolCalls.some((call) =>
-      call.status === 'preparing' || call.status === 'running'
+      (call.status === 'preparing' || call.status === 'running') &&
+      (!currentInference || (call.preparationStartedAt ?? call.startedAt ?? sentAt) >= currentInference.startedAt)
     )
   )
 
@@ -334,10 +335,12 @@ function attachPlanActivities(
   }
 
   const unownedRequests: NonNullable<FeedModelProcessingActivity['requests']> = []
+  const currentRequest = processing?.requests?.findLast((request) => request.isActive)
   const visibleWork = active && activities.some((activity) =>
     activity.type === 'thinking' && activity.isActive ||
     activity.type === 'tools' && activity.toolCalls.some((call) =>
-      call.status === 'preparing' || call.status === 'running')
+      (call.status === 'preparing' || call.status === 'running') &&
+      (!currentRequest || (call.preparationStartedAt ?? call.startedAt ?? sentAt) >= (currentRequest.startedAt ?? sentAt)))
   )
   for (const request of processing?.requests ?? []) {
     const stepId = request.planStepId !== undefined ? request.planStepId ?? undefined : ownerAt(request.startedAt)
@@ -449,9 +452,111 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
 }
 
 /**
- * Keeps legacy-only plans visible without duplicating structured plan widgets.
+ * Locates work by its start, so late output updates keep their original call
+ * above an interruption. Undated summaries belong to the final continuation.
+ */
+function getSegmentIndex(timestamp: number | undefined, owners: readonly ConversationRecord[]): number {
+  if (timestamp === undefined) {
+    return owners.length - 1
+  }
+  for (let index = owners.length - 1; index > 0; index--) {
+    if (timestamp >= owners[index]!.sentAt) {
+      return index
+    }
+  }
+
+  return 0
+}
+
+/**
+ * Splits display groups at owner-message boundaries without copying execution
+ * state or changing plan ownership. Only the final plan segment shows its total.
+ */
+function splitActivities(activities: readonly LeonFeedActivity[], owners: readonly ConversationRecord[]): LeonFeedActivity[][] {
+  const segments: LeonFeedActivity[][] = owners.map(() => [])
+  for (const activity of activities) {
+    if (activity.type === 'plan') {
+      const steps: FeedPlanStep[][] = owners.map(() => [])
+      for (const step of activity.steps) {
+        const children = splitActivities(step.activities ?? (step.toolCalls.length ? [{
+          id: step.toolCalls[0]!.id, type: 'tools', toolCalls: step.toolCalls
+        }] : []), owners)
+        const start = getSegmentIndex(step.startedAt, owners)
+        for (const [index, items] of children.entries()) {
+          if (items.length || index === start) {
+            steps[index]!.push({ ...step, activities: items,
+              toolCalls: step.toolCalls.filter((call) => getSegmentIndex(call.preparationStartedAt ?? call.startedAt, owners) === index) })
+          }
+        }
+      }
+      const last = steps.findLastIndex((items) => items.length > 0)
+      for (const [index, items] of steps.entries()) {
+        if (items.length) {
+          segments[index]!.push({ ...activity, id: `${activity.id}:${owners[index]!.messageId}`,
+            steps: items, durationMs: index === last ? activity.durationMs : undefined })
+        }
+      }
+    } else if (activity.type === 'tools') {
+      const calls: FeedToolCall[][] = owners.map(() => [])
+      for (const call of activity.toolCalls) {
+        calls[getSegmentIndex(call.preparationStartedAt ?? call.startedAt, owners)]!.push(call)
+      }
+      for (const [index, items] of calls.entries()) {
+        if (items.length) {
+          segments[index]!.push({ ...activity, id: items[0]!.id, toolCalls: items })
+        }
+      }
+    } else if (activity.type === 'processing' && activity.requests?.length) {
+      const requests: NonNullable<FeedModelProcessingActivity['requests']>[] = owners.map(() => [])
+      // Live processing has one inline status, not a completed-history group.
+      for (const request of activity.requests.filter((request) => !activity.isActive || request.isActive)) {
+        requests[getSegmentIndex(request.startedAt, owners)]!.push(request)
+      }
+      for (const [index, items] of requests.entries()) {
+        if (items.length) {
+          segments[index]!.push({ ...activity, requests: items, durationMs: getProcessingDuration(items),
+            isActive: items.some((request) => request.isActive) })
+        }
+      }
+    } else {
+      const index = activity.type === 'working' ? owners.length - 1 : getSegmentIndex(activity.startedAt, owners)
+      segments[index]!.push(activity)
+    }
+  }
+
+  return segments
+}
+
+/**
+ * Keeps a consumed follow-up in the same response while presenting new work
+ * below it. Durable timestamps rebuild identical boundaries after replay.
+ */
+function splitResponse(entry: LeonFeedEntry, owners: readonly ConversationRecord[]): LeonFeedEntry[] {
+  return splitActivities(entry.activities, owners).map((activities, index) => {
+    const last = index === owners.length - 1
+    if (last && entry.status === FeedTurnStatus.InProgress && !activities.length && !entry.finalAnswer.trim()) {
+      activities.push({ id: `${entry.id}:processing`, type: 'working', label: getActivityLabel(`${entry.id}:waiting`) })
+    }
+
+    return { ...entry, id: index === 0 ? entry.id : `${entry.id}:after:${owners[index]!.messageId}`,
+      responseId: entry.id, continues: !last, hasTurnWork: entry.activities.length > 0, activities,
+      finalAnswer: last ? entry.finalAnswer : '',
+      ...(last ? {} : { artifacts: [], bonusResponse: '' }) }
+  })
+}
+
+/**
+ * Keeps legacy-only plans visible while suppressing their duplicate widget
+ * fallback when the same turn already contains a structured execution plan.
+ * Stored records and other widget messages remain untouched.
  */
 export function toFeedEntries(records: readonly ConversationRecord[], running: boolean): FeedEntry[] {
+  const owners = records.filter((record) => record.who === 'owner')
+  // Browser responses use the same command-derived ID as optimistic delivery.
+  // Historical non-browser IDs retain their original adjacent-message grouping.
+  const responseOwners = new Map(owners.map((owner, index) => [`${owner.messageId}:leon`, index]))
+  const responses = new Set(records.filter((record) => record.who === 'leon').map((record) => record.messageId))
+  const groups = new Map(owners.map((owner) => [owner.messageId, [toFeedEntry(owner, running)]]))
   const structuredPlanTurns = new Set<string | undefined>()
   let turnId: string | undefined
   for (const record of records) {
@@ -467,11 +572,36 @@ export function toFeedEntries(records: readonly ConversationRecord[], running: b
   for (const record of records) {
     if (record.who === 'owner') {
       turnId = record.messageId
+      continue
     } else if (!record.isAddedToHistory && record.widget?.widget === LEGACY_PLAN_WIDGET && structuredPlanTurns.has(turnId)) {
       continue
     }
-    entries.push(toFeedEntry(record, running))
+    const entry = toFeedEntry(record, running)
+    const ownerIndex = responseOwners.get(record.messageId)
+    const end = running && !record.isAddedToHistory ? Infinity : record.sentAt
+    const turnOwners: ConversationRecord[] = []
+    if (ownerIndex !== undefined) {
+      for (let index = ownerIndex; index < owners.length; index++) {
+        const owner = owners[index]!
+        // A separately dispatched response ends the preceding turn's scope,
+        // including when adjacent messages share millisecond clock values.
+        if (owner.sentAt > end || turnOwners.length && responses.has(`${owner.messageId}:leon`)) {
+          break
+        }
+        turnOwners.push(owner)
+      }
+    }
+    if (entry.role === 'leon' && turnOwners.length > 1) {
+      for (const [index, segment] of splitResponse(entry, turnOwners).entries()) {
+        if (segment.activities.length || segment.finalAnswer || segment.artifacts?.length) {
+          groups.get(turnOwners[index]!.messageId)!.push(segment)
+        }
+      }
+    } else {
+      const group = groups.get(ownerIndex === undefined ? turnId ?? '' : owners[ownerIndex]!.messageId)
+      ;(group ?? entries).push(entry)
+    }
   }
 
-  return entries
+  return [...entries, ...groups.values()].flat()
 }
