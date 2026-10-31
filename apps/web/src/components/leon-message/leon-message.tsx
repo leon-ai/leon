@@ -229,7 +229,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
         <ArtifactAttachments artifacts={entry.artifacts} />
       )}
       {entry.finalAnswer.trim().length > 0 && (
-        <FinalAnswer animationId={`${entry.id}:final-answer`}>
+        <FinalAnswer animationId={`${entry.id}:${entry.answerGenerationId ?? 'accepted'}:final-answer`}>
           {entry.finalAnswer}
         </FinalAnswer>
       )}

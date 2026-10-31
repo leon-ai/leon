@@ -43,16 +43,12 @@ export function ThinkingMessage({
         indicator={<ThoughtIcon />}
         onExpandedChange={setDetailsOpen}
       >
-        {isActive ? (
         <StreamingText
           animationId={animationId}
           className="thinking-message-details"
           startDelay={120}
           text={disclosure.isFetching && !detailText ? 'Loading reasoning…' : detailText}
         />
-        ) : (
-          <span className="thinking-message-details">{detailText}</span>
-        )}
         {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading reasoning</button>}
       </ProcessGroup>
     </div>
