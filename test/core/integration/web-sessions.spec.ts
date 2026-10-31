@@ -7,6 +7,7 @@ import Fastify from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConversationLogger } from '@/conversation-logger'
+import { POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { sessionsPlugin } from '@/core/http-server/api/sessions'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
@@ -187,6 +188,9 @@ describe('web conversation runtime', () => {
     const history = (await request('GET', `/api/v1/sessions/${first}`)).json()
     expect(history.messages.filter((message: { who: string }) => message.who === 'owner')).toHaveLength(1)
     expect(history.messages.some((message: { message: string }) => message.message.includes('Second'))).toBe(false)
+    expect(vi.mocked(POST_TURN_MAINTENANCE_QUEUE.enqueue).mock.calls.map(([label]) => label)).toEqual([
+      'session title generation', 'turn memory observation', 'react self-model reflection', 'memory extraction'
+    ])
   })
 
   it('validates model capabilities and preserves settings per session', async () => {

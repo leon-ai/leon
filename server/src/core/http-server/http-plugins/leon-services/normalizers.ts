@@ -81,43 +81,6 @@ export function normalizeToolCalls(
     .filter((item): item is HTTPPluginToolCall => item !== null)
 }
 
-export function normalizeOwnerProfileToolExecutions(
-  result: LLMDutyResult | null
-): Array<{
-  functionName: string
-  status: 'success' | 'error'
-  observation: string
-}> {
-  const executionHistory = Array.isArray(result?.data?.['executionHistory'])
-    ? result.data['executionHistory']
-    : []
-
-  return executionHistory
-    .map((item) => {
-      if (!item || typeof item !== 'object') return null
-
-      const record = item as Record<string, unknown>
-      const functionName = getStringField(record, 'function')
-      if (!functionName) return null
-
-      return {
-        functionName,
-        status:
-          record['status'] === 'error'
-            ? ('error' as const)
-            : ('success' as const),
-        observation: getStringField(record, 'observation')
-      }
-    })
-    .filter(
-      (item): item is {
-        functionName: string
-        status: 'success' | 'error'
-        observation: string
-      } => item !== null
-    )
-}
-
 export function normalizeConversationSession(
   session: ConversationSession
 ): HTTPPluginConversationSession {

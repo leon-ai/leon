@@ -13,7 +13,7 @@ import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
 import { InferencePurpose } from '@/core/llm-manager/types'
 import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
-import { runOutsideTurnTiming } from '@/core/llm-manager/turn-timing'
+import { runOutsideTurnTiming, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { DateHelper } from '@/helpers/date-helper'
@@ -1080,7 +1080,9 @@ export default class PulseManager {
         return
       }
 
-      await this.executeSessionMatter(state, matter)
+      await runWithTurnTiming(matter.id, sessionId, () => this.executeSessionMatter(state, matter), {
+        stage: TurnStage.AgentLoop
+      })
     })
   }
 

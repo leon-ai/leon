@@ -1,6 +1,12 @@
 // This metadata contract is shared with browser clients and must remain dependency-free.
 export enum TurnPhase {
   Turn = 'turn',
+  PostTurn = 'post-turn',
+  OwnerRewrite = 'owner-profile-rewrite',
+  OwnerRepair = 'owner-profile-repair',
+  OwnerVerification = 'owner-profile-verification',
+  OwnerCompaction = 'owner-profile-compaction',
+  OwnerExtraction = 'owner-profile-extraction',
   Runtime = 'runtime-initialization',
   Attachments = 'attachments',
   History = 'history-loading',
@@ -34,7 +40,21 @@ export enum TurnPhase {
   Persistence = 'response-persistence'
 }
 
+export enum TurnStage {
+  PreTurn = 'pre-turn',
+  AgentLoop = 'agent-loop',
+  PostTurn = 'post-turn'
+}
+
+export interface TurnTimingContext {
+  turnId: string
+  stage: TurnStage
+  taskId?: string
+  task?: string
+}
+
 export interface TurnTiming {
+  stage?: TurnStage
   id: string
   parentId?: string
   kind: 'phase' | 'inference'
@@ -47,4 +67,6 @@ export interface TurnTiming {
   provider?: string
   model?: string
   firstOutputMs?: number
+  usageId?: string
+  usage?: import('./llm-usage/usage-accounting').InferenceUsage
 }

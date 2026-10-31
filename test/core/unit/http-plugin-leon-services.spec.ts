@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONVERSATION_LOGGER } from '@/core'
+import NLU from '@/core/nlp/nlu/nlu'
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 
 const mocks = vi.hoisted(() => ({
@@ -93,9 +94,15 @@ function getProfileSessions(): Set<string> {
 }
 
 vi.mock('@/core', () => ({
+  MEMORY_MANAGER: {
+    observeTurn: vi.fn(async () => undefined),
+    saveMemoryCandidatesFromTurn: vi.fn(async () => 0)
+  },
+  SELF_MODEL_MANAGER: { observeTurn: vi.fn(async () => undefined) },
   TOOLKIT_REGISTRY: mocks.connectionRegistry,
   BRAIN: {
     isMuted: false,
+    talk: vi.fn(async () => undefined),
     runSkillAction: vi.fn(async (nluProcessResult: Record<string, unknown>) => {
       mocks.skillActions.push(structuredClone(nluProcessResult))
       return {
@@ -233,6 +240,7 @@ vi.mock('@/core/session-manager', () => ({
     },
     getActiveSessionId: (): string =>
       [...getProfileSessions()][0] || 'active-session',
+    getCurrentSessionId: (): string => mocks.activeSessionId,
     listSessions: (): Array<Record<string, unknown>> =>
       [...getProfileSessions()].map((id, index) => ({
         id,
@@ -258,7 +266,8 @@ vi.mock('@/core/session-manager', () => ({
         mocks.activeSessionId = previousSessionId
       }
     },
-    maybeSetFallbackTitle: vi.fn()
+    maybeSetFallbackTitle: vi.fn(),
+    generateTitleFromFirstMessage: vi.fn(async () => undefined)
   }
 }))
 
@@ -691,6 +700,9 @@ describe('HTTP plugin Leon services', () => {
     })
 
     expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual([
+      'session title generation',
+      'turn memory observation',
+      'react self-model reflection',
       'owner profile sync'
     ])
     expect(mocks.ownerProfileSyncCalls).toEqual([
@@ -706,6 +718,18 @@ describe('HTTP plugin Leon services', () => {
         ]
       }
     ])
+  })
+
+  it('schedules the same complete owner-turn maintenance for HTTP and legacy agent entry points', async () => {
+    const result = await runAgent({ query: 'Tell me about the coast.', create_session: true })
+    const expected = ['session title generation', 'turn memory observation', 'react self-model reflection', 'memory extraction']
+    expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual(expected)
+    mocks.maintenanceTasks.length = 0
+    mocks.activeSessionId = result.session_id
+
+    await new NLU()['runReAct']('Tell me about the coast.')
+
+    expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual(expected)
   })
 
   it('keeps profile runtime sessions isolated', async () => {

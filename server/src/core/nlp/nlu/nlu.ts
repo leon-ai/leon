@@ -25,17 +25,13 @@ import {
   BRAIN,
   CONVERSATION_LOGGER,
   SOCKET_SERVER,
-  MEMORY_MANAGER,
   PERSONA,
   LLM_PROVIDER,
   TOOL_CALL_LOGGER,
-  SELF_MODEL_MANAGER,
-  PULSE_MANAGER,
-  POST_TURN_MAINTENANCE_QUEUE
+  PULSE_MANAGER
 } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import Conversation from '@/core/nlp/conversation'
-import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import {
   DEFAULT_NLU_PROCESS_RESULT,
@@ -44,7 +40,9 @@ import {
 import { SkillRouterLLMDuty } from '@/core/llm-manager/llm-duties/skill-router-llm-duty'
 import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calling-llm-duty'
 import { SlotFillingLLMDuty } from '@/core/llm-manager/llm-duties/slot-filling-llm-duty'
-import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import { prepareAgentTurn } from '@/core/turn-lifecycle/pre-turn'
+import { runTurnLifecycle } from '@/core/turn-lifecycle'
+import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
 import {
   RoutingMode,
   SkillFormat,
@@ -864,211 +862,117 @@ export default class NLU {
     forcedToolName?: string,
     files?: AgentModelFile[]
   ): Promise<void> {
-    LogHelper.title('NLU')
-    LogHelper.info('Routing to ReAct...')
-    this._currentResponseRoute = 'react'
-    const agentSkillContext = agentSkillName
-      ? await SkillDomainHelper.getAgentSkillExecutionContext(agentSkillName)
-      : null
-
-    if (agentSkillName && !agentSkillContext) {
-      LogHelper.warning(
-        `Agent Skill "${agentSkillName}" could not be loaded. Continuing without active Agent Skill context.`
-      )
-    }
-
-    const reactDuty = new ReActLLMDuty({
-      input: utterance,
-      ...(files?.length ? { files } : {}),
-      agentSkill: agentSkillContext,
-      ...(forcedToolName ? { forcedToolName } : {})
-    })
-    await reactDuty.init()
-    const reactResult = await reactDuty.execute()
-    const output = reactResult?.output as unknown as string
-    const reactData =
-      reactResult?.data && typeof reactResult.data === 'object'
-        ? (reactResult.data as Record<string, unknown>)
-        : {}
-    const hasExplicitMemoryWrite =
-      reactData['hasExplicitMemoryWrite'] === true
-    const llmMetrics =
-      reactData['llmMetrics'] && typeof reactData['llmMetrics'] === 'object'
-        ? (reactData['llmMetrics'] as Record<string, unknown>)
+    await runTurnLifecycle({
+      sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
+      query: utterance
+    }, async () => {
+      LogHelper.title('NLU')
+      LogHelper.info('Routing to ReAct...')
+      this._currentResponseRoute = 'react'
+      const agentSkillContext = agentSkillName
+        ? await SkillDomainHelper.getAgentSkillExecutionContext(agentSkillName)
         : null
-    const agentResponseTrace =
-      reactData['agentResponseTrace'] &&
-      typeof reactData['agentResponseTrace'] === 'object'
-        ? (reactData['agentResponseTrace'] as AgentResponseTrace)
-        : null
-    const finalIntent =
-      typeof reactData['finalIntent'] === 'string'
-        ? (reactData['finalIntent'] as
-            | 'answer'
-            | 'clarification'
-            | 'cancelled'
-            | 'blocked'
-            | 'error')
-        : 'answer'
-    const toolExecutions = Array.isArray(reactData['executionHistory'])
-      ? (reactData['executionHistory'] as Array<Record<string, unknown>>)
-          .map((item) => {
-            const functionName =
-              typeof item['function'] === 'string' ? item['function'] : ''
-            const status = item['status'] === 'error' ? 'error' : 'success'
-            const observation =
-              typeof item['observation'] === 'string' ? item['observation'] : ''
-            if (!functionName) {
-              return null
-            }
 
-            return {
-              functionName,
-              status,
-              observation
-            }
-          })
-          .filter(
-            (
-              item
-            ): item is {
-              functionName: string
-              status: 'success' | 'error'
-              observation: string
-            } => Boolean(item)
-          )
-      : []
-
-    if (output && !BRAIN.isMuted) {
-      await BRAIN.talk(
-        llmMetrics || agentResponseTrace
-          ? {
-              text: String(output),
-              speech: String(output),
-              ...(llmMetrics
-                ? {
-                    llmMetrics: {
-                      ...readContextUsage(llmMetrics),
-                      usageAccounting: readUsageAccounting(llmMetrics['usageAccounting']),
-                      completionCount: Number(llmMetrics['completionCount'] || 0),
-                      reviewCount: Number(llmMetrics['reviewCount'] || 0),
-                      reviewRetryCount: Number(llmMetrics['reviewRetryCount'] || 0),
-                      reviewDurationMs: Number(llmMetrics['reviewDurationMs'] || 0),
-                      inputTokens: Number(llmMetrics['inputTokens'] || 0),
-                      outputTokens: Number(llmMetrics['outputTokens'] || 0),
-                      totalTokens: Number(llmMetrics['totalTokens'] || 0),
-                      finalAnswerOutputTokens: Number(
-                        llmMetrics['finalAnswerOutputTokens'] || 0
-                      ),
-                      durationMs: Number(llmMetrics['durationMs'] || 0),
-                      finalAnswerDurationMs: Number(
-                        llmMetrics['finalAnswerDurationMs'] || 0
-                      ),
-                      finalAnswerTokensPerSecond: Number(
-                        llmMetrics['finalAnswerTokensPerSecond'] || 0
-                      ),
-                      finalAnswerCharsPerSecond: Number(
-                        llmMetrics['finalAnswerCharsPerSecond'] || 0
-                      ),
-                      outputCharsPerSecond: Number(
-                        llmMetrics['outputCharsPerSecond'] || 0
-                      ),
-                      averagedPhaseTokensPerSecond: Number(
-                        llmMetrics['averagedPhaseTokensPerSecond'] || 0
-                      ),
-                      ...(llmMetrics['phaseMetrics'] &&
-                      typeof llmMetrics['phaseMetrics'] === 'object'
-                        ? {
-                            phaseMetrics: llmMetrics['phaseMetrics'] as {
-                              agent: {
-                                outputTokens: number
-                                durationMs: number
-                                tokensPerSecond: number
-                              }
-                              final_answer: {
-                                outputTokens: number
-                                durationMs: number
-                                tokensPerSecond: number
-                              }
-                            }
-                          }
-                        : {}),
-                      turnInputTokens: Number(llmMetrics['turnInputTokens'] || 0),
-                      turnOutputTokens: Number(llmMetrics['turnOutputTokens'] || 0),
-                      turnTotalTokens: Number(llmMetrics['turnTotalTokens'] || 0),
-                      ttftMs: Number(llmMetrics['ttftMs'] || 0),
-                      tokensPerSecond: Number(llmMetrics['tokensPerSecond'] || 0)
-                    }
-                  }
-                : {}),
-              ...(agentResponseTrace ? { agentResponseTrace } : {})
-            }
-          : String(output),
-        true
-      )
-    }
-
-    if (output) {
-      const sentAt = Date.now()
-      void MEMORY_MANAGER.observeTurn({
-        userMessage: utterance,
-        assistantMessage: String(output),
-        sentAt,
-        route: 'react',
-        toolExecutions
-      }).catch((error: unknown) => {
-        LogHelper.title('NLU')
-        LogHelper.warning(`Failed to store turn memory: ${error}`)
-      })
-      POST_TURN_MAINTENANCE_QUEUE.enqueue(
-        'react self-model reflection',
-        () => SELF_MODEL_MANAGER.observeTurn({
-          userMessage: utterance,
-          assistantMessage: String(output),
-          sentAt,
-          route: 'react',
-          finalIntent,
-          toolExecutions
-        })
-      )
-      if (hasExplicitMemoryWrite) {
-        POST_TURN_MAINTENANCE_QUEUE.enqueue(
-          'owner profile sync',
-          () => syncOwnerProfileFromTurn(
-            utterance,
-            String(output),
-            toolExecutions
-          ).then(() => undefined)
-        )
-        LogHelper.title('NLU')
-        LogHelper.debug(
-          'Skipping automatic memory extraction: explicit memory mutation already executed in this turn'
-        )
-      } else {
-        POST_TURN_MAINTENANCE_QUEUE.enqueue(
-          'memory extraction',
-          async () => {
-            const savedCount =
-              await MEMORY_MANAGER.saveMemoryCandidatesFromTurn(
-                utterance,
-                String(output),
-                sentAt
-              )
-
-            if (savedCount === 0) {
-              return
-            }
-
-            await syncOwnerProfileFromTurn(
-              utterance,
-              String(output),
-              toolExecutions
-            )
-          }
+      if (agentSkillName && !agentSkillContext) {
+        LogHelper.warning(
+          `Agent Skill "${agentSkillName}" could not be loaded. Continuing without active Agent Skill context.`
         )
       }
-    }
+
+      const reactDuty = await prepareAgentTurn({
+        input: utterance,
+        ...(files?.length ? { files } : {}),
+        agentSkill: agentSkillContext,
+        ...(forcedToolName ? { forcedToolName } : {})
+      })
+      const reactResult = await runTurnPhase(TurnPhase.Execution, () => reactDuty.execute())
+      const output = reactResult?.output as unknown as string
+      const reactData =
+        reactResult?.data && typeof reactResult.data === 'object'
+          ? (reactResult.data as Record<string, unknown>)
+          : {}
+      const llmMetrics =
+        reactData['llmMetrics'] && typeof reactData['llmMetrics'] === 'object'
+          ? (reactData['llmMetrics'] as Record<string, unknown>)
+          : null
+      const agentResponseTrace =
+        reactData['agentResponseTrace'] &&
+        typeof reactData['agentResponseTrace'] === 'object'
+          ? (reactData['agentResponseTrace'] as AgentResponseTrace)
+          : null
+      if (output && !BRAIN.isMuted) {
+        await BRAIN.talk(
+          llmMetrics || agentResponseTrace
+            ? {
+                text: String(output),
+                speech: String(output),
+                ...(llmMetrics
+                  ? {
+                      llmMetrics: {
+                        ...readContextUsage(llmMetrics),
+                        usageAccounting: readUsageAccounting(llmMetrics['usageAccounting']),
+                        completionCount: Number(llmMetrics['completionCount'] || 0),
+                        reviewCount: Number(llmMetrics['reviewCount'] || 0),
+                        reviewRetryCount: Number(llmMetrics['reviewRetryCount'] || 0),
+                        reviewDurationMs: Number(llmMetrics['reviewDurationMs'] || 0),
+                        inputTokens: Number(llmMetrics['inputTokens'] || 0),
+                        outputTokens: Number(llmMetrics['outputTokens'] || 0),
+                        totalTokens: Number(llmMetrics['totalTokens'] || 0),
+                        finalAnswerOutputTokens: Number(
+                          llmMetrics['finalAnswerOutputTokens'] || 0
+                        ),
+                        durationMs: Number(llmMetrics['durationMs'] || 0),
+                        finalAnswerDurationMs: Number(
+                          llmMetrics['finalAnswerDurationMs'] || 0
+                        ),
+                        finalAnswerTokensPerSecond: Number(
+                          llmMetrics['finalAnswerTokensPerSecond'] || 0
+                        ),
+                        finalAnswerCharsPerSecond: Number(
+                          llmMetrics['finalAnswerCharsPerSecond'] || 0
+                        ),
+                        outputCharsPerSecond: Number(
+                          llmMetrics['outputCharsPerSecond'] || 0
+                        ),
+                        averagedPhaseTokensPerSecond: Number(
+                          llmMetrics['averagedPhaseTokensPerSecond'] || 0
+                        ),
+                        ...(llmMetrics['phaseMetrics'] &&
+                        typeof llmMetrics['phaseMetrics'] === 'object'
+                          ? {
+                              phaseMetrics: llmMetrics['phaseMetrics'] as {
+                                agent: {
+                                  outputTokens: number
+                                  durationMs: number
+                                  tokensPerSecond: number
+                                }
+                                final_answer: {
+                                  outputTokens: number
+                                  durationMs: number
+                                  tokensPerSecond: number
+                                }
+                              }
+                            }
+                          : {}),
+                        turnInputTokens: Number(llmMetrics['turnInputTokens'] || 0),
+                        turnOutputTokens: Number(llmMetrics['turnOutputTokens'] || 0),
+                        turnTotalTokens: Number(llmMetrics['turnTotalTokens'] || 0),
+                        ttftMs: Number(llmMetrics['ttftMs'] || 0),
+                        tokensPerSecond: Number(llmMetrics['tokensPerSecond'] || 0)
+                      }
+                    }
+                  : {}),
+                ...(agentResponseTrace ? { agentResponseTrace } : {})
+              }
+            : String(output),
+          true
+        )
+      }
+
+      return reactResult
+    })
   }
+
   private async runSkillWriterCreateSkill(
     utterance: NLPUtterance
   ): Promise<void> {

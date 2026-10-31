@@ -357,13 +357,16 @@ export default class Brain {
             ...(llmMetrics ? { llmMetrics } : {}),
             ...(agentResponseTrace ? { agentResponseTrace } : {})
           })
-          POST_TURN_MAINTENANCE_QUEUE.enqueue(
-            'session title generation',
-            () => CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(
-              CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
-              ownerMessage
+          // Owner-agent turns schedule titles through their shared lifecycle.
+          if (responseRoute !== 'react') {
+            POST_TURN_MAINTENANCE_QUEUE.enqueue(
+              'session title generation',
+              () => CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(
+                CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
+                ownerMessage
+              )
             )
-          )
+          }
         }
 
         // SOCKET_SERVER.socket?.emit('is-typing', false)

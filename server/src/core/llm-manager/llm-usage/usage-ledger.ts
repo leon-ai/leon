@@ -6,12 +6,14 @@ import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { InferenceMetadata } from '../inference-metadata'
 import type { InferenceUsage } from './usage-context'
 import type { UsageAccounting } from './usage-accounting'
+import type { TurnTimingContext, TurnStage } from '../turn-timing-contract'
 
 export const USAGE_DIRECTORY = 'usage'
 export const HISTORICAL_USAGE_FILENAME = 'history.jsonl'
 const USAGE_FILE_EXTENSION = '.jsonl'
 
-export interface InferenceUsageRecord {
+export interface InferenceUsageRecord extends Partial<TurnTimingContext> {
+  attemptId?: string
   id: string
   startedAt: number
   finishedAt: number
@@ -32,6 +34,9 @@ export interface InferenceUsageQuery {
   from?: number
   until?: number
   sessionId?: string
+  turnId?: string
+  taskId?: string
+  stage?: TurnStage
 }
 
 function usageDay(timestamp: number): string {
@@ -107,7 +112,10 @@ export async function* readInferenceUsage(
         if (
           (query.from !== undefined && record.startedAt < query.from) ||
           (query.until !== undefined && record.startedAt >= query.until) ||
-          (query.sessionId !== undefined && record.sessionId !== query.sessionId)
+          (query.sessionId !== undefined && record.sessionId !== query.sessionId) ||
+          (query.turnId !== undefined && record.turnId !== query.turnId) ||
+          (query.taskId !== undefined && record.taskId !== query.taskId) ||
+          (query.stage !== undefined && record.stage !== query.stage)
         ) {
           continue
         }

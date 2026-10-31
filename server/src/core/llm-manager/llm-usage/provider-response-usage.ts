@@ -7,6 +7,7 @@ import type { InferenceMetadata } from '../inference-metadata'
 import { InferencePurpose } from '../types'
 import { readProviderUsage, type InferenceUsage } from './usage-context'
 import { appendInferenceUsage } from './usage-ledger'
+import { getTurnTimingContext } from '../turn-timing'
 import { ProviderRequestActivity, attachProviderFailureDiagnostics, getConnectionErrorCode } from '../llm-provider/provider-request-activity'
 
 const MAXIMUM_USAGE_EVENT_CHARS = 1_048_576
@@ -28,6 +29,7 @@ export async function trackProviderResponseUsage(
 ): Promise<Response> {
   const profileName = getActiveProfileName()
   const sessionId = getActiveConversationSessionId() || null
+  const turn = getTurnTimingContext()
   const startedAt = Date.now()
   const id = randomUUID()
   let usage: InferenceUsage = {}
@@ -61,6 +63,7 @@ export async function trackProviderResponseUsage(
 
       saved = appendInferenceUsage(profileName, {
         id, startedAt, finishedAt: Date.now(), sessionId,
+        ...turn,
         provider: inference.provider, model: inference.model,
         purpose: InferencePurpose.ProviderTool, inference,
         outcome: canceled ? 'canceled' : outcome, usage

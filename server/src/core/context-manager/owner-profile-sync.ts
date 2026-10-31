@@ -1,3 +1,4 @@
+import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -342,6 +343,7 @@ function parseOwnerDocumentCandidate(value: unknown): OwnerProfile | null {
 }
 
 async function promptForOwnerDocument(
+  phase: TurnPhase,
   prompt: string,
   systemPrompt: string,
   maxTokens: number,
@@ -354,7 +356,7 @@ async function promptForOwnerDocument(
   const groundedPrompt = data
     ? `${prompt}\n\nRequired JSON schema (include every required field):\n${JSON.stringify(data)}`
     : prompt
-  const completion = await LLM_PROVIDER.prompt(groundedPrompt, {
+  const completion = await runTurnPhase(phase, () => LLM_PROVIDER.prompt(groundedPrompt, {
     dutyType: LLMDuties.Inference,
     usagePurpose: InferencePurpose.OwnerProfile,
     systemPrompt,
@@ -365,7 +367,7 @@ async function promptForOwnerDocument(
     // These bounded editing/extraction calls need their output budget for data.
     disableThinking: true,
     ...(data ? { data } : {})
-  })
+  }))
 
   return completion?.output
 }
@@ -405,6 +407,7 @@ async function repairOwnerDocumentCandidate(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerRepair,
       prompt,
       'Repair an OWNER.md markdown document without dropping durable owner facts.',
       getOwnerDocumentOutputBudget(currentDocument),
@@ -458,6 +461,7 @@ async function rewriteOwnerDocumentFromTurn(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerRewrite,
       prompt,
       'Maintain a compact durable OWNER.md profile for Leon. Edit the whole document conservatively and accurately.',
       getOwnerDocumentOutputBudget(currentDocument),
@@ -508,6 +512,7 @@ async function compactOwnerDocument(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerCompaction,
       prompt,
       'Compact OWNER.md without losing durable owner facts.',
       OWNER_DOCUMENT_COMPACT_MAX_TOKENS,
@@ -557,6 +562,7 @@ async function verifyOwnerDocumentPreservesFacts(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerVerification,
       prompt,
       'Verify owner profile curation and corrections against the original document and latest owner message.',
       OWNER_DOCUMENT_VERIFY_MAX_TOKENS,
@@ -598,6 +604,7 @@ async function extractOwnerStaticFields(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerExtraction,
       prompt,
       'Extract a tiny stable owner cache from OWNER.md without guessing.',
       OWNER_STATIC_FIELDS_MAX_TOKENS,

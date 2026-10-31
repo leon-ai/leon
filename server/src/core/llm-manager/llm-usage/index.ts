@@ -5,6 +5,7 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 import { LogHelper } from '@/helpers/log-helper'
 import { inferenceUsageStorage, type InferenceUsageContext } from './usage-context'
 import { appendInferenceUsage } from './usage-ledger'
+import { getTurnTimingContext, recordTurnInferenceUsage } from '../turn-timing'
 
 /**
  * Isolates each attempt's route and counters across parallel work and retries.
@@ -17,6 +18,7 @@ export async function trackInferenceUsage<T>(
   const profileName = getActiveProfileName()
   const sessionId = getActiveConversationSessionId()
   const startedAt = Date.now()
+  const turn = getTurnTimingContext()
   const id = randomUUID()
   const context: InferenceUsageContext = { usage: {}, outcome: 'failed' }
 
@@ -25,6 +27,9 @@ export async function trackInferenceUsage<T>(
       return await execute()
     } finally {
       context.closed = true
+      if (context.attemptId) {
+        recordTurnInferenceUsage(context.attemptId, id, context.usage)
+      }
 
       try {
         await appendInferenceUsage(profileName, {
@@ -32,6 +37,8 @@ export async function trackInferenceUsage<T>(
           startedAt,
           finishedAt: context.finishedAt ?? Date.now(),
           sessionId,
+          ...turn,
+          ...(context.attemptId ? { attemptId: context.attemptId } : {}),
           ...target,
           provider: context.inference?.provider ?? target.provider,
           model: context.inference?.model ?? target.model,

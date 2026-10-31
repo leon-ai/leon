@@ -4,9 +4,9 @@ import { performance } from 'node:perf_hooks'
 import { randomUUID } from 'node:crypto'
 import type { AgentResponseTrace } from '@/types'
 
-import { CONVERSATION_LOGGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
-import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
-import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import { CONVERSATION_LOGGER } from '@/core'
+import { prepareAgentTurn } from '@/core/turn-lifecycle/pre-turn'
+import { runTurnLifecycle } from '@/core/turn-lifecycle'
 import { runWithTurnTiming, runTurnPhase, TurnPhase, setTurnTimingSession, getTurnTimings } from '@/core/llm-manager/turn-timing'
 import { measureOtherProcessingDuration } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-metrics'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
@@ -28,7 +28,6 @@ import { deserializeAgentTrace, serializeAgentTrace } from './agent-trace-serial
 import {
   elapsedMilliseconds,
   normalizeConversationSession,
-  normalizeOwnerProfileToolExecutions,
   normalizeToolCalls,
   resolveSessionId
 } from './normalizers'
@@ -97,7 +96,9 @@ export async function runAgent(
     throw new Error(`Invalid Leon profile name "${profileName}".`)
   }
 
-  return runWithProfileContext({ profileName }, () => runWithTurnTiming(input.request_id ?? randomUUID(), input.session_id ?? null, async () => {
+  const turnId = input.request_id ?? randomUUID()
+
+  return runWithProfileContext({ profileName }, () => runWithTurnTiming(turnId, input.session_id ?? null, async () => {
     const totalStartedAt = performance.now()
     await runTurnPhase(TurnPhase.Runtime, () => ensureActiveProfileRuntime())
     input.signal?.throwIfAborted()
@@ -120,7 +121,7 @@ export async function runAgent(
     let actionExecutionMs = 0
     let reasoningSummary = 'Understanding your request'
     const requestId = input.request_id || null
-    const messageId = `${requestId || randomUUID()}:leon`
+    const messageId = `${turnId}:leon`
     let turnArtifacts: Artifact[] = []
     let finalMetrics: Record<string, unknown> | null = null
     let finalTrace: HTTPPluginAgentTrace = { plan_steps: [], tool_calls: [] }
@@ -148,8 +149,8 @@ export async function runAgent(
       ),
       is_active: true
     })
-    const result = await CONVERSATION_SESSION_MANAGER.runWithSession(
-      sessionId,
+    const result = await runTurnLifecycle(
+      { sessionId, query, turnId: requestId ?? messageId },
       async () => {
         // HTTP turns bypass Brain, so persist both sides here to keep history coherent.
         await runTurnPhase(TurnPhase.Owner, () => CONVERSATION_LOGGER.upsert(
@@ -163,7 +164,7 @@ export async function runAgent(
         ))
         CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(sessionId, query)
 
-        const duty = runTurnPhase(TurnPhase.Construction, () => new ReActLLMDuty({
+        const duty = await prepareAgentTurn({
           input: query,
           responseId: messageId,
           onTextStream: (kind, payload): void => {
@@ -232,9 +233,8 @@ export async function runAgent(
             toolCalls.set(event.toolCall.id, toolCall)
             emit('tool_call', { tool_call: toolCall })
           }
-        }))
+        })
 
-        await runTurnPhase(TurnPhase.Duty, () => duty.init())
         input.signal?.throwIfAborted()
         const collected = await runTurnPhase(TurnPhase.Execution, () => collectArtifacts(() => duty.execute()))
         const dutyResult = collected.value
@@ -316,16 +316,6 @@ export async function runAgent(
             response_trace: trace,
             artifacts: turnArtifacts
           })
-
-          if (data['hasExplicitMemoryWrite'] === true) {
-            POST_TURN_MAINTENANCE_QUEUE.enqueue('owner profile sync', () =>
-              syncOwnerProfileFromTurn(
-                query,
-                output,
-                normalizeOwnerProfileToolExecutions(dutyResult)
-              ).then(() => undefined)
-            )
-          }
         }
 
         return dutyResult

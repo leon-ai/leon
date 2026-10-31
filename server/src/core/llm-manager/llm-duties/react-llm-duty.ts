@@ -25,9 +25,9 @@ import {
   MEMORY_MANAGER,
   CONVERSATION_LOGGER,
   SOCKET_SERVER,
-  TOOL_CALL_LOGGER,
-  POST_TURN_MAINTENANCE_QUEUE
+  TOOL_CALL_LOGGER
 } from '@/core'
+import { scheduleHistoryCompaction } from '@/core/turn-lifecycle/post-turn'
 import {
   LLMDuties,
   LLMProviders,
@@ -441,8 +441,7 @@ export class ReActLLMDuty extends LLMDuty {
         }))
 
         const dutyResult = this.makeDutyResult(answer)
-        POST_TURN_MAINTENANCE_QUEUE.enqueueIfNeeded(
-          'agent history compaction',
+        scheduleHistoryCompaction(
           () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(
             planWidgetIdValue,
             trackedSteps
