@@ -7,7 +7,8 @@ import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { LogHelper } from '@/helpers/log-helper'
 import { LLMProviders, LLMDuties, type CompletionAttemptTiming } from '@/core/llm-manager/types'
 import { getTurnTimings, recordTurnInference, runOutsideTurnTiming, runTurnPhase,
-  runWithTurnTiming, setTurnPhaseGoal, setTurnTimingSession, TurnPhase } from '@/core/llm-manager/turn-timing'
+  runWithTurnTiming, setTurnPhaseGoal, setTurnTimingSession, TurnPhase, observeTurnInferences } from '@/core/llm-manager/turn-timing'
+import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 
 const fixture = vi.hoisted(() => ({ root: '' }))
 vi.mock('@/core/profile-runtime/profile-paths', async (importOriginal) => {
@@ -106,6 +107,59 @@ it('returns the answer even if the diagnostic log cannot be written', async () =
   )).resolves.toBe('answer')
   expect(warning).toHaveBeenCalledOnce()
   expect(getTurnTimings()).toEqual([])
+})
+
+it('observes content-free request transitions, isolates background scopes and detaches after execution', async () => {
+  const updates: InferenceActivity[] = []
+  await runWithProfileContext({ profileName: 'owner' }, () => runWithTurnTiming('live', 'session', async () => {
+    const timing: CompletionAttemptTiming = {
+      attemptId: 'request', startedAt: Date.now(), elapsedMs: 0,
+      provider: LLMProviders.OpenAI, model: 'fixture', duty: LLMDuties.ReAct,
+      transport: 'http', outcome: 'started', inferenceTimeoutMs: 1_000, streamIdleTimeoutMs: 1_000,
+      providerEventCount: 0, providerCompleted: false, lastEvent: 'dispatched'
+    }
+    const gate = Promise.withResolvers<void>()
+    let detached: Promise<void> | undefined
+    await observeTurnInferences((activity) => updates.push(activity), async () => {
+      await runTurnPhase(TurnPhase.Request, async () => {
+        recordTurnInference(timing)
+        setTurnPhaseGoal(TurnPhase.Review)
+        recordTurnInference({ ...timing, elapsedMs: 12, outcome: 'completed' })
+      })
+      await runWithTurnTiming('background', 'session', async () => {
+        recordTurnInference({ ...timing, attemptId: 'private-background' })
+      })
+      detached = gate.promise.then(() => recordTurnInference({ ...timing, attemptId: 'late' }))
+    })
+    gate.resolve()
+    await detached
+    expect(updates.map(({ goal, outcome }) => ({ goal, outcome }))).toEqual([
+      { goal: TurnPhase.Request, outcome: 'started' },
+      { goal: TurnPhase.Review, outcome: 'started' },
+      { goal: TurnPhase.Review, outcome: 'completed' }
+    ])
+    expect(updates.every((activity) => activity.id === 'request')).toBe(true)
+    expect(Object.keys(updates[0]!).sort()).toEqual(['durationMs', 'goal', 'id', 'outcome', 'startedAt'])
+  }))
+})
+
+it('keeps progress-consumer failures from changing model execution', async () => {
+  const warning = vi.spyOn(LogHelper, 'warning').mockImplementation(() => undefined)
+  await runWithProfileContext({ profileName: 'owner' }, () => runWithTurnTiming('live', 'session', () =>
+    observeTurnInferences(() => {
+      throw new Error('Private consumer details')
+    }, async () => {
+      recordTurnInference({
+        attemptId: 'request', startedAt: Date.now(), elapsedMs: 12,
+        provider: LLMProviders.OpenAI, model: 'fixture', duty: LLMDuties.ReAct,
+        transport: 'http', outcome: 'completed', inferenceTimeoutMs: 1_000, streamIdleTimeoutMs: 1_000,
+        providerEventCount: 1, providerCompleted: true, lastEvent: 'finish'
+      })
+      return 'answer'
+    })
+  )).then((answer) => expect(answer).toBe('answer'))
+  expect(warning).toHaveBeenCalledWith('Could not publish inference activity.')
+  expect(JSON.stringify(warning.mock.calls)).not.toContain('Private consumer details')
 })
 
 it('keeps concurrent turns in one profile as intact independent JSONL records', async () => {

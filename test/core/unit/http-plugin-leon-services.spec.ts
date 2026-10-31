@@ -820,6 +820,7 @@ describe('HTTP plugin Leon services', () => {
         toolCall: {
           id: 'tool-1', name: 'system_utilities.tool_executions.read',
           status: 'running', commandOutput: 'First line\nSecond line\n',
+          preparationStartedAt: 1_600, startedAt: 2_000,
           lastOutputAt: 2_500, progressMessage: 'Receiving command output...'
         }
       })
@@ -862,6 +863,7 @@ describe('HTTP plugin Leon services', () => {
     expect(events.filter((event) => event['type'] === 'tool_call').at(-1)).toMatchObject({
       data: { tool_call: {
         ...toolCall, command_output: 'First line\nSecond line\n', last_output_at: 2_500,
+        preparation_started_at: 1_600, started_at: 2_000,
         progress_message: 'Receiving command output...'
       } }
     })

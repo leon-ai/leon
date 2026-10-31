@@ -53,6 +53,7 @@ export class ArchitectureContextFile extends ContextFile {
       '- Workers load assets from the codebase and resolve relative task files in the caller\'s workspace; Satellite uses its device\'s workspace.',
       '- Plans track scope, collection coverage and verified outcomes; their worklists persist through checkpointing and continuation.',
       '- The agent can share progress updates alongside tool calls during longer tasks.',
+      '- Foreground inference lifecycle metadata streams to browser clients and survives replay; private review content and auxiliary background inferences stay out of live feed activity.',
       '- Clarification pauses preserve the transcript, plan and execution state so the owner reply can resume the same task.',
       '- Profiles can limit agent iterations or run time; callers can supply a fixed deadline. Model calls, retries, tools and review share the deadline and reserve time for required writes, checks and the answer. Exhaustion preserves progress and reports incomplete work without renewed approval.',
       '- Completion review checks task evidence and plan progress; only opted-in, complete single lookups with default options can skip it. Plans, failures, recovery, partial/retained results and resumed unfinished work retain review.',

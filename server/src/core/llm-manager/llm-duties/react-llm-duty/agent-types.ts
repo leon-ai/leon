@@ -2,6 +2,7 @@ import type { LLMDutyParams } from '@/core/llm-manager/llm-duty'
 import type { ToolCompletionReview, AgentResponseToolCall  } from '@/types'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import type { LeonClientInterfaceTokenPayload } from '@/core/leon-interface/types'
+import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 export interface AgentSkillContext {
   id: string
   name: string
@@ -13,8 +14,12 @@ export interface AgentSkillContext {
 
 export type AgentRunProgressEvent =
   | {
+      type: 'inference_activity'
+      activity: InferenceActivity
+    }
+  | {
       type: 'progress_message'
-      message: { id: string, content: string, createdAt: number }
+      message: { id: string, content: string, createdAt: number, planStepId?: string | null }
     }
   | {
       type: 'reasoning_summary'

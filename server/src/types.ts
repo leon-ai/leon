@@ -159,6 +159,7 @@ export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
 }
 
 export interface AgentResponseToolCall {
+  planStepId?: string | null
   id: string
   preparationStartedAt?: number
   startedAt?: number
@@ -185,15 +186,17 @@ export interface AgentResponseToolCall {
  * Persisted, user-visible trace for replaying an agent turn.
  */
 export interface AgentResponseTrace {
+  answerStartedAt?: number
   timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
   id?: string
   inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' | 'review' })[]
-  progressMessages?: { id: string, content: string, createdAt: number }[]
+  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null }[]
   reasoning?: {
     id: string
     text: string
     phase: string
     startedAt: number
+    planStepId?: string | null
   }[]
   reasoningSummary?: string
   planSteps: AgentResponsePlanStep[]

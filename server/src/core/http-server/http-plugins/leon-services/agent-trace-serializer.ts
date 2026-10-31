@@ -10,6 +10,7 @@ export function serializeAgentTrace(
   includeDeveloperProvenance: boolean
 ): HTTPPluginAgentTrace {
   return {
+    ...(trace.answerStartedAt !== undefined ? { answer_started_at: trace.answerStartedAt } : {}),
     ...(trace.timings ? { timings: trace.timings.map((timing) => ({ ...timing })) } : {}),
     ...(trace.inferences
       ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
@@ -19,7 +20,8 @@ export function serializeAgentTrace(
           progress_messages: trace.progressMessages.map((message) => ({
             id: message.id,
             content: message.content,
-            created_at: message.createdAt
+            created_at: message.createdAt,
+            ...(message.planStepId !== undefined ? { plan_step_id: message.planStepId } : {})
           }))
         }
       : {}),
@@ -39,6 +41,7 @@ export function serializeAgentTrace(
       : {}),
     tool_calls: trace.toolCalls.map((toolCall) => ({
       id: toolCall.id,
+      ...(toolCall.planStepId !== undefined ? { plan_step_id: toolCall.planStepId } : {}),
       name: toolCall.name,
       ...(toolCall.toolkitName ? { toolkit_name: toolCall.toolkitName } : {}),
       ...(toolCall.toolName ? { tool_name: toolCall.toolName } : {}),
@@ -82,6 +85,7 @@ export function deserializeAgentTrace(
   trace: HTTPPluginAgentTrace
 ): AgentResponseTrace {
   return {
+    ...(trace.answer_started_at !== undefined ? { answerStartedAt: trace.answer_started_at } : {}),
     ...(trace.timings ? { timings: trace.timings.map((timing) => ({ ...timing })) } : {}),
     ...(trace.inferences
       ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
@@ -91,7 +95,8 @@ export function deserializeAgentTrace(
           progressMessages: trace.progress_messages.map((message) => ({
             id: message.id,
             content: message.content,
-            createdAt: message.created_at
+            createdAt: message.created_at,
+            ...(message.plan_step_id !== undefined ? { planStepId: message.plan_step_id } : {})
           }))
         }
       : {}),
@@ -109,6 +114,7 @@ export function deserializeAgentTrace(
       : {}),
     toolCalls: trace.tool_calls.map((toolCall) => ({
       id: toolCall.id || toolCall.name,
+      ...(toolCall.plan_step_id !== undefined ? { planStepId: toolCall.plan_step_id } : {}),
       name: toolCall.name,
       ...(toolCall.toolkit_name ? { toolkitName: toolCall.toolkit_name } : {}),
       ...(toolCall.tool_name ? { toolName: toolCall.tool_name } : {}),

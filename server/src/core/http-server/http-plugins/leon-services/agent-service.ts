@@ -177,11 +177,16 @@ export async function runAgent(
             : {}),
           allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true,
           onProgressEvent: (event): void => {
+            if (event.type === 'inference_activity') {
+              emit('inference_activity', { activity: event.activity })
+              return
+            }
             if (event.type === 'progress_message') {
               const message = {
                 id: event.message.id,
                 content: event.message.content,
-                created_at: event.message.createdAt
+                created_at: event.message.createdAt,
+                ...(event.message.planStepId !== undefined ? { plan_step_id: event.message.planStepId } : {})
               }
               progressMessages.set(message.id, message)
               emit('progress_message', { message })

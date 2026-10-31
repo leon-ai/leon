@@ -54,6 +54,10 @@ export interface TurnTimingContext {
 }
 
 export interface TurnTiming {
+  /**
+   * Captured at activity start. Null means turn-level work; omission means unknown.
+   */
+  planStepId?: string | null
   stage?: TurnStage
   id: string
   parentId?: string
@@ -70,3 +74,5 @@ export interface TurnTiming {
   usageId?: string
   usage?: import('./llm-usage/usage-accounting').InferenceUsage
 }
+
+export type InferenceActivity = Pick<TurnTiming, 'id' | 'goal' | 'startedAt' | 'durationMs' | 'outcome' | 'planStepId'>

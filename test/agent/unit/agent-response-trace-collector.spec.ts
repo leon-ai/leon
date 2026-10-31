@@ -5,25 +5,44 @@ import { deserializeAgentTrace, serializeAgentTrace } from '@/core/http-server/h
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 
 describe('AgentResponseTraceCollector', () => {
+  it('retains the current answer start through streaming and replay without retaining discarded drafts', () => {
+    const collector = new AgentResponseTraceCollector()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    collector.recordAnswer('draft', 'A provisional answer.')
+    now.mockReturnValue(2_000)
+    collector.recordAnswer('draft', ' More text.')
+    expect(collector.snapshot({}).answerStartedAt).toBe(1_000)
+    collector.recordAnswer('accepted', '', true)
+    expect(collector.snapshot({}).answerStartedAt).toBeUndefined()
+    collector.recordAnswer('accepted', 'The accepted answer.')
+    expect(deserializeAgentTrace(serializeAgentTrace(collector.snapshot({}), false)).answerStartedAt).toBe(2_000)
+    collector.reset()
+    expect(collector.snapshot({}).answerStartedAt).toBeUndefined()
+  })
+
   it('separates argument preparation from dispatch and preserves both timestamps through replay', () => {
     const collector = new AgentResponseTraceCollector()
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     const toolCall = { id: 'tool', name: 'test.lookup' }
 
-    collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'preparing' } })
+    const preparingEvent = collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'preparing' } })
     const preparing = collector.snapshot({})
 
     expect(preparing.toolCalls[0]).toMatchObject({ preparationStartedAt: 1_000 })
     expect(preparing.toolCalls[0]).not.toHaveProperty('startedAt')
+    expect(preparingEvent).toEqual({ type: 'tool_call', toolCall: preparing.toolCalls[0] })
 
     now.mockReturnValue(20_000)
-    collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'running' } })
+    const runningEvent = collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'running' } })
+    expect(runningEvent).toMatchObject({
+      toolCall: { preparationStartedAt: 1_000, startedAt: 20_000 }
+    })
     collector.record({ type: 'tool_call', toolCall: {
       ...toolCall, status: 'running', commandOutput: 'Python fixture\n',
       lastOutputAt: 20_010, progressMessage: 'Checking remote access.'
     } })
     now.mockReturnValue(20_050)
-    collector.record({ type: 'tool_call', toolCall: {
+    const completedEvent = collector.record({ type: 'tool_call', toolCall: {
       ...toolCall, status: 'success', durationMs: 50
     } })
     const finished = collector.snapshot({})
@@ -35,6 +54,8 @@ describe('AgentResponseTraceCollector', () => {
     })
     expect(deserializeAgentTrace(serializeAgentTrace(finished, false)).toolCalls)
       .toEqual(finished.toolCalls)
+    expect(completedEvent).toEqual({ type: 'tool_call', toolCall: finished.toolCalls[0] })
+    expect(preparingEvent).toMatchObject({ toolCall: { status: 'preparing' } })
     expect(preparing.toolCalls[0]?.status).toBe('preparing')
 
     collector.record({ type: 'tool_call', toolCall: {
@@ -82,9 +103,10 @@ describe('AgentResponseTraceCollector', () => {
     collector.record({ type: 'progress_message', message: first })
     collector.interrupt()
     const trace = collector.snapshot({})
-    expect(trace.progressMessages).toEqual([first, second])
+    const messages = [first, second].map((message) => ({ ...message, planStepId: null }))
+    expect(trace.progressMessages).toEqual(messages)
     expect(deserializeAgentTrace(serializeAgentTrace(trace, false)).progressMessages)
-      .toEqual([first, second])
+      .toEqual(messages)
     collector.reset()
     expect(collector.snapshot({}).progressMessages).toBeUndefined()
   })
@@ -141,6 +163,7 @@ describe('AgentResponseTraceCollector', () => {
           id: 'tool-1',
           name: 'computer_use.cua.get_screenshot',
           status: 'success',
+          planStepId: 'plan-1',
           toolCallTitle: 'Inspect the current screen',
           toolkitName: 'Computer Use',
           toolName: 'Cua',
@@ -161,6 +184,48 @@ describe('AgentResponseTraceCollector', () => {
       .toEqual(trace.toolCalls)
 
     now.mockRestore()
+  })
+
+  it('keeps start-time step ownership through concurrent completion, same-clock transitions and replay', () => {
+    const collector = new AgentResponseTraceCollector()
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const inference = { id: 'request', goal: 'tool-request', startedAt: 1_000, durationMs: 0, outcome: 'started' }
+    const unowned = collector.record({ type: 'inference_activity', activity: { ...inference, id: 'unowned' } })
+    collector.record({ type: 'plan_step', step: { id: 'first', label: 'First step', status: 'in_progress' } })
+    collector.record({ type: 'plan_step', step: { id: 'second', label: 'Second step', status: 'pending' } })
+    const thought = collector.recordReasoning('thought', 'Checking ', 'agent')
+    const started = collector.record({ type: 'inference_activity', activity: inference })
+    const progress = { id: 'progress', content: 'Checking the result.', createdAt: 1_000 }
+    collector.record({ type: 'progress_message', message: progress })
+    collector.record({ type: 'tool_call', toolCall: { id: 'tool', name: 'test.lookup', status: 'preparing' } })
+    collector.record({ type: 'tool_call', toolCall: {
+      id: 'explicit', name: 'test.lookup', status: 'running', stepLabel: 'Second step'
+    } })
+    collector.record({ type: 'plan_step', step: { id: 'first', label: 'First step', status: 'completed' } })
+    collector.record({ type: 'plan_step', step: { id: 'second', label: 'Second step', status: 'in_progress' } })
+    collector.recordReasoning('thought', 'the result.', 'agent')
+    collector.recordReasoning('next-thought', 'Next task.', 'agent')
+    const completed = collector.record({ type: 'inference_activity', activity: {
+      ...inference, outcome: 'completed', durationMs: 500
+    } })
+    collector.record({ type: 'tool_call', toolCall: { id: 'tool', name: 'test.lookup', status: 'success' } })
+    collector.record({ type: 'progress_message', message: { ...progress, createdAt: 2_000, content: 'Checked the result.' } })
+    expect(unowned).toMatchObject({ activity: { planStepId: null } })
+    expect(started).toMatchObject({ activity: { planStepId: 'first' } })
+    expect(completed).toMatchObject({ activity: { planStepId: 'first' } })
+    expect(thought.text).toBe('Checking ')
+    const snapshot = collector.snapshot({})
+    expect(snapshot.reasoning).toMatchObject([
+      { id: 'thought', planStepId: 'first' }, { id: 'next-thought', planStepId: 'second' }
+    ])
+    expect(snapshot.toolCalls).toMatchObject([{ planStepId: 'first' }, { planStepId: 'second' }])
+    expect(snapshot.progressMessages).toMatchObject([{ planStepId: 'first', createdAt: 1_000 }])
+    const replayed = deserializeAgentTrace(serializeAgentTrace(snapshot, false))
+    expect(replayed.toolCalls).toEqual(snapshot.toolCalls)
+    expect(replayed.progressMessages).toEqual(snapshot.progressMessages)
+    collector.reset()
+    expect(collector.record({ type: 'inference_activity', activity: inference }))
+      .toMatchObject({ activity: { planStepId: null } })
   })
 
   it('records only actual plan changes with their transition time', () => {

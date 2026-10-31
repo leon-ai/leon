@@ -9,7 +9,7 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LogHelper } from '@/helpers/log-helper'
 import type { CompletionAttemptTiming } from './types'
-import { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
+import { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext, type InferenceActivity } from './turn-timing-contract'
 import type { InferenceUsage } from './llm-usage/usage-context'
 
 export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
@@ -26,11 +26,59 @@ export interface MaintenanceTaskResult {
 interface TurnTimingScope extends TurnTimingContext {
   profile: string
   parentId?: string
+  onInference?: (activity: InferenceActivity) => void
   state: { sessionId: string | null, timings: Map<string, TurnTiming>, closed: boolean, omitted: number }
 }
 
 const storage = new AsyncLocalStorage<TurnTimingScope | undefined>()
 const pendingWrites = new Map<string, Promise<void>>()
+
+/**
+ * Observes only this foreground execution. Fresh background timing scopes do not
+ * inherit the listener, and detached work cannot emit after execution finishes.
+ */
+export async function observeTurnInferences<T>(
+  onInference: (activity: InferenceActivity) => void,
+  execute: () => Promise<T>
+): Promise<T> {
+  const scope = storage.getStore()
+  if (!scope) {
+    return execute()
+  }
+  let active = true
+
+  try {
+    return await storage.run({
+      ...scope,
+      onInference: (activity): void => {
+        if (active) {
+          onInference(activity)
+        }
+      }
+    }, execute)
+  } finally {
+    active = false
+  }
+}
+
+function notifyInference(scope: TurnTimingScope, timing: TurnTiming): void {
+  if (!scope.onInference || scope.state.closed) {
+    return
+  }
+
+  try {
+    scope.onInference({
+      id: timing.id,
+      goal: timing.goal,
+      startedAt: timing.startedAt,
+      durationMs: timing.durationMs,
+      outcome: timing.outcome
+    })
+  } catch {
+    // A disconnected progress consumer must never fail the model request.
+    LogHelper.warning('Could not publish inference activity.')
+  }
+}
 
 /**
  * Serializes concurrent turns targeting the same daily file so large append
@@ -118,11 +166,12 @@ export function setTurnPhaseGoal(goal: TurnPhase): void {
     return
   }
   const timing = scope.parentId ? scope.state.timings.get(scope.parentId) : undefined
-  if (timing) {
+  if (timing && timing.goal !== goal) {
     timing.goal = goal
     for (const child of scope.state.timings.values()) {
       if (child.parentId === timing.id && child.kind === 'inference') {
         child.goal = goal
+        notifyInference(scope, child)
       }
     }
   }
@@ -154,6 +203,7 @@ export function recordTurnInference(timing: CompletionAttemptTiming): void {
     provider: timing.provider, ...(timing.model ? { model: timing.model } : {}),
     ...(outputTimes.length ? { firstOutputMs: Math.min(...outputTimes) } : {})
   })
+  notifyInference(scope, scope.state.timings.get(timing.attemptId)!)
   if (timing.outcome !== 'started' && outputTimes.length && scope.state.timings.size < MAXIMUM_TURN_TIMINGS - 2) {
     const waitMs = Math.max(0, Math.min(timing.elapsedMs, ...outputTimes))
     for (const [suffix, goal, offset, durationMs] of [

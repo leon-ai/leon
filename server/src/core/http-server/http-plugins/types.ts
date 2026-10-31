@@ -41,6 +41,7 @@ export interface HTTPPluginRunAgentInput {
 }
 
 export interface HTTPPluginToolCall {
+  plan_step_id?: string | null
   id?: string
   name: string
   tool_call_title?: string
@@ -76,10 +77,11 @@ export interface HTTPPluginPlanTransition extends HTTPPluginPlanStep {
 }
 
 export interface HTTPPluginAgentTrace {
+  answer_started_at?: number
   timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
   inferences?: AgentResponseTrace['inferences']
   reasoning_summary?: string
-  progress_messages?: { id: string, content: string, created_at: number }[]
+  progress_messages?: { id: string, content: string, created_at: number, plan_step_id?: string | null }[]
   plan_steps: HTTPPluginPlanStep[]
   plan_transitions?: HTTPPluginPlanTransition[]
   tool_calls: HTTPPluginToolCall[]
@@ -241,6 +243,7 @@ export interface HTTPPluginConversationSessionMutationResult {
 }
 
 export type HTTPPluginAgentEventType =
+  | 'inference_activity'
   | 'text_stream'
   | 'turn_status'
   | 'owner_message'

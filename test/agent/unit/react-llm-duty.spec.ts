@@ -1320,7 +1320,8 @@ describe('continuous agent loop', () => {
       speed: 'auto'
     })
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
-    const duty = new ReActLLMDuty({ input: 'Check the weather.' })
+    const onProgressEvent = vi.fn()
+    const duty = new ReActLLMDuty({ input: 'Check the weather.', onProgressEvent })
     Object.assign(duty, {
       // A turn ID must not group reasoning across separate model calls.
       reasoningGenerationId: 'turn',
@@ -1364,6 +1365,12 @@ describe('continuous agent loop', () => {
       ...displayNames,
       status: 'preparing',
       preparationStartedAt: 1_000
+    })
+    expect(onProgressEvent).toHaveBeenCalledWith({
+      type: 'tool_call',
+      toolCall: expect.objectContaining({
+        ...displayNames, status: 'preparing', preparationStartedAt: 1_000
+      })
     })
     expect(duty['responseTraceCollector'].snapshot({}).inferences).toEqual([
       expect.objectContaining({
@@ -1411,12 +1418,14 @@ describe('continuous agent loop', () => {
       {
         id: events[0].generationId,
         text: 'Checking the weather.',
+        planStepId: null,
         phase: 'agent',
         startedAt: 1_000
       },
       {
         id: events[2].generationId,
         text: 'Reading the result.',
+        planStepId: null,
         phase: 'agent',
         startedAt: 3_000
       }
