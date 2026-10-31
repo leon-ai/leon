@@ -6,6 +6,7 @@ import type {
 } from '@/types'
 
 import type { AgentRunProgressEvent } from './agent-types'
+import { getTurnTimings } from '../../turn-timing'
 
 /**
  * Accumulates live agent progress into the compact trace persisted with a turn.
@@ -118,7 +119,9 @@ export class AgentResponseTraceCollector {
   }
 
   public snapshot(metrics: Record<string, unknown>): AgentResponseTrace {
+    const timings = getTurnTimings()
     return {
+      ...(timings.length ? { timings } : {}),
       ...(this.id ? { id: this.id } : {}),
       ...(this.inferences.size > 0
         ? {

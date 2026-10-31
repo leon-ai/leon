@@ -1,7 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONVERSATION_LOGGER } from '@/core'
+import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 
 const mocks = vi.hoisted(() => ({
+  archiveRoot: '',
+  archives: new Map<string, ConversationRepository>(),
   connectionRegistry: {
     getConnectionTools: vi.fn(),
     getConnectionTool: vi.fn()
@@ -54,6 +60,26 @@ const mocks = vi.hoisted(() => ({
     isAddedToHistory?: boolean
   }>
 }))
+
+vi.mock('@/core/session-manager/conversation-repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/core/session-manager/conversation-repository')>()
+
+  return {
+    ...actual,
+    CONVERSATION_REPOSITORY: new Proxy({} as ConversationRepository, {
+      get: (_target, property): unknown => {
+        let repository = mocks.archives.get(mocks.activeProfile)
+        if (!repository) {
+          repository = new actual.ConversationRepository(path.join(mocks.archiveRoot, mocks.activeProfile))
+          mocks.archives.set(mocks.activeProfile, repository)
+        }
+        const value = Reflect.get(repository, property)
+
+        return typeof value === 'function' ? value.bind(repository) : value
+      }
+    })
+  }
+})
 
 function getProfileSessions(): Set<string> {
   let sessions = mocks.sessions.get(mocks.activeProfile)
@@ -167,17 +193,26 @@ vi.mock('@/core/context-manager/owner-profile-sync', () => ({
 
 vi.mock('@/core/profile-runtime/profile-context', () => ({
   getActiveProfileName: (): string => mocks.activeProfile,
-  runWithProfileContext: async <T>(
+  runWithProfileContext: <T>(
     context: { profileName: string },
-    callback: () => Promise<T>
-  ): Promise<T> => {
+    callback: () => T
+  ): T => {
     const previousProfile = mocks.activeProfile
     mocks.activeProfile = context.profileName
 
     try {
-      return await callback()
-    } finally {
+      const result = callback()
+      if (result instanceof Promise) {
+        return result.finally(() => {
+          mocks.activeProfile = previousProfile
+        }) as T
+      }
       mocks.activeProfile = previousProfile
+
+      return result
+    } catch (error) {
+      mocks.activeProfile = previousProfile
+      throw error
     }
   }
 }))
@@ -301,6 +336,7 @@ import {
   subscribeAgentEvents
 } from '@/core/http-server/http-plugins/leon-services'
 import { getConnectionCatalog } from '@/core/connections/connection-catalog'
+import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
 
 it('overrides only declared setup display values without mutating tool defaults', async () => {
   const tool = {
@@ -323,7 +359,30 @@ it('overrides only declared setup display values without mutating tool defaults'
 })
 
 describe('HTTP plugin Leon services', () => {
-  beforeEach(() => {
+  it('delivers profile-wide mood changes to a session-scoped subscriber', async () => {
+    const events: unknown[] = []
+    const unsubscribe = await subscribeAgentEvents(
+      { profile_id: 'mood-owner', session_id: 'selected' },
+      (event) => events.push(event)
+    )
+    try {
+      publishAgentEvent('other-mood-owner', {
+        type: 'mood_changed', session_id: '', turn_id: null, response_id: null, data: { mood: { type: 'angry' } }
+      })
+      publishAgentEvent('mood-owner', {
+        type: 'text_stream', session_id: 'unselected', turn_id: null, response_id: null, data: { token: 'private' }
+      })
+      const mood = publishAgentEvent('mood-owner', {
+        type: 'mood_changed', session_id: '', turn_id: null, response_id: null, data: { mood: { type: 'tired' } }
+      })
+      expect(events).toEqual([mood])
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  beforeEach(async () => {
+    mocks.archiveRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-event-replay-'))
     mocks.activeProfile = 'startup-profile'
     mocks.activeSessionId = 'active-session'
     mocks.nextSessionId = 0
@@ -358,6 +417,14 @@ describe('HTTP plugin Leon services', () => {
       actionName: ''
     }
     mocks.persistedMessages.length = 0
+  })
+
+  afterEach(async () => {
+    for (const repository of mocks.archives.values()) {
+      repository.close()
+    }
+    mocks.archives.clear()
+    await fs.rm(mocks.archiveRoot, { recursive: true, force: true })
   })
 
   it('executes and persists one matched controlled action', async () => {
@@ -512,6 +579,8 @@ describe('HTTP plugin Leon services', () => {
         input: 'Check the weather.',
         additionalInstructions: 'Acknowledge pending background work.',
         allowDirectAnswerHandoff: false,
+        responseId: expect.any(String),
+        onTextStream: expect.any(Function),
         onProgressEvent: expect.any(Function)
       }
     ])

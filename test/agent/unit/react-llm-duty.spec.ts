@@ -21,6 +21,7 @@ import { AgentSessionState, createEmptyHistoryCompactionProviderState, type Agen
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import type { MessageLog } from '@/types'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
+import { getTurnTimings, runWithTurnTiming, TurnPhase } from '@/core/llm-manager/turn-timing'
 import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import type {
@@ -100,7 +101,7 @@ vi.mock('@/core/connections/connection-service', () => ({
 }))
 
 vi.mock('@/core', () => ({
-  CONVERSATION_LOGGER: { loadAll: coreMocks.loadConversationLogs },
+  CONVERSATION_LOGGER: { loadContextWindow: coreMocks.loadConversationLogs },
   PERSONA: {
     getCompactDutySystemPrompt: (prompt: string): string => prompt
   },
@@ -4581,6 +4582,40 @@ describe('model response status', () => {
     .filter(([event]) => event === 'model-response-status')
     .map(([, status]) => status)
 
+  it.each([
+    { names: [AGENT_TOOLKIT_LOADER_NAME], goal: TurnPhase.ToolSchemas },
+    { names: [AGENT_SKILL_TOOL_NAME], goal: TurnPhase.Skill },
+    { names: [AGENT_PLAN_TOOL_NAME], goal: TurnPhase.Plan },
+    { names: [AGENT_CLARIFICATION_TOOL_NAME], goal: TurnPhase.Clarification },
+    { names: [AGENT_CANCELLATION_TOOL_NAME], goal: TurnPhase.Cancellation },
+    { names: [CALLABLE_TOOL_NAME], goal: TurnPhase.ToolRequest },
+    { names: [AGENT_TOOLKIT_LOADER_NAME, CALLABLE_TOOL_NAME], goal: TurnPhase.Request },
+    { names: [], goal: TurnPhase.Answer }
+  ])('records one request with its actual $goal purpose', async ({ names, goal }) => {
+    coreMocks.prompt.mockResolvedValue({
+      output: names.length ? '' : 'Done.',
+      toolCalls: names.map((name, index) => ({
+        id: `call-${index}`, type: 'function', function: { name, arguments: '{}' }
+      }))
+    })
+    const duty = new ReActLLMDuty({ input: 'Follow the request.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    await runWithTurnTiming('request-category', null, async () => {
+      await duty['callAgentModel']([], 'Follow the request.', names.map((name) => ({
+        type: 'function', function: { name, description: 'Fixture action', parameters: { type: 'object' } }
+      })), { isRecoveryAttempt: false })
+
+      const lifecycle = getTurnTimings().find((timing) => timing.goal === TurnPhase.Lifecycle)
+      const requests = getTurnTimings().filter((timing) =>
+        timing.parentId === lifecycle?.id && timing.goal !== TurnPhase.Context
+      )
+      expect(requests).toHaveLength(1)
+      expect(requests[0]?.goal).toBe(goal)
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    })
+  })
+
   it('allows accepted reasoning to finish within the advertised response deadline', async () => {
     const runChatCompletion = vi.fn(async (_messages, params: CompletionParams) => {
       params.onStreamEvent?.({
@@ -4958,6 +4993,34 @@ describe('model response status', () => {
     })
   })
 
+  it.each([false, true])('accounts for complete model requests independently of visible thinking (%s)', (withThinking) => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(2_500)
+    const duty = new ReActLLMDuty({ input: 'Look up the result.' })
+    Object.assign(duty, {
+      hasFinalizedAnswer: true, executionStartedAt: 1_000,
+      lastExecutionHistory: [{
+        function: 'test.lookup.run', status: 'success', observation: 'Found it.',
+        startedAt: 5_000, durationMs: 5_000
+      }]
+    })
+    duty['observeCompletionMetrics']({ phase: 'agent', completionStartedAt: 1_000, completedAt: 5_000 })
+    duty['observeCompletionMetrics']({ phase: 'final_answer', completionStartedAt: 10_000, completedAt: 12_000 })
+    if (withThinking) {
+      duty['responseTraceCollector'].recordReasoning('thought', 'Checking the request.', 'agent')
+      duty['responseTraceCollector'].recordInference({
+        attemptId: 'thinking', startedAt: 2_000, elapsedMs: 1_000, phase: 'agent',
+        provider: LLMProviders.OpenAI, duty: LLMDuties.ReAct, transport: 'http',
+        outcome: 'completed', inferenceTimeoutMs: 10_000, streamIdleTimeoutMs: 10_000,
+        providerEventCount: 1, providerCompleted: true, lastEvent: 'finish'
+      })
+    }
+    now.mockReturnValue(12_000)
+    expect(duty['makeDutyResult']('Done.').data?.['llmMetrics']).toMatchObject({
+      durationMs: 11_000,
+      otherProcessingDurationMs: 0
+    })
+  })
+
   it('reports review time and retries even when an earlier review fails', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
@@ -4995,7 +5058,12 @@ describe('model response status', () => {
     })
 
     expect(duty['makeDutyResult']('Done.').data?.['llmMetrics']).toMatchObject({
-      reviewCount: 1, reviewRetryCount: 2, reviewDurationMs: 500, durationMs: 500
+      reviewCount: 1, reviewRetryCount: 2, reviewDurationMs: 500, durationMs: 500,
+      otherProcessingDurationMs: 0
+    })
+    now.mockReturnValue(2_500)
+    expect(duty['makeDutyResult']('Done.').data?.['llmMetrics']).toMatchObject({
+      durationMs: 1_500, otherProcessingDurationMs: 1_000
     })
     expect(duty['responseTraceCollector'].snapshot({}).inferences).toEqual([
       expect.objectContaining({ attemptId: 'retry-first', phase: 'review' }),
@@ -5145,7 +5213,7 @@ describe('model response status', () => {
       }
       expect(coreMocks.emitToChatClients).toHaveBeenCalledWith('llm-token', expect.objectContaining({
         token: '', reset: true
-      }))
+      }), { sessionId: expect.any(String) })
       params.onAttempt?.(attempt)
       params.onStreamEvent?.({ type: 'tool-input-start' })
       params.onAttempt?.({ ...attempt, outcome: 'failed', failureKind: CompletionFailureKind.Timeout })

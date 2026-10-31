@@ -3,6 +3,7 @@ import path from 'node:path'
 import { SERVER_CORE_PATH } from '@/constants'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
+import { runTurnPhase, TurnPhase } from './turn-timing'
 import { LOCAL_SERVER_PROVIDERS } from '@/core/llm-manager/llm-provider/llm-provider-constants'
 import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import { cleanUpResult } from '@/core/llm-manager/llm-provider/llm-provider-response'
@@ -395,6 +396,12 @@ export default class LLMProvider {
   }
 
   private async resolveProviderForDuty(
+    dutyType: LLMDuties | null
+  ): Promise<Provider | undefined> {
+    return runTurnPhase(TurnPhase.Provider, () => this.resolveDutyProvider(dutyType))
+  }
+
+  private async resolveDutyProvider(
     dutyType: LLMDuties | null
   ): Promise<Provider | undefined> {
     const target = this.getTargetForDuty(dutyType)

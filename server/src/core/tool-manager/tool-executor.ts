@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { GLOBAL_DATA_PATH, API_VERSION, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
@@ -574,7 +575,7 @@ export default class ToolExecutor {
     const responseJQ = this.getResponseJQ(functionConfig)
     let argsArray: unknown[] = []
     try {
-      argsArray = this.mapArgs(parsedInput, functionConfig.parameters)
+      argsArray = runTurnPhase(TurnPhase.Validation, () => this.mapArgs(parsedInput, functionConfig.parameters))
     } catch (error) {
       return this.buildResult({
         origin: input.origin,
@@ -640,7 +641,7 @@ export default class ToolExecutor {
     )?.[functionName]?.timeout
 
     const executeTool = (): ReturnType<typeof TOOL_WORKER_MANAGER.execute> =>
-      TOOL_WORKER_MANAGER.execute(
+      runTurnPhase(TurnPhase.Worker, () => TOOL_WORKER_MANAGER.execute(
         {
           toolkitId: resolvedTool.toolkitId,
           toolId: resolvedTool.toolId,
@@ -673,7 +674,7 @@ export default class ToolExecutor {
             functionName
           )
         }
-      )
+      ))
     let runtimeResult = await executeTool()
 
     if (

@@ -123,6 +123,10 @@ export interface LLMAnswerMetrics extends Partial<ContextUsageMetrics> {
   reviewCount?: number
   reviewRetryCount?: number
   reviewDurationMs?: number
+  /**
+   * Wall-clock time outside measured model requests and tool execution intervals.
+   */
+  otherProcessingDurationMs?: number
   inputTokens: number
   outputTokens: number
   totalTokens: number
@@ -181,6 +185,7 @@ export interface AgentResponseToolCall {
  * Persisted, user-visible trace for replaying an agent turn.
  */
 export interface AgentResponseTrace {
+  timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
   id?: string
   inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' | 'review' })[]
   progressMessages?: { id: string, content: string, createdAt: number }[]

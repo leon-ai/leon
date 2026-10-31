@@ -1,4 +1,5 @@
 import { LogHelper } from '@/helpers/log-helper'
+import { runOutsideTurnTiming } from '@/core/llm-manager/turn-timing'
 
 export type PostTurnMaintenanceTask = () => Promise<void> | void
 type PostTurnMaintenanceTaskPreparer = () =>
@@ -36,7 +37,7 @@ export default class PostTurnMaintenanceQueue {
     this.queue = this.queue.then(async () => {
       try {
         await waitForDisplayPathToUnwind()
-        const task = await prepareTask()
+        const task = await runOutsideTurnTiming(prepareTask)
 
         if (!task) {
           return
@@ -47,7 +48,7 @@ export default class PostTurnMaintenanceQueue {
         LogHelper.debug(
           `Running "${label}" | pending=${this.pendingCount}`
         )
-        await task()
+        await runOutsideTurnTiming(task)
         LogHelper.title('Post-Turn Maintenance')
         LogHelper.debug(
           `Completed "${label}" in ${Date.now() - startedAt}ms`

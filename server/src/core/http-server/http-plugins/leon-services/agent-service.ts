@@ -7,6 +7,8 @@ import type { AgentResponseTrace } from '@/types'
 import { CONVERSATION_LOGGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import { runWithTurnTiming, runTurnPhase, TurnPhase, setTurnTimingSession, getTurnTimings } from '@/core/llm-manager/turn-timing'
+import { measureOtherProcessingDuration } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-metrics'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
@@ -95,12 +97,13 @@ export async function runAgent(
     throw new Error(`Invalid Leon profile name "${profileName}".`)
   }
 
-  return runWithProfileContext({ profileName }, async () => {
+  return runWithProfileContext({ profileName }, () => runWithTurnTiming(input.request_id ?? randomUUID(), input.session_id ?? null, async () => {
     const totalStartedAt = performance.now()
-    await ensureActiveProfileRuntime()
+    await runTurnPhase(TurnPhase.Runtime, () => ensureActiveProfileRuntime())
     input.signal?.throwIfAborted()
-    const sessionId = resolveSessionId(input)
-    const { query, files } = await prepareOwnerAttachments(input.query.trim(), input.attachments, sessionId)
+    const sessionId = runTurnPhase(TurnPhase.Session, () => resolveSessionId(input))
+    setTurnTimingSession(sessionId)
+    const { query, files } = await runTurnPhase(TurnPhase.Attachments, () => prepareOwnerAttachments(input.query.trim(), input.attachments, sessionId))
     const planSteps = new Map<
       string,
       HTTPPluginAgentTrace['plan_steps'][number]
@@ -149,7 +152,7 @@ export async function runAgent(
       sessionId,
       async () => {
         // HTTP turns bypass Brain, so persist both sides here to keep history coherent.
-        await CONVERSATION_LOGGER.upsert(
+        await runTurnPhase(TurnPhase.Owner, () => CONVERSATION_LOGGER.upsert(
           {
             who: 'owner',
             message: query,
@@ -157,10 +160,10 @@ export async function runAgent(
             ...(input.request_id ? { messageId: input.request_id } : {})
           },
           { sessionId }
-        )
+        ))
         CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(sessionId, query)
 
-        const duty = new ReActLLMDuty({
+        const duty = runTurnPhase(TurnPhase.Construction, () => new ReActLLMDuty({
           input: query,
           responseId: messageId,
           onTextStream: (kind, payload): void => {
@@ -229,11 +232,11 @@ export async function runAgent(
             toolCalls.set(event.toolCall.id, toolCall)
             emit('tool_call', { tool_call: toolCall })
           }
-        })
+        }))
 
-        await duty.init()
+        await runTurnPhase(TurnPhase.Duty, () => duty.init())
         input.signal?.throwIfAborted()
-        const collected = await collectArtifacts(() => duty.execute())
+        const collected = await runTurnPhase(TurnPhase.Execution, () => collectArtifacts(() => duty.execute()))
         const dutyResult = collected.value
 
         turnArtifacts = collected.artifacts
@@ -244,8 +247,17 @@ export async function runAgent(
           data['llmMetrics'] && typeof data['llmMetrics'] === 'object'
             ? (data['llmMetrics'] as Record<string, unknown>)
             : null
+        const timings = getTurnTimings()
+        const startedAt = timings.find((timing) => timing.goal === TurnPhase.Turn)?.startedAt
+        const durationMs = elapsedMilliseconds(totalStartedAt)
+        const otherDuration = startedAt === undefined ? undefined : measureOtherProcessingDuration(
+          startedAt, durationMs,
+          timings.filter((timing) => timing.kind === 'inference' || timing.goal === TurnPhase.Tool)
+        )
         const metrics = {
           ...(llmMetrics || {}),
+          durationMs,
+          ...(otherDuration === undefined ? {} : { otherProcessingDurationMs: otherDuration }),
           inference_duration_ms: Number(llmMetrics?.['durationMs'] || 0),
           router_response_ms: Number(input.router_response_ms || 0),
           action_execution_ms: Number(actionExecutionMs.toFixed(2)),
@@ -276,23 +288,27 @@ export async function runAgent(
             ? { plan_transitions: planTransitions }
             : {}),
           tool_calls: durableTrace?.tool_calls || [...toolCalls.values()],
-          metrics
+          metrics,
+          timings: getTurnTimings()
         }
         finalTrace = trace
 
         if (typeof output === 'string' && output.trim()) {
-          await CONVERSATION_LOGGER.upsert(
+          await runTurnPhase(TurnPhase.Persistence, () => CONVERSATION_LOGGER.upsert(
             {
               who: 'leon',
               message: output,
               isAddedToHistory: true,
               artifacts: turnArtifacts,
               ...(messageId ? { messageId } : {}),
-              agentResponseTrace: (data['agentResponseTrace'] as AgentResponseTrace | undefined) ||
-                deserializeAgentTrace(trace)
+              agentResponseTrace: {
+                ...((data['agentResponseTrace'] as AgentResponseTrace | undefined) || deserializeAgentTrace(trace)),
+                metrics,
+                timings: trace.timings ?? []
+              }
             },
             { sessionId }
-          )
+          ))
           emit('metrics', { metrics })
           emit('final_answer', {
             message_id: messageId || '',
@@ -331,5 +347,5 @@ export async function runAgent(
       metrics: finalMetrics || data['llmMetrics'] || null,
       response_trace: finalTrace
     }
-  })
+  }))
 }

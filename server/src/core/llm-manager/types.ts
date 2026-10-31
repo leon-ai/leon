@@ -5,33 +5,9 @@ import type {
 import type { MessageLog } from '@/types'
 import type { SharedV4ProviderOptions } from '@ai-sdk/provider'
 
-export enum LLMDuties {
-  Inference = 'inference',
-  SkillRouter = 'skill-router',
-  ActionCalling = 'action-calling',
-  SlotFilling = 'slot-filling',
-  Paraphrase = 'paraphrase',
-  ReAct = 'react'
-  // TODO
-  /*SentimentAnalysis = 'sentiment-analysis',
-  QuestionAnswering = 'question-answering',
-  IntentFallback = 'intent-fallback',
-  RAG = 'rag',
-  NLUParaphraser = 'nlu-paraphraser'*/
-}
+import { LLMDuties, type InferencePurpose } from './inference-contract'
 
-export enum InferencePurpose {
-  ProviderTool = 'provider-tool',
-  SessionTitle = 'session-title',
-  Memory = 'memory',
-  OwnerProfile = 'owner-profile',
-  SelfModel = 'self-model',
-  Pulse = 'pulse',
-  PulsePlanning = 'pulse-planning',
-  PulseReaction = 'pulse-reaction',
-  ContextCompaction = 'context-compaction',
-  ImageInspection = 'image-inspection'
-}
+export { LLMDuties, InferencePurpose } from './inference-contract'
 
 export enum LLMProviders {
   LlamaCPP = 'llamacpp',
