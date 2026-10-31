@@ -66,6 +66,7 @@ import {
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
+  AGENT_REMOTE_PROVIDER_HISTORY_LOGS,
   AGENT_MODEL_RESPONSE_TIMEOUT_MS,
   AGENT_MODEL_RESPONSE_MAX_DURATION_MS
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
@@ -4190,6 +4191,51 @@ describe('conversation protocol history', () => {
   afterEach(() => {
     fs.rmSync(directory, { recursive: true, force: true })
   })
+
+  it.each(['completed', 'invalid-output', 'persistence-error'])(
+    'publishes independently timed history maintenance through its %s outcome',
+    async (outcome) => {
+      coreMocks.loadConversationLogs.mockResolvedValue(Array.from({ length: AGENT_REMOTE_PROVIDER_HISTORY_LOGS }, (_, index) => ({
+        ...owner, message: `Historical message ${index}`, sentAt: index + 1
+      })))
+      const completion = Promise.withResolvers<{ output: string }>()
+      coreMocks.prompt.mockReset().mockReturnValueOnce(completion.promise).mockResolvedValue({ output: '' })
+      const task = await manager.prepareHistoryCompactionAfterAnswer()
+      expect(task).not.toBeNull()
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+      if (outcome === 'persistence-error') {
+        vi.spyOn(ContextStateStore.prototype, 'save').mockImplementationOnce(() => {
+          throw new Error('Storage unavailable')
+        })
+      }
+      const pending = task!()
+      const started = coreMocks.emitAnswerToChatClients.mock.calls.at(-1)![0]
+      expect(started).toMatchObject({
+        widget: 'PlanWidget', sentAt: 1_000, fallbackText: 'Compacting history...',
+        activity: { goal: TurnPhase.Compaction, outcome: 'started', startedAt: 1_000, durationMs: 0 }
+      })
+      expect(started.id).toBe(started.replaceMessageId)
+      clock.mockReturnValue(9_679)
+      completion.resolve({ output: outcome === 'invalid-output' ? '' : 'The conversation covers project inspection.' })
+      if (outcome === 'persistence-error') {
+        await expect(pending).rejects.toThrow('Storage unavailable')
+      } else if (outcome === 'invalid-output') {
+        await expect(pending).resolves.toMatchObject({ outcome: 'failed' })
+      } else {
+        await pending
+        expect(JSON.parse(fs.readFileSync(path.join(directory, 'history.json'), 'utf8')).remote.summary)
+          .toContain('project inspection')
+      }
+      expect(coreMocks.emitAnswerToChatClients).toHaveBeenLastCalledWith(expect.objectContaining({
+        id: started.id, replaceMessageId: started.id, sentAt: 1_000,
+        fallbackText: outcome === 'completed' ? 'Compacted history' : 'History compaction failed',
+        activity: expect.objectContaining({
+          id: started.id, startedAt: 1_000, durationMs: 8_679,
+          outcome: outcome === 'completed' ? 'completed' : 'failed'
+        })
+      }))
+    }
+  )
 
   it('reuses completed tool exchanges and catalog order while appending unseen chat', async () => {
     await manager.saveConversationState(snapshot, answer.message)

@@ -12,6 +12,7 @@ import type { PostTurnMaintenanceTask } from '@/core/post-turn-maintenance-queue
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import type { MessageLog } from '@/types'
+import { TurnPhase, type InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 
 import {
   AGENT_HISTORY_COMPACTION_MAX_TOKENS,
@@ -29,7 +30,7 @@ import {
   hasHistoryCompactionContent,
   normalizeHistoryCompactionSummary
 } from './history-compaction'
-import { emitPlanWidget } from './plan-widget'
+import { emitPlanWidget, widgetId } from './plan-widget'
 import {
   AgentSessionState,
   createEmptyHistoryCompactionProviderState,
@@ -39,7 +40,6 @@ import {
   type AgentHistoryCompactionState,
   type AgentConversationState
 } from './agent-session-state'
-import type { PlanStepStatus, TrackedPlanStep } from './agent-types'
 import { buildAgentTranscriptHistory } from './agent-loop'
 
 interface PreparedAgentHistory {
@@ -513,10 +513,11 @@ export class AgentHistoryManager {
     }
   }
 
-  public async prepareHistoryCompactionAfterAnswer(
-    planWidgetId: string,
-    trackedSteps: TrackedPlanStep[]
-  ): Promise<PostTurnMaintenanceTask | null> {
+  /**
+   * Prepares eligible background maintenance with its own replayable activity,
+   * without modifying the completed answer or its execution plan.
+   */
+  public async prepareHistoryCompactionAfterAnswer(): Promise<PostTurnMaintenanceTask | null> {
     const historyConfig = this.getHistoryCompactionConfig()
     const historyScope = this.getHistoryCompactionScope()
     const conversationLogs = this.getHistoryEligibleConversationLogs(
@@ -547,29 +548,37 @@ export class AgentHistoryManager {
     }
 
     return async () => {
-      const compactionWidgetSteps = [
-        ...trackedSteps.map((step) => ({ ...step })),
-        {
-          label: 'Compacting history...',
-          status: 'in_progress' as PlanStepStatus
-        }
-      ]
-
-      emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
-
-      const compactedState = await this.rollHistoryCompactionState(
-        stateToCompact,
-        historyConfig
-      )
-
-      if (!compactedState) {
-        emitPlanWidget(trackedSteps, null, planWidgetId, true, null)
-        return
+      // Maintenance has its own identity and clock, outside the completed turn
+      // and its execution plan. Updates retain their original display position.
+      const id = widgetId('compaction')
+      const startedAt = Date.now()
+      const emit = (outcome: InferenceActivity['outcome']): void => {
+        const active = outcome === 'started'
+        const completed = outcome === 'completed'
+        emitPlanWidget([{
+          label: active ? 'Compacting history...' : completed ? 'Compacted history' : 'History compaction failed',
+          status: active ? 'in_progress' : completed ? 'completed' : 'error'
+        }], null, id, true, null, {
+          id, goal: TurnPhase.Compaction, startedAt,
+          durationMs: active ? 0 : Date.now() - startedAt, outcome
+        })
       }
 
-      this.saveHistoryCompactionProviderState(historyScope, compactedState)
-      compactionWidgetSteps[compactionWidgetSteps.length - 1]!.status = 'completed'
-      emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
+      emit('started')
+      try {
+        const compactedState = await this.rollHistoryCompactionState(stateToCompact, historyConfig)
+        if (!compactedState) {
+          emit('failed')
+          return { outcome: 'failed', reason: 'history-compaction-failed' }
+        }
+
+        this.saveHistoryCompactionProviderState(historyScope, compactedState)
+        emit('completed')
+        return { outcome: 'completed' }
+      } catch (error) {
+        emit('failed')
+        throw error
+      }
     }
   }
 
