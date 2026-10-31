@@ -109,12 +109,13 @@ export function ToolCall({ toolCall }: ToolCallProps) {
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">
           <p className="tool-call-details-title">{technicalTitle}</p>
-          {disclosure.isFetching && <p role="status">Loading tool details…</p>}
+          {disclosure.isLoading && <p role="status">Loading tool details…</p>}
           {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
-          <JsonView label="Input" value={details.input} />
+          <JsonView label="Input" value={toolCall.input ?? details.input} />
           <JsonView
             label="Output"
-            value={details.output ?? { status: toolCall.status }}
+            // Streamed output is newer than the lazy snapshot during refetches.
+            value={toolCall.output ?? details.output ?? { status: toolCall.status }}
           />
         </div>
       </Collapse>

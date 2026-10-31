@@ -185,7 +185,7 @@ export const test = base.extend<{ ui: UIFixture }>({
         const data: ConversationPage = {
           session, messages: records.slice(start, end), next_cursor: start > 0 ? String(start) : null,
           newer_cursor: end < records.length ? String(end) : null, event_cursor: 0,
-          is_running: false, command: null, selection: catalog.selection
+          is_running: session.status === 'wip', command: null, selection: catalog.selection
         }
         await json(route, data)
         return

@@ -101,7 +101,8 @@ export function Feed({
     // TanStack preserves visible keys when history is prepended and tracks
     // dynamic response growth without competing custom scroll observers.
     anchorTo: 'end',
-    useAnimationFrameWithResizeObserver: true,
+    // ResizeObserver measurements must reach the virtual extent before paint.
+    useAnimationFrameWithResizeObserver: false,
     observeElementOffset: (instance, onOffsetChange) =>
       observeElementOffset(instance, (offset, isScrolling) => {
         onOffsetChange(offset, isScrolling)

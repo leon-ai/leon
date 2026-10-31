@@ -417,6 +417,132 @@ for (const recordedTimestamps of [true, false]) {
   })
 }
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  for (const followBottom of [true, false]) {
+    test(`keeps streamed answers and cached tool panels stable (${reducedMotion}, follow bottom: ${followBottom})`, async ({ page, ui }) => {
+      await page.emulateMedia({ reducedMotion })
+      const startedAt = Date.now()
+      const responseId = 'resize-response'
+      const tool = {
+        id: 'resize-tool', name: 'system_utilities.shell.executeCommand',
+        toolCallTitle: 'Inspect streamed output', status: 'running' as const,
+        input: { command: 'Inspect output' }, commandOutput: 'Initial output',
+        preparationStartedAt: startedAt, startedAt
+      }
+      const record: ConversationRecord = {
+        who: 'leon', messageId: responseId, sentAt: startedAt + 1, isAddedToHistory: false,
+        draftGeneration: 'resize-answer', message: 'A stable line in a long answer.\n'.repeat(48),
+        agentResponseTrace: { id: responseId, planSteps: [], toolCalls: [tool] }
+      }
+      ui.sessions[0]!.status = 'wip' as SessionStatus
+      ui.history.set(SESSION_ID, [{
+        who: 'owner', messageId: 'resize-owner', message: 'Inspect streaming behavior.',
+        sentAt: startedAt, isAddedToHistory: true
+      }, record])
+
+      const refresh = Promise.withResolvers<void>()
+      let detailsRequests = 0
+      const detailsPath = `/api/v1/sessions/${SESSION_ID}/messages/${responseId}`
+      await page.route(`**${detailsPath}`, async (route) => {
+        detailsRequests++
+        if (detailsRequests > 1) {
+          await refresh.promise
+        }
+        if (!route.request().failure()) {
+          await route.fulfill({ json: { message: record } })
+        }
+      })
+
+      try {
+        await page.goto(SESSION_URL)
+        await page.getByRole('button', { name: tool.toolCallTitle, exact: true }).click()
+        const panel = page.locator('.tool-call-details')
+        await expect(panel.getByRole('status')).toHaveCount(0)
+        await expect(panel.getByLabel('Output JSON')).toContainText('Initial output')
+        await page.evaluate(() => document.fonts.ready)
+        await panel.evaluate(async (element) => {
+          await Promise.all((element.closest('.collapse')?.getAnimations() ?? [])
+            .map((animation) => animation.finished.catch(() => undefined)))
+        })
+        const panelHeight = (await panel.boundingBox())!.height
+        const main = page.locator('.app-main')
+        await main.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+        await expect.poll(() => main.evaluate((element) =>
+          element.scrollHeight - element.clientHeight - element.scrollTop
+        )).toBeLessThan(2)
+        if (!followBottom) {
+          await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 250 }))
+          await expect(page.getByRole('button', { name: 'Scroll to bottom', exact: true })).toBeVisible()
+        }
+
+        let sequence = 0
+        const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+          type, data, sequence: ++sequence, session_id: SESSION_ID,
+          turn_id: 'resize-owner', response_id: responseId, created_at: startedAt + sequence
+        }])
+        await emit('tool_call', { tool_call: { id: tool.id, name: tool.name, status: 'running' } })
+        await expect.poll(() => detailsRequests).toBeGreaterThan(1)
+        await expect(panel.getByRole('status')).toHaveCount(0)
+
+        const originalScrollTop = await main.evaluate((element) => element.scrollTop)
+        const frames: { gap: number, scrollTop: number, panelHeight: number, sizeLag: number }[] = []
+        for (let index = 0; index < 12; index++) {
+          const output = `Live output ${index}`
+          await emit('tool_call', { tool_call: {
+            id: tool.id, name: tool.name, status: 'running', command_output: output
+          } })
+          await expect(panel.getByLabel('Output JSON')).toContainText(output)
+          await emit('text_stream', {
+            kind: 'answer', generationId: 'resize-answer', token: `Additional streamed line ${index}.\n`
+          })
+
+          frames.push(...await page.evaluate(async () => {
+            const samples = []
+            for (let frame = 0; frame < 2; frame++) {
+              // Read after paint so an animation-frame-delayed measurement
+              // cannot hide a stale virtual extent behind its settled result.
+              await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+              const main = document.querySelector<HTMLElement>('.app-main')!
+              const row = document.querySelector<HTMLElement>('.feed-turn-latest')!
+              const sizer = document.querySelector<HTMLElement>('.feed-virtual-content')!
+              const panel = document.querySelector<HTMLElement>('.tool-call-details')!
+              samples.push({
+                gap: main.scrollHeight - main.clientHeight - main.scrollTop,
+                scrollTop: main.scrollTop,
+                panelHeight: panel.getBoundingClientRect().height,
+                sizeLag: Math.abs(row.getBoundingClientRect().height - sizer.getBoundingClientRect().height)
+              })
+            }
+
+            return samples
+          }))
+        }
+
+        expect(Math.max(...frames.map((frame) => Math.abs(frame.panelHeight - panelHeight)))).toBeLessThan(2)
+        if (followBottom) {
+          // At the end, extent and scroll correction must land together.
+          // Reading above it may update the extent asynchronously without
+          // moving the owner's viewport.
+          expect(Math.max(...frames.map((frame) => frame.sizeLag))).toBeLessThan(2)
+          expect(Math.max(...frames.map((frame) => Math.abs(frame.gap)))).toBeLessThan(2)
+        } else {
+          expect(Math.max(...frames.map((frame) => Math.abs(frame.scrollTop - originalScrollTop)))).toBeLessThan(2)
+        }
+
+        const refreshed = page.waitForResponse((response) =>
+          new URL(response.url()).pathname === detailsPath && response.ok()
+        )
+        refresh.resolve()
+        await refreshed
+        await expect(panel.getByLabel('Output JSON')).toContainText('Live output 11')
+        await expect(panel.getByRole('status')).toHaveCount(0)
+      } finally {
+        refresh.resolve()
+      }
+    })
+  }
+}
+
 test('replaces one standalone processing row in place and retains completed request history', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   let sequence = 0
