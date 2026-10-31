@@ -13,6 +13,7 @@ import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import { ModelSelector } from '@/components/model-selector'
 import type { useComposerModel } from '@/data/composer-model'
+import { useQueryHistory } from '@/data/query-history'
 
 import { QueryInputFocusWave } from './query-input-focus-wave'
 
@@ -25,6 +26,7 @@ const HEIGHT_COMPARISON_TOLERANCE = 1
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 interface QueryInputProps {
+  sessionId?: string
   autoFocus?: boolean
   autoFocusKey?: string
   introWave?: boolean
@@ -40,6 +42,7 @@ interface QueryInputProps {
 }
 
 export function QueryInput({
+  sessionId,
   autoFocus = false,
   autoFocusKey,
   introWave = false,
@@ -66,6 +69,11 @@ export function QueryInput({
   const measurementTextareaRef = useRef<HTMLTextAreaElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const keyboardFocusIntentRef = useRef(false)
+  const history = useQueryHistory(sessionId)
+  const historyIndexRef = useRef(-1)
+  const historyRequestRef = useRef(0)
+  const historyPendingRef = useRef(false)
+  const historySelectionRef = useRef(false)
   const normalizedQuery = query.trim()
   const submitDisabled = disabled || !canSubmit || normalizedQuery.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
@@ -226,7 +234,16 @@ export function QueryInput({
 
   useLayoutEffect(() => {
     updateTextareaHeight()
+    if (historySelectionRef.current) {
+      historySelectionRef.current = false
+      textareaRef.current?.setSelectionRange(query.length, query.length)
+    }
   }, [query, updateTextareaHeight])
+
+  useEffect(() => () => {
+    // An obsolete network response must never replace another session's input.
+    historyRequestRef.current += 1
+  }, [])
 
   useLayoutEffect(() => {
     const actions = actionsRef.current
@@ -280,15 +297,65 @@ export function QueryInput({
       return
     }
 
+    resetHistoryNavigation()
     onSubmit?.(normalizedQuery)
     setQuery('')
   }
 
+  function resetHistoryNavigation(): void {
+    historyIndexRef.current = -1
+    historyRequestRef.current += 1
+    historyPendingRef.current = false
+    historySelectionRef.current = false
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.nativeEvent.isComposing) {
+      return
+    }
+
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+      !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && sessionId) {
+      const start = historyIndexRef.current === -1
+      if (start && query !== '') {
+        return
+      }
+
+      event.preventDefault()
+      if (event.key === 'ArrowUp' && historyPendingRef.current) {
+        return
+      }
+
+      const index = historyIndexRef.current + (event.key === 'ArrowUp' ? 1 : -1)
+      if (index < 0) {
+        resetHistoryNavigation()
+        setQuery('')
+        return
+      }
+
+      const request = ++historyRequestRef.current
+      historyPendingRef.current = true
+      void history.read(index, start).then((message) => {
+        if (historyRequestRef.current !== request || message === undefined) {
+          return
+        }
+
+        historyIndexRef.current = index
+        historySelectionRef.current = true
+        setQuery(message)
+      }).catch(() => {
+        // The shared query cache reports failures through the toast component.
+      }).finally(() => {
+        if (historyRequestRef.current === request) {
+          historyPendingRef.current = false
+        }
+      })
+      return
+    }
+
     if (
       event.key !== 'Enter' ||
-      event.shiftKey ||
-      event.nativeEvent.isComposing
+      event.shiftKey
     ) {
       return
     }
@@ -347,7 +414,10 @@ export function QueryInput({
               playFocusWave()
             }
           }}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            resetHistoryNavigation()
+            setQuery(event.target.value)
+          }}
           onKeyDown={handleKeyDown}
         />
         <textarea

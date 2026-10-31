@@ -13,6 +13,7 @@ import { ConnectionError, requestErrors } from './request-errors'
 import { sessionsQueryKey, SESSION_PAGE_SIZE, SessionStatus, type SessionsPage } from './sessions'
 import type { FeedEntry } from './feed'
 import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
+import { queryHistoryKey } from './query-history'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
 const MAXIMUM_HISTORY_PAGES = 10
@@ -209,6 +210,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
       void queryClient.invalidateQueries({ queryKey: key, exact: true })
     },
     onSuccess: ({ command }) => {
+      void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, sessionId), exact: true })
       if (command.status !== 'accepted') {
         void queryClient.invalidateQueries({ queryKey: key, exact: true })
       }
@@ -271,6 +273,9 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
         return
       }
       const event = JSON.parse(String(message.data)) as ConversationEvent
+      if (event.type === 'owner_message' || event.data['code'] === 'replay_snapshot_required') {
+        void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, event.session_id || sessionId || ''), exact: true })
+      }
       if (event.type === 'mood_changed') {
         void queryClient.invalidateQueries({ queryKey: [...AMBIENT_CONDITIONS_QUERY_KEY, profile], exact: true })
         return

@@ -12,6 +12,7 @@ declare module 'better-sqlite3' {
     run(...params: unknown[]): RunResult
     get(...params: unknown[]): Record<string, unknown> | undefined
     all(...params: unknown[]): Array<Record<string, unknown>>
+    iterate(...params: unknown[]): IterableIterator<Record<string, unknown>>
   }
 
   export interface Database {

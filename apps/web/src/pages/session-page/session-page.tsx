@@ -107,6 +107,7 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
           />
         </div>
         <QueryInput
+          sessionId={sessionId}
           autoFocus
           autoFocusKey={`${navigationKey}:${composerFocusRequest}`}
           model={model}

@@ -160,6 +160,34 @@ describe('web conversation runtime', () => {
     expect((await request('GET', `/api/v1/sessions/${first}`)).statusCode).toBe(404)
   })
 
+  it('pages query text separately from answers and rejects missing sessions and invalid budgets', async () => {
+    const id = await create()
+    const other = await create()
+    await runWithProfileContext({ profileName: profile }, async () => {
+      CONVERSATION_REPOSITORY.acceptCommand(id, randomUUID(), 'First query')
+      CONVERSATION_REPOSITORY.upsertMessage(id, {
+        who: 'leon', message: 'Answer', isAddedToHistory: true
+      })
+      CONVERSATION_REPOSITORY.acceptCommand(id, randomUUID(), 'Second query\nsecond line')
+      CONVERSATION_REPOSITORY.acceptCommand(other, randomUUID(), 'Other session')
+    })
+
+    const page = await request('GET', `/api/v1/sessions/${id}/queries?limit=1`)
+    expect(page.statusCode).toBe(200)
+    expect(page.json().queries).toEqual([{
+      messageId: expect.any(String), message: 'Second query\nsecond line'
+    }])
+    const older = await request('GET', `/api/v1/sessions/${id}/queries?before=${page.json().next_cursor}`)
+    expect(older.json().queries.map((query: { message: string }) => query.message)).toEqual(['First query'])
+    expect(older.json().next_cursor).toBeNull()
+    expect((await request('GET', `/api/v1/sessions/${id}/queries?characters=1`)).json().queries).toEqual([])
+    for (const query of ['limit=101', 'before=NaN', 'characters=0', `characters=${Number.MAX_SAFE_INTEGER + 1}`]) {
+      expect((await request('GET', `/api/v1/sessions/${id}/queries?${query}`)).statusCode).toBe(400)
+    }
+    expect((await request('GET', '/api/v1/sessions/missing/queries')).statusCode).toBe(404)
+    expect(fixture.executions).toHaveLength(0)
+  })
+
   it('runs different sessions concurrently, deduplicates delivery, and stops only the addressed session', async () => {
     const first = await create()
     const second = await create()

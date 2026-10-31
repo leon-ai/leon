@@ -28,6 +28,11 @@ const historyQuerySchema = Type.Object({
   after: Type.Optional(Type.String({ maxLength: 32 }))
 })
 const compactQuerySchema = Type.Object({ compact: Type.Optional(Type.Boolean()) })
+const queryHistorySchema = Type.Object({
+  limit: historyQuerySchema.properties.limit,
+  before: historyQuerySchema.properties.before,
+  characters: Type.Optional(Type.Integer({ minimum: 1 }))
+})
 const createSessionBodySchema = Type.Object({ id: Type.Optional(Type.String({ format: 'uuid' })) })
 
 const updateSessionSchema = {
@@ -125,6 +130,26 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
         command: snapshot.command,
         selection: getSessionSelection(session)
       })
+    } catch (error) {
+      return reply.code(400).send({ success: false, message: String(error) })
+    }
+  })
+
+  fastify.get<{
+    Params: Static<typeof sessionParamsSchema>
+    Querystring: Static<typeof queryHistorySchema>
+  }>(`/api/${options.apiVersion}/sessions/:${SESSION_ID_PARAM_NAME}/queries`, {
+    schema: { params: sessionParamsSchema, querystring: queryHistorySchema }
+  }, async (request, reply) => {
+    const sessionId = request.params[SESSION_ID_PARAM_NAME]
+    if (!CONVERSATION_REPOSITORY.readSession(sessionId)) {
+      return reply.code(404).send({ success: false, message: 'Session not found.' })
+    }
+
+    try {
+      const page = CONVERSATION_REPOSITORY.readQueryHistory(sessionId, request.query)
+
+      return reply.send({ queries: page.items, next_cursor: page.nextCursor })
     } catch (error) {
       return reply.code(400).send({ success: false, message: String(error) })
     }
