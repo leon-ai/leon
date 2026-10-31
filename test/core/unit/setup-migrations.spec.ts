@@ -11,6 +11,7 @@ import { getProfilePaths, type ProfilePaths } from '@/core/profile-runtime/profi
 import { runProfileMigrations } from '@@/scripts/setup/setup-migrations'
 import migrateMediaToolSettings from '@@/scripts/setup/migrations/2026100812124300-migrate-media-tool-settings'
 import migrateInferenceUsage from '@@/scripts/setup/migrations/2026100823413300-backfill-inference-usage'
+import migrateTemporaryContextBudget from '@@/scripts/setup/migrations/2026110101531712-increase-temporary-context-budget'
 import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 
 const FIRST = '2026100120203102-z-first.js'
@@ -79,6 +80,30 @@ async function usageRecords(profile: ProfilePaths): Promise<InferenceUsageRecord
 
   return records
 }
+
+it('updates the temporary context default once while preserving custom profile settings', async () => {
+  await fixture()
+  const profile = pathsFor('a')
+  const settingsPath = path.join(profile.tools, 'structured_knowledge', 'memory', 'settings.json')
+
+  await migrateTemporaryContextBudget(profile)
+  expect(await fs.access(settingsPath).then(() => true, () => false)).toBe(false)
+
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true })
+  await fs.writeFile(settingsPath, JSON.stringify({
+    temporaryContext: { tokenBudget: 600, maxItems: 8 }, other: 'preserved'
+  }))
+  await migrateTemporaryContextBudget(profile)
+  await migrateTemporaryContextBudget(profile)
+  expect(JSON.parse(await fs.readFile(settingsPath, 'utf8'))).toEqual({
+    temporaryContext: { tokenBudget: 4_096, maxItems: 8 }, other: 'preserved'
+  })
+
+  const customSettings = JSON.stringify({ temporaryContext: { tokenBudget: 2_000 } })
+  await fs.writeFile(settingsPath, customSettings)
+  await migrateTemporaryContextBudget(profile)
+  expect(await fs.readFile(settingsPath, 'utf8')).toBe(customSettings)
+})
 
 it('imports profile history once, preserving saved totals and excluding live-ledger overlap', async () => {
   await fixture()
