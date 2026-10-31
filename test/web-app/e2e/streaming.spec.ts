@@ -4,6 +4,100 @@ import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-cont
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL } from './fixtures'
 
+for (const withPlan of [false, true]) {
+  test(`updates post-answer compaction independently of turn and plan state (plan: ${withPlan})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: withPlan ? 'reduce' : 'no-preference' })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    const startedAt = Date.now()
+    answer.agentResponseTrace = { id: answer.messageId, toolCalls: [], metrics: { durationMs: 6_000 },
+      planSteps: withPlan ? [{ id: 'inspect', label: 'Inspect the sources', status: 'completed' }] : [] }
+    await page.goto(SESSION_URL)
+    const status = page.getByRole('region', { name: 'History compaction', exact: true })
+    const activity = { id: 'history-maintenance', goal: TurnPhase.Compaction,
+      startedAt, durationMs: 0, outcome: 'started' }
+    const widget = { widget: 'PlanWidget', fallbackText: 'Compacting history...', activity }
+    let sequence = 0
+    const emit = (): Promise<void> => ui.emit([{
+      type: 'widget', sequence: ++sequence, session_id: SESSION_ID, turn_id: null,
+      response_id: activity.id, created_at: startedAt + activity.durationMs, data: { widget }
+    }])
+    await emit()
+    await expect(status).toHaveClass(/process-group-active/)
+    await expect(status.locator('.process-group-title')).toHaveText('Compacting history...')
+    await expect(status.locator('.activity-wave-active')).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()).toHaveText(answer.message)
+    await expect(page.locator('.leon-message-work')).toHaveCount(withPlan ? 1 : 0)
+    const saved: ConversationRecord = { who: 'leon', messageId: activity.id, message: widget.fallbackText,
+      sentAt: startedAt, isAddedToHistory: false, widget: structuredClone(widget) }
+    ui.history.get(SESSION_ID)!.push(saved)
+    await page.reload()
+    await expect(status).toHaveClass(/process-group-active/)
+    await expect(status.locator('.process-group-title')).toHaveText('Compacting history...')
+
+    activity.durationMs = 8_679
+    activity.outcome = 'completed'
+    widget.fallbackText = 'Compacted history'
+    saved.widget = structuredClone(widget)
+    await emit()
+    await expect(status).not.toHaveClass(/process-group-active/)
+    await expect(status.locator('.process-group-title')).toHaveText('Compacted history in 9s')
+    await expect(status.locator('.activity-wave-active')).toHaveCount(0)
+    await page.reload()
+    await expect(status.locator('.process-group-title')).toHaveText('Compacted history in 9s')
+    await expect(status.locator('.activity-timestamp')).toHaveCount(1)
+    await expect(page.locator('.leon-message-work')).toHaveCount(withPlan ? 1 : 0)
+    await expect(page.locator('.leon-message').filter({ has: status }).locator('.final-answer')).toHaveCount(0)
+    if (withPlan) {
+      await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
+    }
+    await page.screenshot({ path: testInfo.outputPath('completed-compaction.png') })
+
+    activity.outcome = 'started'
+    activity.durationMs = 0
+    await emit()
+    await expect(status).toHaveClass(/process-group-active/)
+    activity.outcome = 'failed'
+    activity.durationMs = 435
+    widget.fallbackText = 'History compaction failed'
+    saved.widget = structuredClone(widget)
+    await emit()
+    await expect(status.locator('.process-group-title')).toHaveText('History compaction failed after 435ms')
+    await expect(status).not.toHaveClass(/process-group-active/)
+    await page.reload()
+    await expect(status.locator('.process-group-title')).toHaveText('History compaction failed after 435ms')
+  })
+}
+
+test('updates and restores legacy compaction from its checkbox without inventing duration', async ({ page, ui }) => {
+  const label = 'Compacting history...'
+  const widget: NonNullable<ConversationRecord['widget']> = { widget: 'PlanWidget', fallbackText: label, componentTree: {
+    component: 'WidgetWrapper', props: { children: [{ component: 'List', props: { children: [{
+      component: 'ListItem', props: { children: [{ component: 'Text', props: { children: label } }] }
+    }] } }] }
+  } }
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = { id: answer.messageId, toolCalls: [], metrics: { durationMs: 6_000 },
+    planSteps: [{ id: 'finished', label: 'Inspect the sources', status: 'completed' }] }
+  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: 'saved-compaction', message: label,
+    sentAt: Date.now(), isAddedToHistory: false, widget })
+  await page.goto(SESSION_URL)
+  const status = page.getByRole('region', { name: 'History compaction', exact: true })
+  await expect(status).toHaveClass(/process-group-active/)
+  widget.componentTree = { component: 'WidgetWrapper', props: { children: [{ component: 'List', props: { children: [{
+    component: 'ListItem', props: { children: [{ component: 'Checkbox', props: { label, checked: true } }] }
+  }] } }] } }
+  await ui.emit([{ type: 'widget', sequence: 1, session_id: SESSION_ID, turn_id: null,
+    response_id: 'saved-compaction', created_at: Date.now(), data: { widget } }])
+  await expect(status.locator('.process-group-title')).toHaveText('Compacted history')
+  await page.reload()
+  await expect(status.locator('.process-group-title')).toHaveText('Compacted history')
+  await expect(status).not.toHaveClass(/process-group-active/)
+  await expect(status.locator('.activity-timestamp')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
+  await expect(page.locator('.leon-message').filter({ has: status }).locator('.final-answer')).toHaveCount(0)
+})
+
 test('replaces send with a danger stop action without submitting or losing the draft', async ({ page, ui }) => {
   const stopPath = `/api/v1/sessions/${SESSION_ID}/stop`
   await page.route(`**${stopPath}`, (route) => route.fulfill({ json: { success: true } }))

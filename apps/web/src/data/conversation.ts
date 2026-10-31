@@ -1,5 +1,5 @@
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
-import type { TurnTiming } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import type { InferenceActivity, TurnTiming } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import type { FeedPlanStepStatus, FeedToolCallStatus, JsonValue } from './feed'
 import type { ConversationSession } from './sessions'
 import type { ModelSettings, ModelProvider } from './model-catalog'
@@ -65,7 +65,12 @@ export interface ConversationRecord {
   agentResponseTrace?: ConversationTrace
   llmMetrics?: ConversationMetrics
   artifacts?: Artifact[]
-  widget?: { widget: string } | null
+  widget?: {
+    widget: string
+    componentTree?: Record<string, unknown>
+    fallbackText?: string
+    activity?: InferenceActivity
+  } | null
   draftGeneration?: string
   historical?: boolean
 }

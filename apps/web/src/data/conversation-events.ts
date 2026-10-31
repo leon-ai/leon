@@ -59,6 +59,18 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   if (previous.isAddedToHistory && event.type !== 'final_answer' && event.type !== 'artifacts') {
     return messages
   }
+  if (event.type === 'widget') {
+    const widget = event.data['widget'] as ConversationRecord['widget']
+    if (!widget?.widget) {
+      return messages
+    }
+    const record: ConversationRecord = {
+      ...previous, widget, message: widget.fallbackText ?? '',
+      sentAt: widget.activity?.startedAt ?? previous.sentAt
+    }
+
+    return index < 0 ? [...messages, record] : messages.map((message, position) => position === index ? record : message)
+  }
   let record: ConversationRecord = { ...previous }
   const trace: ConversationTrace = {
     id, planSteps: [], toolCalls: [], ...previous.agentResponseTrace

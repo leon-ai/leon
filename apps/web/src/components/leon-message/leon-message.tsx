@@ -114,6 +114,25 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
 }
 
 function renderActivity(activity: LeonFeedActivity) {
+  if (activity.type === 'compaction') {
+    const duration = formatToolDuration(activity.durationMs, DurationFormat.Compact)
+    const completed = activity.status === 'completed'
+
+    return (
+      <ProcessGroup
+        key={activity.id}
+        active={activity.status === 'in_progress'}
+        animateWhileActive
+        activeLabel="Compacting history..."
+        ariaLabel="History compaction"
+        completedLabel={completed ? `Compacted history${duration ? ` in ${duration}` : ''}`
+          : `History compaction failed${duration ? ` after ${duration}` : ''}`}
+        indicator={<i className="ri-file-reduce-line" aria-hidden="true" />}
+        startedAt={activity.startedAt}
+      />
+    )
+  }
+
   if (activity.type === 'working') {
     return (
       <WorkingMessage
@@ -263,7 +282,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
 
   return (
     <div className="leon-message">
-      {entry.status === FeedTurnStatus.Completed && !entry.continues && (activities.length > 0 || entry.hasTurnWork) ? (
+      {entry.status === FeedTurnStatus.Completed && !entry.isMaintenance && !entry.continues && (activities.length > 0 || entry.hasTurnWork) ? (
         <ProcessGroup
           active={false}
           activeLabel="Working..."
