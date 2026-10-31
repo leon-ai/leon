@@ -1,8 +1,74 @@
 import { FeedTurnStatus } from './feed'
-import type { FeedEntry, FeedToolCall, LeonFeedActivity } from './feed'
-import type { ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
+import type { FeedEntry, FeedToolCall, LeonFeedActivity, FeedModelProcessingActivity } from './feed'
+import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
+import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import { getProcessingCategory } from './processing-categories'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
+const MINIMUM_PROCESSING_DURATION_MS = 1_000
+
+/**
+ * Uses recorded request goals, with a neutral duty label for older unclassified
+ * traces. Provider time is interval coverage, never gaps between requests.
+ */
+function toProcessingActivity(trace: ConversationTrace): FeedModelProcessingActivity | undefined {
+  const recorded = trace.timings?.filter((timing) => timing.kind === 'inference' && timing.outcome !== 'started')
+  const timings = recorded?.length ? recorded : (trace.inferences ?? []).map((attempt, index) => ({
+    id: attempt.attemptId ?? `${trace.id}:inference:${index}`,
+    goal: attempt.usagePurpose ?? (attempt.phase === 'review' ? TurnPhase.Review
+      : attempt.phase === 'final_answer' ? TurnPhase.Answer : attempt.duty ?? TurnPhase.Request),
+    startedAt: attempt.startedAt, durationMs: attempt.elapsedMs
+  }))
+  const valid = timings.filter((timing) => Number.isFinite(timing.startedAt) && Number.isFinite(timing.durationMs) && timing.durationMs >= 0)
+    .sort((left, right) => left.startedAt - right.startedAt)
+  if (!valid.length) {
+    return undefined
+  }
+  let coveredUntil = -Infinity
+  let durationMs = 0
+  const requests = valid.map((timing) => {
+    const end = timing.startedAt + timing.durationMs
+    durationMs += Math.max(0, end - Math.max(coveredUntil, timing.startedAt))
+    coveredUntil = Math.max(coveredUntil, end)
+    return {
+      id: timing.id,
+      ...getProcessingCategory(timing.goal),
+      durationMs: timing.durationMs
+    }
+  })
+  return { id: `${trace.id}:processing`, type: 'processing', durationMs, requests }
+}
+
+/**
+ * Counts explicit retry transitions, not ordinary model requests. An additional
+ * attempt must exist so cancellation during a retry delay is not counted.
+ */
+function getRetryCount(trace: ConversationTrace, metrics: ConversationMetrics): number {
+  const attempts = trace.inferences ?? []
+  let providerRetries = 0
+  let reviewProviderRetries = 0
+
+  for (const [index, attempt] of attempts.entries()) {
+    if (attempt.retryDecision !== 'retry' || attempts[index + 1]?.phase !== attempt.phase) {
+      continue
+    }
+
+    if (attempt.phase === 'review') {
+      reviewProviderRetries++
+    } else {
+      providerRetries++
+    }
+  }
+
+  // Review metrics also include invalid-response retries. Their provider
+  // retries are already included, so these counts must not be added together.
+  const reviewRetries = metrics.reviewRetryCount
+  const recordedReviewRetries = reviewRetries !== undefined && Number.isSafeInteger(reviewRetries) && reviewRetries >= 0
+    ? reviewRetries : 0
+
+  return providerRetries + Math.max(recordedReviewRetries, reviewProviderRetries)
+}
+
 /**
  * Maps persisted and streamed calls through the same display contract.
  */
@@ -32,6 +98,7 @@ function toActivities(
   trace: ConversationTrace,
   active: boolean,
   sentAt: number,
+  metrics: ConversationMetrics,
   isAnswering: boolean
 ): LeonFeedActivity[] {
   const items: { timestamp: number, activity: LeonFeedActivity }[] = []
@@ -86,6 +153,50 @@ function toActivities(
     activities.push({ id: `${trace.id}:waiting`, type: 'working' })
   }
 
+  // Phase metrics summarize all attempts, not individual chronological events.
+  // Keep them as completed summaries without exposing private review content.
+  if (!active) {
+    const processing = toProcessingActivity(trace)
+    const processingDuration = metrics.modelProcessingDurationMs
+    const legacyProcessing = (
+      !processing && processingDuration !== undefined && Number.isFinite(processingDuration) &&
+      processingDuration >= MINIMUM_PROCESSING_DURATION_MS && processingDuration <= (metrics.durationMs ?? 0)
+    ) ? { id: `${trace.id}:processing`, type: 'processing' as const, durationMs: processingDuration } : undefined
+
+    const answerDuration = metrics.phaseMetrics?.final_answer?.durationMs
+    if (!processing && answerDuration !== undefined && Number.isFinite(answerDuration) && answerDuration > 0) {
+      activities.push({ id: `${trace.id}:answer`, type: 'answer', durationMs: answerDuration })
+    }
+
+    const reviewDuration = metrics.reviewDurationMs
+    if (
+      !processing && (metrics.reviewCount ?? 0) > 0 && reviewDuration !== undefined &&
+      Number.isFinite(reviewDuration) && reviewDuration >= 0
+    ) {
+      activities.push({ id: `${trace.id}:review`, type: 'review', durationMs: reviewDuration })
+    }
+
+    const retryCount = getRetryCount(trace, metrics)
+    if (retryCount > 0) {
+      activities.push({ id: `${trace.id}:retry`, type: 'retry', count: retryCount })
+    }
+
+    // Historical totals without interval-based accounting must not be guessed.
+    const otherDuration = metrics.otherProcessingDurationMs
+    if (
+      otherDuration !== undefined && Number.isFinite(otherDuration) &&
+      otherDuration >= MINIMUM_PROCESSING_DURATION_MS && otherDuration <= (metrics.durationMs ?? 0)
+    ) {
+      activities.push({ id: `${trace.id}:other`, type: 'other', durationMs: otherDuration })
+    }
+
+    // Reasoning stays in chronology; the request accounting closes the work details.
+    const finalProcessing = processing ?? legacyProcessing
+    if (finalProcessing) {
+      activities.push(finalProcessing)
+    }
+  }
+
   return activities
 }
 
@@ -109,7 +220,7 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
     durationMs: metrics.durationMs ?? 0,
     activities: toActivities(record.agentResponseTrace ?? {
       id: record.messageId, planSteps: [], toolCalls: []
-    }, active, record.sentAt, Boolean(record.message.trim())),
+    }, active, record.sentAt, metrics, Boolean(record.message.trim())),
     finalAnswer: record.message,
     ...(record.artifacts ? { artifacts: record.artifacts } : {})
   }
