@@ -48,6 +48,8 @@ test('updates session titles from metadata-only notifications during and after a
   page.on('pageerror', handlePageError)
   await page.goto(SESSION_URL)
   await expectBottom(page)
+  await expect(page.getByRole('link', { name: 'Test session 0', exact: true })
+    .locator('.streaming-text-character-new')).toHaveCount(0)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   await composer.fill('Keep this draft while the title changes')
   await ui.emit([{
@@ -57,6 +59,8 @@ test('updates session titles from metadata-only notifications during and after a
   ui.sessions[0]!.title = 'Generated title while working'
   await ui.emit([{ type: 'sessions_changed' }])
   await expect(page.getByRole('link', { name: 'Generated title while working', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Generated title while working', exact: true })
+    .locator('.session-list-item-title-resting .streaming-text-character-new')).not.toHaveCount(0)
   ui.sessions[0]!.title = 'Updated title after completion'
   await ui.emit([{
     type: 'session_changed', sequence: 2, session_id: SESSION_ID, turn_id: 'turn', response_id: null,
@@ -66,10 +70,62 @@ test('updates session titles from metadata-only notifications during and after a
   await expect(composer).toHaveValue('Keep this draft while the title changes')
   await expect(composer).toBeFocused()
   expect(errors).toEqual([])
+  await page.reload()
+  await expect(page.getByRole('link', { name: 'Updated title after completion', exact: true })
+    .locator('.streaming-text-character-new')).toHaveCount(0)
   page.off('pageerror', handlePageError)
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`reveals live titles once while preserving ellipsis, hover scrolling and virtualized remounts (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    for (let index = 3; index < 80; index++) {
+      ui.sessions.push({
+        ...ui.sessions[1]!,
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        title: `Older session ${index}`
+      })
+    }
+    await page.goto(SESSION_URL)
+    await expectBottom(page)
+    const title = 'A longer generated session title that needs room beyond the row'
+    ui.sessions[0]!.title = title
+    await ui.emit([{ type: 'sessions_changed' }])
+    const link = page.getByRole('link', { name: title, exact: true })
+    const resting = link.locator('.session-list-item-title-resting')
+    const characters = resting.locator('.streaming-text-character-new')
+    await expect(link).toBeVisible()
+    await expect(characters).toHaveCount(Array.from(title).length)
+    await expect(characters.first()).toHaveCSS('animation-name',
+      reducedMotion === 'reduce' ? 'none' : 'streaming-text-character-enter')
+    await expect(resting.locator('.streaming-text-characters')).toHaveCSS('white-space', 'nowrap')
+    await expect(resting).toHaveCSS('text-overflow', 'ellipsis')
+    await expect(link).toHaveCSS('height', '40px')
+    await expect(characters.last()).toHaveCSS('opacity', '1')
+    const start = await characters.first().evaluate((element) => element.getAnimations()[0]?.startTime ?? null)
+    const requests = ui.completedRequests.filter((url) => url.pathname.endsWith('/page')).length
+    await ui.emit([{ type: 'sessions_changed' }])
+    await expect.poll(() => ui.completedRequests.filter((url) => url.pathname.endsWith('/page')).length).toBeGreaterThan(requests)
+    expect(await characters.first().evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).toBe(start)
+    await link.hover()
+    const viewport = link.locator('.session-list-item-title')
+    if (reducedMotion === 'reduce') {
+      await expect(viewport).not.toHaveClass(/session-list-item-title-scrolling/)
+    } else {
+      await expect(viewport).toHaveClass(/session-list-item-title-scrolling/)
+    }
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(viewport).not.toHaveClass(/session-list-item-title-scrolling/)
+    await expect.poll(() => link.locator('.session-list-item-title-text')
+      .evaluate((element) => element.getAnimations().length)).toBe(0)
+    const sidebar = page.locator('.sidebar-scroll-area')
+    await sidebar.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+    await expect(link).toHaveCount(0)
+    await sidebar.evaluate((element) => element.scrollTo({ top: 0 }))
+    await expect(link).toBeVisible()
+    await expect(link.locator('.streaming-text-character-new')).toHaveCount(0)
+  })
+
   test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {
     void ui
     await page.emulateMedia({ reducedMotion })

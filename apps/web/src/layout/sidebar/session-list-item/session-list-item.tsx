@@ -12,6 +12,7 @@ import { Button } from '@/components/button'
 import { Dialog } from '@/components/dialog'
 import { Dropdown } from '@/components/dropdown'
 import { Input } from '@/components/input'
+import { StreamingText } from '@/components/streaming-text'
 import { SessionStatus } from '@/data/sessions'
 
 import { SessionWorkIndicator } from './session-work-indicator'
@@ -294,7 +295,7 @@ export function SessionListItem({
           to="/session/$sessionId"
           params={{ sessionId: id }}
           className="session-list-item-link"
-          aria-label={isWorking ? `${title}, Leon is working` : undefined}
+          aria-label={isWorking ? `${title}, Leon is working` : title}
           activeProps={{
             className: clsx('session-list-item-link', 'session-list-item-active')
           }}
@@ -310,15 +311,22 @@ export function SessionListItem({
             ref={titleViewportRef}
             className="session-list-item-title"
           >
-            <span className="session-list-item-title-resting">
-              {title}
-            </span>
+            <StreamingText
+              className="session-list-item-title-resting"
+              animationId={`${id}-title-resting`}
+              animateInitial={false}
+              text={title}
+            />
             <span
               ref={titleTextRef}
               className="session-list-item-title-text"
               aria-hidden="true"
             >
-              {title}
+              <StreamingText
+                animationId={`${id}-title-scrolling`}
+                animateInitial={false}
+                text={title}
+              />
             </span>
             <span
               ref={titleLeftMaskRef}
