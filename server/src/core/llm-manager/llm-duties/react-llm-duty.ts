@@ -227,7 +227,10 @@ export class ReActLLMDuty extends LLMDuty {
     if (payload.token) {
       this.firstOutputAt ??= Date.now()
     }
-    SOCKET_SERVER.emitToChatClients('llm-token', payload)
+    SOCKET_SERVER.emitToChatClients('llm-token', payload, {
+      sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    })
+    this.onTextStream?.('answer', payload)
   })
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
@@ -246,6 +249,8 @@ export class ReActLLMDuty extends LLMDuty {
   private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
+  private readonly responseId: string | undefined
+  private readonly onTextStream: ReactLLMDutyParams['onTextStream']
 
   constructor(params: ReactLLMDutyParams) {
     super()
@@ -266,6 +271,8 @@ export class ReActLLMDuty extends LLMDuty {
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
     this.additionalInstructions = params.additionalInstructions?.trim() || ''
     this.onProgressEvent = params.onProgressEvent
+    this.responseId = params.responseId
+    this.onTextStream = params.onTextStream
     this.systemPrompt = this.appendAdditionalInstructions(
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
         includePersonality: false,
@@ -325,7 +332,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
-    const traceId = randomUUID()
+    const traceId = this.responseId || randomUUID()
     this.responseTraceCollector.reset(traceId)
     // Capture the session and profile-bound writer before any deferred saves.
     const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
@@ -336,7 +343,7 @@ export class ReActLLMDuty extends LLMDuty {
       messageId: traceId,
       isAddedToHistory: false,
       agentResponseTrace: this.responseTraceCollector.snapshot({})
-    }, { sessionId })
+    }, { sessionId, activity: true })
     this.reportProgressEvent({
       type: 'reasoning_summary',
       summary: 'Understanding your request'
@@ -913,7 +920,9 @@ export class ReActLLMDuty extends LLMDuty {
     // Coalesce streamed tokens instead of rewriting history for every token.
     this.traceSaveTimer = setTimeout(() => {
       this.traceSaveTimer = null
-      void this.persistResponseTrace?.()
+      void this.persistResponseTrace?.().catch((error: unknown) => {
+        LogHelper.error(`Could not save agent activity: ${error}`)
+      })
     }, TRACE_SAVE_INTERVAL_MS)
   }
 
@@ -2270,6 +2279,7 @@ export class ReActLLMDuty extends LLMDuty {
       token,
       generationId,
       phase
-    })
+    }, { sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId() })
+    this.onTextStream?.('reasoning', { token, generationId, phase })
   }
 }

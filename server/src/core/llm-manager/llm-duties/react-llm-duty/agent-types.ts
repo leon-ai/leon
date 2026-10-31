@@ -1,6 +1,7 @@
 import type { LLMDutyParams } from '@/core/llm-manager/llm-duty'
 import type { ToolCompletionReview, AgentResponseToolCall  } from '@/types'
 import type { AgentModelFile } from '@/core/llm-manager/types'
+import type { LeonClientInterfaceTokenPayload } from '@/core/leon-interface/types'
 export interface AgentSkillContext {
   id: string
   name: string
@@ -44,6 +45,8 @@ export interface ReactLLMDutyParams extends LLMDutyParams {
   allowDirectAnswerHandoff?: boolean
   additionalInstructions?: string
   onProgressEvent?: (event: AgentRunProgressEvent) => void
+  responseId?: string
+  onTextStream?: (kind: 'answer' | 'reasoning', payload: LeonClientInterfaceTokenPayload) => void
 }
 
 export interface FunctionConfig {

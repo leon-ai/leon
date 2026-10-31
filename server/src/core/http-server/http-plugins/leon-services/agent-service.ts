@@ -1,6 +1,7 @@
 import { collectArtifacts } from '@/core/artifacts/artifact-context'
 import type { Artifact } from '@/core/artifacts/artifact-types'
 import { performance } from 'node:perf_hooks'
+import { randomUUID } from 'node:crypto'
 import type { AgentResponseTrace } from '@/types'
 
 import { CONVERSATION_LOGGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
@@ -11,6 +12,7 @@ import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runt
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import type { LeonClientInterfaceTokenPayload } from '@/core/leon-interface/types'
 
 import type {
   HTTPPluginAgentEvent,
@@ -28,6 +30,58 @@ import {
   normalizeToolCalls,
   resolveSessionId
 } from './normalizers'
+
+const TEXT_STREAM_BATCH_INTERVAL_MS = 50
+const MAXIMUM_TEXT_STREAM_BATCH_CHARACTERS = 8_192
+
+/**
+ * Coalesces provider chunks without introducing an artificial typing cadence.
+ * The host flushes before structural events and always releases its timer.
+ */
+function createTextStreamBatch(emit: (data: Record<string, unknown>) => void): {
+  flush: () => void
+  push: (kind: 'answer' | 'reasoning', payload: LeonClientInterfaceTokenPayload) => void
+} {
+  let pending: (LeonClientInterfaceTokenPayload & { kind: 'answer' | 'reasoning' }) | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let failure: unknown
+  const flush = (): void => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    if (failure) {
+      throw failure
+    }
+    if (pending) {
+      const payload = pending
+      pending = null
+      emit({ ...payload })
+    }
+  }
+
+  return {
+    flush,
+    push(kind: 'answer' | 'reasoning', payload: LeonClientInterfaceTokenPayload): void {
+      if (pending && (pending.kind !== kind || pending.generationId !== payload.generationId || payload.reset)) {
+        flush()
+      }
+      pending = { ...payload, kind, token: `${pending?.token ?? ''}${payload.token}` }
+      if (payload.reset || pending.token.length >= MAXIMUM_TEXT_STREAM_BATCH_CHARACTERS) {
+        flush()
+      } else if (timer === null) {
+        timer = setTimeout(() => {
+          try {
+            flush()
+          } catch (error) {
+            // Propagate a durable-write failure on the next host operation.
+            failure = error
+          }
+        }, TEXT_STREAM_BATCH_INTERVAL_MS)
+      }
+    }
+  }
+}
 
 /**
  * Runs one ReAct turn inside the requested profile and conversation session.
@@ -63,11 +117,11 @@ export async function runAgent(
     let actionExecutionMs = 0
     let reasoningSummary = 'Understanding your request'
     const requestId = input.request_id || null
-    const messageId = requestId ? `${requestId}:leon` : undefined
+    const messageId = `${requestId || randomUUID()}:leon`
     let turnArtifacts: Artifact[] = []
     let finalMetrics: Record<string, unknown> | null = null
     let finalTrace: HTTPPluginAgentTrace = { plan_steps: [], tool_calls: [] }
-    const emit = (
+    const publish = (
       type: HTTPPluginAgentEvent['type'],
       data: Record<string, unknown>
     ): void => {
@@ -78,6 +132,11 @@ export async function runAgent(
         type,
         data
       })
+    }
+    const stream = createTextStreamBatch((data) => publish('text_stream', data))
+    const emit: typeof publish = (type, data): void => {
+      stream.flush()
+      publish(type, data)
     }
 
     emit('session_changed', {
@@ -103,6 +162,10 @@ export async function runAgent(
 
         const duty = new ReActLLMDuty({
           input: query,
+          responseId: messageId,
+          onTextStream: (kind, payload): void => {
+            stream.push(kind, payload)
+          },
           ...(files.length ? { files } : {}),
           ...(input.signal ? { signal: input.signal } : {}),
           ...(input.additionalInstructions
@@ -223,6 +286,7 @@ export async function runAgent(
               who: 'leon',
               message: output,
               isAddedToHistory: true,
+              artifacts: turnArtifacts,
               ...(messageId ? { messageId } : {}),
               agentResponseTrace: (data['agentResponseTrace'] as AgentResponseTrace | undefined) ||
                 deserializeAgentTrace(trace)
@@ -250,7 +314,7 @@ export async function runAgent(
 
         return dutyResult
       }
-    )
+    ).finally(stream.flush)
     const data = result?.data || {}
     const output = result?.output as unknown
 
