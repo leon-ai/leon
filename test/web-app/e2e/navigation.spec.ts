@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER } from './fixtures'
@@ -331,6 +331,76 @@ test('rolls back a rejected model setting and reports it through the shared toas
   await page.getByRole('radio', { name: 'Low', exact: true }).click()
   await expect(page.locator('.toast-title')).toHaveText(['Model settings were not saved'])
   await expect(page.locator('.model-settings-trigger')).toContainText('High')
+})
+
+test('confirms session management actions once and only after the server accepts them', async ({ page, ui }) => {
+  let pending = Promise.withResolvers<Route>()
+  await page.route(`**/api/v1/sessions/${SESSION_ID}?*`, async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fallback()
+      return
+    }
+    pending.resolve(route)
+  })
+  await page.goto(SESSION_URL)
+  let title = 'Test session 0'
+  for (const action of ['renamed', 'pinned', 'unpinned', 'deleted']) {
+    const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: title, exact: true }) })
+    await row.hover()
+    await row.getByRole('button', { name: 'Session options', exact: true }).click()
+    if (action === 'renamed') {
+      await page.getByRole('menuitem', { name: 'Rename', exact: true }).click()
+      const input = page.getByRole('textbox', { name: 'Session title', exact: true })
+      await input.fill('Renamed session')
+      await input.press('Enter')
+    } else if (action === 'deleted') {
+      await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete session', exact: true }).click()
+    } else {
+      await page.getByRole('menuitem', { name: action === 'pinned' ? 'Pin session' : 'Unpin session', exact: true }).click()
+    }
+    const route = await pending.promise
+    pending = Promise.withResolvers<Route>()
+    await expect(page.locator('.toast')).toHaveCount(0)
+    const session = ui.sessions[0]!
+    if (action === 'deleted') {
+      expect(route.request().method()).toBe('DELETE')
+      ui.sessions.shift()
+      await route.fulfill({ json: { success: true } })
+    } else {
+      expect(route.request().method()).toBe('PATCH')
+      const changes = route.request().postDataJSON() as { title?: string, is_pinned?: boolean }
+      if (changes.title !== undefined) {
+        session.title = changes.title
+        title = changes.title
+      } else {
+        session.isPinned = changes.is_pinned!
+      }
+      await route.fulfill({ json: { session } })
+    }
+    await expect(page.locator('.toast-success .toast-title')).toHaveText([`Session ${action}`])
+    await expect(page.locator('.toast')).toHaveCount(1)
+    if (action === 'deleted') {
+      await expect(page).toHaveURL(/\/web-app\/$/)
+      await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0)
+    } else {
+      await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible()
+    }
+    await page.getByRole('button', { name: 'Close notification', exact: true }).click()
+    await expect(page.locator('.toast')).toHaveCount(0)
+  }
+})
+
+test('reports a rejected session action once without confirming success', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  ui.failure = { path: `/api/v1/sessions/${SESSION_ID}`, status: 500, message: 'Session update rejected.' }
+  const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Test session 0', exact: true }) })
+  await row.hover()
+  await row.getByRole('button', { name: 'Session options', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
+  await expect(page.locator('.toast-error .toast-title')).toHaveText(['Session could not be updated'])
+  await expect(page.locator('.toast')).toHaveCount(1)
+  await expect(row).not.toHaveClass(/session-list-item-pinned/)
 })
 
 test('cancels obsolete history silently when switching sessions', async ({ page, ui }) => {

@@ -14,6 +14,10 @@
 - Reuse suitable installed facilities instead of custom replacements. Propose
   missing TanStack packages first, explaining avoided complexity and maintainability
   or performance benefits; never install packages by default.
+- Give explicit owner actions feedback through shared request/toast facilities:
+  confirm successful management mutations only after server acceptance and report
+  actionable failures once. Preserve profile isolation; do not duplicate cache-owned
+  errors or toast background fetches, streaming updates, or optimistic success.
 
 ## Design tokens and shared styles
 
