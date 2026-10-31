@@ -10,6 +10,31 @@ async function expectBottom(page: Page): Promise<void> {
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
 }
 
+test('reveals active session options on hover or keyboard focus rather than selection', async ({ page, ui }) => {
+  void ui
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Test session 0', exact: true }) })
+  const link = row.getByRole('link')
+  const actions = row.locator('.session-list-item-actions')
+  await composer.focus()
+  await composer.hover()
+  await expect(link).toHaveClass(/session-list-item-active/)
+  await expect(actions).toHaveCSS('opacity', '0')
+  await row.hover()
+  await expect(actions).toHaveCSS('opacity', '1')
+  await link.click()
+  await composer.hover()
+  await expect(actions).toHaveCSS('opacity', '0')
+  await link.focus()
+  await page.keyboard.press('Tab')
+  const options = row.getByRole('button', { name: 'Session options', exact: true })
+  await expect(options).toBeFocused()
+  await expect(actions).toHaveCSS('opacity', '1')
+  await options.press('Enter')
+  await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeVisible()
+})
+
 test('drafts immediately while history loads and opens the latest messages at the bottom', async ({ page, ui }, testInfo) => {
   const release = ui.holdHistory()
   await page.goto(SESSION_URL)
