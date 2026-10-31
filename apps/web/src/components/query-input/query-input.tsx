@@ -438,7 +438,7 @@ export function QueryInput({
             variant={onStop ? 'danger' : 'primary'}
             iconName={onStop ? 'stop-mini' : 'send-ins'}
             iconType={onStop ? 'fill' : 'line'}
-            tooltipMessage={onStop ? 'Stop this session' : 'Send message'}
+            tooltipMessage={onStop ? 'Stop this turn' : 'Send message'}
             tooltipPosition="top"
             disabled={onStop ? disabled : submitDisabled}
             loading={!onStop && loading}

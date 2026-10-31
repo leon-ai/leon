@@ -109,10 +109,42 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
 
 function renderActivity(activity: LeonFeedActivity) {
   if (activity.type === 'working') {
-    return <WorkingMessage key={activity.id} phaseId={activity.id} />
+    return (
+      <WorkingMessage
+        key={activity.id}
+        phaseId={activity.id}
+        {...(activity.label === undefined ? {} : { label: activity.label })}
+      />
+    )
   }
 
   if (activity.type === 'processing') {
+    const currentRequest = activity.requests?.findLast((request) => request.isActive)
+    if (currentRequest) {
+      return (
+        <WorkingMessage
+          key={activity.id}
+          phaseId={activity.id}
+          label={currentRequest.activeLabel ?? 'Processing...'}
+          iconName={currentRequest.iconName}
+        />
+      )
+    }
+
+    const request = activity.inline ? activity.requests?.[0] : undefined
+    if (request) {
+      return (
+        <ProcessGroup
+          key={activity.id}
+          active={false}
+          activeLabel="Processing..."
+          ariaLabel="Leon’s inference"
+          completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
+          indicator={<i className={`ri-${request.iconName}`} aria-hidden="true" />}
+        />
+      )
+    }
+
     return (
       <ProcessGroup
         key={activity.id}

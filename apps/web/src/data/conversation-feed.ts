@@ -3,40 +3,63 @@ import type { FeedEntry, FeedToolCall, LeonFeedActivity, FeedModelProcessingActi
 import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
 import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import { getProcessingCategory } from './processing-categories'
+import { getActivityLabel, getProcessingLabel } from './activity-labels'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
 
 /**
+ * Measures coverage of start-sorted requests, excluding overlap and idle gaps.
+ */
+function getProcessingDuration(requests: readonly { startedAt?: number | undefined, durationMs: number }[]): number {
+  let coveredUntil = -Infinity
+  let durationMs = 0
+  for (const request of requests) {
+    if (request.startedAt === undefined) {
+      continue
+    }
+    const end = request.startedAt + request.durationMs
+    durationMs += Math.max(0, end - Math.max(coveredUntil, request.startedAt))
+    coveredUntil = Math.max(coveredUntil, end)
+  }
+  return durationMs
+}
+
+/**
  * Uses recorded request goals, with a neutral duty label for older unclassified
  * traces. Provider time is interval coverage, never gaps between requests.
  */
-function toProcessingActivity(trace: ConversationTrace): FeedModelProcessingActivity | undefined {
-  const recorded = trace.timings?.filter((timing) => timing.kind === 'inference' && timing.outcome !== 'started')
-  const timings = recorded?.length ? recorded : (trace.inferences ?? []).map((attempt, index) => ({
+function toProcessingActivity(trace: ConversationTrace, active: boolean): FeedModelProcessingActivity | undefined {
+  const recorded = trace.timings?.filter((timing) => timing.kind === 'inference' && (active || timing.outcome !== 'started'))
+  const timings = recorded?.length ? recorded : (trace.inferences ?? [])
+    .filter((attempt) => active || attempt.outcome !== 'started').map((attempt, index) => ({
     id: attempt.attemptId ?? `${trace.id}:inference:${index}`,
     goal: attempt.usagePurpose ?? (attempt.phase === 'review' ? TurnPhase.Review
       : attempt.phase === 'final_answer' ? TurnPhase.Answer : attempt.duty ?? TurnPhase.Request),
-    startedAt: attempt.startedAt, durationMs: attempt.elapsedMs
+    startedAt: attempt.startedAt, durationMs: attempt.elapsedMs, outcome: attempt.outcome ?? 'completed',
+    planStepId: undefined
   }))
   const valid = timings.filter((timing) => Number.isFinite(timing.startedAt) && Number.isFinite(timing.durationMs) && timing.durationMs >= 0)
     .sort((left, right) => left.startedAt - right.startedAt)
   if (!valid.length) {
     return undefined
   }
-  let coveredUntil = -Infinity
-  let durationMs = 0
   const requests = valid.map((timing) => {
-    const end = timing.startedAt + timing.durationMs
-    durationMs += Math.max(0, end - Math.max(coveredUntil, timing.startedAt))
-    coveredUntil = Math.max(coveredUntil, end)
     return {
       id: timing.id,
       ...getProcessingCategory(timing.goal),
-      durationMs: timing.durationMs
+      durationMs: timing.durationMs,
+      startedAt: timing.startedAt,
+      planStepId: timing.planStepId,
+      isActive: active && timing.outcome === 'started',
+      activeLabel: getProcessingLabel(timing.goal, timing.id)
     }
   })
-  return { id: `${trace.id}:processing`, type: 'processing', durationMs, requests }
+  return {
+    id: `${trace.id}:processing`, type: 'processing', durationMs: getProcessingDuration(valid), requests,
+    startedAt: valid[0]?.startedAt,
+    isActive: requests.some((request) => request.isActive)
+  }
 }
 
 /**
@@ -77,12 +100,14 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
 
   return {
     id: call.id,
-    toolCallTitle: call.toolCallTitle ?? call.name,
+    toolCallTitle: call.toolCallTitle || call.name,
     toolkitName: call.toolkitName ?? parts[0] ?? '',
     toolName: call.toolName ?? parts[1] ?? '',
     functionName: parts.at(-1) ?? call.name,
     toolIconName: call.toolIconName ?? 'tools-line',
     status: !active && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
+    startedAt: call.startedAt,
+    preparationStartedAt: call.preparationStartedAt,
     ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }),
     input: call.input ?? null,
     ...(call.output === undefined && call.commandOutput === undefined && call.errorMessage === undefined
@@ -101,19 +126,40 @@ function toActivities(
   metrics: ConversationMetrics,
   isAnswering: boolean
 ): LeonFeedActivity[] {
+  const processing = toProcessingActivity(trace, active)
+  const currentInference = active ? trace.timings?.findLast((timing) => timing.kind === 'inference' && timing.outcome === 'started') : undefined
   const items: { timestamp: number, activity: LeonFeedActivity }[] = []
   for (const [index, block] of (trace.reasoning ?? []).entries()) {
     const nextAt = trace.reasoning?.[index + 1]?.startedAt ??
       trace.toolCalls.find((call) => (call.startedAt ?? 0) > block.startedAt)?.startedAt
     const inference = trace.inferences?.findLast((attempt) => attempt.phase === block.phase && attempt.startedAt <= block.startedAt)
+    const timing = trace.timings?.findLast((entry) => entry.kind === 'inference' && entry.startedAt <= block.startedAt)
+    // Tool preparation can end visible thinking before its request completes.
+    // Wait for measured timing instead of presenting an unknown duration as zero.
+    let durationMs: number | undefined
+    if (timing) {
+      if (timing.outcome !== 'started') {
+        durationMs = timing.durationMs
+      }
+    } else if (inference) {
+      if (inference.outcome !== 'started') {
+        durationMs = inference.elapsedMs
+      }
+    } else if (nextAt !== undefined) {
+      durationMs = Math.max(0, nextAt - block.startedAt)
+    }
+
     items.push({ timestamp: block.startedAt, activity: {
       id: block.id, type: 'thinking', details: block.text ? [block.text] : [],
-      durationMs: inference?.elapsedMs ?? Math.max(0, (nextAt ?? block.startedAt) - block.startedAt), isActive: false
+      startedAt: block.startedAt,
+      planStepId: block.planStepId,
+      durationMs, isActive: false
     } })
   }
   for (const message of trace.progressMessages ?? []) {
     items.push({ timestamp: message.createdAt, activity: {
-      id: message.id, type: 'summary', content: message.content
+      id: message.id, type: 'summary', content: message.content, startedAt: message.createdAt,
+      planStepId: message.planStepId
     } })
   }
   if (trace.planSteps.length > 0) {
@@ -132,14 +178,15 @@ function toActivities(
       continue
     }
     items.push({ timestamp: call.preparationStartedAt ?? call.startedAt ?? sentAt, activity: {
-      id: call.id, type: 'tools', toolCalls: [toFeedTool(call, active)]
+      id: call.id, type: 'tools', toolCalls: [toFeedTool(call, active)],
+      startedAt: call.preparationStartedAt ?? call.startedAt
     } })
   }
   items.sort((left, right) => left.timestamp - right.timestamp)
   const activities: LeonFeedActivity[] = []
   for (const { activity } of items) {
     const previous = activities.at(-1)
-    if (activity.type === 'tools' && previous?.type === 'tools') {
+    if (!trace.planSteps.length && activity.type === 'tools' && previous?.type === 'tools') {
       previous.toolCalls.push(...activity.toolCalls)
     } else {
       activities.push(activity)
@@ -147,16 +194,22 @@ function toActivities(
   }
   const last = activities.at(-1)
   if (active && last?.type === 'thinking') {
-    last.isActive = !isAnswering
-  } else if (active && !isAnswering && activities.length === 0) {
-    // Waiting for provider output is not evidence of reasoning being streamed.
-    activities.push({ id: `${trace.id}:waiting`, type: 'working' })
+    // A later request (especially a private review) is not a continuation of
+    // the previous visible reasoning block.
+    last.isActive = !isAnswering && (!trace.timings?.length || Boolean(currentInference &&
+      (trace.reasoning?.at(-1)?.startedAt ?? 0) >= currentInference.startedAt))
   }
 
-  // Phase metrics summarize all attempts, not individual chronological events.
-  // Keep them as completed summaries without exposing private review content.
+  const hasVisibleWork = active && activities.some((activity) =>
+    activity.type === 'thinking' && activity.isActive ||
+    activity.type === 'tools' && activity.toolCalls.some((call) =>
+      call.status === 'preparing' || call.status === 'running'
+    )
+  )
+
+  // Legacy metrics remain completed summaries; live requests use timing events
+  // and never expose private review text.
   if (!active) {
-    const processing = toProcessingActivity(trace)
     const processingDuration = metrics.modelProcessingDurationMs
     const legacyProcessing = (
       !processing && processingDuration !== undefined && Number.isFinite(processingDuration) &&
@@ -178,7 +231,9 @@ function toActivities(
 
     const retryCount = getRetryCount(trace, metrics)
     if (retryCount > 0) {
-      activities.push({ id: `${trace.id}:retry`, type: 'retry', count: retryCount })
+      const retry = trace.inferences?.find((attempt, index, attempts) => index > 0 &&
+        attempts[index - 1]?.retryDecision === 'retry' && attempts[index - 1]?.phase === attempt.phase)
+      activities.push({ id: `${trace.id}:retry`, type: 'retry', count: retryCount, startedAt: retry?.startedAt })
     }
 
     // Historical totals without interval-based accounting must not be guessed.
@@ -194,6 +249,17 @@ function toActivities(
     const finalProcessing = processing ?? legacyProcessing
     if (finalProcessing) {
       activities.push(finalProcessing)
+    }
+  } else if (!hasVisibleWork) {
+    // Keep the same row mounted across model handoffs, but let visible thinking
+    // and tool execution own their activity rather than duplicating indicators.
+    if (processing?.isActive) {
+      activities.push(processing)
+    } else if (!isAnswering) {
+      activities.push({
+        id: `${trace.id}:processing`, type: 'working',
+        label: getActivityLabel(`${trace.id}:waiting`)
+      })
     }
   }
 
@@ -211,7 +277,7 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
   }
   const metrics = { ...record.agentResponseTrace?.metrics, ...record.llmMetrics }
   const entry: FeedEntry = record.who === 'owner' ? {
-    id: record.messageId, role: 'owner', content: record.message
+    id: record.messageId, role: 'owner', content: record.message, sentAt: record.sentAt
   } : {
     id: record.messageId,
     role: 'leon',
@@ -222,9 +288,14 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
       id: record.messageId, planSteps: [], toolCalls: []
     }, active, record.sentAt, metrics, Boolean(record.message.trim())),
     finalAnswer: record.message,
+    answerStartedAt: record.agentResponseTrace?.timings?.findLast((timing) =>
+      timing.kind === 'inference' && timing.goal === TurnPhase.Answer)?.startedAt ??
+      record.agentResponseTrace?.inferences?.findLast((attempt) => attempt.phase === 'final_answer')?.startedAt ??
+      record.agentResponseTrace?.answerStartedAt,
     ...(record.artifacts ? { artifacts: record.artifacts } : {})
   }
   entryCache.set(record, { active, entry })
 
   return entry
 }
+

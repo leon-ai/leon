@@ -1,4 +1,5 @@
 import type { ConversationEvent, ConversationRecord, ConversationTrace, ConversationTool } from './conversation'
+import type { InferenceActivity } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 
 /**
  * Converts the shared HTTP event schema to the persisted trace field names.
@@ -7,6 +8,7 @@ export function readEventTool(value: Record<string, unknown>): ConversationTool 
   return {
     id: String(value['id'] ?? value['name']),
     name: String(value['name']),
+    ...(value['plan_step_id'] !== undefined ? { planStepId: value['plan_step_id'] as string | null } : {}),
     status: value['status'] as ConversationTool['status'],
     ...(value['tool_call_title'] ? { toolCallTitle: String(value['tool_call_title']) } : {}),
     ...(value['toolkit_name'] ? { toolkitName: String(value['toolkit_name']) } : {}),
@@ -64,10 +66,22 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   record.agentResponseTrace = trace
   const data = event.data
 
-  if (event.type === 'text_stream') {
+  if (event.type === 'inference_activity') {
+    const activity = data['activity'] as InferenceActivity
+    const timing = { ...activity, kind: 'inference' as const }
+    const found = trace.timings?.some((item) => item.id === timing.id)
+    trace.timings = found ? trace.timings!.map((item) => item.id === timing.id ? timing : item)
+      : [...(trace.timings ?? []), timing]
+  } else if (event.type === 'text_stream') {
     const token = String(data['token'] ?? '')
     const generationId = String(data['generationId'])
     if (data['kind'] === 'answer') {
+      if (data['reset'] || record.draftGeneration !== generationId) {
+        delete trace.answerStartedAt
+      }
+      if (token) {
+        trace.answerStartedAt ??= event.created_at
+      }
       record.message = data['reset'] ? '' :
         `${record.draftGeneration === generationId ? record.message : ''}${token}`
       record.draftGeneration = generationId
@@ -77,7 +91,8 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
       const block = blocks[blockIndex]
       const next = {
         id: generationId, phase: String(data['phase'] ?? 'agent'),
-        startedAt: block?.startedAt ?? event.created_at, text: `${block?.text ?? ''}${token}`
+        startedAt: block?.startedAt ?? event.created_at, text: `${block?.text ?? ''}${token}`,
+        ...(data['planStepId'] !== undefined ? { planStepId: data['planStepId'] as string | null } : {})
       }
       if (blockIndex < 0) {
         blocks.push(next)
@@ -89,8 +104,9 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   } else if (event.type === 'reasoning_summary') {
     trace.reasoningSummary = String(data['summary'])
   } else if (event.type === 'progress_message') {
-    const message = data['message'] as { id: string, content: string, created_at: number }
-    const progress = { id: message.id, content: message.content, createdAt: message.created_at }
+    const message = data['message'] as { id: string, content: string, created_at: number, plan_step_id?: string | null }
+    const progress = { id: message.id, content: message.content, createdAt: message.created_at,
+      ...(message.plan_step_id !== undefined ? { planStepId: message.plan_step_id } : {}) }
     trace.progressMessages = [...(trace.progressMessages ?? []).filter((item) => item.id !== progress.id), progress]
     record.message = ''
   } else if (event.type === 'plan_step') {
@@ -108,7 +124,10 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   } else if (event.type === 'final_answer') {
     // Completed traces include provider attempts that are not streamed as
     // separate events. Use them immediately instead of waiting for navigation.
-    const completedTrace = data['response_trace'] as Pick<ConversationTrace, 'inferences' | 'metrics' | 'timings'> | undefined
+    const completedTrace = data['response_trace'] as Pick<ConversationTrace, 'inferences' | 'metrics' | 'timings' | 'answerStartedAt'> | undefined
+    if (completedTrace?.answerStartedAt !== undefined) {
+      trace.answerStartedAt = completedTrace.answerStartedAt
+    }
     if (completedTrace?.timings) {
       trace.timings = completedTrace.timings
     }

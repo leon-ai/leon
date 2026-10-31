@@ -13,7 +13,7 @@ import './thinking-message.sass'
 interface ThinkingMessageProps {
   animationId: string
   details: string[]
-  durationMs: number
+  durationMs: number | undefined
   isActive: boolean
 }
 
@@ -44,7 +44,7 @@ export function ThinkingMessage({
         activeLabel="Thinking..."
         animateWhileActive
         ariaLabel="Leon’s thinking"
-        completedLabel={`Thought for ${duration}`}
+        completedLabel={duration ? `Thought for ${duration}` : 'Thought'}
         indicator={<ThoughtIcon />}
         onExpandedChange={setDetailsOpen}
       >

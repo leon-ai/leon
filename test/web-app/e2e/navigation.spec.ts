@@ -595,13 +595,13 @@ test('accounts for tool selection and intermediate model requests alongside exec
   await work.getByRole('button', { name: 'Worked for 11s', exact: true }).click()
   await expect(work.getByRole('button', { name: 'Used 1 tool for 5s', exact: true })).toBeVisible()
   await work.getByRole('button', { name: 'Processed for 6s', exact: true }).click()
-  await expect(work.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveText(['Processed tool request in 4s', 'Generated answer in 2s'])
+  await expect(work.getByRole('region', { name: 'Leon’s inference', exact: true }).locator('.process-group-title')).toHaveText(['Processed tool request in 4s', 'Generated answer in 2s'])
 })
 
 test('keeps thoughts separate and closes completed work with categorized model requests', async ({ page, ui }) => {
   const categories = [
     { goal: TurnPhase.ToolSchemas, label: 'Loaded tool schemas in', icon: 'stack-line' },
-    { goal: TurnPhase.ToolRequest, label: 'Requested tools in', icon: 'tools-line' },
+    { goal: TurnPhase.ToolRequest, label: 'Prepared tool calls in', icon: 'wrench-line' },
     { goal: TurnPhase.Skill, label: 'Loaded skills in', icon: 'book-open-line' },
     { goal: TurnPhase.Plan, label: 'Updated plan in', icon: 'list-check-3' },
     { goal: TurnPhase.Clarification, label: 'Requested clarification in', icon: 'question-mark' },

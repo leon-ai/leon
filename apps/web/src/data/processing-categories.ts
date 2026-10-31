@@ -13,9 +13,9 @@ const DEFAULT_CATEGORY: ProcessingCategory = {
 
 const CATEGORIES: Readonly<Partial<Record<string, ProcessingCategory>>> = {
   // Older traces combine schema loading and execution under the same goal.
-  [TurnPhase.Tools]: { label: 'Processed tool request in', iconName: 'tools-line' },
+  [TurnPhase.Tools]: { label: 'Processed tool request in', iconName: 'wrench-line' },
   [TurnPhase.ToolSchemas]: { label: 'Loaded tool schemas in', iconName: 'stack-line' },
-  [TurnPhase.ToolRequest]: { label: 'Requested tools in', iconName: 'tools-line' },
+  [TurnPhase.ToolRequest]: { label: 'Prepared tool calls in', iconName: 'wrench-line' },
   [TurnPhase.Skill]: { label: 'Loaded skills in', iconName: 'book-open-line' },
   [TurnPhase.Plan]: { label: 'Updated plan in', iconName: 'list-check-3' },
   [TurnPhase.Clarification]: { label: 'Requested clarification in', iconName: 'question-mark' },

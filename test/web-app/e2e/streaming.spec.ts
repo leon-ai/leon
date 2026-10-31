@@ -1,5 +1,7 @@
-import type { Locator } from '@playwright/test'
+import type { ElementHandle, Locator } from '@playwright/test'
 import type { ConversationEvent } from '../../../apps/web/src/data/conversation'
+import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
+import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL } from './fixtures'
 
 test('replaces send with a danger stop action without submitting or losing the draft', async ({ page, ui }) => {
@@ -18,12 +20,15 @@ test('replaces send with a danger stop action without submitting or losing the d
   }])
 
   await emit('turn_status', { status: 'accepted' })
-  const stop = page.getByRole('button', { name: 'Stop this session', exact: true })
+  const stop = page.getByRole('button', { name: 'Stop this turn', exact: true })
   await expect(stop).toBeEnabled()
   await expect(send).toHaveCount(0)
   await expect(stop).toHaveClass(/button-danger/)
   await expect(stop).toHaveAttribute('type', 'button')
   await expect(stop.locator('.ri-stop-mini-fill')).toBeVisible()
+  await stop.hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Stop this turn')
+  await composer.hover()
   const stopBounds = await stop.boundingBox()
   expect(stopBounds?.width).toBe(sendBounds!.width)
   expect(stopBounds?.height).toBe(sendBounds!.height)
@@ -44,6 +49,68 @@ test('replaces send with a danger stop action without submitting or losing the d
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+
+  test(`shows live reviews with stable copy, snapshot recovery and completed accounting (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    let sequence = 0
+    const createdAt = Date.now()
+    const responseId = 'review-response'
+    const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: 'review-owner', response_id: responseId, created_at: createdAt + sequence
+    }])
+    const activity = { id: 'd', goal: TurnPhase.Review, startedAt: createdAt + 10, durationMs: 0, outcome: 'started' }
+    await emit('owner_message', { message: {
+      who: 'owner', messageId: 'review-owner', message: 'Review the result.', sentAt: createdAt, isAddedToHistory: true
+    } })
+    await emit('turn_status', { status: 'accepted' })
+    await emit('text_stream', { kind: 'reasoning', generationId: 'earlier-thought', token: 'Earlier public thinking.' })
+    await emit('inference_activity', { activity })
+    const processing = page.getByRole('region', { name: 'Leon’s processing', exact: true }).last()
+    const review = page.getByRole('region', { name: 'Leon’s inference', exact: true })
+    await expect(processing).toHaveCount(0)
+    await expect(review).toHaveCount(1)
+    await expect(review.getByRole('button')).toHaveCount(0)
+    await expect(review.locator('.process-group-title')).toHaveText('Reviewing...')
+    await expect(review.locator('.ri-search-eye-line')).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Leon’s work', exact: true })).toHaveCount(0)
+    await expect(page.getByText('Thinking...', { exact: true })).toHaveCount(0)
+    await emit('metrics', { metrics: { durationMs: 500 } })
+    await expect(review.locator('.process-group-title')).toHaveText('Reviewing...')
+    await expect(review.locator('.activity-wave')).toHaveClass(/activity-wave-active/)
+
+    ui.sessions[0]!.status = 'wip' as SessionStatus
+    ui.history.get(SESSION_ID)!.push({
+      who: 'owner', messageId: 'review-owner', message: 'Review the result.', sentAt: createdAt, isAddedToHistory: true
+    }, {
+      who: 'leon', messageId: responseId, message: '', sentAt: createdAt + 1, isAddedToHistory: false,
+      agentResponseTrace: { id: responseId, planSteps: [], toolCalls: [], timings: [{ ...activity, kind: 'inference' }] }
+    })
+    await page.reload()
+    await expect(review.locator('.process-group-title')).toHaveText('Reviewing...')
+    const finished = { ...activity, durationMs: 3_000, outcome: 'completed' }
+    await emit('inference_activity', { activity: finished })
+    await expect(review).toHaveCount(0)
+    await expect(processing).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Leon’s work', exact: true })).toBeVisible()
+    const saved = ui.history.get(SESSION_ID)!.at(-1)!
+    saved.message = 'Reviewed and ready.'
+    saved.isAddedToHistory = true
+    saved.llmMetrics = { durationMs: 5_000 }
+    saved.agentResponseTrace!.timings = [{ ...finished, kind: 'inference' }]
+    await emit('final_answer', { content: saved.message, response_trace: saved.agentResponseTrace })
+    ui.sessions[0]!.status = 'idle' as SessionStatus
+    await emit('session_changed', { is_running: false })
+    const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
+    await expect(work.getByRole('button', { name: 'Worked for 5s', exact: true })).toBeVisible()
+    await page.reload()
+    await work.getByRole('button', { name: 'Worked for 5s', exact: true }).click()
+    await processing.getByRole('button', { name: 'Processed for 3s', exact: true }).click()
+    await expect(review.locator('.process-group-title')).toHaveText('Reviewed for 3s')
+    await expect(review.locator('.activity-wave-active')).toHaveCount(0)
+  })
+
   test(`keeps character reveals alive across real SSE chunks and completion (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
@@ -79,10 +146,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await emit('turn_status', { status: 'accepted' })
     await emit('text_stream', { kind: 'answer', generationId: 'waiting-answer', token: '', reset: true })
     const working = page.getByRole('region', { name: 'Leon’s work', exact: true })
-    await expect(working).toHaveText('Coming together...')
+    await expect(working).toHaveText('Putting this together...')
     await expect(working.locator('.process-group-indicator, i, svg')).toHaveCount(0)
     await emit('metrics', { metrics: { durationMs: 100 } })
-    await expect(working).toHaveText('Coming together...')
+    await expect(working).toHaveText('Putting this together...')
     await expect(page.getByText('Thinking...', { exact: true })).toHaveCount(0)
     await emit('text_stream', { kind: 'reasoning', generationId: 'live-thinking', token: 'Checking ' })
     const thinking = page.getByRole('region', { name: 'Leon’s thinking' }).last()
@@ -125,3 +192,86 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
   })
 }
+
+test('replaces one standalone processing row in place and retains completed request history', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  let sequence = 0
+  const startedAt = Date.now()
+  const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID,
+    turn_id: 'phase-owner', response_id: 'phase-response', created_at: startedAt + sequence
+  }])
+  await emit('turn_status', { status: 'accepted' })
+  const phases = [
+    [TurnPhase.Request, 'Processing...', 'cpu-line'],
+    [TurnPhase.ToolSchemas, 'Loading tools...', 'stack-line'],
+    [TurnPhase.ToolRequest, 'Preparing tool calls...', 'wrench-line'],
+    [TurnPhase.Skill, 'Loading skills...', 'book-open-line'],
+    [TurnPhase.Plan, 'Updating the plan...', 'list-check-3'],
+    [TurnPhase.Clarification, 'Preparing a question...', 'question-mark'],
+    [TurnPhase.Cancellation, 'Preparing to stop...', 'close-circle-line'],
+    [TurnPhase.Connection, 'Preparing connection setup...', 'plug-line'],
+    [TurnPhase.Answer, 'Generating an answer...', 'pencil-ai-line'],
+    [TurnPhase.Inspection, 'Inspecting images...', 'eye-2-line'],
+    [TurnPhase.Compaction, 'Compacting context...', 'file-reduce-line'],
+    [TurnPhase.Review, 'Reviewing...', 'search-eye-line']
+  ] as const
+  const timings = phases.map(([goal], index) => ({
+    id: 'd'.repeat(index + 1), goal, startedAt: startedAt + index * 200,
+    durationMs: 100, outcome: 'completed'
+  }))
+  const request = page.getByRole('region', { name: 'Leon’s inference', exact: true })
+  const processing = page.getByRole('region', { name: 'Leon’s processing', exact: true })
+  let originalRow: ElementHandle | null = null
+
+  for (const [index, [goal, label, icon]] of phases.entries()) {
+    const activity = { ...timings[index]!, goal, durationMs: 0, outcome: 'started' }
+    await emit('inference_activity', { activity })
+    await expect(processing).toHaveCount(0)
+    await expect(request).toHaveCount(1)
+    await expect(request.getByRole('button')).toHaveCount(0)
+    await expect(request.locator('.process-group-title')).toHaveText(label)
+    await expect(request.locator(`.ri-${icon}`)).toBeVisible()
+    await expect(request.locator('.activity-wave')).toHaveClass(/activity-wave-active/)
+    originalRow ??= await request.elementHandle()
+    expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
+
+    const previous = timings[index - 1]
+    if (previous) {
+      // A delayed completion must not replace the newer running phase.
+      await emit('inference_activity', { activity: previous })
+      await expect(request).toHaveCount(1)
+      await expect(request.locator('.process-group-title')).toHaveText(label)
+    }
+
+    const position = await request.boundingBox()
+    const scrollTop = await page.locator('.app-main').evaluate((element) => element.scrollTop)
+    await emit('inference_activity', { activity: timings[index]! })
+    const waiting = page.getByRole('region', { name: 'Leon’s work', exact: true })
+    await expect(waiting).toBeVisible()
+    await expect(waiting.locator('.process-group-indicator, i, svg')).toHaveCount(0)
+    expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
+    expect(Math.abs((await waiting.boundingBox())!.y - position!.y)).toBeLessThan(2)
+    expect(Math.abs(await page.locator('.app-main').evaluate((element) => element.scrollTop) - scrollTop)).toBeLessThan(2)
+  }
+
+  await emit('inference_activity', { activity: timings.at(-1)! })
+  await expect(request).toHaveCount(0)
+  await expect(processing).toHaveCount(0)
+  await originalRow?.dispose()
+
+  await emit('final_answer', {
+    content: 'All done.',
+    response_trace: {
+      plan_steps: [], tool_calls: [], metrics: { durationMs: 3_000 },
+      timings: timings.map((timing) => ({ ...timing, kind: 'inference' }))
+    }
+  })
+  const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true })
+  await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
+  await processing.getByRole('button', { name: 'Processed for 1s', exact: true }).click()
+  await expect(processing.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(phases.length)
+  await expect(processing.getByText('Prepared tool calls in 100ms', { exact: true })).toBeVisible()
+  await expect(processing.getByText('Reviewed for 100ms', { exact: true })).toBeVisible()
+  await expect(processing.locator('.activity-wave-active')).toHaveCount(0)
+})
