@@ -104,7 +104,9 @@ export function Dropdown({
   const contentId = useId()
   const triggerRef = useRef<HTMLSpanElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const openedWithPointerRef = useRef(false)
   const [mounted, setMounted] = useState(false)
+  const [isPointerFocusRestored, setIsPointerFocusRestored] = useState(false)
   const [internalOpen, setInternalOpen] = useState(false)
   const open = controlledOpen ?? internalOpen
   const controlled = controlledOpen !== undefined
@@ -147,7 +149,11 @@ export function Dropdown({
     }
 
     if (restoreFocus || dropdownRef.current?.contains(document.activeElement)) {
-      triggerRef.current?.querySelector<HTMLElement>('button, a')?.focus()
+      // Escape changes the browser's focus-visible heuristic, not the owner's
+      // original input method. Keep keyboard restoration visible without a
+      // lingering ring on a pointer-opened control.
+      setIsPointerFocusRestored(openedWithPointerRef.current)
+      triggerRef.current?.querySelector<HTMLElement>('button, a')?.focus({ preventScroll: true })
     }
 
     setOpen(false)
@@ -249,9 +255,19 @@ export function Dropdown({
     <>
       <span
         ref={triggerRef}
-        className="dropdown-trigger"
+        className={clsx('dropdown-trigger', {
+          'dropdown-trigger-pointer-focus': isPointerFocusRestored
+        })}
+        onBlurCapture={() => setIsPointerFocusRestored(false)}
+        onKeyDownCapture={(event) => {
+          if (event.key !== 'Escape') {
+            setIsPointerFocusRestored(false)
+          }
+        }}
         onClick={(event) => {
           event.stopPropagation()
+          openedWithPointerRef.current = event.detail > 0
+          setIsPointerFocusRestored(false)
           toggleDropdown()
         }}
       >

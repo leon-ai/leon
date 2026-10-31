@@ -3,6 +3,10 @@
 .dropdown-trigger
   display: inline-flex
 
+.dropdown-trigger.dropdown-trigger-pointer-focus
+  :is(button, a):focus-visible
+    outline: none
+
 .dropdown-content
   position: fixed
   z-index: 110
