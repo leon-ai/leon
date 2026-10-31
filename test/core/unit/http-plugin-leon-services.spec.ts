@@ -175,6 +175,10 @@ vi.mock('@/core', () => ({
     }
   },
   POST_TURN_MAINTENANCE_QUEUE: {
+    startConcurrent: vi.fn((label: string, task: () => unknown) => {
+      mocks.maintenanceTasks.push({ label, task })
+      void task()
+    }),
     enqueue: vi.fn((label: string, task: () => unknown) => {
       mocks.maintenanceTasks.push({ label, task })
       void task()
@@ -194,7 +198,7 @@ vi.mock('@/core/context-manager/owner-profile-sync', () => ({
       toolExecutions
     })
 
-    return { profileChanged: true, contextChanged: true }
+    return { profileChanged: true, contextChanged: true, outcome: 'completed' }
   })
 }))
 
@@ -230,8 +234,8 @@ vi.mock('@/core/profile-runtime/initialize-profile-runtime', () => ({
 
 vi.mock('@/core/session-manager', () => ({
   CONVERSATION_SESSION_MANAGER: {
-    getSession: (sessionId: string): { id: string } | null =>
-      getProfileSessions().has(sessionId) ? { id: sessionId } : null,
+    getSession: (sessionId: string): { id: string, isTitleGenerated: boolean, messageCount: number } | null =>
+      getProfileSessions().has(sessionId) ? { id: sessionId, isTitleGenerated: false, messageCount: 0 } : null,
     createSession: (): { id: string } => {
       const id = `session-${++mocks.nextSessionId}`
       getProfileSessions().add(id)
@@ -605,7 +609,7 @@ describe('HTTP plugin Leon services', () => {
     })).rejects.toBe(reason)
     expect(mocks.agentDutyParams[0]?.['signal']).toBe(controller.signal)
     expect(mocks.persistedMessages).toHaveLength(1)
-    expect(mocks.maintenanceTasks).toHaveLength(0)
+    expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual(['session title generation'])
 
     await expect(runAgent({ query: 'Must not start', signal: controller.signal })).rejects.toBe(reason)
     expect(mocks.agentDutyParams).toHaveLength(1)

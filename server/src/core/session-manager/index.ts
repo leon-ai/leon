@@ -7,6 +7,7 @@ import type { MessageLog } from '@/types'
 import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LogHelper } from '@/helpers/log-helper'
+import type { MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
 import {
   LLMDuties,
   InferencePurpose,
@@ -196,6 +197,7 @@ export class ConversationSessionManager {
   public readonly events = new EventEmitter()
   private index: ConversationSessionIndex | null = null
   private readonly sessionQueues = new Map<string, Promise<void>>()
+  private readonly titleGenerations = new Map<string, Promise<MaintenanceTaskResult>>()
   private readonly agentMessageQueues = new Map<string, {
     pending: PendingAgentMessage[]
     controller: AbortController
@@ -516,16 +518,28 @@ export class ConversationSessionManager {
     this.emitUpdated()
   }
 
-  public async generateTitleFromFirstMessage(
+  /**
+   * Coalesces concurrent requests for a session's first title. Completed requests
+   * release their handles so the registry only retains active inference.
+   */
+  public generateTitleFromFirstMessage(
     sessionId: string,
     message: string
-  ): Promise<void> {
-    try {
-      await this.generateTitle(sessionId, message)
-    } catch (error: unknown) {
+  ): Promise<MaintenanceTaskResult> {
+    const pending = this.titleGenerations.get(sessionId)
+    if (pending) {
+      return pending
+    }
+    const generation = this.generateTitle(sessionId, message).catch((error: unknown): MaintenanceTaskResult => {
       LogHelper.title('Session Manager')
       LogHelper.warning(`Failed to generate session title: ${error}`)
-    }
+      return { outcome: 'failed', reason: 'title-generation-failed' }
+    }).finally(() => {
+      this.titleGenerations.delete(sessionId)
+    })
+    this.titleGenerations.set(sessionId, generation)
+
+    return generation
   }
 
   public async runWithSession<T>(
@@ -585,19 +599,19 @@ export class ConversationSessionManager {
   private async generateTitle(
     sessionId: string,
     message: string
-  ): Promise<void> {
-    const session = this.requireSession(sessionId)
+  ): Promise<MaintenanceTaskResult> {
+    const session = this.findSession(sessionId)
 
-    if (session.isTitleGenerated || session.messageCount > 2) {
-      return
+    if (!session || session.isTitleGenerated || session.messageCount > 2) {
+      return { outcome: 'skipped' }
     }
 
     const { LLM_PROVIDER } = await import('@/core')
     const { CONFIG_STATE } = await import('@/core/config-states/config-state')
     const workflowProvider = CONFIG_STATE.getModelState().getWorkflowTarget().provider
 
-    if (!workflowProvider) {
-      return
+    if (!workflowProvider || this.findSession(sessionId) !== session || session.isTitleGenerated) {
+      return { outcome: 'skipped' }
     }
 
     LogHelper.title('Session Manager')
@@ -621,8 +635,10 @@ export class ConversationSessionManager {
       stripLeadingTitleTemplateTags(String(titleResult?.output || ''))
     )
 
-    if (!this.findSession(sessionId)) {
-      return
+    // A manual rename or deletion/recreation wins over a late model response.
+    const current = this.findSession(sessionId)
+    if (current !== session || current.isTitleGenerated) {
+      return { outcome: 'skipped', reason: 'session-changed' }
     }
 
     if (!title) {
@@ -636,7 +652,7 @@ export class ConversationSessionManager {
       LogHelper.warning(
         `Session title generation returned no usable title for ${sessionId}; using fallback title`
       )
-      return
+      return { outcome: 'completed', reason: 'fallback-title' }
     }
 
     session.title = title
@@ -647,6 +663,7 @@ export class ConversationSessionManager {
 
     LogHelper.title('Session Manager')
     LogHelper.success(`Generated session title: ${title}`)
+    return { outcome: 'completed' }
   }
 
   private loadOrCreateIndex(): ConversationSessionIndex {

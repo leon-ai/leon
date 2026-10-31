@@ -40,6 +40,35 @@ test('reselects the current session at the bottom without discarding its draft',
   await expect(composer).toBeFocused()
 })
 
+test('updates session titles from metadata-only notifications during and after a turn', async ({ page, ui }) => {
+  const errors: Error[] = []
+  const handlePageError = (error: Error): void => {
+    errors.push(error)
+  }
+  page.on('pageerror', handlePageError)
+  await page.goto(SESSION_URL)
+  await expectBottom(page)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await composer.fill('Keep this draft while the title changes')
+  await ui.emit([{
+    type: 'turn_status', sequence: 1, session_id: SESSION_ID, turn_id: 'turn', response_id: null,
+    created_at: Date.now(), data: { status: 'accepted' }
+  }])
+  ui.sessions[0]!.title = 'Generated title while working'
+  await ui.emit([{ type: 'sessions_changed' }])
+  await expect(page.getByRole('link', { name: 'Generated title while working', exact: true })).toBeVisible()
+  ui.sessions[0]!.title = 'Updated title after completion'
+  await ui.emit([{
+    type: 'session_changed', sequence: 2, session_id: SESSION_ID, turn_id: 'turn', response_id: null,
+    created_at: Date.now(), data: { is_running: false }
+  }, { type: 'sessions_changed' }])
+  await expect(page.getByRole('link', { name: 'Updated title after completion', exact: true })).toBeVisible()
+  await expect(composer).toHaveValue('Keep this draft while the title changes')
+  await expect(composer).toBeFocused()
+  expect(errors).toEqual([])
+  page.off('pageerror', handlePageError)
+})
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {
     void ui

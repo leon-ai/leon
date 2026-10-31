@@ -1,10 +1,10 @@
 import { LogHelper } from '@/helpers/log-helper'
 import { randomUUID } from 'node:crypto'
-import { getTurnTimingContext, recordMaintenanceEvent, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
+import { getTurnTimingContext, recordMaintenanceEvent, runWithTurnTiming, TurnStage, type MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
 import { bindConversationSession, getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 
-export type PostTurnMaintenanceTask = () => Promise<void> | void
+export type PostTurnMaintenanceTask = () => Promise<void | MaintenanceTaskResult> | void | MaintenanceTaskResult
 export type PostTurnMaintenanceTaskPreparer = () =>
   | Promise<PostTurnMaintenanceTask | null>
   | PostTurnMaintenanceTask
@@ -17,12 +17,13 @@ function waitForDisplayPathToUnwind(): Promise<void> {
 }
 
 /**
- * Serializes background LLM maintenance so it does not compete with itself
- * after an answer has already been produced.
+ * Serializes post-turn maintenance and owns independent turn-start tasks.
+ * Both paths retain isolated attribution and can be drained during shutdown.
  */
 export default class PostTurnMaintenanceQueue {
   private queue: Promise<void> = Promise.resolve()
   private pendingCount = 0
+  private readonly concurrent = new Set<Promise<void>>()
 
   public enqueue(label: string, task: PostTurnMaintenanceTask): void {
     this.enqueueIfNeeded(label, () => task)
@@ -36,17 +37,36 @@ export default class PostTurnMaintenanceQueue {
     label: string,
     prepareTask: PostTurnMaintenanceTaskPreparer
   ): void {
+    const execute = this.createTask(label, prepareTask, TurnStage.PostTurn)
+    this.pendingCount += 1
+    this.queue = this.queue.then(execute).finally(() => {
+      this.pendingCount = Math.max(0, this.pendingCount - 1)
+    })
+  }
+
+  /**
+   * Starts independent work without waiting behind post-turn maintenance or
+   * sharing the foreground turn's timing and inference collections.
+   */
+  public startConcurrent(label: string, task: PostTurnMaintenanceTask, stage: TurnStage): void {
+    const pending = this.createTask(label, () => task, stage)()
+    this.concurrent.add(pending)
+    void pending.finally(() => this.concurrent.delete(pending))
+  }
+
+  private createTask(label: string, prepareTask: PostTurnMaintenanceTaskPreparer, stage: TurnStage): () => Promise<void> {
     const profile = getActiveProfileName()
     const sessionId = getActiveConversationSessionId()
     const taskId = randomUUID()
     const context = {
       turnId: getTurnTimingContext()?.turnId ?? taskId,
-      stage: TurnStage.PostTurn,
+      stage,
       taskId,
       task: label
     }
-    const record = (outcome: Parameters<typeof recordMaintenanceEvent>[3]): Promise<void> =>
-      recordMaintenanceEvent(context, profile, sessionId, outcome)
+    const record = (outcome: Parameters<typeof recordMaintenanceEvent>[3], details?: MaintenanceTaskResult): Promise<void> =>
+      recordMaintenanceEvent(context, profile, sessionId, outcome, details)
+    const heading = stage === TurnStage.PostTurn ? 'Post-Turn Maintenance' : 'Turn-Start Maintenance'
     const execute = bindConversationSession(() => runWithProfileContext({ profileName: profile }, () =>
       runWithTurnTiming(context.turnId, sessionId, async () => {
         await record('running')
@@ -57,29 +77,34 @@ export default class PostTurnMaintenanceQueue {
         }
 
         const startedAt = Date.now()
-        LogHelper.title('Post-Turn Maintenance')
+        LogHelper.title(heading)
         LogHelper.debug(`Running "${label}" | pending=${this.pendingCount}`)
-        await task()
-        LogHelper.title('Post-Turn Maintenance')
-        LogHelper.debug(`Completed "${label}" in ${Date.now() - startedAt}ms`)
-        await record('completed')
+        const result = await task()
+        const outcome = result?.outcome ?? 'completed'
+        LogHelper.title(heading)
+        const summary = `${outcome} "${label}" in ${Date.now() - startedAt}ms` +
+          `${result?.reason ? ` | reason=${result.reason}` : ''}` +
+          `${result?.issueCount === undefined ? '' : ` | issues=${result.issueCount}`}`
+        if (outcome === 'failed' || outcome === 'rejected') {
+          LogHelper.warning(summary)
+        } else {
+          LogHelper.debug(summary)
+        }
+        await record(outcome, result ?? undefined)
       }, context)
     ))
 
     void record('queued')
-    this.pendingCount += 1
-    this.queue = this.queue.then(async () => {
+    return async (): Promise<void> => {
       try {
         await waitForDisplayPathToUnwind()
         await execute()
       } catch (error) {
         await record('failed')
-        LogHelper.title('Post-Turn Maintenance')
+        LogHelper.title(heading)
         LogHelper.warning(`Failed "${label}": ${String(error)}`)
-      } finally {
-        this.pendingCount = Math.max(0, this.pendingCount - 1)
       }
-    })
+    }
   }
 
   /**
@@ -89,7 +114,7 @@ export default class PostTurnMaintenanceQueue {
     let pending: Promise<void>
     do {
       pending = this.queue
-      await pending
-    } while (pending !== this.queue)
+      await Promise.all([pending, ...this.concurrent])
+    } while (pending !== this.queue || this.concurrent.size > 0)
   }
 }

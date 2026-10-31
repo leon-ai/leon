@@ -1,4 +1,4 @@
-import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
+import { runTurnPhase, TurnPhase, type MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -55,6 +55,19 @@ interface OwnerMemoryItem {
 interface OwnerDocumentVerification {
   safe: boolean
   missingFacts: string[]
+}
+
+export interface OwnerProfileSyncResult extends MaintenanceTaskResult {
+  profileChanged: boolean
+  contextChanged: boolean
+}
+
+enum OwnerProfileSyncReason {
+  RewriteFailed = 'rewrite-failed',
+  VerificationRejected = 'verification-rejected',
+  VerificationFailed = 'verification-failed',
+  ExtractionFailed = 'structured-extraction-failed',
+  DocumentChanged = 'document-changed'
 }
 
 type OwnerStaticFields = Pick<
@@ -621,7 +634,7 @@ async function extractOwnerStaticFields(
 async function writeOwnerArtifacts(
   profile: OwnerProfile,
   expectedDocument: string
-): Promise<{ profileChanged: boolean, contextChanged: boolean }> {
+): Promise<OwnerProfileSyncResult> {
   const currentProfile = readOwnerProfileSync()
   const normalizedProfile = normalizeOwnerProfile(profile)
   const currentDocument = readOwnerDocumentSync().trimEnd()
@@ -636,12 +649,12 @@ async function writeOwnerArtifacts(
   )
   if (!extractedStaticFields) {
     LogHelper.error('Owner profile sync: structured extraction failed; neither artifact was updated')
-    return { profileChanged: false, contextChanged: false }
+    return { profileChanged: false, contextChanged: false, outcome: 'failed', reason: OwnerProfileSyncReason.ExtractionFailed }
   }
   // A background update must not overwrite a manual edit or another completed turn.
   if (readOwnerDocumentSync().trimEnd() !== expectedDocument.trimEnd()) {
     LogHelper.error('Owner profile sync: document changed during generation; update discarded')
-    return { profileChanged: false, contextChanged: false }
+    return { profileChanged: false, contextChanged: false, outcome: 'skipped', reason: OwnerProfileSyncReason.DocumentChanged }
   }
   const nextProfile = normalizeOwnerProfile({
     ...normalizedProfile,
@@ -663,6 +676,7 @@ async function writeOwnerArtifacts(
   if (!profileChanged && !contextChanged) {
     LogHelper.debug('Owner profile sync: no changes')
     return {
+      outcome: 'skipped',
       profileChanged: false,
       contextChanged: false
     }
@@ -681,6 +695,7 @@ async function writeOwnerArtifacts(
   LogHelper.info('Owner profile sync: OWNER.md and structured profile synchronized')
 
   return {
+    outcome: 'completed',
     profileChanged,
     contextChanged
   }
@@ -693,7 +708,7 @@ export async function syncOwnerProfileFromTurn(
   userMessage: string,
   assistantMessage: string,
   toolExecutions: OwnerTurnToolExecution[] = []
-): Promise<{ profileChanged: boolean, contextChanged: boolean }> {
+): Promise<OwnerProfileSyncResult> {
   const normalizedUserMessage = truncateText(userMessage, OWNER_TURN_MAX_USER_CHARS)
   const normalizedAssistantMessage = truncateText(
     assistantMessage,
@@ -703,6 +718,7 @@ export async function syncOwnerProfileFromTurn(
 
   if (!normalizedUserMessage && memoryItems.length === 0) {
     return {
+      outcome: 'skipped',
       profileChanged: false,
       contextChanged: false
     }
@@ -720,6 +736,8 @@ export async function syncOwnerProfileFromTurn(
   if (!updatedProfile) {
     LogHelper.error('Owner profile sync: rewrite/repair failed or returned an incomplete document')
     return {
+      outcome: 'failed',
+      reason: OwnerProfileSyncReason.RewriteFailed,
       profileChanged: false,
       contextChanged: false
     }
@@ -744,6 +762,9 @@ export async function syncOwnerProfileFromTurn(
         ? 'Owner profile sync: revision rejected by curation/correction verification'
         : 'Owner profile sync: revision verification failed or returned invalid output')
       return {
+        outcome: verification ? 'rejected' : 'failed',
+        reason: verification ? OwnerProfileSyncReason.VerificationRejected : OwnerProfileSyncReason.VerificationFailed,
+        ...(verification ? { issueCount: verification.missingFacts.length } : {}),
         profileChanged: false,
         contextChanged: false
       }
@@ -797,6 +818,7 @@ export async function syncOwnerProfileFromTurn(
   if (areOwnerProfilesEquivalent(currentProfile, finalProfile)) {
     LogHelper.debug('Owner profile sync: no changes')
     return {
+      outcome: 'skipped',
       profileChanged: false,
       contextChanged: false
     }

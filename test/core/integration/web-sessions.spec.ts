@@ -30,7 +30,7 @@ vi.mock('@/core', () => ({
   CONVERSATION_LOGGER: {
     upsert: (...args: Parameters<ConversationLogger['upsert']>): Promise<void> => fixture.logger!.upsert(...args)
   },
-  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn() }
+  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn(), startConcurrent: vi.fn() }
 }))
 vi.mock('@/core/profile-runtime/initialize-profile-runtime', () => ({
   ensureActiveProfileRuntime: vi.fn(async () => undefined)
@@ -217,7 +217,7 @@ describe('web conversation runtime', () => {
     expect(history.messages.filter((message: { who: string }) => message.who === 'owner')).toHaveLength(1)
     expect(history.messages.some((message: { message: string }) => message.message.includes('Second'))).toBe(false)
     expect(vi.mocked(POST_TURN_MAINTENANCE_QUEUE.enqueue).mock.calls.map(([label]) => label)).toEqual([
-      'session title generation', 'turn memory observation', 'react self-model reflection', 'memory extraction'
+      'turn memory observation', 'react self-model reflection', 'memory extraction'
     ])
   })
 

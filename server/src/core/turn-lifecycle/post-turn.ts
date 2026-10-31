@@ -1,5 +1,4 @@
 import { MEMORY_MANAGER, SELF_MODEL_MANAGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
-import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import type { FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
@@ -24,7 +23,7 @@ export function scheduleHistoryCompaction(prepare: PostTurnMaintenanceTaskPrepar
  * Schedules owner-turn maintenance after the answer has been persisted and delivered.
  * Explicit memory mutations must not be repeated by automatic extraction.
  */
-export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTurn): void {
+export function schedulePostTurn({ query, result }: CompletedAgentTurn): void {
   const output = result?.output as unknown
   if (typeof output !== 'string' || !output.trim()) {
     return
@@ -34,9 +33,6 @@ export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTur
   const toolExecutions = normalizeOwnerProfileToolExecutions(result)
   const finalIntent = result?.data?.['finalIntent'] as FinalPhaseIntent | undefined
 
-  POST_TURN_MAINTENANCE_QUEUE.enqueue('session title generation', () =>
-    CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(sessionId, query)
-  )
   POST_TURN_MAINTENANCE_QUEUE.enqueue('turn memory observation', () => MEMORY_MANAGER.observeTurn({
     userMessage: query,
     assistantMessage: output,
@@ -55,13 +51,15 @@ export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTur
 
   if (result?.data?.['hasExplicitMemoryWrite'] === true) {
     POST_TURN_MAINTENANCE_QUEUE.enqueue('owner profile sync', () =>
-      syncOwnerProfileFromTurn(query, output, toolExecutions).then(() => undefined)
+      syncOwnerProfileFromTurn(query, output, toolExecutions)
     )
   } else if (finalIntent !== 'cancelled' && finalIntent !== 'error') {
     POST_TURN_MAINTENANCE_QUEUE.enqueue('memory extraction', async () => {
       const savedCount = await MEMORY_MANAGER.saveMemoryCandidatesFromTurn(query, output, sentAt)
       if (savedCount > 0) {
-        await syncOwnerProfileFromTurn(query, output, toolExecutions)
+        POST_TURN_MAINTENANCE_QUEUE.enqueue('owner profile sync', () =>
+          syncOwnerProfileFromTurn(query, output, toolExecutions)
+        )
       }
     })
   }

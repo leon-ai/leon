@@ -14,15 +14,17 @@ import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { buildOwnerDocument, normalizeOwnerProfile } from '@/core/context-manager/owner-profile'
+import { buildOwnerDocument, normalizeOwnerProfile, writeOwnerProfile } from '@/core/context-manager/owner-profile'
 import { runTurnLifecycle } from '@/core/turn-lifecycle'
-import { runTurnPhase, TurnPhase, TurnStage, readTurnHistory, recordTurnInference } from '@/core/llm-manager/turn-timing'
+import { runTurnPhase, TurnPhase, TurnStage, readTurnHistory, recordTurnInference, getTurnTimings } from '@/core/llm-manager/turn-timing'
 import { trackInferenceUsage } from '@/core/llm-manager/llm-usage'
 import { readInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { recordInferenceAttempt, recordInferenceUsage, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
 import { InferencePurpose, LLMDuties, LLMProviders, type CompletionParams, type CompletionAttemptTiming } from '@/core/llm-manager/types'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import { LogHelper } from '@/helpers/log-helper'
+import { getActiveTurnInference, recordTurnInference as recordSessionInference } from '@/core/session-manager/session-context'
+import { InferenceAuthMode, InferenceCredentialSource } from '@/core/llm-manager/inference-metadata'
 
 interface Services {
   queue: PostTurnMaintenanceQueue
@@ -38,7 +40,9 @@ const fixture = vi.hoisted(() => ({
   requests: [] as { profile: string, purpose: string }[],
   releaseTitle: undefined as (() => void) | undefined,
   titleGate: undefined as Promise<void> | undefined,
-  failExtraction: false
+  failExtraction: false,
+  rejectProfile: false,
+  invalidVerification: false
 }))
 
 vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd() }))
@@ -107,6 +111,10 @@ async function providerResponse(_input: unknown, params: CompletionParams): Prom
   const purpose = params.usagePurpose ?? InferencePurpose.Memory
   const profile = getActiveProfileName()
   fixture.requests.push({ profile, purpose })
+  recordSessionInference({
+    provider: 'openai', model: purpose, endpoint: null,
+    authMode: InferenceAuthMode.None, credentialSource: InferenceCredentialSource.None
+  })
   return trackInferenceUsage({ provider: 'openai', model: 'fixture', purpose }, async () => {
     const attemptId = randomUUID()
     const startedAt = Date.now()
@@ -135,7 +143,9 @@ async function providerResponse(_input: unknown, params: CompletionParams): Prom
     } else if (purpose === InferencePurpose.SelfModel) {
       output = JSON.stringify({ retrospection: 'Keep remembered owner facts grounded in their words.' })
     } else if (params.systemPrompt?.startsWith('Verify owner')) {
-      output = { safe: true, missingFacts: [] }
+      output = fixture.invalidVerification ? { invalid: true }
+        : fixture.rejectProfile ? { safe: false, missingFacts: ['Private fact must never enter diagnostics.'] }
+          : { safe: true, missingFacts: [] }
     } else if (params.systemPrompt?.startsWith('Extract a tiny')) {
       output = normalizeOwnerProfile({ owner_current_city: profile })
     } else {
@@ -156,6 +166,9 @@ beforeEach(async () => {
   fixture.requests = []
   fixture.failExtraction = false
   fixture.titleGate = undefined
+  fixture.releaseTitle = undefined
+  fixture.rejectProfile = false
+  fixture.invalidVerification = false
 })
 
 afterEach(async () => {
@@ -187,7 +200,7 @@ async function createProfile(profile: string): Promise<void> {
   })
 }
 
-async function completeTurn(profile: string, explicitMemory = false): Promise<{ sessionId: string, turnId: string }> {
+async function completeTurn(profile: string, explicitMemory = false, duringTurn?: () => Promise<void>): Promise<{ sessionId: string, turnId: string }> {
   return runWithProfileContext({ profileName: profile }, async () => {
     const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
     const turnId = randomUUID()
@@ -195,6 +208,7 @@ async function completeTurn(profile: string, explicitMemory = false): Promise<{ 
     const logger = fixture.services.get(profile)!.logger
     await runTurnLifecycle({ sessionId, turnId, query }, async () => {
       await logger.upsert({ who: 'owner', message: query, messageId: turnId, isAddedToHistory: true })
+      await duringTurn?.()
       const result = await runTurnPhase(TurnPhase.Execution, async () => ({
         output: 'I will keep that in mind.', data: {
           finalIntent: 'answer', hasExplicitMemoryWrite: explicitMemory, executionHistory: []
@@ -213,7 +227,11 @@ it('persists title, memory, reflection and owner artifacts without blocking answ
   const gate = Promise.withResolvers<void>()
   fixture.titleGate = gate.promise
   fixture.releaseTitle = (): void => gate.resolve()
-  const { sessionId, turnId } = await completeTurn(profile)
+  const { sessionId, turnId } = await completeTurn(profile, false, async () => {
+    await vi.waitFor(() => expect(fixture.requests.some((request) => request.purpose === InferencePurpose.SessionTitle)).toBe(true))
+    expect(getTurnTimings().some((timing) => timing.purpose === InferencePurpose.SessionTitle)).toBe(false)
+    expect(getActiveTurnInference()).toBeNull()
+  })
   await runWithProfileContext({ profileName: profile }, async () => {
     expect(CONVERSATION_REPOSITORY.readAllMessages(sessionId)).toHaveLength(2)
     expect(CONVERSATION_SESSION_MANAGER.getSession(sessionId)?.isTitleGenerated).toBe(false)
@@ -231,15 +249,18 @@ it('persists title, memory, reflection and owner artifacts without blocking answ
     }
     expect(history.filter((row) => row['kind'] === 'maintenance' && row['outcome'] === 'failed'),
       JSON.stringify(vi.mocked(LogHelper.warning).mock.calls)).toEqual([])
-    expect(history.filter((row) => row['kind'] === 'maintenance' && row['outcome'] === 'completed')).toHaveLength(4)
+    expect(history.filter((row) => row['kind'] === 'maintenance' && row['outcome'] === 'completed')).toHaveLength(5)
     const usage = []
-    for await (const row of readInferenceUsage({ turnId, stage: TurnStage.PostTurn })) {
+    for await (const row of readInferenceUsage({ turnId })) {
       usage.push(row)
     }
-    expect(usage.map((row) => row.purpose)).toEqual([
+    expect(usage.map((row) => row.purpose).sort()).toEqual([
       InferencePurpose.SessionTitle, InferencePurpose.SelfModel, InferencePurpose.Memory,
       InferencePurpose.OwnerProfile, InferencePurpose.OwnerProfile, InferencePurpose.OwnerProfile
-    ])
+    ].sort())
+    expect(usage.find((row) => row.purpose === InferencePurpose.SessionTitle)?.stage).toBe(TurnStage.PreTurn)
+    expect(usage.filter((row) => row.purpose !== InferencePurpose.SessionTitle)
+      .every((row) => row.stage === TurnStage.PostTurn)).toBe(true)
     expect(usage.every((row) => row.sessionId === sessionId && row.taskId && row.usage.inputTokens === 20)).toBe(true)
     expect(history.some((row) => row['goal'] === TurnPhase.OwnerVerification)).toBe(true)
     expect(history.filter((row) => row['kind'] === 'inference').every((row) => row['usageId'])).toBe(true)
@@ -260,6 +281,75 @@ it('keeps concurrent profiles isolated and avoids extraction after explicit memo
   }))
 })
 
+it.each(['renamed', 'deleted', 'recreated'] as const)('coalesces in-flight titles and preserves a session that is %s during inference', async (change) => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  const gate = Promise.withResolvers<void>()
+  fixture.titleGate = gate.promise
+  fixture.releaseTitle = (): void => gate.resolve()
+  await runWithProfileContext({ profileName: profile }, async () => {
+    const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
+    await runTurnLifecycle({ sessionId, query: 'A first query' }, async () => {
+      await vi.waitFor(() => expect(fixture.requests.some((request) => request.purpose === InferencePurpose.SessionTitle)).toBe(true))
+      return null
+    })
+    const pending = CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(sessionId, 'A duplicate request')
+    expect(pending).toBe(CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(sessionId, 'Another duplicate'))
+    if (change === 'renamed') {
+      CONVERSATION_SESSION_MANAGER.updateSession(sessionId, { title: 'My own title' })
+    } else {
+      CONVERSATION_SESSION_MANAGER.deleteSession(sessionId)
+      if (change === 'recreated') {
+        CONVERSATION_SESSION_MANAGER.createSession(sessionId)
+      }
+    }
+    gate.resolve()
+    await pending
+    await fixture.services.get(profile)!.queue.whenIdle()
+    expect(fixture.requests.filter((request) => request.purpose === InferencePurpose.SessionTitle)).toHaveLength(1)
+    expect(CONVERSATION_SESSION_MANAGER.getSession(sessionId)?.title)
+      .toBe(change === 'renamed' ? 'My own title' : change === 'recreated' ? 'New session' : undefined)
+  })
+})
+
+it.each([
+  { invalid: false, outcome: 'rejected', reason: 'verification-rejected' },
+  { invalid: true, outcome: 'failed', reason: 'verification-failed' }
+])('records $outcome profile verification separately from extraction without changing owner artifacts', async ({ invalid, outcome, reason }) => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  fixture.rejectProfile = !invalid
+  fixture.invalidVerification = invalid
+  await runWithProfileContext({ profileName: profile }, async () => {
+    const context = getProfilePaths().context
+    await fs.mkdir(context, { recursive: true })
+    const original = normalizeOwnerProfile({ homeAndImportantPlaces: ['Lives in Original City.'] })
+    await writeOwnerProfile(original)
+    await fs.writeFile(path.join(context, 'OWNER.md'), buildOwnerDocument(original))
+    const filenames = ['OWNER.md', '.owner-profile.json']
+    const before = await Promise.all(filenames.map((filename) => fs.readFile(path.join(context, filename), 'utf8')))
+    const { sessionId, turnId } = await completeTurn(profile)
+    await fixture.services.get(profile)!.queue.whenIdle()
+    expect(await Promise.all(filenames.map((filename) => fs.readFile(path.join(context, filename), 'utf8')))).toEqual(before)
+    expect(CONVERSATION_REPOSITORY.readAllMessages(sessionId)).toHaveLength(2)
+    const history = []
+    for await (const record of readTurnHistory({ turnId, stage: TurnStage.PostTurn })) {
+      history.push(record)
+    }
+    expect(history).toContainEqual(expect.objectContaining({
+      kind: 'maintenance', task: 'memory extraction', outcome: 'completed'
+    }))
+    expect(history).toContainEqual(expect.objectContaining({
+      kind: 'maintenance', task: 'owner profile sync', outcome, reason,
+      ...(invalid ? {} : { issueCount: 1 })
+    }))
+    expect(history.some((record) => record['task'] === 'owner profile sync' && record['outcome'] === 'completed' &&
+      record['kind'] === 'maintenance')).toBe(false)
+    expect(JSON.stringify(history)).not.toContain('Private fact must never enter diagnostics.')
+    expect(JSON.stringify(vi.mocked(LogHelper.error).mock.calls)).not.toContain('Private fact must never enter diagnostics.')
+  })
+})
+
 it('retains originating sessions and turns when one profile queues maintenance for multiple sessions', async () => {
   const profile = randomUUID()
   await createProfile(profile)
@@ -272,7 +362,8 @@ it('retains originating sessions and turns when one profile queues maintenance f
         usage.push(row)
       }
       expect(usage.length).toBeGreaterThan(0)
-      expect(usage.every((row) => row.sessionId === turn.sessionId && row.stage === TurnStage.PostTurn)).toBe(true)
+      expect(usage.every((row) => row.sessionId === turn.sessionId &&
+        row.stage === (row.purpose === InferencePurpose.SessionTitle ? TurnStage.PreTurn : TurnStage.PostTurn))).toBe(true)
       expect(CONVERSATION_SESSION_MANAGER.getSession(turn.sessionId)?.title).toBe('Home notes')
     }
   })
@@ -340,7 +431,7 @@ it('does not schedule successful-turn maintenance when foreground execution abor
     for await (const record of readTurnHistory({ turnId })) {
       history.push(record)
     }
-    expect(history.some((record) => record['kind'] === 'maintenance')).toBe(false)
+    expect(history.some((record) => record['kind'] === 'maintenance' && record['stage'] === TurnStage.PostTurn)).toBe(false)
     expect(history.some((record) => record['outcome'] === 'failed')).toBe(true)
   })
 })

@@ -16,6 +16,13 @@ export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from '.
 
 const MAXIMUM_TURN_TIMINGS = 10_000
 
+export interface MaintenanceTaskResult {
+  outcome: 'completed' | 'skipped' | 'rejected' | 'failed'
+  // Diagnostics contain fixed reason codes and counts, never model-returned facts.
+  reason?: string
+  issueCount?: number
+}
+
 interface TurnTimingScope extends TurnTimingContext {
   profile: string
   parentId?: string
@@ -205,13 +212,16 @@ export async function recordMaintenanceEvent(
   context: TurnTimingContext,
   profile: string,
   sessionId: string | null,
-  outcome: 'queued' | 'running' | 'completed' | 'skipped' | 'failed'
+  outcome: 'queued' | 'running' | MaintenanceTaskResult['outcome'],
+  details?: Pick<MaintenanceTaskResult, 'reason' | 'issueCount'>
 ): Promise<void> {
   const startedAt = Date.now()
   const filename = path.join(getProfilePaths(profile).logs, 'turns', `${new Date(startedAt).toISOString().slice(0, 10)}.jsonl`)
   try {
     await appendTimingRecords(filename, `${JSON.stringify({
-      ...context, profile, sessionId, kind: 'maintenance', outcome, startedAt
+      ...context, profile, sessionId, kind: 'maintenance', outcome, startedAt,
+      ...(details?.reason ? { reason: details.reason } : {}),
+      ...(details?.issueCount === undefined ? {} : { issueCount: details.issueCount })
     })}\n`)
   } catch (error) {
     LogHelper.warning(`Could not save maintenance event: ${String(error)}`)

@@ -104,3 +104,5 @@ export interface ConversationEvent {
   created_at: number
   data: Record<string, unknown>
 }
+
+export type ConversationNotification = ConversationEvent | { type: 'sessions_changed' }

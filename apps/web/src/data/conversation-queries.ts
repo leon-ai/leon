@@ -5,7 +5,7 @@ import { infiniteQueryOptions, useInfiniteQuery, useMutation, type InfiniteData,
 import { queryClient } from '@/query-client'
 import { useToast } from '@/components/toast'
 import { requestAPI } from './api'
-import type { ConversationCommand, ConversationEvent, ConversationPage, ConversationRecord } from './conversation'
+import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
 import { applyConversationEvent } from './conversation-events'
 import { toFeedEntry } from './conversation-feed'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
@@ -272,8 +272,17 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
       if (disposed) {
         return
       }
-      const event = JSON.parse(String(message.data)) as ConversationEvent
-      if (event.type === 'owner_message' || event.data['code'] === 'replay_snapshot_required') {
+      const notification = JSON.parse(String(message.data)) as ConversationNotification
+      // Metadata notifications do not carry a conversation payload or cursor.
+      if (notification.type === 'sessions_changed') {
+        refreshMetadata()
+        return
+      }
+      if (!('data' in notification)) {
+        return
+      }
+      const event = notification
+      if (event.type === 'owner_message' || event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {
         void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, event.session_id || sessionId || ''), exact: true })
       }
       if (event.type === 'mood_changed') {
@@ -289,7 +298,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
             session.id === event.session_id ? { ...session, status } : session) }))
         } : previous)
       }
-      if (event.type === 'sessions_changed' || event.type === 'session_changed' || event.type === 'turn_status') {
+      if (event.type === 'session_changed' || event.type === 'turn_status') {
         refreshMetadata()
       }
       if (event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {

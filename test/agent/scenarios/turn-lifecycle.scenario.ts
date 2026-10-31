@@ -16,9 +16,11 @@ const scenario: RealAgentScenario = {
     const turnId = randomUUID()
     const query = 'I live in Haarlem, Netherlands. This is my home city, rather than a travel destination. Reply briefly acknowledging this information. Do not use tools.'
     let answer = ''
+    let foregroundFinishedAt = 0
     await runTurnLifecycle({ sessionId, turnId, query }, async () => {
       const result = await runTurn(query, sessionId)
       answer = result.output
+      foregroundFinishedAt = Date.now()
       return {
         output: answer,
         data: { finalIntent: result.finalIntent, executionHistory: result.executionHistory }
@@ -33,12 +35,15 @@ const scenario: RealAgentScenario = {
     }
     assert.ok(history.some((record) => record['task'] === 'session title generation' && record['outcome'] === 'completed'))
     const usage = []
-    for await (const record of readInferenceUsage({ turnId, stage: TurnStage.PostTurn })) {
+    for await (const record of readInferenceUsage({ turnId })) {
       usage.push(record)
     }
-    assert.ok(usage.some((record) => record.purpose === InferencePurpose.SessionTitle))
-    assert.ok(usage.some((record) => record.purpose === InferencePurpose.Memory))
-    assert.ok(usage.every((record) => record.sessionId === sessionId && record.taskId))
+    assert.ok(usage.some((record) => record.purpose === InferencePurpose.SessionTitle && record.stage === TurnStage.PreTurn))
+    assert.ok(usage.find((record) => record.purpose === InferencePurpose.SessionTitle)!.startedAt <= foregroundFinishedAt)
+    assert.ok(usage.some((record) => record.purpose === InferencePurpose.Memory && record.stage === TurnStage.PostTurn))
+    assert.ok(usage.every((record) => record.sessionId === sessionId))
+    assert.ok(usage.filter((record) => record.purpose === InferencePurpose.SessionTitle || record.stage === TurnStage.PostTurn)
+      .every((record) => record.taskId))
     assert.ok(usage.some((record) => (record.usage.inputTokens ?? 0) > 0))
     const dailyPath = path.join(profilePath, 'memory', 'daily')
     const daily = (await Promise.all((await fs.readdir(dailyPath)).map((file) => fs.readFile(path.join(dailyPath, file), 'utf8')))).join('\n')

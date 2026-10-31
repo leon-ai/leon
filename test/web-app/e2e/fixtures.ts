@@ -1,6 +1,6 @@
 import { test as base, expect, type Response, type Route } from '@playwright/test'
 
-import type { ConversationPage, ConversationRecord, ModelCatalog, ConversationEvent } from '../../../apps/web/src/data/conversation'
+import type { ConversationPage, ConversationRecord, ModelCatalog, ConversationNotification } from '../../../apps/web/src/data/conversation'
 import type { ConversationSession } from '../../../apps/web/src/data/sessions'
 import type { AmbientConditions } from '../../../apps/web/src/data/ambient-conditions'
 
@@ -25,7 +25,7 @@ interface UIFixture {
   holdAuthentication: () => () => void
   failure: { path: string, status: number, message: string } | undefined
   ambient: AmbientConditions
-  emit: (events: ConversationEvent[]) => Promise<void>
+  emit: (events: ConversationNotification[]) => Promise<void>
 }
 
 const catalog: ModelCatalog = {
