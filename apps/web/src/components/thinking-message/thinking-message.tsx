@@ -6,6 +6,7 @@ import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration
 import { ProcessGroup } from '@/components/process-group'
 import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
 import { ThoughtIcon } from '@/components/thought-icon'
+import { WorkingMessage } from '@/components/working-message'
 
 import './thinking-message.sass'
 
@@ -29,6 +30,10 @@ export function ThinkingMessage({
   const savedBlock = disclosure.data?.message?.agentResponseTrace?.reasoning?.find((block) => block.id === animationId)
   const detailText = details.length > 0 ? details.join('\n') : savedBlock?.text ?? ''
   const duration = formatToolDuration(durationMs, DurationFormat.Compact)
+
+  if (isActive && !detailText.trim()) {
+    return <WorkingMessage phaseId={animationId} />
+  }
 
   return (
     <div className={clsx('thinking-message', {

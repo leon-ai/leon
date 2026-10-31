@@ -18,6 +18,7 @@ import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
 import { TaskList } from '@/components/task-list'
 import { ThinkingMessage } from '@/components/thinking-message'
 import { ToolCallList } from '@/components/tool-call-list'
+import { WorkingMessage } from '@/components/working-message'
 
 import './leon-message.sass'
 
@@ -108,7 +109,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
 
 function renderActivity(activity: LeonFeedActivity) {
   if (activity.type === 'working') {
-    return <ProcessGroup key={activity.id} active animateWhileActive activeLabel="Working..." ariaLabel="Leon’s work" completedLabel="Worked" />
+    return <WorkingMessage key={activity.id} phaseId={activity.id} />
   }
 
   if (activity.type === 'processing') {
@@ -159,7 +160,7 @@ function renderActivity(activity: LeonFeedActivity) {
         activeLabel="Retrying..."
         ariaLabel="Leon’s retries"
         completedLabel={`Retried ${activity.count} ${activity.count === 1 ? 'time' : 'times'}`}
-        indicator={<i className="ri-loop-right-line" aria-hidden="true" />}
+        indicator={<i className="ri-refresh-line" aria-hidden="true" />}
       />
     )
   }
