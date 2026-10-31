@@ -13,6 +13,7 @@ import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import { ModelSelector } from '@/components/model-selector'
 import type { useComposerModel } from '@/data/composer-model'
+import { useComposerDraft } from '@/data/composer-draft'
 import { useQueryHistory } from '@/data/query-history'
 
 import { QueryInputFocusWave } from './query-input-focus-wave'
@@ -56,7 +57,7 @@ export function QueryInput({
   model,
   onStop
 }: QueryInputProps) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useComposerDraft(sessionId)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isScrollable, setIsScrollable] = useState(false)
   const [showFocusWave, setShowFocusWave] = useState(() => introWave &&

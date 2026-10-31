@@ -41,6 +41,40 @@ test('reselects the current session at the bottom without discarding its draft',
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {
+    void ui
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    const first = page.getByRole('link', { name: 'Test session 0', exact: true })
+    const other = page.getByRole('link', { name: 'Test session 1', exact: true })
+    const newSession = page.getByRole('link', { name: 'New session', exact: true })
+    const draft = 'First draft\n\nKeep these newlines and spaces.  '
+    await composer.fill(draft)
+    await other.click()
+    await expect(composer).toHaveValue('')
+    await composer.fill('Other session draft')
+    await newSession.click()
+    await expect(composer).toHaveValue('')
+    await composer.fill('New-session draft')
+    await first.click()
+    await expect(composer).toHaveValue(draft)
+    await expect(composer).toBeFocused()
+    await composer.press('ArrowUp')
+    await expect(composer).toHaveValue(draft)
+    await page.goBack()
+    await expect(composer).toHaveValue('New-session draft')
+    await page.goForward()
+    await expect(composer).toHaveValue(draft)
+    await page.reload()
+    await expect(composer).toHaveValue(draft)
+    await other.click()
+    await expect(composer).toHaveValue('Other session draft')
+    await newSession.click()
+    await page.reload()
+    await expect(composer).toHaveValue('New-session draft')
+  })
+
   test(`opens tall saved answers at the bottom with intact whitespace (${reducedMotion})`, async ({ page, ui }) => {
     const lines = Array.from({ length: 90 }, (_, index) =>
       `Saved line ${index + 1}: this paragraph keeps its own line and spacing.`
@@ -73,6 +107,103 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expectSavedAnswer()
   })
 }
+
+test('saves drafts only when leaving and removes submitted or manually cleared text', async ({ page, ui }) => {
+  void ui
+  await page.addInitScript(() => {
+    let count = 0
+    Object.defineProperty(window, 'draftStorageWriteCount', { get: () => count })
+    for (const method of ['setItem', 'removeItem'] as const) {
+      const original = Storage.prototype[method]
+      Storage.prototype[method] = function (key: string, value = ''): void {
+        if (this === window.sessionStorage) {
+          count++
+        }
+        Reflect.apply(original, this, [key, value])
+      }
+    }
+  })
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  const first = page.getByRole('link', { name: 'Test session 0', exact: true })
+  const other = page.getByRole('link', { name: 'Test session 1', exact: true })
+  const writes = (): Promise<number> => page.evaluate(() => Reflect.get(window, 'draftStorageWriteCount') as number)
+  await composer.pressSequentially('Unsent text')
+  expect(await writes()).toBe(0)
+  await other.click()
+  expect(await writes()).toBe(1)
+  await first.click()
+  await expect(composer).toHaveValue('Unsent text')
+  expect(await writes()).toBe(1)
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
+  await composer.press('Enter')
+  await expect(page.getByText('Completed Unsent text', { exact: true })).toBeVisible()
+  await other.click()
+  expect(await writes()).toBe(2)
+  await first.click()
+  await expect(composer).toHaveValue('')
+  await composer.fill('To clear manually')
+  await other.click()
+  await first.click()
+  await expect(composer).toHaveValue('To clear manually')
+  await composer.fill('')
+  await page.reload()
+  await expect(composer).toBeFocused()
+  await expect(composer).toHaveValue('')
+})
+
+test('isolates profile drafts and prioritizes new typing while authentication resolves', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled()
+  await composer.fill('First profile draft')
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
+  ui.profile = 'another-ui-profile'
+  await page.reload()
+  await expect(composer).toBeFocused()
+  await expect(page.getByRole('link', { name: 'Test session 0', exact: true })).toBeVisible()
+  await expect(composer).toHaveValue('')
+  await composer.fill('Another profile draft')
+  await page.reload()
+  await expect(composer).toHaveValue('Another profile draft')
+  ui.profile = 'ui-tests'
+  await page.reload()
+  await expect(composer).toHaveValue('First profile draft')
+
+  const release = ui.holdAuthentication()
+  try {
+    await page.reload()
+    await composer.fill('New typing before authentication')
+    release()
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
+    await expect(composer).toHaveValue('New typing before authentication')
+    await page.reload()
+    await expect(composer).toHaveValue('New typing before authentication')
+  } finally {
+    release()
+  }
+})
+
+test('keeps drafting usable and reports browser storage failures', async ({ page, ui }) => {
+  void ui
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key: string, value: string): void {
+      if (this === window.sessionStorage) {
+        throw new DOMException('Storage is full.', 'QuotaExceededError')
+      }
+      setItem.call(this, key, value)
+    }
+  })
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await composer.fill('Keep this text available')
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')))
+  await expect(page.getByText('Draft was not saved', { exact: true })).toBeVisible()
+  await expect(composer).toHaveValue('Keep this text available')
+  await expect(composer).toBeEnabled()
+})
 
 test('reopens an evicted latest window without fetching older cursors first', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
