@@ -5,6 +5,7 @@ import type { ConversationSession } from './sessions'
 import type { ModelSettings, ModelProvider } from './model-catalog'
 
 export interface ConversationTool {
+  planStepId?: string | null
   id: string
   name: string
   status: FeedToolCallStatus
@@ -33,11 +34,12 @@ export interface ConversationMetrics {
 }
 
 export interface ConversationTrace {
+  answerStartedAt?: number
   timings?: TurnTiming[]
   id?: string
   reasoningSummary?: string
-  reasoning?: { id: string, text: string, phase: string, startedAt: number }[]
-  progressMessages?: { id: string, content: string, createdAt: number }[]
+  reasoning?: { id: string, text: string, phase: string, startedAt: number, planStepId?: string | null }[]
+  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null }[]
   planSteps: { id: string, label: string, status: FeedPlanStepStatus }[]
   planTransitions?: { id: string, label: string, status: FeedPlanStepStatus, changedAt: number }[]
   toolCalls: ConversationTool[]
@@ -47,6 +49,7 @@ export interface ConversationTrace {
     usagePurpose?: string
     startedAt: number
     elapsedMs: number
+    outcome?: string
     phase: string
     retryDecision?: 'retry' | 'stop'
   }[]
@@ -62,6 +65,7 @@ export interface ConversationRecord {
   agentResponseTrace?: ConversationTrace
   llmMetrics?: ConversationMetrics
   artifacts?: Artifact[]
+  widget?: { widget: string } | null
   draftGeneration?: string
   historical?: boolean
 }
@@ -104,3 +108,5 @@ export interface ConversationEvent {
   created_at: number
   data: Record<string, unknown>
 }
+
+export type ConversationNotification = ConversationEvent | { type: 'sessions_changed' }

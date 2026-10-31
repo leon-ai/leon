@@ -8,7 +8,7 @@ import type {
   LeonFeedActivity,
   LeonFeedEntry
 } from '@/data/feed'
-import { FeedTurnStatus } from '@/data/feed'
+import { FeedTurnStatus, isToolCallVisible } from '@/data/feed'
 import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { ArtifactAttachments } from '@/components/artifact-attachments'
 import { BonusResponse } from '@/components/bonus-response'
@@ -19,6 +19,7 @@ import { TaskList } from '@/components/task-list'
 import { ThinkingMessage } from '@/components/thinking-message'
 import { ToolCallList } from '@/components/tool-call-list'
 import { WorkingMessage } from '@/components/working-message'
+import { ActivityTimestamp } from '@/components/activity-timestamp'
 
 import './leon-message.sass'
 
@@ -55,6 +56,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   const shouldAnimate = useAnimateOnce(`${activity.id}:execution`)
 
   if (activity.type === 'plan') {
+    const planDuration = formatToolDuration(activity.durationMs, DurationFormat.Compact)
     const planIsActive = activity.steps.some((step) =>
       step.status === 'in_progress' || step.status === 'pending'
     )
@@ -67,11 +69,12 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           active={planIsActive}
           activeLabel="Executing plan..."
           ariaLabel="Leon’s execution plan"
-          completedLabel={activity.steps.every((step) => step.status === 'completed')
-            ? 'Completed plan' : 'Execution plan'}
+          className="activity-timeline-parent"
+          completedLabel={(activity.complete ?? activity.steps.every((step) => step.status === 'completed'))
+            ? `Completed plan${planDuration ? ` for ${planDuration}` : ''}` : 'Execution plan'}
           indicator={<i className="ri-map-2-line" aria-hidden="true" />}
         >
-          <TaskList steps={activity.steps} />
+          <TaskList steps={activity.steps} renderActivity={renderActivity} />
         </ProcessGroup>
       </div>
     )
@@ -83,6 +86,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   const toolsAreRunning = activity.toolCalls.some((toolCall) =>
     toolCall.status === 'running'
   )
+  const hasVisibleToolCalls = activity.toolCalls.some(isToolCallVisible)
   const toolCount = activity.toolCalls.length
   const duration = formatToolDuration(getToolGroupDuration(activity.toolCalls), DurationFormat.Compact)
 
@@ -92,8 +96,10 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
     })}>
       <ProcessGroup
         active={toolsAreActive}
+        animateWhileActive={!hasVisibleToolCalls}
         activeLabel={toolsAreRunning ? 'Using tools...' : 'Preparing tool calls...'}
         ariaLabel="Leon’s tool usage"
+        className="activity-timeline-parent"
         completedLabel={`Used ${toolCount} ${
           toolCount === 1 ? 'tool' : 'tools'
         }${duration ? ` for ${duration}` : ''}`}
@@ -101,7 +107,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           <i className="ri-pencil-ruler-2-line" aria-hidden="true" />
         )}
       >
-        <ToolCallList toolCalls={activity.toolCalls} />
+        {hasVisibleToolCalls ? <ToolCallList toolCalls={activity.toolCalls} /> : undefined}
       </ProcessGroup>
     </div>
   )
@@ -109,21 +115,57 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
 
 function renderActivity(activity: LeonFeedActivity) {
   if (activity.type === 'working') {
-    return <WorkingMessage key={activity.id} phaseId={activity.id} />
+    return (
+      <WorkingMessage
+        key={activity.id}
+        phaseId={activity.id}
+        {...(activity.label === undefined ? {} : { label: activity.label })}
+        startedAt={activity.startedAt}
+      />
+    )
   }
 
   if (activity.type === 'processing') {
+    const currentRequest = activity.requests?.findLast((request) => request.isActive)
+    if (currentRequest) {
+      return (
+        <WorkingMessage
+          key={activity.id}
+          phaseId={activity.id}
+          label={currentRequest.activeLabel ?? 'Processing...'}
+          iconName={currentRequest.iconName}
+          startedAt={currentRequest.startedAt}
+        />
+      )
+    }
+
+    const request = activity.inline ? activity.requests?.[0] : undefined
+    if (request) {
+      return (
+        <ProcessGroup
+          key={activity.id}
+          active={false}
+          activeLabel="Processing..."
+          ariaLabel="Leon’s inference"
+          completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
+          indicator={<i className={`ri-${request.iconName}`} aria-hidden="true" />}
+          startedAt={request.startedAt}
+        />
+      )
+    }
+
     return (
       <ProcessGroup
         key={activity.id}
         active={false}
         activeLabel="Processing..."
         ariaLabel="Leon’s processing"
+        className="activity-timeline-parent"
         completedLabel={`Processed for ${formatToolDuration(activity.durationMs, DurationFormat.Compact)}`}
         indicator={<i className="ri-cpu-line" aria-hidden="true" />}
       >
         {activity.requests?.length ? (
-          <div className="leon-message-activities">
+          <div className="leon-message-activities activity-timeline">
             {activity.requests.map((request) => (
               <ProcessGroup
                 key={request.id}
@@ -132,6 +174,7 @@ function renderActivity(activity: LeonFeedActivity) {
                 ariaLabel="Leon’s inference"
                 completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
                 indicator={<i className={`ri-${request.iconName}`} aria-hidden="true" />}
+                startedAt={request.startedAt}
               />
             ))}
           </div>
@@ -159,6 +202,7 @@ function renderActivity(activity: LeonFeedActivity) {
         active={false}
         activeLabel="Retrying..."
         ariaLabel="Leon’s retries"
+        startedAt={activity.startedAt}
         completedLabel={`Retried ${activity.count} ${activity.count === 1 ? 'time' : 'times'}`}
         indicator={<i className="ri-refresh-line" aria-hidden="true" />}
       />
@@ -175,6 +219,7 @@ function renderActivity(activity: LeonFeedActivity) {
         active={false}
         activeLabel={isReview ? 'Reviewing...' : 'Generating answer...'}
         ariaLabel={isReview ? 'Leon’s review' : 'Leon’s answer generation'}
+        startedAt={activity.startedAt}
         completedLabel={isReview ? `Reviewed for ${duration}` : `Generated answer in ${duration}`}
         indicator={<i className={isReview ? 'ri-search-eye-line' : 'ri-pencil-ai-line'} aria-hidden="true" />}
       />
@@ -189,6 +234,7 @@ function renderActivity(activity: LeonFeedActivity) {
         details={activity.details}
         durationMs={activity.durationMs}
         isActive={activity.isActive}
+        startedAt={activity.startedAt}
       />
     )
   }
@@ -201,6 +247,8 @@ function renderActivity(activity: LeonFeedActivity) {
           startDelay={420}
           text={activity.content}
         />
+        {' '}
+        <ActivityTimestamp timestamp={activity.startedAt} />
       </p>
     )
   }
@@ -215,7 +263,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
 
   return (
     <div className="leon-message">
-      {entry.status === FeedTurnStatus.Completed && activities.length > 0 ? (
+      {entry.status === FeedTurnStatus.Completed && !entry.continues && (activities.length > 0 || entry.hasTurnWork) ? (
         <ProcessGroup
           active={false}
           activeLabel="Working..."
@@ -223,7 +271,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
           className="leon-message-work"
           completedLabel={`Worked for ${duration}`}
         >
-          <div className="leon-message-activities">{activities}</div>
+          {activities.length > 0 ? <div className="leon-message-activities">{activities}</div> : undefined}
         </ProcessGroup>
       ) : activities}
       {entry.artifacts !== undefined && entry.artifacts.length > 0 && (

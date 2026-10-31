@@ -1,6 +1,7 @@
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '@/data/feed'
+import { isToolCallVisible } from '@/data/feed'
 import { ToolCall } from '@/components/tool-call'
 
 import './tool-call-list.sass'
@@ -15,10 +16,10 @@ export function ToolCallList({
   toolCalls
 }: ToolCallListProps) {
   return (
-    <div className={clsx('tool-call-list', {
+    <div className={clsx('tool-call-list activity-timeline', {
       'tool-call-list-nested': nested
     })}>
-      {toolCalls.map((toolCall) => (
+      {toolCalls.filter(isToolCallVisible).map((toolCall) => (
         <ToolCall key={toolCall.id} toolCall={toolCall} />
       ))}
     </div>

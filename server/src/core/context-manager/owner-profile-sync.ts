@@ -1,3 +1,4 @@
+import { runTurnPhase, TurnPhase, type MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -54,6 +55,19 @@ interface OwnerMemoryItem {
 interface OwnerDocumentVerification {
   safe: boolean
   missingFacts: string[]
+}
+
+export interface OwnerProfileSyncResult extends MaintenanceTaskResult {
+  profileChanged: boolean
+  contextChanged: boolean
+}
+
+enum OwnerProfileSyncReason {
+  RewriteFailed = 'rewrite-failed',
+  VerificationRejected = 'verification-rejected',
+  VerificationFailed = 'verification-failed',
+  ExtractionFailed = 'structured-extraction-failed',
+  DocumentChanged = 'document-changed'
 }
 
 type OwnerStaticFields = Pick<
@@ -342,6 +356,7 @@ function parseOwnerDocumentCandidate(value: unknown): OwnerProfile | null {
 }
 
 async function promptForOwnerDocument(
+  phase: TurnPhase,
   prompt: string,
   systemPrompt: string,
   maxTokens: number,
@@ -354,7 +369,7 @@ async function promptForOwnerDocument(
   const groundedPrompt = data
     ? `${prompt}\n\nRequired JSON schema (include every required field):\n${JSON.stringify(data)}`
     : prompt
-  const completion = await LLM_PROVIDER.prompt(groundedPrompt, {
+  const completion = await runTurnPhase(phase, () => LLM_PROVIDER.prompt(groundedPrompt, {
     dutyType: LLMDuties.Inference,
     usagePurpose: InferencePurpose.OwnerProfile,
     systemPrompt,
@@ -365,7 +380,7 @@ async function promptForOwnerDocument(
     // These bounded editing/extraction calls need their output budget for data.
     disableThinking: true,
     ...(data ? { data } : {})
-  })
+  }))
 
   return completion?.output
 }
@@ -405,6 +420,7 @@ async function repairOwnerDocumentCandidate(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerRepair,
       prompt,
       'Repair an OWNER.md markdown document without dropping durable owner facts.',
       getOwnerDocumentOutputBudget(currentDocument),
@@ -458,6 +474,7 @@ async function rewriteOwnerDocumentFromTurn(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerRewrite,
       prompt,
       'Maintain a compact durable OWNER.md profile for Leon. Edit the whole document conservatively and accurately.',
       getOwnerDocumentOutputBudget(currentDocument),
@@ -508,6 +525,7 @@ async function compactOwnerDocument(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerCompaction,
       prompt,
       'Compact OWNER.md without losing durable owner facts.',
       OWNER_DOCUMENT_COMPACT_MAX_TOKENS,
@@ -557,6 +575,7 @@ async function verifyOwnerDocumentPreservesFacts(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerVerification,
       prompt,
       'Verify owner profile curation and corrections against the original document and latest owner message.',
       OWNER_DOCUMENT_VERIFY_MAX_TOKENS,
@@ -598,6 +617,7 @@ async function extractOwnerStaticFields(
 
   try {
     const output = await promptForOwnerDocument(
+      TurnPhase.OwnerExtraction,
       prompt,
       'Extract a tiny stable owner cache from OWNER.md without guessing.',
       OWNER_STATIC_FIELDS_MAX_TOKENS,
@@ -614,7 +634,7 @@ async function extractOwnerStaticFields(
 async function writeOwnerArtifacts(
   profile: OwnerProfile,
   expectedDocument: string
-): Promise<{ profileChanged: boolean, contextChanged: boolean }> {
+): Promise<OwnerProfileSyncResult> {
   const currentProfile = readOwnerProfileSync()
   const normalizedProfile = normalizeOwnerProfile(profile)
   const currentDocument = readOwnerDocumentSync().trimEnd()
@@ -629,12 +649,12 @@ async function writeOwnerArtifacts(
   )
   if (!extractedStaticFields) {
     LogHelper.error('Owner profile sync: structured extraction failed; neither artifact was updated')
-    return { profileChanged: false, contextChanged: false }
+    return { profileChanged: false, contextChanged: false, outcome: 'failed', reason: OwnerProfileSyncReason.ExtractionFailed }
   }
   // A background update must not overwrite a manual edit or another completed turn.
   if (readOwnerDocumentSync().trimEnd() !== expectedDocument.trimEnd()) {
     LogHelper.error('Owner profile sync: document changed during generation; update discarded')
-    return { profileChanged: false, contextChanged: false }
+    return { profileChanged: false, contextChanged: false, outcome: 'skipped', reason: OwnerProfileSyncReason.DocumentChanged }
   }
   const nextProfile = normalizeOwnerProfile({
     ...normalizedProfile,
@@ -656,6 +676,7 @@ async function writeOwnerArtifacts(
   if (!profileChanged && !contextChanged) {
     LogHelper.debug('Owner profile sync: no changes')
     return {
+      outcome: 'skipped',
       profileChanged: false,
       contextChanged: false
     }
@@ -674,6 +695,7 @@ async function writeOwnerArtifacts(
   LogHelper.info('Owner profile sync: OWNER.md and structured profile synchronized')
 
   return {
+    outcome: 'completed',
     profileChanged,
     contextChanged
   }
@@ -686,7 +708,7 @@ export async function syncOwnerProfileFromTurn(
   userMessage: string,
   assistantMessage: string,
   toolExecutions: OwnerTurnToolExecution[] = []
-): Promise<{ profileChanged: boolean, contextChanged: boolean }> {
+): Promise<OwnerProfileSyncResult> {
   const normalizedUserMessage = truncateText(userMessage, OWNER_TURN_MAX_USER_CHARS)
   const normalizedAssistantMessage = truncateText(
     assistantMessage,
@@ -696,6 +718,7 @@ export async function syncOwnerProfileFromTurn(
 
   if (!normalizedUserMessage && memoryItems.length === 0) {
     return {
+      outcome: 'skipped',
       profileChanged: false,
       contextChanged: false
     }
@@ -713,6 +736,8 @@ export async function syncOwnerProfileFromTurn(
   if (!updatedProfile) {
     LogHelper.error('Owner profile sync: rewrite/repair failed or returned an incomplete document')
     return {
+      outcome: 'failed',
+      reason: OwnerProfileSyncReason.RewriteFailed,
       profileChanged: false,
       contextChanged: false
     }
@@ -737,6 +762,9 @@ export async function syncOwnerProfileFromTurn(
         ? 'Owner profile sync: revision rejected by curation/correction verification'
         : 'Owner profile sync: revision verification failed or returned invalid output')
       return {
+        outcome: verification ? 'rejected' : 'failed',
+        reason: verification ? OwnerProfileSyncReason.VerificationRejected : OwnerProfileSyncReason.VerificationFailed,
+        ...(verification ? { issueCount: verification.missingFacts.length } : {}),
         profileChanged: false,
         contextChanged: false
       }
@@ -790,6 +818,7 @@ export async function syncOwnerProfileFromTurn(
   if (areOwnerProfilesEquivalent(currentProfile, finalProfile)) {
     LogHelper.debug('Owner profile sync: no changes')
     return {
+      outcome: 'skipped',
       profileChanged: false,
       contextChanged: false
     }

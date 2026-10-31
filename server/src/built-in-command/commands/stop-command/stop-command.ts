@@ -33,7 +33,7 @@ export class StopCommand extends BuiltInCommand {
         tone: 'info',
         items: [
           {
-            label: 'Leon is stopping now.'
+            label: 'I’m stopping now.'
           }
         ]
       })

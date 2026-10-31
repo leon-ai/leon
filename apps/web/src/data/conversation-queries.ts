@@ -5,14 +5,15 @@ import { infiniteQueryOptions, useInfiniteQuery, useMutation, type InfiniteData,
 import { queryClient } from '@/query-client'
 import { useToast } from '@/components/toast'
 import { requestAPI } from './api'
-import type { ConversationCommand, ConversationEvent, ConversationPage, ConversationRecord } from './conversation'
+import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
 import { applyConversationEvent } from './conversation-events'
-import { toFeedEntry } from './conversation-feed'
+import { toFeedEntries } from './conversation-feed'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
 import { ConnectionError, requestErrors } from './request-errors'
 import { sessionsQueryKey, SESSION_PAGE_SIZE, SessionStatus, type SessionsPage } from './sessions'
 import type { FeedEntry } from './feed'
 import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
+import { queryHistoryKey } from './query-history'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
 const MAXIMUM_HISTORY_PAGES = 10
@@ -157,7 +158,7 @@ export function useConversation(sessionId: string): UseInfiniteQueryResult<Cache
 
     return [...unique.values()].sort((left, right) => left.sentAt - right.sentAt)
   }, [result.data])
-  const entries = useMemo(() => records.map((record) => toFeedEntry(record, latest?.is_running ?? false)),
+  const entries = useMemo(() => toFeedEntries(records, latest?.is_running ?? false),
     [records, latest?.is_running])
   const historicalIds = useMemo(() => records.filter((record) => record.historical).flatMap((record) => [
     record.messageId,
@@ -199,7 +200,11 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
         const messages = [...page.messages]
         if (!messages.some((message) => message.messageId === input.id)) {
           messages.push({ who: 'owner', messageId: input.id, message: input.query, sentAt: Date.now(), isAddedToHistory: true })
-          messages.push({ who: 'leon', messageId: `${input.id}:leon`, message: '', sentAt: Date.now(), isAddedToHistory: false })
+          // A running turn can consume this input. Its existing response supplies
+          // the continuation; a separate response is created by real events only.
+          if (!page.is_running) {
+            messages.push({ who: 'leon', messageId: `${input.id}:leon`, message: '', sentAt: Date.now(), isAddedToHistory: false })
+          }
         }
 
         return { ...previous, pages: [{ ...page, messages, is_running: true }, ...previous.pages.slice(1)] }
@@ -209,6 +214,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
       void queryClient.invalidateQueries({ queryKey: key, exact: true })
     },
     onSuccess: ({ command }) => {
+      void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, sessionId), exact: true })
       if (command.status !== 'accepted') {
         void queryClient.invalidateQueries({ queryKey: key, exact: true })
       }
@@ -270,7 +276,19 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
       if (disposed) {
         return
       }
-      const event = JSON.parse(String(message.data)) as ConversationEvent
+      const notification = JSON.parse(String(message.data)) as ConversationNotification
+      // Metadata notifications do not carry a conversation payload or cursor.
+      if (notification.type === 'sessions_changed') {
+        refreshMetadata()
+        return
+      }
+      if (!('data' in notification)) {
+        return
+      }
+      const event = notification
+      if (event.type === 'owner_message' || event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {
+        void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, event.session_id || sessionId || ''), exact: true })
+      }
       if (event.type === 'mood_changed') {
         void queryClient.invalidateQueries({ queryKey: [...AMBIENT_CONDITIONS_QUERY_KEY, profile], exact: true })
         return
@@ -284,7 +302,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
             session.id === event.session_id ? { ...session, status } : session) }))
         } : previous)
       }
-      if (event.type === 'sessions_changed' || event.type === 'session_changed' || event.type === 'turn_status') {
+      if (event.type === 'session_changed' || event.type === 'turn_status') {
         refreshMetadata()
       }
       if (event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {
@@ -308,7 +326,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
           }
           requestErrors.report(new Error(isNewError && typeof event.data['message'] === 'string'
             ? event.data['message'] : 'Open this session to review the saved error and try again.'), {
-            errorTitle: 'Leon could not finish the turn', profile
+            errorTitle: 'I could not finish the turn', profile
           })
         }
       }
@@ -348,7 +366,8 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
       }
       if (!disconnectedRef.current) {
         disconnectedRef.current = true
-        requestErrors.report(new ConnectionError('Live updates are disconnected. I’ll reconnect automatically.'), {
+        requestErrors.report(new ConnectionError(navigator.onLine
+          ? 'Live updates are disconnected. I’ll reconnect automatically.' : undefined), {
           errorTitle: 'Connection interrupted', errorType: 'warning', profile
         })
       }

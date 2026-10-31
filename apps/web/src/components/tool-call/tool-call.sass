@@ -2,15 +2,6 @@
   position: relative
   min-width: 0
 
-  &:not(:last-child)::before
-    position: absolute
-    top: calc(var(--tool-call-marker-offset) + var(--tool-call-marker-size) + var(--timeline-connector-gap))
-    left: calc(var(--tool-call-marker-size) / 2)
-    width: 1px
-    height: calc(100% + var(--tool-call-list-gap) - var(--tool-call-marker-size) - var(--timeline-connector-gap) - var(--timeline-connector-gap))
-    background-color: var(--color-timeline-border)
-    content: ''
-
 .tool-call-trigger
   display: flex
   align-items: center
@@ -67,16 +58,11 @@
   white-space: nowrap
   color: currentColor
 
-.tool-call-duration
-  // Smaller type needs the same optical centering correction as the chevron.
-  position: relative
-  top: 1px
-  flex: 0 0 auto
-  color: var(--color-text-tertiary)
-  font-size: var(--font-size-xs)
-  line-height: var(--line-height-xs)
-  font-variant-numeric: tabular-nums
-  white-space: nowrap
+.tool-call-heading
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  min-width: 0
 
 .tool-call-chevron
   position: relative

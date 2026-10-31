@@ -4,6 +4,9 @@ import { useMemo } from 'react'
 import { queryClient } from '@/query-client'
 import { requestAPI } from './api'
 import type { ModelSettings } from './model-catalog'
+import { useToast } from '@/components/toast'
+import { PROFILE_AUTH_QUERY_KEY } from './profile-query'
+import type { ProfileAuthentication } from '../../../../server/src/core/http-server/profile-auth-contract'
 
 export enum SessionStatus {
   Idle = 'idle',
@@ -90,6 +93,8 @@ export function useSessions(profile: string, query = ''): UseInfiniteQueryResult
 export function useSessionMutation(profile: string): UseMutationResult<
   { session: ConversationSession }, Error, { id: string, changes?: { title?: string, is_pinned?: boolean } }
 > {
+  const { showToast } = useToast()
+
   return useMutation({
     meta: { errorTitle: 'Session could not be updated', profile },
     mutationFn: ({ id, changes }: { id: string, changes?: { title?: string, is_pinned?: boolean } }) =>
@@ -97,6 +102,19 @@ export function useSessionMutation(profile: string): UseMutationResult<
         method: changes ? 'PATCH' : 'DELETE',
         ...(changes ? { body: JSON.stringify(changes) } : {})
       }),
+    onSuccess: (_result, { changes }) => {
+      if (queryClient.getQueryData<ProfileAuthentication>(PROFILE_AUTH_QUERY_KEY)?.profile_name !== profile) {
+        return
+      }
+      const action = !changes ? 'deleted'
+        : changes.title !== undefined ? 'renamed'
+          : changes.is_pinned ? 'pinned' : 'unpinned'
+
+      showToast({
+        type: 'success', title: `Session ${action}`,
+        description: changes?.title ?? `I've ${action} the session.`
+      })
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
   })
 }

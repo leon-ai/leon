@@ -1009,7 +1009,7 @@ export default class SelfModelManager {
         : ['- No recent signals recorded yet']
 
     return [
-      '> Do not open. This is Leon\'s private diary. If you keep reading, you are doing it at your own risk.',
+      '> Do not open. This is my private diary. If you keep reading, you are doing it at your own risk.',
       '# LEON_PRIVATE_DIARY',
       `- Updated at: ${formatDateTime(state.updatedAt)}`,
       `- Observed turns: ${state.metrics.observedTurns}`,

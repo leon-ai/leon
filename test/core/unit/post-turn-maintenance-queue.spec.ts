@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
 import { LogHelper } from '@/helpers/log-helper'
+import { TurnStage } from '@/core/llm-manager/turn-timing'
 
 describe('PostTurnMaintenanceQueue', () => {
   beforeEach(() => {
@@ -34,5 +35,28 @@ describe('PostTurnMaintenanceQueue', () => {
     queue.enqueue('following task', () => undefined)
 
     await vi.waitFor(() => expect(task).toHaveBeenCalledOnce())
+  })
+
+  it('runs turn-start tasks past blocked post-turn work and drains both paths', async () => {
+    vi.spyOn(LogHelper, 'title').mockImplementation(() => undefined)
+    vi.spyOn(LogHelper, 'debug').mockImplementation(() => undefined)
+    const gate = Promise.withResolvers<void>()
+    const task = vi.fn()
+    const queue = new PostTurnMaintenanceQueue()
+    queue.enqueue('blocked maintenance', () => gate.promise)
+    queue.startConcurrent('session title generation', task, TurnStage.PreTurn)
+    let drained = false
+    const idle = queue.whenIdle().then(() => {
+      drained = true
+    })
+
+    try {
+      await vi.waitFor(() => expect(task).toHaveBeenCalledOnce())
+      expect(drained).toBe(false)
+    } finally {
+      gate.resolve()
+      await idle
+    }
+    expect(drained).toBe(true)
   })
 })

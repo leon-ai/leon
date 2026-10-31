@@ -22,6 +22,21 @@ interface StoredConversationSessionContext extends ConversationSessionContext {
 const conversationSessionStorage =
   new AsyncLocalStorage<StoredConversationSessionContext>()
 
+/**
+ * Binds deferred maintenance to immutable session settings and fresh attribution.
+ * Background requests must not mutate the completed foreground turn's routes.
+ */
+export function bindConversationSession<T>(execute: () => T): () => T {
+  const current = conversationSessionStorage.getStore()
+  if (!current) {
+    return execute
+  }
+
+  const context = structuredClone({ ...current, inferences: [] })
+
+  return () => conversationSessionStorage.run({ ...context, inferences: [] }, execute)
+}
+
 export function getActiveConversationSessionId(): string | null {
   const context = conversationSessionStorage.getStore()
 

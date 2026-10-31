@@ -13,6 +13,8 @@ import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import { ModelSelector } from '@/components/model-selector'
 import type { useComposerModel } from '@/data/composer-model'
+import { useComposerDraft } from '@/data/composer-draft'
+import { useQueryHistory } from '@/data/query-history'
 
 import { QueryInputFocusWave } from './query-input-focus-wave'
 
@@ -25,6 +27,7 @@ const HEIGHT_COMPARISON_TOLERANCE = 1
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 interface QueryInputProps {
+  sessionId?: string
   autoFocus?: boolean
   autoFocusKey?: string
   introWave?: boolean
@@ -40,6 +43,7 @@ interface QueryInputProps {
 }
 
 export function QueryInput({
+  sessionId,
   autoFocus = false,
   autoFocusKey,
   introWave = false,
@@ -53,7 +57,9 @@ export function QueryInput({
   model,
   onStop
 }: QueryInputProps) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery, draftRestoration] = useComposerDraft(sessionId)
+  const caretRestorationRef = useRef<number | undefined>(undefined)
+  const [settledRestoration, setSettledRestoration] = useState<number | undefined>(undefined)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isScrollable, setIsScrollable] = useState(false)
   const [showFocusWave, setShowFocusWave] = useState(() => introWave &&
@@ -66,6 +72,11 @@ export function QueryInput({
   const measurementTextareaRef = useRef<HTMLTextAreaElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const keyboardFocusIntentRef = useRef(false)
+  const history = useQueryHistory(sessionId)
+  const historyIndexRef = useRef(-1)
+  const historyRequestRef = useRef(0)
+  const historyPendingRef = useRef(false)
+  const historySelectionRef = useRef(false)
   const normalizedQuery = query.trim()
   const submitDisabled = disabled || !canSubmit || normalizedQuery.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
@@ -150,8 +161,13 @@ export function QueryInput({
       Number.parseFloat(textareaStyle.borderTopWidth) +
       Number.parseFloat(textareaStyle.borderBottomWidth)
     const singleLineHeight = lineHeight + verticalPadding + verticalBorder
-    const maximumHeight =
-      lineHeight * resolvedMaximumLineCount + verticalPadding + verticalBorder
+    const actionRowHeight = Math.max(leadingAction.offsetHeight, actions.offsetHeight)
+    // Leave room for the conversation even on short viewports; longer drafts
+    // scroll inside the native textarea instead of covering the entire feed.
+    const viewportMaximum = window.innerHeight / 2 -
+      verticalPadding - actionRowHeight - lineHeight
+    const maximumHeight = Math.max(singleLineHeight,
+      Math.min(lineHeight * resolvedMaximumLineCount + verticalPadding + verticalBorder, viewportMaximum))
     const horizontalFormPadding =
       Number.parseFloat(formStyle.paddingLeft) +
       Number.parseFloat(formStyle.paddingRight)
@@ -205,10 +221,6 @@ export function QueryInput({
       textarea.scrollTop = 0
     }
 
-    const actionRowHeight = Math.max(
-      leadingAction.offsetHeight,
-      actions.offsetHeight
-    )
     const contentAreaHeight = shouldExpand
       ? nextHeight + gap + actionRowHeight
       : Math.max(nextHeight, actionRowHeight)
@@ -226,7 +238,25 @@ export function QueryInput({
 
   useLayoutEffect(() => {
     updateTextareaHeight()
-  }, [query, updateTextareaHeight])
+    if (historySelectionRef.current || caretRestorationRef.current !== draftRestoration) {
+      caretRestorationRef.current = draftRestoration
+      historySelectionRef.current = false
+      textareaRef.current?.setSelectionRange(query.length, query.length)
+    }
+    if (settledRestoration !== draftRestoration) {
+      // Commit the measured draft geometry with transitions disabled. Ordinary
+      // editing regains its existing motion after this restoration frame.
+      const frame = window.requestAnimationFrame(() => setSettledRestoration(draftRestoration))
+      return () => window.cancelAnimationFrame(frame)
+    }
+
+    return undefined
+  }, [query, draftRestoration, settledRestoration, updateTextareaHeight])
+
+  useEffect(() => () => {
+    // An obsolete network response must never replace another session's input.
+    historyRequestRef.current += 1
+  }, [])
 
   useLayoutEffect(() => {
     const actions = actionsRef.current
@@ -269,8 +299,12 @@ export function QueryInput({
     })
 
     resizeObserver.observe(form)
+    window.addEventListener('resize', updateTextareaHeight)
 
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateTextareaHeight)
+    }
   }, [updateTextareaHeight])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -280,15 +314,65 @@ export function QueryInput({
       return
     }
 
+    resetHistoryNavigation()
     onSubmit?.(normalizedQuery)
     setQuery('')
   }
 
+  function resetHistoryNavigation(): void {
+    historyIndexRef.current = -1
+    historyRequestRef.current += 1
+    historyPendingRef.current = false
+    historySelectionRef.current = false
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.nativeEvent.isComposing) {
+      return
+    }
+
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+      !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && sessionId) {
+      const start = historyIndexRef.current === -1
+      if (start && query !== '') {
+        return
+      }
+
+      event.preventDefault()
+      if (event.key === 'ArrowUp' && historyPendingRef.current) {
+        return
+      }
+
+      const index = historyIndexRef.current + (event.key === 'ArrowUp' ? 1 : -1)
+      if (index < 0) {
+        resetHistoryNavigation()
+        setQuery('')
+        return
+      }
+
+      const request = ++historyRequestRef.current
+      historyPendingRef.current = true
+      void history.read(index, start).then((message) => {
+        if (historyRequestRef.current !== request || message === undefined) {
+          return
+        }
+
+        historyIndexRef.current = index
+        historySelectionRef.current = true
+        setQuery(message)
+      }).catch(() => {
+        // The shared query cache reports failures through the toast component.
+      }).finally(() => {
+        if (historyRequestRef.current === request) {
+          historyPendingRef.current = false
+        }
+      })
+      return
+    }
+
     if (
       event.key !== 'Enter' ||
-      event.shiftKey ||
-      event.nativeEvent.isComposing
+      event.shiftKey
     ) {
       return
     }
@@ -308,7 +392,8 @@ export function QueryInput({
       <form
         ref={formRef}
         className={clsx('query-input', {
-          'query-input-expanded': isExpanded
+          'query-input-expanded': isExpanded,
+          'query-input-restoring': settledRestoration !== draftRestoration
         })}
         aria-label="Send a message to Leon"
         style={formHeight === undefined ? undefined : {
@@ -347,7 +432,10 @@ export function QueryInput({
               playFocusWave()
             }
           }}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            resetHistoryNavigation()
+            setQuery(event.target.value)
+          }}
           onKeyDown={handleKeyDown}
         />
         <textarea
@@ -361,18 +449,17 @@ export function QueryInput({
         />
         <div ref={actionsRef} className="query-input-actions">
           <ModelSelector disabled={disabled || loading || Boolean(model?.pending)} {...(model ? { binding: model } : {})} />
-          {onStop && (
-            <Button className="button-composer" iconName="stop" ariaLabel="Stop this session" onClick={onStop} />
-          )}
           <Button
             className="button-composer query-input-submit"
-            type="submit"
-            variant="primary"
-            iconName="send-ins"
-            tooltipMessage="Send message"
+            type={onStop ? 'button' : 'submit'}
+            variant={onStop ? 'danger' : 'primary'}
+            iconName={onStop ? 'stop-mini' : 'send-ins'}
+            iconType={onStop ? 'fill' : 'line'}
+            tooltipMessage={onStop ? 'Stop this turn' : 'Send message'}
             tooltipPosition="top"
-            disabled={submitDisabled}
-            loading={loading}
+            disabled={onStop ? disabled : submitDisabled}
+            loading={!onStop && loading}
+            {...(onStop ? { onClick: onStop } : {})}
           />
         </div>
       </form>

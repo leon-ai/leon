@@ -7,6 +7,7 @@ import Fastify from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConversationLogger } from '@/conversation-logger'
+import { POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { sessionsPlugin } from '@/core/http-server/api/sessions'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
@@ -29,7 +30,7 @@ vi.mock('@/core', () => ({
   CONVERSATION_LOGGER: {
     upsert: (...args: Parameters<ConversationLogger['upsert']>): Promise<void> => fixture.logger!.upsert(...args)
   },
-  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn() }
+  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn(), startConcurrent: vi.fn() }
 }))
 vi.mock('@/core/profile-runtime/initialize-profile-runtime', () => ({
   ensureActiveProfileRuntime: vi.fn(async () => undefined)
@@ -159,6 +160,34 @@ describe('web conversation runtime', () => {
     expect((await request('GET', `/api/v1/sessions/${first}`)).statusCode).toBe(404)
   })
 
+  it('pages query text separately from answers and rejects missing sessions and invalid budgets', async () => {
+    const id = await create()
+    const other = await create()
+    await runWithProfileContext({ profileName: profile }, async () => {
+      CONVERSATION_REPOSITORY.acceptCommand(id, randomUUID(), 'First query')
+      CONVERSATION_REPOSITORY.upsertMessage(id, {
+        who: 'leon', message: 'Answer', isAddedToHistory: true
+      })
+      CONVERSATION_REPOSITORY.acceptCommand(id, randomUUID(), 'Second query\nsecond line')
+      CONVERSATION_REPOSITORY.acceptCommand(other, randomUUID(), 'Other session')
+    })
+
+    const page = await request('GET', `/api/v1/sessions/${id}/queries?limit=1`)
+    expect(page.statusCode).toBe(200)
+    expect(page.json().queries).toEqual([{
+      messageId: expect.any(String), message: 'Second query\nsecond line'
+    }])
+    const older = await request('GET', `/api/v1/sessions/${id}/queries?before=${page.json().next_cursor}`)
+    expect(older.json().queries.map((query: { message: string }) => query.message)).toEqual(['First query'])
+    expect(older.json().next_cursor).toBeNull()
+    expect((await request('GET', `/api/v1/sessions/${id}/queries?characters=1`)).json().queries).toEqual([])
+    for (const query of ['limit=101', 'before=NaN', 'characters=0', `characters=${Number.MAX_SAFE_INTEGER + 1}`]) {
+      expect((await request('GET', `/api/v1/sessions/${id}/queries?${query}`)).statusCode).toBe(400)
+    }
+    expect((await request('GET', '/api/v1/sessions/missing/queries')).statusCode).toBe(404)
+    expect(fixture.executions).toHaveLength(0)
+  })
+
   it('runs different sessions concurrently, deduplicates delivery, and stops only the addressed session', async () => {
     const first = await create()
     const second = await create()
@@ -187,6 +216,9 @@ describe('web conversation runtime', () => {
     const history = (await request('GET', `/api/v1/sessions/${first}`)).json()
     expect(history.messages.filter((message: { who: string }) => message.who === 'owner')).toHaveLength(1)
     expect(history.messages.some((message: { message: string }) => message.message.includes('Second'))).toBe(false)
+    expect(vi.mocked(POST_TURN_MAINTENANCE_QUEUE.enqueue).mock.calls.map(([label]) => label)).toEqual([
+      'turn memory observation', 'react self-model reflection', 'memory extraction'
+    ])
   })
 
   it('validates model capabilities and preserves settings per session', async () => {

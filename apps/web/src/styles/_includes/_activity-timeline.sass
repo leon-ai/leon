@@ -1,0 +1,59 @@
+@mixin connector
+  position: absolute
+  left: calc(var(--timeline-marker-size) / 2)
+  width: 1px
+  background-color: var(--color-timeline-border)
+  pointer-events: none
+  content: ''
+
+.activity-timeline,
+.activity-timeline-parent,
+.task-list-item-trigger
+  --timeline-marker-size: 16px
+  --timeline-node-height: 25px
+  --timeline-connector-gap: 4px
+  --timeline-marker-offset: calc((var(--timeline-node-height) - var(--timeline-marker-size)) / 2)
+  --timeline-first-node-height: 25px
+  --timeline-first-marker-offset: calc((var(--timeline-first-node-height) - var(--timeline-marker-size)) / 2)
+
+// Every list owns its sibling links. Nested lists stop at their last icon;
+// an expanded group's continuation belongs to the surrounding list instead.
+.activity-timeline
+  position: relative
+
+  > *
+    position: relative
+
+  > :where(:not(:last-child):not(.leon-message-summary):not(:has(+ .leon-message-summary)))::after
+    @include connector
+    top: max(calc(var(--timeline-marker-offset) + var(--timeline-marker-size) + var(--timeline-connector-gap)), calc(100% - var(--timeline-marker-offset) + var(--timeline-connector-gap)))
+    bottom: calc((var(--activity-node-gap) + var(--timeline-marker-offset) - var(--timeline-connector-gap)) * -1)
+
+  > .tool-call:not(:last-child)::after,
+  > .thinking-message:not(:last-child)::after
+    top: calc(var(--timeline-marker-offset) + var(--timeline-marker-size) + var(--timeline-connector-gap))
+
+  // A boundary gap separates the parent continuation from its terminal child.
+  > :where(:has(> .activity-timeline-parent > .process-group-content.collapse-open), :has(> .task-list-item-content > .task-list-item-tool-calls.collapse-open))::after
+    top: calc(100% + var(--timeline-connector-gap))
+
+.activity-timeline-parent
+  &:has(> .process-group-content > .collapse-content > .collapse-body > :is(.tool-call-list, .task-list))
+    --timeline-first-node-height: var(--line-height-md)
+
+  > .process-group-heading
+    position: relative
+
+    // Attach the entry link to the heading so the collapse cannot clip it.
+    &:has(> [aria-expanded='true'])::before
+      @include connector
+      top: calc(50% + var(--timeline-marker-size) / 2 + var(--timeline-connector-gap))
+      height: calc(50% - var(--timeline-marker-size) / 2 + var(--activity-node-gap) + var(--timeline-first-marker-offset) - var(--timeline-connector-gap) * 2)
+
+.task-list-item-trigger
+  position: relative
+
+  &[aria-expanded='true']::before
+    @include connector
+    top: calc(var(--task-list-item-marker-offset) + var(--timeline-marker-size) + var(--timeline-connector-gap))
+    height: calc(100% - var(--task-list-item-marker-offset) - var(--timeline-marker-size) + var(--activity-node-gap) + var(--timeline-first-marker-offset) - var(--timeline-connector-gap) * 2)

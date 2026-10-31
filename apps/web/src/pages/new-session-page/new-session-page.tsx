@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 
 import { QueryInput } from '@/components/query-input'
-import { Button } from '@/components/button'
+import { RequestFeedback } from '@/components/request-feedback/request-feedback'
 import { requestAPI } from '@/data/api'
 import { useProfile } from '@/data/profile'
 import { useComposerModel } from '@/data/composer-model'
@@ -62,11 +62,9 @@ export function NewSessionPage() {
       <div className="new-session-page-composer">
         <QueryInput autoFocus introWave model={model} loading={create.isPending} canSubmit={!model.pending}
           onSubmit={(query) => create.mutate({ id: crypto.randomUUID(), query })} />
-        {create.isError && (
-          <div role="alert">
-            <p>{create.error.message}</p>
-            <Button onClick={() => create.variables && create.mutate(create.variables)}>Retry</Button>
-          </div>
+        {(create.isError || create.isPaused) && (
+          <RequestFeedback error={create.error} paused={create.isPaused}
+            onRetry={() => create.variables && create.mutate(create.variables)} />
         )}
       </div>
     </div>

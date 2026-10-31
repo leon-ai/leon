@@ -27,7 +27,7 @@ export class Updater {
         LogHelper.warning(`A new version is available: ${latestVersion}`)
         LogHelper.warning(`Current version: ${this.currentVersion}`)
         LogHelper.warning(
-          `Run the following command to update Leon and benefit from the latest features: "pnpm add @leon-ai/leon@${latestVersion}"`
+          `Run the following command to update me and benefit from the latest features: "pnpm add @leon-ai/leon@${latestVersion}"`
         )
 
         SOCKET_SERVER.emitToChatClients('new-update', latestVersion)
@@ -35,7 +35,7 @@ export class Updater {
         const releaseMode = this.isDevelopment ? 'development' : 'stable'
 
         LogHelper.success(
-          `You are using the latest ${releaseMode} version of Leon`
+          `I’m already on the latest ${releaseMode} version`
         )
       }
     } catch (e) {

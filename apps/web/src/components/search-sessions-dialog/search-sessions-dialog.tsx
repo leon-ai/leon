@@ -16,6 +16,7 @@ import {
 } from '@/data/sessions'
 import { useProfile } from '@/data/profile'
 import { createSearchIndex, getSearchSegments, searchIndex } from '@/utils/search'
+import { formatRelativeDate } from '@/utils/format-date'
 
 import './search-sessions-dialog.sass'
 
@@ -26,18 +27,6 @@ interface SearchSessionsDialogProps {
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_RESULT_ITEM_HEIGHT = 46
 const SEARCH_RESULT_OVERSCAN = 6
-const MINUTE_MS = 60_000
-const HOUR_MS = 60 * MINUTE_MS
-const DAY_MS = 24 * HOUR_MS
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'short'
-})
-const DATE_WITH_YEAR_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric'
-})
 
 function useDebouncedValue<TValue>(
   value: TValue,
@@ -60,49 +49,6 @@ function useDebouncedValue<TValue>(
 
 function getSessionTimestamp(session: ConversationSession): number {
   return session.lastMessageAt ?? session.updatedAt
-}
-
-function getStartOfDay(date: Date): number {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate()
-  ).getTime()
-}
-
-function formatSessionDate(timestamp: number): string {
-  const now = Date.now()
-  const elapsedMs = Math.max(0, now - timestamp)
-  const nowDate = new Date(now)
-  const date = new Date(timestamp)
-  const todayStart = getStartOfDay(nowDate)
-  const yesterdayStart = todayStart - DAY_MS
-
-  if (timestamp >= todayStart) {
-    if (elapsedMs < MINUTE_MS) {
-      return 'Just now'
-    }
-
-    if (elapsedMs < HOUR_MS) {
-      const minutes = Math.floor(elapsedMs / MINUTE_MS)
-
-      return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-    }
-
-    const hours = Math.floor(elapsedMs / HOUR_MS)
-
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  }
-
-  if (timestamp >= yesterdayStart) {
-    return 'Yesterday'
-  }
-
-  if (date.getFullYear() === nowDate.getFullYear()) {
-    return DATE_FORMATTER.format(date)
-  }
-
-  return DATE_WITH_YEAR_FORMATTER.format(date)
 }
 
 export function SearchSessionsDialog({
@@ -193,7 +139,7 @@ export function SearchSessionsDialog({
                       ))}
                     </span>
                     <span className="search-sessions-dialog-date">
-                      {formatSessionDate(getSessionTimestamp(session))}
+                      {formatRelativeDate(getSessionTimestamp(session))}
                     </span>
                   </Link>
                 </li>

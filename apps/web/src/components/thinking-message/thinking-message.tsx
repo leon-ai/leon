@@ -13,15 +13,17 @@ import './thinking-message.sass'
 interface ThinkingMessageProps {
   animationId: string
   details: string[]
-  durationMs: number
+  durationMs: number | undefined
   isActive: boolean
+  startedAt?: number | undefined
 }
 
 export function ThinkingMessage({
   animationId,
   details,
   durationMs,
-  isActive
+  isActive,
+  startedAt
 }: ThinkingMessageProps) {
   const shouldAnimateHeading = useAnimateOnce(`${animationId}:heading`)
   const [detailsOpen, setDetailsOpen] = useState(isActive)
@@ -41,10 +43,11 @@ export function ThinkingMessage({
     })}>
       <ProcessGroup
         active={isActive}
+        startedAt={startedAt}
         activeLabel="Thinking..."
         animateWhileActive
         ariaLabel="Leon’s thinking"
-        completedLabel={`Thought for ${duration}`}
+        completedLabel={duration ? `Thought for ${duration}` : 'Thought'}
         indicator={<ThoughtIcon />}
         onExpandedChange={setDetailsOpen}
       >

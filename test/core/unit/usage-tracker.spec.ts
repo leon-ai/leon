@@ -10,7 +10,9 @@ import { runWithProfileContext, getActiveProfileName } from '@/core/profile-runt
 import { runWithConversationSession, recordTurnInference } from '@/core/session-manager/session-context'
 import { trackInferenceUsage } from '@/core/llm-manager/llm-usage'
 import { appendInferenceUsage, readInferenceUsage, HISTORICAL_USAGE_FILENAME, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
-import { recordInferenceUsage, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
+import { recordInferenceAttempt, recordInferenceUsage, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
+import { runWithTurnTiming, TurnStage, runTurnPhase, TurnPhase, recordTurnInference as recordAttemptTiming, readTurnHistory } from '@/core/llm-manager/turn-timing'
+import { LLMProviders, LLMDuties } from '@/core/llm-manager/types'
 import { trackProviderResponseUsage } from '@/core/llm-manager/llm-usage/provider-response-usage'
 import { createInferenceMetadata, InferenceAuthMode, InferenceCredentialSource } from '@/core/llm-manager/inference-metadata'
 import { LogHelper } from '@/helpers/log-helper'
@@ -66,6 +68,39 @@ async function command(period: string): Promise<string> {
 }
 
 describe('inference usage', () => {
+  it('links post-turn token accounting to its task, original turn and exact provider attempt', async () => {
+    await runWithProfileContext({ profileName: 'owner-a' }, () => runWithConversationSession({ sessionId: 'session-a' }, () =>
+      runWithTurnTiming('turn-a', 'session-a', async () => {
+        await runTurnPhase(TurnPhase.OwnerVerification, () => trackInferenceUsage(TARGET, async () => {
+          recordInferenceAttempt('attempt-a')
+          recordInferenceUsage({ input_tokens: 12, output_tokens: 3, cache_read_input_tokens: 4 })
+          recordInferenceUsageOutcome('completed')
+          recordAttemptTiming({
+            attemptId: 'attempt-a', startedAt: Date.now(), elapsedMs: 10,
+            provider: LLMProviders.OpenAI, model: 'fixture', duty: LLMDuties.Inference,
+            transport: 'http', outcome: 'completed', inferenceTimeoutMs: 1_000,
+            streamIdleTimeoutMs: 1_000, providerEventCount: 1, providerCompleted: true, lastEvent: 'finish'
+          })
+        }))
+      }, { stage: TurnStage.PostTurn, taskId: 'task-a', task: 'owner profile sync' })
+    ))
+    await runWithProfileContext({ profileName: 'owner-a' }, async () => {
+      const rows = []
+      for await (const row of readInferenceUsage({ turnId: 'turn-a', taskId: 'task-a', stage: TurnStage.PostTurn })) {
+        rows.push(row)
+      }
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ sessionId: 'session-a', attemptId: 'attempt-a', usage: { inputTokens: 16, outputTokens: 3 } })
+      const history = []
+      for await (const row of readTurnHistory({ turnId: 'turn-a' })) {
+        history.push(row)
+      }
+      expect(history.find((row) => row['id'] === 'attempt-a')).toMatchObject({
+        usageId: rows[0]!.id, goal: TurnPhase.OwnerVerification,
+        usage: { inputTokens: 16, outputTokens: 3 }
+      })
+    })
+  })
   beforeEach(async () => {
     runtime.directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-usage-'))
   })

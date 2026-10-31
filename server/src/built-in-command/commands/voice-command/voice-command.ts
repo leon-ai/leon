@@ -31,7 +31,7 @@ const VOICE_DISABLE_SUB_COMMAND = 'disable'
 const VOICE_SETUP_LOADING_MESSAGE =
   'Voice setup in progress... Check the terminal logs to review progress details.'
 const RESTART_REQUIRED_MESSAGE =
-  'Restart Leon by using /restart for voice runtime changes to take effect.'
+  'Restart me using /restart for voice runtime changes to take effect.'
 const TSX_ENTRY_PATH = path.join(
   CODEBASE_PATH,
   'node_modules',

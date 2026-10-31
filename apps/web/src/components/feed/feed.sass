@@ -1,5 +1,5 @@
 .feed
-  --feed-bottom-clearance: 148px
+  --feed-bottom-clearance: max(148px, calc(var(--session-composer-height, var(--query-input-height)) + var(--space-xl) * 2 + var(--space-lg)))
   --feed-entry-gap: 42px
   --feed-scrim-edge-width: 64px
   --feed-top-clearance: 52px
@@ -83,7 +83,7 @@
 
 @media (max-width: 680px)
   .feed
-    --feed-bottom-clearance: 132px
+    --feed-bottom-clearance: max(132px, calc(var(--session-composer-height, var(--query-input-height)) + var(--space-xl) * 2 + var(--space-lg)))
     --feed-top-clearance: var(--space-xl)
 
 @media (prefers-reduced-motion: reduce)

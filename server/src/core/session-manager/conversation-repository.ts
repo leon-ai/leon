@@ -21,6 +21,7 @@ const DEFAULT_PAGE_SIZE = 40
 const MAXIMUM_PAGE_SIZE = 100
 const MAXIMUM_REPLAY_EVENTS = 10_000
 const MAXIMUM_REPLAY_BYTES = 16 * 1_024 * 1_024
+const MAXIMUM_QUERY_HISTORY_CHARACTERS = 128 * 1_024
 const UI_MESSAGE_FILTER = `(visible = 1 OR trace_id IS NOT NULL
   OR json_type(summary, '$.agentResponseTrace') = 'object'
   OR json_array_length(summary, '$.artifacts') > 0
@@ -342,6 +343,52 @@ export class ConversationRepository {
     return this.db.prepare(`SELECT payload FROM conversation_messages
       WHERE session_id = ? ORDER BY sequence`).all(sessionId)
       .map((row) => JSON.parse(String(row['payload'])) as MessageLog)
+  }
+
+  /**
+   * Pages submitted queries without loading answers or trace payloads. Character
+   * budgets keep large prompts bounded without returning partial query text.
+   */
+  public readQueryHistory(sessionId: string, options: {
+    limit?: number
+    before?: string
+    characters?: number
+  } = {}): ConversationPage<{ messageId: string, message: string }> {
+    const limit = pageSize(options.limit)
+    const before = options.before === undefined ? null : Number(options.before)
+    const requestedCharacters = options.characters ?? MAXIMUM_QUERY_HISTORY_CHARACTERS
+
+    if (before !== null && (!Number.isSafeInteger(before) || before < 1)) {
+      throw new Error('Invalid conversation cursor.')
+    }
+    if (!Number.isSafeInteger(requestedCharacters) || requestedCharacters < 1) {
+      throw new Error('Invalid query history character budget.')
+    }
+
+    const maximumCharacters = Math.min(requestedCharacters, MAXIMUM_QUERY_HISTORY_CHARACTERS)
+    const rows = this.db.prepare(`SELECT sequence, id, content FROM conversation_messages
+      WHERE session_id = ? AND role = 'owner' AND visible = 1 AND content != ''
+        ${before === null ? '' : 'AND sequence < ?'}
+      ORDER BY sequence DESC LIMIT ?`)
+      .iterate(sessionId, ...(before === null ? [] : [before]), limit + 1)
+    const items: { messageId: string, message: string }[] = []
+    let characters = 0
+    let lastSequence: string | null = null
+    let nextCursor: string | null = null
+
+    for (const row of rows) {
+      const message = String(row['content'])
+      if (items.length === limit || characters + message.length > maximumCharacters) {
+        nextCursor = lastSequence
+        break
+      }
+
+      items.push({ messageId: String(row['id']), message })
+      characters += message.length
+      lastSequence = String(row['sequence'])
+    }
+
+    return { items, nextCursor }
   }
 
   /**

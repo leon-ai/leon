@@ -1,15 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import type { InferenceMetadata } from '../inference-metadata'
-import { readCompletionAccounting, type CompletionAccounting } from './usage-accounting'
+import { readCompletionAccounting, type InferenceUsage } from './usage-accounting'
 import type { InferencePurpose } from '../types'
 
-export interface InferenceUsage extends CompletionAccounting {
-  inputTokens?: number
-  outputTokens?: number
-}
+export type { InferenceUsage } from './usage-accounting'
 
 export interface InferenceUsageContext {
+  attemptId?: string
   inference?: InferenceMetadata
   usage: InferenceUsage
   outcome: string
@@ -19,6 +17,16 @@ export interface InferenceUsageContext {
 
 export const inferenceUsageStorage = new AsyncLocalStorage<InferenceUsageContext>()
 const inferencePurposeStorage = new AsyncLocalStorage<InferencePurpose>()
+
+/**
+ * Shares the provider's attempt identifier with accounting and lifecycle records.
+ */
+export function recordInferenceAttempt(attemptId: string): void {
+  const context = inferenceUsageStorage.getStore()
+  if (context && !context.closed) {
+    context.attemptId = attemptId
+  }
+}
 
 /**
  * Labels nested agent requests with the background activity that initiated them.

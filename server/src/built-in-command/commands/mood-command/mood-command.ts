@@ -12,7 +12,7 @@ const AUTO_MOOD_VALUE = 'auto'
 
 export class MoodCommand extends BuiltInCommand {
   protected override description =
-    'Display or change Leon mood behavior.'
+    'Display or change my mood behavior.'
   protected override icon_name = 'ri-emotion-line'
   protected override supported_usages = ['/mood', '/mood <auto|default|tired|cocky|sad|angry>']
   protected override help_usage = '/mood <auto|default|tired|cocky|sad|angry>'
@@ -36,8 +36,8 @@ export class MoodCommand extends BuiltInCommand {
         name: moodValue,
         description:
           moodValue === AUTO_MOOD_VALUE
-            ? 'Keep Leon mood on automatic behavior.'
-            : `Force Leon mood to "${moodValue}".`,
+            ? 'Let my mood change automatically.'
+            : `Set my mood to "${moodValue}".`,
         usage: `/mood ${moodValue}`,
         supported_usages: this.getSupportedUsages(),
         value: `/mood ${moodValue}`
@@ -54,7 +54,7 @@ export class MoodCommand extends BuiltInCommand {
       return {
         status: 'completed',
         result: createListResult({
-          title: 'Leon Mood',
+          title: 'My mood',
           tone: 'info',
           items: [
             {
@@ -107,14 +107,14 @@ export class MoodCommand extends BuiltInCommand {
     return {
       status: 'completed',
       result: createListResult({
-        title: 'Leon Mood Updated',
+        title: 'My mood updated',
         tone: 'success',
         items: [
           {
             label:
               nextConfiguredMood === AUTO_MOOD_VALUE
-                ? `Leon mood is now automatic. Current mood: "${moodState.getCurrentMood()}".`
-                : `Leon mood is now forced to "${moodState.getCurrentMood()}".`,
+                ? `My mood now changes automatically. Current mood: "${moodState.getCurrentMood()}".`
+                : `My mood is now set to "${moodState.getCurrentMood()}".`,
             tone: 'success'
           }
         ]

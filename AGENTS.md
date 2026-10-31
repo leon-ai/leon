@@ -58,6 +58,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 ## Comments, documentation and tests
 
+- Write user-facing messages spoken by Leon in first person (“I”, “me”, “my”), not third person; preserve branding, technical identifiers, and neutral descriptive/accessibility labels.
 - Explain Leon's lasting requirements: what behavior is needed, why the code or configuration exists, and how it serves Leon. Write for a contributor who has never seen the task, conversation, bug report or PR.
 - Do not use comments, documentation or tests as a record of the current change. Avoid upgrade narratives, incidental version details, temporary debugging context, and explanations centered on the specific incident that prompted the work. Keep change history in commit messages, PR descriptions or dedicated migration notes.
 - Tests must express a lasting, observable contract through their names, fixtures and assertions. A bug can reveal a missing contract, but reproducing an incident alone is not a reason to add or keep a test. Preserve distinct contracts; remove redundant or obsolete cases.

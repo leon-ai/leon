@@ -25,9 +25,9 @@ import {
   MEMORY_MANAGER,
   CONVERSATION_LOGGER,
   SOCKET_SERVER,
-  TOOL_CALL_LOGGER,
-  POST_TURN_MAINTENANCE_QUEUE
+  TOOL_CALL_LOGGER
 } from '@/core'
+import { scheduleHistoryCompaction } from '@/core/turn-lifecycle/post-turn'
 import {
   LLMDuties,
   LLMProviders,
@@ -129,7 +129,7 @@ import {
 import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/agent-loop'
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
-import { runTurnPhase, TurnPhase, setTurnPhaseGoal } from '../turn-timing'
+import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnInferences } from '../turn-timing'
 import {
   type AccumulatedLLMMetricsState,
   type FinalAnswerMetricsSnapshot,
@@ -258,6 +258,7 @@ export class ReActLLMDuty extends LLMDuty {
   private hasOwnerMessages = false
   private hasFinalizedAnswer = false
   private readonly answerStream = new AgentAnswerStream((payload) => {
+    this.responseTraceCollector.recordAnswer(payload.generationId, payload.token, payload.reset)
     if (payload.token) {
       this.firstOutputAt ??= Date.now()
     }
@@ -331,6 +332,12 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   public async execute(): Promise<LLMDutyResult | null> {
+    return observeTurnInferences((activity) => {
+      this.reportProgressEvent({ type: 'inference_activity', activity })
+    }, () => this.executeTurn())
+  }
+
+  private async executeTurn(): Promise<LLMDutyResult | null> {
     this.signal?.throwIfAborted()
     LogHelper.title(this.name)
     LogHelper.info('Executing...')
@@ -441,8 +448,7 @@ export class ReActLLMDuty extends LLMDuty {
         }))
 
         const dutyResult = this.makeDutyResult(answer)
-        POST_TURN_MAINTENANCE_QUEUE.enqueueIfNeeded(
-          'agent history compaction',
+        scheduleHistoryCompaction(
           () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(
             planWidgetIdValue,
             trackedSteps
@@ -915,7 +921,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
 
-    this.responseTraceCollector.record(event)
+    event = this.responseTraceCollector.record(event)
     this.scheduleTraceSave()
     this.onProgressEvent?.(event)
   }
@@ -1535,7 +1541,9 @@ export class ReActLLMDuty extends LLMDuty {
         this.reviewCount += 1
       }
       const requestGoal = options.isCompletionReview ? TurnPhase.Review
-        : options.isImageInspection ? TurnPhase.Inspection : TurnPhase.Request
+        : options.isImageInspection ? TurnPhase.Inspection
+          : options.isFinalizationAttempt ? TurnPhase.Answer : TurnPhase.Request
+      const streamedGoals = new Set<TurnPhase>()
       completionResult = await runTurnPhase(requestGoal, () => LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         ...(options.isImageInspection ? { usagePurpose: InferencePurpose.ImageInspection } : {}),
@@ -1585,6 +1593,8 @@ export class ReActLLMDuty extends LLMDuty {
             lastAttemptDiagnostics = timing.failureSummary ? timing : undefined
           }
           if (timing.outcome === 'started') {
+            streamedGoals.clear()
+            setTurnPhaseGoal(requestGoal)
             if (options.isCompletionReview && modelAttempt > 0) {
               this.reviewRetryCount += 1
             }
@@ -1688,6 +1698,11 @@ export class ReActLLMDuty extends LLMDuty {
                 if (cancellationSignal.aborted) {
                   return
                 }
+
+                // A streamed function name identifies its actual purpose before
+                // arguments finish, without guessing the model's next action.
+                streamedGoals.add(getRequestGoal([call]))
+                setTurnPhaseGoal(streamedGoals.size === 1 ? streamedGoals.values().next().value! : TurnPhase.Request)
 
                 refreshWaitDiagnostics()
                 clearModelStatus()
@@ -2338,7 +2353,7 @@ export class ReActLLMDuty extends LLMDuty {
       return
     }
 
-    this.responseTraceCollector.recordReasoning(generationId, token, phase)
+    const block = this.responseTraceCollector.recordReasoning(generationId, token, phase)
     this.scheduleTraceSave()
     // Preserve provider chunks; word-level events overwhelm long-running chat UIs.
     SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {
@@ -2346,6 +2361,6 @@ export class ReActLLMDuty extends LLMDuty {
       generationId,
       phase
     }, { sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId() })
-    this.onTextStream?.('reasoning', { token, generationId, phase })
+    this.onTextStream?.('reasoning', { token, generationId, phase, planStepId: block.planStepId! })
   }
 }

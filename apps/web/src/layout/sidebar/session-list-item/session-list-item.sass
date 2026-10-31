@@ -22,9 +22,6 @@
     color: var(--color-text)
     text-decoration: none
 
-    &.session-list-item-active
-      padding-right: 44px
-
   &.session-list-item-wip
     .session-list-item-link
       position: relative
@@ -43,7 +40,6 @@
     opacity: 0
     pointer-events: none
     transform: translateY(-50%)
-    transition: opacity var(--transition-duration-main) var(--transition-timing-main)
 
   .session-list-item-pinned-icon
     position: absolute
@@ -57,7 +53,7 @@
     transform: translateY(-50%)
 
   &:hover,
-  &:focus-within
+  &:has(:focus-visible)
     .session-list-item-link:where(:not([aria-disabled='true']))
       padding-right: 44px
       background-color: var(--color-surface-hover)
@@ -68,17 +64,6 @@
 
     .session-list-item-pinned-icon
       right: 44px
-
-  .session-list-item-active + .session-list-item-actions
-    opacity: 1
-    pointer-events: auto
-
-  .session-list-item-active ~ .session-list-item-actions
-    opacity: 1
-    pointer-events: auto
-
-  .session-list-item-active ~ .session-list-item-pinned-icon
-    right: 44px
 
   .session-list-item-link
     @include list-row.interactions
@@ -96,13 +81,10 @@
       padding-right: 44px
 
     &:hover,
-    &:focus-within
+    &:has(:focus-visible)
       .session-list-item-link,
       .session-list-item-input .input-field
         padding-right: 64px
-
-    .session-list-item-active
-      padding-right: 64px
 
   &.session-list-item-editing
     .session-list-item-actions,
@@ -127,6 +109,9 @@
     display: block
     overflow: hidden
     text-overflow: ellipsis
+
+  .session-list-item-title .streaming-text-characters
+    white-space: nowrap
 
   .session-list-item-title-text
     position: absolute
@@ -174,8 +159,5 @@
       background-color: var(--color-sidebar-background-hover)
 
 @media (prefers-reduced-motion: reduce)
-  .session-list-item .session-list-item-actions
-    transition: none
-
   .session-list-item .session-list-item-pinned-icon
     transition: none

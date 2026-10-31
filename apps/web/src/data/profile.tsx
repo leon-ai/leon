@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
+import { RequestFeedback } from '@/components/request-feedback/request-feedback'
 import { queryClient } from '@/query-client'
 
 import { requestAPI } from './api'
@@ -51,11 +52,9 @@ export function ProfileAccessGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {auth.isError && !auth.data && (
-        <div role="alert">
-          <p>{auth.error.message}</p>
-          <Button onClick={() => void auth.refetch()}>Retry connection</Button>
-        </div>
+      {(auth.isError || auth.fetchStatus === 'paused') && !auth.data && (
+        <RequestFeedback error={auth.error} paused={auth.fetchStatus === 'paused'}
+          retrying={auth.isFetching} retryLabel="Retry connection" onRetry={() => void auth.refetch()} />
       )}
       {children}
     </>

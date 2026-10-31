@@ -724,7 +724,7 @@ export const App: React.FC = () => {
                     color="green"
                     bgColor="transparent-green"
                   />
-                  <Text>Leon is now ready to use</Text>
+                  <Text>I’m ready to help</Text>
                 </Flexbox>
               </ListItem>
             </List>
@@ -767,7 +767,7 @@ export const App: React.FC = () => {
                     color="red"
                     bgColor="transparent-red"
                   />
-                  <Text>Leon cannot run properly</Text>
+                  <Text>I cannot run properly</Text>
                 </Flexbox>
               </ListItem>
             </List>
@@ -1184,7 +1184,7 @@ export const App: React.FC = () => {
               type="email"
               placeholder="Your email address"
               iconName="mail"
-              hint="Leon will notify you there once the task is over."
+              hint="I’ll notify you there once the task is over."
             />
             <Input
               name="email"

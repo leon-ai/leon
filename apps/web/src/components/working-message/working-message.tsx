@@ -1,50 +1,27 @@
 import { ProcessGroup } from '@/components/process-group'
-
-const WORKING_LABELS = [
-  'Working...',
-  'On it...',
-  'Right here...',
-  'Let me see...',
-  'Taking a peek...',
-  'Just a moment...',
-  'One little moment...',
-  'Leave it with me...',
-  'A little magic...',
-  'Coming together...',
-  'Getting comfy...',
-  'Settling in...',
-  'Warming up...',
-  'Here we go...',
-  'Let’s see...',
-  'Tinkering away...',
-  'Quietly at work...',
-  'A little tinkering...',
-  'I’ve got you...',
-  'Just a tick...'
-] as const
+import { getActivityLabel } from '@/data/activity-labels'
 
 interface WorkingMessageProps {
   phaseId: string
+  label?: string
+  iconName?: string
+  startedAt?: number | undefined
 }
 
 /**
- * Keeps icon-free waiting copy stable across updates and virtualized remounts,
- * without timers or a retained label cache.
+ * Reuses one status row through waiting and known model phases, without timers
+ * or a retained label cache. Generic waiting remains icon-free.
  */
-export function WorkingMessage({ phaseId }: WorkingMessageProps) {
-  let labelIndex = 0
-
-  for (const character of phaseId) {
-    labelIndex = (labelIndex + character.codePointAt(0)!) % WORKING_LABELS.length
-  }
-
+export function WorkingMessage({ phaseId, label, iconName, startedAt }: WorkingMessageProps) {
   return (
     <ProcessGroup
       active
+      startedAt={startedAt}
       animateWhileActive
-      activeLabel={WORKING_LABELS[labelIndex]!}
-      ariaLabel="Leon’s work"
+      activeLabel={label ?? getActivityLabel(phaseId)}
+      ariaLabel={iconName ? 'Leon’s inference' : 'Leon’s work'}
       completedLabel="Worked"
+      indicator={iconName ? <i className={`ri-${iconName}`} aria-hidden="true" /> : undefined}
     />
   )
 }

@@ -1,7 +1,8 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 
-import type { FeedPlanStep } from '@/data/feed'
+import type { FeedPlanStep, LeonFeedActivity } from '@/data/feed'
+import { isToolCallVisible } from '@/data/feed'
 import { Collapse } from '@/components/collapse'
 import { useProcessGroupNestedDisclosureDefault } from '@/components/process-group'
 import { ToolCallList } from '@/components/tool-call-list'
@@ -10,10 +11,11 @@ import './task-list-item.sass'
 
 interface TaskListItemProps {
   step: FeedPlanStep
+  renderActivity?: ((activity: LeonFeedActivity) => ReactNode) | undefined
 }
 
-export function TaskListItem({ step }: TaskListItemProps) {
-  const hasToolCalls = step.toolCalls.length > 0
+export function TaskListItem({ step, renderActivity }: TaskListItemProps) {
+  const hasToolCalls = step.toolCalls.some(isToolCallVisible) || Boolean(step.activities?.length)
   const expandByDefault = useProcessGroupNestedDisclosureDefault()
   const previousStatusRef = useRef(step.status)
   const toolCallsId = useId()
@@ -64,7 +66,9 @@ export function TaskListItem({ step }: TaskListItemProps) {
         {hasToolCalls ? (
           <button
             type="button"
-            className="task-list-item-trigger"
+            className={clsx('task-list-item-trigger', {
+              'task-list-item-direct-tools': !(step.activities && renderActivity)
+            })}
             aria-controls={toolCallsId}
             aria-expanded={isExpanded}
             onClick={() => setIsExpanded((isOpen) => !isOpen)}
@@ -80,7 +84,11 @@ export function TaskListItem({ step }: TaskListItemProps) {
             className="task-list-item-tool-calls"
             isOpen={isExpanded}
           >
-            <ToolCallList toolCalls={step.toolCalls} nested />
+            {step.activities && renderActivity ? (
+              <div className="leon-message-activities activity-timeline">
+                {step.activities.map(renderActivity)}
+              </div>
+            ) : <ToolCallList toolCalls={step.toolCalls} nested />}
           </Collapse>
         )}
       </div>

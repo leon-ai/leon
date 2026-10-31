@@ -222,7 +222,7 @@ function Init() {
       >
         <WidgetWrapper noPadding>
           <List>
-            <ListHeader>Leon is getting ready...</ListHeader>
+            <ListHeader>I’m getting ready...</ListHeader>
             <Item status={statusMap.clientCoreServerHandshake}>
               {getInitMessage(
                 statusMap.clientCoreServerHandshake,

@@ -556,7 +556,7 @@ function printCheckResult(result) {
   if (Math.round(summary.environment.freeRAMInGB) < MINIMUM_REQUIRED_RAM) {
     addFailure(
       checks.canRun,
-      `Free RAM is ${summary.environment.freeRAMInGB} GB but Leon needs at least ${MINIMUM_REQUIRED_RAM} GB`
+      `Free RAM is ${summary.environment.freeRAMInGB} GB but I need at least ${MINIMUM_REQUIRED_RAM} GB`
     )
   } else {
     addDetail(
@@ -762,7 +762,7 @@ function printCheckResult(result) {
   if (criticalFailures || !checks.canRun.ok) {
     LogHelper.error('Please fix the errors above')
   } else {
-    LogHelper.success('Hooray! Leon can run correctly')
+    LogHelper.success('Hooray! I’m ready to run')
   }
 
   try {

@@ -53,8 +53,8 @@ import {
 } from '@/core/llm-manager/types'
 import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { LogHelper } from '@/helpers/log-helper'
-import { recordTurnInference } from '../turn-timing'
-import { recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
+import { getTurnTimingContext, recordTurnInference } from '../turn-timing'
+import { recordInferenceAttempt, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
 import { ProviderRequestActivity } from './provider-request-activity'
 
 const LEADING_EMPTY_THINKING_BLOCK_PATTERN = /^(?:\s*<think>\s*<\/think>)+\s*/i
@@ -123,6 +123,7 @@ export async function runCompletionAttempt(
   const pendingHostedTools = new Set<string>()
   let hasProviderExecutedTools = false
   const attemptId = randomUUID()
+  recordInferenceAttempt(attemptId)
   let retryDiagnostics: Pick<CompletionAttemptTiming, 'retryDecision' | 'retryReason'> | undefined
   const idleTimeout = completionParams.streamIdleTimeout ?? (
     isRemoteProvider
@@ -195,6 +196,7 @@ export async function runCompletionAttempt(
         : Date.now() - lastOutputAt
     }
     const details = JSON.stringify({
+      ...getTurnTimingContext(),
       ...timing,
       startedAt: new Date(completionStartedAt).toISOString(),
       accounting

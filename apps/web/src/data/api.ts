@@ -28,14 +28,18 @@ export async function requestAPI<T>(path: string, options: RequestInit = {}): Pr
     if (options.signal?.aborted || error instanceof Error && error.name === 'AbortError') {
       throw error
     }
-    if (!response.ok) {
-      throw new Error('Leon could not complete this request. Please try again.')
+    // A response body can fail after headers arrive when the connection drops.
+    if (!navigator.onLine || error instanceof TypeError) {
+      throw new ConnectionError()
     }
-    throw new Error('Leon returned an invalid response. Please try again.')
+    if (!response.ok) {
+      throw new Error('I could not complete this request. Please try again.')
+    }
+    throw new Error('I returned an invalid response. Please try again.')
   }
   if (!response.ok) {
     throw new APIError(response.status, typeof result?.message === 'string' && result.message.trim()
-      ? result.message : 'Leon could not complete this request.')
+      ? result.message : 'I could not complete this request.')
   }
 
   return result

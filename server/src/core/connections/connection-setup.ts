@@ -279,7 +279,7 @@ export async function handleConnectionSetup(
         view.description =
           step === SetupStep.Assisted
             ? 'You can follow setup progress in this conversation.'
-            : 'Your assistant will complete setup in your browser.'
+            : 'I’ll complete setup in your browser.'
         if (step === SetupStep.Choice) {
           view.actions.push(
             action(SetupAction.StartSetup, 'Set it up for me')

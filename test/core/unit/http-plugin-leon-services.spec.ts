@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONVERSATION_LOGGER } from '@/core'
+import NLU from '@/core/nlp/nlu/nlu'
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 
 const mocks = vi.hoisted(() => ({
@@ -93,9 +94,15 @@ function getProfileSessions(): Set<string> {
 }
 
 vi.mock('@/core', () => ({
+  MEMORY_MANAGER: {
+    observeTurn: vi.fn(async () => undefined),
+    saveMemoryCandidatesFromTurn: vi.fn(async () => 0)
+  },
+  SELF_MODEL_MANAGER: { observeTurn: vi.fn(async () => undefined) },
   TOOLKIT_REGISTRY: mocks.connectionRegistry,
   BRAIN: {
     isMuted: false,
+    talk: vi.fn(async () => undefined),
     runSkillAction: vi.fn(async (nluProcessResult: Record<string, unknown>) => {
       mocks.skillActions.push(structuredClone(nluProcessResult))
       return {
@@ -168,6 +175,10 @@ vi.mock('@/core', () => ({
     }
   },
   POST_TURN_MAINTENANCE_QUEUE: {
+    startConcurrent: vi.fn((label: string, task: () => unknown) => {
+      mocks.maintenanceTasks.push({ label, task })
+      void task()
+    }),
     enqueue: vi.fn((label: string, task: () => unknown) => {
       mocks.maintenanceTasks.push({ label, task })
       void task()
@@ -187,7 +198,7 @@ vi.mock('@/core/context-manager/owner-profile-sync', () => ({
       toolExecutions
     })
 
-    return { profileChanged: true, contextChanged: true }
+    return { profileChanged: true, contextChanged: true, outcome: 'completed' }
   })
 }))
 
@@ -223,8 +234,8 @@ vi.mock('@/core/profile-runtime/initialize-profile-runtime', () => ({
 
 vi.mock('@/core/session-manager', () => ({
   CONVERSATION_SESSION_MANAGER: {
-    getSession: (sessionId: string): { id: string } | null =>
-      getProfileSessions().has(sessionId) ? { id: sessionId } : null,
+    getSession: (sessionId: string): { id: string, isTitleGenerated: boolean, messageCount: number } | null =>
+      getProfileSessions().has(sessionId) ? { id: sessionId, isTitleGenerated: false, messageCount: 0 } : null,
     createSession: (): { id: string } => {
       const id = `session-${++mocks.nextSessionId}`
       getProfileSessions().add(id)
@@ -233,6 +244,7 @@ vi.mock('@/core/session-manager', () => ({
     },
     getActiveSessionId: (): string =>
       [...getProfileSessions()][0] || 'active-session',
+    getCurrentSessionId: (): string => mocks.activeSessionId,
     listSessions: (): Array<Record<string, unknown>> =>
       [...getProfileSessions()].map((id, index) => ({
         id,
@@ -258,7 +270,8 @@ vi.mock('@/core/session-manager', () => ({
         mocks.activeSessionId = previousSessionId
       }
     },
-    maybeSetFallbackTitle: vi.fn()
+    maybeSetFallbackTitle: vi.fn(),
+    generateTitleFromFirstMessage: vi.fn(async () => undefined)
   }
 }))
 
@@ -596,7 +609,7 @@ describe('HTTP plugin Leon services', () => {
     })).rejects.toBe(reason)
     expect(mocks.agentDutyParams[0]?.['signal']).toBe(controller.signal)
     expect(mocks.persistedMessages).toHaveLength(1)
-    expect(mocks.maintenanceTasks).toHaveLength(0)
+    expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual(['session title generation'])
 
     await expect(runAgent({ query: 'Must not start', signal: controller.signal })).rejects.toBe(reason)
     expect(mocks.agentDutyParams).toHaveLength(1)
@@ -691,6 +704,9 @@ describe('HTTP plugin Leon services', () => {
     })
 
     expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual([
+      'session title generation',
+      'turn memory observation',
+      'react self-model reflection',
       'owner profile sync'
     ])
     expect(mocks.ownerProfileSyncCalls).toEqual([
@@ -706,6 +722,18 @@ describe('HTTP plugin Leon services', () => {
         ]
       }
     ])
+  })
+
+  it('schedules the same complete owner-turn maintenance for HTTP and legacy agent entry points', async () => {
+    const result = await runAgent({ query: 'Tell me about the coast.', create_session: true })
+    const expected = ['session title generation', 'turn memory observation', 'react self-model reflection', 'memory extraction']
+    expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual(expected)
+    mocks.maintenanceTasks.length = 0
+    mocks.activeSessionId = result.session_id
+
+    await new NLU()['runReAct']('Tell me about the coast.')
+
+    expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual(expected)
   })
 
   it('keeps profile runtime sessions isolated', async () => {
@@ -792,6 +820,7 @@ describe('HTTP plugin Leon services', () => {
         toolCall: {
           id: 'tool-1', name: 'system_utilities.tool_executions.read',
           status: 'running', commandOutput: 'First line\nSecond line\n',
+          preparationStartedAt: 1_600, startedAt: 2_000,
           lastOutputAt: 2_500, progressMessage: 'Receiving command output...'
         }
       })
@@ -834,6 +863,7 @@ describe('HTTP plugin Leon services', () => {
     expect(events.filter((event) => event['type'] === 'tool_call').at(-1)).toMatchObject({
       data: { tool_call: {
         ...toolCall, command_output: 'First line\nSecond line\n', last_output_at: 2_500,
+        preparation_started_at: 1_600, started_at: 2_000,
         progress_message: 'Receiving command output...'
       } }
     })

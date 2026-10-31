@@ -126,6 +126,42 @@ describe('profile conversation archive', () => {
     expect(() => repository.readMessages('new', { before: 'NaN' })).toThrow()
   })
 
+  it('recalls complete visible owner queries in durable sequence order with bounded text pages', () => {
+    const repository = open()
+    repository.saveSession(session('chat'))
+    repository.saveSession(session('other'))
+    const write = (id: string, message: string, who: MessageLog['who'] = 'owner', visible = true): void => {
+      repository.upsertMessage('chat', {
+        messageId: id, message, who, isAddedToHistory: visible
+      }, { sentAt: 1 })
+    }
+
+    write('first', 'First query\nwith newlines')
+    write('answer', 'Answer text', 'leon')
+    write('hidden', 'Hidden query', 'owner', false)
+    write('empty', '')
+    write('second', 'Second query')
+    write('third', 'Third query')
+    repository.upsertMessage('other', { who: 'owner', message: 'Another session', isAddedToHistory: true })
+    const latest = repository.readQueryHistory('chat', { limit: 1 })
+    expect(latest.items).toEqual([{ messageId: 'third', message: 'Third query' }])
+    const previous = repository.readQueryHistory('chat', { before: latest.nextCursor!, limit: 1 })
+    expect(previous.items).toEqual([{ messageId: 'second', message: 'Second query' }])
+    const oldest = repository.readQueryHistory('chat', { before: previous.nextCursor! })
+    expect(oldest).toEqual({ items: [{ messageId: 'first', message: 'First query\nwith newlines' }], nextCursor: null })
+    const bounded = repository.readQueryHistory('chat', { characters: 'Third query'.length })
+    expect(bounded.items).toEqual(latest.items)
+    expect(repository.readQueryHistory('chat', { before: bounded.nextCursor!, characters: 1 }))
+      .toEqual({ items: [], nextCursor: null })
+    expect(() => repository.readQueryHistory('chat', { before: 'NaN' })).toThrow()
+    expect(() => repository.readQueryHistory('chat', { limit: 101 })).toThrow()
+    expect(() => repository.readQueryHistory('chat', { characters: Number.MAX_SAFE_INTEGER + 1 })).toThrow()
+    expect(repository.readQueryHistory('chat', { characters: Number.MAX_SAFE_INTEGER }).items).toHaveLength(3)
+    close(repository)
+    expect(open().readQueryHistory('chat', { limit: 1 }).items).toEqual(latest.items)
+    expect(open('isolated').readQueryHistory('chat').items).toEqual([])
+  })
+
   it('keeps completed answers authoritative over delayed trace snapshots and loads details on demand', () => {
     const repository = open()
     repository.saveSession(session('chat'))

@@ -12,6 +12,11 @@ export interface CompletionAccounting {
   costSource?: string | undefined
 }
 
+export interface InferenceUsage extends CompletionAccounting {
+  inputTokens?: number
+  outputTokens?: number
+}
+
 export interface UsageAccounting {
   cachedInputTokens: number
   cacheReadCompletionCount: number

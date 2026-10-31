@@ -1,9 +1,42 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 
-import { test, expect, SESSION_URL, OTHER_SESSION_ID, LATEST_ANSWER } from './fixtures'
+import { test, expect, SESSION_URL, SESSION_ID, OTHER_SESSION_ID, LATEST_ANSWER } from './fixtures'
 
 async function countWaves(page: Page): Promise<number> {
   return page.evaluate(() => Reflect.get(window, 'composerWaveCount') as number)
+}
+
+interface ScrollTiming {
+  durationMs: number
+  gaps: number[]
+  landed: boolean
+}
+
+/**
+ * Measures the actual click-to-landing motion independently of driver latency.
+ */
+async function captureScrollTiming(button: Locator): Promise<void> {
+  await button.evaluate((element) => {
+    element.addEventListener('click', () => {
+      Reflect.set(window, 'scrollTiming', new Promise((resolve) => {
+        const startedAt = performance.now()
+        const main = document.querySelector<HTMLElement>('.app-main')!
+        const gaps = [main.scrollHeight - main.clientHeight - main.scrollTop]
+        const sample = (now: number): void => {
+          const gap = main.scrollHeight - main.clientHeight - main.scrollTop
+          gaps.push(gap)
+          if (gap < 2 || now - startedAt > 1_000) {
+            resolve({ durationMs: now - startedAt, gaps, landed: gap < 2 })
+          } else {
+            requestAnimationFrame(sample)
+          }
+        }
+
+        requestAnimationFrame(sample)
+      }))
+    }, { once: true })
+  })
 }
 
 test.beforeEach(async ({ page, ui }) => {
@@ -79,8 +112,166 @@ test('respects reduced motion on deliberate focus', async ({ page }) => {
   expect(await countWaves(page)).toBe(0)
 })
 
+test('recalls only from empty input and keeps normal caret navigation after editing', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await expect(composer).toBeFocused()
+  const requests = (): number => ui.requests.filter((url) => url.pathname.endsWith('/queries')).length
+  expect(requests()).toBe(0)
+  await composer.fill('My own\nmultiline draft')
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('My own\nmultiline draft')
+  expect(requests()).toBe(0)
+  await composer.fill('')
+  await composer.dispatchEvent('keydown', { key: 'ArrowUp', isComposing: true })
+  await composer.press('Shift+ArrowUp')
+  expect(requests()).toBe(0)
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Saved question 239')
+  await expect.poll(() => composer.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe('Saved question 239'.length)
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Saved question 238')
+  await composer.press('ArrowDown')
+  await expect(composer).toHaveValue('Saved question 239')
+  await composer.press('ArrowDown')
+  await expect(composer).toHaveValue('')
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Saved question 239')
+  await composer.press('End')
+  await composer.press('!')
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Saved question 239!')
+  expect(requests()).toBe(1)
+})
+
+test('recalls 128 queries lazily without changing the feed or fetching beyond the limit', async ({ page, ui }) => {
+  ui.history.set(SESSION_ID, Array.from({ length: 133 }, (_, index) => ({
+    who: 'owner', messageId: `query-${index}`, message: `Query ${index}`,
+    sentAt: index, isAddedToHistory: true
+  })))
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await expect(composer).toBeFocused()
+  const feedRequests = ui.historyRequests.length
+  for (let index = 132; index >= 5; index--) {
+    await composer.press('ArrowUp')
+    await expect(composer).toHaveValue(`Query ${index}`)
+  }
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Query 5')
+  expect(ui.requests.filter((url) => url.pathname.endsWith('/queries'))).toHaveLength(3)
+  expect(ui.historyRequests).toHaveLength(feedRequests)
+  await composer.press('ArrowDown')
+  await expect(composer).toHaveValue('Query 6')
+})
+
+test('recalls newly submitted queries after refresh and isolates navigation between sessions', async ({ page, ui }) => {
+  ui.history.get(OTHER_SESSION_ID)!.push({
+    who: 'owner', messageId: 'other-query', message: 'Other session query', sentAt: 1, isAddedToHistory: true
+  })
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Saved question 239')
+  await composer.fill('My latest query')
+  await composer.press('Enter')
+  await expect(page.getByText('Completed My latest query', { exact: true })).toBeVisible()
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('My latest query')
+  await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Other session query')
+  await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+  await expect(composer).toHaveValue('My latest query')
+  await composer.fill('')
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('My latest query')
+  await page.reload()
+  await expect(composer).toBeFocused()
+  await expect(composer).toHaveValue('My latest query')
+  await composer.fill('')
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('My latest query')
+})
+
+test('does not overwrite drafts or another session when a history request finishes late', async ({ page, ui }) => {
+  let release!: () => void
+  let gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let started = false
+  await page.route('**/sessions/*/queries?**', async (route) => {
+    started = true
+    await gate
+    await route.fallback()
+  })
+  try {
+    await page.goto(SESSION_URL)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    await composer.press('ArrowUp')
+    await expect.poll(() => started).toBe(true)
+    await composer.fill('Do not replace this draft')
+    release()
+    await expect.poll(() => ui.completedRequests.filter((url) => url.pathname.endsWith('/queries')).length).toBe(1)
+    await expect(composer).toHaveValue('Do not replace this draft')
+    await composer.fill('')
+    await composer.press('ArrowUp')
+    await expect(composer).toHaveValue('Saved question 239')
+    await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+    await expect(composer).toHaveValue('')
+    started = false
+    gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const pending = page.waitForRequest((request) =>
+      request.url().includes(`/sessions/${OTHER_SESSION_ID}/queries`))
+    await composer.press('ArrowUp')
+    const request = await pending
+    await expect.poll(() => started).toBe(true)
+    await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+    await composer.fill('A different session draft')
+    release()
+    await request.response()
+    await expect(composer).toHaveValue('A different session draft')
+  } finally {
+    release()
+  }
+})
+
+test('reports failed history reads in a toast and allows another recall attempt', async ({ page, ui }) => {
+  ui.failure = { path: `/api/v1/sessions/${SESSION_ID}/queries`, status: 400, message: 'Query history is unavailable.' }
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await composer.press('ArrowUp')
+  await expect(page.getByText('Could not load query history', { exact: true })).toBeVisible()
+  await expect(composer).toHaveValue('')
+  ui.failure = undefined
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue('Saved question 239')
+})
+
+test('bounds long-query text without truncating recalled input', async ({ page, ui }) => {
+  test.setTimeout(60_000)
+  const message = 'Long query '.repeat(8_000)
+  ui.history.set(SESSION_ID, Array.from({ length: 100 }, (_, index) => ({
+    who: 'owner', messageId: `long-${index}`, message: `${message}${index}`,
+    sentAt: index, isAddedToHistory: true
+  })))
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  for (let index = 99; index >= 89; index--) {
+    await composer.press('ArrowUp')
+    await expect(composer).toHaveValue(`${message}${index}`)
+  }
+  await composer.press('ArrowUp')
+  await expect(composer).toHaveValue(`${message}89`)
+  const requests = ui.requests.filter((url) => url.pathname.endsWith('/queries'))
+  expect(requests).toHaveLength(12)
+  expect(Number(requests.at(-1)!.searchParams.get('characters'))).toBeLessThan(message.length)
+})
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`returns to drafting after scrolling to the bottom with ${reducedMotion} motion`, async ({ page }) => {
+  test(`quickly returns to drafting after scrolling to the bottom with ${reducedMotion} motion`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
@@ -89,12 +280,16 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const main = page.locator('.app-main')
     const scrollButton = page.getByRole('button', { name: 'Scroll to bottom' })
 
-    for (const activation of ['pointer', 'keyboard']) {
+    const timings: ScrollTiming[] = []
+    for (const [activation, distance] of [
+      ['pointer', 800], ['keyboard', 800], ['pointer', 5_000], ['keyboard', 5_000]
+    ] as const) {
       await expect.poll(() => main.evaluate((element) =>
         Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop)
       )).toBeLessThanOrEqual(2)
-      await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 800 }))
+      await main.evaluate((element, amount) => element.scrollTo({ top: element.scrollTop - amount }), distance)
       await expect(scrollButton).toBeVisible()
+      await captureScrollTiming(scrollButton)
       if (activation === 'pointer') {
         await scrollButton.click()
       } else {
@@ -107,8 +302,16 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await expect.poll(() => main.evaluate((element) =>
         Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop)
       )).toBeLessThanOrEqual(2)
+      const timing = await page.evaluate(async () => await Reflect.get(window, 'scrollTiming')) as ScrollTiming
+      timings.push(timing)
+      expect(timing.landed).toBe(true)
+      expect(timing.durationMs).toBeLessThan(320)
+      const hadIntermediatePosition = timing.gaps.some((gap) => gap > 2 && gap < timing.gaps[0]! - 2)
+      expect(hadIntermediatePosition).toBe(reducedMotion === 'no-preference')
       expect(await countWaves(page)).toBe(0)
     }
+
+    await testInfo.attach('scroll-timings', { body: JSON.stringify(timings), contentType: 'application/json' })
   })
 }
 
@@ -127,6 +330,117 @@ test('plays one entrance wave on each new-session landing, including refresh', a
   await expect.poll(() => countWaves(page)).toBe(2)
   await page.reload()
   await expect.poll(() => countWaves(page)).toBe(1)
+})
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`keeps multiline drafts and the last answer reachable above the composer (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    const errors: string[] = []
+    const onPageError = (error: Error): void => {
+      errors.push(error.message)
+    }
+    page.on('pageerror', onPageError)
+    await page.emulateMedia({ reducedMotion })
+    await page.setViewportSize({ width: 1_366, height: 720 })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.message = 'A line of the answer.\n'.repeat(80) + 'The final line stays reachable.'
+    await page.goto(SESSION_URL)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    await composer.fill('A line of the draft.\n'.repeat(40))
+    const form = page.getByRole('form', { name: 'Send a message to Leon' })
+    await expect(form).toHaveClass(/query-input-expanded/)
+    await expect(page.locator('.query-input-field')).toHaveClass(/query-input-field-scrollable/)
+    await expect.poll(async () => (await form.boundingBox())!.height).toBeLessThan(720 / 2)
+    await expect.poll(async () => {
+      const glow = await page.locator('.query-input-glow').boundingBox()
+      const bounds = await form.boundingBox()
+      return Math.abs(glow!.y - bounds!.y)
+    }).toBeLessThanOrEqual(1)
+    const main = page.locator('.app-main')
+    const lastAnswer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+    const expectReachable = async (): Promise<void> => {
+      await main.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+      await expect.poll(async () => {
+        const end = await lastAnswer.boundingBox()
+        const top = await form.boundingBox()
+        return top!.y - end!.y - end!.height
+      }).toBeGreaterThan(0)
+    }
+    await expectReachable()
+    for (const theme of ['light', 'dark']) {
+      await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+      await page.evaluate(async () => {
+        await Promise.allSettled(document.getAnimations().filter((animation) => animation instanceof CSSTransition)
+          .map((animation) => animation.finished))
+      })
+      const path = testInfo.outputPath(`multiline-${theme}.png`)
+      await page.screenshot({ path })
+      await testInfo.attach(`multiline-${theme}`, { path, contentType: 'image/png' })
+    }
+    await page.setViewportSize({ width: 800, height: 560 })
+    await expect.poll(async () => (await form.boundingBox())!.height).toBeLessThan(560 / 2)
+    await expectReachable()
+    await composer.fill('Short again')
+    await expect(form).not.toHaveClass(/query-input-expanded/)
+    await expectReachable()
+    await expect(composer).toHaveValue('Short again')
+    expect(errors).toEqual([])
+    page.off('pageerror', onPageError)
+  })
+}
+
+test('lets a wheel gesture interrupt the fast return without pulling the owner back down', async ({ page }) => {
+  await page.goto(SESSION_URL)
+  await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+  const main = page.locator('.app-main')
+  const scrollButton = page.getByRole('button', { name: 'Scroll to bottom', exact: true })
+  await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 4_000 }))
+  await expect(scrollButton).toBeVisible()
+  await scrollButton.click()
+  expect(await main.evaluate((element) =>
+    element.scrollHeight - element.clientHeight - element.scrollTop
+  )).toBeGreaterThan(64)
+  await page.mouse.wheel(0, -400)
+  const remaining = await main.evaluate(async (element) => {
+    // Observe beyond the animation's deadline; a cancelled target must not resume.
+    for (let frame = 0; frame < 20; frame++) {
+      await new Promise(requestAnimationFrame)
+    }
+
+    return element.scrollHeight - element.clientHeight - element.scrollTop
+  })
+  expect(remaining).toBeGreaterThan(64)
+  await expect(scrollButton).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+})
+
+test('retargets the fast return when streamed content grows before landing', async ({ page, ui }) => {
+  const record = ui.history.get(SESSION_ID)!.at(-1)!
+  record.message = 'A line in a streamed answer.\n'.repeat(80)
+  record.isAddedToHistory = false
+  record.draftGeneration = 'growing-answer'
+  ui.sessions[0]!.status = 'wip' as SessionStatus
+  await page.goto(SESSION_URL)
+  const main = page.locator('.app-main')
+  const scrollButton = page.getByRole('button', { name: 'Scroll to bottom', exact: true })
+  await expect.poll(() => main.evaluate((element) =>
+    element.scrollHeight - element.clientHeight - element.scrollTop
+  )).toBeLessThanOrEqual(2)
+  await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 1_500 }))
+  await expect(scrollButton).toBeVisible()
+  await captureScrollTiming(scrollButton)
+  await scrollButton.click()
+  await ui.emit([{
+    type: 'text_stream', sequence: 1, session_id: SESSION_ID,
+    turn_id: 'growing-owner', response_id: record.messageId, created_at: Date.now(),
+    data: { kind: 'answer', generationId: 'growing-answer', token: 'More arriving content.\n'.repeat(25) }
+  }])
+  await expect.poll(() => main.evaluate((element) =>
+    element.scrollHeight - element.clientHeight - element.scrollTop
+  )).toBeLessThanOrEqual(2)
+  const timing = await page.evaluate(async () => await Reflect.get(window, 'scrollTiming')) as ScrollTiming
+  expect(timing.landed).toBe(true)
+  expect(timing.durationMs).toBeLessThan(320)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
 })
 
 for (const panel of ['models', 'settings']) {

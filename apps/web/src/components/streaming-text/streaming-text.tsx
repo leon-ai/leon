@@ -22,6 +22,7 @@ interface CharacterReveal {
 
 interface StreamingTextProps {
   animationId: string
+  animateInitial?: boolean
   className?: string
   startDelay?: number
   text: string
@@ -97,6 +98,7 @@ export function useAnimateOnce(animationId: string): boolean {
 
 export function StreamingText({
   animationId,
+  animateInitial = true,
   className,
   startDelay = 0,
   text
@@ -105,7 +107,8 @@ export function StreamingText({
   const stateRef = useRef<StreamingTextState>({
     animationId,
     reveals: new Map(),
-    text: ''
+    // Cached labels should appear immediately and only reveal subsequent changes.
+    text: animateInitial ? '' : text
   })
   const characters = Array.from(text)
 

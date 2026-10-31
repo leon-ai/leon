@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-10-29T15:47:06+08:00
+- Generated at: 2026-10-31T13:15:11+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -11,7 +11,7 @@
 - Tools own dependencies, settings, connections and device behavior. Core/bridge hosts own execution, transport and authentication. `bridges/runtime/` holds dependency-free shared contracts/Node.js capabilities; Core and SDK implementations stay independent with equivalent Node.js/Python SDK behavior.
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
-- HTTP APIs remain request/response support surfaces; live profile-scoped utterances should use the Socket.IO client interface.
+- Browser conversations use profile-scoped HTTP commands and durable SSE replay; Socket.IO remains available for other clients. Browser and legacy owner-agent entry points share turn orchestration.
 - External HTTP plugins can extend Leon's HTTP contract without patching the core API for each integration.
 - Custom clients can read profile-owned extension JSON files through a generic redacted HTTP endpoint, covering skill memory, skill settings, and tool settings without exposing secrets.
 - The LLM layer supports media understanding and generation; generated files are conversation artifacts with authenticated downloads and inline media playback.
@@ -28,6 +28,9 @@
 - The browser_use toolkit uses Browser Use CLI for direct browser inspection and actions in the configured browser session. Cua handles graphical application control locally or through Leon Satellite, retaining its session and cleaning up native resources through the worker host.
 - Computer use respects owner app preferences and permissions, adapts to platform capabilities, and uses observed results to verify actions and recover from ineffective attempts.
 ## Agent Loop
+- Owner-agent turns enter `core/turn-lifecycle/`: pre-turn preparation, the existing agent loop, foreground persistence/delivery, then shared asynchronous post-turn maintenance. Execution-time inferences stay inside the loop; transport adapters do not independently select maintenance tasks.
+- Session title inference starts alongside the first owner-agent turn without blocking it; in-flight generation is coalesced and manual renames or deletion take precedence over late results.
+- Profile-local `logs/turns/` journals and `logs/usage/` ledgers correlate turn/stage/task/attempt identities, timings and reported tokens, cache usage and cost. Auxiliary tasks have independent trace scopes and do not inflate foreground turn duration; audit replay never automatically repeats model calls or memory mutations. Owner-profile sync records rejected revisions separately from extraction, retaining only content-free reason codes and issue counts.
 - One provider transcript preserves requests, matching tool exchanges, recovery and answers across conversation turns; edited chat invalidates reuse.
 - Tool schemas load progressively from the toolkit catalog as the task needs them. Guidance follows toolkit -> tool -> function, with function-specific instructions loaded alongside selected schemas before use.
 - Stable rules precede append-only owner, clock, mood, plan, guidance and budget updates; full context files and Agent Skills load on demand.
@@ -41,6 +44,7 @@
 - Workers load assets from the codebase and resolve relative task files in the caller's workspace; Satellite uses its device's workspace.
 - Plans track scope, collection coverage and verified outcomes; their worklists persist through checkpointing and continuation.
 - The agent can share progress updates alongside tool calls during longer tasks.
+- Foreground inference lifecycle metadata streams to browser clients and survives replay; private review content and auxiliary background inferences stay out of live feed activity.
 - Clarification pauses preserve the transcript, plan and execution state so the owner reply can resume the same task.
 - Profiles can limit agent iterations or run time; callers can supply a fixed deadline. Model calls, retries, tools and review share the deadline and reserve time for required writes, checks and the answer. Exhaustion preserves progress and reports incomplete work without renewed approval.
 - Completion review checks task evidence and plan progress; only opted-in, complete single lookups with default options can skip it. Plans, failures, recovery, partial/retained results and resumed unfinished work retain review.

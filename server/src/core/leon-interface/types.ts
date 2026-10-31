@@ -90,6 +90,7 @@ export interface ModelResponseStatus {
 export type LeonClientInterfaceSuggestionsPayload = string[]
 
 export interface LeonClientInterfaceTokenPayload {
+  planStepId?: string | null
   token: string
   generationId: string
   phase?: string

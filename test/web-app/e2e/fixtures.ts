@@ -1,6 +1,6 @@
 import { test as base, expect, type Response, type Route } from '@playwright/test'
 
-import type { ConversationPage, ConversationRecord, ModelCatalog, ConversationEvent } from '../../../apps/web/src/data/conversation'
+import type { ConversationPage, ConversationRecord, ModelCatalog, ConversationNotification } from '../../../apps/web/src/data/conversation'
 import type { ConversationSession } from '../../../apps/web/src/data/sessions'
 import type { AmbientConditions } from '../../../apps/web/src/data/ambient-conditions'
 
@@ -25,7 +25,7 @@ interface UIFixture {
   holdAuthentication: () => () => void
   failure: { path: string, status: number, message: string } | undefined
   ambient: AmbientConditions
-  emit: (events: ConversationEvent[]) => Promise<void>
+  emit: (events: ConversationNotification[]) => Promise<void>
 }
 
 const catalog: ModelCatalog = {
@@ -147,6 +147,30 @@ export const test = base.extend<{ ui: UIFixture }>({
         return
       }
       const session = sessions.find((candidate) => candidate.id === parts[3])
+      if (session && request.method() === 'GET' && parts[4] === 'queries') {
+        const records = history.get(session.id)!
+        const before = Number(url.searchParams.get('before') ?? records.length + 1)
+        const limit = Number(url.searchParams.get('limit'))
+        const budget = Math.min(128 * 1_024, Number(url.searchParams.get('characters')))
+        const candidates = records.map((record, index) => ({ record, sequence: index + 1 }))
+          .filter(({ record, sequence }) => record.who === 'owner' && record.isAddedToHistory &&
+            record.message !== '' && sequence < before).reverse()
+        const queries: Pick<ConversationRecord, 'messageId' | 'message'>[] = []
+        let characters = 0
+        let lastSequence: string | null = null
+        let nextCursor: string | null = null
+        for (const { record, sequence } of candidates) {
+          if (queries.length === limit || characters + record.message.length > budget) {
+            nextCursor = lastSequence
+            break
+          }
+          queries.push({ messageId: record.messageId, message: record.message })
+          characters += record.message.length
+          lastSequence = String(sequence)
+        }
+        await json(route, { queries, next_cursor: nextCursor })
+        return
+      }
       if (session && request.method() === 'GET' && parts[4] === 'messages' && parts[5]) {
         const message = history.get(session.id)!.find((record) => record.messageId === decodeURIComponent(parts[5]!))
         await json(route, message ? { message } : { message: 'Message not found.' }, message ? 200 : 404)
@@ -161,7 +185,7 @@ export const test = base.extend<{ ui: UIFixture }>({
         const data: ConversationPage = {
           session, messages: records.slice(start, end), next_cursor: start > 0 ? String(start) : null,
           newer_cursor: end < records.length ? String(end) : null, event_cursor: 0,
-          is_running: false, command: null, selection: catalog.selection
+          is_running: session.status === 'wip', command: null, selection: catalog.selection
         }
         await json(route, data)
         return
