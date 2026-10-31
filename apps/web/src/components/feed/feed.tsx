@@ -176,11 +176,16 @@ export function Feed({
     const observedFeed = feed
     const observedLayers = [bottomMask, topMask, scrim]
     const observedScrollElement = scrollElement
+    const sessionPage = feed.closest<HTMLElement>('.session-page')
+    const composer = sessionPage?.querySelector<HTMLElement>('.session-page-composer')
 
     // Fixed elements use the viewport as their containing block, so measure
     // the feed to account for the main scrollbar and sidebar transitions.
     function updateLayerBounds(): void {
       const feedBounds = observedFeed.getBoundingClientRect()
+      if (composer) {
+        sessionPage?.style.setProperty('--session-composer-height', `${composer.getBoundingClientRect().height}px`)
+      }
 
       for (const layer of observedLayers) {
         layer.style.left = `${feedBounds.left}px`
@@ -191,6 +196,9 @@ export function Feed({
     const resizeObserver = new ResizeObserver(updateLayerBounds)
     resizeObserver.observe(observedFeed)
     resizeObserver.observe(observedScrollElement)
+    if (composer) {
+      resizeObserver.observe(composer)
+    }
     updateLayerBounds()
 
     return () => resizeObserver.disconnect()

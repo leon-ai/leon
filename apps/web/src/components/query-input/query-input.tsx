@@ -57,7 +57,9 @@ export function QueryInput({
   model,
   onStop
 }: QueryInputProps) {
-  const [query, setQuery] = useComposerDraft(sessionId)
+  const [query, setQuery, draftRestoration] = useComposerDraft(sessionId)
+  const caretRestorationRef = useRef<number | undefined>(undefined)
+  const [settledRestoration, setSettledRestoration] = useState<number | undefined>(undefined)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isScrollable, setIsScrollable] = useState(false)
   const [showFocusWave, setShowFocusWave] = useState(() => introWave &&
@@ -159,8 +161,13 @@ export function QueryInput({
       Number.parseFloat(textareaStyle.borderTopWidth) +
       Number.parseFloat(textareaStyle.borderBottomWidth)
     const singleLineHeight = lineHeight + verticalPadding + verticalBorder
-    const maximumHeight =
-      lineHeight * resolvedMaximumLineCount + verticalPadding + verticalBorder
+    const actionRowHeight = Math.max(leadingAction.offsetHeight, actions.offsetHeight)
+    // Leave room for the conversation even on short viewports; longer drafts
+    // scroll inside the native textarea instead of covering the entire feed.
+    const viewportMaximum = window.innerHeight / 2 -
+      verticalPadding - actionRowHeight - lineHeight
+    const maximumHeight = Math.max(singleLineHeight,
+      Math.min(lineHeight * resolvedMaximumLineCount + verticalPadding + verticalBorder, viewportMaximum))
     const horizontalFormPadding =
       Number.parseFloat(formStyle.paddingLeft) +
       Number.parseFloat(formStyle.paddingRight)
@@ -214,10 +221,6 @@ export function QueryInput({
       textarea.scrollTop = 0
     }
 
-    const actionRowHeight = Math.max(
-      leadingAction.offsetHeight,
-      actions.offsetHeight
-    )
     const contentAreaHeight = shouldExpand
       ? nextHeight + gap + actionRowHeight
       : Math.max(nextHeight, actionRowHeight)
@@ -235,11 +238,20 @@ export function QueryInput({
 
   useLayoutEffect(() => {
     updateTextareaHeight()
-    if (historySelectionRef.current) {
+    if (historySelectionRef.current || caretRestorationRef.current !== draftRestoration) {
+      caretRestorationRef.current = draftRestoration
       historySelectionRef.current = false
       textareaRef.current?.setSelectionRange(query.length, query.length)
     }
-  }, [query, updateTextareaHeight])
+    if (settledRestoration !== draftRestoration) {
+      // Commit the measured draft geometry with transitions disabled. Ordinary
+      // editing regains its existing motion after this restoration frame.
+      const frame = window.requestAnimationFrame(() => setSettledRestoration(draftRestoration))
+      return () => window.cancelAnimationFrame(frame)
+    }
+
+    return undefined
+  }, [query, draftRestoration, settledRestoration, updateTextareaHeight])
 
   useEffect(() => () => {
     // An obsolete network response must never replace another session's input.
@@ -287,8 +299,12 @@ export function QueryInput({
     })
 
     resizeObserver.observe(form)
+    window.addEventListener('resize', updateTextareaHeight)
 
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateTextareaHeight)
+    }
   }, [updateTextareaHeight])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -376,7 +392,8 @@ export function QueryInput({
       <form
         ref={formRef}
         className={clsx('query-input', {
-          'query-input-expanded': isExpanded
+          'query-input-expanded': isExpanded,
+          'query-input-restoring': settledRestoration !== draftRestoration
         })}
         aria-label="Send a message to Leon"
         style={formHeight === undefined ? undefined : {

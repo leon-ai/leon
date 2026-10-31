@@ -18,7 +18,7 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, 
 
   .query-input-glow
     position: absolute
-    bottom: 0
+    top: 0
     left: 50%
     z-index: -1
     width: 85%
@@ -170,6 +170,13 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, 
 .query-input-focus-wave
   z-index: 4
   color: var(--query-input-focus-wave-color)
+
+.query-input.query-input-restoring
+  &,
+  .query-input-field,
+  .query-input-leading-action,
+  .query-input-actions
+    transition: none
 
 @keyframes query-input-particle-drift
   0%

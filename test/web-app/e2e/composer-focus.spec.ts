@@ -332,6 +332,62 @@ test('plays one entrance wave on each new-session landing, including refresh', a
   await expect.poll(() => countWaves(page)).toBe(1)
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`keeps multiline drafts and the last answer reachable above the composer (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    const errors: string[] = []
+    const onPageError = (error: Error): void => {
+      errors.push(error.message)
+    }
+    page.on('pageerror', onPageError)
+    await page.emulateMedia({ reducedMotion })
+    await page.setViewportSize({ width: 1_366, height: 720 })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.message = 'A line of the answer.\n'.repeat(80) + 'The final line stays reachable.'
+    await page.goto(SESSION_URL)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    await composer.fill('A line of the draft.\n'.repeat(40))
+    const form = page.getByRole('form', { name: 'Send a message to Leon' })
+    await expect(form).toHaveClass(/query-input-expanded/)
+    await expect(page.locator('.query-input-field')).toHaveClass(/query-input-field-scrollable/)
+    await expect.poll(async () => (await form.boundingBox())!.height).toBeLessThan(720 / 2)
+    await expect.poll(async () => {
+      const glow = await page.locator('.query-input-glow').boundingBox()
+      const bounds = await form.boundingBox()
+      return Math.abs(glow!.y - bounds!.y)
+    }).toBeLessThanOrEqual(1)
+    const main = page.locator('.app-main')
+    const lastAnswer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+    const expectReachable = async (): Promise<void> => {
+      await main.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+      await expect.poll(async () => {
+        const end = await lastAnswer.boundingBox()
+        const top = await form.boundingBox()
+        return top!.y - end!.y - end!.height
+      }).toBeGreaterThan(0)
+    }
+    await expectReachable()
+    for (const theme of ['light', 'dark']) {
+      await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+      await page.evaluate(async () => {
+        await Promise.allSettled(document.getAnimations().filter((animation) => animation instanceof CSSTransition)
+          .map((animation) => animation.finished))
+      })
+      const path = testInfo.outputPath(`multiline-${theme}.png`)
+      await page.screenshot({ path })
+      await testInfo.attach(`multiline-${theme}`, { path, contentType: 'image/png' })
+    }
+    await page.setViewportSize({ width: 800, height: 560 })
+    await expect.poll(async () => (await form.boundingBox())!.height).toBeLessThan(560 / 2)
+    await expectReachable()
+    await composer.fill('Short again')
+    await expect(form).not.toHaveClass(/query-input-expanded/)
+    await expectReachable()
+    await expect(composer).toHaveValue('Short again')
+    expect(errors).toEqual([])
+    page.off('pageerror', onPageError)
+  })
+}
+
 test('lets a wheel gesture interrupt the fast return without pulling the owner back down', async ({ page }) => {
   await page.goto(SESSION_URL)
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()

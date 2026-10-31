@@ -22,12 +22,13 @@ function readDraft(key: string | undefined): string {
  * Retains only the active draft in React. Tab-scoped storage keeps unsent text
  * across navigation and refresh without saving on the typing hot path.
  */
-export function useComposerDraft(sessionId?: string): [string, (value: string) => void] {
+export function useComposerDraft(sessionId?: string): [string, (value: string) => void, number] {
   const profile = useProfile()
   const storageKey = profile
     ? `${DRAFT_STORAGE_PREFIX}${JSON.stringify([profile, sessionId ?? null])}`
     : undefined
   const [query, setQuery] = useState(() => readDraft(storageKey))
+  const [restoration, setRestoration] = useState(0)
   const draftRef = useRef({ key: storageKey, value: query, edited: false })
 
   useLayoutEffect(() => {
@@ -39,6 +40,9 @@ export function useComposerDraft(sessionId?: string): [string, (value: string) =
       const value = keepLocal ? previous.value : readDraft(storageKey)
       draftRef.current = { key: storageKey, value, edited: keepLocal }
       setQuery(value)
+      if (!keepLocal) {
+        setRestoration((revision) => revision + 1)
+      }
     }
 
     const draft = draftRef.current
@@ -90,5 +94,5 @@ export function useComposerDraft(sessionId?: string): [string, (value: string) =
     setQuery(value)
   }
 
-  return [query, updateQuery]
+  return [query, updateQuery, restoration]
 }

@@ -193,6 +193,21 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
   test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {
     void ui
+    await page.addInitScript(() => {
+      Reflect.set(window, 'draftGeometryTransitions', [])
+      document.addEventListener('transitionrun', (event) => {
+        const target = event.target
+        if (!(target instanceof HTMLElement) || !target.closest('.query-input') ||
+          !['height', 'margin-left', 'margin-right', 'top', 'transform'].includes(event.propertyName)) {
+          return
+        }
+        const field = document.querySelector<HTMLTextAreaElement>('textarea[name="query"]')
+        const transitions = Reflect.get(window, 'draftGeometryTransitions') as string[]
+        if (field && transitions.length < 64) {
+          transitions.push(field.value)
+        }
+      })
+    })
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     const composer = page.getByRole('textbox', { name: 'Message Leon' })
@@ -207,9 +222,20 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await newSession.click()
     await expect(composer).toHaveValue('')
     await composer.fill('New-session draft')
+    await page.evaluate(() => Reflect.set(window, 'draftGeometryTransitions', []))
     await first.click()
     await expect(composer).toHaveValue(draft)
     await expect(composer).toBeFocused()
+    expect(await composer.evaluate((field: HTMLTextAreaElement) => [field.selectionStart, field.selectionEnd]))
+      .toEqual([draft.length, draft.length])
+    expect(await page.evaluate(async () => {
+      await new Promise(requestAnimationFrame)
+      await new Promise(requestAnimationFrame)
+      return Reflect.get(window, 'draftGeometryTransitions') as string[]
+    })).not.toContain(draft)
+    if (reducedMotion === 'no-preference') {
+      await expect(page.getByRole('form', { name: 'Send a message to Leon' })).toHaveCSS('transition-property', 'height')
+    }
     await composer.press('ArrowUp')
     await expect(composer).toHaveValue(draft)
     await page.goBack()
@@ -218,6 +244,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(composer).toHaveValue(draft)
     await page.reload()
     await expect(composer).toHaveValue(draft)
+    expect(await composer.evaluate((field: HTMLTextAreaElement) => [field.selectionStart, field.selectionEnd]))
+      .toEqual([draft.length, draft.length])
+    expect(await page.evaluate(() => Reflect.get(window, 'draftGeometryTransitions') as string[])).not.toContain(draft)
     await other.click()
     await expect(composer).toHaveValue('Other session draft')
     await newSession.click()
@@ -316,6 +345,7 @@ test('isolates profile drafts and prioritizes new typing while authentication re
   await composer.fill('Another profile draft')
   await page.reload()
   await expect(composer).toHaveValue('Another profile draft')
+  expect(await composer.evaluate((field: HTMLTextAreaElement) => field.selectionStart)).toBe('Another profile draft'.length)
   ui.profile = 'ui-tests'
   await page.reload()
   await expect(composer).toHaveValue('First profile draft')
@@ -324,9 +354,11 @@ test('isolates profile drafts and prioritizes new typing while authentication re
   try {
     await page.reload()
     await composer.fill('New typing before authentication')
+    await composer.press('Home')
     release()
     await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
     await expect(composer).toHaveValue('New typing before authentication')
+    expect(await composer.evaluate((field: HTMLTextAreaElement) => field.selectionStart)).toBe(0)
     await page.reload()
     await expect(composer).toHaveValue('New typing before authentication')
   } finally {
