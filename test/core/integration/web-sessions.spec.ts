@@ -160,6 +160,38 @@ describe('web conversation runtime', () => {
     expect((await request('GET', `/api/v1/sessions/${first}`)).statusCode).toBe(404)
   })
 
+  it('reads only the requested invocation, bounds previews, and authorizes complete bodies within the profile', async () => {
+    const id = await create()
+    const other = await create()
+    const text = 'result\n'.repeat(10_000)
+    await runWithProfileContext({ profileName: profile }, async () => {
+      CONVERSATION_REPOSITORY.upsertMessage(id, {
+        who: 'leon', messageId: 'answer', message: 'Done', isAddedToHistory: true,
+        agentResponseTrace: { id: 'trace', planSteps: [], toolCalls: [
+          { id: 'one', name: 'test.lookup', status: 'success', input: { query: 'hello' }, output: text },
+          { id: 'two', name: 'test.lookup', status: 'success', output: 'another tool result' }
+        ] }
+      })
+    })
+    const route = `/api/v1/sessions/${id}/messages/trace/tools/one`
+    const preview = await request('GET', route)
+    expect(preview.statusCode).toBe(200)
+    expect(preview.json().output.truncated).toBe(true)
+    expect(preview.body.length).toBeLessThan(20_000)
+    expect(preview.body).not.toContain('another tool result')
+    expect((await request('GET', `${route}?complete=true`)).json().output.text).toBe(text)
+    expect((await request('GET', `${route}?complete=invalid`)).statusCode).toBe(400)
+    expect((await request('GET', `/api/v1/sessions/${other}/messages/trace/tools/one`)).statusCode).toBe(404)
+    const previousProfile = profile
+    profile = randomUUID()
+    try {
+      expect((await request('GET', route)).statusCode).toBe(404)
+    } finally {
+      await runWithProfileContext({ profileName: profile }, async () => CONVERSATION_REPOSITORY.close())
+      profile = previousProfile
+    }
+  })
+
   it('pages query text separately from answers and rejects missing sessions and invalid budgets', async () => {
     const id = await create()
     const other = await create()

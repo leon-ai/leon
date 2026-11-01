@@ -1,6 +1,10 @@
 import { test as base, expect, type Locator, type Response, type Route } from '@playwright/test'
 
-import type { ConversationPage, ConversationRecord, ModelCatalog, ConversationNotification } from '../../../apps/web/src/data/conversation'
+import type { ConversationPage, ConversationRecord, ConversationTool, ModelCatalog, ConversationNotification } from '../../../apps/web/src/data/conversation'
+import { getToolResultData, toToolContent, toToolInput } from '../../../apps/web/src/utils/tool-content'
+import path from 'node:path'
+import { hasToolChanges } from '../../../apps/web/src/utils/tool-changes'
+import type { ToolCallContents } from '../../../server/src/core/session-manager/tool-content-contract'
 import type { ConversationSession } from '../../../apps/web/src/data/sessions'
 import type { AmbientConditions } from '../../../apps/web/src/data/ambient-conditions'
 
@@ -23,6 +27,25 @@ export async function finishFiniteAnimations(target: Locator): Promise<void> {
       .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
       .map((animation) => animation.finished))
   })
+}
+
+/**
+ * Keeps controlled API fixtures aligned with the invocation-content contract.
+ */
+export function toolContentsFixture(tool: ConversationTool, complete = false): ToolCallContents {
+  const output = tool.output ?? tool.commandOutput ?? tool.errorMessage ?? ''
+  const result = getToolResultData(tool.output)
+  const fileContent = result && typeof result['path'] === 'string' && typeof result['content'] === 'string' && typeof result['contentHash'] === 'string'
+    ? { ...toToolContent(result['content'], complete)!, language: path.extname(result['path']).slice(1) || 'text' } : undefined
+
+  return {
+    input: toToolInput(tool.input ?? null, complete)!,
+    output: toToolContent(output, complete)!,
+    ...(tool.commandOutput === undefined ? {} : { commandOutput: toToolContent(tool.commandOutput, complete, true)! }),
+    hasChanges: hasToolChanges(tool.output),
+    diffTruncated: Boolean(result?.['diffTruncated']),
+    ...(fileContent ? { displayOutput: fileContent } : {})
+  }
 }
 
 interface UIFixture {
@@ -187,6 +210,11 @@ export const test = base.extend<{ ui: UIFixture }>({
       }
       if (session && request.method() === 'GET' && parts[4] === 'messages' && parts[5]) {
         const message = history.get(session.id)!.find((record) => record.messageId === decodeURIComponent(parts[5]!))
+        if (parts[6] === 'tools' && parts[7]) {
+          const tool = message?.agentResponseTrace?.toolCalls.find((call) => call.id === decodeURIComponent(parts[7]!))
+          await json(route, tool ? toolContentsFixture(tool, url.searchParams.get('complete') === 'true') : { message: 'Tool call not found.' }, tool ? 200 : 404)
+          return
+        }
         await json(route, message ? { message } : { message: 'Message not found.' }, message ? 200 : 404)
         return
       }
@@ -197,7 +225,18 @@ export const test = base.extend<{ ui: UIFixture }>({
         const end = Number(url.searchParams.get('before') ?? records.length)
         const start = Math.max(0, end - PAGE_SIZE)
         const data: ConversationPage = {
-          session, messages: records.slice(start, end), next_cursor: start > 0 ? String(start) : null,
+          session, messages: records.slice(start, end).map((record) => ({ ...record,
+            ...(record.agentResponseTrace ? { agentResponseTrace: { ...record.agentResponseTrace,
+              toolCalls: record.agentResponseTrace.toolCalls.map((call) => {
+                const metadata = { ...call }
+                delete metadata.input
+                delete metadata.output
+                delete metadata.commandOutput
+
+                return metadata
+              })
+            } } : {})
+          })), next_cursor: start > 0 ? String(start) : null,
           newer_cursor: end < records.length ? String(end) : null, event_cursor: 0,
           is_running: session.status === 'wip', command: null, selection: ui.models.selection
         }
@@ -226,7 +265,9 @@ export const test = base.extend<{ ui: UIFixture }>({
       for (const release of releases) {
         release()
       }
-      await page.unrouteAll({ behavior: 'wait' })
+      // Context disposal cancels remaining streaming requests. Teardown must not
+      // wait for a live or already-cancelled route handler to receive a response.
+      await page.unrouteAll({ behavior: 'ignoreErrors' })
     }
   }
 })

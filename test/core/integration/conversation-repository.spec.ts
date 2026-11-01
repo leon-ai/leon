@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 import type { ConversationSession } from '@/core/session-manager'
 import type { MessageLog } from '@/types'
+import { TOOL_CONTENT_PREVIEW_CHARACTERS } from '@/core/session-manager/tool-content-contract'
 
 function session(id: string, timestamp = 1): ConversationSession {
   return {
@@ -47,6 +48,44 @@ describe('profile conversation archive', () => {
     }
     repositories.clear()
     await fs.rm(directory, { recursive: true, force: true })
+  })
+
+  it('reads bounded invocation previews and complete bodies independently within their session and profile', () => {
+    const repository = open()
+    repository.saveSession(session('chat'))
+    repository.saveSession(session('other'))
+    const output = '你🙂'.repeat(TOOL_CONTENT_PREVIEW_CHARACTERS)
+    const commandOutput = `start\n${'line\n'.repeat(8_000)}finished`
+    repository.upsertMessage('chat', {
+      who: 'leon', message: 'Done', messageId: 'answer', isAddedToHistory: true,
+      agentResponseTrace: { id: 'trace', planSteps: [], toolCalls: [
+        { id: 'one', name: 'test.read', status: 'success', input: { query: 'hello' }, output, commandOutput },
+        { id: 'two', name: 'test.edit', status: 'success', input: JSON.stringify({ path: 'hello.ts', changes: [{ oldText: 'a', newText: 'b' }] }),
+          output: { result: { success: true, data: { changed: true, diff: '-a\n+b', diffTruncated: false } } } },
+        { id: 'three', name: 'test.read', status: 'success', output: {
+          result: { success: true, data: { path: 'hello.ts', content: 'const answer = 42\n', contentHash: 'hash' } }
+        } },
+        { id: 'four', name: 'test.boolean', status: 'success', input: false, output: true }
+      ] }
+    })
+    const preview = repository.readToolContents('chat', 'trace', 'one')!
+    expect(Array.from(preview.output.text)).toHaveLength(TOOL_CONTENT_PREVIEW_CHARACTERS)
+    expect(preview.output.truncated).toBe(true)
+    expect(preview.commandOutput?.text.endsWith('finished')).toBe(true)
+    expect(preview.commandOutput?.truncated).toBe(true)
+    expect(JSON.parse(preview.input.text)).toEqual({ query: 'hello' })
+    expect(preview.hasChanges).toBe(false)
+    const complete = repository.readToolContents('chat', 'answer', 'one', true)!
+    expect(complete.output.text).toBe(output)
+    expect(complete.output.truncated).toBe(false)
+    expect(complete.commandOutput?.text).toBe(commandOutput)
+    expect(repository.readToolContents('chat', 'trace', 'two')?.hasChanges).toBe(true)
+    expect(repository.readToolContents('chat', 'trace', 'two')?.input.language).toBe('json')
+    expect(repository.readToolContents('chat', 'trace', 'three')?.displayOutput).toMatchObject({ text: 'const answer = 42\n', language: 'ts', truncated: false })
+    expect(repository.readToolContents('chat', 'trace', 'four')).toMatchObject({ input: { text: 'false' }, output: { text: 'true' } })
+    expect(repository.readToolContents('chat', 'trace', 'missing')).toBeNull()
+    expect(repository.readToolContents('other', 'trace', 'one')).toBeNull()
+    expect(open('another-profile').readToolContents('chat', 'trace', 'one')).toBeNull()
   })
 
   it('imports legacy sessions once, preserves their files, and survives reopening', async () => {
