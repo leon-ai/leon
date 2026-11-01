@@ -1,14 +1,14 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '@/data/feed'
 import { formatToolDuration } from '@/utils/format-tool-duration'
 import { ActivityWave } from '@/components/activity-wave'
 import { Collapse } from '@/components/collapse'
-import { JsonView } from '@/components/json-view'
-import { useConversationDetails } from '@/data/conversation-details'
-import { toFeedTool } from '@/data/conversation-feed'
+import { useToolCallContents } from '@/data/conversation-details'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
+import { toToolContent } from '@/utils/tool-content'
+import { ToolOutput } from './tool-output'
 
 import './tool-call.sass'
 
@@ -50,9 +50,9 @@ function formatFunctionName(functionName: string): string {
  */
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const disclosure = useConversationDetails(isExpanded)
-  const saved = disclosure.data?.message?.agentResponseTrace?.toolCalls.find((call) => call.id === toolCall.id)
-  const details = saved ? toFeedTool(saved) : toolCall
+  const disclosure = useToolCallContents(toolCall.id, isExpanded)
+  const liveOutput = useMemo(() => toToolContent(toolCall.output), [toolCall.output])
+  const output = liveOutput ?? disclosure.data?.output
   const detailsId = useId()
   const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
   const duration = isActive
@@ -116,14 +116,11 @@ export function ToolCall({ toolCall }: ToolCallProps) {
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">
           <p className="tool-call-details-title">{technicalTitle}</p>
-          {disclosure.isLoading && <p role="status">Loading tool details…</p>}
           {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
-          <JsonView label="Input" value={toolCall.input ?? details.input} />
-          <JsonView
-            label="Output"
-            // Streamed output is newer than the lazy snapshot during refetches.
-            value={toolCall.output ?? details.output ?? { status: toolCall.status }}
-          />
+          <div className="tool-call-output-frame">
+            <ToolOutput content={output} label="Tool output" active={isActive}
+              loading={disclosure.isFetching} preview />
+          </div>
         </div>
       </Collapse>
     </section>

@@ -1,0 +1,39 @@
+.code-view
+  min-width: 0
+  height: 236px
+  flex: 0 1 auto
+
+.code-view-viewport
+  padding: var(--space-md) var(--space-lg)
+  font-family: var(--font-family-code)
+  font-size: var(--font-size-xs)
+  font-weight: var(--font-weight-regular)
+  font-variant-ligatures: none
+  line-height: 22px
+  color: var(--color-text-secondary)
+
+.code-view-content
+  position: relative
+  min-width: 100%
+  width: max-content
+  margin: 0
+  font: inherit
+
+.code-view-line
+  position: absolute
+  top: 0
+  left: 0
+  height: 22px
+  white-space: pre
+
+.code-view-preview
+  box-sizing: border-box
+  overflow: clip
+
+  .code-view-content
+    width: 100%
+    overflow: clip
+
+  .code-view-line
+    position: static
+    display: block

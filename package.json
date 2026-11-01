@@ -93,6 +93,7 @@
     "@ark-ui/react": "5.36.0",
     "@fastify/static": "10.1.5",
     "@ffprobe-installer/ffprobe": "2.1.2",
+    "@fontsource/jetbrains-mono": "5.3.0",
     "@fontsource/source-sans-pro": "5.2.5",
     "@huggingface/inference": "4.13.30",
     "@openrouter/ai-sdk-provider": "3.1.0",
