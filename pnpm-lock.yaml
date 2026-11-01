@@ -62,6 +62,9 @@ importers:
       '@openrouter/ai-sdk-provider':
         specifier: 3.1.0
         version: 3.1.0(ai@7.0.143(zod@4.2.1))(zod@4.2.1)
+      '@pierre/highlights':
+        specifier: 0.3.0
+        version: 0.3.0
       '@segment/ajv-human-errors':
         specifier: 2.16.0
         version: 2.16.0(ajv@8.18.0)
@@ -1171,6 +1174,9 @@ packages:
   '@parcel/watcher@2.5.6':
     resolution: { integrity: sha512-tmmZ3lQxAe/k/+rNnXQRawJ4NjxO2hqiOLTHvWchtGZULp4RyFeh6aU4XdOYBFe2KE1oShQTv4AblOs2iOrNnQ== }
     engines: { node: '>= 10.0.0' }
+
+  '@pierre/highlights@0.3.0':
+    resolution: { integrity: sha512-s6xZ/giPPrSeCO2w254GiysUXD4ditKMTOrl1vHynvPqP7VdlujYi01O9joxJ0T16XkoXGQMN6zkRi9+O8NCzg== }
 
   '@pinojs/redact@0.4.0':
     resolution: { integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg== }
@@ -4988,6 +4994,8 @@ snapshots:
       '@parcel/watcher-win32-ia32': 2.5.6
       '@parcel/watcher-win32-x64': 2.5.6
     optional: true
+
+  '@pierre/highlights@0.3.0': {}
 
   '@pinojs/redact@0.4.0': {}
 

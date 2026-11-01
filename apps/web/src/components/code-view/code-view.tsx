@@ -2,7 +2,8 @@ import { useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { ScrollContainer } from '@/components/scroll-container'
-import { CODE_PREVIEW_LINES, MAXIMUM_CODE_LINE_CHARACTERS } from './code-highlight-types'
+import { useCodeHighlight } from './use-code-highlight'
+import { CODE_PREVIEW_LINES, MAXIMUM_CODE_LINE_CHARACTERS, type CodeToken } from './code-highlight-types'
 
 import '@fontsource/jetbrains-mono/latin-400.css'
 import './code-view.sass'
@@ -25,11 +26,29 @@ interface CodeRow {
   offset: number
 }
 
+function getRowTokens(row: CodeRow, tokens: CodeToken[][] | null): CodeToken[] | undefined {
+  const lineTokens = tokens?.[row.line]
+  if (!lineTokens) {
+    return undefined
+  }
+  let offset = 0
+
+  // Display chunks retain their source-line offsets; a long JSON string must
+  // not invalidate the highlighting of every other line in the document.
+  return lineTokens.flatMap((token) => {
+    const start = Math.max(0, row.offset - offset)
+    const end = Math.min(token.content.length, row.offset + row.text.length - offset)
+    offset += token.content.length
+
+    return end > start ? [{ ...token, content: token.content.slice(start, end) }] : []
+  })
+}
+
 /**
  * Renders only visible output lines, bounds pathological single-line payloads,
  * and follows live output only while its reader remains at the end.
  */
-export function CodeView({ text, label, active = false, preview = false, previewTail = false }: CodeViewProps) {
+export function CodeView({ text, label, language = 'text', active = false, preview = false, previewTail = false }: CodeViewProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const rows = useMemo(() => text.split('\n').flatMap((text, line) => {
@@ -40,6 +59,7 @@ export function CodeView({ text, label, active = false, preview = false, preview
 
     return chunks
   }), [text])
+  const tokens = useCodeHighlight(text, language)
   const virtualizer = useVirtualizer({
     count: rows.length,
     enabled: !preview,
@@ -56,7 +76,9 @@ export function CodeView({ text, label, active = false, preview = false, preview
   }, [text, active, preview])
 
   function renderRow(row: CodeRow) {
-    return row.text
+    return getRowTokens(row, tokens)?.map((token, index) => (
+      <span key={index} style={token.color ? { color: token.color } : undefined}>{token.content}</span>
+    )) ?? row.text
   }
 
   if (preview) {
