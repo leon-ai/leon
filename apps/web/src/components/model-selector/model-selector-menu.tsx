@@ -212,7 +212,7 @@ export function ModelSelectorMenu({
     }
 
     if (
-      event.key === 'ArrowLeft' &&
+      (event.key === 'ArrowLeft' || event.key === 'Backspace') &&
       query === '' && provider !== null
     ) {
       event.preventDefault()
