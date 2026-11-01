@@ -199,7 +199,12 @@
       height: 100%
 
 .tool-changes-preview
+  height: auto
+  max-height: calc(var(--code-preview-lines) * 22px + 80px)
   overflow: clip
+
+  .tool-diff
+    height: auto
 
 .tool-diff-preview-body
   flex: 1 1 auto
