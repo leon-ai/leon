@@ -89,6 +89,34 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+test('moves sidebar focus across virtual rows without opening a session until Enter', async ({ page, ui }) => {
+  for (let index = ui.sessions.length; index < 80; index++) {
+    const session = { ...ui.sessions[0]!, id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      title: `Test session ${index}` }
+    ui.sessions.push(session)
+    ui.history.set(session.id, [])
+  }
+  await page.goto(SESSION_URL)
+  const first = page.getByRole('link', { name: 'Test session 0', exact: true })
+  await first.focus()
+  await first.press('End')
+  const last = page.getByRole('link', { name: 'Test session 79', exact: true })
+  await expect(last).toBeFocused()
+  await expect(last).toBeVisible()
+  expect(await page.locator('.session-list-item').count()).toBeLessThan(40)
+  await last.press('Home')
+  await expect(first).toBeFocused()
+  await first.press('ArrowDown')
+  const second = page.getByRole('link', { name: 'Test session 1', exact: true })
+  await expect(second).toBeFocused()
+  await expect(page).toHaveURL(new RegExp(SESSION_ID))
+  await second.press('Shift+ArrowDown')
+  await expect(second).toBeFocused()
+  await second.press('Enter')
+  await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+})
+
 test('opens and navigates session action menus with arrows, boundaries and native activation', async ({ page, ui }) => {
   void ui
   await page.goto(SESSION_URL)
