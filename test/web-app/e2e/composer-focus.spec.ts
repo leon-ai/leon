@@ -395,19 +395,20 @@ test('lets a wheel gesture interrupt the fast return without pulling the owner b
   const scrollButton = page.getByRole('button', { name: 'Scroll to bottom', exact: true })
   await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 4_000 }))
   await expect(scrollButton).toBeVisible()
+  // Control the animation clock so the wheel gesture always arrives mid-scroll,
+  // independently of how long browser commands wait for a parallel worker.
+  const now = new Date()
+  await page.clock.install({ time: now })
+  await page.clock.pauseAt(new Date(now.getTime() + 10_000))
   await scrollButton.click()
+  await page.clock.runFor(32)
   expect(await main.evaluate((element) =>
     element.scrollHeight - element.clientHeight - element.scrollTop
   )).toBeGreaterThan(64)
   await page.mouse.wheel(0, -400)
-  const remaining = await main.evaluate(async (element) => {
-    // Observe beyond the animation's deadline; a cancelled target must not resume.
-    for (let frame = 0; frame < 20; frame++) {
-      await new Promise(requestAnimationFrame)
-    }
-
-    return element.scrollHeight - element.clientHeight - element.scrollTop
-  })
+  // Observe beyond the animation's deadline; a cancelled target must not resume.
+  await page.clock.runFor(1_000)
+  const remaining = await main.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)
   expect(remaining).toBeGreaterThan(64)
   await expect(scrollButton).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
