@@ -34,9 +34,11 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
   const [selectedTab, setSelectedTab] = useState<ToolDetailsTab | null>(null)
   const liveInput = useMemo(() => toToolInput(toolCall.input === null ? undefined : toolCall.input, true), [toolCall.input])
   const liveOutput = useMemo(() => toToolContent(toolCall.output, true), [toolCall.output])
+  const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, true), [toolCall.commandOutput])
   const input = liveInput ?? contents.data?.input
   const result = liveOutput ?? contents.data?.output
-  const output = contents.data?.displayOutput ?? result
+  const command = liveCommand ?? contents.data?.commandOutput ?? contents.data?.displayOutput
+  const output = command ?? result
   const active = toolCall.status === 'preparing' || toolCall.status === 'running'
   const tabs = [ToolDetailsTab.Input, ToolDetailsTab.Output]
   const tab = selectedTab ?? ToolDetailsTab.Output

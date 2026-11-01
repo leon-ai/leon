@@ -153,6 +153,7 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     preparationStartedAt: call.preparationStartedAt,
     ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }),
     input: call.input ?? null,
+    ...(call.commandOutput === undefined ? {} : { commandOutput: call.commandOutput }),
     ...(call.output === undefined && call.commandOutput === undefined && call.errorMessage === undefined
       ? {} : { output: call.output ?? call.commandOutput ?? call.errorMessage ?? null })
   }

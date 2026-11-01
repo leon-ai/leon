@@ -38,6 +38,7 @@ export interface FeedToolCall extends FeedActivityTime {
   durationMs?: number
   input: JsonValue
   output?: JsonValue
+  commandOutput?: string
 }
 
 /**

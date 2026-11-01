@@ -7,10 +7,10 @@ import { ActivityWave } from '@/components/activity-wave'
 import { Collapse } from '@/components/collapse'
 import { useToolCallContents } from '@/data/conversation-details'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
-import { toToolContent } from '@/utils/tool-content'
 import { Button } from '@/components/button'
-import { useOpenToolDetails } from './tool-details-provider'
+import { toToolContent } from '@/utils/tool-content'
 import { ToolOutput } from './tool-output'
+import { useOpenToolDetails } from './tool-details-provider'
 
 import './tool-call.sass'
 
@@ -54,7 +54,9 @@ export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const disclosure = useToolCallContents(toolCall.id, isExpanded)
   const liveOutput = useMemo(() => toToolContent(toolCall.output), [toolCall.output])
-  const output = disclosure.data?.displayOutput ?? liveOutput ?? disclosure.data?.output
+  const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, false, true), [toolCall.commandOutput])
+  const command = liveCommand ?? disclosure.data?.commandOutput ?? disclosure.data?.displayOutput
+  const output = command ?? liveOutput ?? disclosure.data?.output
   const detailsId = useId()
   const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
   const duration = isActive
@@ -71,7 +73,6 @@ export function ToolCall({ toolCall }: ToolCallProps) {
     toolCall.toolName,
     formatFunctionName(toolCall.functionName)
   ].join(' • ')
-
   const openDetails = useOpenToolDetails(toolCall, technicalTitle)
 
   return (
@@ -126,8 +127,9 @@ export function ToolCall({ toolCall }: ToolCallProps) {
           </div>
           {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
           <div className="tool-call-output-frame">
-            <ToolOutput content={output} label="Tool output" active={isActive}
-              loading={disclosure.isFetching} preview />
+              <ToolOutput content={output} label="Tool output" active={isActive}
+                loading={disclosure.isFetching} preview
+                previewTail={liveCommand !== undefined || disclosure.data?.commandOutput !== undefined} />
           </div>
         </div>
       </Collapse>
