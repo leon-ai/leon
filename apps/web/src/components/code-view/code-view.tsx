@@ -85,7 +85,7 @@ export function CodeView({ text, label, language = 'text', active = false, previ
     const visibleRows = previewTail ? rows.slice(-CODE_PREVIEW_LINES) : rows.slice(0, CODE_PREVIEW_LINES)
 
     return (
-      <div className="code-view code-view-preview code-view-viewport" role="region" aria-label={label}
+      <div className="code-view code-view-preview code-view-viewport" role="region" aria-label={label} tabIndex={0}
         style={{ '--code-preview-lines': CODE_PREVIEW_LINES } as CSSProperties}>
         <pre className="code-view-content"><code>
           {visibleRows.map((row) => (

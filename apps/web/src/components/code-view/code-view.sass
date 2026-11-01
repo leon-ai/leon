@@ -30,11 +30,10 @@
   box-sizing: border-box
   height: auto
   max-height: calc(var(--code-preview-lines) * 22px + var(--space-md) * 2)
-  overflow: clip
-
-  .code-view-content
-    width: 100%
-    overflow: clip
+  overflow-x: auto
+  overflow-y: hidden
+  scrollbar-width: thin
+  scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
 
   .code-view-line
     position: static

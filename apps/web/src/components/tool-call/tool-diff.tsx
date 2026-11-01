@@ -61,6 +61,13 @@ const DIFF_CSS = `:host {
   --diffs-fg-number-override: var(--color-text-tertiary);
 }`
 
+// Bound the native scrolling element itself so its horizontal scrollbar stays
+// reachable even when the recorded excerpt exceeds the preview's height.
+const DIFF_PREVIEW_CSS = `[data-code] {
+  max-height: calc(var(--code-preview-lines) * var(--diffs-line-height));
+  overflow-y: hidden;
+}`
+
 function excerpt(text: string): string {
   // Diff bounded context before clipping the viewport so change locations do
   // not depend on the preview's visible height.
@@ -96,13 +103,13 @@ export function ToolDiff({ changes, truncated = false, preview = false }: {
     diffStyle: split ? 'split' as const : 'unified' as const,
     diffIndicators: 'classic' as const,
     preferredHighlighter: canUseWASM() ? 'highlights' as const : 'shiki-js' as const,
-    theme: THEME_NAME, themeType: theme, unsafeCSS: DIFF_CSS,
+    theme: THEME_NAME, themeType: theme, unsafeCSS: preview ? `${DIFF_CSS}\n${DIFF_PREVIEW_CSS}` : DIFF_CSS,
     disableFileHeader: true, tokenizeMaxLength: MAXIMUM_DIFF_CHARACTERS,
     // Hunk rendering remains available for version-backed comparisons; tool
     // invocations show their recorded replacement context instead.
     expandUnchanged: view !== DiffView.Hunks,
     hunkSeparators: view === DiffView.Hunks ? 'metadata' as const : 'simple' as const
-  }), [split, theme, view])
+  }), [split, theme, view, preview])
 
   useEffect(() => {
     viewers++

@@ -1,6 +1,6 @@
 import type { Locator, Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
-import type { ConversationPage } from '../../../apps/web/src/data/conversation'
+import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
@@ -53,6 +53,66 @@ test('reveals conversation loading only after one second and cancels it on navig
   release()
   await page.clock.resume()
   await expect(loading).toHaveCount(0)
+})
+
+test('bounds inline output, virtualizes complete logs, and retains the inspector when work finishes', async ({ page, ui }, testInfo) => {
+  expect(page.workers()).toHaveLength(0)
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  const tool: ConversationTool = { id: 'large-log', name: 'test.shell.run', toolCallTitle: 'Inspect the logs',
+    status: 'running', input: { command: 'read logs' },
+    commandOutput: Array.from({ length: 12_000 }, (_, index) => `Log line ${index}`).join('\n'),
+    output: { running: true } }
+  answer.message = ''
+  answer.isAddedToHistory = false
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [tool] }
+  ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Inspect the logs', exact: true }).click()
+  const preview = page.getByLabel('Tool output', { exact: true })
+  await expect(preview).toContainText('Log line')
+  await expect(preview).not.toContainText('Log line 0')
+  await expect(preview).toContainText('Log line 11999')
+  expect(ui.requests.some((url) => url.searchParams.get('complete') === 'true')).toBe(false)
+  expect(await preview.locator('.code-view-line').count()).toBe(16)
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeGreaterThan(300)
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(376)
+  expect(await preview.evaluate((element) => getComputedStyle(element).overflowY)).toBe('hidden')
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Inspect the logs', exact: true })
+  await expect(dialog.locator('.tool-details-output-size')).toHaveCount(0)
+  await expect(dialog.locator('.dialog-footer')).not.toContainText('characters')
+  const output = dialog.getByLabel('Output JSON', { exact: true })
+  await expect(output).toContainText('Log line')
+  await dialog.getByRole('tab', { name: 'Input', exact: true }).click()
+  await expect(dialog.getByLabel('Input JSON', { exact: true })).toContainText('read logs')
+  await expect(output).toHaveCount(0)
+  await dialog.getByRole('tab', { name: 'Output', exact: true }).click()
+  await expect(dialog.locator('.scroll-container-viewport')).toHaveCount(1)
+  await output.evaluate((element) => { element.scrollTop = 0 })
+  await expect(output).toContainText('Log line 0')
+  await output.evaluate((element) => { element.scrollTop = element.scrollHeight })
+  await expect(output).toContainText('Log line 11999')
+  expect(await output.locator('.code-view-line').count()).toBeLessThan(40)
+  tool.status = 'success'
+  tool.durationMs = 4_000
+  await ui.emit([{ type: 'tool_call', sequence: 1, session_id: SESSION_ID, turn_id: 'owner',
+    response_id: answer.messageId, created_at: Date.now(),
+    data: { tool_call: { id: tool.id, name: tool.name, status: 'success', duration_ms: 4_000 } } }])
+  await expect(dialog).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Used 1 tool for 4s', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await testInfo.attach('complete-tool-output', { body: await dialog.screenshot(), contentType: 'image/png' })
+  const downloadEvent = page.waitForEvent('download')
+  const downloadButton = dialog.getByRole('button', { name: 'Download output', exact: true })
+  await expect(downloadButton.locator('.button-label')).toHaveCount(0)
+  await downloadButton.hover()
+  await expect(page.locator('.tooltip-content-open')).toHaveText('Download output')
+  await downloadButton.click()
+  const download = await downloadEvent
+  expect(download.suggestedFilename()).toBe('tool-output.txt')
+  expect(await download.failure()).toBeNull()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect.poll(() => page.workers().length).toBe(0)
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -133,6 +193,121 @@ for (const active of [false, true]) {
     await expect(list.getByLabel('Tool output', { exact: true })).toContainText('Result 127')
   })
 }
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`keeps the feed as the only vertical scroll area (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.message = Array.from({ length: 60 }, (_, index) => `Answer paragraph ${index}.`).join('\n\n')
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      toolCalls: Array.from({ length: 16 }, (_, index) => ({
+        id: `scroll-${index}`, name: 'test.inspect', toolCallTitle: `Inspect section ${index}`, status: 'success',
+        output: Array.from({ length: 200 }, (_, line) => `Output line ${line} ${'detail '.repeat(80)}`).join('\n')
+      }))
+    }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 16 tools', exact: true }).click()
+    await page.getByRole('button', { name: 'Inspect section 0', exact: true }).click()
+    const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+    const firstOutput = tools.getByRole('region', { name: 'Tool output', exact: true }).first()
+    const main = page.locator('.app-main')
+
+    await finishFiniteAnimations(page.locator('.feed'))
+    await firstOutput.scrollIntoViewIfNeeded()
+    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    expect(await firstOutput.locator('.code-view-line').count()).toBeLessThanOrEqual(16)
+    await firstOutput.hover()
+    const mainTop = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(400, 0)
+    await expect.poll(() => firstOutput.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+    expect(await main.evaluate((element) => element.scrollTop)).toBe(mainTop)
+    await page.mouse.wheel(0, 120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeGreaterThan(mainTop)
+
+    await firstOutput.scrollIntoViewIfNeeded()
+    await firstOutput.hover()
+    const beforeUp = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(0, -120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(beforeUp)
+
+    await page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true }).click()
+    const menuViewport = page.locator('.dropdown-content .scroll-container-viewport')
+    await expect(menuViewport).toBeVisible()
+    expect(await menuViewport.evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe('contain')
+  })
+}
+
+test('highlights session JSON with long output strings in previews and the tabbed inspector', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = {
+    id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+      id: 'session-output', name: 'operating_system_control.shell.readSession', toolCallTitle: 'Read the command session',
+      status: 'success', input: { sessionId: 'command-session' },
+      output: { result: { success: true, data: {
+        sessionId: 'command-session', running: false, exitCode: 0, output: 'A shell output line.\n'.repeat(250)
+      } } }
+    }]
+  }
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+  await page.getByRole('button', { name: 'Read the command session', exact: true }).click()
+  const preview = page.getByRole('region', { name: 'Tool output', exact: true })
+  await expect.poll(() => preview.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
+  await expect(preview).toContainText('command-session')
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Read the command session', exact: true })
+  const output = dialog.getByRole('region', { name: 'Output JSON', exact: true })
+  await expect.poll(() => output.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
+  await expect(dialog.locator('.scroll-container-viewport')).toHaveCount(1)
+  const outputTab = dialog.getByRole('tab', { name: 'Output', exact: true })
+  await outputTab.focus()
+  await outputTab.press('ArrowLeft')
+  await expect(dialog.getByRole('tab', { name: 'Input', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(dialog.getByRole('region', { name: 'Input JSON', exact: true })).toContainText('command-session')
+  await expect(output).toHaveCount(0)
+  await page.keyboard.press('ArrowRight')
+  await expect(outputTab).toHaveAttribute('aria-selected', 'true')
+  await expect(output).toContainText('A shell output line.')
+})
+
+test('shows native file-read content as code without exposing its result envelope', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  const content = `export const greeting = "${'Hello '.repeat(100)}"\n`
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+    id: 'source', name: 'file_system.file.read', toolCallTitle: 'Read source file', status: 'success', durationMs: 84,
+    input: JSON.stringify({ path: 'greeting.ts' }), output: { result: { success: true,
+      data: { path: 'greeting.ts', content, contentHash: 'hash', truncated: false } } }
+  }] }
+  await page.goto(SESSION_URL)
+  expect(page.workers()).toHaveLength(0)
+  expect(await page.evaluate(() => performance.getEntriesByType('resource').some((entry) => entry.name.includes('jetbrains-mono')))).toBe(false)
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool for 84ms', exact: true }).click()
+  const trigger = page.getByRole('button', { name: 'Read source file' })
+  await trigger.click()
+  const output = page.getByLabel('Tool output', { exact: true })
+  await expect(output).toContainText(content.trim())
+  expect(await output.evaluate((element) => element.clientHeight)).toBeLessThan(200)
+  await output.focus()
+  await output.press('ArrowRight')
+  await expect.poll(() => output.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+  await expect(output).not.toContainText('contentHash')
+  await expect.poll(() => output.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
+  expect(await output.evaluate((element) => getComputedStyle(element).fontFamily)).toContain('JetBrains Mono')
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Read source file', exact: true })
+  await expect(dialog.getByLabel('Output JSON', { exact: true })).toContainText(content.trim())
+  await expect(dialog.getByLabel('Output JSON', { exact: true })).not.toContainText('contentHash')
+  await expect(dialog.getByRole('button', { name: 'Structured result', exact: true })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: 'Formatted output', exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await trigger.click()
+  await expect.poll(() => page.workers().length).toBe(0)
+})
 
 for (const width of [1_512, 390]) {
   test(`defaults to inline diffs with accessible layout controls and raw input/output (${width})`, async ({ page, ui }, testInfo) => {
@@ -238,6 +413,64 @@ for (const width of [1_512, 390]) {
     })
   })
 }
+
+test('bounds long diff previews and retains recorded context in both inspector layouts', async ({ page, ui }) => {
+  const before = Array.from({ length: 60 }, (_, index) => `const marker${index} = ${index};`)
+  before[0] = `const description = "${'Context '.repeat(100)}";`
+  const after = [...before]
+  after[10] = 'const marker10 = 100;'
+  after[45] = 'const marker45 = 450;'
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = {
+    id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+      id: 'context-edit', name: 'file_system.file.patch', toolCallTitle: 'Update both markers', status: 'success',
+      input: JSON.stringify({ path: 'markers.ts', changes: [{ oldText: before.join('\n'), newText: after.join('\n') }] }),
+      output: { result: { success: true, data: { changed: true, diff: '-marker10 = 10\n+marker10 = 100' } } }
+    }]
+  }
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+  await page.getByRole('button', { name: 'Update both markers', exact: true }).click()
+  const preview = page.locator('.tool-changes-preview')
+  const previewCode = preview.locator('[data-code]').first()
+  await expect(previewCode).toBeVisible()
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(432)
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeGreaterThan(300)
+  await previewCode.hover()
+  await page.mouse.wheel(400, 0)
+  await expect.poll(() => previewCode.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+  const previewBounds = (await preview.boundingBox())!
+  const codeBounds = (await previewCode.boundingBox())!
+  expect(codeBounds.y + codeBounds.height).toBeLessThanOrEqual(previewBounds.y + previewBounds.height)
+  const main = page.locator('.app-main')
+  const mainTop = await main.evaluate((element) => element.scrollTop)
+  await page.mouse.wheel(0, -120)
+  await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(mainTop)
+  expect(await previewCode.evaluate((element) => element.scrollTop)).toBe(0)
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Update both markers', exact: true })
+  const diff = dialog.locator('.tool-diff')
+  const text = (): Promise<string> => diff.evaluate((element) =>
+    element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? '')
+  await expect.poll(text).toContain('marker30')
+  const controls = diff.getByRole('group', { name: 'Diff view', exact: true })
+  const inline = controls.getByRole('button', { name: 'Inline view', exact: true })
+  const split = controls.getByRole('button', { name: 'Split view', exact: true })
+  expect(await controls.locator('.ri-list-check').evaluateAll((icons) =>
+    icons.every((icon) => getComputedStyle(icon, '::before').content !== 'none'))).toBe(true)
+  await expect.poll(text).toContain('marker10')
+  await expect.poll(text).toContain('marker45')
+  await split.click()
+  await expect(split).toHaveAttribute('aria-pressed', 'true')
+  await expect(diff).toHaveAttribute('data-diff-style', 'split')
+  await expect.poll(text).toContain('marker30')
+  await inline.press('Enter')
+  await expect(inline).toHaveAttribute('aria-pressed', 'true')
+  await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+  await expect.poll(text).toContain('marker30')
+  await expect(controls.getByRole('button')).toHaveCount(2)
+})
 
 for (const wasm of [true, false]) {
   test(`keeps file diffs readable outside the JavaScript grammar catalog (Wasm: ${wasm})`, async ({ page, ui }) => {
