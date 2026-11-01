@@ -1,10 +1,12 @@
 import {
+  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
   type Ref
 } from 'react'
 import { observeElementOffset, useVirtualizer } from '@tanstack/react-virtual'
@@ -99,11 +101,18 @@ export function Feed({
   const topMaskRef = useRef<HTMLDivElement>(null)
   const scrollToBottomVisibleRef = useRef(false)
   const requestedHistoryRef = useRef(false)
+  const inspectingDetailsRef = useRef(false)
+  const [isInspectingDetails, setIsInspectingDetails] = useState(false)
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
   const fastScroll = useMemo(createFastScrollDriver, [])
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const turnCount = turns.length
   const historyRef = useRef(history)
+  const resumeFollowing = useCallback((): void => {
+    inspectingDetailsRef.current = false
+    setIsInspectingDetails(false)
+  }, [])
+
   useLayoutEffect(() => {
     // The virtualizer keeps its offset subscription for the scroll element's
     // lifetime; page completions must reach that subscription without rebinding it.
@@ -120,13 +129,21 @@ export function Feed({
     getItemKey: (index) => turns[index]?.id ?? index,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
     overscan: FEED_OVERSCAN_COUNT,
-    anchorTo: 'end',
+    // Manual disclosures grow below their headings. History prepends and new
+    // turns retain TanStack's key-preserving end anchor.
+    anchorTo: isInspectingDetails && previousFirstTurnRef.current === turns[0]?.id &&
+      previousTurnCountRef.current === turnCount ? 'start' : 'end',
     // ResizeObserver already runs before paint. Deferring it another frame
     // lets streamed content outgrow the virtual height and scroll anchor.
     useAnimationFrameWithResizeObserver: false,
     observeElementOffset: (instance, onOffsetChange) =>
       observeElementOffset(instance, (offset, isScrolling) => {
         onOffsetChange(offset, isScrolling)
+        if (inspectingDetailsRef.current && isScrolling &&
+          instance.scrollDirection === 'forward' && instance.isAtEnd(SCROLL_POSITION_TOLERANCE_PX)) {
+          resumeFollowing()
+        }
+
         const currentHistory = historyRef.current
         if (
           currentHistory?.canLoad && isScrolling &&
@@ -151,6 +168,17 @@ export function Feed({
   })
   const totalSize = virtualizer.getTotalSize()
 
+  function handleDisclosureClick(event: MouseEvent<HTMLElement>): void {
+    if (!(event.target instanceof Element) || !event.target.closest('button[aria-expanded]')) {
+      return
+    }
+
+    fastScroll.cancel()
+    virtualizer.cancelScroll()
+    inspectingDetailsRef.current = true
+    setIsInspectingDetails(true)
+  }
+
   useEffect(() => {
     const scroller = virtualizer.scrollElement
     if (!history?.canLoad || history.isLoading || history.isError || !scroller ||
@@ -167,6 +195,7 @@ export function Feed({
 
   useImperativeHandle(ref, () => ({
     scrollToBottom: () => {
+      resumeFollowing()
       fastScroll.cancel()
       virtualizer.scrollToEnd({
         behavior: window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
@@ -174,9 +203,15 @@ export function Feed({
           : 'smooth'
       })
     }
-  }), [fastScroll, virtualizer])
+  }), [fastScroll, virtualizer, resumeFollowing])
 
   useLayoutEffect(() => {
+    if (isInspectingDetails && !scrollToBottomVisibleRef.current &&
+      !virtualizer.isAtEnd(SCROLL_TO_BOTTOM_THRESHOLD_PX)) {
+      scrollToBottomVisibleRef.current = true
+      setIsScrollToBottomVisible(true)
+    }
+
     // Disclosure resizing can reach the end without emitting a scroll event.
     if (
       scrollToBottomVisibleRef.current &&
@@ -278,6 +313,7 @@ export function Feed({
     const isInitialPosition = previousTurnCount === null
     const latestTurnIndex = turnCount - 1
     previousTurnCountRef.current = turnCount
+    resumeFollowing()
 
     if (isInitialPosition) {
       virtualizer.scrollToEnd({ behavior: 'auto' })
@@ -428,14 +464,14 @@ export function Feed({
         window.clearTimeout(scrollSettleTimeout)
       }
     }
-  }, [turnCount, fastScroll, virtualizer])
+  }, [turnCount, fastScroll, virtualizer, resumeFollowing])
 
   return (
     <FeedAnimationProvider live={Boolean(sessionId)} {...(historicalIds ? { historicalIds } : {})}>
       <ToolDetailsProvider entries={entries} sessionId={sessionId}>
         <section ref={feedRef} className={clsx('feed', {
           'feed-with-history': history?.canLoad || requestedHistoryRef.current
-        })} aria-label="Session messages">
+        })} aria-label="Session messages" onClickCapture={handleDisclosureClick}>
           <div
             ref={scrimRef}
             className="feed-scrim"

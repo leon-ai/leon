@@ -1,4 +1,4 @@
-import type { Page, Route } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import type { ConversationPage } from '../../../apps/web/src/data/conversation'
 
@@ -9,6 +9,28 @@ async function expectBottom(page: Page): Promise<void> {
     Math.abs(main.scrollHeight - main.clientHeight - main.scrollTop)
   )).toBeLessThanOrEqual(2)
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+}
+
+/**
+ * Samples a disclosure heading through its finite motion, including late
+ * virtual measurements, so a brief upward jump cannot pass a settled assertion.
+ */
+function recordDisclosurePositions(trigger: Locator): Promise<number[]> {
+  return trigger.evaluate(async (element) => {
+    const positions: number[] = []
+    let settledFrames = 0
+    const maximumFrames = 120
+    for (let frame = 0; frame < maximumFrames && settledFrames < 3; frame++) {
+      await new Promise(requestAnimationFrame)
+      positions.push(element.isConnected ? element.getBoundingClientRect().top : NaN)
+      const animating = element.closest('.feed')?.getAnimations({ subtree: true }).some((animation) =>
+        animation.playState === 'running' && animation.effect?.getComputedTiming().iterations !== Infinity
+      )
+      settledFrames = element.getAttribute('aria-expanded') === 'true' && !animating ? settledFrames + 1 : 0
+    }
+
+    return positions
+  })
 }
 
 test('reveals conversation loading only after one second and cancels it on navigation', async ({ page, ui }) => {
@@ -32,6 +54,47 @@ test('reveals conversation loading only after one second and cancels it on navig
   await page.clock.resume()
   await expect(loading).toHaveCount(0)
 })
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`expands large groups downward without moving their headings (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      reasoning: Array.from({ length: 32 }, (_, index) => ({
+        id: `thought-${index}`, text: `Consider part ${index}.`, phase: 'agent', startedAt: index + 1
+      })),
+      toolCalls: Array.from({ length: 128 }, (_, index) => ({
+        id: `expand-${index}`, name: 'test.inspect', toolCallTitle: `Inspect part ${index}`,
+        status: 'success', output: `Part ${index}`
+      }))
+    }
+    await page.goto(SESSION_URL)
+    await expectBottom(page)
+    const work = page.getByRole('button', { name: 'Worked for 2s', exact: true })
+    const workTop = (await work.boundingBox())!.y
+    const workPositions = recordDisclosurePositions(work)
+    await work.click()
+    expect(Math.max(...(await workPositions).map((top) => Math.abs(top - workTop)))).toBeLessThan(2)
+    await finishFiniteAnimations(page.locator('.feed'))
+    const group = page.getByRole('button', { name: 'Used 128 tools', exact: true })
+    await group.evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
+    const groupTop = (await group.boundingBox())!.y
+    const groupPositions = recordDisclosurePositions(group)
+    await group.click()
+    expect(Math.max(...(await groupPositions).map((top) => Math.abs(top - groupTop)))).toBeLessThan(2)
+    await expect(page.getByRole('button', { name: 'Inspect part 0', exact: true })).toBeVisible()
+    const leaf = page.getByRole('button', { name: 'Inspect part 0', exact: true })
+    await leaf.focus()
+    const leafTop = (await leaf.boundingBox())!.y
+    const leafPositions = recordDisclosurePositions(leaf)
+    await leaf.press('Enter')
+    expect(Math.max(...(await leafPositions).map((top) => Math.abs(top - leafTop)))).toBeLessThan(2)
+    await expect(page.getByRole('region', { name: 'Tool output', exact: true })).toContainText('Part 0')
+    await page.getByRole('button', { name: 'Scroll to bottom', exact: true }).click()
+    await expectBottom(page)
+  })
+}
 
 for (const active of [false, true]) {
   test(`virtualizes long tool groups against the conversation viewport (active: ${active})`, async ({ page, ui }) => {
