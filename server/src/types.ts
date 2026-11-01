@@ -201,7 +201,7 @@ export interface AgentResponseTrace {
   timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
   id?: string
   inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' | 'review' })[]
-  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null }[]
+  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null, iconName?: string }[]
   reasoning?: {
     id: string
     text: string

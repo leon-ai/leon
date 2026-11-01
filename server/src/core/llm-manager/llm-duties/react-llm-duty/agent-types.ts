@@ -20,7 +20,7 @@ export type AgentRunProgressEvent =
     }
   | {
       type: 'progress_message'
-      message: { id: string, content: string, createdAt: number, planStepId?: string | null }
+      message: { id: string, content: string, createdAt: number, planStepId?: string | null, iconName?: string }
     }
   | {
       type: 'reasoning_summary'

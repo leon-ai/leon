@@ -259,6 +259,19 @@ function renderActivity(activity: LeonFeedActivity) {
   }
 
   if (activity.type === 'summary') {
+    if (activity.iconName) {
+      return (
+        <ProcessGroup
+          key={activity.id}
+          active={false}
+          activeLabel={activity.content}
+          completedLabel={activity.content}
+          ariaLabel="Leon’s activity"
+          startedAt={activity.startedAt}
+          indicator={<i className={`ri-${activity.iconName}`} aria-hidden="true" />}
+        />
+      )
+    }
     return (
       <p key={activity.id} className="leon-message-summary">
         <StreamingText

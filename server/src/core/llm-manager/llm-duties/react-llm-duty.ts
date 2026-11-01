@@ -59,6 +59,7 @@ const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
 const IMAGE_INSPECTION_REASONING_EFFORT: LLMReasoningEffort = 'low'
 const COMPLETION_REVIEW_REASONING_EFFORT: LLMReasoningEffort = 'low'
 const CLARIFICATION_REVIEW_REASONING_EFFORT: LLMReasoningEffort = 'low'
+const SKILL_ACTIVITY_ICON_NAME = 'book-ai-line'
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentTarget().provider
@@ -166,6 +167,11 @@ const TOOL_REQUEST_GOALS: ReadonlyMap<string, TurnPhase> = new Map([
   [CONNECTION_SETUP_TOOL_NAME, TurnPhase.Connection]
 ])
 
+enum SkillActivityStatus {
+  Loaded = 'loaded',
+  InUse = 'in-use'
+}
+
 /**
  * Describes the returned actions without inventing separate model requests.
  * Mixed-purpose batches retain a neutral label rather than claiming one goal.
@@ -194,30 +200,6 @@ const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
   'max_output_tokens',
   'incomplete'
 ])
-
-function emitAgentSkillActivityToWebApp(
-  agentSkillContext: AgentSkillContext
-): void {
-  const skillGroupId =
-    `agent_skill_${agentSkillContext.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-
-  SOCKET_SERVER.emitAnswerToChatClients({
-    answer: `Using Agent Skill: ${agentSkillContext.name}\nFollowing: ${agentSkillContext.skillPath}`,
-    isToolOutput: true,
-    toolDisplayMode: 'activity_card',
-    activityType: 'agent_skill',
-    status: 'selected',
-    toolGroupId: skillGroupId,
-    key: `agent_skill.${agentSkillContext.id}.selected`,
-    agentSkill: {
-      id: agentSkillContext.id,
-      name: agentSkillContext.name,
-      description: agentSkillContext.description,
-      rootPath: agentSkillContext.rootPath,
-      skillPath: agentSkillContext.skillPath
-    }
-  })
-}
 
 export class ReActLLMDuty extends LLMDuty {
   private static instance: ReActLLMDuty
@@ -277,6 +259,7 @@ export class ReActLLMDuty extends LLMDuty {
   private activeAgentSkillContext: AgentSkillContext | null
   private readonly experienceTaskId = randomUUID()
   private readonly activeExperiences = new Map<string, AgentSkillContext>()
+  private readonly skillActivities = new Map<string, { createdAt: number, status: SkillActivityStatus }>()
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
@@ -423,7 +406,6 @@ export class ReActLLMDuty extends LLMDuty {
         continuation?.trackedSteps.map((step) => ({ ...step })) || []
       let hasPlanningWidget = trackedSteps.length > 0
       const executionHistory: ExecutionRecord[] = []
-      let emittedAgentSkillActivityId: string | null = null
       const caller = this.createLLMCaller()
       if (continuation?.activeSkillId) {
         const skill = continuation.activeSkillId.startsWith(EXPERIENCE_PREFIX)
@@ -444,21 +426,12 @@ export class ReActLLMDuty extends LLMDuty {
           const context = EXPERIENCE_MANAGER.load(String(entry.id), this.experienceTaskId)
           if (context) {
             this.activeExperiences.set(context.id, context)
+            await this.emitSkillActivity(context, SkillActivityStatus.Loaded)
           }
         }
       }
-      const emitActiveAgentSkillActivity = (): void => {
-        const activeAgentSkillContext = caller.agentSkillContext
-
-        if (
-          !activeAgentSkillContext ||
-          emittedAgentSkillActivityId === activeAgentSkillContext.id
-        ) {
-          return
-        }
-
-        emitAgentSkillActivityToWebApp(activeAgentSkillContext)
-        emittedAgentSkillActivityId = activeAgentSkillContext.id
+      if (caller.agentSkillContext) {
+        await this.emitSkillActivity(caller.agentSkillContext, SkillActivityStatus.Loaded)
       }
       const finalize = (
         answer: string,
@@ -756,6 +729,7 @@ export class ReActLLMDuty extends LLMDuty {
           )
         },
         executeFunction: async (callable, toolInput, toolCallTitle, toolCallId) => {
+          const activeSkill = caller.agentSkillContext
           const preview = toolCallId ? this.streamedToolCalls.get(toolCallId) : undefined
           if (toolCallId) {
             this.streamedToolCalls.delete(toolCallId)
@@ -789,8 +763,13 @@ export class ReActLLMDuty extends LLMDuty {
             preview?.groupId
           )
 
+          if (activeSkill && !activeSkill.id.startsWith(EXPERIENCE_PREFIX)) {
+            await this.emitSkillActivity(activeSkill, SkillActivityStatus.InUse)
+          }
           for (const experience of this.activeExperiences.values()) {
-            EXPERIENCE_MANAGER.recordUse(experience.id, this.experienceTaskId, callable.qualifiedName)
+            if (EXPERIENCE_MANAGER.recordUse(experience.id, this.experienceTaskId, callable.qualifiedName)) {
+              await this.emitSkillActivity(experience, SkillActivityStatus.InUse)
+            }
           }
           return toolResult
         },
@@ -806,10 +785,11 @@ export class ReActLLMDuty extends LLMDuty {
               return
             }
             this.activeExperiences.set(context.id, context)
+            await this.emitSkillActivity(context, SkillActivityStatus.Loaded)
             return
           }
           caller.setAgentSkillContext(context)
-          emitActiveAgentSkillActivity()
+          await this.emitSkillActivity(context, SkillActivityStatus.Loaded)
         },
         onProgressMessage: async (message) => {
           // Existing hosts display reasoning_summary as a public activity summary.
@@ -2269,21 +2249,50 @@ export class ReActLLMDuty extends LLMDuty {
     )
   }
 
+  /**
+   * Keep one persistent activity per skill, preserving its origin and first load time.
+   */
+  private async emitSkillActivity(
+    skill: AgentSkillContext,
+    status: SkillActivityStatus
+  ): Promise<void> {
+    const previous = this.skillActivities.get(skill.id)
+    // Reloading guidance must not duplicate or downgrade an already-used item.
+    if (previous && (status === SkillActivityStatus.Loaded || previous.status === status)) {
+      return
+    }
+    const createdAt = previous?.createdAt ?? Date.now()
+    this.skillActivities.set(skill.id, { createdAt, status })
+    const isExperience = skill.id.startsWith(EXPERIENCE_PREFIX)
+    const label = isExperience ? 'an experience' : 'an agent skill'
+    const prefix = isExperience ? 'experience-activity' : 'agent-skill-activity'
+
+    await this.emitProgress(
+      status === SkillActivityStatus.Loaded
+        ? `I loaded ${label}: ${skill.name}.`
+        : `I'm using ${label}: ${skill.name}.`,
+      null,
+      { id: `${prefix}:${this.experienceTaskId}:${skill.id}`, createdAt, iconName: SKILL_ACTIVITY_ICON_NAME }
+    )
+  }
+
   private async emitProgress(
     message: string,
-    generationId: string | null = null
+    generationId: string | null = null,
+    activity?: { id: string, createdAt: number, iconName?: string }
   ): Promise<void> {
     if (!message) {
       return
     }
 
-    const id = `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`
-    const createdAt = Date.now()
+    const id = activity?.id ?? `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`
+    const createdAt = activity?.createdAt ?? Date.now()
 
     // Hosts receive the same non-final message as the built-in chat client.
     this.reportProgressEvent({
       type: 'progress_message',
-      message: { id, content: message, createdAt }
+      message: { id, content: message, createdAt,
+        ...(activity?.iconName ? { iconName: activity.iconName } : {}) }
     })
     try {
       SOCKET_SERVER.emitAnswerToChatClients({

@@ -39,7 +39,7 @@ export interface ConversationTrace {
   id?: string
   reasoningSummary?: string
   reasoning?: { id: string, text: string, phase: string, startedAt: number, planStepId?: string | null }[]
-  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null }[]
+  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null, iconName?: string }[]
   planSteps: { id: string, label: string, status: FeedPlanStepStatus }[]
   planTransitions?: { id: string, label: string, status: FeedPlanStepStatus, changedAt: number }[]
   toolCalls: ConversationTool[]

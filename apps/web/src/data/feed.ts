@@ -70,6 +70,7 @@ export interface FeedSummaryActivity extends FeedActivityTime {
   id: string
   type: 'summary'
   content: string
+  iconName?: string
 }
 
 export interface FeedPlanActivity extends FeedActivityTime {

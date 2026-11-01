@@ -203,6 +203,7 @@ function toActivities(
   for (const message of trace.progressMessages ?? []) {
     items.push({ timestamp: message.createdAt, activity: {
       id: message.id, type: 'summary', content: message.content, startedAt: message.createdAt,
+      ...(message.iconName ? { iconName: message.iconName } : {}),
       planStepId: message.planStepId
     } })
   }

@@ -814,7 +814,7 @@ describe('HTTP plugin Leon services', () => {
       ) => void
       onProgress({
         type: 'progress_message',
-        message: { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }
+        message: { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000, iconName: 'book-ai-line' }
       })
       onProgress({
         type: 'tool_call',
@@ -845,7 +845,7 @@ describe('HTTP plugin Leon services', () => {
       (event) => events.push(event)
     )
     unsubscribe()
-    const progress = { id: 'progress-1', content: 'Inspecting the issue.', created_at: 1_000 }
+    const progress = { id: 'progress-1', content: 'Inspecting the issue.', created_at: 1_000, icon_name: 'book-ai-line' }
     expect(events.find((event) => event['type'] === 'progress_message')).toMatchObject({
       turn_id: 'turn-1', response_id: 'turn-1:leon', data: { message: progress }
     })
