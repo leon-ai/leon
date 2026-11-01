@@ -33,6 +33,44 @@ test('reveals conversation loading only after one second and cancels it on navig
   await expect(loading).toHaveCount(0)
 })
 
+for (const active of [false, true]) {
+  test(`virtualizes long tool groups against the conversation viewport (active: ${active})`, async ({ page, ui }) => {
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    if (active) {
+      answer.isAddedToHistory = false
+      answer.message = ''
+      ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+    }
+    answer.agentResponseTrace = { id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      toolCalls: Array.from({ length: 128 }, (_, index) => ({ id: `tool-${index}`, name: 'test.inspect',
+        toolCallTitle: `Inspect item ${index}`, status: active && index === 127 ? 'running' : 'success', output: `Result ${index}` })) }
+    await page.goto(SESSION_URL)
+    if (!active) {
+      await page.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+      await page.getByRole('button', { name: 'Used 128 tools', exact: true }).click()
+    }
+    const list = page.getByRole('region', { name: 'Tool calls', exact: true })
+    const main = page.locator('.app-main')
+    await expect(list).toBeAttached()
+    await finishFiniteAnimations(page.locator('.feed'))
+    await main.evaluate((element) => {
+      const list = element.querySelector('[aria-label="Tool calls"]')!
+      element.scrollTop += list.getBoundingClientRect().top - element.getBoundingClientRect().top - 64
+    })
+    await expect(list.getByRole('button', { name: 'Inspect item 0', exact: true })).toBeVisible()
+    expect(await list.locator('.tool-call').count()).toBeLessThan(50)
+    expect(await list.evaluate((element) => element.clientHeight)).toBeGreaterThan(360)
+    await main.evaluate((element) => {
+      const list = element.querySelector('[aria-label="Tool calls"]')!
+      element.scrollTop += list.getBoundingClientRect().bottom - element.getBoundingClientRect().top - element.clientHeight / 2
+    })
+    await expect(list.getByRole('button', { name: 'Inspect item 127', exact: true })).toBeVisible()
+    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    await list.getByRole('button', { name: 'Inspect item 127', exact: true }).click()
+    await expect(list.getByLabel('Tool output', { exact: true })).toContainText('Result 127')
+  })
+}
+
 for (const wasm of [true, false]) {
   test(`keeps file diffs readable outside the JavaScript grammar catalog (Wasm: ${wasm})`, async ({ page, ui }) => {
     if (!wasm) {

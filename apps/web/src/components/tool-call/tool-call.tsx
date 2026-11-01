@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useState, type CSSProperties, type Ref } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '@/data/feed'
@@ -17,6 +17,9 @@ import './tool-call.sass'
 
 interface ToolCallProps {
   toolCall: FeedToolCall
+  measureRef?: Ref<HTMLElement>
+  rowIndex?: number
+  style?: CSSProperties
 }
 
 function formatFunctionName(functionName: string): string {
@@ -51,7 +54,7 @@ function formatFunctionName(functionName: string): string {
 /**
  * Shows a tool invocation, its execution state, and expandable input and output.
  */
-export function ToolCall({ toolCall }: ToolCallProps) {
+export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const disclosure = useToolCallContents(toolCall.id, isExpanded)
   const liveOutput = useMemo(() => toToolContent(toolCall.output), [toolCall.output])
@@ -81,7 +84,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
   const openDetails = useOpenToolDetails(toolCall, technicalTitle)
 
   return (
-    <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
+    <section ref={measureRef} data-index={rowIndex} style={style} className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
       <div className="tool-call-heading" onClick={forwardTimestampClickToDisclosure}>
         <button
           type="button"
