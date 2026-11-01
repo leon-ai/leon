@@ -22,12 +22,14 @@ import {
   TOOLKIT_REGISTRY,
   CONTEXT_MANAGER,
   SELF_MODEL_MANAGER,
+  EXPERIENCE_MANAGER,
   MEMORY_MANAGER,
   CONVERSATION_LOGGER,
   SOCKET_SERVER,
   TOOL_CALL_LOGGER
 } from '@/core'
 import { scheduleHistoryCompaction } from '@/core/turn-lifecycle/post-turn'
+import { createExperienceSearchTool, EXPERIENCE_PREFIX } from '@/core/experience-manager'
 import {
   LLMDuties,
   LLMProviders,
@@ -273,6 +275,8 @@ export class ReActLLMDuty extends LLMDuty {
   private traceSaveTimer: ReturnType<typeof setTimeout> | null = null
   private persistResponseTrace: (() => Promise<void>) | null = null
   private activeAgentSkillContext: AgentSkillContext | null
+  private readonly experienceTaskId = randomUUID()
+  private readonly activeExperiences = new Map<string, AgentSkillContext>()
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
@@ -334,7 +338,13 @@ export class ReActLLMDuty extends LLMDuty {
   public async execute(): Promise<LLMDutyResult | null> {
     return observeTurnInferences((activity) => {
       this.reportProgressEvent({ type: 'inference_activity', activity })
-    }, () => this.executeTurn())
+    }, async () => {
+      try {
+        return await this.executeTurn()
+      } finally {
+        EXPERIENCE_MANAGER.releaseTask(this.experienceTaskId)
+      }
+    })
   }
 
   private async executeTurn(): Promise<LLMDutyResult | null> {
@@ -416,13 +426,26 @@ export class ReActLLMDuty extends LLMDuty {
       let emittedAgentSkillActivityId: string | null = null
       const caller = this.createLLMCaller()
       if (continuation?.activeSkillId) {
-        const skill = await SkillDomainHelper.getAgentSkillExecutionContext(
-          continuation.activeSkillId
-        )
+        const skill = continuation.activeSkillId.startsWith(EXPERIENCE_PREFIX)
+          ? EXPERIENCE_MANAGER.load(continuation.activeSkillId, this.experienceTaskId)
+          : await SkillDomainHelper.getAgentSkillExecutionContext(continuation.activeSkillId)
         if (!skill) {
           throw new Error('The active Agent Skill is no longer available.')
         }
         caller.setAgentSkillContext(skill)
+      }
+      const restoredMessage = continuation?.transcript.findLast((message) =>
+        message.role === 'user' && Array.isArray(message.runtimeContext?.['active_experiences'])
+      )
+      const restoredExperiences = restoredMessage?.role === 'user'
+        ? restoredMessage.runtimeContext?.['active_experiences'] : undefined
+      if (Array.isArray(restoredExperiences)) {
+        for (const entry of restoredExperiences) {
+          const context = EXPERIENCE_MANAGER.load(String(entry.id), this.experienceTaskId)
+          if (context) {
+            this.activeExperiences.set(context.id, context)
+          }
+        }
       }
       const emitActiveAgentSkillActivity = (): void => {
         const activeAgentSkillContext = caller.agentSkillContext
@@ -531,6 +554,10 @@ export class ReActLLMDuty extends LLMDuty {
         )
       }
 
+      if (CONFIG_MANAGER.getConfig().runtime.experience_enabled !== false && EXPERIENCE_MANAGER.list().length > 0) {
+        catalog.tools.push(createExperienceSearchTool())
+      }
+
       const agentSystemPrompt = this.appendAdditionalInstructions(
         PERSONA.getCompactDutySystemPrompt(
           AGENT_SYSTEM_PROMPT,
@@ -597,7 +624,7 @@ export class ReActLLMDuty extends LLMDuty {
         })
       }
 
-      const grounding = await this.buildAgentGrounding(caller)
+      const grounding = await this.buildAgentGrounding(caller, ownerInput)
 
       LogHelper.title(this.name)
       LogHelper.debug(
@@ -677,6 +704,9 @@ export class ReActLLMDuty extends LLMDuty {
           appendAgentRuntimeContext(messages, {
             ...grounding,
             temporary_context: await MEMORY_MANAGER.getTemporaryContext(),
+            active_experiences: [...this.activeExperiences.values()].map((experience) => ({
+              id: experience.id, instructions: experience.instructions
+            })),
             persona: PERSONA.getDutyRuntimeContextFields({ includeMood: !options.isCompletionReview }),
             tool_guidance: progressiveGuidance,
             connection_guidance: buildAgentConnectionGuidance(state.executionHistory),
@@ -759,15 +789,25 @@ export class ReActLLMDuty extends LLMDuty {
             preview?.groupId
           )
 
+          for (const experience of this.activeExperiences.values()) {
+            EXPERIENCE_MANAGER.recordUse(experience.id, this.experienceTaskId, callable.qualifiedName)
+          }
           return toolResult
         },
         loadToolkitContext: (toolkitId) =>
           buildToolkitContextSection(caller, toolkitId),
-        loadAgentSkill:
-          SkillDomainHelper.getAgentSkillExecutionContext.bind(
-            SkillDomainHelper
-          ),
-        onAgentSkillLoaded: (context) => {
+        searchExperiences: (query) => EXPERIENCE_MANAGER.search(query),
+        loadAgentSkill: async (id) => id.startsWith(EXPERIENCE_PREFIX)
+          ? EXPERIENCE_MANAGER.load(id, this.experienceTaskId)
+          : SkillDomainHelper.getAgentSkillExecutionContext(id),
+        onAgentSkillLoaded: async (context) => {
+          if (context.id.startsWith(EXPERIENCE_PREFIX)) {
+            if (this.activeExperiences.has(context.id)) {
+              return
+            }
+            this.activeExperiences.set(context.id, context)
+            return
+          }
           caller.setAgentSkillContext(context)
           emitActiveAgentSkillActivity()
         },
@@ -985,7 +1025,7 @@ export class ReActLLMDuty extends LLMDuty {
    * Supply grounding as runtime fields so unchanged facts survive across turns
    * without repetition, and the latest snapshot is restored after compaction.
    */
-  private async buildAgentGrounding(caller: LLMCaller): Promise<Record<string, unknown>> {
+  private async buildAgentGrounding(caller: LLMCaller, query: string): Promise<Record<string, unknown>> {
     const grounding: Record<string, unknown> = {
       local_workspace: [
         `Default local working directory: ${process.cwd()}`,
@@ -996,6 +1036,7 @@ export class ReActLLMDuty extends LLMDuty {
         caller.getContextManifest()
       ].join('\n'),
       self_model: caller.getSelfModelSnapshot(),
+      experience_context: EXPERIENCE_MANAGER.getContext(process.cwd(), query),
       available_agent_skills: caller.agentSkillCatalog,
       previous_tool_artifacts: ''
     }
@@ -2323,6 +2364,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: normalizedOutput,
       data: {
         hasExplicitMemoryWrite: this.hasExplicitMemoryWrite,
+        workspace: process.cwd(),
         hasOwnerMessages: this.hasOwnerMessages,
         finalIntent: this.finalResponseIntent,
         llmMetrics,

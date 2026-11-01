@@ -102,6 +102,14 @@ vi.mock('@/core/connections/connection-service', () => ({
 }))
 
 vi.mock('@/core', () => ({
+  EXPERIENCE_MANAGER: {
+    list: (): never[] => [],
+    getContext: (): never[] => [],
+    search: (): never[] => [],
+    load: (): null => null,
+    releaseTask: (): void => undefined,
+    recordUse: (): void => undefined
+  },
   CONVERSATION_LOGGER: { loadContextWindow: coreMocks.loadConversationLogs },
   PERSONA: {
     getCompactDutySystemPrompt: (prompt: string): string => prompt
