@@ -84,9 +84,6 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
           onRetry={() => void conversation.refetch()}
         />
       )}
-      {conversation.hasPreviousPage && (
-        <Button onClick={handleReturnToLatest}>Back to latest messages</Button>
-      )}
       {conversation.latest?.command?.status === 'interrupted' && (
         <p role="status">This turn was interrupted by a server restart. Your saved work is available below.</p>
       )}

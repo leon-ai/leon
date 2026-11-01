@@ -468,14 +468,14 @@ test('keeps drafting usable and reports browser storage failures', async ({ page
 test('reopens an evicted latest window without fetching older cursors first', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   await expectBottom(page)
-  const load = page.getByRole('button', { name: 'Load earlier messages' })
   for (let index = 0; index < 10; index++) {
     const response = page.waitForResponse((candidate) => new URL(candidate.url()).searchParams.has('before'))
-    await load.click()
+    await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
     await response
-    await expect(load).toBeEnabled()
+    await expect(page.getByRole('status').filter({ hasText: 'Loading earlier messages…' })).toHaveCount(0)
   }
-  await expect(page.getByRole('button', { name: 'Back to latest messages' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Back to latest messages' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Scroll to bottom', exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
   const frontier = ui.historyRequests.length
