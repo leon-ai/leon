@@ -12,6 +12,8 @@ import { useSessions, useSessionMutation } from '@/data/sessions'
 import { useProfile } from '@/data/profile'
 import { SessionListItem } from '@/layout/sidebar/session-list-item'
 
+import { Loader } from '@/components/loader'
+
 import './session-list.sass'
 
 const SESSION_ITEM_ESTIMATED_HEIGHT = 41
@@ -178,7 +180,7 @@ export function SessionList({
           )
         })}
       </ul>
-      {profile && query.isPending && <p role="status">Loading sessions…</p>}
+      {profile && query.isPending && <Loader size="sm" label="Loading sessions…" />}
       {query.isError && <button type="button" onClick={() => void query.refetch()}>Retry loading sessions</button>}
       <div
         ref={scrollMaskRef}

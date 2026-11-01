@@ -1,8 +1,25 @@
+.loader
+  display: inline-flex
+  align-items: center
+  gap: var(--space-sm)
+  color: var(--color-text-secondary)
+
+.loader-sm
+  --loader-size: 12px
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+.loader-md
+  --loader-size: 20px
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+
 .loader-indicator
   position: relative
   display: inline-block
-  width: 20px
-  height: 20px
+  flex: 0 0 var(--loader-size)
+  width: var(--loader-size)
+  height: var(--loader-size)
   color: var(--color-accent)
 
   &::before,
@@ -12,12 +29,12 @@
     box-sizing: border-box
     border-radius: var(--border-radius-pill)
     background-color: currentColor
-    animation: loader-indicator-pulse 1s linear infinite
+    animation: loader-indicator-pulse 1.6s linear infinite
     content: ''
 
   &::after
     opacity: 0
-    animation-delay: .4s
+    animation-delay: .64s
 
 @keyframes loader-indicator-pulse
   from
@@ -35,3 +52,7 @@
 
   .loader-indicator::after
     display: none
+
+  .loader-indicator::before
+    opacity: .65
+    transform: scale(.45)
