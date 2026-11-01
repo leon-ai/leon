@@ -78,31 +78,34 @@ export function ToolCall({ toolCall }: ToolCallProps) {
           className="tool-call-trigger"
           aria-expanded={isExpanded}
           aria-controls={detailsId}
+          aria-description={toolCall.status === 'error' ? 'Tool call failed' : undefined}
           onClick={() => setIsExpanded((isOpen) => !isOpen)}
         >
-          <ActivityWave
-            active={isActive}
-            className="tool-call-heading-layer"
-          >
-            <i
-              className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
-              aria-hidden="true"
-            />
-            <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
-          </ActivityWave>
-          {toolCall.status === 'preparing' && (
-            <span className="tool-call-duration activity-metadata">Preparing call</span>
-          )}
-          {duration && (
-            <span
-              className="tool-call-duration activity-metadata"
-              title={isBackground
-                ? 'Time to return the execution handle; the job is still running.'
-                : 'Execution time, including tool setup and transport.'}
+          <span className="tool-call-label">
+            <ActivityWave
+              active={isActive}
+              className="tool-call-heading-layer"
             >
-              {isBackground ? `${duration} to return` : duration}
-            </span>
-          )}
+              <i
+                className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
+                aria-hidden="true"
+              />
+              <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
+              {toolCall.status === 'error' && (
+                <i className="tool-call-error-indicator ri-close-line" aria-hidden="true" />
+              )}
+            </ActivityWave>
+            {duration && (
+              <span
+                className="tool-call-duration activity-metadata"
+                title={isBackground
+                  ? 'Time to return the execution handle; the job is still running.'
+                  : 'Execution time, including tool setup and transport.'}
+              >
+                {isBackground ? `${duration} to return` : duration}
+              </span>
+            )}
+          </span>
           <i
             className="tool-call-chevron ri-arrow-right-s-line"
             aria-hidden="true"

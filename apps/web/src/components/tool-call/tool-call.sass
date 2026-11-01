@@ -14,7 +14,7 @@
   line-height: var(--line-height-md)
   text-align: left
 
-  &:hover:not(:has(> .activity-wave-active))
+  &:hover:not(:has(.activity-wave-active))
     color: var(--color-text)
 
   &:hover
@@ -30,11 +30,14 @@
     outline: 1px solid var(--color-accent)
     outline-offset: var(--space-xs)
 
+.tool-call-label,
 .tool-call-heading-layer
   display: flex
   align-items: center
   gap: var(--space-sm)
   min-width: 0
+
+.tool-call-heading-layer
   flex: 1 1 auto
   color: inherit
   transition: color var(--transition-duration-main) var(--transition-timing-main)
@@ -63,6 +66,17 @@
   align-items: center
   gap: var(--space-sm)
   min-width: 0
+
+.tool-call-error-indicator
+  // Match the optical alignment of the duration and disclosure icon.
+  position: relative
+  top: 1px
+  display: inline-flex
+  flex: 0 0 auto
+  align-items: center
+  color: var(--color-danger)
+  font-size: var(--font-size-sm)
+  line-height: 1
 
 .tool-call-chevron
   position: relative

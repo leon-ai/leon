@@ -963,6 +963,51 @@ test('retries failed delivery with the original message ID instead of duplicatin
   await expect(page.getByText('Retry delivery', { exact: true })).toHaveCount(1)
 })
 
+for (const status of ['success', 'error'] as const) {
+  test(`keeps recorded tool outcomes quiet and durations centered in both themes (${status})`, async ({ page, ui }, testInfo) => {
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId,
+      planSteps: [],
+      toolCalls: [{
+        id: 'lookup', name: 'search.lookup.run', status,
+        toolCallTitle: 'Look up information', toolIconName: 'search-line', startedAt: 0, durationMs: 1_500
+      }],
+      metrics: { durationMs: 2_000 }
+    }
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 2s' }).click()
+    await page.getByRole('button', { name: 'Used 1 tool for 2s', exact: true }).click()
+    const tool = page.getByRole('button', { name: 'Look up information' })
+    await expect(tool).toBeVisible()
+    await expect(tool.locator('.tool-call-duration')).toHaveText('1.5s')
+    await expect(tool.locator('.activity-wave-active')).toHaveCount(0)
+    await expect(tool.locator('.tool-call-error-indicator')).toHaveCount(status === 'error' ? 1 : 0)
+    await expect(tool.locator('.ri-check-line, .ri-check-fill')).toHaveCount(0)
+
+    for (const theme of ['dark', 'light']) {
+      await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+      if (status === 'error') {
+        await expect(tool).toHaveAccessibleDescription('Tool call failed')
+        await expect(tool.locator('.tool-call-error-indicator.ri-close-line')).toHaveCSS('color', 'rgb(172, 10, 10)')
+      }
+      const title = await tool.locator('.tool-call-title').boundingBox()
+      const duration = await tool.locator('.tool-call-duration').boundingBox()
+      expect(title).not.toBeNull()
+      expect(duration).not.toBeNull()
+      expect(Math.abs(title!.y + title!.height / 2 - duration!.y - duration!.height / 2)).toBeLessThanOrEqual(1)
+      if (status === 'error') {
+        const indicator = await tool.locator('.tool-call-error-indicator').boundingBox()
+        expect(indicator).not.toBeNull()
+        expect(Math.abs(indicator!.y + indicator!.height / 2 - duration!.y - duration!.height / 2)).toBeLessThanOrEqual(0.25)
+      }
+      await testInfo.attach(`tool-duration-${theme}`, { body: await tool.screenshot(), contentType: 'image/png' })
+    }
+  })
+}
+
 test('preserves sub-second tool totals in milliseconds after reloading', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.agentResponseTrace = {
