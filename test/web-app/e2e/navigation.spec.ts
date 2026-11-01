@@ -134,6 +134,111 @@ for (const active of [false, true]) {
   })
 }
 
+for (const width of [1_512, 390]) {
+  test(`defaults to inline diffs with accessible layout controls and raw input/output (${width})`, async ({ page, ui }, testInfo) => {
+    const resources: string[] = []
+    page.on('request', (request) => {
+      if (request.resourceType() === 'script' || new URL(request.url()).pathname.endsWith('.wasm')) {
+        resources.push(request.url())
+      }
+    })
+    await page.setViewportSize({ width, height: 982 })
+    if (width === 390) {
+      // Restricted hosts must retain a usable diff through the JavaScript backend.
+      await page.addInitScript(() => Object.defineProperty(window, 'WebAssembly', { value: undefined }))
+    }
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = { id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+      id: 'edit', name: 'file_system.file.patch', toolCallTitle: 'Adjust the greeting', status: 'success', durationMs: 100,
+      input: JSON.stringify({ path: 'greeting.ts', changes: [{ oldText: 'const greeting = "Hello"\n', newText: 'const greeting = "Welcome"\n' }] }),
+      output: { result: { success: true, data: { changed: true, diff: '-const greeting = "Hello"\n+const greeting = "Welcome"', diffTruncated: true } } }
+    }] }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 1 tool for 100ms', exact: true }).click()
+    await page.getByRole('button', { name: 'Adjust the greeting' }).click()
+    const diff = page.locator('.feed .tool-diff')
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+    await expect.poll(() => diff.evaluate((element) => element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? ''))
+      .toContain('Welcome')
+    await expect.poll(() => diff.evaluate((element) => Array.from(
+      element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
+    ).filter((span) => span.textContent?.trim() === 'const' && span.style.color).length)).toBeGreaterThan(0)
+    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    await expect(diff.getByRole('button')).toHaveCount(0)
+    expect(await page.locator('.tool-changes-preview').evaluate((element) => element.clientHeight)).toBeLessThan(200)
+    await page.setViewportSize({ width: width === 390 ? 1_512 : 390, height: 982 })
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+    await page.setViewportSize({ width, height: 982 })
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+
+    const details = page.getByRole('button', { name: 'View details', exact: true })
+    await expect(details.locator('.button-label')).toHaveCount(0)
+    await details.hover()
+    await expect(page.locator('.tooltip-content-open')).toHaveText('View details')
+    await details.click()
+    const dialog = page.getByRole('dialog', { name: 'Adjust the greeting', exact: true })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused()
+    const bounds = (await dialog.boundingBox())!
+    expect(bounds.width).toBeLessThanOrEqual(width - 28)
+    if (width > 1_000) {
+      expect(bounds.width).toBeGreaterThan(1_000)
+    }
+    for (const height of [982, 540]) {
+      await page.setViewportSize({ width, height })
+      await expect.poll(async () => {
+        const box = (await dialog.boundingBox())!
+
+        return Math.abs(box.y + box.height / 2 - height / 2)
+      }).toBeLessThanOrEqual(1)
+      const box = (await dialog.boundingBox())!
+      expect(box.y).toBeGreaterThan(0)
+      expect(box.y + box.height).toBeLessThan(height)
+    }
+    await page.setViewportSize({ width, height: 982 })
+    const dialogDiff = dialog.locator('.tool-diff')
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'unified')
+    await expect(dialogDiff).toContainText('Truncated change preview.')
+    const views = dialogDiff.getByRole('group', { name: 'Diff view', exact: true })
+    expect(await views.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))))
+      .toEqual(['Inline view', 'Split view'])
+    await expect(views.getByRole('button', { name: 'Inline view', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(views.locator('.ri-list-check')).toHaveCount(1)
+    await expect(dialog.getByRole('button', { name: 'Hunk view', exact: true })).toHaveCount(0)
+    const dialogToggle = dialogDiff.getByRole('button', { name: 'Split view', exact: true })
+    await expect(dialogToggle.locator('.button-label')).toHaveCount(0)
+    await dialogToggle.focus()
+    const tooltip = page.locator('.tooltip-content-open')
+    await expect(tooltip).toHaveText('Split view')
+    const tooltipLayer = await tooltip.evaluate((element) => Number(getComputedStyle(element).zIndex))
+    const dialogLayer = await dialog.locator('..').evaluate((element) => Number(getComputedStyle(element).zIndex))
+    expect(tooltipLayer).toBeGreaterThan(dialogLayer)
+    await dialogToggle.press('Enter')
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'split')
+    await expect(dialogToggle).toBeFocused()
+    const inlineToggle = dialogDiff.getByRole('button', { name: 'Inline view', exact: true })
+    await finishFiniteAnimations(dialog.locator('..'))
+    await testInfo.attach(`tool-diff-${width}`, { body: await page.screenshot(), contentType: 'image/png' })
+    await inlineToggle.press('Enter')
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'unified')
+    await dialog.getByRole('tab', { name: 'Input', exact: true }).click()
+    await expect(dialog.getByLabel('Input JSON', { exact: true })).toContainText('oldText')
+    await expect(dialog.getByLabel('Output JSON', { exact: true })).toHaveCount(0)
+    await dialog.getByRole('tab', { name: 'Output', exact: true }).click()
+    await expect(dialog.getByLabel('Output JSON', { exact: true })).toContainText('diffTruncated')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'View details', exact: true })).toBeFocused()
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0)
+    expect(resources.some((url) => new URL(url).pathname.endsWith('.wasm'))).toBe(false)
+    await testInfo.attach('syntax-resource-requests', {
+      body: JSON.stringify(resources, null, 2), contentType: 'application/json'
+    })
+  })
+}
+
 for (const wasm of [true, false]) {
   test(`keeps file diffs readable outside the JavaScript grammar catalog (Wasm: ${wasm})`, async ({ page, ui }) => {
     if (!wasm) {

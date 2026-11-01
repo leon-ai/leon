@@ -96,7 +96,7 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
   }
 
   return (
-    <Dialog open={open} size="wide" title={toolCall.toolCallTitle || 'Tool details'} className="tool-details-dialog"
+    <Dialog open={open} centered size="wide" title={toolCall.toolCallTitle || 'Tool details'} className="tool-details-dialog"
       onClose={onClose} onAfterClose={onAfterClose} footer={(
         <>
           <Button iconName="download" tone="muted" tooltipMessage={`Download ${contentName}`} tooltipPosition="left"

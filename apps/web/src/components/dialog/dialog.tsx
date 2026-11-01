@@ -27,6 +27,7 @@ interface DialogProps {
   hideHeader?: boolean
   description?: ReactNode
   open: boolean
+  centered?: boolean
   role?: DialogRole
   size?: DialogSize
   title: string
@@ -38,6 +39,7 @@ export function Dialog({
   className,
   actions = [],
   children,
+  centered = false,
   closeOnOverlayClick = true,
   description,
   footer,
@@ -114,7 +116,8 @@ export function Dialog({
     <div
       ref={overlayRef}
       className={clsx('dialog-overlay', {
-        'dialog-overlay-open': open
+        'dialog-overlay-open': open,
+        'dialog-overlay-centered': centered
       })}
       onMouseDown={(event) => {
         if (closeOnOverlayClick && event.target === event.currentTarget) {
