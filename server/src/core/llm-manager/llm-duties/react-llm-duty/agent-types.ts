@@ -1,9 +1,10 @@
 import type { LLMDutyParams } from '@/core/llm-manager/llm-duty'
-import type { ToolCompletionReview, AgentResponseToolCall  } from '@/types'
+import type { ToolCompletionReview, AgentResponseToolCall, SkillOrigin   } from '@/types'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import type { LeonClientInterfaceTokenPayload } from '@/core/leon-interface/types'
 import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 export interface AgentSkillContext {
+  origin?: SkillOrigin
   id: string
   name: string
   description: string

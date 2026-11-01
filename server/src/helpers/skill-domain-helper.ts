@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { SkillFormat, type ShortLanguageCode } from '@/types'
+import { SkillFormat, SkillOrigin, type ShortLanguageCode } from '@/types'
 import type { GlobalEntitySchema } from '@/schemas/global-data-schemas'
 import type {
   DomainSchema,
@@ -56,6 +56,7 @@ interface AgentSkillFrontmatter {
 }
 
 export interface SkillDescriptor {
+  origin: SkillOrigin
   id: string
   commandName: string
   name: string
@@ -67,6 +68,7 @@ export interface SkillDescriptor {
 }
 
 export interface AgentSkillExecutionContext {
+  origin: SkillOrigin
   id: string
   name: string
   description: string
@@ -129,7 +131,10 @@ export class SkillDomainHelper {
     return trimmedValue
   }
 
-  private static parseAgentSkillFrontmatter(
+  /**
+   * Validate discovery metadata consistently for installed and learned skills.
+   */
+  public static parseAgentSkillFrontmatter(
     content: string
   ): AgentSkillFrontmatter | null {
     const lines = content.replace(/\r\n/g, '\n').split('\n')
@@ -266,6 +271,7 @@ export class SkillDomainHelper {
             ) as SkillSchema
 
             descriptors.set(folder, {
+              origin: skillsPath === NATIVE_SKILLS_PATH ? SkillOrigin.BuiltIn : SkillOrigin.Owner,
               id: folder,
               commandName: this.getSkillCommandName(folder),
               name: skillConfig.name,
@@ -303,6 +309,7 @@ export class SkillDomainHelper {
         }
 
         descriptors.set(frontmatter.name, {
+          origin: skillsPath === AGENT_SKILLS_PATH ? SkillOrigin.BuiltIn : SkillOrigin.Owner,
           id: frontmatter.name,
           commandName: frontmatter.name,
           name: frontmatter.name,
@@ -345,6 +352,7 @@ export class SkillDomainHelper {
           ) as SkillSchema
 
           descriptors.set(folder, {
+            origin: SkillOrigin.Owner,
             id: folder,
             commandName: this.getSkillCommandName(folder),
             name: skillConfig.name,
@@ -375,6 +383,7 @@ export class SkillDomainHelper {
         }
 
         descriptors.set(frontmatter.name, {
+          origin: SkillOrigin.Owner,
           id: frontmatter.name,
           commandName: frontmatter.name,
           name: frontmatter.name,
@@ -529,7 +538,8 @@ export class SkillDomainHelper {
       description: descriptor.description,
       rootPath: descriptor.path,
       skillPath,
-      instructions
+      instructions,
+      origin: descriptor.origin
     }
   }
 

@@ -83,6 +83,15 @@ export enum SkillFormat {
 }
 
 /**
+ * Ownership of executable guidance, independent of its package format.
+ */
+export enum SkillOrigin {
+  BuiltIn = 'built-in',
+  Owner = 'owner-installed',
+  Experience = 'experience'
+}
+
+/**
  * Mood
  */
 export enum Moods {
