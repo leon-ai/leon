@@ -1,7 +1,8 @@
-import { MEMORY_MANAGER, SELF_MODEL_MANAGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
+import { MEMORY_MANAGER, SELF_MODEL_MANAGER, EXPERIENCE_MANAGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
+import type { ExecutionRecord, FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
+import { hasExperienceLearningEvidence } from '@/core/experience-manager'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
-import type { FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import { normalizeOwnerProfileToolExecutions } from './turn-result'
 import type { PostTurnMaintenanceTaskPreparer } from '@/core/post-turn-maintenance-queue'
 
@@ -23,7 +24,7 @@ export function scheduleHistoryCompaction(prepare: PostTurnMaintenanceTaskPrepar
  * Schedules owner-turn maintenance after the answer has been persisted and delivered.
  * Explicit memory mutations must not be repeated by automatic extraction.
  */
-export function schedulePostTurn({ query, result }: CompletedAgentTurn): void {
+export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTurn): void {
   const output = result?.output as unknown
   if (typeof output !== 'string' || !output.trim()) {
     return
@@ -32,6 +33,14 @@ export function schedulePostTurn({ query, result }: CompletedAgentTurn): void {
   const sentAt = Date.now()
   const toolExecutions = normalizeOwnerProfileToolExecutions(result)
   const finalIntent = result?.data?.['finalIntent'] as FinalPhaseIntent | undefined
+
+  const executions = (result?.data?.['executionHistory'] ?? []) as ExecutionRecord[]
+  if (finalIntent === 'answer' && hasExperienceLearningEvidence(executions)) {
+    const workspace = typeof result?.data?.['workspace'] === 'string' ? result.data['workspace'] : process.cwd()
+    POST_TURN_MAINTENANCE_QUEUE.enqueue('experience learning', () => EXPERIENCE_MANAGER.observeTurn({
+      query, output, executions, workspace, sourceRef: `session:${sessionId}:turn:${sentAt}`
+    }))
+  }
 
   POST_TURN_MAINTENANCE_QUEUE.enqueue('turn memory observation', () => MEMORY_MANAGER.observeTurn({
     userMessage: query,

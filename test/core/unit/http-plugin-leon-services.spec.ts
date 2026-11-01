@@ -94,6 +94,7 @@ function getProfileSessions(): Set<string> {
 }
 
 vi.mock('@/core', () => ({
+  EXPERIENCE_MANAGER: { observeTurn: vi.fn(async () => undefined) },
   MEMORY_MANAGER: {
     observeTurn: vi.fn(async () => undefined),
     saveMemoryCandidatesFromTurn: vi.fn(async () => 0)
