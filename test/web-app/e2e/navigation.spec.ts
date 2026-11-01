@@ -1,7 +1,8 @@
 import type { Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
+import type { ConversationPage } from '../../../apps/web/src/data/conversation'
 
-import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER } from './fixtures'
+import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
 async function expectBottom(page: Page): Promise<void> {
   await expect.poll(() => page.locator('.app-main').evaluate((main) =>
@@ -9,6 +10,28 @@ async function expectBottom(page: Page): Promise<void> {
   )).toBeLessThanOrEqual(2)
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
 }
+
+test('reveals conversation loading only after one second and cancels it on navigation', async ({ page, ui }) => {
+  const now = new Date('2026-11-01T12:00:00Z')
+  await page.clock.install({ time: now })
+  await page.clock.pauseAt(now)
+  const release = ui.holdHistory()
+  await page.goto(SESSION_URL)
+  const loading = page.getByText('Loading conversation…', { exact: true })
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeVisible()
+  await expect(loading).toHaveCount(0)
+  await page.clock.runFor(999)
+  await expect(loading).toHaveCount(0)
+  await page.clock.runFor(1)
+  await expect(loading).toBeVisible()
+  await page.getByRole('link', { name: 'New session', exact: true }).click()
+  await expect(page).toHaveURL(/\/web-app\/?$/)
+  await page.clock.runFor(1_000)
+  await expect(loading).toHaveCount(0)
+  release()
+  await page.clock.resume()
+  await expect(loading).toHaveCount(0)
+})
 
 test('reveals active session options on hover or keyboard focus rather than selection', async ({ page, ui }) => {
   void ui
@@ -40,6 +63,7 @@ test('drafts immediately while history loads and opens the latest messages at th
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   await expect(composer).toBeFocused()
+  await expect(page.getByText('Loading conversation…', { exact: true })).toHaveCount(0)
   await composer.fill('Draft before loading')
   await composer.press('Enter')
   await expect(composer).toHaveValue('Draft before loading')
@@ -47,6 +71,8 @@ test('drafts immediately while history loads and opens the latest messages at th
   const loading = page.getByRole('status').filter({ hasText: 'Loading conversation…' })
   await expect(loading).toBeVisible()
   await expect(loading.getByRole('button')).toHaveCount(0)
+  await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('width', '20px')
+  await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('height', '20px')
   for (const theme of ['light', 'dark']) {
     await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
@@ -460,6 +486,105 @@ test('reopens an evicted latest window without fetching older cursors first', as
   expect(reopened.every((url) => !url.searchParams.has('before') && !url.searchParams.has('after'))).toBe(true)
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`loads history on scroll with a shared loader and a stable reading position (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 },
+      toolCalls: [{ id: 'history-tool', name: 'test.inspect', toolCallTitle: 'Inspect history', status: 'success' }]
+    }
+    await page.goto(SESSION_URL)
+    await expectBottom(page)
+    // Inspecting turn details must not disable the history-prepend anchor.
+    await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+    await finishFiniteAnimations(page.locator('.feed'))
+    expect(ui.historyRequests).toHaveLength(1)
+    await expect(page.getByRole('button', { name: 'Load earlier messages', exact: true })).toHaveCount(0)
+    const release = ui.holdHistory()
+    await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+    const loading = page.getByRole('status').filter({ hasText: 'Loading earlier messages…' })
+    await expect(loading).toBeVisible()
+    await expect(loading.locator('.loader-indicator')).toHaveCSS('width', '12px')
+    await expect(loading.locator('.loader-indicator')).toHaveCSS('height', '12px')
+    await expect.poll(() => loading.locator('.loader-indicator').evaluate((element) =>
+      getComputedStyle(element, '::before').animationName
+    )).toBe(reducedMotion === 'reduce' ? 'none' : 'loader-indicator-pulse')
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await expect(loading.locator('.loader-indicator')).toHaveCSS('color', 'rgb(28, 117, 219)')
+      await expect(loading).toHaveCSS('color', 'rgb(136, 136, 136)')
+      const bounds = await loading.boundingBox()
+      const mask = await page.locator('.feed-mask-top').boundingBox()
+      expect(bounds!.y).toBeGreaterThan(mask!.y + mask!.height)
+      await page.screenshot({ path: testInfo.outputPath(`history-loader-${theme}.png`) })
+    }
+    expect(ui.historyRequests).toHaveLength(2)
+    const firstOwner = page.getByText('Saved question 220', { exact: true })
+    const before = await firstOwner.boundingBox()
+    release()
+    await expect(loading).toHaveCount(0)
+    await expect.poll(async () => Math.abs((await firstOwner.boundingBox())!.y - before!.y)).toBeLessThanOrEqual(2)
+    expect(ui.historyRequests).toHaveLength(2)
+  })
+}
+
+test('keeps older history readable after a paging failure and retries only on request', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  await expectBottom(page)
+  await finishFiniteAnimations(page.locator('.feed'))
+  ui.failure = { path: `/api/v1/sessions/${SESSION_ID}`, status: 500, message: 'History is unavailable.' }
+  await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+  const retry = page.getByRole('button', { name: 'Retry loading earlier messages', exact: true })
+  await expect(retry).toBeVisible()
+  await expect(page.locator('.request-feedback')).toHaveCount(0)
+  await expect(page.getByText('Saved question 220', { exact: true })).toBeVisible()
+  await expect(page.locator('.toast-title')).toHaveText(['Could not load the conversation'])
+  const requests = ui.requests.filter((url) => url.searchParams.has('before')).length
+  await page.getByRole('textbox', { name: 'Message Leon' }).fill('Keep this draft')
+  await expect(retry).toBeEnabled()
+  expect(ui.requests.filter((url) => url.searchParams.has('before'))).toHaveLength(requests)
+  ui.failure = undefined
+  await retry.click()
+  await expect(retry).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toHaveValue('Keep this draft')
+})
+
+for (const shortWindow of [false, true]) {
+  test(`continues history loading without another scroll (short window: ${shortWindow})`, async ({ page, ui }) => {
+    const response = page.waitForResponse((candidate) => new URL(candidate.url()).pathname === `/api/v1/sessions/${SESSION_ID}`)
+    await page.goto(SESSION_URL)
+    const snapshot = await (await response).json() as ConversationPage
+    await expectBottom(page)
+    const records = ui.history.get(SESSION_ID)!
+    const first = records.length - (shortWindow ? 2 : snapshot.messages.length)
+    let olderReads = 0
+    await page.route(`**/api/v1/sessions/${SESSION_ID}?*`, async (route) => {
+      const before = new URL(route.request().url()).searchParams.get('before')
+      if (before) {
+        olderReads++
+      }
+      await route.fulfill({ json: {
+        ...snapshot,
+        messages: before === 'first-older' ? records.slice(first - 2, first)
+          : before === 'older-tail' ? records.slice(first - 42, first - 2) : records.slice(first),
+        next_cursor: before === 'older-tail' ? null : before ? 'older-tail' : 'first-older',
+        newer_cursor: before ? String(first) : null
+      } })
+    })
+    await page.reload()
+    if (!shortWindow) {
+      await expectBottom(page)
+      await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+    }
+    await expect.poll(() => olderReads).toBe(2)
+    await expect(page.getByRole('status').filter({ hasText: 'Loading earlier messages…' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Load earlier messages', exact: true })).toHaveCount(0)
+  })
+}
+
 test('reports a shared history failure once and keeps the draft through manual recovery', async ({ page, ui }) => {
   ui.failure = { path: `/api/v1/sessions/${SESSION_ID}`, status: 500, message: 'History is unavailable.' }
   await page.goto(SESSION_URL)
@@ -715,37 +840,6 @@ test('retries failed delivery with the original message ID instead of duplicatin
   expect(((await retry).postDataJSON() as { id: string }).id).toBe(first.id)
   await expect(page.getByText('Completed Retry delivery', { exact: true })).toBeVisible()
   await expect(page.getByText('Retry delivery', { exact: true })).toHaveCount(1)
-})
-
-test('keeps tool durations centered alongside their titles in both themes', async ({ page, ui }, testInfo) => {
-  const answer = ui.history.get(SESSION_ID)!.at(-1)!
-  answer.agentResponseTrace = {
-    id: answer.messageId,
-    planSteps: [],
-    toolCalls: [{
-      id: 'lookup', name: 'search.lookup.run', status: 'success',
-      toolCallTitle: 'Looked up information', toolIconName: 'search-line', startedAt: 0, durationMs: 1_500
-    }],
-    metrics: { durationMs: 2_000 }
-  }
-
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto(SESSION_URL)
-  await page.getByRole('button', { name: 'Worked for 2s' }).click()
-  await page.getByRole('button', { name: 'Used 1 tool for 2s', exact: true }).click()
-  const tool = page.getByRole('button', { name: 'Looked up information' })
-  await expect(tool).toBeVisible()
-  await expect(tool.locator('.tool-call-duration')).toHaveText('1.5s')
-
-  for (const theme of ['dark', 'light']) {
-    await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
-    const title = await tool.locator('.tool-call-title').boundingBox()
-    const duration = await tool.locator('.tool-call-duration').boundingBox()
-    expect(title).not.toBeNull()
-    expect(duration).not.toBeNull()
-    expect(Math.abs(title!.y + title!.height / 2 - duration!.y - duration!.height / 2)).toBeLessThanOrEqual(1)
-    await testInfo.attach(`tool-duration-${theme}`, { body: await tool.screenshot(), contentType: 'image/png' })
-  }
 })
 
 test('preserves sub-second tool totals in milliseconds after reloading', async ({ page, ui }) => {

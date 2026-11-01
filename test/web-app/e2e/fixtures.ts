@@ -1,4 +1,4 @@
-import { test as base, expect, type Response, type Route } from '@playwright/test'
+import { test as base, expect, type Locator, type Response, type Route } from '@playwright/test'
 
 import type { ConversationPage, ConversationRecord, ModelCatalog, ConversationNotification } from '../../../apps/web/src/data/conversation'
 import type { ConversationSession } from '../../../apps/web/src/data/sessions'
@@ -12,6 +12,18 @@ export const SESSION_ID = '00000000-0000-4000-8000-000000000000'
 export const OTHER_SESSION_ID = '00000000-0000-4000-8000-000000000001'
 export const SESSION_URL = `session/${SESSION_ID}`
 export const LATEST_ANSWER = `Saved answer ${HISTORY_TURNS - 1}`
+
+/**
+ * Lets finite entrance/disclosure motion settle before the next user action,
+ * without waiting for ongoing activity waves or other infinite animations.
+ */
+export async function finishFiniteAnimations(target: Locator): Promise<void> {
+  await target.evaluate(async (element) => {
+    await Promise.allSettled(element.getAnimations({ subtree: true })
+      .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+      .map((animation) => animation.finished))
+  })
+}
 
 interface UIFixture {
   sessions: ConversationSession[]
