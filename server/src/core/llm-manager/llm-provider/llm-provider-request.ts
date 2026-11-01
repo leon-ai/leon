@@ -26,6 +26,7 @@ const PULSE_REACTION_REASONING_EFFORT: LLMReasoningEffort = 'low'
 const INFERENCE_REASONING_EFFORTS: Partial<Record<InferencePurpose, LLMReasoningEffort>> = {
   [InferencePurpose.Memory]: MEMORY_EXTRACTION_REASONING_EFFORT,
   [InferencePurpose.SelfModel]: SELF_MODEL_REFLECTION_REASONING_EFFORT,
+  [InferencePurpose.Experience]: MEMORY_EXTRACTION_REASONING_EFFORT,
   [InferencePurpose.PulsePlanning]: PULSE_PLANNING_REASONING_EFFORT,
   [InferencePurpose.PulseReaction]: PULSE_REACTION_REASONING_EFFORT
 }

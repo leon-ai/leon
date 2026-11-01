@@ -102,6 +102,8 @@ runtime:
   pulse_enabled: true
   # Enable Leon's private diary/self-model mechanism.
   private_diary_enabled: true
+  # Learn reusable procedures after tasks and expose bounded discovery hints.
+  experience_enabled: true
   # Load toolkit function schemas only when needed.
   progressive_toolkit_loading: true
 

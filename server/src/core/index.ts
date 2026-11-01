@@ -20,6 +20,7 @@ import Persona from '@/core/llm-manager/persona'
 import ContextManager from '@/core/context-manager'
 import MemoryManager from '@/core/memory-manager'
 import SelfModelManager from '@/core/self-model-manager'
+import ExperienceManager from '@/core/experience-manager'
 import PulseManager from '@/core/pulse-manager'
 import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
 import { ToolkitRegistry, ToolExecutor, ToolWorkerManager } from '@/core/tool-manager'
@@ -112,6 +113,10 @@ export const MEMORY_MANAGER = createProfileServiceProxy(
 export const SELF_MODEL_MANAGER = createProfileServiceProxy(
   'self-model-manager',
   () => new SelfModelManager()
+)
+export const EXPERIENCE_MANAGER = createProfileServiceProxy(
+  'experience-manager',
+  () => new ExperienceManager()
 )
 export const PULSE_MANAGER = createProfileServiceProxy(
   'pulse-manager',

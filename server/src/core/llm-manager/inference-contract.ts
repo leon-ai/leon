@@ -14,6 +14,7 @@ export enum InferencePurpose {
   Memory = 'memory',
   OwnerProfile = 'owner-profile',
   SelfModel = 'self-model',
+  Experience = 'experience',
   Pulse = 'pulse',
   PulsePlanning = 'pulse-planning',
   PulseReaction = 'pulse-reaction',
