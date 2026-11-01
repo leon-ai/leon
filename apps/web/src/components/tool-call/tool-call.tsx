@@ -54,7 +54,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const disclosure = useToolCallContents(toolCall.id, isExpanded)
   const liveOutput = useMemo(() => toToolContent(toolCall.output), [toolCall.output])
-  const output = liveOutput ?? disclosure.data?.output
+  const output = disclosure.data?.displayOutput ?? liveOutput ?? disclosure.data?.output
   const detailsId = useId()
   const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
   const duration = isActive
