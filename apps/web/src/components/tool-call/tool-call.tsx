@@ -8,6 +8,8 @@ import { Collapse } from '@/components/collapse'
 import { useToolCallContents } from '@/data/conversation-details'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
 import { toToolContent } from '@/utils/tool-content'
+import { Button } from '@/components/button'
+import { useOpenToolDetails } from './tool-details-provider'
 import { ToolOutput } from './tool-output'
 
 import './tool-call.sass'
@@ -70,6 +72,8 @@ export function ToolCall({ toolCall }: ToolCallProps) {
     formatFunctionName(toolCall.functionName)
   ].join(' • ')
 
+  const openDetails = useOpenToolDetails(toolCall, technicalTitle)
+
   return (
     <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
       <div className="tool-call-heading" onClick={forwardTimestampClickToDisclosure}>
@@ -115,7 +119,11 @@ export function ToolCall({ toolCall }: ToolCallProps) {
       </div>
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">
-          <p className="tool-call-details-title">{technicalTitle}</p>
+          <div className="tool-call-details-heading">
+            <p className="tool-call-details-title">{technicalTitle}</p>
+            <Button iconName="expand-diagonal" tone="muted" tooltipMessage="View details"
+              tooltipPosition="left" onClick={openDetails} />
+          </div>
           {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
           <div className="tool-call-output-frame">
             <ToolOutput content={output} label="Tool output" active={isActive}

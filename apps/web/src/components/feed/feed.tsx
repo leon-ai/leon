@@ -16,6 +16,7 @@ import { Message } from '@/components/message'
 import { OwnerMessage } from '@/components/owner-message'
 import { FeedAnimationProvider } from '@/components/streaming-text'
 import { ConversationDetailsProvider } from '@/data/conversation-details'
+import { ToolDetailsProvider } from '@/components/tool-call/tool-details-provider'
 import { Button } from '@/components/button'
 import { Loader } from '@/components/loader'
 import { createFastScrollDriver } from './fast-scroll'
@@ -431,6 +432,7 @@ export function Feed({
 
   return (
     <FeedAnimationProvider live={Boolean(sessionId)} {...(historicalIds ? { historicalIds } : {})}>
+      <ToolDetailsProvider entries={entries} sessionId={sessionId}>
         <section ref={feedRef} className={clsx('feed', {
           'feed-with-history': history?.canLoad || requestedHistoryRef.current
         })} aria-label="Session messages">
@@ -503,6 +505,7 @@ export function Feed({
             aria-hidden="true"
           />
         </section>
+      </ToolDetailsProvider>
     </FeedAnimationProvider>
   )
 }

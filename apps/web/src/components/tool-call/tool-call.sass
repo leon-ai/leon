@@ -125,6 +125,61 @@
   align-items: center
   justify-content: center
 
+.tool-details-dialog
+  display: flex
+  flex-direction: column
+  height: min(720px, calc(100dvh - 144px))
+  max-height: calc(100dvh - 144px)
+
+  .dialog-body
+    display: flex
+    flex: 1 1 auto
+    flex-direction: column
+    min-height: 0
+    padding: var(--space-sm) 0 0
+
+  .dialog-header,
+  .dialog-footer
+    flex: 0 0 auto
+
+  .dialog-footer
+    align-items: center
+
+.tool-details-path
+  flex: 0 0 auto
+  margin: 0 0 var(--space-lg)
+  padding: 0 var(--space-xl)
+  font-size: var(--font-size-xs)
+  color: var(--color-text-tertiary)
+
+.tool-details-reading-pane
+  flex: 1 1 auto
+  min-width: 0
+  min-height: 0
+
+  .code-view,
+  .tool-output,
+  .tool-changes
+    height: 100%
+    min-height: 0
+
+.tool-details-toolbar
+  display: flex
+  flex: 0 0 auto
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-sm)
+  padding: 0 var(--space-lg) var(--space-sm)
+  border-bottom: 1px solid var(--color-border)
+
+.tool-details-tabs
+  display: flex
+  gap: var(--space-xs)
+
+.tool-details-tab[aria-selected='true']
+  --button-background: var(--color-surface-hover)
+  color: var(--color-text)
+
 @media (max-width: 680px)
   .tool-call-details
     margin-left: var(--space-sm)
