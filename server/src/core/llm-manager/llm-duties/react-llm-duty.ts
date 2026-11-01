@@ -449,10 +449,7 @@ export class ReActLLMDuty extends LLMDuty {
 
         const dutyResult = this.makeDutyResult(answer)
         scheduleHistoryCompaction(
-          () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(
-            planWidgetIdValue,
-            trackedSteps
-          )
+          () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer()
         )
 
         return dutyResult

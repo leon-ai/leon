@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { useRouter } from '@tanstack/react-router'
 
 import { Button } from '@/components/button'
+import { Loader } from '@/components/loader'
 import { ConnectionError } from '@/data/request-errors'
 
 import './request-feedback.sass'
@@ -70,7 +71,10 @@ export function RequestFeedback({ error = null, message, role = 'alert', paused 
 
   return (
     <div ref={feedbackRef} role={role} className="request-feedback">
-      <p>{message ?? (paused ? new ConnectionError().message : error?.message)}</p>
+      <p>
+        {role === 'status' && <Loader />}
+        {message ?? (paused ? new ConnectionError().message : error?.message)}
+      </p>
       {onRetry && (
         <Button variant="secondary" disabled={paused || retrying} onClick={onRetry}>
           {retrying ? 'Retrying…' : retryLabel}

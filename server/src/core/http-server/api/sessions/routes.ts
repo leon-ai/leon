@@ -172,6 +172,25 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
     }
   )
 
+  fastify.get<{
+    Params: { session_id: string, message_id: string, tool_id: string }
+    Querystring: { complete?: boolean }
+  }>(`/api/${options.apiVersion}/sessions/:session_id/messages/:message_id/tools/:tool_id`, {
+    schema: {
+      params: Type.Object({ session_id: Type.String(), message_id: Type.String(), tool_id: Type.String() }),
+      querystring: Type.Object({ complete: Type.Optional(Type.Boolean()) })
+    }
+  }, async (request, reply) => {
+    const { session_id: sessionId, message_id: messageId, tool_id: toolId } = request.params
+    if (!CONVERSATION_REPOSITORY.readSession(sessionId)) {
+      return reply.code(404).send({ message: 'Session not found.' })
+    }
+
+    const contents = CONVERSATION_REPOSITORY.readToolContents(sessionId, messageId, toolId, request.query.complete)
+
+    return contents ? reply.send(contents) : reply.code(404).send({ message: 'Tool call not found.' })
+  })
+
   fastify.route({
     method: 'GET',
     url: `/api/${options.apiVersion}/sessions`,

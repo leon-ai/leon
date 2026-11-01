@@ -1,7 +1,8 @@
-import type { Page, Route } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
+import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 
-import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER } from './fixtures'
+import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
 async function expectBottom(page: Page): Promise<void> {
   await expect.poll(() => page.locator('.app-main').evaluate((main) =>
@@ -9,6 +10,625 @@ async function expectBottom(page: Page): Promise<void> {
   )).toBeLessThanOrEqual(2)
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
 }
+
+/**
+ * Samples a disclosure heading through its finite motion, including late
+ * virtual measurements, so a brief upward jump cannot pass a settled assertion.
+ */
+function recordDisclosurePositions(trigger: Locator): Promise<number[]> {
+  return trigger.evaluate(async (element) => {
+    const positions: number[] = []
+    let settledFrames = 0
+    const maximumFrames = 120
+    for (let frame = 0; frame < maximumFrames && settledFrames < 3; frame++) {
+      await new Promise(requestAnimationFrame)
+      positions.push(element.isConnected ? element.getBoundingClientRect().top : NaN)
+      const animating = element.closest('.feed')?.getAnimations({ subtree: true }).some((animation) =>
+        animation.playState === 'running' && animation.effect?.getComputedTiming().iterations !== Infinity
+      )
+      settledFrames = element.getAttribute('aria-expanded') === 'true' && !animating ? settledFrames + 1 : 0
+    }
+
+    return positions
+  })
+}
+
+test('reveals conversation loading only after one second and cancels it on navigation', async ({ page, ui }) => {
+  const now = new Date('2026-11-01T12:00:00Z')
+  await page.clock.install({ time: now })
+  await page.clock.pauseAt(now)
+  const release = ui.holdHistory()
+  await page.goto(SESSION_URL)
+  const loading = page.getByText('Loading conversation…', { exact: true })
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeVisible()
+  await expect(loading).toHaveCount(0)
+  await page.clock.runFor(999)
+  await expect(loading).toHaveCount(0)
+  await page.clock.runFor(1)
+  await expect(loading).toBeVisible()
+  await page.getByRole('link', { name: 'New session', exact: true }).click()
+  await expect(page).toHaveURL(/\/web-app\/?$/)
+  await page.clock.runFor(1_000)
+  await expect(loading).toHaveCount(0)
+  release()
+  await page.clock.resume()
+  await expect(loading).toHaveCount(0)
+})
+
+test('bounds inline output, virtualizes complete logs, and retains the inspector when work finishes', async ({ page, ui }, testInfo) => {
+  expect(page.workers()).toHaveLength(0)
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  const tool: ConversationTool = { id: 'large-log', name: 'test.shell.run', toolCallTitle: 'Inspect the logs',
+    status: 'running', input: { command: 'read logs' },
+    commandOutput: Array.from({ length: 12_000 }, (_, index) => `Log line ${index}`).join('\n'),
+    output: { running: true } }
+  answer.message = ''
+  answer.isAddedToHistory = false
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [tool] }
+  ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Inspect the logs', exact: true }).click()
+  const preview = page.getByLabel('Tool output', { exact: true })
+  await expect(preview).toContainText('Log line')
+  await expect(preview).not.toContainText('Log line 0')
+  await expect(preview).toContainText('Log line 11999')
+  expect(ui.requests.some((url) => url.searchParams.get('complete') === 'true')).toBe(false)
+  expect(await preview.locator('.code-view-line').count()).toBe(16)
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeGreaterThan(300)
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(376)
+  expect(await preview.evaluate((element) => getComputedStyle(element).overflowY)).toBe('hidden')
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Inspect the logs', exact: true })
+  await expect(dialog.locator('.tool-details-output-size')).toHaveCount(0)
+  await expect(dialog.locator('.dialog-footer')).not.toContainText('characters')
+  const output = dialog.getByLabel('Output JSON', { exact: true })
+  await expect(output).toContainText('Log line')
+  await dialog.getByRole('tab', { name: 'Input', exact: true }).click()
+  await expect(dialog.getByLabel('Input JSON', { exact: true })).toContainText('read logs')
+  await expect(output).toHaveCount(0)
+  await dialog.getByRole('tab', { name: 'Output', exact: true }).click()
+  await expect(dialog.locator('.scroll-container-viewport')).toHaveCount(1)
+  await output.evaluate((element) => { element.scrollTop = 0 })
+  await expect(output).toContainText('Log line 0')
+  await output.evaluate((element) => { element.scrollTop = element.scrollHeight })
+  await expect(output).toContainText('Log line 11999')
+  expect(await output.locator('.code-view-line').count()).toBeLessThan(40)
+  tool.status = 'success'
+  tool.durationMs = 4_000
+  await ui.emit([{ type: 'tool_call', sequence: 1, session_id: SESSION_ID, turn_id: 'owner',
+    response_id: answer.messageId, created_at: Date.now(),
+    data: { tool_call: { id: tool.id, name: tool.name, status: 'success', duration_ms: 4_000 } } }])
+  await expect(dialog).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Used 1 tool for 4s', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await testInfo.attach('complete-tool-output', { body: await dialog.screenshot(), contentType: 'image/png' })
+  const downloadEvent = page.waitForEvent('download')
+  const downloadButton = dialog.getByRole('button', { name: 'Download output', exact: true })
+  await expect(downloadButton.locator('.button-label')).toHaveCount(0)
+  await downloadButton.hover()
+  await expect(page.locator('.tooltip-content-open')).toHaveText('Download output')
+  await downloadButton.click()
+  const download = await downloadEvent
+  expect(download.suggestedFilename()).toBe('tool-output.txt')
+  expect(await download.failure()).toBeNull()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect.poll(() => page.workers().length).toBe(0)
+})
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`expands large groups downward without moving their headings (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      reasoning: Array.from({ length: 32 }, (_, index) => ({
+        id: `thought-${index}`, text: `Consider part ${index}.`, phase: 'agent', startedAt: index + 1
+      })),
+      toolCalls: Array.from({ length: 128 }, (_, index) => ({
+        id: `expand-${index}`, name: 'test.inspect', toolCallTitle: `Inspect part ${index}`,
+        status: 'success', output: `Part ${index}`
+      }))
+    }
+    await page.goto(SESSION_URL)
+    await expectBottom(page)
+    const work = page.getByRole('button', { name: 'Worked for 2s', exact: true })
+    const workTop = (await work.boundingBox())!.y
+    const workPositions = recordDisclosurePositions(work)
+    await work.click()
+    expect(Math.max(...(await workPositions).map((top) => Math.abs(top - workTop)))).toBeLessThan(2)
+    await finishFiniteAnimations(page.locator('.feed'))
+    const group = page.getByRole('button', { name: 'Used 128 tools', exact: true })
+    await group.evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
+    const groupTop = (await group.boundingBox())!.y
+    const groupPositions = recordDisclosurePositions(group)
+    await group.click()
+    expect(Math.max(...(await groupPositions).map((top) => Math.abs(top - groupTop)))).toBeLessThan(2)
+    await expect(page.getByRole('button', { name: 'Inspect part 0', exact: true })).toBeVisible()
+    const leaf = page.getByRole('button', { name: 'Inspect part 0', exact: true })
+    await leaf.focus()
+    const leafTop = (await leaf.boundingBox())!.y
+    const leafPositions = recordDisclosurePositions(leaf)
+    await leaf.press('Enter')
+    expect(Math.max(...(await leafPositions).map((top) => Math.abs(top - leafTop)))).toBeLessThan(2)
+    await expect(page.getByRole('region', { name: 'Tool output', exact: true })).toContainText('Part 0')
+    await page.getByRole('button', { name: 'Scroll to bottom', exact: true }).click()
+    await expectBottom(page)
+  })
+}
+
+for (const active of [false, true]) {
+  test(`virtualizes long tool groups against the conversation viewport (active: ${active})`, async ({ page, ui }) => {
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    if (active) {
+      answer.isAddedToHistory = false
+      answer.message = ''
+      ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+    }
+    answer.agentResponseTrace = { id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      toolCalls: Array.from({ length: 128 }, (_, index) => ({ id: `tool-${index}`, name: 'test.inspect',
+        toolCallTitle: `Inspect item ${index}`, status: active && index === 127 ? 'running' : 'success', output: `Result ${index}` })) }
+    await page.goto(SESSION_URL)
+    if (!active) {
+      await page.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+      await page.getByRole('button', { name: 'Used 128 tools', exact: true }).click()
+    }
+    const list = page.getByRole('region', { name: 'Tool calls', exact: true })
+    const main = page.locator('.app-main')
+    await expect(list).toBeAttached()
+    await finishFiniteAnimations(page.locator('.feed'))
+    await main.evaluate((element) => {
+      const list = element.querySelector('[aria-label="Tool calls"]')!
+      element.scrollTop += list.getBoundingClientRect().top - element.getBoundingClientRect().top - 64
+    })
+    await expect(list.getByRole('button', { name: 'Inspect item 0', exact: true })).toBeVisible()
+    expect(await list.locator('.tool-call').count()).toBeLessThan(50)
+    expect(await list.evaluate((element) => element.clientHeight)).toBeGreaterThan(360)
+    await main.evaluate((element) => {
+      const list = element.querySelector('[aria-label="Tool calls"]')!
+      element.scrollTop += list.getBoundingClientRect().bottom - element.getBoundingClientRect().top - element.clientHeight / 2
+    })
+    await expect(list.getByRole('button', { name: 'Inspect item 127', exact: true })).toBeVisible()
+    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    await list.getByRole('button', { name: 'Inspect item 127', exact: true }).click()
+    await expect(list.getByLabel('Tool output', { exact: true })).toContainText('Result 127')
+  })
+}
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`keeps the feed as the only vertical scroll area (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.message = Array.from({ length: 60 }, (_, index) => `Answer paragraph ${index}.`).join('\n\n')
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      toolCalls: Array.from({ length: 16 }, (_, index) => ({
+        id: `scroll-${index}`, name: 'test.inspect', toolCallTitle: `Inspect section ${index}`, status: 'success',
+        output: Array.from({ length: 200 }, (_, line) => `Output line ${line} ${'detail '.repeat(80)}`).join('\n')
+      }))
+    }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 16 tools', exact: true }).click()
+    await page.getByRole('button', { name: 'Inspect section 0', exact: true }).click()
+    const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+    const firstOutput = tools.getByRole('region', { name: 'Tool output', exact: true }).first()
+    const main = page.locator('.app-main')
+
+    await finishFiniteAnimations(page.locator('.feed'))
+    await firstOutput.scrollIntoViewIfNeeded()
+    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    expect(await firstOutput.locator('.code-view-line').count()).toBeLessThanOrEqual(16)
+    await firstOutput.hover()
+    const mainTop = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(400, 0)
+    await expect.poll(() => firstOutput.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+    expect(await main.evaluate((element) => element.scrollTop)).toBe(mainTop)
+    await page.mouse.wheel(0, 120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeGreaterThan(mainTop)
+
+    await firstOutput.scrollIntoViewIfNeeded()
+    await firstOutput.hover()
+    const beforeUp = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(0, -120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(beforeUp)
+
+    await page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true }).click()
+    const menuViewport = page.locator('.dropdown-content .scroll-container-viewport')
+    await expect(menuViewport).toBeVisible()
+    expect(await menuViewport.evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe('contain')
+  })
+}
+
+test('highlights session JSON with long output strings in previews and the tabbed inspector', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = {
+    id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+      id: 'session-output', name: 'operating_system_control.shell.readSession', toolCallTitle: 'Read the command session',
+      status: 'success', input: { sessionId: 'command-session' },
+      output: { result: { success: true, data: {
+        sessionId: 'command-session', running: false, exitCode: 0, output: 'A shell output line.\n'.repeat(250)
+      } } }
+    }]
+  }
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+  await page.getByRole('button', { name: 'Read the command session', exact: true }).click()
+  const preview = page.getByRole('region', { name: 'Tool output', exact: true })
+  await expect.poll(() => preview.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
+  await expect(preview).toContainText('command-session')
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Read the command session', exact: true })
+  const output = dialog.getByRole('region', { name: 'Output JSON', exact: true })
+  await expect.poll(() => output.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
+  await expect(dialog.locator('.scroll-container-viewport')).toHaveCount(1)
+  const outputTab = dialog.getByRole('tab', { name: 'Output', exact: true })
+  await outputTab.focus()
+  await outputTab.press('ArrowLeft')
+  await expect(dialog.getByRole('tab', { name: 'Input', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(dialog.getByRole('region', { name: 'Input JSON', exact: true })).toContainText('command-session')
+  await expect(output).toHaveCount(0)
+  await page.keyboard.press('ArrowRight')
+  await expect(outputTab).toHaveAttribute('aria-selected', 'true')
+  await expect(output).toContainText('A shell output line.')
+})
+
+test('shows native file-read content as code without exposing its result envelope', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  const content = `export const greeting = "${'Hello '.repeat(100)}"\n`
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+    id: 'source', name: 'file_system.file.read', toolCallTitle: 'Read source file', status: 'success', durationMs: 84,
+    input: JSON.stringify({ path: 'greeting.ts' }), output: { result: { success: true,
+      data: { path: 'greeting.ts', content, contentHash: 'hash', truncated: false } } }
+  }] }
+  await page.goto(SESSION_URL)
+  expect(page.workers()).toHaveLength(0)
+  expect(await page.evaluate(() => performance.getEntriesByType('resource').some((entry) => entry.name.includes('jetbrains-mono')))).toBe(false)
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool for 84ms', exact: true }).click()
+  const trigger = page.getByRole('button', { name: 'Read source file' })
+  await trigger.click()
+  const output = page.getByLabel('Tool output', { exact: true })
+  await expect(output).toContainText(content.trim())
+  expect(await output.evaluate((element) => element.clientHeight)).toBeLessThan(200)
+  await output.focus()
+  await output.press('ArrowRight')
+  await expect.poll(() => output.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+  await expect(output).not.toContainText('contentHash')
+  await expect.poll(() => output.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
+  expect(await output.evaluate((element) => getComputedStyle(element).fontFamily)).toContain('JetBrains Mono')
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Read source file', exact: true })
+  await expect(dialog.getByLabel('Output JSON', { exact: true })).toContainText(content.trim())
+  await expect(dialog.getByLabel('Output JSON', { exact: true })).not.toContainText('contentHash')
+  await expect(dialog.getByRole('button', { name: 'Structured result', exact: true })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: 'Formatted output', exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await trigger.click()
+  await expect.poll(() => page.workers().length).toBe(0)
+})
+
+for (const width of [1_512, 390]) {
+  test(`defaults to inline diffs with accessible layout controls and raw input/output (${width})`, async ({ page, ui }, testInfo) => {
+    const resources: string[] = []
+    page.on('request', (request) => {
+      if (request.resourceType() === 'script' || new URL(request.url()).pathname.endsWith('.wasm')) {
+        resources.push(request.url())
+      }
+    })
+    await page.setViewportSize({ width, height: 982 })
+    if (width === 390) {
+      // Restricted hosts must retain a usable diff through the JavaScript backend.
+      await page.addInitScript(() => Object.defineProperty(window, 'WebAssembly', { value: undefined }))
+    }
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = { id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+      id: 'edit', name: 'file_system.file.patch', toolCallTitle: 'Adjust the greeting', status: 'success', durationMs: 100,
+      input: JSON.stringify({ path: 'greeting.ts', changes: [{ oldText: 'const greeting = "Hello"\n', newText: 'const greeting = "Welcome"\n' }] }),
+      output: { result: { success: true, data: { changed: true, diff: '-const greeting = "Hello"\n+const greeting = "Welcome"', diffTruncated: true } } }
+    }] }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 1 tool for 100ms', exact: true }).click()
+    await page.getByRole('button', { name: 'Adjust the greeting' }).click()
+    const diff = page.locator('.feed .tool-diff')
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+    await expect.poll(() => diff.evaluate((element) => element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? ''))
+      .toContain('Welcome')
+    await expect.poll(() => diff.evaluate((element) => Array.from(
+      element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
+    ).filter((span) => span.textContent?.trim() === 'const' && span.style.color).length)).toBeGreaterThan(0)
+    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    await expect(diff.getByRole('button')).toHaveCount(0)
+    expect(await page.locator('.tool-changes-preview').evaluate((element) => element.clientHeight)).toBeLessThan(200)
+    await page.setViewportSize({ width: width === 390 ? 1_512 : 390, height: 982 })
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+    await page.setViewportSize({ width, height: 982 })
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+
+    const details = page.getByRole('button', { name: 'View details', exact: true })
+    await expect(details.locator('.button-label')).toHaveCount(0)
+    await details.hover()
+    await expect(page.locator('.tooltip-content-open')).toHaveText('View details')
+    await details.click()
+    const dialog = page.getByRole('dialog', { name: 'Adjust the greeting', exact: true })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused()
+    const bounds = (await dialog.boundingBox())!
+    expect(bounds.width).toBeLessThanOrEqual(width - 28)
+    if (width > 1_000) {
+      expect(bounds.width).toBeGreaterThan(1_000)
+    }
+    for (const height of [982, 540]) {
+      await page.setViewportSize({ width, height })
+      await expect.poll(async () => {
+        const box = (await dialog.boundingBox())!
+
+        return Math.abs(box.y + box.height / 2 - height / 2)
+      }).toBeLessThanOrEqual(1)
+      const box = (await dialog.boundingBox())!
+      expect(box.y).toBeGreaterThan(0)
+      expect(box.y + box.height).toBeLessThan(height)
+    }
+    await page.setViewportSize({ width, height: 982 })
+    const dialogDiff = dialog.locator('.tool-diff')
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'unified')
+    await expect(dialogDiff).toContainText('Truncated change preview.')
+    const views = dialogDiff.getByRole('group', { name: 'Diff view', exact: true })
+    expect(await views.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))))
+      .toEqual(['Inline view', 'Split view'])
+    await expect(views.getByRole('button', { name: 'Inline view', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(views.locator('.ri-list-check')).toHaveCount(1)
+    await expect(dialog.getByRole('button', { name: 'Hunk view', exact: true })).toHaveCount(0)
+    const dialogToggle = dialogDiff.getByRole('button', { name: 'Split view', exact: true })
+    await expect(dialogToggle.locator('.button-label')).toHaveCount(0)
+    await dialogToggle.focus()
+    const tooltip = page.locator('.tooltip-content-open')
+    await expect(tooltip).toHaveText('Split view')
+    const tooltipLayer = await tooltip.evaluate((element) => Number(getComputedStyle(element).zIndex))
+    const dialogLayer = await dialog.locator('..').evaluate((element) => Number(getComputedStyle(element).zIndex))
+    expect(tooltipLayer).toBeGreaterThan(dialogLayer)
+    await dialogToggle.press('Enter')
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'split')
+    await expect(dialogToggle).toBeFocused()
+    const inlineToggle = dialogDiff.getByRole('button', { name: 'Inline view', exact: true })
+    await finishFiniteAnimations(dialog.locator('..'))
+    await testInfo.attach(`tool-diff-${width}`, { body: await page.screenshot(), contentType: 'image/png' })
+    await inlineToggle.press('Enter')
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'unified')
+    await dialog.getByRole('tab', { name: 'Input', exact: true }).click()
+    await expect(dialog.getByLabel('Input JSON', { exact: true })).toContainText('oldText')
+    await expect(dialog.getByLabel('Output JSON', { exact: true })).toHaveCount(0)
+    await dialog.getByRole('tab', { name: 'Output', exact: true }).click()
+    await expect(dialog.getByLabel('Output JSON', { exact: true })).toContainText('diffTruncated')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'View details', exact: true })).toBeFocused()
+    await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0)
+    expect(resources.some((url) => new URL(url).pathname.endsWith('.wasm'))).toBe(false)
+    await testInfo.attach('syntax-resource-requests', {
+      body: JSON.stringify(resources, null, 2), contentType: 'application/json'
+    })
+  })
+}
+
+test('bounds long diff previews and retains recorded context in both inspector layouts', async ({ page, ui }) => {
+  const before = Array.from({ length: 60 }, (_, index) => `const marker${index} = ${index};`)
+  before[0] = `const description = "${'Context '.repeat(100)}";`
+  const after = [...before]
+  after[10] = 'const marker10 = 100;'
+  after[45] = 'const marker45 = 450;'
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = {
+    id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+      id: 'context-edit', name: 'file_system.file.patch', toolCallTitle: 'Update both markers', status: 'success',
+      input: JSON.stringify({ path: 'markers.ts', changes: [{ oldText: before.join('\n'), newText: after.join('\n') }] }),
+      output: { result: { success: true, data: { changed: true, diff: '-marker10 = 10\n+marker10 = 100' } } }
+    }]
+  }
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+  await page.getByRole('button', { name: 'Update both markers', exact: true }).click()
+  const preview = page.locator('.tool-changes-preview')
+  const previewCode = preview.locator('[data-code]').first()
+  await expect(previewCode).toBeVisible()
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(432)
+  expect(await preview.evaluate((element) => element.clientHeight)).toBeGreaterThan(300)
+  await previewCode.hover()
+  await page.mouse.wheel(400, 0)
+  await expect.poll(() => previewCode.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+  const previewBounds = (await preview.boundingBox())!
+  const codeBounds = (await previewCode.boundingBox())!
+  expect(codeBounds.y + codeBounds.height).toBeLessThanOrEqual(previewBounds.y + previewBounds.height)
+  const main = page.locator('.app-main')
+  const mainTop = await main.evaluate((element) => element.scrollTop)
+  await page.mouse.wheel(0, -120)
+  await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(mainTop)
+  expect(await previewCode.evaluate((element) => element.scrollTop)).toBe(0)
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Update both markers', exact: true })
+  const diff = dialog.locator('.tool-diff')
+  const text = (): Promise<string> => diff.evaluate((element) =>
+    element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? '')
+  await expect.poll(text).toContain('marker30')
+  const controls = diff.getByRole('group', { name: 'Diff view', exact: true })
+  const inline = controls.getByRole('button', { name: 'Inline view', exact: true })
+  const split = controls.getByRole('button', { name: 'Split view', exact: true })
+  expect(await controls.locator('.ri-list-check').evaluateAll((icons) =>
+    icons.every((icon) => getComputedStyle(icon, '::before').content !== 'none'))).toBe(true)
+  await expect.poll(text).toContain('marker10')
+  await expect.poll(text).toContain('marker45')
+  await split.click()
+  await expect(split).toHaveAttribute('aria-pressed', 'true')
+  await expect(diff).toHaveAttribute('data-diff-style', 'split')
+  await expect.poll(text).toContain('marker30')
+  await inline.press('Enter')
+  await expect(inline).toHaveAttribute('aria-pressed', 'true')
+  await expect(diff).toHaveAttribute('data-diff-style', 'unified')
+  await expect.poll(text).toContain('marker30')
+  await expect(controls.getByRole('button')).toHaveCount(2)
+})
+
+for (const wasm of [true, false]) {
+  test(`keeps file diffs readable outside the JavaScript grammar catalog (Wasm: ${wasm})`, async ({ page, ui }) => {
+    if (!wasm) {
+      await page.addInitScript(() => Object.defineProperty(window, 'WebAssembly', { value: undefined }))
+    }
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+        id: 'cpp-edit', name: 'file_system.file.patch', toolCallTitle: 'Adjust the counter', status: 'success',
+        input: JSON.stringify({ path: 'counter.cpp', changes: [{ oldText: 'int count = 1;\n', newText: 'int count = 2;\n' }] }),
+        output: { result: { success: true, data: { changed: true, diff: '-int count = 1;\n+int count = 2;' } } }
+      }]
+    }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+    await page.getByRole('button', { name: 'Adjust the counter', exact: true }).click()
+    const diff = page.locator('.feed .tool-diff')
+    await expect.poll(() => diff.evaluate((element) =>
+      element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? ''
+    )).toContain('count = 2')
+    if (wasm) {
+      await expect.poll(() => diff.evaluate((element) => Array.from(
+        element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
+      ).filter((span) => span.textContent?.trim() === 'int' && span.style.color).length)).toBeGreaterThan(0)
+    }
+    await expect(diff.getByRole('button')).toHaveCount(0)
+    await page.getByRole('button', { name: 'View details', exact: true }).click()
+    const dialogDiff = page.getByRole('dialog').locator('.tool-diff')
+    await dialogDiff.getByRole('button', { name: 'Split view', exact: true }).click()
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'split')
+    expect(errors).toEqual([])
+  })
+}
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`navigates virtual session search from the keyboard without leaving its input (${reducedMotion})`, async ({ page, ui }) => {
+    for (let index = ui.sessions.length; index < 80; index++) {
+      const session = { ...ui.sessions[0]!, id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        title: `Test session ${index}` }
+      ui.sessions.push(session)
+      ui.history.set(session.id, [])
+    }
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const trigger = page.getByRole('button', { name: 'Search sessions', exact: true })
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+    const search = dialog.getByRole('combobox', { name: 'Search sessions', exact: true })
+    const results = dialog.getByRole('listbox', { name: 'Matching sessions', exact: true })
+    await expect(search).toBeFocused()
+    await search.dispatchEvent('keydown', { key: 'ArrowDown', isComposing: true })
+    await expect(search).not.toHaveAttribute('aria-activedescendant')
+    await search.press('ArrowDown')
+    await expect(results.getByRole('option', { name: /^Test session 0 / })).toHaveAttribute('aria-selected', 'true')
+    await search.press('ArrowDown')
+    await expect(results.getByRole('option', { name: /^Test session 1 / })).toHaveAttribute('aria-selected', 'true')
+    await search.press('ArrowUp')
+    await expect(search).toBeFocused()
+    await search.fill('Test session')
+    await expect.poll(() => ui.requests.some((url) => url.searchParams.get('query') === 'Test session')).toBe(true)
+    await search.press('ArrowUp')
+    const last = results.getByRole('option', { name: /^Test session 79 / })
+    await expect(last).toBeVisible()
+    await expect(last).toHaveAttribute('aria-selected', 'true')
+    await expect(search).toHaveAttribute('aria-activedescendant', await last.getAttribute('id') ?? '')
+    expect(await results.getByRole('option').count()).toBeLessThan(30)
+    await search.press('Home')
+    expect(await search.evaluate((field: HTMLInputElement) => field.selectionStart)).toBe(0)
+    await expect(last).toHaveAttribute('aria-selected', 'true')
+    await search.fill('no-matching-session')
+    await search.press('Enter')
+    await expect(dialog).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(SESSION_ID))
+    await expect(dialog.getByText('No session found.', { exact: true })).toBeVisible()
+    await search.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await trigger.press('Enter')
+    await expect(search).toBeFocused()
+    await search.fill('Test session 1')
+    await expect(search).toHaveAttribute('aria-busy', 'false')
+    await expect(results.getByRole('option', { name: /^Test session 1 / })).toBeVisible()
+    await search.press('ArrowDown')
+    await search.press('Enter')
+    await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
+    await expect(dialog).toBeHidden()
+    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  })
+}
+
+test('moves sidebar focus across virtual rows without opening a session until Enter', async ({ page, ui }) => {
+  for (let index = ui.sessions.length; index < 80; index++) {
+    const session = { ...ui.sessions[0]!, id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      title: `Test session ${index}` }
+    ui.sessions.push(session)
+    ui.history.set(session.id, [])
+  }
+  await page.goto(SESSION_URL)
+  const first = page.getByRole('link', { name: 'Test session 0', exact: true })
+  await first.focus()
+  await first.press('End')
+  const last = page.getByRole('link', { name: 'Test session 79', exact: true })
+  await expect(last).toBeFocused()
+  await expect(last).toBeVisible()
+  expect(await page.locator('.session-list-item').count()).toBeLessThan(40)
+  await last.press('Home')
+  await expect(first).toBeFocused()
+  await first.press('ArrowDown')
+  const second = page.getByRole('link', { name: 'Test session 1', exact: true })
+  await expect(second).toBeFocused()
+  await expect(page).toHaveURL(new RegExp(SESSION_ID))
+  await second.press('Shift+ArrowDown')
+  await expect(second).toBeFocused()
+  await second.press('Enter')
+  await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+})
+
+test('opens and navigates session action menus with arrows, boundaries and native activation', async ({ page, ui }) => {
+  void ui
+  await page.goto(SESSION_URL)
+  const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Test session 0', exact: true }) })
+  await row.getByRole('link').focus()
+  const trigger = row.getByRole('button', { name: 'Session options', exact: true })
+  await trigger.focus()
+  await trigger.press('ArrowDown')
+  const menu = page.getByRole('menu')
+  const rename = menu.getByRole('menuitem', { name: 'Rename', exact: true })
+  await expect(rename).toBeFocused()
+  await rename.press('ArrowDown')
+  await expect(menu.getByRole('menuitem', { name: 'Pin session', exact: true })).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(menu.getByRole('menuitem', { name: 'Delete', exact: true })).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(rename).toBeFocused()
+  await rename.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await trigger.press('ArrowUp')
+  await expect(menu.getByRole('menuitem', { name: 'Delete', exact: true })).toBeFocused()
+  await page.keyboard.press('Home')
+  await rename.press('Enter')
+  const title = page.getByRole('textbox', { name: 'Session title', exact: true })
+  await expect(title).toBeFocused()
+  await title.press('Home')
+  await title.press('ArrowDown')
+  await expect(title).toBeFocused()
+  await title.press('Escape')
+  await row.getByRole('link').focus()
+  await trigger.press('Enter')
+  await expect(rename).toBeFocused()
+  await rename.press('Tab')
+  await expect(menu).toBeHidden()
+})
 
 test('reveals active session options on hover or keyboard focus rather than selection', async ({ page, ui }) => {
   void ui
@@ -40,6 +660,7 @@ test('drafts immediately while history loads and opens the latest messages at th
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   await expect(composer).toBeFocused()
+  await expect(page.getByText('Loading conversation…', { exact: true })).toHaveCount(0)
   await composer.fill('Draft before loading')
   await composer.press('Enter')
   await expect(composer).toHaveValue('Draft before loading')
@@ -47,6 +668,8 @@ test('drafts immediately while history loads and opens the latest messages at th
   const loading = page.getByRole('status').filter({ hasText: 'Loading conversation…' })
   await expect(loading).toBeVisible()
   await expect(loading.getByRole('button')).toHaveCount(0)
+  await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('width', '20px')
+  await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('height', '20px')
   for (const theme of ['light', 'dark']) {
     await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
@@ -442,14 +1065,14 @@ test('keeps drafting usable and reports browser storage failures', async ({ page
 test('reopens an evicted latest window without fetching older cursors first', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   await expectBottom(page)
-  const load = page.getByRole('button', { name: 'Load earlier messages' })
   for (let index = 0; index < 10; index++) {
     const response = page.waitForResponse((candidate) => new URL(candidate.url()).searchParams.has('before'))
-    await load.click()
+    await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
     await response
-    await expect(load).toBeEnabled()
+    await expect(page.getByRole('status').filter({ hasText: 'Loading earlier messages…' })).toHaveCount(0)
   }
-  await expect(page.getByRole('button', { name: 'Back to latest messages' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Back to latest messages' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Scroll to bottom', exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
   const frontier = ui.historyRequests.length
@@ -459,6 +1082,105 @@ test('reopens an evicted latest window without fetching older cursors first', as
   expect(reopened.length).toBeGreaterThan(0)
   expect(reopened.every((url) => !url.searchParams.has('before') && !url.searchParams.has('after'))).toBe(true)
 })
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`loads history on scroll with a shared loader and a stable reading position (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 },
+      toolCalls: [{ id: 'history-tool', name: 'test.inspect', toolCallTitle: 'Inspect history', status: 'success' }]
+    }
+    await page.goto(SESSION_URL)
+    await expectBottom(page)
+    // Inspecting turn details must not disable the history-prepend anchor.
+    await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+    await finishFiniteAnimations(page.locator('.feed'))
+    expect(ui.historyRequests).toHaveLength(1)
+    await expect(page.getByRole('button', { name: 'Load earlier messages', exact: true })).toHaveCount(0)
+    const release = ui.holdHistory()
+    await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+    const loading = page.getByRole('status').filter({ hasText: 'Loading earlier messages…' })
+    await expect(loading).toBeVisible()
+    await expect(loading.locator('.loader-indicator')).toHaveCSS('width', '12px')
+    await expect(loading.locator('.loader-indicator')).toHaveCSS('height', '12px')
+    await expect.poll(() => loading.locator('.loader-indicator').evaluate((element) =>
+      getComputedStyle(element, '::before').animationName
+    )).toBe(reducedMotion === 'reduce' ? 'none' : 'loader-indicator-pulse')
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await expect(loading.locator('.loader-indicator')).toHaveCSS('color', 'rgb(28, 117, 219)')
+      await expect(loading).toHaveCSS('color', 'rgb(136, 136, 136)')
+      const bounds = await loading.boundingBox()
+      const mask = await page.locator('.feed-mask-top').boundingBox()
+      expect(bounds!.y).toBeGreaterThan(mask!.y + mask!.height)
+      await page.screenshot({ path: testInfo.outputPath(`history-loader-${theme}.png`) })
+    }
+    expect(ui.historyRequests).toHaveLength(2)
+    const firstOwner = page.getByText('Saved question 220', { exact: true })
+    const before = await firstOwner.boundingBox()
+    release()
+    await expect(loading).toHaveCount(0)
+    await expect.poll(async () => Math.abs((await firstOwner.boundingBox())!.y - before!.y)).toBeLessThanOrEqual(2)
+    expect(ui.historyRequests).toHaveLength(2)
+  })
+}
+
+test('keeps older history readable after a paging failure and retries only on request', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  await expectBottom(page)
+  await finishFiniteAnimations(page.locator('.feed'))
+  ui.failure = { path: `/api/v1/sessions/${SESSION_ID}`, status: 500, message: 'History is unavailable.' }
+  await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+  const retry = page.getByRole('button', { name: 'Retry loading earlier messages', exact: true })
+  await expect(retry).toBeVisible()
+  await expect(page.locator('.request-feedback')).toHaveCount(0)
+  await expect(page.getByText('Saved question 220', { exact: true })).toBeVisible()
+  await expect(page.locator('.toast-title')).toHaveText(['Could not load the conversation'])
+  const requests = ui.requests.filter((url) => url.searchParams.has('before')).length
+  await page.getByRole('textbox', { name: 'Message Leon' }).fill('Keep this draft')
+  await expect(retry).toBeEnabled()
+  expect(ui.requests.filter((url) => url.searchParams.has('before'))).toHaveLength(requests)
+  ui.failure = undefined
+  await retry.click()
+  await expect(retry).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toHaveValue('Keep this draft')
+})
+
+for (const shortWindow of [false, true]) {
+  test(`continues history loading without another scroll (short window: ${shortWindow})`, async ({ page, ui }) => {
+    const response = page.waitForResponse((candidate) => new URL(candidate.url()).pathname === `/api/v1/sessions/${SESSION_ID}`)
+    await page.goto(SESSION_URL)
+    const snapshot = await (await response).json() as ConversationPage
+    await expectBottom(page)
+    const records = ui.history.get(SESSION_ID)!
+    const first = records.length - (shortWindow ? 2 : snapshot.messages.length)
+    let olderReads = 0
+    await page.route(`**/api/v1/sessions/${SESSION_ID}?*`, async (route) => {
+      const before = new URL(route.request().url()).searchParams.get('before')
+      if (before) {
+        olderReads++
+      }
+      await route.fulfill({ json: {
+        ...snapshot,
+        messages: before === 'first-older' ? records.slice(first - 2, first)
+          : before === 'older-tail' ? records.slice(first - 42, first - 2) : records.slice(first),
+        next_cursor: before === 'older-tail' ? null : before ? 'older-tail' : 'first-older',
+        newer_cursor: before ? String(first) : null
+      } })
+    })
+    await page.reload()
+    if (!shortWindow) {
+      await expectBottom(page)
+      await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
+    }
+    await expect.poll(() => olderReads).toBe(2)
+    await expect(page.getByRole('status').filter({ hasText: 'Loading earlier messages…' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Load earlier messages', exact: true })).toHaveCount(0)
+  })
+}
 
 test('reports a shared history failure once and keeps the draft through manual recovery', async ({ page, ui }) => {
   ui.failure = { path: `/api/v1/sessions/${SESSION_ID}`, status: 500, message: 'History is unavailable.' }
@@ -548,6 +1270,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(badge).toHaveCSS('opacity', '0')
     const reservedWidth = (await badge.boundingBox())!.width
     expect(reservedWidth).toBeGreaterThan(0)
+    const titleBounds = await tool.locator('.tool-call-title').boundingBox()
+    const chevron = tool.locator('.tool-call-chevron')
+    const chevronBounds = await chevron.boundingBox()
     expect(await timestamp.evaluate((element) => {
       const date = getComputedStyle(element)
       const duration = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-duration')!)
@@ -569,6 +1294,15 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await tool.hover()
     await expect(badge).toHaveCSS('opacity', '1')
     expect((await badge.boundingBox())!.width).toBe(reservedWidth)
+    const hoveredTitle = (await tool.locator('.tool-call-title').boundingBox())!
+    const hoveredChevron = (await chevron.boundingBox())!
+    expect(hoveredTitle.x).toBe(titleBounds!.x)
+    expect(hoveredTitle.width).toBe(titleBounds!.width)
+    expect(hoveredChevron.x).toBe(chevronBounds!.x)
+    const dateBounds = (await badge.boundingBox())!
+    const durationBounds = (await tool.locator('.tool-call-duration').boundingBox())!
+    expect(dateBounds.x).toBeGreaterThanOrEqual(durationBounds.x + durationBounds.width)
+    expect(dateBounds.x + dateBounds.width).toBeLessThanOrEqual(chevronBounds!.x)
     await expect(tooltip).toHaveCount(0)
     await timestamp.hover()
     await expect(tooltip).toHaveText('2026-10-30 14:32:15')
@@ -584,19 +1318,32 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(tool).toBeFocused()
     await expect(tool).toHaveAttribute('aria-expanded', 'true')
     await expect(tooltip).toHaveCount(0)
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(badge).toHaveCSS('opacity', '1')
     await timestamp.focus()
     await expect(tooltip).toHaveText('2026-10-30 14:32:15')
     await tool.focus()
     await expect(tooltip).toHaveCount(0)
+    await chevron.click()
+    await expect(tool).toHaveAttribute('aria-expanded', 'false')
+    await timestamp.click()
+    await expect(tool).toHaveAttribute('aria-expanded', 'true')
     const thought = work.getByRole('region', { name: 'Leon’s thinking', exact: true })
-    await thought.getByRole('button').click()
+    await thought.getByRole('button').locator('.process-group-title').click()
     await expect(thought.locator('.thinking-message-details')).toBeVisible()
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(thought.locator('.process-group-heading > .activity-timestamp')).toHaveCSS('opacity', '1')
     expect(await thought.evaluate((element) => {
       const details = element.querySelector('.thinking-message-details')!.getBoundingClientRect()
       const label = element.querySelector('.process-group-title')!.getBoundingClientRect()
       return Math.abs(details.left - label.left)
     })).toBeLessThanOrEqual(1)
     await thought.hover()
+    const thoughtDate = (await thought.locator('.activity-timestamp').boundingBox())!
+    const thoughtChevron = (await thought.locator('.process-group-chevron').boundingBox())!
+    expect(thoughtDate.x + thoughtDate.width).toBeLessThanOrEqual(thoughtChevron.x)
     await thought.locator('.activity-timestamp time').hover()
     await expect(tooltip).toContainText('2026-10-30 14:32:15')
     await page.getByRole('textbox', { name: 'Message Leon' }).hover()
@@ -717,36 +1464,50 @@ test('retries failed delivery with the original message ID instead of duplicatin
   await expect(page.getByText('Retry delivery', { exact: true })).toHaveCount(1)
 })
 
-test('keeps tool durations centered alongside their titles in both themes', async ({ page, ui }, testInfo) => {
-  const answer = ui.history.get(SESSION_ID)!.at(-1)!
-  answer.agentResponseTrace = {
-    id: answer.messageId,
-    planSteps: [],
-    toolCalls: [{
-      id: 'lookup', name: 'search.lookup.run', status: 'success',
-      toolCallTitle: 'Looked up information', toolIconName: 'search-line', startedAt: 0, durationMs: 1_500
-    }],
-    metrics: { durationMs: 2_000 }
-  }
+for (const status of ['success', 'error'] as const) {
+  test(`keeps recorded tool outcomes quiet and durations centered in both themes (${status})`, async ({ page, ui }, testInfo) => {
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId,
+      planSteps: [],
+      toolCalls: [{
+        id: 'lookup', name: 'search.lookup.run', status,
+        toolCallTitle: 'Look up information', toolIconName: 'search-line', startedAt: 0, durationMs: 1_500
+      }],
+      metrics: { durationMs: 2_000 }
+    }
 
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto(SESSION_URL)
-  await page.getByRole('button', { name: 'Worked for 2s' }).click()
-  await page.getByRole('button', { name: 'Used 1 tool for 2s', exact: true }).click()
-  const tool = page.getByRole('button', { name: 'Looked up information' })
-  await expect(tool).toBeVisible()
-  await expect(tool.locator('.tool-call-duration')).toHaveText('1.5s')
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 2s' }).click()
+    await page.getByRole('button', { name: 'Used 1 tool for 2s', exact: true }).click()
+    const tool = page.getByRole('button', { name: 'Look up information' })
+    await expect(tool).toBeVisible()
+    await expect(tool.locator('.tool-call-duration')).toHaveText('1.5s')
+    await expect(tool.locator('.activity-wave-active')).toHaveCount(0)
+    await expect(tool.locator('.tool-call-error-indicator')).toHaveCount(status === 'error' ? 1 : 0)
+    await expect(tool.locator('.ri-check-line, .ri-check-fill')).toHaveCount(0)
 
-  for (const theme of ['dark', 'light']) {
-    await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
-    const title = await tool.locator('.tool-call-title').boundingBox()
-    const duration = await tool.locator('.tool-call-duration').boundingBox()
-    expect(title).not.toBeNull()
-    expect(duration).not.toBeNull()
-    expect(Math.abs(title!.y + title!.height / 2 - duration!.y - duration!.height / 2)).toBeLessThanOrEqual(1)
-    await testInfo.attach(`tool-duration-${theme}`, { body: await tool.screenshot(), contentType: 'image/png' })
-  }
-})
+    for (const theme of ['dark', 'light']) {
+      await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+      if (status === 'error') {
+        await expect(tool).toHaveAccessibleDescription('Tool call failed')
+        await expect(tool.locator('.tool-call-error-indicator.ri-close-line')).toHaveCSS('color', 'rgb(172, 10, 10)')
+      }
+      const title = await tool.locator('.tool-call-title').boundingBox()
+      const duration = await tool.locator('.tool-call-duration').boundingBox()
+      expect(title).not.toBeNull()
+      expect(duration).not.toBeNull()
+      expect(Math.abs(title!.y + title!.height / 2 - duration!.y - duration!.height / 2)).toBeLessThanOrEqual(1)
+      if (status === 'error') {
+        const indicator = await tool.locator('.tool-call-error-indicator').boundingBox()
+        expect(indicator).not.toBeNull()
+        expect(Math.abs(indicator!.y + indicator!.height / 2 - duration!.y - duration!.height / 2)).toBeLessThanOrEqual(0.25)
+      }
+      await testInfo.attach(`tool-duration-${theme}`, { body: await tool.screenshot(), contentType: 'image/png' })
+    }
+  })
+}
 
 test('preserves sub-second tool totals in milliseconds after reloading', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!

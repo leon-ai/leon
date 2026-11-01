@@ -7,6 +7,7 @@ import { ProcessGroup } from '@/components/process-group'
 import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
 import { ThoughtIcon } from '@/components/thought-icon'
 import { WorkingMessage } from '@/components/working-message'
+import { Loader } from '@/components/loader'
 
 import './thinking-message.sass'
 
@@ -51,12 +52,16 @@ export function ThinkingMessage({
         indicator={<ThoughtIcon />}
         onExpandedChange={setDetailsOpen}
       >
-        <StreamingText
-          animationId={animationId}
-          className="thinking-message-details"
-          startDelay={120}
-          text={disclosure.isFetching && !detailText ? 'Loading reasoning…' : detailText}
-        />
+        {disclosure.isFetching && !detailText ? (
+          <span className="thinking-message-details"><Loader size="sm" label="Loading reasoning…" /></span>
+        ) : (
+          <StreamingText
+            animationId={animationId}
+            className="thinking-message-details"
+            startDelay={120}
+            text={detailText}
+          />
+        )}
         {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading reasoning</button>}
       </ProcessGroup>
     </div>

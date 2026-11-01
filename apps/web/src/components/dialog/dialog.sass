@@ -16,6 +16,11 @@
   opacity: 1
   pointer-events: auto
 
+.dialog-overlay-centered
+  align-items: center
+  box-sizing: border-box
+  padding: var(--space-lg)
+
 .dialog
   overflow: hidden
   background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
@@ -35,6 +40,9 @@
 
 .dialog-large
   width: min(720px, calc(100vw - 32px))
+
+.dialog-wide
+  width: min(1040px, calc(100vw - 32px))
 
 @starting-style
   .dialog-overlay-open

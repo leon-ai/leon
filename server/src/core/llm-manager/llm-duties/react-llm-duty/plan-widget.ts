@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { SOCKET_SERVER, TOOLKIT_REGISTRY } from '@/core'
+import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 
 import type { TrackedPlanStep } from './agent-types'
 
@@ -268,7 +269,8 @@ export function emitPlanWidget(
   justCompletedIndex: number | null,
   planWidgetId: string,
   isUpdate: boolean,
-  currentExecutingFunction: string | null = null
+  currentExecutingFunction: string | null = null,
+  activity?: InferenceActivity
 ): void {
   const activeStep =
     steps.find((step) => step.status === 'in_progress') ||
@@ -283,7 +285,8 @@ export function emitPlanWidget(
   const widgetData: Record<string, unknown> = {
     id: planWidgetId,
     widget: 'PlanWidget',
-    sentAt: Date.now(),
+    sentAt: activity?.startedAt ?? Date.now(),
+    ...(activity ? { activity } : {}),
     componentTree,
     supportedEvents: [],
     fallbackText: activeStep

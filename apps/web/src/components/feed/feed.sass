@@ -3,12 +3,16 @@
   --feed-entry-gap: 42px
   --feed-scrim-edge-width: 64px
   --feed-top-clearance: 52px
+  --feed-history-clearance: 0px
   box-sizing: border-box
   width: 100%
   padding: var(--feed-top-clearance) 0 var(--feed-bottom-clearance)
   color: var(--color-feed-text)
   font-size: var(--font-size-lg)
   line-height: var(--line-height-lg)
+
+.feed-with-history
+  --feed-history-clearance: calc(var(--space-xl) + var(--space-lg) * 2)
 
 .feed-scrim
   // A fixed decoration cannot widen the feed's scrollable content on small screens.
@@ -31,6 +35,19 @@
   position: relative
   width: 100%
 
+.feed-history
+  // Keep the paging slot stable across request states and clear of the top mask.
+  display: flex
+  box-sizing: border-box
+  align-items: center
+  justify-content: center
+  gap: var(--space-sm)
+  min-height: var(--feed-history-clearance)
+  padding: var(--space-md) 0
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
 .feed-turn
   position: absolute
   top: 0
@@ -42,7 +59,7 @@
   padding-bottom: calc(var(--feed-entry-gap) + var(--space-xl))
 
 .feed-turn-latest
-  min-height: calc(100vh - var(--feed-top-clearance) - var(--feed-bottom-clearance))
+  min-height: calc(100vh - var(--feed-top-clearance) - var(--feed-bottom-clearance) - var(--feed-history-clearance))
 
 .feed-turn-awaiting-owner .owner-message-animate
   animation-play-state: paused

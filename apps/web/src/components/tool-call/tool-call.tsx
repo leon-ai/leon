@@ -1,19 +1,25 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState, type CSSProperties, type Ref } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '@/data/feed'
 import { formatToolDuration } from '@/utils/format-tool-duration'
 import { ActivityWave } from '@/components/activity-wave'
 import { Collapse } from '@/components/collapse'
-import { JsonView } from '@/components/json-view'
-import { useConversationDetails } from '@/data/conversation-details'
-import { toFeedTool } from '@/data/conversation-feed'
-import { ActivityTimestamp } from '@/components/activity-timestamp'
+import { useToolCallContents } from '@/data/conversation-details'
+import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
+import { Button } from '@/components/button'
+import { toToolContent, toToolInput } from '@/utils/tool-content'
+import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
+import { ToolChanges, ToolOutput } from './tool-output'
+import { useOpenToolDetails } from './tool-details-provider'
 
 import './tool-call.sass'
 
 interface ToolCallProps {
   toolCall: FeedToolCall
+  measureRef?: Ref<HTMLElement>
+  rowIndex?: number
+  style?: CSSProperties
 }
 
 function formatFunctionName(functionName: string): string {
@@ -48,11 +54,17 @@ function formatFunctionName(functionName: string): string {
 /**
  * Shows a tool invocation, its execution state, and expandable input and output.
  */
-export function ToolCall({ toolCall }: ToolCallProps) {
+export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const disclosure = useConversationDetails(isExpanded)
-  const saved = disclosure.data?.message?.agentResponseTrace?.toolCalls.find((call) => call.id === toolCall.id)
-  const details = saved ? toFeedTool(saved) : toolCall
+  const disclosure = useToolCallContents(toolCall.id, isExpanded)
+  const liveOutput = useMemo(() => toToolContent(toolCall.output), [toolCall.output])
+  const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, false, true), [toolCall.commandOutput])
+  const command = liveCommand ?? disclosure.data?.commandOutput ?? disclosure.data?.displayOutput
+  const output = command ?? liveOutput ?? disclosure.data?.output
+  const liveInput = useMemo(() => toToolInput(toolCall.input === null ? undefined : toolCall.input), [toolCall.input])
+  const changesAvailable = toolCall.status === 'success' && (hasToolChanges(toolCall.output) || disclosure.data?.hasChanges === true)
+  const input = liveInput ?? disclosure.data?.input
+  const changes = useMemo(() => getToolChanges(input, changesAvailable), [input, changesAvailable])
   const detailsId = useId()
   const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
   const duration = isActive
@@ -69,40 +81,44 @@ export function ToolCall({ toolCall }: ToolCallProps) {
     toolCall.toolName,
     formatFunctionName(toolCall.functionName)
   ].join(' • ')
+  const openDetails = useOpenToolDetails(toolCall, technicalTitle)
 
   return (
-    <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
-      <div className="tool-call-heading">
+    <section ref={measureRef} data-index={rowIndex} style={style} className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
+      <div className="tool-call-heading" onClick={forwardTimestampClickToDisclosure}>
         <button
           type="button"
           className="tool-call-trigger"
           aria-expanded={isExpanded}
           aria-controls={detailsId}
+          aria-description={toolCall.status === 'error' ? 'Tool call failed' : undefined}
           onClick={() => setIsExpanded((isOpen) => !isOpen)}
         >
-          <ActivityWave
-            active={isActive}
-            className="tool-call-heading-layer"
-          >
-            <i
-              className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
-              aria-hidden="true"
-            />
-            <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
-          </ActivityWave>
-          {toolCall.status === 'preparing' && (
-            <span className="tool-call-duration activity-metadata">Preparing call</span>
-          )}
-          {duration && (
-            <span
-              className="tool-call-duration activity-metadata"
-              title={isBackground
-                ? 'Time to return the execution handle; the job is still running.'
-                : 'Execution time, including tool setup and transport.'}
+          <span className="tool-call-label">
+            <ActivityWave
+              active={isActive}
+              className="tool-call-heading-layer"
             >
-              {isBackground ? `${duration} to return` : duration}
-            </span>
-          )}
+              <i
+                className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
+                aria-hidden="true"
+              />
+              <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
+              {toolCall.status === 'error' && (
+                <i className="tool-call-error-indicator ri-close-line" aria-hidden="true" />
+              )}
+            </ActivityWave>
+            {duration && (
+              <span
+                className="tool-call-duration activity-metadata"
+                title={isBackground
+                  ? 'Time to return the execution handle; the job is still running.'
+                  : 'Execution time, including tool setup and transport.'}
+              >
+                {isBackground ? `${duration} to return` : duration}
+              </span>
+            )}
+          </span>
           <i
             className="tool-call-chevron ri-arrow-right-s-line"
             aria-hidden="true"
@@ -112,15 +128,22 @@ export function ToolCall({ toolCall }: ToolCallProps) {
       </div>
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">
-          <p className="tool-call-details-title">{technicalTitle}</p>
-          {disclosure.isLoading && <p role="status">Loading tool details…</p>}
+          <div className="tool-call-details-heading">
+            <p className="tool-call-details-title">{technicalTitle}</p>
+            <Button iconName="expand-diagonal" tone="muted" tooltipMessage="View details"
+              tooltipPosition="left" onClick={openDetails} />
+          </div>
           {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
-          <JsonView label="Input" value={toolCall.input ?? details.input} />
-          <JsonView
-            label="Output"
-            // Streamed output is newer than the lazy snapshot during refetches.
-            value={toolCall.output ?? details.output ?? { status: toolCall.status }}
-          />
+          <div className="tool-call-output-frame">
+            {changes.length > 0 ? (
+              <ToolChanges changes={changes} truncated={disclosure.data?.diffTruncated ?? false} preview
+                fallback={<ToolOutput content={output} label="Tool output" preview />} />
+            ) : (
+              <ToolOutput content={output} label="Tool output" active={isActive}
+                loading={disclosure.isFetching} preview
+                previewTail={liveCommand !== undefined || disclosure.data?.commandOutput !== undefined} />
+            )}
+          </div>
         </div>
       </Collapse>
     </section>

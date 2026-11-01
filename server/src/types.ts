@@ -19,6 +19,7 @@ import type { UsageAccounting } from '@/core/llm-manager/llm-usage/usage-account
 import type { ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
 import type { TurnInference } from '@/core/llm-manager/inference-metadata'
 import type { CompletionAttemptTiming } from '@/core/llm-manager/types'
+import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 
 export type Languages = typeof LANG_CONFIGS
 export type LongLanguageCode = keyof Languages
@@ -100,6 +101,7 @@ export type ConversationWidgetHistoryMode = 'persisted' | 'system_widget'
 export type ConversationItemSource = 'conversation_history' | 'system_widget'
 
 export interface ConversationWidgetData {
+  activity?: InferenceActivity
   actionName: string
   widget: string
   id: string

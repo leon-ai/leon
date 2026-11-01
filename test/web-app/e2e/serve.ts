@@ -44,7 +44,42 @@ try {
   await fs.writeFile(path.join(profilePath, 'config.yml'), 'server:\n  host: http://127.0.0.1\n  port: 1\n')
   const configFile = 'apps/web/vite.config.ts'
   const outDir = path.join(testHome, 'web-dist')
-  await build({ configFile, build: { outDir } })
+  let chunkSizeLimit = 0
+  await build({
+    configFile, build: { outDir }, plugins: [{
+      name: 'verify-ui-bundle-boundaries',
+      configResolved(config): void {
+        chunkSizeLimit = config.build.chunkSizeWarningLimit * 1_000
+      },
+      generateBundle(_options, bundle): void {
+        const outputs = Object.values(bundle)
+        const chunks = outputs.filter((entry) => entry.type === 'chunk')
+        const byName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]))
+        const initial = new Set<string>()
+        const pending = chunks.filter((chunk) => chunk.isEntry).map((chunk) => chunk.fileName)
+        while (pending.length) {
+          const fileName = pending.pop()!
+          if (initial.has(fileName)) {
+            continue
+          }
+          initial.add(fileName)
+          pending.push(...(byName.get(fileName)?.imports ?? []))
+        }
+        for (const output of outputs) {
+          const source = output.type === 'chunk' ? output.code : output.source
+          if (output.fileName.endsWith('.js') && Buffer.byteLength(source) > chunkSizeLimit) {
+            this.error(`JavaScript chunk exceeds the configured budget: ${output.fileName}`)
+          }
+        }
+        for (const chunk of chunks) {
+          if (initial.has(chunk.fileName) && chunk.moduleIds.some((id) =>
+            id.includes('/@pierre/') || id.includes('/@shikijs/') || id.includes('/shiki/'))) {
+            this.error(`Syntax engines must stay outside the startup graph: ${chunk.fileName}`)
+          }
+        }
+      }
+    }]
+  })
   server = await preview({
     configFile,
     base: '/web-app/',

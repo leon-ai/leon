@@ -395,19 +395,20 @@ test('lets a wheel gesture interrupt the fast return without pulling the owner b
   const scrollButton = page.getByRole('button', { name: 'Scroll to bottom', exact: true })
   await main.evaluate((element) => element.scrollTo({ top: element.scrollTop - 4_000 }))
   await expect(scrollButton).toBeVisible()
+  // Control the animation clock so the wheel gesture always arrives mid-scroll,
+  // independently of how long browser commands wait for a parallel worker.
+  const now = new Date()
+  await page.clock.install({ time: now })
+  await page.clock.pauseAt(new Date(now.getTime() + 10_000))
   await scrollButton.click()
+  await page.clock.runFor(32)
   expect(await main.evaluate((element) =>
     element.scrollHeight - element.clientHeight - element.scrollTop
   )).toBeGreaterThan(64)
   await page.mouse.wheel(0, -400)
-  const remaining = await main.evaluate(async (element) => {
-    // Observe beyond the animation's deadline; a cancelled target must not resume.
-    for (let frame = 0; frame < 20; frame++) {
-      await new Promise(requestAnimationFrame)
-    }
-
-    return element.scrollHeight - element.clientHeight - element.scrollTop
-  })
+  // Observe beyond the animation's deadline; a cancelled target must not resume.
+  await page.clock.runFor(1_000)
+  const remaining = await main.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)
   expect(remaining).toBeGreaterThan(64)
   await expect(scrollButton).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
@@ -441,6 +442,69 @@ test('retargets the fast return when streamed content grows before landing', asy
   expect(timing.landed).toBe(true)
   expect(timing.durationMs).toBeLessThan(320)
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+})
+
+test('shares keyboard navigation across virtual model results and reasoning/service-tier choices', async ({ page, ui }) => {
+  const provider = ui.models.providers[0]!
+  const model = provider.models[0]!
+  ui.models.providers = [{ ...provider, models: [model, ...Array.from({ length: 60 }, (_, index) => ({
+    ...model, model: `test-model-${index}`, label: `Model ${index}`
+  }))] }]
+  await page.goto('/web-app/')
+  const trigger = page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true })
+  await trigger.press('Enter')
+  const popup = page.getByRole('dialog', { name: 'Choose a model', exact: true })
+  const search = popup.getByRole('combobox', { name: 'Search models', exact: true })
+  await search.press('ArrowDown')
+  await expect(popup.getByRole('option', { name: 'OpenAI', exact: true })).toHaveAttribute('data-highlighted', 'true')
+  await search.press('ArrowRight')
+  await expect(popup.getByRole('listbox', { name: 'OpenAI', exact: true })).toBeVisible()
+  await search.fill('x')
+  await search.press('Backspace')
+  await expect(search).toHaveValue('')
+  await expect(popup.getByRole('listbox', { name: 'OpenAI', exact: true })).toBeVisible()
+  await search.dispatchEvent('keydown', { key: 'Backspace', isComposing: true })
+  await expect(popup.getByRole('listbox', { name: 'OpenAI', exact: true })).toBeVisible()
+  await search.press('Backspace')
+  await expect(popup.getByRole('listbox', { name: 'Models and providers', exact: true })).toBeVisible()
+  await expect(search).toBeFocused()
+  await search.press('Backspace')
+  await expect(popup).toBeVisible()
+  await search.press('ArrowDown')
+  await search.press('ArrowRight')
+  await expect(popup.getByRole('listbox', { name: 'OpenAI', exact: true })).toBeVisible()
+  await search.press('ArrowUp')
+  await expect(popup.getByRole('option', { name: 'Model 59', exact: true })).toHaveAttribute('data-highlighted', 'true')
+  await expect(search).toBeFocused()
+  expect(await popup.getByRole('option').count()).toBeLessThan(25)
+  await search.fill('Model 12')
+  await search.press('Home')
+  expect(await search.evaluate((field: HTMLInputElement) => field.selectionStart)).toBe(0)
+  await search.press('ArrowDown')
+  await search.press('Enter')
+  await expect(popup).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Choose model, current: OpenAI, Model 12', exact: true })).toBeFocused()
+  const settingsTrigger = page.getByRole('button', { name: /^Model settings,/ })
+  await settingsTrigger.press('Enter')
+  const settings = page.getByRole('dialog', { name: 'Model settings', exact: true })
+  const effort = settings.getByRole('radiogroup', { name: 'Reasoning effort', exact: true })
+  await expect(effort.getByRole('radio', { name: 'High', exact: true })).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(effort.getByRole('radio', { name: 'Low', exact: true })).toBeChecked()
+  await page.keyboard.press('ArrowDown')
+  await expect(effort.getByRole('radio', { name: 'Medium', exact: true })).toBeChecked()
+  await page.keyboard.press('End')
+  await expect(effort.getByRole('radio', { name: 'High', exact: true })).toBeChecked()
+  await page.keyboard.press('Tab')
+  const tier = settings.getByRole('radiogroup', { name: 'Service tier', exact: true })
+  await expect(tier.getByRole('radio', { name: 'Auto', exact: true })).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect(tier.getByRole('radio', { name: 'Normal', exact: true })).toBeChecked()
+  await page.keyboard.press('ArrowLeft')
+  await expect(tier.getByRole('radio', { name: 'Auto', exact: true })).toBeChecked()
+  await page.keyboard.press('Escape')
+  await expect(settings).toBeHidden()
+  await expect(settingsTrigger).toBeFocused()
 })
 
 for (const panel of ['models', 'settings']) {

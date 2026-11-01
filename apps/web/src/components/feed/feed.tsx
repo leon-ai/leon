@@ -1,9 +1,12 @@
 import {
+  useCallback,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
   type Ref
 } from 'react'
 import { observeElementOffset, useVirtualizer } from '@tanstack/react-virtual'
@@ -15,6 +18,9 @@ import { Message } from '@/components/message'
 import { OwnerMessage } from '@/components/owner-message'
 import { FeedAnimationProvider } from '@/components/streaming-text'
 import { ConversationDetailsProvider } from '@/data/conversation-details'
+import { ToolDetailsProvider } from '@/components/tool-call/tool-details-provider'
+import { Button } from '@/components/button'
+import { Loader } from '@/components/loader'
 import { createFastScrollDriver } from './fast-scroll'
 
 import './feed.sass'
@@ -26,6 +32,7 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SCROLL_POSITION_TOLERANCE_PX = 1
 const SCROLL_SETTLE_DELAY_MS = 100
 const SCROLL_TO_BOTTOM_THRESHOLD_PX = 64
+const HISTORY_PREFETCH_DISTANCE_PX = 600
 
 /**
  * Exposes feed navigation without duplicating its virtualized scroll lifecycle.
@@ -40,7 +47,13 @@ interface FeedProps {
   ref?: Ref<FeedHandle>
   historicalIds?: readonly string[]
   sessionId?: string
-  onLoadEarlier?: () => void
+  history?: {
+    canLoad: boolean
+    isLoading: boolean
+    isError: boolean
+    onLoad: () => void
+    onRetry: () => void
+  }
 }
 
 interface FeedTurn {
@@ -78,7 +91,7 @@ export function Feed({
   ref,
   historicalIds,
   sessionId,
-  onLoadEarlier
+  history
 }: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
   const bottomMaskRef = useRef<HTMLDivElement>(null)
@@ -87,10 +100,25 @@ export function Feed({
   const scrimRef = useRef<HTMLDivElement>(null)
   const topMaskRef = useRef<HTMLDivElement>(null)
   const scrollToBottomVisibleRef = useRef(false)
+  const requestedHistoryRef = useRef(false)
+  const inspectingDetailsRef = useRef(false)
+  const [isInspectingDetails, setIsInspectingDetails] = useState(false)
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
   const fastScroll = useMemo(createFastScrollDriver, [])
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const turnCount = turns.length
+  const historyRef = useRef(history)
+  const resumeFollowing = useCallback((): void => {
+    inspectingDetailsRef.current = false
+    setIsInspectingDetails(false)
+  }, [])
+
+  useLayoutEffect(() => {
+    // The virtualizer keeps its offset subscription for the scroll element's
+    // lifetime; page completions must reach that subscription without rebinding it.
+    historyRef.current = history
+  }, [history])
+
   const virtualizer = useVirtualizer({
     count: turnCount,
     scrollToFn: fastScroll.scrollToFn,
@@ -101,17 +129,28 @@ export function Feed({
     getItemKey: (index) => turns[index]?.id ?? index,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
     overscan: FEED_OVERSCAN_COUNT,
-    // TanStack preserves visible keys when history is prepended and tracks
-    // dynamic response growth without competing custom scroll observers.
-    anchorTo: 'end',
+    // Manual disclosures grow below their headings. History prepends and new
+    // turns retain TanStack's key-preserving end anchor.
+    anchorTo: isInspectingDetails && previousFirstTurnRef.current === turns[0]?.id &&
+      previousTurnCountRef.current === turnCount ? 'start' : 'end',
     // ResizeObserver already runs before paint. Deferring it another frame
     // lets streamed content outgrow the virtual height and scroll anchor.
     useAnimationFrameWithResizeObserver: false,
     observeElementOffset: (instance, onOffsetChange) =>
       observeElementOffset(instance, (offset, isScrolling) => {
         onOffsetChange(offset, isScrolling)
-        if (isScrolling && instance.scrollDirection === 'backward' && offset < FEED_TURN_ESTIMATED_HEIGHT) {
-          onLoadEarlier?.()
+        if (inspectingDetailsRef.current && isScrolling &&
+          instance.scrollDirection === 'forward' && instance.isAtEnd(SCROLL_POSITION_TOLERANCE_PX)) {
+          resumeFollowing()
+        }
+
+        const currentHistory = historyRef.current
+        if (
+          currentHistory?.canLoad && isScrolling &&
+          instance.scrollDirection === 'backward' && offset < HISTORY_PREFETCH_DISTANCE_PX
+        ) {
+          requestedHistoryRef.current = true
+          currentHistory.onLoad()
         }
 
         // Reuse the virtualizer's observer; only visibility changes enter React.
@@ -127,9 +166,36 @@ export function Feed({
         }
       })
   })
+  const totalSize = virtualizer.getTotalSize()
+
+  function handleDisclosureClick(event: MouseEvent<HTMLElement>): void {
+    if (!(event.target instanceof Element) || !event.target.closest('button[aria-expanded]')) {
+      return
+    }
+
+    fastScroll.cancel()
+    virtualizer.cancelScroll()
+    inspectingDetailsRef.current = true
+    setIsInspectingDetails(true)
+  }
+
+  useEffect(() => {
+    const scroller = virtualizer.scrollElement
+    if (!history?.canLoad || history.isLoading || history.isError || !scroller ||
+      (virtualizer.scrollOffset ?? Infinity) >= HISTORY_PREFETCH_DISTANCE_PX) {
+      return
+    }
+    // Recheck after a page or measurement arrives, even without another scroll.
+    // Short windows can fill themselves; opening a tall session still starts at its end.
+    if (requestedHistoryRef.current || scroller.scrollHeight <= scroller.clientHeight + SCROLL_POSITION_TOLERANCE_PX) {
+      requestedHistoryRef.current = true
+      history.onLoad()
+    }
+  }, [history?.canLoad, history?.isLoading, history?.isError, history?.onLoad, totalSize, virtualizer])
 
   useImperativeHandle(ref, () => ({
     scrollToBottom: () => {
+      resumeFollowing()
       fastScroll.cancel()
       virtualizer.scrollToEnd({
         behavior: window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
@@ -137,9 +203,15 @@ export function Feed({
           : 'smooth'
       })
     }
-  }), [fastScroll, virtualizer])
+  }), [fastScroll, virtualizer, resumeFollowing])
 
   useLayoutEffect(() => {
+    if (isInspectingDetails && !scrollToBottomVisibleRef.current &&
+      !virtualizer.isAtEnd(SCROLL_TO_BOTTOM_THRESHOLD_PX)) {
+      scrollToBottomVisibleRef.current = true
+      setIsScrollToBottomVisible(true)
+    }
+
     // Disclosure resizing can reach the end without emitting a scroll event.
     if (
       scrollToBottomVisibleRef.current &&
@@ -241,6 +313,7 @@ export function Feed({
     const isInitialPosition = previousTurnCount === null
     const latestTurnIndex = turnCount - 1
     previousTurnCountRef.current = turnCount
+    resumeFollowing()
 
     if (isInitialPosition) {
       virtualizer.scrollToEnd({ behavior: 'auto' })
@@ -391,70 +464,84 @@ export function Feed({
         window.clearTimeout(scrollSettleTimeout)
       }
     }
-  }, [turnCount, fastScroll, virtualizer])
+  }, [turnCount, fastScroll, virtualizer, resumeFollowing])
 
   return (
     <FeedAnimationProvider live={Boolean(sessionId)} {...(historicalIds ? { historicalIds } : {})}>
-      <section ref={feedRef} className="feed" aria-label="Session messages">
-        <div
-          ref={scrimRef}
-          className="feed-scrim"
-          hidden={entries.length === 0}
-          aria-hidden="true"
-        />
-        <div
-          className="feed-virtual-content"
-          style={{ height: `${virtualizer.getTotalSize()}px` }}
-        >
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const turn = turns[virtualItem.index]
+      <ToolDetailsProvider entries={entries} sessionId={sessionId}>
+        <section ref={feedRef} className={clsx('feed', {
+          'feed-with-history': history?.canLoad || requestedHistoryRef.current
+        })} aria-label="Session messages" onClickCapture={handleDisclosureClick}>
+          <div
+            ref={scrimRef}
+            className="feed-scrim"
+            hidden={entries.length === 0}
+            aria-hidden="true"
+          />
+          {(history?.canLoad || requestedHistoryRef.current) && (
+            <div className="feed-history">
+              {history?.isLoading ? <Loader size="sm" label="Loading earlier messages…" /> : history?.isError ? (
+                <>
+                  <span>I couldn’t load earlier messages.</span>
+                  <Button size="sm" ariaLabel="Retry loading earlier messages" onClick={history.onRetry}>Retry</Button>
+                </>
+              ) : null}
+            </div>
+          )}
+          <div
+            className="feed-virtual-content"
+            style={{ height: `${totalSize}px` }}
+          >
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const turn = turns[virtualItem.index]
 
-            if (turn === undefined) {
-              return null
-            }
+              if (turn === undefined) {
+                return null
+              }
 
-            const isLatestTurn = virtualItem.index === turnCount - 1
+              const isLatestTurn = virtualItem.index === turnCount - 1
 
-            return (
-              <div
-                key={turn.id}
-                ref={virtualizer.measureElement}
-                className={clsx('feed-turn', {
-                  'feed-turn-latest': isLatestTurn
-                })}
-                data-index={virtualItem.index}
-                style={{ transform: `translateY(${virtualItem.start}px)` }}
-              >
-                {turn.entries.map((entry) => (
-                  <div key={entry.id} className="feed-entry">
-                    <Message role={entry.role}>
-                      {entry.role === 'owner' ? (
-                        <OwnerMessage animationId={`${entry.id}:owner`}>
-                          {entry.content}
-                        </OwnerMessage>
-                      ) : (
-                        <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id}>
-                          <LeonMessage entry={entry} />
-                        </ConversationDetailsProvider>
-                      )}
-                    </Message>
-                  </div>
-                ))}
-              </div>
-            )
-          })}
-        </div>
-        <div
-          ref={topMaskRef}
-          className="feed-mask feed-mask-top"
-          aria-hidden="true"
-        />
-        <div
-          ref={bottomMaskRef}
-          className="feed-mask feed-mask-bottom"
-          aria-hidden="true"
-        />
-      </section>
+              return (
+                <div
+                  key={turn.id}
+                  ref={virtualizer.measureElement}
+                  className={clsx('feed-turn', {
+                    'feed-turn-latest': isLatestTurn
+                  })}
+                  data-index={virtualItem.index}
+                  style={{ transform: `translateY(${virtualItem.start}px)` }}
+                >
+                  {turn.entries.map((entry) => (
+                    <div key={entry.id} className="feed-entry">
+                      <Message role={entry.role}>
+                        {entry.role === 'owner' ? (
+                          <OwnerMessage animationId={`${entry.id}:owner`}>
+                            {entry.content}
+                          </OwnerMessage>
+                        ) : (
+                          <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id}>
+                            <LeonMessage entry={entry} />
+                          </ConversationDetailsProvider>
+                        )}
+                      </Message>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+          <div
+            ref={topMaskRef}
+            className="feed-mask feed-mask-top"
+            aria-hidden="true"
+          />
+          <div
+            ref={bottomMaskRef}
+            className="feed-mask feed-mask-bottom"
+            aria-hidden="true"
+          />
+        </section>
+      </ToolDetailsProvider>
     </FeedAnimationProvider>
   )
 }

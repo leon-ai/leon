@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 import { defineConfig } from 'vite'
@@ -61,9 +62,19 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
       LEON_MODEL_PROVIDERS: JSON.stringify(await readModelProviders())
     },
     resolve: {
-      alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url))
-      }
+      alias: [
+        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+        // The fallback uses a small lazy grammar catalog, not Shiki's full bundle.
+        {
+          find: /^shiki\/langs$/,
+          replacement: fileURLToPath(new URL('./src/components/code-view/fallback-languages.ts', import.meta.url))
+        },
+        // Keep optional Wasm as a native binary instead of base64 JavaScript.
+        {
+          find: /^shiki\/wasm$/,
+          replacement: `${createRequire(import.meta.url).resolve('shiki/onig.wasm')}?init`
+        }
+      ]
     },
     build: {
       ...(mode === 'development' ? { minify: false, sourcemap: true } : {}),

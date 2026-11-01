@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
 import { clsx } from 'clsx'
@@ -14,6 +14,8 @@ import { useProfile } from '@/data/profile'
 import { RequestFeedback } from '@/components/request-feedback/request-feedback'
 
 import './session-page.sass'
+
+const CONVERSATION_LOADING_DELAY_MS = 1_000
 
 export function SessionPage() {
   const { sessionId } = useParams({ from: '/session/$sessionId' })
@@ -37,6 +39,20 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
   const feedRef = useRef<FeedHandle>(null)
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
   const [composerFocusRequest, setComposerFocusRequest] = useState(0)
+  const [showLoading, setShowLoading] = useState(false)
+  const isInitialLoading = conversation.isPending && conversation.fetchStatus === 'fetching'
+
+  useEffect(() => {
+    if (!isInitialLoading) {
+      setShowLoading(false)
+      return undefined
+    }
+
+    // Cached and fast session switches should not flash a loading notice.
+    const timer = window.setTimeout(() => setShowLoading(true), CONVERSATION_LOADING_DELAY_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [isInitialLoading])
 
   function handleSubmit(query: string): void {
     send.mutate({ id: crypto.randomUUID(), query })
@@ -47,26 +63,26 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
     void conversation.returnToLatest().catch(() => undefined)
   }
 
+  const loadEarlier = useCallback((): void => {
+    if (conversation.hasNextPage && !conversation.isFetching && !conversation.isFetchNextPageError) {
+      // Scroll and layout notifications can coincide before React rerenders.
+      // Query keeps one page request alive rather than cancelling and restarting it.
+      void conversation.fetchNextPage({ cancelRefetch: false })
+    }
+  }, [conversation.hasNextPage, conversation.isFetching, conversation.isFetchNextPageError, conversation.fetchNextPage])
+
   return (
     <div className="session-page">
-      {conversation.isPending && conversation.fetchStatus === 'fetching' && (
+      {isInitialLoading && showLoading && (
         <RequestFeedback role="status" message="Loading conversation…" />
       )}
-      {(conversation.isError || conversation.fetchStatus === 'paused') && (
+      {!conversation.latest && (conversation.isError || conversation.fetchStatus === 'paused') && (
         <RequestFeedback
           error={conversation.error}
           paused={conversation.fetchStatus === 'paused'}
           retrying={conversation.isFetching}
           onRetry={() => void conversation.refetch()}
         />
-      )}
-      {conversation.hasNextPage && (
-        <Button disabled={conversation.isFetchingNextPage} onClick={() => void conversation.fetchNextPage()}>
-          Load earlier messages
-        </Button>
-      )}
-      {conversation.hasPreviousPage && (
-        <Button onClick={handleReturnToLatest}>Back to latest messages</Button>
       )}
       {conversation.latest?.command?.status === 'interrupted' && (
         <p role="status">This turn was interrupted by a server restart. Your saved work is available below.</p>
@@ -80,10 +96,12 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
         entries={conversation.entries}
         historicalIds={conversation.historicalIds}
         sessionId={sessionId}
-        onLoadEarlier={() => {
-          if (conversation.hasNextPage && !conversation.isFetching) {
-            void conversation.fetchNextPage()
-          }
+        history={{
+          canLoad: Boolean(conversation.hasNextPage),
+          isLoading: conversation.isFetchingNextPage,
+          isError: conversation.isFetchNextPageError,
+          onLoad: loadEarlier,
+          onRetry: () => void conversation.fetchNextPage({ cancelRefetch: false })
         }}
         onScrollToBottomVisibilityChange={setIsScrollToBottomVisible}
       />

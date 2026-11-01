@@ -1,9 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 
 import { useExitCleanup } from '@/hooks/use-exit-cleanup'
+import { getListNavigationIndex } from '@/utils/list-navigation'
 
 import './dropdown.sass'
 
@@ -105,6 +106,7 @@ export function Dropdown({
   const triggerRef = useRef<HTMLSpanElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const openedWithPointerRef = useRef(false)
+  const pendingMenuFocusRef = useRef<'first' | 'last' | null>(null)
   const [mounted, setMounted] = useState(false)
   const [isPointerFocusRestored, setIsPointerFocusRestored] = useState(false)
   const [internalOpen, setInternalOpen] = useState(false)
@@ -166,6 +168,35 @@ export function Dropdown({
       setMounted(true)
     }
   }, [open, updateDropdownPosition])
+
+  useLayoutEffect(() => {
+    if (!open || !mounted || content !== undefined || !pendingMenuFocusRef.current) {
+      return
+    }
+    const options = dropdownRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+    const index = pendingMenuFocusRef.current === 'last' ? (options?.length ?? 0) - 1 : 0
+    options?.[index]?.focus({ preventScroll: true })
+    pendingMenuFocusRef.current = null
+  }, [content, mounted, open])
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (content !== undefined) {
+      return
+    }
+    if (event.key === 'Tab') {
+      closeDropdown()
+      return
+    }
+    const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+    const next = getListNavigationIndex(event, {
+      count: options.length, currentIndex: options.indexOf(document.activeElement as HTMLButtonElement), loop: true
+    })
+    if (next !== undefined) {
+      event.preventDefault()
+      options[next]?.focus({ preventScroll: true })
+      options[next]?.scrollIntoView({ block: 'nearest' })
+    }
+  }
 
   function toggleDropdown(): void {
     if (disabled) {
@@ -263,10 +294,25 @@ export function Dropdown({
           if (event.key !== 'Escape') {
             setIsPointerFocusRestored(false)
           }
+          if (content === undefined && !disabled &&
+            (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+            getListNavigationIndex(event, { count: items.length, currentIndex: -1 }) !== undefined) {
+            event.preventDefault()
+            openedWithPointerRef.current = false
+            pendingMenuFocusRef.current = event.key === 'ArrowUp' ? 'last' : 'first'
+            if (open) {
+              const options = dropdownRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+              options?.[event.key === 'ArrowUp' ? options.length - 1 : 0]?.focus({ preventScroll: true })
+              pendingMenuFocusRef.current = null
+            } else {
+              setOpen(true)
+            }
+          }
         }}
         onClick={(event) => {
           event.stopPropagation()
           openedWithPointerRef.current = event.detail > 0
+          pendingMenuFocusRef.current = event.detail === 0 && content === undefined ? 'first' : null
           setIsPointerFocusRestored(false)
           toggleDropdown()
         }}
@@ -288,6 +334,7 @@ export function Dropdown({
           aria-label={contentLabel}
           aria-hidden={!open}
           inert={!open}
+          onKeyDown={handleMenuKeyDown}
           style={dropdownStyle}
         >
           {content === undefined ? items.map((item) => (
@@ -299,6 +346,7 @@ export function Dropdown({
               )}
               key={item.label}
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
                 item.onSelect?.()
                 closeDropdown(true)

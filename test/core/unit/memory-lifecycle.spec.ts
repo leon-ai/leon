@@ -9,10 +9,12 @@ import MemoryManager from '@/core/memory-manager/memory-manager'
 import MemoryRepository from '@/core/memory-manager/memory-repository'
 import type { MemoryRecord, MemoryWriteInput } from '@/core/memory-manager/types'
 import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
+import { DEFAULT_TEMPORARY_MEMORY_POLICY, getTemporaryContextSize } from '@@/bridges/runtime/nodejs/temporary-memory'
 
 const state = vi.hoisted(() => ({
   root: '',
   rows: [] as Array<Record<string, unknown>>,
+  settings: {} as Record<string, unknown>,
   prompt: vi.fn()
 }))
 
@@ -34,7 +36,7 @@ vi.mock('@/core/config-states/config-state', () => ({
 }))
 vi.mock('@/core', () => ({ LLM_PROVIDER: { prompt: state.prompt } }))
 vi.mock('@/core/tool-manager/tool-settings', () => ({
-  ToolSettings: { loadToolSettings: (): Record<string, unknown> => ({}) }
+  ToolSettings: { loadToolSettings: (): Record<string, unknown> => state.settings }
 }))
 vi.mock('@/core/memory-manager/qmd/qmd-store', () => ({
   QMDWriteLockTimeoutError: class extends Error {},
@@ -54,6 +56,7 @@ describe('memory lifecycle', () => {
   beforeEach(async () => {
     state.root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'leon-memory-'))
     state.rows = []
+    state.settings = {}
     state.prompt.mockReset()
     repository = new MemoryRepository()
     await repository.load(path.join(state.root, 'memory.sqlite'))
@@ -308,9 +311,48 @@ describe('memory lifecycle', () => {
     }
     const snapshot = await manager.getTemporaryContext()
     expect(snapshot.length).toBeLessThanOrEqual(10)
-    expect(Buffer.byteLength(JSON.stringify({ temporary_context: snapshot }))).toBeLessThanOrEqual(600)
+    expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
     expect(await manager.getTemporaryContext()).toEqual(snapshot)
     await expect(remember('Unverified', { scope: 'temporary' })).rejects.toThrow('evidence')
+  })
+
+  it('keeps explicit circumstances ahead of newer inferences under item and size limits', async () => {
+    state.settings = { temporaryContext: { tokenBudget: 600 } }
+    const location = await remember('I am staying in Lyon for a while.', {
+      scope: 'temporary', metadata: { evidence: 'I am staying in Lyon for a while.' }
+    })
+    const db = (repository as unknown as { db: Database }).db
+    db.prepare('UPDATE memory_items SET updated_at = ? WHERE id = ?').run(location.updatedAt - 1_000, location.id)
+
+    for (let index = 0; index < 12; index += 1) {
+      await remember(`The owner is considering a new post about topic ${index}.`, {
+        scope: 'temporary', sourceType: 'inferred',
+        metadata: { evidence: `Considering topic ${index}.` }
+      })
+    }
+
+    expect(repository.listTemporaryItems(1).map((record) => record.id)).toEqual([location.id])
+    const snapshot = await manager.getTemporaryContext()
+    expect(snapshot[0]?.id).toBe(location.id)
+    expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(600)
+  })
+
+  it('fits ten concise multilingual circumstances in the default context budget', async () => {
+    const contents = [
+      'I am staying in Lyon with my family until the end of the week.',
+      ...Array.from({ length: 9 }, (_, index) => `这周我正在准备第 ${index + 1} 项活动，需要提前安排时间。`)
+    ]
+    const records = []
+
+    for (const content of contents) {
+      records.push(await remember(content, {
+        scope: 'temporary', metadata: { evidence: content }
+      }))
+    }
+
+    const snapshot = await manager.getTemporaryContext()
+    expect(snapshot.map((entry) => entry.id).sort()).toEqual(records.map((record) => record.id).sort())
+    expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
   })
 
   it('extracts temporary circumstances with multilingual owner evidence in the existing background call', async () => {

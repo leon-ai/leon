@@ -2,7 +2,7 @@ import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
 
-import { UrlReader, type UrlReadOptions } from './lib/url-reader'
+import { UrlFetchError, UrlReader, type UrlReadOptions } from './lib/url-reader'
 
 /**
  * Provider-independent URL extraction with locally cached source snapshots.
@@ -33,7 +33,17 @@ export default class CrawlbergTool extends Tool {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        ...(error instanceof UrlFetchError ? {
+          kind: error.kind,
+          ...(error.browserFallback ? {
+            fallback: {
+              toolkit: 'browser_use',
+              url,
+              guidance: 'Inspect this URL in the connected browser instead of repeating the HTTP fetch. Do not solve or bypass challenges; ask the owner if access requires their action.'
+            }
+          } : {})
+        } : {})
       }
     }
   }

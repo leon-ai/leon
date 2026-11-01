@@ -1,5 +1,5 @@
 import { FeedTurnStatus } from './feed'
-import type { FeedEntry, FeedToolCall, LeonFeedActivity, LeonFeedEntry, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep } from './feed'
+import type { FeedEntry, FeedToolCall, LeonFeedActivity, LeonFeedEntry, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep, FeedCompactionActivity } from './feed'
 import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
 import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import { getProcessingCategory } from './processing-categories'
@@ -8,6 +8,47 @@ import { getActivityLabel, getProcessingLabel } from './activity-labels'
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
 const LEGACY_PLAN_WIDGET = 'PlanWidget'
+const LEGACY_COMPACTION_LABEL = 'Compacting history...'
+
+/**
+ * Reads explicit maintenance state, or the checkbox of saved legacy widgets.
+ * Legacy snapshots have no elapsed timing, so their duration stays unknown.
+ */
+function toCompactionActivity(record: ConversationRecord): FeedCompactionActivity | undefined {
+  const widget = record.widget
+  if (widget?.widget !== LEGACY_PLAN_WIDGET) {
+    return undefined
+  }
+  const activity = widget.activity
+  if (activity?.goal === TurnPhase.Compaction) {
+    return {
+      id: activity.id, type: 'compaction', startedAt: activity.startedAt,
+      status: activity.outcome === 'started' ? 'in_progress' : activity.outcome === 'completed' ? 'completed' : 'error',
+      ...(activity.outcome !== 'started' && Number.isFinite(activity.durationMs) && activity.durationMs >= 0
+        ? { durationMs: activity.durationMs } : {})
+    }
+  }
+  // This exact label identifies the old persisted wire format, not new work.
+  if ((widget.fallbackText ?? record.message) !== LEGACY_COMPACTION_LABEL) {
+    return undefined
+  }
+  const pending: unknown[] = [widget.componentTree]
+  while (pending.length) {
+    const node = pending.pop()
+    if (!node || typeof node !== 'object') {
+      continue
+    }
+    const component = node as { component?: string, props?: { label?: string, checked?: boolean, children?: unknown[] } }
+    if (component.component === 'Checkbox' && component.props?.label === LEGACY_COMPACTION_LABEL && component.props.checked) {
+      return { id: record.messageId, type: 'compaction', status: 'completed' }
+    }
+    if (Array.isArray(component.props?.children)) {
+      pending.push(...component.props.children)
+    }
+  }
+
+  return { id: record.messageId, type: 'compaction', status: 'in_progress' }
+}
 
 /**
  * Measures coverage of start-sorted requests, excluding overlap and idle gaps.
@@ -112,6 +153,7 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     preparationStartedAt: call.preparationStartedAt,
     ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }),
     input: call.input ?? null,
+    ...(call.commandOutput === undefined ? {} : { commandOutput: call.commandOutput }),
     ...(call.output === undefined && call.commandOutput === undefined && call.errorMessage === undefined
       ? {} : { output: call.output ?? call.commandOutput ?? call.errorMessage ?? null })
   }
@@ -424,8 +466,19 @@ function attachPlanActivities(
 export function toFeedEntry(record: ConversationRecord, running: boolean): FeedEntry {
   const active = running && !record.isAddedToHistory
   const cached = entryCache.get(record)
-  if (cached?.active === active) {
+  if (cached && (cached.active === active || cached.entry.role === 'leon' && cached.entry.isMaintenance)) {
     return cached.entry
+  }
+  const compaction = toCompactionActivity(record)
+  if (compaction) {
+    const entry: LeonFeedEntry = {
+      id: record.messageId, role: 'leon', isMaintenance: true,
+      status: compaction.status === 'in_progress' ? FeedTurnStatus.InProgress : FeedTurnStatus.Completed,
+      durationMs: 0, activities: [compaction], finalAnswer: ''
+    }
+    entryCache.set(record, { active, entry })
+
+    return entry
   }
   const metrics = { ...record.agentResponseTrace?.metrics, ...record.llmMetrics }
   const entry: FeedEntry = record.who === 'owner' ? {
@@ -573,10 +626,12 @@ export function toFeedEntries(records: readonly ConversationRecord[], running: b
     if (record.who === 'owner') {
       turnId = record.messageId
       continue
-    } else if (!record.isAddedToHistory && record.widget?.widget === LEGACY_PLAN_WIDGET && structuredPlanTurns.has(turnId)) {
-      continue
     }
     const entry = toFeedEntry(record, running)
+    if (!record.isAddedToHistory && record.widget?.widget === LEGACY_PLAN_WIDGET && structuredPlanTurns.has(turnId) &&
+      !(entry.role === 'leon' && entry.isMaintenance)) {
+      continue
+    }
     const ownerIndex = responseOwners.get(record.messageId)
     const end = running && !record.isAddedToHistory ? Infinity : record.sentAt
     const turnOwners: ConversationRecord[] = []

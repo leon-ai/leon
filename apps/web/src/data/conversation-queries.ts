@@ -335,7 +335,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
           disclosureTimer = setTimeout(() => {
             disclosureTimer = undefined
             void queryClient.invalidateQueries({
-              queryKey: ['conversation-details', profile, sessionId, event.response_id], exact: true
+              queryKey: ['conversation-details', profile, sessionId, event.response_id]
             })
           }, DISCLOSURE_REFRESH_DELAY_MS)
         }

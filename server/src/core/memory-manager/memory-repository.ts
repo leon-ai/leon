@@ -128,17 +128,17 @@ export default class MemoryRepository {
    * Read bounded current circumstances directly, without search or access-time writes.
    */
   public listTemporaryItems(limit: number): MemoryRecord[] {
-    // Prefer the ordered partial index over the generic deleted-status index;
-    // otherwise SQLite can sort every active memory before applying the limit.
+    // Keep owner-confirmed circumstances ahead of incidental inferences before
+    // applying the item limit. The matching index avoids sorting active memory.
     this.temporaryQuery ??= this.ensureDb().prepare(
-      `SELECT * FROM memory_items INDEXED BY idx_memory_items_temporary
+      `SELECT * FROM memory_items INDEXED BY idx_memory_items_temporary_priority
        WHERE scope = 'temporary' AND is_deleted = 0 AND expires_at > ?
          AND NOT EXISTS (
            SELECT 1 FROM memory_items AS replacement
            WHERE replacement.supersedes_item_id = memory_items.id
              AND replacement.id != memory_items.id
          )
-       ORDER BY importance DESC, updated_at DESC, id LIMIT ?`
+       ORDER BY (source_type = 'explicit_user') DESC, importance DESC, updated_at DESC, id LIMIT ?`
     )
     return this.temporaryQuery.all(Date.now(), limit).map(mapMemoryRow)
   }

@@ -38,6 +38,7 @@ export interface FeedToolCall extends FeedActivityTime {
   durationMs?: number
   input: JsonValue
   output?: JsonValue
+  commandOutput?: string
 }
 
 /**
@@ -133,6 +134,13 @@ export interface FeedModelProcessingActivity extends FeedActivityTime {
   }[]
 }
 
+export interface FeedCompactionActivity extends FeedActivityTime {
+  id: string
+  type: 'compaction'
+  status: 'in_progress' | 'completed' | 'error'
+  durationMs?: number
+}
+
 // Preserve agent-loop chronology by representing each phase as its own node.
 // In particular, later reasoning must create another thinking activity.
 export type LeonFeedActivity =
@@ -146,6 +154,7 @@ export type LeonFeedActivity =
   | FeedRetryActivity
   | FeedOtherProcessingActivity
   | FeedModelProcessingActivity
+  | FeedCompactionActivity
 
 export interface OwnerFeedEntry {
   sentAt?: number | undefined
@@ -155,6 +164,7 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  isMaintenance?: boolean
   // Presentation segments share one durable response and its lazy disclosures.
   responseId?: string
   continues?: boolean

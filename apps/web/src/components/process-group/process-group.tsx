@@ -11,7 +11,7 @@ import { clsx } from 'clsx'
 
 import { Collapse } from '@/components/collapse'
 import { ActivityWave } from '@/components/activity-wave'
-import { ActivityTimestamp } from '@/components/activity-timestamp'
+import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
 
 import './process-group.sass'
 
@@ -103,7 +103,7 @@ export function ProcessGroup({
         })}
         aria-label={ariaLabel}
       >
-        <div className="process-group-heading">
+        <div className="process-group-heading" onClick={forwardTimestampClickToDisclosure}>
           {children === undefined ? (
             <div className="process-group-trigger">{heading}</div>
           ) : (

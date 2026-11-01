@@ -12,7 +12,7 @@ export const DEFAULT_TEMPORARY_MEMORY_POLICY: TemporaryMemoryPolicy = {
   defaultDays: 7,
   maximumDays: 30,
   maxItems: 10,
-  tokenBudget: 600
+  tokenBudget: 4_096
 }
 
 /**

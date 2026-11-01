@@ -7,26 +7,28 @@ import {
 } from 'react'
 import { clsx } from 'clsx'
 
-import './scroll-list.sass'
+import './scroll-container.sass'
 
-const MASK_HEIGHT_PX = 32
+export const SCROLL_CONTAINER_MASK_HEIGHT_PX = 32
 const OVERFLOW_TOLERANCE_PX = 1
 
-interface ScrollListProps extends HTMLAttributes<HTMLDivElement> {
+interface ScrollContainerProps extends HTMLAttributes<HTMLDivElement> {
   scrollRef?: RefObject<HTMLDivElement | null>
+  viewportClassName?: string
 }
 
 /**
- * Gives scrollable lists progressive edge fades while preserving the viewport
- * ref needed by virtualizers. Use this wrapper for ordinary web-app lists.
+ * Gives scrollable content progressive edge fades while preserving the viewport
+ * ref and scroll events needed by virtualizers and live-output followers.
  */
-export function ScrollList({
+export function ScrollContainer({
   children,
   className,
   scrollRef,
+  viewportClassName,
   style,
   ...viewportProps
-}: ScrollListProps) {
+}: ScrollContainerProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const localScrollRef = useRef<HTMLDivElement>(null)
@@ -40,21 +42,20 @@ export function ScrollList({
     if (viewport === null || content === null || root === null) {
       return undefined
     }
-
     function updateMasks(): void {
       if (viewport === null || root === null) {
         return
       }
 
       const maximumScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-      const fadeHeight = Math.max(1, Math.min(MASK_HEIGHT_PX, viewport.clientHeight / 2))
+      const fadeHeight = Math.max(1, Math.min(SCROLL_CONTAINER_MASK_HEIGHT_PX, viewport.clientHeight / 2))
       const top = Math.max(0, Math.min(viewport.scrollTop, maximumScroll))
       const overflowing = maximumScroll > OVERFLOW_TOLERANCE_PX
 
-      root.style.setProperty('--scroll-list-top-opacity', String(
+      root.style.setProperty('--scroll-container-top-opacity', String(
         overflowing ? Math.min(1, top / fadeHeight) : 0
       ))
-      root.style.setProperty('--scroll-list-bottom-opacity', String(
+      root.style.setProperty('--scroll-container-bottom-opacity', String(
         overflowing ? Math.min(1, (maximumScroll - top) / fadeHeight) : 0
       ))
     }
@@ -77,14 +78,14 @@ export function ScrollList({
   return (
     <div
       ref={rootRef}
-      className={clsx('scroll-list', className)}
-      style={{ '--scroll-list-mask-height': `${MASK_HEIGHT_PX}px`, ...style } as CSSProperties}
+      className={clsx('scroll-container', className)}
+      style={{ '--scroll-container-mask-height': `${SCROLL_CONTAINER_MASK_HEIGHT_PX}px`, ...style } as CSSProperties}
     >
-      <div {...viewportProps} ref={viewportRef} className="scroll-list-viewport">
-        <div ref={contentRef} className="scroll-list-content">{children}</div>
+      <div {...viewportProps} ref={viewportRef} className={clsx('scroll-container-viewport', viewportClassName)}>
+        <div ref={contentRef} className="scroll-container-content">{children}</div>
       </div>
-      <span className="scroll-list-mask scroll-list-mask-top" aria-hidden="true" />
-      <span className="scroll-list-mask scroll-list-mask-bottom" aria-hidden="true" />
+      <span className="scroll-container-mask scroll-container-mask-top" aria-hidden="true" />
+      <span className="scroll-container-mask scroll-container-mask-bottom" aria-hidden="true" />
     </div>
   )
 }

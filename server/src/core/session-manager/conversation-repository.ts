@@ -13,6 +13,8 @@ import {
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { MessageLog } from '@/types'
+import { TOOL_CONTENT_PREVIEW_CHARACTERS } from './tool-content-contract'
+import type { ToolCallContents, ToolContentPart } from './tool-content-contract'
 
 import type { ConversationSession } from './index'
 import { getSessionSearchTerms } from './session-search'
@@ -429,6 +431,85 @@ export class ConversationRepository {
       .get(sessionId, messageId, messageId)
 
     return row ? JSON.parse(String(row['payload'])) as MessageLog : null
+  }
+
+  /**
+   * Reads one invocation without materializing or transferring the other calls.
+   * SQLite bounds previews before large bodies enter the JavaScript heap.
+   */
+  public readToolContents(sessionId: string, messageId: string, toolId: string, complete = false): ToolCallContents | null {
+    const row = this.db.prepare(`WITH invocation AS (
+      SELECT call.value AS body FROM conversation_messages AS message,
+        json_each(message.payload, '$.agentResponseTrace.toolCalls') AS call
+      WHERE message.session_id = @sessionId AND (message.id = @messageId OR message.trace_id = @messageId)
+        AND json_extract(call.value, '$.id') = @toolId LIMIT 1
+    ), results AS (
+      SELECT body, CASE
+        WHEN json_type(body, '$.output.result.data') = 'object' THEN json_extract(body, '$.output.result.data')
+        WHEN json_type(body, '$.output.result') = 'object' THEN json_extract(body, '$.output.result')
+        WHEN json_type(body, '$.output.data') = 'object' THEN json_extract(body, '$.output.data')
+        WHEN json_type(body, '$.output') = 'object' THEN json_extract(body, '$.output')
+        ELSE '{}' END AS result
+      FROM invocation
+    ), contents AS (
+      SELECT
+        CASE WHEN json_type(body, '$.input') = 'text' THEN
+          CASE WHEN json_valid(json_extract(body, '$.input')) THEN json_pretty(json_extract(body, '$.input'), '  ')
+            ELSE json_extract(body, '$.input') END
+          WHEN json_type(body, '$.input') = 'true' THEN 'true'
+          WHEN json_type(body, '$.input') = 'false' THEN 'false'
+          ELSE coalesce(json_pretty(json_extract(body, '$.input'), '  '), 'null') END AS input,
+        CASE WHEN json_type(body, '$.output') = 'text' THEN json_extract(body, '$.output')
+          WHEN json_type(body, '$.output') = 'true' THEN 'true'
+          WHEN json_type(body, '$.output') = 'false' THEN 'false'
+          WHEN json_type(body, '$.output') IS NOT NULL THEN coalesce(json_pretty(json_extract(body, '$.output'), '  '), 'null')
+          ELSE coalesce(json_extract(body, '$.commandOutput'), json_extract(body, '$.errorMessage'), '') END AS output,
+        json_extract(body, '$.commandOutput') AS command_output,
+        (json_extract(result, '$.changed') = 1 AND json_type(result, '$.diff') = 'text') AS has_changes,
+        coalesce(json_extract(result, '$.diffTruncated'), 0) AS diff_truncated,
+        CASE WHEN json_type(result, '$.path') = 'text' AND json_type(result, '$.content') = 'text'
+          AND json_type(result, '$.contentHash') = 'text' THEN json_extract(result, '$.content') END AS file_content,
+        json_extract(result, '$.path') AS source_path,
+        CASE WHEN json_type(body, '$.input') = 'text' AND NOT json_valid(json_extract(body, '$.input'))
+          THEN 'text' ELSE 'json' END AS input_language,
+        CASE WHEN json_type(body, '$.output') IS NOT NULL AND json_type(body, '$.output') != 'text'
+          THEN 'json' ELSE 'text' END AS output_language
+      FROM results
+    ) SELECT CASE WHEN @complete THEN input ELSE substr(input, 1, @limit) END AS input,
+      length(input) AS input_length, input_language,
+      has_changes, diff_truncated,
+      CASE WHEN @complete THEN output ELSE substr(output, 1, @limit) END AS output,
+      length(output) AS output_length, output_language,
+      CASE WHEN @complete THEN command_output ELSE substr(command_output, -@limit) END AS command_output,
+      length(command_output) AS command_length,
+      CASE WHEN @complete THEN file_content ELSE substr(file_content, 1, @limit) END AS file_content,
+      length(file_content) AS file_length, source_path
+      FROM contents`).get({ sessionId, messageId, toolId,
+      limit: TOOL_CONTENT_PREVIEW_CHARACTERS, complete: Number(complete) })
+
+    if (!row) {
+      return null
+    }
+
+    const part = (key: string, lengthKey: string, language: ToolContentPart['language']): ToolContentPart => {
+      const totalCharacters = Number(row[lengthKey] ?? 0)
+
+      return { text: String(row[key] ?? ''), totalCharacters,
+        truncated: !complete && totalCharacters > TOOL_CONTENT_PREVIEW_CHARACTERS, language }
+    }
+
+    return {
+      hasChanges: row['has_changes'] === 1,
+      diffTruncated: row['diff_truncated'] === 1,
+      input: part('input', 'input_length', row['input_language'] as ToolContentPart['language']),
+      output: part('output', 'output_length', row['output_language'] as ToolContentPart['language']),
+      ...(row['command_output'] === null ? {} : {
+        commandOutput: part('command_output', 'command_length', 'text')
+      }),
+      ...(row['file_content'] === null ? {} : {
+        displayOutput: part('file_content', 'file_length', path.extname(String(row['source_path'])).slice(1).toLocaleLowerCase() || 'text')
+      })
+    }
   }
 
   /**

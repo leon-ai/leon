@@ -11,7 +11,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { Input } from '@/components/input'
 import { LLMProviderIcon } from '@/components/llm-provider-icon'
-import { ScrollList } from '@/components/scroll-list'
+import { ScrollList, SCROLL_LIST_MASK_HEIGHT_PX } from '@/components/scroll-list'
 import {
   modelProviders,
   type ModelChoice,
@@ -19,6 +19,7 @@ import {
   type ModelProvider
 } from '@/data/model-catalog'
 import { createSearchIndex, searchIndex } from '@/utils/search'
+import { getListNavigationIndex } from '@/utils/list-navigation'
 
 const ROW_HEIGHT_PX = 48
 const ROW_OVERSCAN = 3
@@ -157,6 +158,8 @@ export function ModelSelectorMenu({
     },
     getItemKey: (index) => rows[index]?.key ?? index,
     overscan: ROW_OVERSCAN,
+    scrollPaddingStart: SCROLL_LIST_MASK_HEIGHT_PX,
+    scrollPaddingEnd: SCROLL_LIST_MASK_HEIGHT_PX,
     enabled: open
   })
 
@@ -170,7 +173,7 @@ export function ModelSelectorMenu({
     }
   }, [open])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setActiveIndex(-1)
     scrollRef.current?.scrollTo({ top: 0 })
   }, [provider, search])
@@ -192,7 +195,7 @@ export function ModelSelectorMenu({
   }
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void {
-    if (event.nativeEvent.isComposing) {
+    if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
       return
     }
 
@@ -208,7 +211,10 @@ export function ModelSelectorMenu({
       return
     }
 
-    if (event.key === 'ArrowLeft' && query === '' && provider !== null) {
+    if (
+      (event.key === 'ArrowLeft' || event.key === 'Backspace') &&
+      query === '' && provider !== null
+    ) {
       event.preventDefault()
       setProvider(null)
       return
@@ -225,26 +231,16 @@ export function ModelSelectorMenu({
       return
     }
 
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+    const next = getListNavigationIndex(event, {
+      count: rows.length, currentIndex: activeRowIndex,
+      isSelectable: (index) => isPickerOption(rows[index])
+    })
+    if (next === undefined) {
       return
     }
 
     event.preventDefault()
-
-    if (rows.length === 0) {
-      return
-    }
-
-    const direction = event.key === 'ArrowDown' ? 1 : -1
-    let next = activeRowIndex < 0
-      ? direction > 0 ? 0 : rows.length - 1
-      : activeRowIndex + direction
-
-    while (next >= 0 && next < rows.length && !isPickerOption(rows[next])) {
-      next += direction
-    }
-
-    if (next < 0 || next >= rows.length) {
+    if (next < 0) {
       return
     }
 

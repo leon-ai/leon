@@ -295,6 +295,7 @@ export function SessionListItem({
           to="/session/$sessionId"
           params={{ sessionId: id }}
           className="session-list-item-link"
+          data-session-id={id}
           aria-label={isWorking ? `${title}, Leon is working` : title}
           activeProps={{
             className: clsx('session-list-item-link', 'session-list-item-active')

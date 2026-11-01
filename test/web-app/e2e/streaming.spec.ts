@@ -2,7 +2,101 @@ import type { ElementHandle, Locator } from '@playwright/test'
 import type { ConversationEvent, ConversationRecord } from '../../../apps/web/src/data/conversation'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
-import { test, expect, SESSION_ID, SESSION_URL } from './fixtures'
+import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
+
+for (const withPlan of [false, true]) {
+  test(`updates post-answer compaction independently of turn and plan state (plan: ${withPlan})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: withPlan ? 'reduce' : 'no-preference' })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    const startedAt = Date.now()
+    answer.agentResponseTrace = { id: answer.messageId, toolCalls: [], metrics: { durationMs: 6_000 },
+      planSteps: withPlan ? [{ id: 'inspect', label: 'Inspect the sources', status: 'completed' }] : [] }
+    await page.goto(SESSION_URL)
+    const status = page.getByRole('region', { name: 'History compaction', exact: true })
+    const activity = { id: 'history-maintenance', goal: TurnPhase.Compaction,
+      startedAt, durationMs: 0, outcome: 'started' }
+    const widget = { widget: 'PlanWidget', fallbackText: 'Compacting history...', activity }
+    let sequence = 0
+    const emit = (): Promise<void> => ui.emit([{
+      type: 'widget', sequence: ++sequence, session_id: SESSION_ID, turn_id: null,
+      response_id: activity.id, created_at: startedAt + activity.durationMs, data: { widget }
+    }])
+    await emit()
+    await expect(status).toHaveClass(/process-group-active/)
+    await expect(status.locator('.process-group-title')).toHaveText('Compacting history...')
+    await expect(status.locator('.activity-wave-active')).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()).toHaveText(answer.message)
+    await expect(page.locator('.leon-message-work')).toHaveCount(withPlan ? 1 : 0)
+    const saved: ConversationRecord = { who: 'leon', messageId: activity.id, message: widget.fallbackText,
+      sentAt: startedAt, isAddedToHistory: false, widget: structuredClone(widget) }
+    ui.history.get(SESSION_ID)!.push(saved)
+    await page.reload()
+    await expect(status).toHaveClass(/process-group-active/)
+    await expect(status.locator('.process-group-title')).toHaveText('Compacting history...')
+
+    activity.durationMs = 8_679
+    activity.outcome = 'completed'
+    widget.fallbackText = 'Compacted history'
+    saved.widget = structuredClone(widget)
+    await emit()
+    await expect(status).not.toHaveClass(/process-group-active/)
+    await expect(status.locator('.process-group-title')).toHaveText('Compacted history in 9s')
+    await expect(status.locator('.activity-wave-active')).toHaveCount(0)
+    await page.reload()
+    await expect(status.locator('.process-group-title')).toHaveText('Compacted history in 9s')
+    await expect(status.locator('.activity-timestamp')).toHaveCount(1)
+    await expect(page.locator('.leon-message-work')).toHaveCount(withPlan ? 1 : 0)
+    await expect(page.locator('.leon-message').filter({ has: status }).locator('.final-answer')).toHaveCount(0)
+    if (withPlan) {
+      await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
+    }
+    await page.screenshot({ path: testInfo.outputPath('completed-compaction.png') })
+
+    activity.outcome = 'started'
+    activity.durationMs = 0
+    await emit()
+    await expect(status).toHaveClass(/process-group-active/)
+    activity.outcome = 'failed'
+    activity.durationMs = 435
+    widget.fallbackText = 'History compaction failed'
+    saved.widget = structuredClone(widget)
+    await emit()
+    await expect(status.locator('.process-group-title')).toHaveText('History compaction failed after 435ms')
+    await expect(status).not.toHaveClass(/process-group-active/)
+    await page.reload()
+    await expect(status.locator('.process-group-title')).toHaveText('History compaction failed after 435ms')
+  })
+}
+
+test('updates and restores legacy compaction from its checkbox without inventing duration', async ({ page, ui }) => {
+  const label = 'Compacting history...'
+  const widget: NonNullable<ConversationRecord['widget']> = { widget: 'PlanWidget', fallbackText: label, componentTree: {
+    component: 'WidgetWrapper', props: { children: [{ component: 'List', props: { children: [{
+      component: 'ListItem', props: { children: [{ component: 'Text', props: { children: label } }] }
+    }] } }] }
+  } }
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = { id: answer.messageId, toolCalls: [], metrics: { durationMs: 6_000 },
+    planSteps: [{ id: 'finished', label: 'Inspect the sources', status: 'completed' }] }
+  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: 'saved-compaction', message: label,
+    sentAt: Date.now(), isAddedToHistory: false, widget })
+  await page.goto(SESSION_URL)
+  const status = page.getByRole('region', { name: 'History compaction', exact: true })
+  await expect(status).toHaveClass(/process-group-active/)
+  widget.componentTree = { component: 'WidgetWrapper', props: { children: [{ component: 'List', props: { children: [{
+    component: 'ListItem', props: { children: [{ component: 'Checkbox', props: { label, checked: true } }] }
+  }] } }] } }
+  await ui.emit([{ type: 'widget', sequence: 1, session_id: SESSION_ID, turn_id: null,
+    response_id: 'saved-compaction', created_at: Date.now(), data: { widget } }])
+  await expect(status.locator('.process-group-title')).toHaveText('Compacted history')
+  await page.reload()
+  await expect(status.locator('.process-group-title')).toHaveText('Compacted history')
+  await expect(status).not.toHaveClass(/process-group-active/)
+  await expect(status.locator('.activity-timestamp')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
+  await expect(page.locator('.leon-message').filter({ has: status }).locator('.final-answer')).toHaveCount(0)
+})
 
 test('replaces send with a danger stop action without submitting or losing the draft', async ({ page, ui }) => {
   const stopPath = `/api/v1/sessions/${SESSION_ID}/stop`
@@ -129,9 +223,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       }
       await openTools(root)
       await root.getByRole('button', { name: 'Read first source' }).click()
-      await expect(root.getByLabel('Output JSON')).toContainText('Finished first source')
+      await expect(root.getByLabel('Tool output', { exact: true })).toContainText('Finished first source')
       await expect(page.getByRole('alert')).toHaveCount(0)
-      expect(ui.requests.some((url) => decodeURIComponent(url.pathname).endsWith(`/messages/${responseId}`))).toBe(true)
+      expect(ui.requests.some((url) => decodeURIComponent(url.pathname).includes(`/messages/${responseId}/tools/`))).toBe(true)
       saved.agentResponseTrace!.toolCalls[1] = { ...secondCall, status: 'success', durationMs: 300 }
       await emit('tool_call', { tool_call: { id: secondCall.id, name: secondCall.name, status: 'success', duration_ms: 300 } }, 800)
       await sendFollowup('Please check the conclusion too.', 900)
@@ -174,11 +268,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       }
       await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
       await expect(root.getByText(owner.message, { exact: true })).toBeVisible()
-      await page.locator('.feed').evaluate(async (element) => {
-        await Promise.allSettled(element.getAnimations({ subtree: true })
-          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
-          .map((animation) => animation.finished))
-      })
+      await finishFiniteAnimations(page.locator('.feed'))
       const path = testInfo.outputPath('followup-order.png')
       await page.screenshot({ path })
       await testInfo.attach('followup-order', { path, contentType: 'image/png' })
@@ -215,11 +305,11 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await plan.getByRole('button', { name: first.label, exact: true }).click()
     await plan.getByRole('button', { name: 'Used 2 tools for 200ms', exact: true }).click()
     const thought = plan.getByRole('region', { name: 'Leon’s thinking', exact: true })
-    await thought.getByRole('button').click()
+    await thought.getByRole('button').locator('.process-group-title').click()
     const tool = plan.locator('.tool-call').first()
     const initialTop = await tool.evaluate((element) => getComputedStyle(element, '::after').top)
     await tool.getByRole('button', { name: 'Read first source' }).click()
-    await expect(tool.locator('.json-view')).toHaveCount(2)
+    await expect(tool.getByLabel('Tool output', { exact: true })).toBeVisible()
     await expect.poll(() => tool.locator('.tool-call-details').evaluate((element) =>
       element.getBoundingClientRect().height
     )).toBeGreaterThan(200)
@@ -511,13 +601,17 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       ...tool, status: 'preparing', tool_call_title: 'Check tomorrow’s weather',
       input: '{"location":"Haarlem"}'
     } })
-    const row = group.locator('.tool-call')
+    const row = group.locator('.tool-call').filter({ has: page.getByText('Check tomorrow’s weather', { exact: true }) })
     await expect(row).toHaveCount(1)
     await expect(row.locator('.tool-call-title')).toHaveText('Check tomorrow’s weather')
+    await expect(row.locator('.activity-wave-active')).toHaveCount(1)
+    await expect(row.locator('.tool-call-duration, .tool-call-error-indicator')).toHaveCount(0)
     expect(await originalGroup!.evaluate((element) => element.isConnected)).toBe(true)
     const originalRow = await row.elementHandle()
     await emit('tool_call', { tool_call: { ...tool, status: 'running' } })
     await expect(row.locator('.tool-call-title')).toHaveText('Check tomorrow’s weather')
+    await expect(row.locator('.activity-wave-active')).toHaveCount(1)
+    await expect(row.locator('.tool-call-duration, .tool-call-error-indicator')).toHaveCount(0)
     expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
 
     // A call that executes without a title still needs a readable, inspectable row.
@@ -526,6 +620,24 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     } })
     await expect(group.locator('.tool-call-title')).toHaveText(['Check tomorrow’s weather', 'Get Weather'])
     await expect(group.getByText(tool.name, { exact: true })).toHaveCount(0)
+
+    await emit('tool_call', { tool_call: {
+      id: 'untitled-execution', name: tool.name, status: 'error', duration_ms: 435,
+      error_message: 'The weather service did not respond.'
+    } })
+    const failed = group.locator('.tool-call-error')
+    await expect(failed.locator('.tool-call-error-indicator.ri-close-line')).toBeVisible()
+    await expect(failed.locator('.tool-call-trigger')).toHaveAccessibleDescription('Tool call failed')
+    await expect(failed.locator('.tool-call-duration')).toHaveText('435ms')
+    await expect(failed.locator('.activity-wave-active')).toHaveCount(0)
+    await expect(group.getByText('Failed', { exact: true })).toHaveCount(0)
+
+    await emit('tool_call', { tool_call: { ...tool, status: 'success', duration_ms: 618 } })
+    const completedGroup = group.locator(':scope > .process-group-heading > button')
+    await expect(completedGroup).toHaveAttribute('aria-expanded', 'false')
+    await completedGroup.click()
+    await expect(row.locator('.tool-call-duration')).toHaveText('618ms')
+    await expect(row.locator('.activity-wave-active, .tool-call-error-indicator')).toHaveCount(0)
 
     await emit('plan_step', { step: { id: 'weather-step', label: 'Compare forecasts', status: 'in_progress' } })
     const nested = { ...tool, id: 'planned-preview', step_label: 'Compare forecasts', status: 'preparing' }
@@ -693,7 +805,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         const startedAt = await first.evaluate((element) => element.getAnimations()[0]!.startTime)
         await append()
         await expect(first).toHaveClass('streaming-text-character-new')
-        expect(await first.evaluate((element) => element.getAnimations()[0]!.startTime)).toBe(startedAt)
+        await expect.poll(() => first.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).toBe(startedAt)
       } else {
         await append()
         await expect(first).toHaveCSS('animation-name', 'none')
@@ -875,13 +987,13 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       const refresh = Promise.withResolvers<void>()
       let detailsRequests = 0
       const detailsPath = `/api/v1/sessions/${SESSION_ID}/messages/${responseId}`
-      await page.route(`**${detailsPath}`, async (route) => {
+      await page.route(`**${detailsPath}/tools/${tool.id}*`, async (route) => {
         detailsRequests++
         if (detailsRequests > 1) {
           await refresh.promise
         }
         if (!route.request().failure()) {
-          await route.fulfill({ json: { message: record } })
+          await route.fulfill({ json: toolContentsFixture(record.agentResponseTrace!.toolCalls[0]!) })
         }
       })
 
@@ -890,12 +1002,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         await page.getByRole('button', { name: tool.toolCallTitle, exact: true }).click()
         const panel = page.locator('.tool-call-details')
         await expect(panel.getByRole('status')).toHaveCount(0)
-        await expect(panel.getByLabel('Output JSON')).toContainText('Initial output')
+        await expect(panel.getByLabel('Tool output', { exact: true })).toContainText('Initial output')
         await page.evaluate(() => document.fonts.ready)
-        await panel.evaluate(async (element) => {
-          await Promise.all((element.closest('.collapse')?.getAnimations() ?? [])
-            .map((animation) => animation.finished.catch(() => undefined)))
-        })
+        await finishFiniteAnimations(page.locator('.feed'))
         const panelHeight = (await panel.boundingBox())!.height
         const main = page.locator('.app-main')
         await main.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
@@ -923,7 +1032,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
           await emit('tool_call', { tool_call: {
             id: tool.id, name: tool.name, status: 'running', command_output: output
           } })
-          await expect(panel.getByLabel('Output JSON')).toContainText(output)
+          await expect(panel.getByLabel('Tool output', { exact: true })).toContainText(output)
           await emit('text_stream', {
             kind: 'answer', generationId: 'resize-answer', token: `Additional streamed line ${index}.\n`
           })
@@ -962,11 +1071,11 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         }
 
         const refreshed = page.waitForResponse((response) =>
-          new URL(response.url()).pathname === detailsPath && response.ok()
+          new URL(response.url()).pathname.startsWith(`${detailsPath}/tools/`) && response.ok()
         )
         refresh.resolve()
         await refreshed
-        await expect(panel.getByLabel('Output JSON')).toContainText('Live output 11')
+        await expect(panel.getByLabel('Tool output', { exact: true })).toContainText('Live output 11')
         await expect(panel.getByRole('status')).toHaveCount(0)
       } finally {
         refresh.resolve()

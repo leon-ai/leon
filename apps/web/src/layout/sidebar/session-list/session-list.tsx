@@ -3,7 +3,8 @@ import {
   useEffect,
   useRef,
   useState,
-  type RefObject
+  type RefObject,
+  type KeyboardEvent
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useNavigate, useParams } from '@tanstack/react-router'
@@ -11,6 +12,8 @@ import { useNavigate, useParams } from '@tanstack/react-router'
 import { useSessions, useSessionMutation } from '@/data/sessions'
 import { useProfile } from '@/data/profile'
 import { SessionListItem } from '@/layout/sidebar/session-list-item'
+import { Loader } from '@/components/loader'
+import { getListNavigationIndex } from '@/utils/list-navigation'
 
 import './session-list.sass'
 
@@ -35,6 +38,7 @@ export function SessionList({
   const scrollMaskRef = useRef<HTMLDivElement>(null)
   const virtualListRef = useRef<HTMLUListElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null)
   const sessions = query.sessions
   const rowVirtualizer = useVirtualizer({
     count: sessions.length,
@@ -42,15 +46,55 @@ export function SessionList({
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => SESSION_ITEM_ESTIMATED_HEIGHT,
     overscan: SESSION_LIST_OVERSCAN,
+    scrollPaddingStart: SCROLL_MASK_FADE_DISTANCE_PX,
+    scrollPaddingEnd: SCROLL_MASK_FADE_DISTANCE_PX,
     scrollMargin
   })
-  const lastVisibleIndex = rowVirtualizer.getVirtualItems().at(-1)?.index ?? -1
+  const virtualItems = rowVirtualizer.getVirtualItems()
+  const lastVisibleIndex = virtualItems.at(-1)?.index ?? -1
   useEffect(() => {
     if (!collapsed && lastVisibleIndex >= sessions.length - SESSION_LIST_OVERSCAN &&
       query.hasNextPage && !query.isFetching && !query.isError) {
       void query.fetchNextPage()
     }
   }, [collapsed, lastVisibleIndex, sessions.length, query.hasNextPage, query.isFetching, query.isError, query.fetchNextPage])
+
+  useLayoutEffect(() => {
+    if (!pendingFocusId) {
+      return
+    }
+    const list = virtualListRef.current
+    // A virtual row may mount after scrolling. Do not steal focus back if the
+    // owner has meanwhile moved to another control or started editing a title.
+    if (document.activeElement !== document.body &&
+      !(document.activeElement instanceof HTMLAnchorElement && list?.contains(document.activeElement))) {
+      setPendingFocusId(null)
+      return
+    }
+    const target = list?.querySelector<HTMLElement>(`[data-session-id="${CSS.escape(pendingFocusId)}"]`)
+    if (target) {
+      target.focus({ preventScroll: true })
+      setPendingFocusId(null)
+    }
+  }, [pendingFocusId, virtualItems])
+
+  function handleListKeyDown(event: KeyboardEvent<HTMLUListElement>): void {
+    const target = event.target
+    if (!(target instanceof HTMLAnchorElement) || !target.dataset['sessionId']) {
+      return
+    }
+    const currentIndex = sessions.findIndex((session) => session.id === target.dataset['sessionId'])
+    const next = getListNavigationIndex(event, { count: sessions.length, currentIndex })
+    if (next === undefined) {
+      return
+    }
+    event.preventDefault()
+    const session = sessions[next]
+    if (session) {
+      setPendingFocusId(session.id)
+      rowVirtualizer.scrollToIndex(next, { align: 'auto' })
+    }
+  }
 
   function renameSession(sessionId: string, nextTitle: string): void {
     const title = nextTitle.trim()
@@ -151,9 +195,10 @@ export function SessionList({
       <ul
         className="session-list-items"
         ref={virtualListRef}
+        onKeyDown={handleListKeyDown}
         style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
       >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const session = sessions[virtualRow.index]
 
           if (session === undefined) {
@@ -178,7 +223,7 @@ export function SessionList({
           )
         })}
       </ul>
-      {profile && query.isPending && <p role="status">Loading sessions…</p>}
+      {profile && query.isPending && <Loader size="sm" label="Loading sessions…" />}
       {query.isError && <button type="button" onClick={() => void query.refetch()}>Retry loading sessions</button>}
       <div
         ref={scrollMaskRef}
