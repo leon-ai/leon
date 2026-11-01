@@ -932,6 +932,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(badge).toHaveCSS('opacity', '0')
     const reservedWidth = (await badge.boundingBox())!.width
     expect(reservedWidth).toBeGreaterThan(0)
+    const titleBounds = await tool.locator('.tool-call-title').boundingBox()
+    const chevron = tool.locator('.tool-call-chevron')
+    const chevronBounds = await chevron.boundingBox()
     expect(await timestamp.evaluate((element) => {
       const date = getComputedStyle(element)
       const duration = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-duration')!)
@@ -953,6 +956,15 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await tool.hover()
     await expect(badge).toHaveCSS('opacity', '1')
     expect((await badge.boundingBox())!.width).toBe(reservedWidth)
+    const hoveredTitle = (await tool.locator('.tool-call-title').boundingBox())!
+    const hoveredChevron = (await chevron.boundingBox())!
+    expect(hoveredTitle.x).toBe(titleBounds!.x)
+    expect(hoveredTitle.width).toBe(titleBounds!.width)
+    expect(hoveredChevron.x).toBe(chevronBounds!.x)
+    const dateBounds = (await badge.boundingBox())!
+    const durationBounds = (await tool.locator('.tool-call-duration').boundingBox())!
+    expect(dateBounds.x).toBeGreaterThanOrEqual(durationBounds.x + durationBounds.width)
+    expect(dateBounds.x + dateBounds.width).toBeLessThanOrEqual(chevronBounds!.x)
     await expect(tooltip).toHaveCount(0)
     await timestamp.hover()
     await expect(tooltip).toHaveText('2026-10-30 14:32:15')
@@ -968,19 +980,32 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(tool).toBeFocused()
     await expect(tool).toHaveAttribute('aria-expanded', 'true')
     await expect(tooltip).toHaveCount(0)
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(badge).toHaveCSS('opacity', '1')
     await timestamp.focus()
     await expect(tooltip).toHaveText('2026-10-30 14:32:15')
     await tool.focus()
     await expect(tooltip).toHaveCount(0)
+    await chevron.click()
+    await expect(tool).toHaveAttribute('aria-expanded', 'false')
+    await timestamp.click()
+    await expect(tool).toHaveAttribute('aria-expanded', 'true')
     const thought = work.getByRole('region', { name: 'Leon’s thinking', exact: true })
-    await thought.getByRole('button').click()
+    await thought.getByRole('button').locator('.process-group-title').click()
     await expect(thought.locator('.thinking-message-details')).toBeVisible()
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(thought.locator('.process-group-heading > .activity-timestamp')).toHaveCSS('opacity', '1')
     expect(await thought.evaluate((element) => {
       const details = element.querySelector('.thinking-message-details')!.getBoundingClientRect()
       const label = element.querySelector('.process-group-title')!.getBoundingClientRect()
       return Math.abs(details.left - label.left)
     })).toBeLessThanOrEqual(1)
     await thought.hover()
+    const thoughtDate = (await thought.locator('.activity-timestamp').boundingBox())!
+    const thoughtChevron = (await thought.locator('.process-group-chevron').boundingBox())!
+    expect(thoughtDate.x + thoughtDate.width).toBeLessThanOrEqual(thoughtChevron.x)
     await thought.locator('.activity-timestamp time').hover()
     await expect(tooltip).toContainText('2026-10-30 14:32:15')
     await page.getByRole('textbox', { name: 'Message Leon' }).hover()

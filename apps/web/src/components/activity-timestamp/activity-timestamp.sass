@@ -45,6 +45,7 @@
 .tool-call:focus-within > .tool-call-heading > .activity-timestamp,
 .process-group:hover > .process-group-heading > .activity-timestamp,
 .process-group:focus-within > .process-group-heading > .activity-timestamp,
+:is(.tool-call-heading, .process-group-heading):has(> button[aria-expanded='true']) > .activity-timestamp,
 .leon-message-summary:hover > .activity-timestamp,
 .activity-timestamp:focus-within
   opacity: 1
