@@ -33,6 +33,62 @@ test('reveals conversation loading only after one second and cancels it on navig
   await expect(loading).toHaveCount(0)
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`navigates virtual session search from the keyboard without leaving its input (${reducedMotion})`, async ({ page, ui }) => {
+    for (let index = ui.sessions.length; index < 80; index++) {
+      const session = { ...ui.sessions[0]!, id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        title: `Test session ${index}` }
+      ui.sessions.push(session)
+      ui.history.set(session.id, [])
+    }
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const trigger = page.getByRole('button', { name: 'Search sessions', exact: true })
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+    const search = dialog.getByRole('combobox', { name: 'Search sessions', exact: true })
+    const results = dialog.getByRole('listbox', { name: 'Matching sessions', exact: true })
+    await expect(search).toBeFocused()
+    await search.dispatchEvent('keydown', { key: 'ArrowDown', isComposing: true })
+    await expect(search).not.toHaveAttribute('aria-activedescendant')
+    await search.press('ArrowDown')
+    await expect(results.getByRole('option', { name: /^Test session 0 / })).toHaveAttribute('aria-selected', 'true')
+    await search.press('ArrowDown')
+    await expect(results.getByRole('option', { name: /^Test session 1 / })).toHaveAttribute('aria-selected', 'true')
+    await search.press('ArrowUp')
+    await expect(search).toBeFocused()
+    await search.fill('Test session')
+    await expect.poll(() => ui.requests.some((url) => url.searchParams.get('query') === 'Test session')).toBe(true)
+    await search.press('ArrowUp')
+    const last = results.getByRole('option', { name: /^Test session 79 / })
+    await expect(last).toBeVisible()
+    await expect(last).toHaveAttribute('aria-selected', 'true')
+    await expect(search).toHaveAttribute('aria-activedescendant', await last.getAttribute('id') ?? '')
+    expect(await results.getByRole('option').count()).toBeLessThan(30)
+    await search.press('Home')
+    expect(await search.evaluate((field: HTMLInputElement) => field.selectionStart)).toBe(0)
+    await expect(last).toHaveAttribute('aria-selected', 'true')
+    await search.fill('no-matching-session')
+    await search.press('Enter')
+    await expect(dialog).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(SESSION_ID))
+    await expect(dialog.getByText('No session found.', { exact: true })).toBeVisible()
+    await search.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await trigger.press('Enter')
+    await expect(search).toBeFocused()
+    await search.fill('Test session 1')
+    await expect(search).toHaveAttribute('aria-busy', 'false')
+    await expect(results.getByRole('option', { name: /^Test session 1 / })).toBeVisible()
+    await search.press('ArrowDown')
+    await search.press('Enter')
+    await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
+    await expect(dialog).toBeHidden()
+    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  })
+}
+
 test('opens and navigates session action menus with arrows, boundaries and native activation', async ({ page, ui }) => {
   void ui
   await page.goto(SESSION_URL)

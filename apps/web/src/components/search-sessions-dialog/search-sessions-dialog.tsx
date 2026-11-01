@@ -1,15 +1,17 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
-  useState
+  useState,
+  type KeyboardEvent
 } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
-import { ScrollList } from '@/components/scroll-list'
+import { ScrollList, SCROLL_LIST_MASK_HEIGHT_PX } from '@/components/scroll-list'
 import {
   useSessions,
   type ConversationSession
@@ -17,6 +19,7 @@ import {
 import { useProfile } from '@/data/profile'
 import { createSearchIndex, getSearchSegments, searchIndex } from '@/utils/search'
 import { formatRelativeDate } from '@/utils/format-date'
+import { getListNavigationIndex } from '@/utils/list-navigation'
 
 import './search-sessions-dialog.sass'
 
@@ -55,10 +58,14 @@ export function SearchSessionsDialog({
   onSessionSelect
 }: SearchSessionsDialogProps) {
   const scrollElementRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+  const listId = useId()
   const [query, setQuery] = useState('')
+  const [activeId, setActiveId] = useState<string | null>(null)
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
   const sessionsQuery = useSessions(useProfile(), debouncedQuery)
   const sessions = sessionsQuery.sessions
+  const activeIndex = sessions.findIndex((session) => session.id === activeId)
   const searchResults = useMemo(
     () => new Map(searchIndex(createSearchIndex(sessions, (session) => [session.title]), debouncedQuery)
       .map((result) => [result.item.id, result])),
@@ -69,7 +76,9 @@ export function SearchSessionsDialog({
     getItemKey: (index) => sessions[index]?.id ?? index,
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => SEARCH_RESULT_ITEM_HEIGHT,
-    overscan: SEARCH_RESULT_OVERSCAN
+    overscan: SEARCH_RESULT_OVERSCAN,
+    scrollPaddingStart: SCROLL_LIST_MASK_HEIGHT_PX,
+    scrollPaddingEnd: SCROLL_LIST_MASK_HEIGHT_PX
   })
   const lastVisibleIndex = rowVirtualizer.getVirtualItems().at(-1)?.index ?? -1
   useEffect(() => {
@@ -80,6 +89,38 @@ export function SearchSessionsDialog({
   }, [lastVisibleIndex, sessions.length, sessionsQuery.hasNextPage, sessionsQuery.isFetching,
     sessionsQuery.isError, sessionsQuery.fetchNextPage])
 
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void {
+    if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      return
+    }
+    if (event.key === 'Escape') {
+      // The dialog owns closing. Suppress the search field's native clear action.
+      event.preventDefault()
+      return
+    }
+    // Never activate results belonging to a query still awaiting its debounce.
+    if (query !== debouncedQuery) {
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const session = sessions[activeIndex < 0 ? 0 : activeIndex]
+      if (session) {
+        onSessionSelect?.()
+        void navigate({ to: '/session/$sessionId', params: { sessionId: session.id } })
+      }
+      return
+    }
+    const next = getListNavigationIndex(event, { count: sessions.length, currentIndex: activeIndex })
+    if (next !== undefined) {
+      event.preventDefault()
+      setActiveId(sessions[next]?.id ?? null)
+      if (next >= 0) {
+        rowVirtualizer.scrollToIndex(next, { align: 'auto' })
+      }
+    }
+  }
+
   return (
     <div className="search-sessions-dialog">
       <Input
@@ -89,16 +130,32 @@ export function SearchSessionsDialog({
         placeholder="Search sessions..."
         size="large"
         type="search"
+        role="combobox"
+        aria-expanded={sessions.length > 0}
+        aria-autocomplete="list"
+        aria-busy={query !== debouncedQuery || sessionsQuery.isPending}
+        aria-controls={listId}
+        aria-activedescendant={activeIndex >= 0 && rowVirtualizer.getVirtualItems().some((row) => row.index === activeIndex)
+          ? `${listId}-${activeId}` : undefined}
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value)
+          setActiveId(null)
+        }}
+        onBlur={() => setActiveId(null)}
+        onKeyDown={handleKeyDown}
       />
       <ScrollList
         className="search-sessions-dialog-results"
         scrollRef={scrollElementRef}
+        onPointerMove={() => setActiveId(null)}
       >
         {sessions.length > 0 ? (
           <ul
             className="search-sessions-dialog-list"
+            id={listId}
+            role="listbox"
+            aria-label="Matching sessions"
             style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -115,15 +172,22 @@ export function SearchSessionsDialog({
                 <li
                   className="search-sessions-dialog-item list-item-slot"
                   key={session.id}
+                  role="presentation"
                   style={{
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`
                   }}
                 >
                   <Link
+                    id={`${listId}-${session.id}`}
+                    role="option"
+                    tabIndex={-1}
+                    aria-selected={session.id === activeId}
+                    data-highlighted={session.id === activeId || undefined}
                     to="/session/$sessionId"
                     params={{ sessionId: session.id }}
                     className="search-sessions-dialog-link"
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={onSessionSelect}
                   >
                     <span className="search-sessions-dialog-title">

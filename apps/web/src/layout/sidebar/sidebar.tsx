@@ -37,6 +37,7 @@ function shouldReduceMotion(): boolean {
 export function Sidebar() {
   const navigate = useNavigate()
   const sidebarScrollAreaRef = useRef<HTMLDivElement>(null)
+  const searchReturnFocusRef = useRef<HTMLElement | null>(null)
   const [soundsEnabled, setSoundsEnabled] = useState(getStoredSoundsEnabled)
   const theme = useTheme()
   const [sidebarExpanded, setSidebarExpanded] = useState(getStoredSidebarExpanded)
@@ -115,7 +116,18 @@ export function Sidebar() {
   }
 
   function openSearchSessionsDialog(): void {
+    if (!searchReturnFocusRef.current) {
+      searchReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    }
     setSearchSessionsDialogOpen(true)
+  }
+
+  function closeSearchSessionsDialog(): void {
+    setSearchSessionsDialogOpen(false)
+    if (searchReturnFocusRef.current?.isConnected) {
+      searchReturnFocusRef.current.focus({ preventScroll: true })
+    }
+    searchReturnFocusRef.current = null
   }
 
   useEffect(() => {
@@ -133,6 +145,7 @@ export function Sidebar() {
 
       if (event.shiftKey && key === 'o') {
         event.preventDefault()
+        searchReturnFocusRef.current = null
         setSearchSessionsDialogOpen(false)
         void navigate({ to: '/' })
         return
@@ -241,13 +254,16 @@ export function Sidebar() {
           {
             label: 'Close',
             variant: 'secondary',
-            onClick: () => setSearchSessionsDialogOpen(false)
+            onClick: closeSearchSessionsDialog
           }
         ]}
-        onClose={() => setSearchSessionsDialogOpen(false)}
+        onClose={closeSearchSessionsDialog}
       >
         <SearchSessionsDialog
-          onSessionSelect={() => setSearchSessionsDialogOpen(false)}
+          onSessionSelect={() => {
+            searchReturnFocusRef.current = null
+            setSearchSessionsDialogOpen(false)
+          }}
         />
       </Dialog>
     </aside>
