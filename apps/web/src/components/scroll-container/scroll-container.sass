@@ -1,4 +1,4 @@
-.scroll-list
+.scroll-container
   position: relative
   display: flex
   flex: 1 1 auto
@@ -6,7 +6,7 @@
   min-height: 0
   overflow: hidden
 
-.scroll-list-viewport
+.scroll-container-viewport
   flex: 1 1 auto
   min-height: 0
   overflow: auto
@@ -14,29 +14,29 @@
   scrollbar-width: thin
   scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
 
-.scroll-list-content
+.scroll-container-content
   display: flow-root
 
-.scroll-list-mask
+.scroll-container-mask
   position: absolute
   right: 0
   left: 0
   z-index: 1
-  height: min(var(--scroll-list-mask-height), 50%)
-  background-color: var(--color-surface-elevated)
+  height: min(var(--scroll-container-mask-height), 50%)
+  background-color: var(--scroll-container-surface, var(--color-surface-elevated))
   pointer-events: none
   transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
-.scroll-list-mask-top
+.scroll-container-mask-top
   top: 0
   mask-image: linear-gradient(to bottom, #000, transparent)
-  opacity: var(--scroll-list-top-opacity, 0)
+  opacity: var(--scroll-container-top-opacity, 0)
 
-.scroll-list-mask-bottom
+.scroll-container-mask-bottom
   bottom: 0
   mask-image: linear-gradient(to top, #000, transparent)
-  opacity: var(--scroll-list-bottom-opacity, 0)
+  opacity: var(--scroll-container-bottom-opacity, 0)
 
 @media (prefers-reduced-motion: reduce)
-  .scroll-list-mask
+  .scroll-container-mask
     transition: none
