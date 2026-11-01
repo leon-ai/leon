@@ -8,7 +8,7 @@ import { Collapse } from '@/components/collapse'
 import { JsonView } from '@/components/json-view'
 import { useConversationDetails } from '@/data/conversation-details'
 import { toFeedTool } from '@/data/conversation-feed'
-import { ActivityTimestamp } from '@/components/activity-timestamp'
+import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
 
 import './tool-call.sass'
 
@@ -72,7 +72,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
 
   return (
     <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
-      <div className="tool-call-heading">
+      <div className="tool-call-heading" onClick={forwardTimestampClickToDisclosure}>
         <button
           type="button"
           className="tool-call-trigger"
