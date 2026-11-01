@@ -26,6 +26,7 @@ export async function finishFiniteAnimations(target: Locator): Promise<void> {
 }
 
 interface UIFixture {
+  models: ModelCatalog
   sessions: ConversationSession[]
   history: Map<string, ConversationRecord[]>
   historyRequests: URL[]
@@ -96,6 +97,7 @@ export const test = base.extend<{ ui: UIFixture }>({
     }
 
     const ui: UIFixture = {
+      models: structuredClone(catalog),
       sessions, history, historyRequests: [], requests: [], completedRequests: [],
       authenticated: true, profile: 'ui-tests', failure: undefined,
       ambient: { mood: 'default', season: 'autumn', solarPhase: 'afternoon', timeZone: 'UTC', weather: null },
@@ -150,7 +152,7 @@ export const test = base.extend<{ ui: UIFixture }>({
         return
       }
       if (parts.at(-1) === 'models') {
-        await json(route, catalog)
+        await json(route, ui.models)
         return
       }
       if (parts.at(-1) === 'page') {
@@ -197,7 +199,7 @@ export const test = base.extend<{ ui: UIFixture }>({
         const data: ConversationPage = {
           session, messages: records.slice(start, end), next_cursor: start > 0 ? String(start) : null,
           newer_cursor: end < records.length ? String(end) : null, event_cursor: 0,
-          is_running: session.status === 'wip', command: null, selection: catalog.selection
+          is_running: session.status === 'wip', command: null, selection: ui.models.selection
         }
         await json(route, data)
         return

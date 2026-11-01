@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type KeyboardEvent } from 'react'
 
 import { Dropdown } from '@/components/dropdown'
 import { ScrollList } from '@/components/scroll-list'
+import { getListNavigationIndex } from '@/utils/list-navigation'
 import type {
   ModelOption,
   ModelProvider,
@@ -104,25 +105,11 @@ function SettingsSection<TValue extends string>({
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
     const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
-    let nextIndex: number
-
-    switch (event.key) {
-      case 'ArrowDown':
-      case 'ArrowRight':
-        nextIndex = (currentIndex + 1) % buttons.length
-        break
-      case 'ArrowUp':
-      case 'ArrowLeft':
-        nextIndex = (currentIndex - 1 + buttons.length) % buttons.length
-        break
-      case 'Home':
-        nextIndex = 0
-        break
-      case 'End':
-        nextIndex = buttons.length - 1
-        break
-      default:
-        return
+    const nextIndex = getListNavigationIndex(event, {
+      count: buttons.length, currentIndex, loop: true, horizontal: true
+    })
+    if (nextIndex === undefined) {
+      return
     }
 
     event.preventDefault()
