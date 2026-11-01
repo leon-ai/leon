@@ -33,6 +33,43 @@ test('reveals conversation loading only after one second and cancels it on navig
   await expect(loading).toHaveCount(0)
 })
 
+for (const wasm of [true, false]) {
+  test(`keeps file diffs readable outside the JavaScript grammar catalog (Wasm: ${wasm})`, async ({ page, ui }) => {
+    if (!wasm) {
+      await page.addInitScript(() => Object.defineProperty(window, 'WebAssembly', { value: undefined }))
+    }
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+        id: 'cpp-edit', name: 'file_system.file.patch', toolCallTitle: 'Adjust the counter', status: 'success',
+        input: JSON.stringify({ path: 'counter.cpp', changes: [{ oldText: 'int count = 1;\n', newText: 'int count = 2;\n' }] }),
+        output: { result: { success: true, data: { changed: true, diff: '-int count = 1;\n+int count = 2;' } } }
+      }]
+    }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+    await page.getByRole('button', { name: 'Adjust the counter', exact: true }).click()
+    const diff = page.locator('.feed .tool-diff')
+    await expect.poll(() => diff.evaluate((element) =>
+      element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? ''
+    )).toContain('count = 2')
+    if (wasm) {
+      await expect.poll(() => diff.evaluate((element) => Array.from(
+        element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
+      ).filter((span) => span.textContent?.trim() === 'int' && span.style.color).length)).toBeGreaterThan(0)
+    }
+    await expect(diff.getByRole('button')).toHaveCount(0)
+    await page.getByRole('button', { name: 'View details', exact: true }).click()
+    const dialogDiff = page.getByRole('dialog').locator('.tool-diff')
+    await dialogDiff.getByRole('button', { name: 'Split view', exact: true }).click()
+    await expect(dialogDiff).toHaveAttribute('data-diff-style', 'split')
+    expect(errors).toEqual([])
+  })
+}
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`navigates virtual session search from the keyboard without leaving its input (${reducedMotion})`, async ({ page, ui }) => {
     for (let index = ui.sessions.length; index < 80; index++) {

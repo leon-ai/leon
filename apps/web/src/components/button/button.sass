@@ -39,6 +39,10 @@
   &.button-ghost
     --button-background: transparent
 
+  &[aria-pressed='true']
+    --button-background: var(--color-surface-hover)
+    color: var(--color-text)
+
   .button-icon
     flex: 0 0 auto
     font-weight: var(--font-weight-regular)

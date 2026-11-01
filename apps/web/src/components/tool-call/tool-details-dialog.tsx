@@ -7,12 +7,14 @@ import type { ToolContentPart } from '../../../../../server/src/core/session-man
 import { useToolCallContents } from '@/data/conversation-details'
 import type { FeedToolCall } from '@/data/feed'
 import { toToolContent, toToolInput } from '@/utils/tool-content'
-import { ToolOutput } from './tool-output'
+import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
+import { ToolChanges, ToolOutput } from './tool-output'
 import { getListNavigationIndex } from '@/utils/list-navigation'
 
 enum ToolDetailsTab {
   Input = 'Input',
-  Output = 'Output'
+  Output = 'Output',
+  Changes = 'Changes'
 }
 
 interface ToolDetailsDialogProps {
@@ -40,8 +42,11 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
   const command = liveCommand ?? contents.data?.commandOutput ?? contents.data?.displayOutput
   const output = command ?? result
   const active = toolCall.status === 'preparing' || toolCall.status === 'running'
-  const tabs = [ToolDetailsTab.Input, ToolDetailsTab.Output]
-  const tab = selectedTab ?? ToolDetailsTab.Output
+  const changesAvailable = toolCall.status === 'success' && (hasToolChanges(toolCall.output) || contents.data?.hasChanges === true)
+  const changes = useMemo(() => getToolChanges(input, changesAvailable), [input, changesAvailable])
+  const tabs = [ToolDetailsTab.Input, ToolDetailsTab.Output, ...(changes.length ? [ToolDetailsTab.Changes] : [])]
+  const tab = selectedTab === ToolDetailsTab.Changes && !changes.length
+    ? ToolDetailsTab.Output : selectedTab ?? (changes.length ? ToolDetailsTab.Changes : ToolDetailsTab.Output)
   const content = tab === ToolDetailsTab.Input ? input : output
   const contentName = tab === ToolDetailsTab.Input ? 'input' : 'output'
 
@@ -111,14 +116,19 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
               onClick={() => setSelectedTab(item)}>{item}</button>
           ))}
         </div>
-        {(
+        {tab !== ToolDetailsTab.Changes && (
           <Button iconName="file-copy" tone="muted" tooltipMessage={`Copy ${contentName}`} tooltipPosition="left"
             disabled={!content} onClick={() => void copy(content, contentName)} />
         )}
       </div>
       <div className="tool-details-reading-pane" role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-${tab}`}>
-        <ToolOutput key={tab} content={content} label={tab === ToolDetailsTab.Input ? 'Input JSON' : 'Output JSON'}
-          active={active} loading={contents.isFetching} />
+        {tab === ToolDetailsTab.Changes ? (
+          <ToolChanges changes={changes} truncated={contents.data?.diffTruncated ?? false}
+            fallback={<ToolOutput content={output} label="Tool output" />} />
+        ) : (
+          <ToolOutput key={tab} content={content} label={tab === ToolDetailsTab.Input ? 'Input JSON' : 'Output JSON'}
+            active={active} loading={contents.isFetching} />
+        )}
       </div>
       {contents.isError && <Button onClick={() => void contents.refetch()}>Retry loading tool details</Button>}
     </Dialog>

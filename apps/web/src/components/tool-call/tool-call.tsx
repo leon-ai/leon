@@ -8,8 +8,9 @@ import { Collapse } from '@/components/collapse'
 import { useToolCallContents } from '@/data/conversation-details'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
 import { Button } from '@/components/button'
-import { toToolContent } from '@/utils/tool-content'
-import { ToolOutput } from './tool-output'
+import { toToolContent, toToolInput } from '@/utils/tool-content'
+import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
+import { ToolChanges, ToolOutput } from './tool-output'
 import { useOpenToolDetails } from './tool-details-provider'
 
 import './tool-call.sass'
@@ -57,6 +58,10 @@ export function ToolCall({ toolCall }: ToolCallProps) {
   const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, false, true), [toolCall.commandOutput])
   const command = liveCommand ?? disclosure.data?.commandOutput ?? disclosure.data?.displayOutput
   const output = command ?? liveOutput ?? disclosure.data?.output
+  const liveInput = useMemo(() => toToolInput(toolCall.input === null ? undefined : toolCall.input), [toolCall.input])
+  const changesAvailable = toolCall.status === 'success' && (hasToolChanges(toolCall.output) || disclosure.data?.hasChanges === true)
+  const input = liveInput ?? disclosure.data?.input
+  const changes = useMemo(() => getToolChanges(input, changesAvailable), [input, changesAvailable])
   const detailsId = useId()
   const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
   const duration = isActive
@@ -127,9 +132,14 @@ export function ToolCall({ toolCall }: ToolCallProps) {
           </div>
           {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
           <div className="tool-call-output-frame">
+            {changes.length > 0 ? (
+              <ToolChanges changes={changes} truncated={disclosure.data?.diffTruncated ?? false} preview
+                fallback={<ToolOutput content={output} label="Tool output" preview />} />
+            ) : (
               <ToolOutput content={output} label="Tool output" active={isActive}
                 loading={disclosure.isFetching} preview
                 previewTail={liveCommand !== undefined || disclosure.data?.commandOutput !== undefined} />
+            )}
           </div>
         </div>
       </Collapse>

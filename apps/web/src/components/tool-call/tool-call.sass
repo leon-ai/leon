@@ -180,6 +180,75 @@
   --button-background: var(--color-surface-hover)
   color: var(--color-text)
 
+.tool-diff
+  display: flex
+  flex-direction: column
+  min-width: 0
+  height: 100%
+
+.tool-changes
+  display: flex
+  flex-direction: column
+  height: 236px
+
+  &:not(.tool-changes-preview) > .tool-output
+    flex: 1 1 auto
+    min-height: 0
+
+    .code-view
+      height: 100%
+
+.tool-changes-preview
+  overflow: clip
+
+.tool-diff-preview-body
+  flex: 1 1 auto
+  min-height: 0
+  overflow: clip
+
+.tool-diff-labels
+  display: flex
+  gap: var(--space-lg)
+  padding: var(--space-sm) var(--space-lg)
+  color: var(--color-text-tertiary)
+  font-size: var(--font-size-xs)
+  border-bottom: 1px solid var(--color-border)
+
+  span
+    flex: 1
+
+.tool-diff-header
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-sm)
+  padding: var(--space-sm) var(--space-lg) 0
+
+  .tooltip
+    flex: 0 0 auto
+
+.tool-diff-views
+  display: flex
+  flex: 0 0 auto
+  gap: var(--space-xs)
+
+.tool-diff-filename
+  min-width: 0
+  margin: 0
+  overflow-wrap: anywhere
+  color: var(--color-text-tertiary)
+  font-family: var(--font-family-code)
+  font-size: var(--font-size-xs)
+
+.tool-diff-scroll
+  flex: 1 1 auto
+
+.tool-diff-notice
+  margin: 0
+  padding: var(--space-sm) var(--space-lg)
+  color: var(--color-text-tertiary)
+  font-size: var(--font-size-xs)
+
 @media (max-width: 680px)
   .tool-call-details
     margin-left: var(--space-sm)

@@ -8,7 +8,7 @@ import type { TooltipPosition } from '@/components/tooltip'
 import './button.sass'
 
 type AppRouteTo = '/'
-type ButtonIconType = 'line' | 'fill'
+type ButtonIconType = 'line' | 'fill' | null
 type ButtonIconPosition = 'left' | 'right'
 type ButtonSize = 'sm' | 'md'
 type ButtonTone = 'default' | 'muted'
@@ -23,6 +23,7 @@ interface ButtonBaseProps {
   tooltipMessage?: string
   tooltipPosition?: TooltipPosition
   ariaLabel?: string
+  ariaPressed?: boolean
   tone?: ButtonTone
   variant?: ButtonVariant
   size?: ButtonSize
@@ -70,6 +71,7 @@ export function Button({
   tooltipMessage,
   tooltipPosition = 'bottom',
   ariaLabel,
+  ariaPressed,
   tone = 'default',
   variant = 'ghost',
   size = 'md',
@@ -81,7 +83,7 @@ export function Button({
   const isDisabled = disabled || loading
   const isIconOnly = children === undefined
   const accessibleLabel = ariaLabel ?? tooltipMessage
-  const iconClassName = `ri-${iconName}-${iconType}`
+  const iconClassName = iconType === null ? `ri-${iconName}` : `ri-${iconName}-${iconType}`
   const buttonClassName = clsx('button', `button-${variant}`, `button-${size}`, `button-tone-${tone}`, className, {
     'button-icon-only': isIconOnly
   })
@@ -101,6 +103,7 @@ export function Button({
       to={to}
       className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
+      aria-pressed={ariaPressed}
       aria-busy={loading}
       aria-disabled={isDisabled}
       style={{ cursor: loading ? 'wait' : cursorStyle }}
@@ -120,6 +123,7 @@ export function Button({
       type={type}
       className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
+      aria-pressed={ariaPressed}
       aria-busy={loading}
       disabled={isDisabled}
       style={{ cursor: loading ? 'wait' : cursorStyle }}
@@ -132,6 +136,7 @@ export function Button({
       href={href}
       className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
+      aria-pressed={ariaPressed}
       aria-busy={loading}
       aria-disabled={isDisabled}
       target={target}
