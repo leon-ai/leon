@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 
-import type { RealAgentScenario } from '../e2e/run-agent-provider-scenario'
+import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 import type { HTTPPluginAgentEvent } from '@/core/http-server/http-plugins/types'
 import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 
@@ -60,7 +60,10 @@ const scenario: RealAgentScenario = {
 
       for (const { event, activity } of activities) {
         assert.equal(event.turn_id, requestId)
-        assert.deepEqual(Object.keys(activity).sort(), ['durationMs', 'goal', 'id', 'outcome', 'startedAt'])
+        assert.deepEqual(Object.keys(activity).sort(), [
+          'durationMs', 'goal', 'id', 'outcome', 'startedAt',
+          ...(activity.planStepId !== undefined ? ['planStepId'] : [])
+        ].sort())
         assert.ok(result.response_trace.timings?.some(
           (timing) => timing.kind === 'inference' && timing.id === activity.id
         ))

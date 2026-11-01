@@ -4,10 +4,10 @@ import { spawn } from 'node:child_process'
 
 import { LEON_PROFILES_PATH } from '../server/src/leon-roots'
 import { getProfilePaths } from '../server/src/core/profile-runtime/profile-paths'
+import { listAgentScenarios, selectAgentScenarios } from './agent-scenarios'
 
 type AgentSuite = 'unit' | 'e2e' | 'scenario'
 const SCENARIOS_PATH = 'test/agent/scenarios'
-const SCENARIO_SUFFIX = '.scenario.ts'
 
 /**
  * Session activity selects the default profile without changing owner state.
@@ -96,16 +96,16 @@ if (forwardedArgs[0] === '--') {
 
 let scenario: string | undefined
 if (suite === 'scenario') {
-  const names = fs.readdirSync(SCENARIOS_PATH)
-    .filter((name) => name.endsWith(SCENARIO_SUFFIX))
-    .map((name) => name.slice(0, -SCENARIO_SUFFIX.length)).sort()
+  const names = listAgentScenarios()
   scenario = forwardedArgs[0]?.startsWith('-') ? undefined : forwardedArgs.shift()
-  if (forwardedArgs[0] === '--list') {
-    console.info(`Run all: pnpm test:agent:scenario\nRun one: pnpm test:agent:scenario -- <name>\n${names.join('\n')}`)
-    process.exit(0)
-  }
-  if (scenario && !names.includes(scenario)) {
-    console.error(`Unknown scenario "${scenario}". Available: ${names.join(', ')}`)
+  try {
+    const selected = selectAgentScenarios(names, scenario)
+    if (forwardedArgs[0] === '--list') {
+      console.info(`Run all: pnpm test:agent:scenario\nSelect a category, mechanism or case: pnpm test:agent:scenario -- <selection>\n${selected.join('\n')}`)
+      process.exit(0)
+    }
+  } catch (error) {
+    console.error(String(error))
     process.exit(1)
   }
 }

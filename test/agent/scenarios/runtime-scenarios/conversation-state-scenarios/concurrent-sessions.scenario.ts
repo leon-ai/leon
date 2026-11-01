@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import path from 'node:path'
 
-import type { RealAgentScenario } from '../e2e/run-agent-provider-scenario'
+import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 
 const FIRST_LABEL = 'amber-kite-47'
 const SECOND_LABEL = 'cobalt-pine-83'
@@ -26,8 +26,8 @@ const scenario: RealAgentScenario = {
       runTurn(`For this conversation the label is ${SECOND_LABEL}. Reply with this label only; do not use tools.`)
     ])
     assert.notEqual(first.sessionId, second.sessionId)
-    assert.equal(first.finalIntent, 'answer', JSON.stringify(first))
-    assert.equal(second.finalIntent, 'answer', JSON.stringify(second))
+    assert.equal(first.finalIntent, 'answer', first.output)
+    assert.equal(second.finalIntent, 'answer', second.output)
     assert.ok(first.output.includes(FIRST_LABEL), first.output)
     assert.ok(second.output.includes(SECOND_LABEL), second.output)
 
@@ -49,7 +49,7 @@ const scenario: RealAgentScenario = {
     }
 
     const followUp = await runTurn('What is the label for this conversation? Reply with the label only; do not use tools.', first.sessionId)
-    assert.equal(followUp.finalIntent, 'answer', JSON.stringify(followUp))
+    assert.equal(followUp.finalIntent, 'answer', followUp.output)
     assert.ok(followUp.historyBeforeTurn >= 2)
     assert.ok(followUp.output.includes(FIRST_LABEL), followUp.output)
     assert.ok(!followUp.output.includes(SECOND_LABEL), followUp.output)

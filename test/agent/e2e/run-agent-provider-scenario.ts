@@ -1,15 +1,19 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { once } from 'node:events'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:net'
 
 import YAML from 'yaml'
+import { resolveAgentScenario } from '../../../scripts/agent-scenarios'
 import { createCodingFixture, type CodingEvidence } from './coding-fixture'
 
 import type { LLMModelReasoning } from '../../../server/src/core/llm-manager/llm-model-catalog'
-import type { MessageLog } from '../../../server/src/types'
+import type { AgentResponseTrace, MessageLog } from '../../../server/src/types'
+import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
+import type { AgentModelFile } from '../../../server/src/core/llm-manager/types'
 import type { ToolExecutionInput, ToolExecutionResult } from '../../../server/src/core/tool-manager/tool-executor'
 import type { AgentProvider } from './provider-matrix'
 import { PROVIDER_MATRIX, PROVIDER_REQUIRED_ENV } from './provider-matrix'
@@ -79,6 +83,10 @@ export interface AgentTurnResult {
 export interface RealScenarioTurn extends AgentTurnResult {
   sessionId: string
   historyBeforeTurn: number
+  progressMessages: NonNullable<AgentResponseTrace['progressMessages']>
+  responseTrace: AgentResponseTrace
+  hasExplicitMemoryWrite: boolean
+  artifacts: Artifact[]
 }
 
 /**
@@ -89,7 +97,7 @@ export interface RealAgentScenario {
   toolResult?(input: ToolExecutionInput): ToolExecutionResult | undefined
   run(context: {
     profilePath: string
-    runTurn(input: string, sessionId?: string): Promise<RealScenarioTurn>
+    runTurn(input: string, sessionId?: string, options?: { deadlineAt?: number, files?: AgentModelFile[] }): Promise<RealScenarioTurn>
   }): Promise<Record<string, unknown>>
 }
 
@@ -321,12 +329,7 @@ async function main(): Promise<void> {
   let realScenario: RealAgentScenario | null = null
   let realScenarioPath: string | undefined
   if (process.argv.includes('--real-scenario')) {
-    const directory = fileURLToPath(new URL('../scenarios/', import.meta.url))
-    const filename = `${scenarioArg}.scenario.ts`
-    if (!(await fs.readdir(directory)).includes(filename)) {
-      throw new Error('Select a named real scenario.')
-    }
-    realScenarioPath = pathToFileURL(path.join(directory, filename)).href
+    realScenarioPath = pathToFileURL(resolveAgentScenario(scenarioArg || '')).href
   }
   const isRealScenario = realScenarioPath !== undefined
   const scenario = isRealScenario
@@ -355,7 +358,11 @@ async function main(): Promise<void> {
     throw new Error('No active profile model was selected for the scenario.')
   }
   const requiredEnv = PROVIDER_REQUIRED_ENV[provider]
-  const testRunId = `${provider}-${scenario.id}-${process.pid}-${Date.now()}`
+  // Nested source identifiers must never become profile path components.
+  const profileScenarioId = isRealScenario
+    ? createHash('sha256').update(scenario.id).digest('hex').slice(0, 12)
+    : scenario.id
+  const testRunId = `${provider}-${profileScenarioId}-${process.pid}-${Date.now()}`
   const testProfileName = `${TEST_PROFILE_PREFIX}-${testRunId}`
   const testHomePath = (isRealScenario && process.env['LEON_AGENT_SCENARIO_HOME']) || path.join(
     os.tmpdir(),
@@ -403,7 +410,7 @@ async function main(): Promise<void> {
 
   const tempAssetPath = path.join(
     os.tmpdir(),
-    `leon-agent-${provider}-${scenario.id}-${Date.now()}.txt`
+    `leon-agent-${provider}-${profileScenarioId}-${Date.now()}.txt`
   )
 
   const {
@@ -497,7 +504,7 @@ async function main(): Promise<void> {
   const { CONFIG_STATE } = await import(
     '../../../server/src/core/config-states/config-state'
   )
-  const { runWithConversationSession } = await import(
+  const { runWithConversationSession, getActiveConversationSessionId } = await import(
     '../../../server/src/core/session-manager/session-context'
   )
 
@@ -506,6 +513,7 @@ async function main(): Promise<void> {
     : null
   const input = scenario.buildInput(codingFixture?.root || tempAssetPath)
   const toolCalls: AgentTurnResult['toolCalls'] = []
+  const toolCallSessions = new Map<AgentTurnResult['toolCalls'][number], string | undefined>()
   type ExecuteTool = typeof TOOL_EXECUTOR.executeTool
   type ToolExecutionInput = Parameters<ExecuteTool>[0]
   type ToolExecutionResult = Awaited<ReturnType<ExecuteTool>>
@@ -558,6 +566,7 @@ async function main(): Promise<void> {
     })
 
     toolCalls.push(toolCall)
+    toolCallSessions.set(toolCall, getActiveConversationSessionId())
 
     return toolResult
   }
@@ -602,30 +611,43 @@ async function main(): Promise<void> {
       let turnNumber = 0
       const evidence = await realScenario.run({
         profilePath: testProfilePath,
-        runTurn: async (ownerInput, existingSessionId) => {
+        runTurn: async (ownerInput, existingSessionId, options = {}) => {
           const sessionId = existingSessionId || CONVERSATION_SESSION_MANAGER.createSession().id
           return runWithConversationSession({ sessionId }, async () => {
             const historyBeforeTurn = (await CONVERSATION_LOGGER.loadAll({ sessionId })).length
             const callOffset = toolCalls.length
-            turnNumber += 1
-            printProgress({ provider, stage: 'turn_start', turn: turnNumber, message: scenario.id, data: { input: ownerInput } })
+            const currentTurn = ++turnNumber
+            printProgress({ provider, stage: 'turn_start', turn: currentTurn, message: scenario.id, data: { input: ownerInput } })
             await CONVERSATION_LOGGER.push(createConversationLoggerRecord('owner', ownerInput))
-            const duty = new ReActLLMDuty({ input: ownerInput })
+            const progressMessages: RealScenarioTurn['progressMessages'] = []
+            const duty = new ReActLLMDuty({
+              input: ownerInput,
+              ...options,
+              onProgressEvent: (event): void => {
+                if (event.type === 'progress_message') {
+                  progressMessages.push(structuredClone(event.message))
+                }
+              }
+            })
             await duty.init({ force: true })
-            const result = await duty.execute()
+            const { collectArtifacts } = await import('@/core/artifacts/artifact-context')
+            const { value: result, artifacts } = await collectArtifacts(() => duty.execute())
             if (!result) {
               throw new Error('Agent scenario returned no result.')
             }
             const output = typeof result.output === 'string' ? result.output : ''
             const turn: RealScenarioTurn = {
               sessionId, historyBeforeTurn, input: ownerInput, output,
+              progressMessages, artifacts,
+              responseTrace: result.data?.['agentResponseTrace'] as AgentResponseTrace,
+              hasExplicitMemoryWrite: result.data?.['hasExplicitMemoryWrite'] === true,
               finalIntent: typeof result.data?.['finalIntent'] === 'string' ? result.data['finalIntent'] : null,
               executionHistory: Array.isArray(result.data?.['executionHistory'])
                 ? result.data['executionHistory'] as AgentTurnResult['executionHistory'] : [],
-              toolCalls: toolCalls.slice(callOffset)
+              toolCalls: toolCalls.slice(callOffset).filter((call) => toolCallSessions.get(call) === sessionId)
             }
             await CONVERSATION_LOGGER.push(createConversationLoggerRecord('leon', output))
-            printProgress({ provider, stage: 'turn_result', turn: turnNumber, message: scenario.id, data: { output, finalIntent: turn.finalIntent } })
+            printProgress({ provider, stage: 'turn_result', turn: currentTurn, message: scenario.id, data: { output, finalIntent: turn.finalIntent } })
             return turn
           })
         }

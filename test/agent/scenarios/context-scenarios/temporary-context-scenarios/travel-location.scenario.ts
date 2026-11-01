@@ -4,7 +4,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import SQLite from 'better-sqlite3'
-import type { RealAgentScenario } from '../e2e/run-agent-provider-scenario'
+import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 
 const HOME_CITY = 'Shenzhen'
@@ -57,7 +57,7 @@ const scenario: RealAgentScenario = {
 
   async run({ profilePath, runTurn }) {
     const first = await runTurn(OWNER_STATEMENT)
-    assert.equal(first.finalIntent, 'answer', JSON.stringify(first))
+    assert.equal(first.finalIntent, 'answer', first.output)
     assert.equal(first.historyBeforeTurn, 0)
 
     // Inspect immediately: background extraction must not hide a failure to
@@ -68,7 +68,7 @@ const scenario: RealAgentScenario = {
     try {
       const records = db.prepare('SELECT * FROM active_memory_items WHERE scope = \'temporary\'').all()
       const location = records.find((record) => String(record['content_md']).toLowerCase().includes(TEMPORARY_CITY.toLowerCase()))
-      assert.ok(location, `No temporary location captured: ${JSON.stringify(first)}`)
+      assert.ok(location, `No temporary location captured: ${first.output}`)
       assert.ok(Number(location['expires_at']) > Date.now())
       assert.ok(Number(location['expires_at']) - Number(location['created_at']) <= MAXIMUM_LIFETIME_MS)
       assert.ok(String(location['source_ref']).includes(first.sessionId))
@@ -95,7 +95,7 @@ const scenario: RealAgentScenario = {
       const second = await runTurn(WEATHER_REQUEST)
       assert.notEqual(second.sessionId, first.sessionId)
       assert.equal(second.historyBeforeTurn, 0, 'A fresh session must not inherit conversation history.')
-      assert.equal(second.finalIntent, 'answer', JSON.stringify(second))
+      assert.equal(second.finalIntent, 'answer', second.output)
 
       const state = JSON.parse(await fs.readFile(path.join(
         profilePath, 'sessions', second.sessionId, '.agent-conversation-state.json'
@@ -107,7 +107,7 @@ const scenario: RealAgentScenario = {
       assert.ok(snapshots.some((entry) => entry.id === location['id']), 'The agent must receive the saved temporary record.')
       assert.ok(!state.transcript.some((message) => message.content.startsWith('<user_request>') && message.content.includes(OWNER_STATEMENT)))
       const calls = second.toolCalls.filter((call) => call.toolkitId === 'weather' && call.functionName === 'getWeather')
-      assert.ok(calls.length > 0, `No weather call: ${JSON.stringify(second)}`)
+      assert.ok(calls.length > 0, `No weather call: ${second.output}`)
       for (const call of calls) {
         const requestedLocation = String(call.parsedInput?.['location']).toLowerCase()
         assert.ok(requestedLocation.includes(TEMPORARY_CITY.toLowerCase()), JSON.stringify({ call, injected: snapshots }))
