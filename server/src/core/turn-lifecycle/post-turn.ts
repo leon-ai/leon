@@ -1,3 +1,4 @@
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import { MEMORY_MANAGER, SELF_MODEL_MANAGER, EXPERIENCE_MANAGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import type { ExecutionRecord, FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import { hasExperienceLearningEvidence } from '@/core/experience-manager'
@@ -9,6 +10,7 @@ import { MEMORY_EXTRACTION_MAX_BATCH_TURNS } from '@/constants'
 import { getTurnTimingContext } from '@/core/llm-manager/turn-timing'
 
 export interface CompletedAgentTurn {
+  onActivity?: (activity: AgentProgressMessage) => void
   sessionId: string
   query: string
   result: LLMDutyResult | null
