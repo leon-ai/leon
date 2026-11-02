@@ -58,7 +58,8 @@ if (operation === 'help') {
         assert.equal(first.finalIntent, 'answer', first.output)
         assert.equal(await fs.readFile(path.join(workspace, '.serving'), 'utf8'), 'serving')
         return { output: first.output, data: {
-          finalIntent: first.finalIntent, executionHistory: first.executionHistory, workspace
+          finalIntent: first.finalIntent, executionHistory: first.executionHistory, workspace,
+          agentResponseTrace: first.responseTrace
         } } as unknown as import('@/core/llm-manager/llm-duty').LLMDutyResult
       })
       await POST_TURN_MAINTENANCE_QUEUE.whenIdle()
