@@ -258,6 +258,23 @@ export default class MemoryTool extends Tool {
       DEFAULT_TOKEN_BUDGET
     ))
     const includeFacts = options.includeFacts !== false
+    // SQLite is authoritative: an empty store cannot produce valid indexed hits.
+    // Avoid loading hybrid search models just to rediscover that there is no evidence.
+    const hasMemory = this.getDb().prepare(
+      'SELECT 1 FROM active_memory_items WHERE scope != \'temporary\' LIMIT 1'
+    ).get()
+    if (!namespaces.includes('context') && !hasMemory &&
+      (!includeFacts || this.readFacts(1).length === 0)) {
+      return {
+        success: true,
+        data: {
+          query: normalizedQuery, namespaces, topK, tokenBudget,
+          usedTokenEstimate: 0, hits: [], facts: [],
+          candidateCount: 0, omittedCandidateCount: 0
+        }
+      }
+    }
+
     await this.ensureCollections()
     await this.updateIndex()
 
