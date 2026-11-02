@@ -45,7 +45,7 @@ const fixture = vi.hoisted(() => ({
   invalidVerification: false
 }))
 
-vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd() }))
+vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd(), MEMORY_EXTRACTION_MAX_BATCH_TURNS: 3 }))
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: { title: vi.fn(), info: vi.fn(), success: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
@@ -140,7 +140,10 @@ async function providerResponse(_input: unknown, params: CompletionParams): Prom
     if (purpose === InferencePurpose.SessionTitle) {
       output = 'Home notes'
     } else if (purpose === InferencePurpose.Memory) {
-      output = { items: [{ content: `The owner lives in ${profile}.`, evidence: `I live in ${profile}.`, scope: 'persistent' }] }
+      output = { items: [{
+        content: `The owner lives in ${profile}.`, evidence: `I live in ${profile}.`, scope: 'persistent',
+        ...(typeof _input === 'string' && _input.startsWith('Turn index') ? { turnIndex: 0 } : {})
+      }] }
     } else if (purpose === InferencePurpose.SelfModel) {
       output = JSON.stringify({ retrospection: 'Keep remembered owner facts grounded in their words.' })
     } else if (params.systemPrompt?.startsWith('Verify owner')) {
@@ -201,9 +204,9 @@ async function createProfile(profile: string): Promise<void> {
   })
 }
 
-async function completeTurn(profile: string, explicitMemory = false, duringTurn?: () => Promise<void>): Promise<{ sessionId: string, turnId: string }> {
+async function completeTurn(profile: string, explicitMemory = false, duringTurn?: () => Promise<void>, existingSessionId?: string): Promise<{ sessionId: string, turnId: string }> {
   return runWithProfileContext({ profileName: profile }, async () => {
-    const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
+    const sessionId = existingSessionId ?? CONVERSATION_SESSION_MANAGER.createSession().id
     const turnId = randomUUID()
     const query = `I live in ${profile}. Please keep that in mind when helping me with local suggestions and other future questions.`
     const logger = fixture.services.get(profile)!.logger
@@ -221,6 +224,34 @@ async function completeTurn(profile: string, explicitMemory = false, duringTurn?
     return { sessionId, turnId }
   })
 }
+
+it('shares one pending extraction across owner turns while retaining every archived message', async () => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  await runWithProfileContext({ profileName: profile }, async () => {
+    const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
+    const services = fixture.services.get(profile)!
+    const gate = Promise.withResolvers<void>()
+    services.queue.enqueue('occupied maintenance', () => gate.promise)
+    try {
+      for (let index = 0; index < 3; index += 1) {
+        await completeTurn(profile, false, undefined, sessionId)
+      }
+      expect(fixture.requests.filter((request) => request.purpose === InferencePurpose.Memory)).toHaveLength(0)
+      expect(CONVERSATION_REPOSITORY.readAllMessages(sessionId)).toHaveLength(6)
+    } finally {
+      gate.resolve()
+      await services.queue.whenIdle()
+    }
+    expect(fixture.requests.filter((request) => request.purpose === InferencePurpose.Memory)).toHaveLength(1)
+    expect(services.repository.listPersistentMirrorRecords()).toEqual([
+      expect.objectContaining({
+        content: `The owner lives in ${profile}.`,
+        sourceRef: expect.stringContaining(`session:${sessionId}:turn:`)
+      })
+    ])
+  })
+})
 
 it('persists title, memory, reflection and owner artifacts without blocking answer delivery', async () => {
   const profile = randomUUID()

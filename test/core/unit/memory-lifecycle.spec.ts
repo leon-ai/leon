@@ -18,7 +18,7 @@ const state = vi.hoisted(() => ({
   prompt: vi.fn()
 }))
 
-vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd() }))
+vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd(), MEMORY_EXTRACTION_MAX_BATCH_TURNS: 3 }))
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: { title: vi.fn(), info: vi.fn(), success: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
@@ -194,21 +194,112 @@ describe('memory lifecycle', () => {
     })
   })
 
-  it('extracts short owner statements with evidence while retaining materially different wording', async () => {
-    await remember('Owner prefers quiet work sessions with no interruptions in the morning.')
+  it('extracts new owner facts and replaces corrected facts with their evidence', async () => {
+    const old = await remember('Owner prefers quiet work sessions with no interruptions in the morning.')
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'Owner prefers quiet work sessions with no interruptions in the evening.',
+      evidence: 'My quiet work sessions are now in the evening.', supersedesItemId: old.id
+    }] } })
+    expect(await manager.saveMemoryCandidatesFromTurn('My quiet work sessions are now in the evening.', 'Noted.', Date.now())).toBe(1)
+    expect(repository.getActiveMemoryItem(old.id)).toBeNull()
+    expect(state.prompt.mock.calls[0]?.[0]).toContain(old.id)
     state.prompt.mockResolvedValueOnce({ output: { items: [{
       content: 'Owner lives in Lyon.', evidence: 'I moved to Lyon.'
     }] } })
     expect(await manager.saveMemoryCandidatesFromTurn('I moved to Lyon.', 'Noted.', 1_000)).toBe(1)
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
-      content: 'Owner prefers quiet work sessions with no interruptions in the evening.',
-      evidence: 'Evenings, not mornings.'
-    }] } })
-    expect(await manager.saveMemoryCandidatesFromTurn('Evenings, not mornings.', 'Noted.', 2_000)).toBe(1)
     const inferred = repository.listPersistentMirrorRecords().find((record) => record.sourceRef === 'turn:1000')
     expect(inferred).toMatchObject({
       sourceType: 'inferred', confidence: 0.7, metadata: { evidence: 'I moved to Lyon.' }
     })
+  })
+
+  it('rejects delayed persistent corrections after their selected target changes', async () => {
+    const old = await remember('Caldera contact is Mira.')
+    state.prompt.mockImplementationOnce(async () => {
+      await remember('Caldera contact is Nora.', { supersedesItemId: old.id })
+      return { output: { items: [{
+        content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.',
+        supersedesItemId: old.id
+      }] } }
+    })
+    expect(await manager.saveMemoryCandidatesFromTurn('Caldera contact is Tomas.', 'Noted.', Date.now())).toBe(0)
+    expect(repository.listPersistentMirrorRecords().map((record) => record.content)).toEqual(['Caldera contact is Nora.'])
+
+    // A queued older turn can start extraction after the newer record already exists.
+    const current = repository.listPersistentMirrorRecords()[0]!
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.',
+      supersedesItemId: current.id
+    }] } })
+    expect(await manager.saveMemoryCandidatesFromTurn('Caldera contact is Tomas.', 'Noted.', current.updatedAt - 1)).toBe(0)
+    expect(repository.getActiveMemoryItem(current.id)?.content).toBe('Caldera contact is Nora.')
+  })
+
+  it('validates the correction version inside its write transaction', async () => {
+    const old = await remember('Caldera contact is Mira.')
+    await expect(remember('Caldera contact is Nora.', {
+      supersedesItemId: old.id, expectedSupersededUpdatedAt: old.updatedAt - 1
+    })).rejects.toThrow('changed')
+    expect(repository.getActiveMemoryItem(old.id)?.content).toBe(old.content)
+  })
+
+  it('extracts a bounded backlog once with independent evidence and the latest correction', async () => {
+    const old = await remember('Caldera contact is Mira.')
+    const sentAt = Date.now()
+    state.prompt.mockResolvedValueOnce({ output: { items: [
+      { turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: old.id },
+      { turnIndex: 1, content: 'Borealis reviews are Friday.', evidence: 'Borealis reviews are Friday.' },
+      { turnIndex: 2, content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.', supersedesItemId: old.id },
+      { turnIndex: 2, content: 'Unsupported fact.', evidence: 'Borealis reviews are Friday.' }
+    ] } })
+    expect(await manager.saveMemoryCandidatesFromTurns([
+      { userMessage: 'Caldera contact is Nora.', assistantMessage: 'Noted.', sentAt, sourceRef: 'source:first' },
+      { userMessage: 'Borealis reviews are Friday.', assistantMessage: 'Noted.', sentAt, sourceRef: 'source:second' },
+      { userMessage: 'Caldera contact is Tomas.', assistantMessage: 'Noted.', sentAt, sourceRef: 'source:third' }
+    ])).toEqual([0, 1, 1])
+    expect(state.prompt).toHaveBeenCalledOnce()
+    expect(repository.listPersistentMirrorRecords()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ content: 'Borealis reviews are Friday.', sourceRef: 'source:second' }),
+      expect.objectContaining({ content: 'Caldera contact is Tomas.', sourceRef: 'source:third' })
+    ]))
+    expect(repository.listPersistentMirrorRecords()).toHaveLength(2)
+  })
+
+  it('preserves newer explicit memory when an older backlog begins extraction', async () => {
+    const current = await remember('Caldera contact is Tomas.')
+    state.prompt.mockResolvedValueOnce({ output: { items: [
+      { turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: current.id }
+    ] } })
+    expect(await manager.saveMemoryCandidatesFromTurns([
+      { userMessage: 'Caldera contact is Nora.', assistantMessage: 'Noted.', sentAt: current.updatedAt - 1 },
+      { userMessage: 'Thanks.', assistantMessage: 'Welcome.', sentAt: current.updatedAt - 1 }
+    ])).toEqual([0, 0])
+    expect(repository.getActiveMemoryItem(current.id)?.content).toBe(current.content)
+  })
+
+  it('retains independent temporary circumstances from every turn in a batch', async () => {
+    const sentAt = Date.now() - 1_000
+    state.prompt.mockResolvedValueOnce({ output: { items: [
+      { turnIndex: 0, scope: 'temporary', content: 'Owner is visiting Lyon.', evidence: 'I am visiting Lyon.' },
+      { turnIndex: 1, scope: 'temporary', content: 'Owner has a slow connection this week.', evidence: 'My connection is slow this week.' }
+    ] } })
+    expect(await manager.saveMemoryCandidatesFromTurns([
+      { userMessage: 'I am visiting Lyon.', assistantMessage: 'Noted.', sentAt },
+      { userMessage: 'My connection is slow this week.', assistantMessage: 'Noted.', sentAt }
+    ])).toEqual([1, 1])
+    expect(repository.listTemporaryItems(DEFAULT_TEMPORARY_MEMORY_POLICY.maxItems)).toHaveLength(2)
+  })
+
+  it('preserves unrelated project facts when applying an inferred correction', async () => {
+    const caldera = await remember('Caldera invoices are fortnightly.')
+    const borealis = await remember('Borealis invoices are fortnightly.')
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'Caldera invoices are weekly.', evidence: 'Caldera invoices are weekly.',
+      supersedesItemId: caldera.id
+    }] } })
+    expect(await manager.saveMemoryCandidatesFromTurn('Caldera invoices are weekly.', 'Noted.', Date.now())).toBe(1)
+    expect(repository.getActiveMemoryItem(caldera.id)).toBeNull()
+    expect(repository.getActiveMemoryItem(borealis.id)?.content).toBe(borealis.content)
   })
 
   it.each([
@@ -285,6 +376,7 @@ describe('memory lifecycle', () => {
       const db = (repository as unknown as { db: Database }).db
       db.prepare('UPDATE memory_items SET expires_at = ? WHERE id = ?').run(Date.now() - 1, corrected.id)
       expect(await otherSession.getTemporaryContext()).toEqual([])
+      expect(await otherSession.getTemporaryContextSnapshot()).toEqual({ entries: [], hasMore: false })
 
       const active = await remember('我暂时只接受邮件。', {
         scope: 'temporary', metadata: { evidence: '我暂时只接受邮件。' }
@@ -313,6 +405,7 @@ describe('memory lifecycle', () => {
     expect(snapshot.length).toBeLessThanOrEqual(10)
     expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
     expect(await manager.getTemporaryContext()).toEqual(snapshot)
+    expect(await manager.getTemporaryContextSnapshot()).toEqual({ entries: snapshot, hasMore: true })
     await expect(remember('Unverified', { scope: 'temporary' })).rejects.toThrow('evidence')
   })
 
@@ -352,6 +445,10 @@ describe('memory lifecycle', () => {
 
     const snapshot = await manager.getTemporaryContext()
     expect(snapshot.map((entry) => entry.id).sort()).toEqual(records.map((record) => record.id).sort())
+    expect(await manager.getTemporaryContextSnapshot()).toEqual({ entries: snapshot, hasMore: false })
+    expect(Buffer.byteLength(JSON.stringify({
+      temporary_context: snapshot, temporary_context_has_more: false
+    }), 'utf8')).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
     expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
   })
 

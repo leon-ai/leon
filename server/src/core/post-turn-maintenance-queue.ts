@@ -24,6 +24,37 @@ export default class PostTurnMaintenanceQueue {
   private queue: Promise<void> = Promise.resolve()
   private pendingCount = 0
   private readonly concurrent = new Set<Promise<void>>()
+  private readonly batches = new Map<string, unknown[]>()
+
+  /**
+   * Joins only work that has not started, bounded by conversation and profile.
+   * Single turns start normally; no debounce delays the first task.
+   */
+  public enqueueBatch<T>(
+    label: string,
+    item: T,
+    maxItems: number,
+    execute: (items: T[]) => ReturnType<PostTurnMaintenanceTask>
+  ): void {
+    const key = JSON.stringify([
+      getActiveProfileName(), getActiveConversationSessionId(), label
+    ])
+    const pending = this.batches.get(key)
+    if (pending && pending.length < maxItems) {
+      pending.push(item)
+      return
+    }
+
+    const items = [item]
+    this.batches.set(key, items)
+    this.enqueue(label, () => {
+      // Full batches can have a successor already waiting under the same key.
+      if (this.batches.get(key) === items) {
+        this.batches.delete(key)
+      }
+      return execute(items)
+    })
+  }
 
   public enqueue(label: string, task: PostTurnMaintenanceTask): void {
     this.enqueueIfNeeded(label, () => task)

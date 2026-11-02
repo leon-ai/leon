@@ -675,9 +675,11 @@ export class ReActLLMDuty extends LLMDuty {
           const remainingMs = this.runBudget?.remainingMs
           // Keep changing task state after the conversation prefix. Rewriting
           // the system prompt prevents reuse of the history that follows it.
+          const temporaryContext = await MEMORY_MANAGER.getTemporaryContextSnapshot()
           appendAgentRuntimeContext(messages, {
             ...grounding,
-            temporary_context: await MEMORY_MANAGER.getTemporaryContext(),
+            temporary_context: temporaryContext.entries,
+            temporary_context_has_more: temporaryContext.hasMore,
             active_experiences: [...this.activeExperiences.values()].map((experience) => ({
               id: experience.id, instructions: experience.instructions
             })),

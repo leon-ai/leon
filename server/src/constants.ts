@@ -48,6 +48,7 @@ export const PROGRESSIVE_GUIDANCE_MAX_LENGTH = 4_096
 export const OWNER_ATTACHMENT_MAX_BYTES = 8 * 1_024 * 1_024
 export const AGENT_IMAGE_BATCH_MAX_BYTES = 12 * 1_024 * 1_024
 export const MAXIMUM_EXPERIENCES = 196
+export const MEMORY_EXTRACTION_MAX_BATCH_TURNS = 3
 // Base64 plus JSON framing for the same bounded payload accepted over sockets.
 export const MAX_GENERATED_ARTIFACT_BYTES = 512 * 1_024 * 1_024
 export const OWNER_ATTACHMENT_BODY_LIMIT = 12 * 1_024 * 1_024

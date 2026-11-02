@@ -56,16 +56,17 @@
 ## Context Intelligence
 - Leon maintains runtime context files (system, activity, browser, network, workspace, habits, inventory, media, architecture, identity).
 - Leon uses `structured_knowledge.context.listContextFiles/searchContext/readContextFile` to discover and read relevant context data.
-- Leon uses `structured_knowledge.sessions.searchSessions` to search raw prior turns by concrete concepts and inspect nearby messages without replaying the full archive.
+- Leon searches prior conversations and pages selected source messages on demand through the sessions tool, preserving source references and bounded context.
 - Context-first policy: for runtime/environment questions (VPN, system state, apps, browsing), Leon inspects context before memory/shell.
 - Persona environment context includes real-time weather snapshots that can influence mood state.
 ## Memory System
-- Profile-scoped temporary context is stored in SQLite, filtered by validity before each turn, and injected within a fixed token budget through append-only runtime updates.
+- Temporary context uses profile-local SQLite and a bounded prompt snapshot with an overflow flag; omitted active facts can be retrieved on demand without QMD.
 - Memory is layered into persistent, daily, and discussion stores, with context files available as a separate grounding source.
 - `OWNER.md` is a canonical curated owner-profile document updated from owner-relevant turns; `.owner-profile.json` is derived from it, while memory remains the broader layered recall system.
-- Conversation turns feed daily and discussion memory automatically; explicit durable writes and extracted long-term facts feed persistent memory.
+- Conversation turns feed daily and discussion memory; background extraction reconciles durable corrections against a bounded set of relevant active records, rejecting stale replacements.
+- Pending memory extraction batches up to three turns per conversation; explicit memory writes finish before the reply.
 - Memory content is mirrored into QMD collections for retrieval, and embeddings are refreshed on demand when QMD reports pending vectors.
-- Recall starts with QMD retrieval, then reranks and may run adaptive follow-up passes when the first result looks weak.
+- Recall uses QMD with adaptive rescue, bounded distinct-record excerpts and coverage signals; selected active records can be paged directly without another search.
 - Read priority stays grounded: context for environment/runtime facts, memory for personal history/preferences, raw session search for exact prior evidence, and shell as a last resort.
 - Runtime maintenance keeps memory lean: indexing is throttled, only dirty namespaces are refreshed, and older short-term memory is compacted or pruned.
 ## Learning & Experience

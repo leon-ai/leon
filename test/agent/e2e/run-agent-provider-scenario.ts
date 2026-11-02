@@ -54,6 +54,7 @@ interface AgentProgressEvent {
     | 'tool_call'
     | 'turn_result'
     | 'scenario_complete'
+    | 'cleanup'
   turn?: number
   message: string
   data?: Record<string, unknown>
@@ -513,7 +514,7 @@ async function main(): Promise<void> {
     : null
   const input = scenario.buildInput(codingFixture?.root || tempAssetPath)
   const toolCalls: AgentTurnResult['toolCalls'] = []
-  const toolCallSessions = new Map<AgentTurnResult['toolCalls'][number], string | undefined>()
+  const toolCallSessions = new Map<AgentTurnResult['toolCalls'][number], ReturnType<typeof getActiveConversationSessionId>>()
   type ExecuteTool = typeof TOOL_EXECUTOR.executeTool
   type ToolExecutionInput = Parameters<ExecuteTool>[0]
   type ToolExecutionResult = Awaited<ReturnType<ExecuteTool>>
@@ -753,7 +754,11 @@ async function main(): Promise<void> {
       }
     })
   } finally {
+    const workerCleanupStartedAt = performance.now()
     await TOOL_WORKER_MANAGER.dispose()
+    printProgress({ provider, stage: 'cleanup', message:
+      `Tool worker cleanup: ${Math.round(performance.now() - workerCleanupStartedAt)} ms` })
+    const httpCleanupStartedAt = performance.now()
     if (HTTP_SERVER.httpServer.listening) {
       await new Promise<void>((resolve, reject) => {
         HTTP_SERVER.httpServer.close((error) => {
@@ -766,14 +771,19 @@ async function main(): Promise<void> {
         })
       })
     }
+    printProgress({ provider, stage: 'cleanup', message:
+      `HTTP cleanup: ${Math.round(performance.now() - httpCleanupStartedAt)} ms` })
     process.removeListener('SIGINT', stop)
     process.removeListener('SIGTERM', stop)
     TOOL_EXECUTOR.executeTool = originalExecuteTool
+    const fileCleanupStartedAt = performance.now()
     await CONVERSATION_LOGGER.clear()
     await fs.rm(tempAssetPath, { force: true })
     await fs.rm(continuationStatePath, { force: true })
     await fs.rm(historyCompactionStatePath, { force: true })
     await removeTestHomePath(LEON_HOME_PATH, testHomePath)
+    printProgress({ provider, stage: 'cleanup', message:
+      `Fixture file cleanup: ${Math.round(performance.now() - fileCleanupStartedAt)} ms` })
   }
 }
 

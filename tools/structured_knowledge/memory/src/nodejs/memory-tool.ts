@@ -34,6 +34,7 @@ import {
   buildQueryTokenSet,
   DEFAULT_QMD_NAMESPACE_WEIGHTS,
   extractContent,
+  extractOverlapCount,
   extractScore,
   normalizeContent,
   normalizeFilename,
@@ -44,16 +45,21 @@ import {
   shouldRunAdaptiveSecondPass
 } from '@@/server/src/core/memory-manager/qmd/qmd-retrieval'
 
+import { LEON_PROFILE_NAME } from '@@/server/src/leon-roots'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
-const QMD_INDEX_NAME = 'leon-memory'
+// Reuse Core's profile index instead of reconfiguring a shared search collection.
+const QMD_INDEX_NAME = `leon-memory-${LEON_PROFILE_NAME}`
 const CONVERSATION_DATABASE_FILENAME = 'conversations.sqlite'
 const DEFAULT_TOP_K = 12
 const DEFAULT_TOKEN_BUDGET = 480
 const CONTEXT_FULL_CONTENT_CAP = 8_000
 const BRIDGE_SOURCE_CONTENT_CAP = 96_000
 const MIN_HIT_TOKEN_BUDGET = 48
+const MAX_READ_ITEMS = 48
+const MAX_DATABASE_RESCUE_ITEMS = 500
+const MAX_READ_TOKEN_BUDGET = 4_000
 const INDEX_UPDATE_MIN_INTERVAL_MS = 10_000
 
 type MemoryScope = 'persistent' | 'daily' | 'discussion' | 'temporary'
@@ -79,12 +85,15 @@ type KnowledgeNamespace =
   | 'context'
 
 interface MemoryReadOptions {
+  scope?: 'temporary'
   namespaces?: string[]
   topK?: number
   tokenBudget?: number
   includeFacts?: boolean
   includeContext?: boolean
   contextFilenames?: string[]
+  itemIds?: string[]
+  offset?: number
 }
 
 interface MemoryWriteOptions {
@@ -116,6 +125,8 @@ interface QMDHit {
   sourceRef?: string | null
   scope?: MemoryScope
   kind?: MemoryKind
+  createdAt?: number
+  updatedAt?: number
 }
 
 const MEMORY_PERSISTENT_PATH = path.join(PROFILE_MEMORY_PATH, 'persistent')
@@ -189,19 +200,9 @@ function clipWithTokenBudget(
     return { content, tokens: fullTokens }
   }
 
-  const maxChars = Math.max(96, remainingTokens * 4)
-  if (maxChars >= content.length) {
-    return {
-      content,
-      tokens: Math.max(1, Math.ceil(content.length / 4))
-    }
-  }
-
-  const clipped = `${content.slice(0, maxChars).trimEnd()}...`
-  return {
-    content: clipped,
-    tokens: Math.max(1, Math.ceil(clipped.length / 4))
-  }
+  const maxChars = remainingTokens * 4
+  const clipped = content.slice(0, maxChars)
+  return { content: clipped, tokens: Math.ceil(clipped.length / 4) }
 }
 
 export default class MemoryTool extends Tool {
@@ -249,17 +250,40 @@ export default class MemoryTool extends Tool {
       }
     }
     await this.ensureStorage()
-    await this.ensureCollections()
-    await this.updateIndex()
-
+    if (options.itemIds?.length) {
+      return this.readItems(normalizedQuery, options)
+    }
     const includeContext = options.includeContext === true
     const namespaces = this.normalizeNamespaces(options.namespaces, includeContext)
-    const topK = this.normalizePositiveInt(options.topK, DEFAULT_TOP_K)
-    const tokenBudget = this.normalizePositiveInt(
+    const topK = Math.min(MAX_READ_ITEMS, this.normalizePositiveInt(options.topK, DEFAULT_TOP_K))
+    const tokenBudget = Math.min(MAX_READ_TOKEN_BUDGET, this.normalizePositiveInt(
       options.tokenBudget,
       DEFAULT_TOKEN_BUDGET
-    )
+    ))
     const includeFacts = options.includeFacts !== false
+    if (options.scope === 'temporary') {
+      return this.readTemporary(normalizedQuery, topK, tokenBudget)
+    }
+
+    // SQLite is authoritative: an empty store cannot produce valid indexed hits.
+    // Avoid loading hybrid search models just to rediscover that there is no evidence.
+    const hasMemory = this.getDb().prepare(
+      'SELECT 1 FROM active_memory_items WHERE scope != \'temporary\' LIMIT 1'
+    ).get()
+    if (!namespaces.includes('context') && !hasMemory &&
+      (!includeFacts || this.readFacts(1).length === 0)) {
+      return {
+        success: true,
+        data: {
+          query: normalizedQuery, namespaces, topK, tokenBudget,
+          usedTokenEstimate: 0, hits: [], facts: [],
+          candidateCount: 0, omittedCandidateCount: 0
+        }
+      }
+    }
+
+    await this.ensureCollections()
+    await this.updateIndex()
 
     const allowedContextFilenames = new Set(
       (options.contextFilenames || []).map((filename) =>
@@ -611,6 +635,33 @@ export default class MemoryTool extends Tool {
       rankedHits = rankHitsByQuery(rawHits)
     }
 
+    // Long lexical queries can miss every indexed document. Reuse the same ranker
+    // over a bounded set of current rows before declaring the owner's memory empty.
+    if (rankedHits.length === 0 && queryTokens.size > 0) {
+      const records = this.getDb().prepare(
+        'SELECT * FROM active_memory_items WHERE scope != \'temporary\' ORDER BY updated_at DESC LIMIT ?'
+      ).all(MAX_DATABASE_RESCUE_ITEMS)
+      for (const record of records) {
+        const namespace = `memory_${record['scope']}` as KnowledgeNamespace
+        const requestedNamespace = namespaces.includes(namespace) ? namespace
+          : namespace === 'memory_daily' && namespaces.includes('conversation_daily') ? 'conversation_daily' : null
+        if (!requestedNamespace) {
+          continue
+        }
+        const hit: QMDHit = {
+          id: String(record['id']), path: `memory-db://${record['id']}`,
+          title: String(record['title'] || record['kind']),
+          content: String(record['content_md']), score: 0,
+          namespace: requestedNamespace, authoritative: true
+        }
+        if (extractOverlapCount(queryTokens, hit, COLLECTIONS, BRIDGE_SOURCE_CONTENT_CAP) > 0) {
+          rawHits.push(hit)
+        }
+      }
+      rankedHits = rankHitsByQuery(rawHits)
+      retrievalStages.push(`rescue:database:${rankedHits.length}`)
+    }
+
     const excerptQueryTokens = buildAdaptiveQueryTokenSet(
       queryTokens,
       rankedHits.map((rankedHit) => rankedHit.hit),
@@ -645,118 +696,80 @@ export default class MemoryTool extends Tool {
       return focusedContent
     }
 
+    // Reserve space for complementary records instead of seeding each storage namespace.
+    const seenIds = new Set<string>()
+    const seenContents = new Set<string>()
+    const candidates = rankedHits.filter(({ hit }) => {
+      const contentKey = normalizeContent(hit.content).toLowerCase()
+      if (seenIds.has(hit.id) || seenContents.has(contentKey)) {
+        return false
+      }
+      seenIds.add(hit.id)
+      seenContents.add(contentKey)
+      return true
+    })
     const selected: Array<{
       id: string
-      sourceType?: string
-      sourceRef?: string | null
+      content: string
       scope?: MemoryScope
       kind?: MemoryKind
+      sourceType?: string
+      sourceRef: string | null
+      createdAt: number | null
+      updatedAt: number | null
       namespace: KnowledgeNamespace
       title: string | null
-      content: string
       score: number
       sourcePath: string | null
+      excerpted: boolean
+      truncated: boolean
     }> = []
-    const selectedKeys = new Set<string>()
     let usedTokenEstimate = 0
 
-    const addHit = (
-      hit: QMDHit,
-      rankingScore: number,
-      budgetHint?: number
-    ): boolean => {
-      if (selected.length >= topK || usedTokenEstimate >= tokenBudget) {
-        return false
-      }
-
-      const hitKey = `${hit.namespace}|${hit.path}|${hit.content}`
-      if (selectedKeys.has(hitKey)) {
-        return false
-      }
-
-      const remainingBudget = tokenBudget - usedTokenEstimate
-      const perHitBudget =
-        budgetHint && budgetHint > 0
-          ? Math.min(remainingBudget, budgetHint)
-          : selected.length === 0
-            ? Math.max(96, Math.floor(tokenBudget * 0.6))
-            : remainingBudget
-
-      const clipped = clipWithTokenBudget(
-        getFocusedHitContent(hit),
-        Math.min(remainingBudget, perHitBudget)
-      )
-      if (!clipped) {
-        return false
-      }
-
-      selected.push({
-        id: hit.id,
-        ...(hit.scope && hit.kind ? { scope: hit.scope, kind: hit.kind } : {}),
-        ...(hit.sourceType ? { sourceType: hit.sourceType, sourceRef: hit.sourceRef ?? null } : {}),
-        namespace: hit.namespace,
-        title: hit.title || null,
-        content:
-          hit.namespace === 'context'
-            ? clipped.content.slice(0, CONTEXT_FULL_CONTENT_CAP)
-            : clipped.content,
-        score: rankingScore,
-        sourcePath: hit.path || null
-      })
-      selectedKeys.add(hitKey)
-      usedTokenEstimate += clipped.tokens
-      return true
-    }
-
-    const namespaceCoverageQueue: KnowledgeNamespace[] = [...new Set(namespaces)]
-      .filter(
-        (namespace) =>
-          namespace !== 'context' &&
-          !(namespace === 'conversation_daily' && namespaces.includes('memory_daily'))
-      )
-    for (const [index, namespace] of namespaceCoverageQueue.entries()) {
-      const firstByNamespace = rankedHits.find(
-        (rankedHit) => rankedHit.hit.namespace === namespace
-      )
-      if (!firstByNamespace) {
-        continue
-      }
-
-      const remainingCoverageNamespaces = Math.max(
-        1,
-        namespaceCoverageQueue.length - index
-      )
-      const namespaceBudget = Math.max(
-        MIN_HIT_TOKEN_BUDGET,
-        Math.floor((tokenBudget - usedTokenEstimate) / remainingCoverageNamespaces)
-      )
-      const cappedNamespaceBudget = Math.min(
-        namespaceBudget,
-        Math.max(192, Math.floor(tokenBudget * 0.28))
-      )
-
-      addHit(
-        firstByNamespace.hit,
-        firstByNamespace.rankingScore,
-        cappedNamespaceBudget
-      )
-    }
-
-    for (const rankedHit of rankedHits) {
+    for (const { hit, rankingScore } of candidates) {
       if (selected.length >= topK || usedTokenEstimate >= tokenBudget) {
         break
       }
 
-      const remainingResultSlots = Math.max(1, topK - selected.length)
-      const rollingBudget = Math.max(
+      const remainingSlots = Math.min(topK, candidates.length) - selected.length
+      const budget = Math.min(tokenBudget - usedTokenEstimate, Math.max(
         MIN_HIT_TOKEN_BUDGET,
-        Math.floor((tokenBudget - usedTokenEstimate) / remainingResultSlots)
-      )
-
-      addHit(rankedHit.hit, rankedHit.rankingScore, rollingBudget)
+        Math.floor((tokenBudget - usedTokenEstimate) / remainingSlots)
+      ))
+      const focused = getFocusedHitContent(hit)
+      const clipped = clipWithTokenBudget(focused, budget)
+      if (!clipped) {
+        continue
+      }
+      const content = hit.namespace === 'context'
+        ? clipped.content.slice(0, CONTEXT_FULL_CONTENT_CAP)
+        : clipped.content
+      selected.push({
+        id: hit.id,
+        ...(hit.scope ? { scope: hit.scope } : {}),
+        ...(hit.kind ? { kind: hit.kind } : {}),
+        ...(hit.sourceType ? { sourceType: hit.sourceType } : {}),
+        sourceRef: hit.sourceRef ?? null,
+        createdAt: hit.createdAt ?? null, updatedAt: hit.updatedAt ?? null,
+        namespace: hit.namespace, title: hit.title || null,
+        content, score: rankingScore, sourcePath: hit.path || null,
+        excerpted: normalizeContent(focused) !== normalizeContent(hit.content),
+        truncated: content.length < focused.length
+      })
+      usedTokenEstimate += Math.ceil(content.length / 4)
     }
 
-    const facts = includeFacts ? this.readFacts(8) : []
+    // Optional facts share the same budget and must not repeat selected records.
+    const facts = includeFacts ? this.readFacts(8).filter((fact) => {
+      const cost = Math.ceil(fact.text.length / 4)
+      if (selected.some((hit) => hit.id === fact.id) ||
+        ![...buildQueryTokenSet(fact.text)].some((token) => queryTokens.has(token)) ||
+        cost > tokenBudget - usedTokenEstimate) {
+        return false
+      }
+      usedTokenEstimate += cost
+      return true
+    }) : []
     this.log(
       `memory.read retrieval stages=${retrievalStages.join(' -> ')} final_hits=${selected.length} used_tokens=${usedTokenEstimate}`
     )
@@ -773,9 +786,110 @@ export default class MemoryTool extends Tool {
         tokenBudget,
         usedTokenEstimate,
         hits: selected,
+        candidateCount: candidates.length,
+        omittedCandidateCount: candidates.length - selected.length,
         facts
       }
     }
+  }
+
+  /**
+   * Recover current circumstances omitted from injection without initializing search.
+   */
+  private readTemporary(query: string, topK: number, tokenBudget: number): Record<string, unknown> {
+    const records = this.getDb().prepare(`SELECT * FROM active_memory_items
+      WHERE scope = 'temporary' AND expires_at > ?
+      ORDER BY (source_type = 'explicit_user') DESC, importance DESC, updated_at DESC, id
+      LIMIT ?`).all(Date.now(), MAX_DATABASE_RESCUE_ITEMS + 1)
+    const queryTokens = buildQueryTokenSet(query)
+    const collections = { temporary: { name: 'temporary', dir: '' } }
+    const ranked = rankRetrievedHits(records.slice(0, MAX_DATABASE_RESCUE_ITEMS).map((record) => ({
+      id: String(record['id']), title: String(record['title'] || ''),
+      content: String(record['content_md']), namespace: 'temporary' as const,
+      path: '', score: 0, authoritative: true
+    })), queryTokens, collections)
+    // Original query terms establish relevance even when reranking suppresses common terms.
+    const matching = ranked.filter(({ hit }) =>
+      extractOverlapCount(queryTokens, hit, collections, BRIDGE_SOURCE_CONTENT_CAP) > 0)
+    const candidates = matching.length > 0 ? matching : ranked
+    const hits = []
+    let usedTokenEstimate = 0
+
+    for (const { hit } of candidates) {
+      if (hits.length >= topK) {
+        break
+      }
+      const record = records.find((entry) => entry['id'] === hit.id)!
+      const selected = {
+        id: hit.id, scope: 'temporary', content: hit.content,
+        sourceType: record['source_type'], sourceRef: record['source_ref'],
+        createdAt: record['created_at'], updatedAt: record['updated_at'],
+        expiresAt: record['expires_at'], truncated: false, excerpted: false
+      }
+      const tokens = Math.ceil(Buffer.byteLength(JSON.stringify(selected), 'utf8') / 4)
+      // A shortened circumstance could lose its exception or time qualification.
+      if (usedTokenEstimate + tokens > tokenBudget) {
+        continue
+      }
+      hits.push(selected)
+      usedTokenEstimate += tokens
+    }
+
+    return { success: true, data: {
+      query, scope: 'temporary', topK, tokenBudget, usedTokenEstimate, hits, facts: [],
+      candidateCount: candidates.length,
+      omittedCandidateCount: candidates.length - hits.length,
+      candidateLimitReached: records.length > MAX_DATABASE_RESCUE_ITEMS,
+      matchedQuery: matching.length > 0
+    } }
+  }
+
+  /**
+   * Expand selected active records without repeating search or rehydrating retired files.
+   */
+  private readItems(query: string, options: MemoryReadOptions): Record<string, unknown> {
+    const itemIds = [...new Set(options.itemIds)].slice(0, MAX_READ_ITEMS)
+    const tokenBudget = Math.min(MAX_READ_TOKEN_BUDGET,
+      this.normalizePositiveInt(options.tokenBudget, DEFAULT_TOKEN_BUDGET))
+    const offset = Number.isFinite(options.offset) ? Math.max(0, Math.floor(options.offset ?? 0)) : 0
+    const hits = []
+    const unavailableItemIds = []
+    let usedTokenEstimate = 0
+
+    for (const id of itemIds) {
+      const row = this.getDb().prepare(
+        `SELECT * FROM active_memory_items WHERE id = ?
+         AND (scope != 'temporary' OR expires_at > ?)
+         AND (? IS NULL OR scope = ?)`
+      ).get(id, Date.now(), options.scope ?? null, options.scope ?? null) as Record<string, unknown> | undefined
+      if (!row) {
+        unavailableItemIds.push(id)
+        continue
+      }
+      const source = String(row['content_md'])
+      const budget = Math.floor((tokenBudget - usedTokenEstimate) / (itemIds.length - hits.length - unavailableItemIds.length))
+      const clipped = clipWithTokenBudget(source.slice(offset), budget)
+      if (!clipped) {
+        continue
+      }
+      const nextOffset = offset + clipped.content.length
+      hits.push({
+        id, scope: row['scope'], kind: row['kind'], title: row['title'],
+        sourceType: row['source_type'], sourceRef: row['source_ref'],
+        createdAt: row['created_at'], updatedAt: row['updated_at'],
+        ...(row['scope'] === 'temporary' ? { expiresAt: row['expires_at'] } : {}),
+        content: clipped.content, offset,
+        nextOffset: nextOffset < source.length ? nextOffset : null,
+        truncated: nextOffset < source.length, excerpted: false
+      })
+      usedTokenEstimate += clipped.tokens
+    }
+
+    return { success: true, data: {
+      query, tokenBudget, usedTokenEstimate, hits, unavailableItemIds,
+      omittedCandidateCount: itemIds.length - hits.length - unavailableItemIds.length,
+      facts: []
+    } }
   }
 
   public async write(
@@ -1075,6 +1189,7 @@ export default class MemoryTool extends Tool {
       sourceRef: row['source_ref'] ? String(row['source_ref']) : null,
       scope: this.normalizeScope(row['scope']),
       kind: this.normalizeKind(row['kind']),
+      createdAt: Number(row['created_at']), updatedAt: Number(row['updated_at']),
       authoritative: true
     }))
   }

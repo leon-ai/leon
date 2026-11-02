@@ -876,7 +876,7 @@ async function next(profile: string, session: string, attach = false, crash = fa
 
 it('retains per-profile state, refreshes session context, clears attachments and disposes workers', async () => {
   await fixture(true)
-  const workspace = path.join(home, 'workspace')
+  const workspace = path.join(await fs.realpath(home), 'workspace')
   await fs.mkdir(workspace)
   vi.spyOn(process, 'cwd').mockReturnValue(workspace)
   const first = await next('a', 'one', true)

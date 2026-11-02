@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 import type { ConversationSession } from '@/core/session-manager'
 import type { MessageLog } from '@/types'
+import { MAXIMUM_ARCHIVE_PAGE_CHARACTERS, type ArchiveMessagePage } from '@@/bridges/runtime/contracts/conversation-archive'
+import { searchConversationSessions } from '@/core/session-manager/session-search'
 import { TOOL_CONTENT_PREVIEW_CHARACTERS } from '@/core/session-manager/tool-content-contract'
 
 function session(id: string, timestamp = 1): ConversationSession {
@@ -86,6 +88,50 @@ describe('profile conversation archive', () => {
     expect(repository.readToolContents('chat', 'trace', 'missing')).toBeNull()
     expect(repository.readToolContents('other', 'trace', 'one')).toBeNull()
     expect(open('another-profile').readToolContents('chat', 'trace', 'one')).toBeNull()
+  })
+
+  it('pages complete visible source text without gaps, disclosures or cross-session access', async () => {
+    const repository = open()
+    repository.saveSession(session('report'))
+    repository.saveSession(session('other'))
+    const text = `Caldera report opening.\n${'Operational notes 你🙂. '.repeat(1_100)}\nFinal decision: retain the offline export.`
+    repository.upsertMessage('report', {
+      who: 'owner', message: text, messageId: 'source', isAddedToHistory: true
+    })
+    repository.upsertMessage('report', {
+      who: 'leon', message: 'Private reasoning', messageId: 'hidden', isAddedToHistory: false
+    })
+
+    const search = await searchConversationSessions({
+      sessionsPath: path.join(directory, 'owner', 'sessions'),
+      query: 'Final decision', includeCurrentSession: true
+    })
+    const match = search.hits[0]!.match
+    expect(match).toMatchObject({ messageId: 'source', isTruncated: true })
+    expect(repository.readMessageText('report', 'source', {
+      offset: match.excerptStart, limit: 1_000
+    })?.text).toBe(match.message)
+
+    const pages = []
+    let offset: number | null = 0
+    while (offset !== null) {
+      const page: ArchiveMessagePage = repository.readMessageText('report', 'source', { offset, limit: 777 })!
+      expect(page).toMatchObject({ sessionId: 'report', messageId: 'source', who: 'owner', offset })
+      expect(Array.from(page.text).length).toBeLessThanOrEqual(777)
+      expect(page.totalCharacters).toBe(Array.from(text).length)
+      pages.push(page.text)
+      offset = page.nextOffset
+    }
+    expect(pages.join('')).toBe(text)
+    expect(Array.from(repository.readMessageText('report', 'source', { limit: 1_000_000 })!.text))
+      .toHaveLength(MAXIMUM_ARCHIVE_PAGE_CHARACTERS)
+    expect(repository.readMessageText('other', 'source')).toBeNull()
+    expect(open('another-profile').readMessageText('report', 'source')).toBeNull()
+    expect(repository.readMessageText('report', 'hidden')).toBeNull()
+    expect(repository.readMessageText('report', 'missing')).toBeNull()
+    expect(() => repository.readMessageText('report', 'source', { offset: -1 })).toThrow('offset')
+    expect(() => repository.readMessageText('report', 'source', { limit: 0 })).toThrow('limits')
+    expect(() => repository.readMessageText('report', 'source', { offset: text.length + 1 })).toThrow('beyond')
   })
 
   it('imports legacy sessions once, preserves their files, and survives reopening', async () => {

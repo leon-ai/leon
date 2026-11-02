@@ -101,7 +101,7 @@ if (suite === 'scenario') {
   try {
     const selected = selectAgentScenarios(names, scenario)
     if (forwardedArgs[0] === '--list') {
-      console.info(`Run all: pnpm test:agent:scenario\nSelect a category, mechanism or case: pnpm test:agent:scenario -- <selection>\n${selected.join('\n')}`)
+      console.info(`Run all: pnpm test:agent:scenario\nSelect a category, mechanism or case: pnpm test:agent:scenario -- <selection>\nConcurrency defaults to 2; override with --maxConcurrency <number>.\n${selected.join('\n')}`)
       process.exit(0)
     }
   } catch (error) {

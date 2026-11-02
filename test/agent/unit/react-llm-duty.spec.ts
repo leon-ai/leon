@@ -4365,7 +4365,8 @@ describe('agent automatic compaction', () => {
     const initial = {
       ...await duty.buildAgentGrounding(caller),
       persona: persona.getDutyRuntimeContextFields({ includeMood: true }),
-      temporary_context: [{ id: 'current', content: 'Je séjourne à Lyon.' }]
+      temporary_context: [{ id: 'current', content: 'Je séjourne à Lyon.' }],
+      temporary_context_has_more: true
     }
     appendAgentRuntimeContext(transcript, initial)
     const prefix = structuredClone(transcript)
@@ -4374,19 +4375,20 @@ describe('agent automatic compaction', () => {
     appendAgentRuntimeContext(transcript, {
       ...await duty.buildAgentGrounding(caller),
       persona: persona.getDutyRuntimeContextFields({ includeMood: true }),
-      temporary_context: []
+      temporary_context: [], temporary_context_has_more: false
     })
     expect(transcript.slice(0, prefix.length)).toEqual(prefix)
     expect(transcript.at(-1)?.runtimeContext).toEqual({
-      persona: { clock: 'Clock two' }, temporary_context: []
+      persona: { clock: 'Clock two' }, temporary_context: [], temporary_context_has_more: false
     })
     expect(transcript.at(-1)?.content).not.toContain('Owner facts')
     const compacted: AgentToolTranscriptMessage[] = []
     appendAgentRuntimeContext(compacted, {
-      ...await duty.buildAgentGrounding(caller), temporary_context: []
+      ...await duty.buildAgentGrounding(caller), temporary_context: [], temporary_context_has_more: false
     })
     expect(compacted.at(-1)?.content).toContain('Owner facts')
     expect(compacted.at(-1)?.runtimeContext?.['temporary_context']).toEqual([])
+    expect(compacted.at(-1)?.runtimeContext?.['temporary_context_has_more']).toBe(false)
   })
 
   it.each([false, true])('preserves completed writes through provider overload (recovers=%s)', async (recovers) => {

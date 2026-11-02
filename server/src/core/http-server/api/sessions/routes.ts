@@ -9,6 +9,9 @@ import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-rep
 import { LogHelper } from '@/helpers/log-helper'
 import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { getSessionSelection } from './web-routes'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { searchConversationSessions } from '@/core/session-manager/session-search'
+import { MAXIMUM_ARCHIVE_PAGE_CHARACTERS } from '@@/bridges/runtime/contracts/conversation-archive'
 
 const SESSION_ID_PARAM_NAME = 'session_id'
 
@@ -33,6 +36,20 @@ const queryHistorySchema = Type.Object({
   before: historyQuerySchema.properties.before,
   characters: Type.Optional(Type.Integer({ minimum: 1 }))
 })
+const archiveSearchBodySchema = Type.Object({
+  query: Type.String({ minLength: 1 }),
+  role: Type.Optional(Type.Union([
+    Type.Literal('owner'), Type.Literal('leon'), Type.Literal('both')
+  ])),
+  topK: Type.Optional(Type.Number()),
+  contextWindow: Type.Optional(Type.Number()),
+  includeCurrentSession: Type.Optional(Type.Boolean()),
+  currentSessionId: Type.Optional(Type.String())
+}, { additionalProperties: false })
+const archiveReadQuerySchema = Type.Object({
+  offset: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER - 1 })),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAXIMUM_ARCHIVE_PAGE_CHARACTERS }))
+}, { additionalProperties: false })
 const createSessionBodySchema = Type.Object({ id: Type.Optional(Type.String({ format: 'uuid' })) })
 
 const updateSessionSchema = {
@@ -79,6 +96,43 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
   fastify,
   options
 ) => {
+  fastify.post<{ Body: Static<typeof archiveSearchBodySchema> }>(
+    `/api/${options.apiVersion}/sessions/search`,
+    { schema: { body: archiveSearchBodySchema } },
+    async (request, reply) => {
+      // Initializing the owning repository imports legacy history with stable message IDs.
+      CONVERSATION_REPOSITORY.hasSessions()
+      const data = await searchConversationSessions({
+        ...request.body,
+        sessionsPath: getProfilePaths().sessions
+      })
+
+      return reply.send({ success: true, data })
+    }
+  )
+
+  fastify.get<{
+    Params: { session_id: string, message_id: string }
+    Querystring: Static<typeof archiveReadQuerySchema>
+  }>(`/api/${options.apiVersion}/sessions/:session_id/messages/:message_id/text`, {
+    schema: {
+      params: Type.Object({ session_id: Type.String(), message_id: Type.String() }),
+      querystring: archiveReadQuerySchema
+    }
+  }, async (request, reply) => {
+    try {
+      const data = CONVERSATION_REPOSITORY.readMessageText(
+        request.params.session_id, request.params.message_id, request.query
+      )
+
+      return data
+        ? reply.send({ success: true, data })
+        : reply.code(404).send({ success: false, message: 'Visible message not found.' })
+    } catch (error) {
+      return reply.code(400).send({ success: false, message: String(error) })
+    }
+  })
+
   fastify.get<{ Querystring: Static<typeof pageQuerySchema> }>(
     `/api/${options.apiVersion}/sessions/page`,
     { schema: { querystring: pageQuerySchema } },

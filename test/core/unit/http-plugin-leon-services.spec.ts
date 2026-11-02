@@ -97,7 +97,7 @@ vi.mock('@/core', () => ({
   EXPERIENCE_MANAGER: { observeTurn: vi.fn(async () => undefined) },
   MEMORY_MANAGER: {
     observeTurn: vi.fn(async () => undefined),
-    saveMemoryCandidatesFromTurn: vi.fn(async () => 0)
+    saveMemoryCandidatesFromTurns: vi.fn(async (turns: unknown[]) => turns.map(() => 0))
   },
   SELF_MODEL_MANAGER: { observeTurn: vi.fn(async () => undefined) },
   TOOLKIT_REGISTRY: mocks.connectionRegistry,
@@ -176,6 +176,11 @@ vi.mock('@/core', () => ({
     }
   },
   POST_TURN_MAINTENANCE_QUEUE: {
+    enqueueBatch: vi.fn((label: string, item: unknown, _maxItems: number, execute: (items: unknown[]) => unknown) => {
+      const task = (): unknown => execute([item])
+      mocks.maintenanceTasks.push({ label, task })
+      void task()
+    }),
     startConcurrent: vi.fn((label: string, task: () => unknown) => {
       mocks.maintenanceTasks.push({ label, task })
       void task()

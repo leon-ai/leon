@@ -39,6 +39,7 @@ export interface MemoryWriteInput {
   expiresAt?: number | null
   isPinned?: boolean
   supersedesItemId?: string
+  expectedSupersededUpdatedAt?: number
   metadata?: Record<string, unknown>
 }
 
@@ -93,12 +94,15 @@ export interface RecallHit {
   bm25Score: number
   rerankScore?: number
   createdAt: number
+  excerpted?: boolean
+  truncated?: boolean
   sourcePath?: string | null
   sourceType?: MemorySourceType
   sourceRef?: string | null
 }
 
 export interface RecallResult {
+  omittedCandidateCount?: number
   hits: RecallHit[]
   facts: Array<{
     itemId: string
@@ -113,10 +117,14 @@ export interface RecallResult {
   usedTokenEstimate: number
 }
 
-export interface TurnObservationInput {
+export interface MemoryExtractionTurn {
   userMessage: string
   assistantMessage: string
   sentAt: number
+  sourceRef?: string
+}
+
+export interface TurnObservationInput extends MemoryExtractionTurn {
   route: 'react' | 'controlled' | 'pulse'
   toolExecutions?: Array<{
     functionName: string
