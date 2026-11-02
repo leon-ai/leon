@@ -5,6 +5,8 @@ import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-s
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import { normalizeOwnerProfileToolExecutions } from './turn-result'
 import type { PostTurnMaintenanceTaskPreparer } from '@/core/post-turn-maintenance-queue'
+import { MEMORY_EXTRACTION_MAX_BATCH_TURNS } from '@/constants'
+import { getTurnTimingContext } from '@/core/llm-manager/turn-timing'
 
 export interface CompletedAgentTurn {
   sessionId: string
@@ -63,12 +65,17 @@ export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTur
       syncOwnerProfileFromTurn(query, output, toolExecutions)
     )
   } else if (finalIntent !== 'cancelled' && finalIntent !== 'error') {
-    POST_TURN_MAINTENANCE_QUEUE.enqueue('memory extraction', async () => {
-      const savedCount = await MEMORY_MANAGER.saveMemoryCandidatesFromTurn(query, output, sentAt)
-      if (savedCount > 0) {
-        POST_TURN_MAINTENANCE_QUEUE.enqueue('owner profile sync', () =>
-          syncOwnerProfileFromTurn(query, output, toolExecutions)
-        )
+    POST_TURN_MAINTENANCE_QUEUE.enqueueBatch('memory extraction', {
+      userMessage: query, assistantMessage: output, sentAt, toolExecutions,
+      sourceRef: `session:${sessionId}:turn:${getTurnTimingContext()?.turnId ?? sentAt}`
+    }, MEMORY_EXTRACTION_MAX_BATCH_TURNS, async (turns) => {
+      const savedCounts = await MEMORY_MANAGER.saveMemoryCandidatesFromTurns(turns)
+      for (const [index, turn] of turns.entries()) {
+        if ((savedCounts[index] ?? 0) > 0) {
+          POST_TURN_MAINTENANCE_QUEUE.enqueue('owner profile sync', () =>
+            syncOwnerProfileFromTurn(turn.userMessage, turn.assistantMessage, turn.toolExecutions)
+          )
+        }
       }
     })
   }

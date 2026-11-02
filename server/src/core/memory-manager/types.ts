@@ -117,10 +117,14 @@ export interface RecallResult {
   usedTokenEstimate: number
 }
 
-export interface TurnObservationInput {
+export interface MemoryExtractionTurn {
   userMessage: string
   assistantMessage: string
   sentAt: number
+  sourceRef?: string
+}
+
+export interface TurnObservationInput extends MemoryExtractionTurn {
   route: 'react' | 'controlled' | 'pulse'
   toolExecutions?: Array<{
     functionName: string

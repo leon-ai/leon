@@ -18,7 +18,7 @@ const state = vi.hoisted(() => ({
   prompt: vi.fn()
 }))
 
-vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd() }))
+vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd(), MEMORY_EXTRACTION_MAX_BATCH_TURNS: 3 }))
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: { title: vi.fn(), info: vi.fn(), success: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
@@ -241,6 +241,53 @@ describe('memory lifecycle', () => {
       supersedesItemId: old.id, expectedSupersededUpdatedAt: old.updatedAt - 1
     })).rejects.toThrow('changed')
     expect(repository.getActiveMemoryItem(old.id)?.content).toBe(old.content)
+  })
+
+  it('extracts a bounded backlog once with independent evidence and the latest correction', async () => {
+    const old = await remember('Caldera contact is Mira.')
+    const sentAt = Date.now()
+    state.prompt.mockResolvedValueOnce({ output: { items: [
+      { turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: old.id },
+      { turnIndex: 1, content: 'Borealis reviews are Friday.', evidence: 'Borealis reviews are Friday.' },
+      { turnIndex: 2, content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.', supersedesItemId: old.id },
+      { turnIndex: 2, content: 'Unsupported fact.', evidence: 'Borealis reviews are Friday.' }
+    ] } })
+    expect(await manager.saveMemoryCandidatesFromTurns([
+      { userMessage: 'Caldera contact is Nora.', assistantMessage: 'Noted.', sentAt, sourceRef: 'source:first' },
+      { userMessage: 'Borealis reviews are Friday.', assistantMessage: 'Noted.', sentAt, sourceRef: 'source:second' },
+      { userMessage: 'Caldera contact is Tomas.', assistantMessage: 'Noted.', sentAt, sourceRef: 'source:third' }
+    ])).toEqual([0, 1, 1])
+    expect(state.prompt).toHaveBeenCalledOnce()
+    expect(repository.listPersistentMirrorRecords()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ content: 'Borealis reviews are Friday.', sourceRef: 'source:second' }),
+      expect.objectContaining({ content: 'Caldera contact is Tomas.', sourceRef: 'source:third' })
+    ]))
+    expect(repository.listPersistentMirrorRecords()).toHaveLength(2)
+  })
+
+  it('preserves newer explicit memory when an older backlog begins extraction', async () => {
+    const current = await remember('Caldera contact is Tomas.')
+    state.prompt.mockResolvedValueOnce({ output: { items: [
+      { turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: current.id }
+    ] } })
+    expect(await manager.saveMemoryCandidatesFromTurns([
+      { userMessage: 'Caldera contact is Nora.', assistantMessage: 'Noted.', sentAt: current.updatedAt - 1 },
+      { userMessage: 'Thanks.', assistantMessage: 'Welcome.', sentAt: current.updatedAt - 1 }
+    ])).toEqual([0, 0])
+    expect(repository.getActiveMemoryItem(current.id)?.content).toBe(current.content)
+  })
+
+  it('retains independent temporary circumstances from every turn in a batch', async () => {
+    const sentAt = Date.now() - 1_000
+    state.prompt.mockResolvedValueOnce({ output: { items: [
+      { turnIndex: 0, scope: 'temporary', content: 'Owner is visiting Lyon.', evidence: 'I am visiting Lyon.' },
+      { turnIndex: 1, scope: 'temporary', content: 'Owner has a slow connection this week.', evidence: 'My connection is slow this week.' }
+    ] } })
+    expect(await manager.saveMemoryCandidatesFromTurns([
+      { userMessage: 'I am visiting Lyon.', assistantMessage: 'Noted.', sentAt },
+      { userMessage: 'My connection is slow this week.', assistantMessage: 'Noted.', sentAt }
+    ])).toEqual([1, 1])
+    expect(repository.listTemporaryItems(DEFAULT_TEMPORARY_MEMORY_POLICY.maxItems)).toHaveLength(2)
   })
 
   it('preserves unrelated project facts when applying an inferred correction', async () => {
