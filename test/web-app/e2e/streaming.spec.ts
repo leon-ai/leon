@@ -96,6 +96,17 @@ for (const kind of ['skill', 'experience'] as const) {
         await page.keyboard.press('Escape')
         await expect(dialog).toHaveCount(0)
         await expect(details).toBeFocused()
+        await expect(details).toHaveCSS('outline-style', 'none')
+        await details.press('Tab')
+        await page.keyboard.press('Shift+Tab')
+        await expect(details).toBeFocused()
+        await expect(details).not.toHaveCSS('outline-style', 'none')
+        await details.press('Enter')
+        await expect(dialog).toBeVisible()
+        await page.keyboard.press('Escape')
+        await expect(dialog).toHaveCount(0)
+        await expect(details).toBeFocused()
+        await expect(details).not.toHaveCSS('outline-style', 'none')
         if (reducedMotion === 'reduce') {
           await page.setViewportSize({ width: 1_512, height: 982 })
         }
