@@ -117,9 +117,9 @@ if (operation === 'help') {
       assert.equal(activities.length, 2, 'Loading and first use must each publish an experience update.')
       assert.equal(activities[0]!.id, activities[1]!.id)
       assert.equal(activities[0]!.createdAt, activities[1]!.createdAt)
-      assert.ok(activities.every((activity) => activity.iconName === 'book-ai-line'))
+      assert.ok(activities.every((activity) => activity.iconName === 'brain-2-line'))
       assert.equal(activities[0]!.content, `Loaded experience: ${used.name}`)
-      assert.equal(activities[1]!.content, `Using experience: ${used.name}`)
+      assert.equal(activities[1]!.content, `Used experience: ${used.name}`)
       assert.equal(second.responseTrace.progressMessages?.filter((message) => message.id === activities[0]!.id).length, 1,
         'The saved timeline must retain one item with the latest experience state.')
 

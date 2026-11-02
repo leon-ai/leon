@@ -1,3 +1,5 @@
+import { createMemoryActivity, MEMORY_ACTIVITY_ICON_NAME } from '@/core/memory-manager/memory-activity'
+import { MemoryActivityAction, type MemoryActivitySnapshot } from '@/core/llm-manager/memory-activity-contract'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
@@ -260,6 +262,7 @@ export class ReActLLMDuty extends LLMDuty {
   private activeAgentSkillContext: AgentSkillContext | null
   private readonly experienceTaskId = randomUUID()
   private readonly activeExperiences = new Map<string, AgentSkillContext>()
+  private temporaryContextActivity: { fingerprint: string, createdAt: number } | undefined
   private readonly skillActivities = new Map<string, { createdAt: number, status: SkillActivityStatus }>()
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
@@ -675,7 +678,22 @@ export class ReActLLMDuty extends LLMDuty {
           const remainingMs = this.runBudget?.remainingMs
           // Keep changing task state after the conversation prefix. Rewriting
           // the system prompt prevents reuse of the history that follows it.
+          const temporaryStartedAt = Date.now()
           const temporaryContext = await MEMORY_MANAGER.getTemporaryContextSnapshot()
+          const fingerprint = JSON.stringify(temporaryContext.entries)
+          if (fingerprint !== this.temporaryContextActivity?.fingerprint &&
+            (temporaryContext.entries.length > 0 || this.temporaryContextActivity)) {
+            const createdAt = this.temporaryContextActivity?.createdAt ?? temporaryStartedAt
+            this.temporaryContextActivity = { fingerprint, createdAt }
+            const activity = createMemoryActivity(
+              `temporary-context:${this.experienceTaskId}`, MemoryActivityAction.TemporaryLoaded,
+              temporaryContext.entries.map((entry) => ({
+                id: entry.id, content: StringHelper.redactSecrets(entry.content),
+                sourceRef: entry.source, expiresAt: entry.expiresAt
+              })), createdAt, Date.now() - temporaryStartedAt
+            )
+            await this.emitProgress(activity.content, null, activity)
+          }
           appendAgentRuntimeContext(messages, {
             ...grounding,
             temporary_context: temporaryContext.entries,
@@ -2273,12 +2291,12 @@ export class ReActLLMDuty extends LLMDuty {
     await this.emitProgress(
       status === SkillActivityStatus.Loaded
         ? `Loaded ${label}: ${skill.name}`
-        : `Using ${label}: ${skill.name}`,
+        : `${isExperience ? 'Used' : 'Using'} ${label}: ${skill.name}`,
       null,
       {
         id: `${prefix}:${this.experienceTaskId}:${skill.id}`,
         createdAt,
-        iconName: SKILL_ACTIVITY_ICON_NAME,
+        iconName: isExperience ? MEMORY_ACTIVITY_ICON_NAME : SKILL_ACTIVITY_ICON_NAME,
         skill: { name: skill.name, instructions: skill.instructions }
       }
     )
@@ -2292,6 +2310,7 @@ export class ReActLLMDuty extends LLMDuty {
       createdAt: number
       iconName?: string
       skill?: AgentSkillSnapshot
+      memory?: MemoryActivitySnapshot
     }
   ): Promise<void> {
     if (!message) {
@@ -2309,6 +2328,7 @@ export class ReActLLMDuty extends LLMDuty {
         content: message,
         createdAt,
         ...(activity?.skill ? { skill: activity.skill } : {}),
+        ...(activity?.memory ? { memory: activity.memory } : {}),
         ...(activity?.iconName ? { iconName: activity.iconName } : {})
       }
     })
