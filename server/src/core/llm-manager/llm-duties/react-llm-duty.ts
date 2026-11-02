@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks'
 import { createMemoryActivity, MEMORY_ACTIVITY_ICON_NAME } from '@/core/memory-manager/memory-activity'
 import { MemoryActivityAction, type MemoryActivitySnapshot } from '@/core/llm-manager/memory-activity-contract'
 import fs from 'node:fs'
@@ -678,19 +679,21 @@ export class ReActLLMDuty extends LLMDuty {
           const remainingMs = this.runBudget?.remainingMs
           // Keep changing task state after the conversation prefix. Rewriting
           // the system prompt prevents reuse of the history that follows it.
-          const temporaryStartedAt = Date.now()
+          const temporaryCreatedAt = Date.now()
+          const temporaryStartedAt = performance.now()
           const temporaryContext = await MEMORY_MANAGER.getTemporaryContextSnapshot()
+          const temporaryDurationMs = performance.now() - temporaryStartedAt
           const fingerprint = JSON.stringify(temporaryContext.entries)
           if (fingerprint !== this.temporaryContextActivity?.fingerprint &&
             (temporaryContext.entries.length > 0 || this.temporaryContextActivity)) {
-            const createdAt = this.temporaryContextActivity?.createdAt ?? temporaryStartedAt
+            const createdAt = this.temporaryContextActivity?.createdAt ?? temporaryCreatedAt
             this.temporaryContextActivity = { fingerprint, createdAt }
             const activity = createMemoryActivity(
               `temporary-context:${this.experienceTaskId}`, MemoryActivityAction.TemporaryLoaded,
               temporaryContext.entries.map((entry) => ({
                 id: entry.id, content: StringHelper.redactSecrets(entry.content),
                 sourceRef: entry.source, expiresAt: entry.expiresAt
-              })), createdAt, Date.now() - temporaryStartedAt
+              })), createdAt, temporaryDurationMs
             )
             await this.emitProgress(activity.content, null, activity)
           }

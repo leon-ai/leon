@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks'
 import { createMemoryActivity } from '@/core/memory-manager/memory-activity'
 import { MemoryActivityAction } from '@/core/llm-manager/memory-activity-contract'
 import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
@@ -397,6 +398,7 @@ export default class ExperienceManager {
       return { outcome: 'skipped', reason: 'no-procedural-evidence' }
     }
     const startedAt = Date.now()
+    const extractionStartedAt = performance.now()
     const evidence = input.executions.slice(-8).map((execution) => {
       const observation = parseToolCallArguments(execution.observation)
       const data = parseProviderResponseData(observation?.['data'])
@@ -457,7 +459,7 @@ export default class ExperienceManager {
         const action = saved.revision > 1 ? MemoryActivityAction.ExperienceUpdated : MemoryActivityAction.ExperienceLearned
         const activity = createMemoryActivity(`${input.sourceRef}:${action}`, action, [{
           id: saved.id, content: saved.description, sourceRef: saved.sourceRef
-        }], startedAt, Date.now() - startedAt)
+        }], startedAt, performance.now() - extractionStartedAt)
         activity.skill = { name: saved.name, instructions: saved.instructions }
         try {
           input.onActivity?.(activity)

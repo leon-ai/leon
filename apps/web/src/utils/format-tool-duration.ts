@@ -1,3 +1,4 @@
+const MINIMUM_DISPLAY_DURATION_MS = 1
 const MILLISECONDS_PER_SECOND = 1_000
 const SECONDS_PER_MINUTE = 60
 const MINUTES_PER_HOUR = 60
@@ -21,6 +22,11 @@ export function formatToolDuration(
     durationMs < 0
   ) {
     return ''
+  }
+
+  // Preserve the meaning of fast measurements and older whole-millisecond zeros.
+  if (durationMs < MINIMUM_DISPLAY_DURATION_MS) {
+    return `<${MINIMUM_DISPLAY_DURATION_MS}ms`
   }
 
   if (durationMs < MILLISECONDS_PER_SECOND) {
