@@ -52,11 +52,18 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     return messages
   }
   const index = messages.findIndex((record) => record.messageId === id)
+  const memoryProgress = event.type === 'progress_message' && Boolean(
+    (event.data['message'] as { memory?: unknown } | undefined)?.memory
+  )
+  // A late outcome for unloaded history will arrive through its saved projection.
+  if (index < 0 && memoryProgress && event.data['background'] === true) {
+    return messages
+  }
   const previous = messages[index] ?? {
     who: 'leon' as const, messageId: id, message: '', sentAt: event.created_at, isAddedToHistory: false
   }
   // Accepted final content is authoritative over delayed draft and retry events.
-  if (previous.isAddedToHistory && event.type !== 'final_answer' && event.type !== 'artifacts') {
+  if (previous.isAddedToHistory && event.type !== 'final_answer' && event.type !== 'artifacts' && !memoryProgress) {
     return messages
   }
   if (event.type === 'widget') {
@@ -131,7 +138,9 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
       ...(message.icon_name ? { iconName: message.icon_name } : {}),
       ...(message.plan_step_id !== undefined ? { planStepId: message.plan_step_id } : {}) }
     trace.progressMessages = [...(trace.progressMessages ?? []).filter((item) => item.id !== progress.id), progress]
-    record.message = ''
+    if (!memoryProgress) {
+      record.message = ''
+    }
   } else if (event.type === 'plan_step') {
     const step = data['step'] as ConversationTrace['planSteps'][number]
     const found = trace.planSteps.some((item) => item.id === step.id)

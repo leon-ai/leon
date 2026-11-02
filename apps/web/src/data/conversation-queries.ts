@@ -350,7 +350,9 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
           return { ...previous, pages: [{
             ...page, appliedCursor: event.sequence, is_running: running,
             messages: page.newer_cursor ? page.messages : applyConversationEvent(page.messages, event)
-          }, ...previous.pages.slice(1)] }
+          }, ...previous.pages.slice(1).map((older) => event.type === 'progress_message' &&
+            event.data['background'] === true && older.messages.some((record) => record.messageId === event.response_id)
+            ? { ...older, messages: applyConversationEvent(older.messages, event) } : older)] }
         })
         if (event.type === 'session_changed' && event.data['is_running'] === false) {
           void queryClient.invalidateQueries({ queryKey: key, exact: true })
