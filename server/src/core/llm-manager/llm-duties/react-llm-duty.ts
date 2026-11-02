@@ -6,6 +6,7 @@ import { resolveModelContextWindowTokens } from '@/core/llm-manager/model-contex
 import { randomUUID } from 'node:crypto'
 import { AsyncResource } from 'node:async_hooks'
 import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'
+import type { AgentSkillSnapshot } from '@/core/llm-manager/agent-progress-contract'
 
 import {
   DEFAULT_INIT_PARAMS,
@@ -2264,22 +2265,32 @@ export class ReActLLMDuty extends LLMDuty {
     const createdAt = previous?.createdAt ?? Date.now()
     this.skillActivities.set(skill.id, { createdAt, status })
     const isExperience = skill.id.startsWith(EXPERIENCE_PREFIX)
-    const label = isExperience ? 'an experience' : 'an agent skill'
+    const label = isExperience ? 'experience' : 'skill'
     const prefix = isExperience ? 'experience-activity' : 'agent-skill-activity'
 
     await this.emitProgress(
       status === SkillActivityStatus.Loaded
-        ? `I loaded ${label}: ${skill.name}.`
-        : `I'm using ${label}: ${skill.name}.`,
+        ? `Loaded ${label}: ${skill.name}`
+        : `Using ${label}: ${skill.name}`,
       null,
-      { id: `${prefix}:${this.experienceTaskId}:${skill.id}`, createdAt, iconName: SKILL_ACTIVITY_ICON_NAME }
+      {
+        id: `${prefix}:${this.experienceTaskId}:${skill.id}`,
+        createdAt,
+        iconName: SKILL_ACTIVITY_ICON_NAME,
+        skill: { name: skill.name, instructions: skill.instructions }
+      }
     )
   }
 
   private async emitProgress(
     message: string,
     generationId: string | null = null,
-    activity?: { id: string, createdAt: number, iconName?: string }
+    activity?: {
+      id: string
+      createdAt: number
+      iconName?: string
+      skill?: AgentSkillSnapshot
+    }
   ): Promise<void> {
     if (!message) {
       return
@@ -2291,8 +2302,13 @@ export class ReActLLMDuty extends LLMDuty {
     // Hosts receive the same non-final message as the built-in chat client.
     this.reportProgressEvent({
       type: 'progress_message',
-      message: { id, content: message, createdAt,
-        ...(activity?.iconName ? { iconName: activity.iconName } : {}) }
+      message: {
+        id,
+        content: message,
+        createdAt,
+        ...(activity?.skill ? { skill: activity.skill } : {}),
+        ...(activity?.iconName ? { iconName: activity.iconName } : {})
+      }
     })
     try {
       SOCKET_SERVER.emitAnswerToChatClients({

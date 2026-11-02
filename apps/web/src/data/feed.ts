@@ -1,4 +1,5 @@
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
+import type { AgentSkillSnapshot } from '../../../../server/src/core/llm-manager/agent-progress-contract'
 
 export enum FeedTurnStatus {
   InProgress = 'in_progress',
@@ -71,6 +72,7 @@ export interface FeedSummaryActivity extends FeedActivityTime {
   type: 'summary'
   content: string
   iconName?: string
+  skill?: AgentSkillSnapshot
 }
 
 export interface FeedPlanActivity extends FeedActivityTime {

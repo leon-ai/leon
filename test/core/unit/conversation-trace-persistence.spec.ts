@@ -446,8 +446,9 @@ describe('conversation trace persistence', () => {
         }],
         progressMessages: [{
           id: 'progress',
-          content: 'One item is verified; more remain.',
-          createdAt: 1_000
+          content: 'Using skill: coding',
+          createdAt: 1_000,
+          skill: { name: 'coding', instructions: 'Read the source before making changes.' }
         }],
         reasoning: [
           { id: 'thinking', text: 'Checking $&', phase: 'agent', startedAt: 1_000 },

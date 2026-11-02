@@ -97,7 +97,10 @@ describe('AgentResponseTraceCollector', () => {
   it('preserves ordered commentary through replay and HTTP history without duplicating it', () => {
     const collector = new AgentResponseTraceCollector()
     const first = { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }
-    const second = { id: 'progress-2', content: 'I loaded an agent skill: coding.', createdAt: 2_000, iconName: 'book-ai-line' }
+    const second = {
+      id: 'progress-2', content: 'Loaded skill: coding', createdAt: 2_000, iconName: 'book-ai-line',
+      skill: { name: 'coding', instructions: 'Read the source before making changes.' }
+    }
     collector.record({ type: 'progress_message', message: first })
     collector.record({ type: 'progress_message', message: second })
     collector.record({ type: 'progress_message', message: first })

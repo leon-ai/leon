@@ -116,8 +116,16 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   } else if (event.type === 'reasoning_summary') {
     trace.reasoningSummary = String(data['summary'])
   } else if (event.type === 'progress_message') {
-    const message = data['message'] as { id: string, content: string, created_at: number, plan_step_id?: string | null, icon_name?: string }
+    const message = data['message'] as {
+      id: string
+      content: string
+      created_at: number
+      plan_step_id?: string | null
+      icon_name?: string
+      skill?: NonNullable<ConversationTrace['progressMessages']>[number]['skill']
+    }
     const progress = { id: message.id, content: message.content, createdAt: message.created_at,
+      ...(message.skill ? { skill: message.skill } : {}),
       ...(message.icon_name ? { iconName: message.icon_name } : {}),
       ...(message.plan_step_id !== undefined ? { planStepId: message.plan_step_id } : {}) }
     trace.progressMessages = [...(trace.progressMessages ?? []).filter((item) => item.id !== progress.id), progress]

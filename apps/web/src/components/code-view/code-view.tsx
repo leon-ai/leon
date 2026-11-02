@@ -18,6 +18,7 @@ interface CodeViewProps {
   active?: boolean
   preview?: boolean
   previewTail?: boolean
+  truncated?: boolean
 }
 
 interface CodeRow {
@@ -48,7 +49,7 @@ function getRowTokens(row: CodeRow, tokens: CodeToken[][] | null): CodeToken[] |
  * Renders only visible output lines, bounds pathological single-line payloads,
  * and follows live output only while its reader remains at the end.
  */
-export function CodeView({ text, label, language = 'text', active = false, preview = false, previewTail = false }: CodeViewProps) {
+export function CodeView({ text, label, language = 'text', active = false, preview = false, previewTail = false, truncated = false }: CodeViewProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const rows = useMemo(() => text.split('\n').flatMap((text, line) => {
@@ -82,15 +83,24 @@ export function CodeView({ text, label, language = 'text', active = false, previ
   }
 
   if (preview) {
-    const visibleRows = previewTail ? rows.slice(-CODE_PREVIEW_LINES) : rows.slice(0, CODE_PREVIEW_LINES)
+    const omitted = truncated || rows.length > CODE_PREVIEW_LINES
+    // The omission marker shares the preview budget so long output stays bounded.
+    const visibleCount = CODE_PREVIEW_LINES - (omitted ? 1 : 0)
+    const visibleRows = previewTail ? rows.slice(-visibleCount) : rows.slice(0, visibleCount)
+    const ellipsis = omitted ? (
+      <span className="code-view-line code-view-ellipsis"
+        aria-label={previewTail ? 'Earlier content omitted' : 'More content omitted'}>…{'\n'}</span>
+    ) : null
 
     return (
       <div className="code-view code-view-preview code-view-viewport" role="region" aria-label={label} tabIndex={0}
         style={{ '--code-preview-lines': CODE_PREVIEW_LINES } as CSSProperties}>
         <pre className="code-view-content"><code>
+          {previewTail && ellipsis}
           {visibleRows.map((row) => (
             <span key={`${row.line}:${row.offset}`} className="code-view-line">{renderRow(row)}{'\n'}</span>
           ))}
+          {!previewTail && ellipsis}
         </code></pre>
       </div>
     )

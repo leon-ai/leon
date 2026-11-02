@@ -1,0 +1,89 @@
+.activity-details
+  margin: var(--space-sm) 0 var(--space-md) 24px
+
+.activity-details-heading
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-sm)
+  min-height: 28px
+  margin-bottom: var(--space-sm)
+
+.activity-details-title
+  min-width: 0
+  margin: 0
+  overflow-wrap: anywhere
+  color: var(--color-text-tertiary)
+  font-size: var(--font-size-xs)
+  line-height: var(--line-height-sm)
+
+.activity-details-frame
+  overflow: hidden
+  background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
+  border: 1px solid transparent
+  border-radius: var(--border-radius-md)
+
+.activity-details-footer
+  display: flex
+  border-top: 1px solid var(--color-border)
+
+  > .button
+    width: 100%
+    padding: 0
+    border-radius: 0
+
+.activity-details-pointer-focus
+  > .button:focus-visible
+    outline: none
+
+.activity-details-dialog
+  display: flex
+  flex-direction: column
+  height: min(720px, calc(100dvh - 144px))
+  max-height: calc(100dvh - 144px)
+
+  .dialog-body
+    display: flex
+    flex: 1 1 auto
+    flex-direction: column
+    min-height: 0
+    padding: var(--space-sm) 0 0
+
+  .dialog-header,
+  .dialog-footer
+    flex: 0 0 auto
+
+  .dialog-footer
+    align-items: center
+
+.activity-details-path
+  flex: 0 0 auto
+  margin: 0 0 var(--space-lg)
+  padding: 0 var(--space-xl)
+  overflow-wrap: anywhere
+  font-size: var(--font-size-xs)
+  color: var(--color-text-tertiary)
+
+.activity-details-reading-pane
+  flex: 1 1 auto
+  min-width: 0
+  min-height: 0
+
+  .code-view,
+  .tool-output,
+  .tool-changes
+    height: 100%
+    min-height: 0
+
+.activity-details-toolbar
+  display: flex
+  flex: 0 0 auto
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-sm)
+  padding: 0 var(--space-lg) var(--space-sm)
+  border-bottom: 1px solid var(--color-border)
+
+@media (max-width: 680px)
+  .activity-details
+    margin-left: var(--space-sm)

@@ -5,6 +5,7 @@ import type { APIOptions } from '@/core/http-server/http-server'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import type { TurnInference } from '@/core/llm-manager/inference-metadata'
 import type { AgentResponseTrace, ConversationWidgetData } from '@/types'
+import type { AgentSkillSnapshot } from '@/core/llm-manager/agent-progress-contract'
 
 export interface HTTPPluginAuthConfig {
   enabled: boolean
@@ -81,7 +82,14 @@ export interface HTTPPluginAgentTrace {
   timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
   inferences?: AgentResponseTrace['inferences']
   reasoning_summary?: string
-  progress_messages?: { id: string, content: string, created_at: number, plan_step_id?: string | null, icon_name?: string }[]
+  progress_messages?: {
+    id: string
+    content: string
+    created_at: number
+    plan_step_id?: string | null
+    icon_name?: string
+    skill?: AgentSkillSnapshot
+  }[]
   plan_steps: HTTPPluginPlanStep[]
   plan_transitions?: HTTPPluginPlanTransition[]
   tool_calls: HTTPPluginToolCall[]

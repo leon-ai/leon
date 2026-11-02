@@ -1,9 +1,7 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useMemo, useState, type KeyboardEvent } from 'react'
 
-import { Dialog } from '@/components/dialog'
+import { ActivityDetailsDialog } from '@/components/activity-details/activity-details-dialog'
 import { Button } from '@/components/button'
-import { useToast } from '@/components/toast'
-import type { ToolContentPart } from '../../../../../server/src/core/session-manager/tool-content-contract'
 import { useToolCallContents } from '@/data/conversation-details'
 import type { FeedToolCall } from '@/data/feed'
 import { toToolContent, toToolInput } from '@/utils/tool-content'
@@ -30,8 +28,6 @@ interface ToolDetailsDialogProps {
  */
 export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onAfterClose }: ToolDetailsDialogProps) {
   const contents = useToolCallContents(toolCall.id, open, true)
-  const { showToast } = useToast()
-  const downloadURL = useRef<string | undefined>(undefined)
   const tabsId = useId()
   const [selectedTab, setSelectedTab] = useState<ToolDetailsTab | null>(null)
   const liveInput = useMemo(() => toToolInput(toolCall.input === null ? undefined : toolCall.input, true), [toolCall.input])
@@ -50,25 +46,6 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
   const content = tab === ToolDetailsTab.Input ? input : output
   const contentName = tab === ToolDetailsTab.Input ? 'input' : 'output'
 
-  useEffect(() => (): void => {
-    if (downloadURL.current) {
-      URL.revokeObjectURL(downloadURL.current)
-    }
-  }, [])
-
-  async function copy(content: ToolContentPart | undefined, label: string): Promise<void> {
-    if (!content) {
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(content.text)
-      showToast({ type: 'success', title: `Copied ${label}`, description: 'The text is in your clipboard.' })
-    } catch {
-      showToast({ type: 'error', title: 'I couldn’t copy this text',
-        description: 'Your browser did not allow clipboard access. You can download the output instead.' })
-    }
-  }
-
   function handleTabsKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     const next = getListNavigationIndex(event, {
       count: tabs.length, currentIndex: tabs.indexOf(tab), horizontal: true, loop: true
@@ -80,34 +57,13 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
     }
   }
 
-  function download(): void {
-    if (!content) {
-      return
-    }
-    if (downloadURL.current) {
-      URL.revokeObjectURL(downloadURL.current)
-    }
-    const url = URL.createObjectURL(new Blob([content.text], { type: 'text/plain;charset=utf-8' }))
-    downloadURL.current = url
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `tool-${contentName}.txt`
-    link.click()
-  }
-
   return (
-    <Dialog open={open} centered size="wide" title={toolCall.toolCallTitle || 'Tool details'} className="tool-details-dialog"
-      onClose={onClose} onAfterClose={onAfterClose} footer={(
-        <>
-          <Button iconName="download" tone="muted" tooltipMessage={`Download ${contentName}`} tooltipPosition="left"
-            disabled={!content} onClick={download} />
-        </>
-      )}>
-      <p className="tool-details-path">{technicalTitle}</p>
-      {contents.fetchStatus === 'paused' && (
+    <ActivityDetailsDialog open={open} title={toolCall.toolCallTitle || 'Tool details'} path={technicalTitle}
+      content={content?.text} contentName={contentName} downloadFilename={`tool-${contentName}.txt`}
+      canCopy={tab !== ToolDetailsTab.Changes} onClose={onClose} onAfterClose={onAfterClose}
+      notice={contents.fetchStatus === 'paused' && (
         <p className="tool-diff-notice" role="status">Check your network connection to load complete tool details.</p>
-      )}
-      <div className="tool-details-toolbar">
+      )} toolbar={(
         <div className="tool-details-tabs" role="tablist" aria-label="Tool details" onKeyDown={handleTabsKeyDown}>
           {tabs.map((item) => (
             <button key={item} type="button" role="tab" id={`${tabsId}-${item}`}
@@ -116,12 +72,8 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
               onClick={() => setSelectedTab(item)}>{item}</button>
           ))}
         </div>
-        {tab !== ToolDetailsTab.Changes && (
-          <Button iconName="file-copy" tone="muted" tooltipMessage={`Copy ${contentName}`} tooltipPosition="left"
-            disabled={!content} onClick={() => void copy(content, contentName)} />
-        )}
-      </div>
-      <div className="tool-details-reading-pane" role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-${tab}`}>
+      )}>
+      <div className="activity-details-reading-pane" role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-${tab}`}>
         {tab === ToolDetailsTab.Changes ? (
           <ToolChanges changes={changes} truncated={contents.data?.diffTruncated ?? false}
             fallback={<ToolOutput content={output} label="Tool output" />} />
@@ -131,6 +83,6 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
         )}
       </div>
       {contents.isError && <Button onClick={() => void contents.refetch()}>Retry loading tool details</Button>}
-    </Dialog>
+    </ActivityDetailsDialog>
   )
 }

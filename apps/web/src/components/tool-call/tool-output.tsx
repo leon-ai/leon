@@ -71,6 +71,7 @@ export function ToolOutput({ content, label, active = false, loading = false, pr
         active={active}
         preview={preview}
         previewTail={previewTail}
+        truncated={content?.truncated ?? false}
       />
       {loading && !content && <span className="tool-output-loading"><Loader size="sm" label="Loading output…" /></span>}
     </div>
