@@ -1,0 +1,210 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "figcraft",
+  "toolkit_id": "media_production",
+  "name": "FigCraft",
+  "description": "Create and edit interface designs, reusable components and prototypes headlessly; deliver editable FigCraft documents, previews and design exports.",
+  "icon_name": "layout-4-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/storytold/figcraft/releases/download/v0.13.1/figcraft-0.13.1-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/figcraft/releases/download/v0.13.1/figcraft-0.13.1-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/figcraft/releases/download/v0.13.1/figcraft-cli-0.13.1-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/figcraft/releases/download/v0.13.1/figcraft-cli-0.13.1-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/figcraft/releases/download/v0.13.1/figcraft-0.13.1-windows-x64-portable.zip",
+    "win-arm64": "https://github.com/storytold/figcraft/releases/download/v0.13.1/figcraft-0.13.1-windows-arm64-portable.zip"
+  },
+  "progressive_guidance": "The pinned CLI downloads automatically and runs without a desktop window or provider account. For designs based on an existing app, first inspect its components, theme tokens, typography, spacing and representative screens with file/browser tools; use those observed details in the design. Discover command IDs and parameters before constructing edits. Edits stage a native source copy and deliver new conversation artifacts. Commands with explicit paths can still read or write local files: use file, plugin or destructive operations only when requested. Inspect diagnostics, missing fonts and import warnings. Visually inspect the returned preview before delivering the design; use export to check other pages or layers. The native artifact retains components, variables and prototype interactions.",
+  "functions": {
+    "commands": {
+      "description": "Discover installed interface-design commands and accepted parameters, optionally filtered by command ID, label or parameter text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Text to search in the installed command registry."
+          }
+        },
+        "additionalProperties": false
+      },
+      "read_only": true,
+      "timeout": {
+        "idleMs": 120000
+      }
+    },
+    "inspect": {
+      "description": "Read document pages, frame IDs, dimensions, counts, import warnings and missing fonts, or inspect one layer and its immediate children without saving.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source document path. Supports .figcraft and the installed CLI import formats."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "nodeId": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Observed layer or page ID. Omit for a document summary."
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Exact node property names to inspect, such as fills, fontFamily, layout or interactions. Requires nodeId; cannot combine with outline: true."
+              },
+              "outline": {
+                "type": "boolean",
+                "description": "Return a compact layer tree. Requires nodeId; cannot combine outline: true with fields."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "inputPath"
+        ],
+        "additionalProperties": false
+      },
+      "progressive_guidance": "Start with the document summary to discover page and frame IDs. Inspect a page or frame with options.nodeId, then use child IDs for deeper inspection. Request fields when matching styles or checking geometry; outline is useful for names and structure.",
+      "read_only": true,
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000
+      }
+    },
+    "edit": {
+      "description": "Create an interface design or edit a source copy with discovered engine commands; deliver an editable .figcraft document and a PNG preview.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "Command ID observed through commands.",
+                  "minLength": 1
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Parameters discovered from the installed command registry."
+                },
+                "as": {
+                  "type": "string",
+                  "description": "Optional name for this step result, referenced by later steps.",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute existing source document. Omit to start a new document."
+          },
+          "preview": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "description": "Observed page name. Defaults to the first non-divider page."
+              },
+              "node": {
+                "type": "string",
+                "description": "Observed layer ID (as a string) or name. Omit to export the whole page."
+              },
+              "scale": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 64,
+                "description": "Raster export scale; defaults to 1."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "additionalProperties": false
+      },
+      "progressive_guidance": "Discover node, frame, layout, component, variable and prototype commands as needed. Steps run as one atomic script; a command failure rolls back document edits. Name a creation step with as, then use {\"$ref\":\"name\"} in a later parameter, or {\"$step\":0} for a prior step index; optional field selects another result field. Build reusable components and auto layout when the design needs them. A new document is already open; file.newFromTemplate can start from an observed template. PNG defaults to the first page; choose preview.page or preview.node to inspect another area. Continue edits from the returned native artifact path. Explicit file commands may have effects outside the staged copy.",
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000
+      }
+    },
+    "export": {
+      "description": "Export a design page or layer as PNG, JPG, WebP, SVG, PDF or Android XML, or the whole document as experimental .fig or Penpot.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source document path. Supports .figcraft and the installed CLI import formats."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpg",
+              "webp",
+              "svg",
+              "pdf",
+              "fig",
+              "penpot",
+              "xml"
+            ],
+            "description": "Defaults to png. Raster exports attach bounded visual evidence."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "description": "Observed page name. Defaults to the first non-divider page."
+              },
+              "node": {
+                "type": "string",
+                "description": "Observed layer ID (as a string) or name. Omit to export the whole page."
+              },
+              "scale": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 64,
+                "description": "Raster export scale; defaults to 1."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "inputPath"
+        ],
+        "additionalProperties": false
+      },
+      "progressive_guidance": "Without options.node, raster/SVG exports composite the selected page and PDF puts its top-level frames on separate pages. Use observed page names or layer IDs/names. fig and penpot export the whole document and ignore page/layer selectors; inspect diagnostics for unsupported features. Native .figcraft output is available from edit.",
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000
+      }
+    }
+  }
+}
