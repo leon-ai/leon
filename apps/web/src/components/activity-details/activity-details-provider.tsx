@@ -2,16 +2,23 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 
 import { ConversationDetailsProvider, ConversationDetailsContext } from '@/data/conversation-details'
 import type { FeedEntry, FeedToolCall, LeonFeedActivity } from '@/data/feed'
-import { ToolDetailsDialog } from './tool-details-dialog'
+import { ToolDetailsDialog } from '@/components/tool-call/tool-details-dialog'
+
+enum ActivityDetailsKind {
+  Tool = 'tool'
+}
 
 interface ToolSelection {
+  kind: ActivityDetailsKind.Tool
   toolCall: FeedToolCall
   technicalTitle: string
   messageId: string
   opener: HTMLElement | null
 }
 
-const ToolDetailsContext = createContext<((selection: ToolSelection) => void) | null>(null)
+type ActivitySelection = ToolSelection
+
+const ActivityDetailsContext = createContext<((selection: ActivitySelection) => void) | null>(null)
 
 function findTool(activities: LeonFeedActivity[], id: string): FeedToolCall | undefined {
   for (const activity of activities) {
@@ -36,19 +43,19 @@ function findTool(activities: LeonFeedActivity[], id: string): FeedToolCall | un
 /**
  * Keeps an inspector alive outside virtualized rows and collapsing turn details.
  */
-export function ToolDetailsProvider({ entries, sessionId, children }: {
+export function ActivityDetailsProvider({ entries, sessionId, children }: {
   entries: FeedEntry[]
   sessionId: string | undefined
   children: ReactNode
 }) {
-  const [selection, setSelection] = useState<ToolSelection | null>(null)
+  const [selection, setSelection] = useState<ActivitySelection | null>(null)
   const [isOpen, setIsOpen] = useState(false)
-  const open = useCallback((next: ToolSelection): void => {
+  const open = useCallback((next: ActivitySelection): void => {
     setSelection(next)
     setIsOpen(true)
   }, [])
-  let tool = selection?.toolCall
-  if (selection) {
+  let tool = selection?.kind === ActivityDetailsKind.Tool ? selection.toolCall : undefined
+  if (selection?.kind === ActivityDetailsKind.Tool) {
     for (const entry of entries) {
       if (entry.role === 'leon' && (entry.responseId ?? entry.id) === selection.messageId) {
         tool = findTool(entry.activities, selection.toolCall.id) ?? tool
@@ -56,19 +63,21 @@ export function ToolDetailsProvider({ entries, sessionId, children }: {
     }
   }
 
+  function handleAfterClose(): void {
+    setSelection(null)
+    selection?.opener?.focus({ preventScroll: true })
+  }
+
   return (
-    <ToolDetailsContext value={open}>
+    <ActivityDetailsContext value={open}>
       {children}
-      {selection && tool && (
+      {selection?.kind === ActivityDetailsKind.Tool && tool && (
         <ConversationDetailsProvider sessionId={sessionId} messageId={selection.messageId}>
           <ToolDetailsDialog open={isOpen} toolCall={tool} technicalTitle={selection.technicalTitle}
-            onClose={() => setIsOpen(false)} onAfterClose={() => {
-              setSelection(null)
-              selection.opener?.focus({ preventScroll: true })
-            }} />
+            onClose={() => setIsOpen(false)} onAfterClose={handleAfterClose} />
         </ConversationDetailsProvider>
       )}
-    </ToolDetailsContext>
+    </ActivityDetailsContext>
   )
 }
 
@@ -76,9 +85,10 @@ export function ToolDetailsProvider({ entries, sessionId, children }: {
  * Opens the feed-owned inspector with the invocation's existing response identity.
  */
 export function useOpenToolDetails(toolCall: FeedToolCall, technicalTitle: string): () => void {
-  const open = useContext(ToolDetailsContext)
+  const open = useContext(ActivityDetailsContext)
   const response = useContext(ConversationDetailsContext)
 
-  return () => open?.({ toolCall, technicalTitle, messageId: response?.messageId ?? '',
+  return () => open?.({ kind: ActivityDetailsKind.Tool, toolCall, technicalTitle, messageId: response?.messageId ?? '',
     opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
 }
+

@@ -7,11 +7,11 @@ import { ActivityWave } from '@/components/activity-wave'
 import { Collapse } from '@/components/collapse'
 import { useToolCallContents } from '@/data/conversation-details'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
-import { Button } from '@/components/button'
+import { ActivityDetails } from '@/components/activity-details/activity-details'
 import { toToolContent, toToolInput } from '@/utils/tool-content'
 import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
 import { ToolChanges, ToolOutput } from './tool-output'
-import { useOpenToolDetails } from './tool-details-provider'
+import { useOpenToolDetails } from '@/components/activity-details/activity-details-provider'
 
 import './tool-call.sass'
 
@@ -127,24 +127,18 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
         <ActivityTimestamp timestamp={toolCall.startedAt ?? toolCall.preparationStartedAt} />
       </div>
       <Collapse id={detailsId} isOpen={isExpanded}>
-        <div className="tool-call-details">
-          <div className="tool-call-details-heading">
-            <p className="tool-call-details-title">{technicalTitle}</p>
-            <Button iconName="expand-diagonal" tone="muted" tooltipMessage="View details"
-              tooltipPosition="left" onClick={openDetails} />
-          </div>
-          {disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>}
-          <div className="tool-call-output-frame">
-            {changes.length > 0 ? (
-              <ToolChanges changes={changes} truncated={disclosure.data?.diffTruncated ?? false} preview
-                fallback={<ToolOutput content={output} label="Tool output" preview />} />
-            ) : (
-              <ToolOutput content={output} label="Tool output" active={isActive}
-                loading={disclosure.isFetching} preview
-                previewTail={liveCommand !== undefined || disclosure.data?.commandOutput !== undefined} />
-            )}
-          </div>
-        </div>
+        <ActivityDetails title={technicalTitle} onViewDetails={openDetails} notice={
+          disclosure.isError && <button type="button" onClick={() => void disclosure.refetch()}>Retry loading tool details</button>
+        }>
+          {changes.length > 0 ? (
+            <ToolChanges changes={changes} truncated={disclosure.data?.diffTruncated ?? false} preview
+              fallback={<ToolOutput content={output} label="Tool output" preview />} />
+          ) : (
+            <ToolOutput content={output} label="Tool output" active={isActive}
+              loading={disclosure.isFetching} preview
+              previewTail={liveCommand !== undefined || disclosure.data?.commandOutput !== undefined} />
+          )}
+        </ActivityDetails>
       </Collapse>
     </section>
   )

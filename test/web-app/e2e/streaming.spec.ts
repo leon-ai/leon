@@ -376,7 +376,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const initialTop = await tool.evaluate((element) => getComputedStyle(element, '::after').top)
     await tool.getByRole('button', { name: 'Read first source' }).click()
     await expect(tool.getByLabel('Tool output', { exact: true })).toBeVisible()
-    await expect.poll(() => tool.locator('.tool-call-details').evaluate((element) =>
+    await expect.poll(() => tool.locator('.activity-details').evaluate((element) =>
       element.getBoundingClientRect().height
     )).toBeGreaterThan(200)
     await plan.evaluate(async (element) => {
@@ -1066,7 +1066,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       try {
         await page.goto(SESSION_URL)
         await page.getByRole('button', { name: tool.toolCallTitle, exact: true }).click()
-        const panel = page.locator('.tool-call-details')
+        const panel = page.locator('.activity-details')
         await expect(panel.getByRole('status')).toHaveCount(0)
         await expect(panel.getByLabel('Tool output', { exact: true })).toContainText('Initial output')
         await page.evaluate(() => document.fonts.ready)
@@ -1112,7 +1112,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
               const main = document.querySelector<HTMLElement>('.app-main')!
               const row = document.querySelector<HTMLElement>('.feed-turn-latest')!
               const sizer = document.querySelector<HTMLElement>('.feed-virtual-content')!
-              const panel = document.querySelector<HTMLElement>('.tool-call-details')!
+              const panel = document.querySelector<HTMLElement>('.activity-details')!
               samples.push({
                 gap: main.scrollHeight - main.clientHeight - main.scrollTop,
                 scrollTop: main.scrollTop,
