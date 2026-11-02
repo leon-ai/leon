@@ -4,7 +4,7 @@ import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-cont
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
 
-for (const kind of ['agent skill', 'experience'] as const) {
+for (const kind of ['skill', 'experience'] as const) {
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     test(`updates one ${kind} timeline item from loaded to in use and restores it (${reducedMotion})`, async ({ page, ui }, testInfo) => {
       await page.emulateMedia({ reducedMotion })
@@ -13,7 +13,7 @@ for (const kind of ['agent skill', 'experience'] as const) {
       const responseId = 'skill-response'
       const createdAt = Date.now()
       const progress = { id: `skill-activity:task:${kind}:fixture`,
-        content: `I loaded an ${kind}: ${name}.`, created_at: createdAt, icon_name: 'book-ai-line' }
+        content: `Loaded ${kind}: ${name}`, created_at: createdAt, icon_name: 'book-ai-line' }
       let sequence = 0
       const emit = (): Promise<void> => ui.emit([{
         type: 'progress_message', sequence: ++sequence, session_id: SESSION_ID,
@@ -32,12 +32,12 @@ for (const kind of ['agent skill', 'experience'] as const) {
       await expect(item).toContainText(progress.content)
       await expect(item.locator('.ri-book-ai-line')).toBeVisible()
       await expect(item.getByRole('button')).toHaveCount(0)
-      progress.content = `I'm using an ${kind}: ${name}.`
+      progress.content = `Using ${kind}: ${name}`
       await emit()
       await emit()
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
-      await expect(item).not.toContainText(`loaded an ${kind}`)
+      await expect(item).not.toContainText(`Loaded ${kind}`)
       for (const theme of ['light', 'dark']) {
         await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme)

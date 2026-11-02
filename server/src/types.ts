@@ -1,4 +1,5 @@
 import type { Artifact } from '@/core/artifacts/artifact-types'
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 /**
  * Contain common/shared types that are universal across the project
  * and cannot be placed in the respective core nodes
@@ -201,7 +202,7 @@ export interface AgentResponseTrace {
   timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
   id?: string
   inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' | 'review' })[]
-  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null, iconName?: string }[]
+  progressMessages?: AgentProgressMessage[]
   reasoning?: {
     id: string
     text: string

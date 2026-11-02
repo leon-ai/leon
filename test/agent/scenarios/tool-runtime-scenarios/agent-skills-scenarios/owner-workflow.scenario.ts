@@ -21,12 +21,12 @@ const scenario: RealAgentScenario = {
     return inScenarioWorkspace(context.profilePath, async (workspace) => {
       const turn = await context.runTurn('Use my handoff-card agent skill for Nora. The next action is Publish release notes. Create and verify the handoff card in this workspace.')
       assert.equal(turn.finalIntent, 'answer', turn.output)
-      const activities = turn.progressMessages.filter((message) => message.content.includes('agent skill: handoff-card.'))
+      const activities = turn.progressMessages.filter((message) => message.content.includes('skill: handoff-card'))
       assert.equal(activities.length, 2)
       assert.equal(activities[0]!.id, activities[1]!.id)
       assert.equal(activities[0]!.createdAt, activities[1]!.createdAt)
-      assert.ok(activities[0]!.content.includes('I loaded an agent skill'))
-      assert.ok(activities[1]!.content.includes('I\'m using an agent skill'))
+      assert.equal(activities[0]!.content, 'Loaded skill: handoff-card')
+      assert.equal(activities[1]!.content, 'Using skill: handoff-card')
       assert.ok(activities.every((activity) => activity.iconName === 'book-ai-line'))
       assert.equal(turn.responseTrace.progressMessages?.filter((message) => message.id === activities[0]!.id).length, 1)
       assert.equal((await fs.readFile(path.join(workspace, 'handoff.txt'), 'utf8')).trim(),
