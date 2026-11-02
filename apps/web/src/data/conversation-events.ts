@@ -123,9 +123,11 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
       plan_step_id?: string | null
       icon_name?: string
       skill?: NonNullable<ConversationTrace['progressMessages']>[number]['skill']
+      memory?: NonNullable<ConversationTrace['progressMessages']>[number]['memory']
     }
     const progress = { id: message.id, content: message.content, createdAt: message.created_at,
       ...(message.skill ? { skill: message.skill } : {}),
+      ...(message.memory ? { memory: message.memory } : {}),
       ...(message.icon_name ? { iconName: message.icon_name } : {}),
       ...(message.plan_step_id !== undefined ? { planStepId: message.plan_step_id } : {}) }
     trace.progressMessages = [...(trace.progressMessages ?? []).filter((item) => item.id !== progress.id), progress]

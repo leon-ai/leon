@@ -1,3 +1,4 @@
+import { MemoryDetails } from '@/components/activity-details/memory-details'
 import { clsx } from 'clsx'
 import { memo } from 'react'
 
@@ -261,18 +262,23 @@ function renderActivity(activity: LeonFeedActivity) {
 
   if (activity.type === 'summary') {
     if (activity.iconName) {
+      const duration = formatToolDuration(activity.memory?.durationMs)
+      const label = `${activity.content}${duration ? ` in ${duration}` : ''}`
       return (
         <ProcessGroup
           key={activity.id}
           active={false}
-          activeLabel={activity.content}
-          completedLabel={activity.content}
+          activeLabel={label}
+          completedLabel={label}
           ariaLabel="Leon’s activity"
           startedAt={activity.startedAt}
           indicator={<i className={`ri-${activity.iconName}`} aria-hidden="true" />}
         >
-          {activity.skill ? (
-            <SkillDetails skill={activity.skill} />
+          {activity.memory || activity.skill ? (
+            <>
+              {activity.memory && <MemoryDetails memory={activity.memory} title={activity.content} />}
+              {activity.skill && <SkillDetails skill={activity.skill} />}
+            </>
           ) : undefined}
         </ProcessGroup>
       )

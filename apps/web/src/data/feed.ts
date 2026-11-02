@@ -1,3 +1,4 @@
+import type { MemoryActivitySnapshot } from '../../../../server/src/core/llm-manager/memory-activity-contract'
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
 import type { AgentSkillSnapshot } from '../../../../server/src/core/llm-manager/agent-progress-contract'
 
@@ -73,6 +74,7 @@ export interface FeedSummaryActivity extends FeedActivityTime {
   content: string
   iconName?: string
   skill?: AgentSkillSnapshot
+  memory?: MemoryActivitySnapshot
 }
 
 export interface FeedPlanActivity extends FeedActivityTime {
