@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MultiFileDiff } from '@pierre/diffs/react'
 import { canUseWASM, createCSSVariablesTheme, disposeHighlighter, getFiletypeFromFileName, registerCustomTheme } from '@pierre/diffs'
 
@@ -85,6 +85,12 @@ export function ToolDiff({ changes, truncated = false, preview = false }: {
   preview?: boolean
 }) {
   const [selectedView, setView] = useState(DiffView.Inline)
+  const [previewClipped, setPreviewClipped] = useState(false)
+  const handlePostRender = useCallback((node: HTMLElement): void => {
+    // The renderer owns the shadow viewport and signals when its layout is ready.
+    const code = node.shadowRoot?.querySelector<HTMLElement>('[data-code]')
+    setPreviewClipped(Boolean(code && code.scrollHeight > code.clientHeight))
+  }, [])
   const view = preview ? DiffView.Inline : selectedView
   const split = view === DiffView.Split
   const theme = useTheme()
@@ -108,8 +114,9 @@ export function ToolDiff({ changes, truncated = false, preview = false }: {
     // Hunk rendering remains available for version-backed comparisons; tool
     // invocations show their recorded replacement context instead.
     expandUnchanged: view !== DiffView.Hunks,
-    hunkSeparators: view === DiffView.Hunks ? 'metadata' as const : 'simple' as const
-  }), [split, theme, view, preview])
+    hunkSeparators: view === DiffView.Hunks ? 'metadata' as const : 'simple' as const,
+    ...(preview ? { onPostRender: handlePostRender } : {})
+  }), [split, theme, view, preview, handlePostRender])
 
   useEffect(() => {
     viewers++
@@ -142,7 +149,12 @@ export function ToolDiff({ changes, truncated = false, preview = false }: {
       </div>
       <div className="tool-diff-labels"><span>{split ? 'Before −' : view === DiffView.Hunks ? 'Changed hunks' : 'Changed excerpts'}</span>{split && <span>After +</span>}</div>
       {preview ? (
-        <div className="tool-diff-preview-body">{diffContent}</div>
+        <>
+          <div className="tool-diff-preview-body">{diffContent}</div>
+          {(isTruncated || previewClipped) && (
+            <p className="tool-diff-ellipsis" aria-label="More content omitted">…</p>
+          )}
+        </>
       ) : (
         <ScrollContainer className="tool-diff-scroll" aria-label="Code changes" tabIndex={0}>
           {diffContent}

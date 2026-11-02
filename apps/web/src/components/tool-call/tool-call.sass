@@ -130,7 +130,7 @@
 
 .tool-changes-preview
   height: auto
-  max-height: calc(var(--code-preview-lines) * 22px + 80px)
+  max-height: calc((var(--code-preview-lines) + 1) * 22px + 80px)
   overflow: clip
 
   .tool-diff
@@ -183,6 +183,14 @@
   padding: var(--space-sm) var(--space-lg)
   color: var(--color-text-tertiary)
   font-size: var(--font-size-xs)
+
+.tool-diff-ellipsis
+  flex: 0 0 auto
+  margin: 0
+  padding: 0 var(--space-lg)
+  color: var(--color-text-tertiary)
+  font-family: var(--font-family-code)
+  line-height: 22px
 
 @media (prefers-reduced-motion: reduce)
   .tool-call-heading-layer,
