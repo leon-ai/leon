@@ -44,10 +44,12 @@ import {
   shouldRunAdaptiveSecondPass
 } from '@@/server/src/core/memory-manager/qmd/qmd-retrieval'
 
+import { LEON_PROFILE_NAME } from '@@/server/src/leon-roots'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
-const QMD_INDEX_NAME = 'leon-memory'
+// Reuse Core's profile index instead of reconfiguring a shared search collection.
+const QMD_INDEX_NAME = `leon-memory-${LEON_PROFILE_NAME}`
 const CONVERSATION_DATABASE_FILENAME = 'conversations.sqlite'
 const DEFAULT_TOP_K = 12
 const DEFAULT_TOKEN_BUDGET = 480
