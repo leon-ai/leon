@@ -48,6 +48,8 @@ for (const kind of ['skill', 'experience'] as const) {
       await expect(contents).toContainText('Read the source files before making changes.')
       await expect(contents.locator('.code-view-line')).toHaveCount(CODE_PREVIEW_LINES)
       await expect(contents).not.toContainText('Verify the result before answering.')
+      await expect(contents.locator('.code-view-line').last()).toHaveText('…')
+      await expect(contents.locator('.code-view-ellipsis')).toHaveAttribute('aria-label', 'More content omitted')
       progress.content = `Using ${kind}: ${name}`
       await emit()
       await emit()
