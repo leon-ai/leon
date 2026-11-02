@@ -11,14 +11,10 @@ import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { resolveConfiguredLLMTarget } from '@/core/llm-manager/llm-routing'
 import type { ConversationSession } from '@/core/session-manager'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { listAgentScenarios, selectAgentScenarios } from '../../../scripts/agent-scenarios'
 
 const SELECTION = process.env['LEON_AGENT_REAL_SCENARIO']
-const SCENARIO_SUFFIX = '.scenario.ts'
-const SCENARIOS = (await fs.readdir(new URL('./', import.meta.url)))
-  .filter((name) => name.endsWith(SCENARIO_SUFFIX))
-  .map((name) => name.slice(0, -SCENARIO_SUFFIX.length))
-  .filter((name) => !SELECTION || SELECTION === '*' || SELECTION === name)
-  .sort()
+const SCENARIOS = selectAgentScenarios(listAgentScenarios(), SELECTION)
 const RESULT_PREFIX = '__AGENT_RESULT__'
 const PROGRESS_PREFIX = '__AGENT_PROGRESS__'
 const TIMEOUT_MS = 300_000
@@ -75,7 +71,7 @@ it.skipIf(!SELECTION).each(SCENARIOS)('%s', async (scenario) => {
   const testHome = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-agent-e2e-'))
   const directory = path.join('tmp', 'agent-scenarios')
   await fs.mkdir(directory, { recursive: true })
-  const evidencePath = path.join(directory, `${scenario}-${Date.now()}.log`)
+  const evidencePath = path.join(directory, `${scenario.split('/').join('--')}-${Date.now()}.log`)
   const child = execa(process.execPath, [
     '--import', 'tsx',
     'test/agent/e2e/run-agent-provider-scenario.ts',

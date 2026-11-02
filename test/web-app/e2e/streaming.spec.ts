@@ -4,6 +4,72 @@ import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-cont
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
 
+for (const kind of ['agent skill', 'experience'] as const) {
+  for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+    test(`updates one ${kind} timeline item from loaded to in use and restores it (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+      await page.emulateMedia({ reducedMotion })
+      await page.goto(SESSION_URL)
+      const name = kind === 'experience' ? 'expense-report' : 'coding'
+      const responseId = 'skill-response'
+      const createdAt = Date.now()
+      const progress = { id: `skill-activity:task:${kind}:fixture`,
+        content: `I loaded an ${kind}: ${name}.`, created_at: createdAt, icon_name: 'book-ai-line' }
+      let sequence = 0
+      const emit = (): Promise<void> => ui.emit([{
+        type: 'progress_message', sequence: ++sequence, session_id: SESSION_ID,
+        turn_id: 'skill-task', response_id: responseId, created_at: Date.now(),
+        data: { message: { ...progress } }
+      }])
+
+      await ui.emit([{
+        type: 'turn_status', sequence: ++sequence, session_id: SESSION_ID,
+        turn_id: 'skill-task', response_id: responseId, created_at: createdAt,
+        data: { status: 'accepted' }
+      }])
+      await emit()
+      const item = page.getByRole('region', { name: 'Leon’s activity', exact: true }).filter({ hasText: name })
+      await expect(item).toHaveCount(1)
+      await expect(item).toContainText(progress.content)
+      await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+      await expect(item.getByRole('button')).toHaveCount(0)
+      progress.content = `I'm using an ${kind}: ${name}.`
+      await emit()
+      await emit()
+      await expect(item).toHaveCount(1)
+      await expect(item).toContainText(progress.content)
+      await expect(item).not.toContainText(`loaded an ${kind}`)
+      for (const theme of ['light', 'dark']) {
+        await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+        if (reducedMotion === 'reduce') {
+          await page.setViewportSize({ width: 390, height: 844 })
+        }
+        await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+        await page.screenshot({ path: testInfo.outputPath(`skill-activity-${theme}.png`) })
+        if (reducedMotion === 'reduce') {
+          await page.setViewportSize({ width: 1_512, height: 982 })
+        }
+      }
+
+      ui.history.get(SESSION_ID)!.push({
+        who: 'leon', messageId: responseId, message: 'The result is verified.',
+        sentAt: createdAt + 1_000, isAddedToHistory: true,
+        agentResponseTrace: {
+          id: responseId, planSteps: [], toolCalls: [],
+          progressMessages: [{ id: progress.id, content: progress.content, createdAt, iconName: progress.icon_name }]
+        }
+      })
+      await page.reload()
+      const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
+      await work.getByRole('button').first().click()
+      await expect(item).toHaveCount(1)
+      await expect(item).toContainText(progress.content)
+      await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+    })
+  }
+}
+
 for (const withPlan of [false, true]) {
   test(`updates post-answer compaction independently of turn and plan state (plan: ${withPlan})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion: withPlan ? 'reduce' : 'no-preference' })

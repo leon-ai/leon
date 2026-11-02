@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-10-31T13:15:11+08:00
+- Generated at: 2026-11-02T00:39:19+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -68,6 +68,11 @@
 - Recall starts with QMD retrieval, then reranks and may run adaptive follow-up passes when the first result looks weak.
 - Read priority stays grounded: context for environment/runtime facts, memory for personal history/preferences, raw session search for exact prior evidence, and shell as a last resort.
 - Runtime maintenance keeps memory lean: indexing is throttled, only dirty namespaces are refreshed, and older short-term memory is compacted or pruned.
+## Learning & Experience
+- Leon learns through memory for facts, the self-model for service habits, and experiences for reusable procedures.
+- Post-turn maintenance learns verified procedures and stores them under each profile's skills/agent/experiences as SKILL.md files with a SQLite index, separate from built-in and owner-installed skills.
+- A small shortlist matches the current task; full procedures load on demand. Retrieval uses local matching, without QMD or an extra LLM call.
+- The limit is 196 experiences. Retention uses last use, or creation time when unused, and protects active procedures. Loading and use have separate counters.
 ## Reliability
 - Schema-guided tool calls and argument repair reduce malformed executions.
 - Duplicate-input guards and observation-driven recovery reduce repeated bad calls while preserving successful progress.

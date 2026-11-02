@@ -21,6 +21,7 @@ export function serializeAgentTrace(
             id: message.id,
             content: message.content,
             created_at: message.createdAt,
+            ...(message.iconName ? { icon_name: message.iconName } : {}),
             ...(message.planStepId !== undefined ? { plan_step_id: message.planStepId } : {})
           }))
         }
@@ -96,6 +97,7 @@ export function deserializeAgentTrace(
             id: message.id,
             content: message.content,
             createdAt: message.created_at,
+            ...(message.icon_name ? { iconName: message.icon_name } : {}),
             ...(message.plan_step_id !== undefined ? { planStepId: message.plan_step_id } : {})
           }))
         }

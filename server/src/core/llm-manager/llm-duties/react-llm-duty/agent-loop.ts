@@ -1,7 +1,9 @@
-import { ToolCompletionReview, ToolConcurrency } from '@/types'
+import { ToolCompletionReview, ToolConcurrency, SkillOrigin } from '@/types'
 import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
+import { EXPERIENCE_SEARCH_TOOL_NAME } from '@/core/experience-manager'
+import type { ExperienceCard } from '@/core/experience-manager'
 import {
   CONNECTION_SETUP_TOOL_NAME,
   setupConnection,
@@ -136,6 +138,12 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - An execution_budget is a fixed caller deadline, not a renewable model wait. Use its finishing reserve for pending writes, required checks and the answer; stop optional exploration in the finishing phase. Report unfinished work honestly if the deadline prevents completion.
 - Call request_clarification alone, after consuming available tool results, with one concrete question only for required information, authorization, or owner action that available tools cannot resolve. Do not use it for draft text or a routine technical failure that tools can address.
 </agent_loop>
+
+<experience>
+- Before choosing a nontrivial operating or recovery procedure, examine experience_context. Load an applicable experience: ID with load_agent_skill alongside independent toolkit loads, before rediscovering the procedure through tools.
+- The bounded shortlist is not the full archive. If it has no applicable method and search_experiences is available, search concrete task or failure details and load a relevant result. Skip this for routine factual answers and ordinary conversation; reuse already loaded guidance.
+- Experience is conditional guidance, not current facts. Check its preconditions against observations, verify the outcome, and follow current owner instructions and installed skills first.
+</experience>
 
 <coding>
 - Handle coding directly. Before repository edits, load the coding Agent Skill when enabled, read applicable repository rules and run their required baseline checks; an interactive reproduction does not replace a required failing test. Delegate only when the owner requests or prefers an external coding agent.
@@ -391,8 +399,9 @@ export interface AgentLoopParams {
     toolCallId?: string
   ) => Promise<AgentFunctionExecutionResult>
   loadAgentSkill: (skillId: string) => Promise<AgentSkillContext | null>
+  searchExperiences?: (query: string) => ExperienceCard[]
   loadToolkitContext?: (toolkitId: string) => string
-  onAgentSkillLoaded?: (context: AgentSkillContext) => void
+  onAgentSkillLoaded?: (context: AgentSkillContext) => void | Promise<void>
   onPlanUpdated?: (steps: TrackedPlanStep[]) => void
   onProgressMessage?: (message: string) => Promise<void> | void
   onInspectionCheckpoint?: (
@@ -2267,6 +2276,14 @@ async function executeAgentToolCall(
     }
   }
 
+  if (toolCall.function.name === EXPERIENCE_SEARCH_TOOL_NAME && params.searchExperiences) {
+    const query = parseStringArgument(toolCall.function.arguments, 'query')
+    return {
+      content: JSON.stringify(params.searchExperiences(query ?? '')),
+      trackedSteps
+    }
+  }
+
   if (toolCall.function.name === AGENT_SKILL_TOOL_NAME) {
     const skillId = parseStringArgument(toolCall.function.arguments, 'skill_id')
     if (!skillId) {
@@ -2292,7 +2309,13 @@ async function executeAgentToolCall(
       }
     }
 
-    params.onAgentSkillLoaded?.(context)
+    await params.onAgentSkillLoaded?.(context)
+    if (context.origin === SkillOrigin.Experience) {
+      return {
+        content: `Experience loaded: ${context.id}. Its complete procedure is supplied in active_experiences runtime context. Verify applicability before using it.`,
+        trackedSteps
+      }
+    }
     return {
       content: [
         `Agent Skill loaded: ${context.name}`,
@@ -2668,13 +2691,13 @@ function createAgentSkillTool(): OpenAITool {
     function: {
       name: AGENT_SKILL_TOOL_NAME,
       description:
-        'Load the complete instructions for one relevant Agent Skill before following its specialized workflow.',
+        'Load the complete instructions for a relevant Agent Skill or learned experience before following its specialized workflow.',
       parameters: {
         type: 'object',
         properties: {
           skill_id: {
             type: 'string',
-            description: 'Exact Agent Skill id from the available skills list.'
+            description: 'Exact Agent Skill id from the available skills list, or experience: ID from experience_context or search_experiences.'
           }
         },
         required: ['skill_id'],

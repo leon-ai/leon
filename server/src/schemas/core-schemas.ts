@@ -127,6 +127,7 @@ export const configSchemaObject = strictObject({
     ),
     pulse_enabled: Type.Boolean(),
     private_diary_enabled: Type.Boolean(),
+    experience_enabled: Type.Optional(Type.Boolean()),
     progressive_toolkit_loading: Type.Boolean()
   }),
   context: strictObject({

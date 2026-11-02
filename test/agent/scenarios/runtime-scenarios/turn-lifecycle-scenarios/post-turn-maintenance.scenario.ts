@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { RealAgentScenario } from '../e2e/run-agent-provider-scenario'
+import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 
 const scenario: RealAgentScenario = {
   async run({ profilePath, runTurn }) {
