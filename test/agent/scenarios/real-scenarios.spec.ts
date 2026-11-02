@@ -36,7 +36,7 @@ function stopScenarioProcesses(pid: number | undefined): void {
 }
 
 // Only the scenario command opts in; broad Vitest runs never make paid calls.
-it.skipIf(!SELECTION).each(SCENARIOS)('%s', async (scenario) => {
+it.skipIf(!SELECTION).concurrent.each(SCENARIOS)('%s', async (scenario) => {
   const profile = getProfilePaths()
   const indexPath = path.join(profile.sessions, 'index.json')
   const index = await fs.readFile(indexPath, 'utf8').then(

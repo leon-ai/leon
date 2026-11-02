@@ -23,6 +23,8 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, '**/tmp/**', 'test/web-app/**'],
     fileParallelism: true,
     maxWorkers: 4,
+    // Real scenarios use isolated child runtimes; bound paid calls and native resources.
+    maxConcurrency: 2,
     disableConsoleIntercept: true,
     restoreMocks: true,
     clearMocks: true,
