@@ -155,6 +155,22 @@ describe('web conversation runtime', () => {
     const detail = await request('GET', `/api/v1/sessions/${second}?limit=1`)
     expect(detail.json().messages).toEqual([])
     expect(detail.json().event_cursor).toBeTypeOf('number')
+    await runWithProfileContext({ profileName: profile }, async () => {
+      for (const [messageId, message] of [['opening', 'Opening.'], ['ending', 'Closing.']]) {
+        CONVERSATION_REPOSITORY.upsertMessage(first, {
+          who: 'owner', messageId, message, isAddedToHistory: true
+        })
+      }
+    })
+    const source = await request('GET', `/api/v1/sessions/${first}/text?limit=8`)
+    expect(source.json().data.messages.map((message: { text: string }) => message.text)).toEqual(['Opening.'])
+    const cursor = encodeURIComponent(source.json().data.nextCursor)
+    const ending = await request('GET', `/api/v1/sessions/${first}/text?limit=8&cursor=${cursor}`)
+    expect(ending.json().data.messages.map((message: { text: string }) => message.text)).toEqual(['Closing.'])
+    expect(ending.json().data.nextCursor).toBeNull()
+    expect((await request('GET', `/api/v1/sessions/${second}/text?cursor=${cursor}`)).statusCode).toBe(400)
+    expect((await request('GET', `/api/v1/sessions/${first}/text?limit=0`)).statusCode).toBe(400)
+    expect((await request('GET', '/api/v1/sessions/missing/text')).statusCode).toBe(404)
     expect(fixture.executions).toHaveLength(0)
     await request('DELETE', `/api/v1/sessions/${first}?compact=true`)
     expect((await request('GET', `/api/v1/sessions/${first}`)).statusCode).toBe(404)

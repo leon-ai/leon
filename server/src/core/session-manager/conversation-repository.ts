@@ -20,7 +20,9 @@ import {
 } from '@@/bridges/runtime/contracts/conversation-archive'
 import type {
   ArchiveMessagePage,
-  ArchiveMessageReadOptions
+  ArchiveMessageReadOptions,
+  ArchiveSessionPage,
+  ArchiveSessionReadOptions
 } from '@@/bridges/runtime/contracts/conversation-archive'
 import { TOOL_CONTENT_PREVIEW_CHARACTERS } from './tool-content-contract'
 import type { ToolCallContents, ToolContentPart } from './tool-content-contract'
@@ -68,6 +70,14 @@ interface SessionCursor {
   id: string
 }
 
+interface ArchiveCursor {
+  sessionId: string
+  role: ArchiveSessionPage['role']
+  sequence: number
+  offset: number
+  through: number
+}
+
 function pageSize(limit = DEFAULT_PAGE_SIZE): number {
   if (!Number.isInteger(limit) || limit < 1 || limit > MAXIMUM_PAGE_SIZE) {
     throw new Error(`Page size must be between 1 and ${MAXIMUM_PAGE_SIZE}.`)
@@ -88,6 +98,31 @@ function parseSessionCursor(cursor?: string): SessionCursor | null {
   }
 
   return value as SessionCursor
+}
+
+function parseArchiveCursor(
+  cursor: string,
+  sessionId: string,
+  role: ArchiveSessionPage['role']
+): ArchiveCursor {
+  try {
+    const value = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8')
+    ) as ArchiveCursor
+
+    if (
+      value?.sessionId === sessionId && value.role === role &&
+      Number.isSafeInteger(value.sequence) && value.sequence > 0 &&
+      Number.isSafeInteger(value.offset) && value.offset >= 0 &&
+      Number.isSafeInteger(value.through) && value.through >= value.sequence
+    ) {
+      return value
+    }
+  } catch {
+    // Invalid continuation data must never silently restart or select another source.
+  }
+
+  throw new Error('Invalid archive cursor.')
 }
 
 /**
@@ -506,6 +541,74 @@ export class ConversationRepository {
       offset,
       nextOffset: offset + limit < totalCharacters ? offset + limit : null,
       totalCharacters
+    }
+  }
+
+  /**
+   * Reads a selected conversation in source order, including documents supplied
+   * across messages, without transferring private traces or its entire history.
+   */
+  public readSessionText(
+    sessionId: string,
+    options: ArchiveSessionReadOptions = {}
+  ): ArchiveSessionPage | null {
+    const requested = options.limit ?? DEFAULT_ARCHIVE_PAGE_CHARACTERS
+    const role = options.role ?? 'owner'
+
+    if (!Number.isSafeInteger(requested) || requested < 1) {
+      throw new Error('Archive page limits must be positive integers.')
+    }
+    if (role !== 'owner' && role !== 'leon' && role !== 'both') {
+      throw new Error('Invalid archive role.')
+    }
+
+    const cursor = options.cursor
+      ? parseArchiveCursor(options.cursor, sessionId, role) : null
+    if (!this.db.prepare('SELECT 1 FROM conversation_sessions WHERE id = ?').get(sessionId)) {
+      return null
+    }
+
+    // Pin the source boundary so new messages cannot extend a read indefinitely.
+    const through = cursor?.through ?? Number(this.db.prepare(`SELECT max(sequence) AS sequence
+      FROM conversation_messages WHERE session_id = ? AND visible = 1
+        AND (? = 'both' OR role = ?) AND role IN ('owner', 'leon') AND content != ''`)
+      .get(sessionId, role, role)?.['sequence'] ?? 0)
+    const rows = this.db.prepare(`SELECT id, sequence FROM conversation_messages
+      WHERE session_id = ? AND visible = 1 AND role IN ('owner', 'leon')
+        AND (? = 'both' OR role = ?) AND content != '' AND sequence >= ? AND sequence <= ?
+      ORDER BY sequence LIMIT ?`)
+      .all(sessionId, role, role, cursor?.sequence ?? 0, through, MAXIMUM_PAGE_SIZE + 1)
+    const messages: ArchiveMessagePage[] = []
+    let remaining = Math.min(requested, MAXIMUM_ARCHIVE_PAGE_CHARACTERS)
+    let next: ArchiveCursor | null = null
+
+    for (const [index, row] of rows.entries()) {
+      const sequence = Number(row['sequence'])
+      const offset = sequence === cursor?.sequence ? cursor.offset : 0
+      if (remaining === 0 || index === MAXIMUM_PAGE_SIZE) {
+        next = { sessionId, role, sequence, offset, through }
+        break
+      }
+      const page = this.readMessageText(sessionId, String(row['id']), {
+        offset, limit: remaining
+      })
+      if (!page) {
+        continue
+      }
+      messages.push(page)
+      remaining -= Array.from(page.text).length
+
+      if (page.nextOffset !== null) {
+        next = { sessionId, role, sequence, offset: page.nextOffset, through }
+        break
+      }
+    }
+
+    return {
+      sessionId,
+      role,
+      nextCursor: next ? Buffer.from(JSON.stringify(next)).toString('base64url') : null,
+      messages
     }
   }
 
