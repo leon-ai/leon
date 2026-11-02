@@ -2,10 +2,14 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 
 import { ConversationDetailsProvider, ConversationDetailsContext } from '@/data/conversation-details'
 import type { FeedEntry, FeedToolCall, LeonFeedActivity } from '@/data/feed'
+import type { AgentSkillSnapshot } from '../../../../../server/src/core/llm-manager/agent-progress-contract'
+import { CodeView } from '@/components/code-view'
 import { ToolDetailsDialog } from '@/components/tool-call/tool-details-dialog'
+import { ActivityDetailsDialog } from './activity-details-dialog'
 
 enum ActivityDetailsKind {
-  Tool = 'tool'
+  Tool = 'tool',
+  Skill = 'skill'
 }
 
 interface ToolSelection {
@@ -16,7 +20,13 @@ interface ToolSelection {
   opener: HTMLElement | null
 }
 
-type ActivitySelection = ToolSelection
+interface SkillSelection {
+  kind: ActivityDetailsKind.Skill
+  skill: AgentSkillSnapshot
+  opener: HTMLElement | null
+}
+
+type ActivitySelection = ToolSelection | SkillSelection
 
 const ActivityDetailsContext = createContext<((selection: ActivitySelection) => void) | null>(null)
 
@@ -77,6 +87,16 @@ export function ActivityDetailsProvider({ entries, sessionId, children }: {
             onClose={() => setIsOpen(false)} onAfterClose={handleAfterClose} />
         </ConversationDetailsProvider>
       )}
+      {selection?.kind === ActivityDetailsKind.Skill && (
+        <ActivityDetailsDialog open={isOpen} title={selection.skill.name} path={`${selection.skill.name}/SKILL.md`}
+          content={selection.skill.instructions} contentName="SKILL.md" downloadFilename="SKILL.md"
+          toolbar={<span className="activity-details-title">SKILL.md</span>}
+          onClose={() => setIsOpen(false)} onAfterClose={handleAfterClose}>
+          <div className="activity-details-reading-pane">
+            <CodeView text={selection.skill.instructions} language="markdown" label="SKILL.md" />
+          </div>
+        </ActivityDetailsDialog>
+      )}
     </ActivityDetailsContext>
   )
 }
@@ -92,3 +112,12 @@ export function useOpenToolDetails(toolCall: FeedToolCall, technicalTitle: strin
     opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
 }
 
+/**
+ * Keeps the loaded guidance inspectable when its feed row is unmounted.
+ */
+export function useOpenSkillDetails(skill: AgentSkillSnapshot): () => void {
+  const open = useContext(ActivityDetailsContext)
+
+  return () => open?.({ kind: ActivityDetailsKind.Skill, skill,
+    opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
+}

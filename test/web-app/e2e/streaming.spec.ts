@@ -1,19 +1,26 @@
+import fs from 'node:fs/promises'
 import type { ElementHandle, Locator } from '@playwright/test'
 import type { ConversationEvent, ConversationRecord } from '../../../apps/web/src/data/conversation'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
+import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 
 for (const kind of ['skill', 'experience'] as const) {
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-    test(`updates one ${kind} timeline item from loaded to in use and restores it (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    test(`updates, inspects and restores one ${kind} activity (${reducedMotion})`, async ({ page, ui }, testInfo) => {
       await page.emulateMedia({ reducedMotion })
       await page.goto(SESSION_URL)
       const name = kind === 'experience' ? 'expense-report' : 'coding'
       const responseId = 'skill-response'
       const createdAt = Date.now()
+      const skill = { name, instructions: [
+        `# ${name}`, '', 'Read the source files before making changes.',
+        ...Array.from({ length: 64 }, (_, index) => `Inspect source ${index + 1} and record its behavior.`),
+        'Verify the result before answering.'
+      ].join('\n') }
       const progress = { id: `skill-activity:task:${kind}:fixture`,
-        content: `Loaded ${kind}: ${name}`, created_at: createdAt, icon_name: 'book-ai-line' }
+        content: `Loaded ${kind}: ${name}`, created_at: createdAt, icon_name: 'book-ai-line', skill }
       let sequence = 0
       const emit = (): Promise<void> => ui.emit([{
         type: 'progress_message', sequence: ++sequence, session_id: SESSION_ID,
@@ -31,13 +38,28 @@ for (const kind of ['skill', 'experience'] as const) {
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
       await expect(item.locator('.ri-book-ai-line')).toBeVisible()
-      await expect(item.getByRole('button')).toHaveCount(0)
+      const disclosure = item.getByRole('button', { name: progress.content, exact: true })
+      const contents = item.getByRole('region', { name: `${name}/SKILL.md`, exact: true })
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+      await expect(contents).toHaveCount(0)
+      await disclosure.focus()
+      await page.keyboard.press('Enter')
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+      await expect(contents).toContainText('Read the source files before making changes.')
+      await expect(contents.locator('.code-view-line')).toHaveCount(CODE_PREVIEW_LINES)
+      await expect(contents).not.toContainText('Verify the result before answering.')
       progress.content = `Using ${kind}: ${name}`
       await emit()
       await emit()
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
       await expect(item).not.toContainText(`Loaded ${kind}`)
+      await expect(item.getByRole('button', { name: progress.content, exact: true })).toHaveAttribute('aria-expanded', 'true')
+      await expect(contents).toContainText('Read the source files before making changes.')
+      const details = item.getByRole('button', { name: 'View details', exact: true })
+      await expect(details.locator('.button-label')).toHaveCount(0)
+      const dialog = page.getByRole('dialog', { name, exact: true })
+      const complete = dialog.getByRole('region', { name: 'SKILL.md', exact: true })
       for (const theme of ['light', 'dark']) {
         await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
@@ -46,26 +68,78 @@ for (const kind of ['skill', 'experience'] as const) {
           await page.setViewportSize({ width: 390, height: 844 })
         }
         await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+        await expect(item.locator('.activity-details-frame')).toBeVisible()
         await page.screenshot({ path: testInfo.outputPath(`skill-activity-${theme}.png`) })
+        await details.click()
+        await expect(dialog).toBeVisible()
+        await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused()
+        await expect(complete).toContainText(`# ${name}`)
+        await complete.evaluate((element) => { element.scrollTop = element.scrollHeight })
+        await expect(complete).toContainText('Verify the result before answering.')
+        expect(await complete.locator('.code-view-line').count()).toBeLessThan(40)
+        const viewport = page.viewportSize()!
+        const bounds = (await dialog.boundingBox())!
+        expect(bounds.width).toBeLessThanOrEqual(viewport.width - 28)
+        expect(bounds.y + bounds.height).toBeLessThan(viewport.height)
+        await page.screenshot({ path: testInfo.outputPath(`skill-dialog-${theme}.png`) })
+        await page.keyboard.press('Escape')
+        await expect(dialog).toHaveCount(0)
+        await expect(details).toBeFocused()
         if (reducedMotion === 'reduce') {
           await page.setViewportSize({ width: 1_512, height: 982 })
         }
       }
 
-      ui.history.get(SESSION_ID)!.push({
+      await details.click()
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+      await dialog.getByRole('button', { name: 'Copy SKILL.md', exact: true }).click()
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(skill.instructions)
+      const downloadEvent = page.waitForEvent('download')
+      await dialog.getByRole('button', { name: 'Download SKILL.md', exact: true }).click()
+      const download = await downloadEvent
+      expect(download.suggestedFilename()).toBe('SKILL.md')
+      expect(await fs.readFile((await download.path())!, 'utf8')).toBe(skill.instructions)
+
+      const saved: ConversationRecord = {
         who: 'leon', messageId: responseId, message: 'The result is verified.',
         sentAt: createdAt + 1_000, isAddedToHistory: true,
         agentResponseTrace: {
           id: responseId, planSteps: [], toolCalls: [],
-          progressMessages: [{ id: progress.id, content: progress.content, createdAt, iconName: progress.icon_name }]
+          progressMessages: [{ id: progress.id, content: progress.content, createdAt, iconName: progress.icon_name, skill }]
         }
-      })
+      }
+      ui.history.get(SESSION_ID)!.push(saved)
+      await ui.emit([
+        { type: 'final_answer', sequence: ++sequence, session_id: SESSION_ID,
+          turn_id: 'skill-task', response_id: responseId, created_at: createdAt + 1_000,
+          data: { content: saved.message, response_trace: saved.agentResponseTrace } },
+        { type: 'turn_status', sequence: ++sequence, session_id: SESSION_ID,
+          turn_id: 'skill-task', response_id: responseId, created_at: createdAt + 1_001,
+          data: { status: 'completed' } }
+      ])
+      await expect(page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
+        .getByRole('button').first()).toHaveAttribute('aria-expanded', 'false')
+      await expect(dialog).toBeVisible()
+      await expect(contents).toHaveCount(0)
+      await expect(complete).toContainText(`# ${name}`)
+      await page.keyboard.press('Escape')
+      await expect(dialog).toHaveCount(0)
       await page.reload()
       const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
       await work.getByRole('button').first().click()
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
       await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+      const restored = item.getByRole('button', { name: progress.content, exact: true })
+      await expect(restored).toHaveAttribute('aria-expanded', 'false')
+      await restored.click()
+      await expect(contents).toContainText('Read the source files before making changes.')
+      await details.click()
+      await expect(complete).toContainText(`# ${name}`)
+      await page.keyboard.press('Escape')
+      await expect(dialog).toHaveCount(0)
+      await restored.click()
+      await expect(contents).toHaveCount(0)
     })
   }
 }

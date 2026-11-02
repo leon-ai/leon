@@ -13,6 +13,7 @@ import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration
 import { ArtifactAttachments } from '@/components/artifact-attachments'
 import { BonusResponse } from '@/components/bonus-response'
 import { FinalAnswer } from '@/components/final-answer'
+import { SkillDetails } from '@/components/activity-details/skill-details'
 import { ProcessGroup } from '@/components/process-group'
 import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
 import { TaskList } from '@/components/task-list'
@@ -269,7 +270,11 @@ function renderActivity(activity: LeonFeedActivity) {
           ariaLabel="Leon’s activity"
           startedAt={activity.startedAt}
           indicator={<i className={`ri-${activity.iconName}`} aria-hidden="true" />}
-        />
+        >
+          {activity.skill ? (
+            <SkillDetails skill={activity.skill} />
+          ) : undefined}
+        </ProcessGroup>
       )
     }
     return (

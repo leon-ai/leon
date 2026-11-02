@@ -1,4 +1,5 @@
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
+import type { AgentProgressMessage } from '../../../../server/src/core/llm-manager/agent-progress-contract'
 import type { InferenceActivity, TurnTiming } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import type { FeedPlanStepStatus, FeedToolCallStatus, JsonValue } from './feed'
 import type { ConversationSession } from './sessions'
@@ -39,7 +40,7 @@ export interface ConversationTrace {
   id?: string
   reasoningSummary?: string
   reasoning?: { id: string, text: string, phase: string, startedAt: number, planStepId?: string | null }[]
-  progressMessages?: { id: string, content: string, createdAt: number, planStepId?: string | null, iconName?: string }[]
+  progressMessages?: AgentProgressMessage[]
   planSteps: { id: string, label: string, status: FeedPlanStepStatus }[]
   planTransitions?: { id: string, label: string, status: FeedPlanStepStatus, changedAt: number }[]
   toolCalls: ConversationTool[]
