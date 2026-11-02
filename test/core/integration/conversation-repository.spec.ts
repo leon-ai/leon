@@ -136,6 +136,52 @@ describe('profile conversation archive', () => {
     expect(() => repository.readMessageText('report', 'source', { offset: text.length + 1 })).toThrow('beyond')
   })
 
+  it('reads ordered source fragments across messages with bounded text and stable continuation', () => {
+    const repository = open()
+    repository.saveSession(session('book'))
+    const sources = ['Opening 你🙂.', 'Middle chapter.', 'Closing decision.']
+    for (const [index, message] of sources.entries()) {
+      repository.upsertMessage('book', {
+        who: 'owner', message, messageId: `part-${index}`, isAddedToHistory: true
+      })
+      repository.upsertMessage('book', {
+        who: 'leon', message: 'Acknowledged.', messageId: `reply-${index}`, isAddedToHistory: true
+      })
+    }
+    repository.upsertMessage('book', {
+      who: 'leon', message: 'Private reasoning', messageId: 'hidden', isAddedToHistory: false
+    })
+    const first = repository.readSessionText('book', { limit: 5 })!
+    expect(first.messages).toHaveLength(1)
+    expect(first.messages[0]?.text).toBe('Openi')
+    expect(first.nextCursor).toBeTypeOf('string')
+    repository.upsertMessage('book', {
+      who: 'owner', message: 'A later revision.', messageId: 'later', isAddedToHistory: true
+    })
+    const fragments = [...first.messages]
+    let cursor = first.nextCursor
+    while (cursor !== null) {
+      const page = repository.readSessionText('book', { cursor, limit: 5 })!
+      expect(page.messages.reduce((sum, message) => sum + Array.from(message.text).length, 0))
+        .toBeLessThanOrEqual(5)
+      fragments.push(...page.messages)
+      cursor = page.nextCursor
+    }
+    expect(fragments.every((message) => message.who === 'owner')).toBe(true)
+    expect(fragments.map((message) => message.text).join('')).toBe(sources.join(''))
+    for (const [index, text] of sources.entries()) {
+      expect(fragments.filter((message) => message.messageId === `part-${index}`)
+        .map((message) => message.text).join('')).toBe(text)
+    }
+    expect(repository.readSessionText('missing')).toBeNull()
+    expect(open('another-profile').readSessionText('book')).toBeNull()
+    repository.saveSession(session('other'))
+    expect(() => repository.readSessionText('other', { cursor: first.nextCursor! })).toThrow('cursor')
+    expect(() => repository.readSessionText('book', { cursor: first.nextCursor!, role: 'both' })).toThrow('cursor')
+    expect(() => repository.readSessionText('book', { cursor: 'invalid' })).toThrow('cursor')
+    expect(() => repository.readSessionText('book', { limit: 0 })).toThrow('limit')
+  })
+
   it('imports legacy sessions once, preserves their files, and survives reopening', async () => {
     const root = path.join(directory, 'owner', 'sessions')
     await fs.mkdir(path.join(root, 'legacy'), { recursive: true })

@@ -50,6 +50,11 @@ const archiveReadQuerySchema = Type.Object({
   offset: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER - 1 })),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAXIMUM_ARCHIVE_PAGE_CHARACTERS }))
 }, { additionalProperties: false })
+const archiveSessionQuerySchema = Type.Object({
+  cursor: Type.Optional(Type.String({ maxLength: 512 })),
+  limit: archiveReadQuerySchema.properties.limit,
+  role: archiveSearchBodySchema.properties.role
+}, { additionalProperties: false })
 const createSessionBodySchema = Type.Object({ id: Type.Optional(Type.String({ format: 'uuid' })) })
 
 const updateSessionSchema = {
@@ -157,6 +162,25 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
       }
     }
   )
+
+  fastify.get<{
+    Params: Static<typeof sessionParamsSchema>
+    Querystring: Static<typeof archiveSessionQuerySchema>
+  }>(`/api/${options.apiVersion}/sessions/:${SESSION_ID_PARAM_NAME}/text`, {
+    schema: { params: sessionParamsSchema, querystring: archiveSessionQuerySchema }
+  }, async (request, reply) => {
+    try {
+      const data = CONVERSATION_REPOSITORY.readSessionText(
+        request.params.session_id, request.query
+      )
+
+      return data
+        ? reply.send({ success: true, data })
+        : reply.code(404).send({ success: false, message: 'Conversation not found.' })
+    } catch (error) {
+      return reply.code(400).send({ success: false, message: String(error) })
+    }
+  })
 
   fastify.get<{
     Params: Static<typeof sessionParamsSchema>
