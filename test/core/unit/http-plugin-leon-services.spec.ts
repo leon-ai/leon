@@ -789,6 +789,7 @@ describe('HTTP plugin Leon services', () => {
   })
 
   it('streams agent commentary and includes it in the final trace', async () => {
+    const skill = { name: 'coding', instructions: 'Read the source before making changes.' }
     const inferences = [{
       attemptId: 'attempt', startedAt: 1_000, provider: 'openai', duty: 'react',
       phase: 'agent', transport: 'http', outcome: 'completed', elapsedMs: 900,
@@ -814,7 +815,7 @@ describe('HTTP plugin Leon services', () => {
       ) => void
       onProgress({
         type: 'progress_message',
-        message: { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000, iconName: 'book-ai-line' }
+        message: { id: 'progress-1', content: 'Loaded skill: coding', createdAt: 1_000, iconName: 'book-ai-line', skill }
       })
       onProgress({
         type: 'tool_call',
@@ -845,7 +846,7 @@ describe('HTTP plugin Leon services', () => {
       (event) => events.push(event)
     )
     unsubscribe()
-    const progress = { id: 'progress-1', content: 'Inspecting the issue.', created_at: 1_000, icon_name: 'book-ai-line' }
+    const progress = { id: 'progress-1', content: 'Loaded skill: coding', created_at: 1_000, icon_name: 'book-ai-line', skill }
     expect(events.find((event) => event['type'] === 'progress_message')).toMatchObject({
       turn_id: 'turn-1', response_id: 'turn-1:leon', data: { message: progress }
     })

@@ -186,6 +186,7 @@ export async function runAgent(
                 id: event.message.id,
                 content: event.message.content,
                 created_at: event.message.createdAt,
+                ...(event.message.skill ? { skill: event.message.skill } : {}),
                 ...(event.message.iconName ? { icon_name: event.message.iconName } : {}),
                 ...(event.message.planStepId !== undefined ? { plan_step_id: event.message.planStepId } : {})
               }
