@@ -163,9 +163,16 @@ function renderRecallPrompt(result: RecallResult): string {
       const sourceLabel = hit.sourcePath
         ? path.basename(hit.sourcePath)
         : hit.title || hit.namespace
-      const provenance = hit.sourceType ? `; ${hit.sourceType}` : ''
-      lines.push(`${index + 1}. [${sourceLabel}${provenance}] ${hit.content}`)
+      const provenance = hit.sourceType
+        ? `; ${hit.sourceType}; id=${hit.itemId}; source=${hit.sourceRef || 'unknown'}`
+        : ''
+      const coverage = hit.truncated || hit.excerpted ? '; excerpt' : ''
+      lines.push(`${index + 1}. [${sourceLabel}${provenance}${coverage}] ${hit.content}`)
     }
+  }
+
+  if (result.omittedCandidateCount) {
+    lines.push(`Additional retrieved candidates omitted: ${result.omittedCandidateCount}. Expand required evidence before claiming complete coverage.`)
   }
 
   return lines.join('\n')
@@ -821,6 +828,7 @@ export default class MemoryManager {
         content: normalizeContent(hit.content),
         bm25Score: hit.score,
         createdAt: record?.createdAt || 0,
+        excerpted: record ? normalizeContent(hit.content) !== normalizeContent(record.content) : false,
         sourcePath: hit.path || null,
         ...(record ? { sourceType: record.sourceType, sourceRef: record.sourceRef } : {})
       }]
@@ -935,7 +943,8 @@ export default class MemoryManager {
       return {
         fittedHit: {
           ...hit,
-          content: truncatedContent
+          content: truncatedContent,
+          truncated: true
         },
         tokens: truncatedEstimate,
         truncated: true
@@ -1083,6 +1092,7 @@ export default class MemoryManager {
 
     const result: RecallResult = {
       hits: selectedHits,
+      omittedCandidateCount: hits.filter((hit) => !selectedChunkIds.has(hit.chunkId)).length,
       facts,
       promptText: '',
       usedTokenEstimate

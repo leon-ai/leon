@@ -93,12 +93,15 @@ export interface RecallHit {
   bm25Score: number
   rerankScore?: number
   createdAt: number
+  excerpted?: boolean
+  truncated?: boolean
   sourcePath?: string | null
   sourceType?: MemorySourceType
   sourceRef?: string | null
 }
 
 export interface RecallResult {
+  omittedCandidateCount?: number
   hits: RecallHit[]
   facts: Array<{
     itemId: string

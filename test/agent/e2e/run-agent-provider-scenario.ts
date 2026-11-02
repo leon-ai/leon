@@ -513,7 +513,7 @@ async function main(): Promise<void> {
     : null
   const input = scenario.buildInput(codingFixture?.root || tempAssetPath)
   const toolCalls: AgentTurnResult['toolCalls'] = []
-  const toolCallSessions = new Map<AgentTurnResult['toolCalls'][number], string | undefined>()
+  const toolCallSessions = new Map<AgentTurnResult['toolCalls'][number], ReturnType<typeof getActiveConversationSessionId>>()
   type ExecuteTool = typeof TOOL_EXECUTOR.executeTool
   type ToolExecutionInput = Parameters<ExecuteTool>[0]
   type ToolExecutionResult = Awaited<ReturnType<ExecuteTool>>
