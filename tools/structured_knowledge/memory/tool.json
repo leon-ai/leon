@@ -65,6 +65,13 @@
                 "type": "integer",
                 "minimum": 0,
                 "description": "Character offset for a selected-record page. Continue from nextOffset."
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "temporary"
+                ],
+                "description": "Read relevant active temporary circumstances directly from SQLite, including facts omitted from the injected snapshot. Bypasses QMD."
               }
             },
             "additionalProperties": false
@@ -74,7 +81,7 @@
           "query"
         ]
       },
-      "progressive_guidance": "Recall relevant memories for a query using Leon's memory system. Keep the query short and semantically close to the user's wording. Prefer concrete entities or relationships already mentioned. Avoid long speculative keyword lists. Results include stable memory IDs and source provenance. Use the relevant ID to correct or forget an entry; verify inferred memories against their source before treating them as owner statements. Search results are bounded excerpts: inspect excerpted, truncated and omittedCandidateCount; these describe retrieved candidates, not exhaustive archive coverage. For totals or handoffs, reconcile distinct source events across conversations and count duplicate receipts only once. For personalized advice, apply relevant preferences and constraints. Expand only required incomplete evidence with options.itemIds, then page with offset=nextOffset until sufficient; selected-ID reads use current database records without QMD. createdAt/updatedAt are record timestamps, not necessarily event dates. Search another concrete facet or raw sessions when relevant evidence is still missing; do not repeat an unchanged search once the requested scope is covered. Resolve conflicting facts using the latest applicable owner evidence for the same entity, relationship and scope; a historical mention does not replace a current fact."
+      "progressive_guidance": "Recall relevant memories for a query using Leon's memory system. Keep the query short and semantically close to the user's wording. Prefer concrete entities or relationships already mentioned. Avoid long speculative keyword lists. Results include stable memory IDs and source provenance. Use the relevant ID to correct or forget an entry; verify inferred memories against their source before treating them as owner statements. Search results are bounded excerpts: inspect excerpted, truncated and omittedCandidateCount; these describe retrieved candidates, not exhaustive archive coverage. For totals or handoffs, reconcile distinct source events across conversations and count duplicate receipts only once. For personalized advice, apply relevant preferences and constraints. Expand only required incomplete evidence with options.itemIds, then page with offset=nextOffset until sufficient; selected-ID reads use current database records without QMD. createdAt/updatedAt are record timestamps, not necessarily event dates. Search another concrete facet or raw sessions when relevant evidence is still missing; do not repeat an unchanged search once the requested scope is covered. Resolve conflicting facts using the latest applicable owner evidence for the same entity, relationship and scope; a historical mention does not replace a current fact. Use options.scope temporary for current circumstances missing from the injected snapshot, especially when temporary_context_has_more is true. This lookup reads only active, unexpired, non-superseded records and never renews them. Use ordinary terms describing the circumstance. Results retain whole facts and their expiresAt validity. If matchedQuery is false, the result is a bounded set of active candidates; refine the query or increase topK/tokenBudget only when required evidence is omitted. candidateLimitReached means the bounded candidate pool may exclude older records. Current applicable temporary evidence overrides durable defaults within its scope and validity; historical logs do not establish that an old circumstance is still active."
     },
     "write": {
       "description": "Store a memory or correct an existing one using options.supersedesItemId.",

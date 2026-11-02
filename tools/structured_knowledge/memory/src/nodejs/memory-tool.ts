@@ -85,6 +85,7 @@ type KnowledgeNamespace =
   | 'context'
 
 interface MemoryReadOptions {
+  scope?: 'temporary'
   namespaces?: string[]
   topK?: number
   tokenBudget?: number
@@ -260,6 +261,10 @@ export default class MemoryTool extends Tool {
       DEFAULT_TOKEN_BUDGET
     ))
     const includeFacts = options.includeFacts !== false
+    if (options.scope === 'temporary') {
+      return this.readTemporary(normalizedQuery, topK, tokenBudget)
+    }
+
     // SQLite is authoritative: an empty store cannot produce valid indexed hits.
     // Avoid loading hybrid search models just to rediscover that there is no evidence.
     const hasMemory = this.getDb().prepare(
@@ -789,6 +794,57 @@ export default class MemoryTool extends Tool {
   }
 
   /**
+   * Recover current circumstances omitted from injection without initializing search.
+   */
+  private readTemporary(query: string, topK: number, tokenBudget: number): Record<string, unknown> {
+    const records = this.getDb().prepare(`SELECT * FROM active_memory_items
+      WHERE scope = 'temporary' AND expires_at > ?
+      ORDER BY (source_type = 'explicit_user') DESC, importance DESC, updated_at DESC, id
+      LIMIT ?`).all(Date.now(), MAX_DATABASE_RESCUE_ITEMS + 1)
+    const queryTokens = buildQueryTokenSet(query)
+    const collections = { temporary: { name: 'temporary', dir: '' } }
+    const ranked = rankRetrievedHits(records.slice(0, MAX_DATABASE_RESCUE_ITEMS).map((record) => ({
+      id: String(record['id']), title: String(record['title'] || ''),
+      content: String(record['content_md']), namespace: 'temporary' as const,
+      path: '', score: 0, authoritative: true
+    })), queryTokens, collections)
+    // Original query terms establish relevance even when reranking suppresses common terms.
+    const matching = ranked.filter(({ hit }) =>
+      extractOverlapCount(queryTokens, hit, collections, BRIDGE_SOURCE_CONTENT_CAP) > 0)
+    const candidates = matching.length > 0 ? matching : ranked
+    const hits = []
+    let usedTokenEstimate = 0
+
+    for (const { hit } of candidates) {
+      if (hits.length >= topK) {
+        break
+      }
+      const record = records.find((entry) => entry['id'] === hit.id)!
+      const selected = {
+        id: hit.id, scope: 'temporary', content: hit.content,
+        sourceType: record['source_type'], sourceRef: record['source_ref'],
+        createdAt: record['created_at'], updatedAt: record['updated_at'],
+        expiresAt: record['expires_at'], truncated: false, excerpted: false
+      }
+      const tokens = Math.ceil(Buffer.byteLength(JSON.stringify(selected), 'utf8') / 4)
+      // A shortened circumstance could lose its exception or time qualification.
+      if (usedTokenEstimate + tokens > tokenBudget) {
+        continue
+      }
+      hits.push(selected)
+      usedTokenEstimate += tokens
+    }
+
+    return { success: true, data: {
+      query, scope: 'temporary', topK, tokenBudget, usedTokenEstimate, hits, facts: [],
+      candidateCount: candidates.length,
+      omittedCandidateCount: candidates.length - hits.length,
+      candidateLimitReached: records.length > MAX_DATABASE_RESCUE_ITEMS,
+      matchedQuery: matching.length > 0
+    } }
+  }
+
+  /**
    * Expand selected active records without repeating search or rehydrating retired files.
    */
   private readItems(query: string, options: MemoryReadOptions): Record<string, unknown> {
@@ -802,8 +858,10 @@ export default class MemoryTool extends Tool {
 
     for (const id of itemIds) {
       const row = this.getDb().prepare(
-        'SELECT * FROM active_memory_items WHERE id = ? AND scope != \'temporary\''
-      ).get(id) as Record<string, unknown> | undefined
+        `SELECT * FROM active_memory_items WHERE id = ?
+         AND (scope != 'temporary' OR expires_at > ?)
+         AND (? IS NULL OR scope = ?)`
+      ).get(id, Date.now(), options.scope ?? null, options.scope ?? null) as Record<string, unknown> | undefined
       if (!row) {
         unavailableItemIds.push(id)
         continue
@@ -819,6 +877,7 @@ export default class MemoryTool extends Tool {
         id, scope: row['scope'], kind: row['kind'], title: row['title'],
         sourceType: row['source_type'], sourceRef: row['source_ref'],
         createdAt: row['created_at'], updatedAt: row['updated_at'],
+        ...(row['scope'] === 'temporary' ? { expiresAt: row['expires_at'] } : {}),
         content: clipped.content, offset,
         nextOffset: nextOffset < source.length ? nextOffset : null,
         truncated: nextOffset < source.length, excerpted: false

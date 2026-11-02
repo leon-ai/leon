@@ -329,6 +329,7 @@ describe('memory lifecycle', () => {
       const db = (repository as unknown as { db: Database }).db
       db.prepare('UPDATE memory_items SET expires_at = ? WHERE id = ?').run(Date.now() - 1, corrected.id)
       expect(await otherSession.getTemporaryContext()).toEqual([])
+      expect(await otherSession.getTemporaryContextSnapshot()).toEqual({ entries: [], hasMore: false })
 
       const active = await remember('我暂时只接受邮件。', {
         scope: 'temporary', metadata: { evidence: '我暂时只接受邮件。' }
@@ -357,6 +358,7 @@ describe('memory lifecycle', () => {
     expect(snapshot.length).toBeLessThanOrEqual(10)
     expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
     expect(await manager.getTemporaryContext()).toEqual(snapshot)
+    expect(await manager.getTemporaryContextSnapshot()).toEqual({ entries: snapshot, hasMore: true })
     await expect(remember('Unverified', { scope: 'temporary' })).rejects.toThrow('evidence')
   })
 
@@ -396,6 +398,10 @@ describe('memory lifecycle', () => {
 
     const snapshot = await manager.getTemporaryContext()
     expect(snapshot.map((entry) => entry.id).sort()).toEqual(records.map((record) => record.id).sort())
+    expect(await manager.getTemporaryContextSnapshot()).toEqual({ entries: snapshot, hasMore: false })
+    expect(Buffer.byteLength(JSON.stringify({
+      temporary_context: snapshot, temporary_context_has_more: false
+    }), 'utf8')).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
     expect(getTemporaryContextSize(snapshot)).toBeLessThanOrEqual(DEFAULT_TEMPORARY_MEMORY_POLICY.tokenBudget)
   })
 

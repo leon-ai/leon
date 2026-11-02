@@ -685,10 +685,21 @@ export default class MemoryManager {
    * Supply current cross-session context without initializing QMD or its mirrors.
    */
   public async getTemporaryContext(): Promise<TemporaryContextEntry[]> {
+    return (await this.getTemporaryContextSnapshot()).entries
+  }
+
+  /**
+   * Report omitted active evidence without increasing the injected fact budget.
+   */
+  public async getTemporaryContextSnapshot(): Promise<{
+    entries: TemporaryContextEntry[]
+    hasMore: boolean
+  }> {
     await this.repository.load(this.memoryDbPath)
     const policy = this.getTemporaryPolicy()
     const snapshot: TemporaryContextEntry[] = []
-    for (const record of this.repository.listTemporaryItems(policy.maxItems)) {
+    const records = this.repository.listTemporaryItems(policy.maxItems + 1)
+    for (const record of records.slice(0, policy.maxItems)) {
       const entry = {
         id: record.id,
         content: record.content,
@@ -702,7 +713,7 @@ export default class MemoryManager {
         snapshot.push(entry)
       }
     }
-    return snapshot
+    return { entries: snapshot, hasMore: records.length > snapshot.length }
   }
 
   public async rememberExplicit(
