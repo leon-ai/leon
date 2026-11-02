@@ -34,6 +34,7 @@ import {
   buildQueryTokenSet,
   DEFAULT_QMD_NAMESPACE_WEIGHTS,
   extractContent,
+  extractOverlapCount,
   extractScore,
   normalizeContent,
   normalizeFilename,
@@ -57,6 +58,7 @@ const CONTEXT_FULL_CONTENT_CAP = 8_000
 const BRIDGE_SOURCE_CONTENT_CAP = 96_000
 const MIN_HIT_TOKEN_BUDGET = 48
 const MAX_READ_ITEMS = 48
+const MAX_DATABASE_RESCUE_ITEMS = 500
 const MAX_READ_TOKEN_BUDGET = 4_000
 const INDEX_UPDATE_MIN_INTERVAL_MS = 10_000
 
@@ -626,6 +628,33 @@ export default class MemoryTool extends Tool {
       }
       retrievalStages.push(`backtrack:local:${appendedBacktrackHits.length}`)
       rankedHits = rankHitsByQuery(rawHits)
+    }
+
+    // Long lexical queries can miss every indexed document. Reuse the same ranker
+    // over a bounded set of current rows before declaring the owner's memory empty.
+    if (rankedHits.length === 0 && queryTokens.size > 0) {
+      const records = this.getDb().prepare(
+        'SELECT * FROM active_memory_items WHERE scope != \'temporary\' ORDER BY updated_at DESC LIMIT ?'
+      ).all(MAX_DATABASE_RESCUE_ITEMS)
+      for (const record of records) {
+        const namespace = `memory_${record['scope']}` as KnowledgeNamespace
+        const requestedNamespace = namespaces.includes(namespace) ? namespace
+          : namespace === 'memory_daily' && namespaces.includes('conversation_daily') ? 'conversation_daily' : null
+        if (!requestedNamespace) {
+          continue
+        }
+        const hit: QMDHit = {
+          id: String(record['id']), path: `memory-db://${record['id']}`,
+          title: String(record['title'] || record['kind']),
+          content: String(record['content_md']), score: 0,
+          namespace: requestedNamespace, authoritative: true
+        }
+        if (extractOverlapCount(queryTokens, hit, COLLECTIONS, BRIDGE_SOURCE_CONTENT_CAP) > 0) {
+          rawHits.push(hit)
+        }
+      }
+      rankedHits = rankHitsByQuery(rawHits)
+      retrievalStages.push(`rescue:database:${rankedHits.length}`)
     }
 
     const excerptQueryTokens = buildAdaptiveQueryTokenSet(
