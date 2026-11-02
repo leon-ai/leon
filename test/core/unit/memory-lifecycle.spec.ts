@@ -194,21 +194,65 @@ describe('memory lifecycle', () => {
     })
   })
 
-  it('extracts short owner statements with evidence while retaining materially different wording', async () => {
-    await remember('Owner prefers quiet work sessions with no interruptions in the morning.')
+  it('extracts new owner facts and replaces corrected facts with their evidence', async () => {
+    const old = await remember('Owner prefers quiet work sessions with no interruptions in the morning.')
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'Owner prefers quiet work sessions with no interruptions in the evening.',
+      evidence: 'My quiet work sessions are now in the evening.', supersedesItemId: old.id
+    }] } })
+    expect(await manager.saveMemoryCandidatesFromTurn('My quiet work sessions are now in the evening.', 'Noted.', Date.now())).toBe(1)
+    expect(repository.getActiveMemoryItem(old.id)).toBeNull()
+    expect(state.prompt.mock.calls[0]?.[0]).toContain(old.id)
     state.prompt.mockResolvedValueOnce({ output: { items: [{
       content: 'Owner lives in Lyon.', evidence: 'I moved to Lyon.'
     }] } })
     expect(await manager.saveMemoryCandidatesFromTurn('I moved to Lyon.', 'Noted.', 1_000)).toBe(1)
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
-      content: 'Owner prefers quiet work sessions with no interruptions in the evening.',
-      evidence: 'Evenings, not mornings.'
-    }] } })
-    expect(await manager.saveMemoryCandidatesFromTurn('Evenings, not mornings.', 'Noted.', 2_000)).toBe(1)
     const inferred = repository.listPersistentMirrorRecords().find((record) => record.sourceRef === 'turn:1000')
     expect(inferred).toMatchObject({
       sourceType: 'inferred', confidence: 0.7, metadata: { evidence: 'I moved to Lyon.' }
     })
+  })
+
+  it('rejects delayed persistent corrections after their selected target changes', async () => {
+    const old = await remember('Caldera contact is Mira.')
+    state.prompt.mockImplementationOnce(async () => {
+      await remember('Caldera contact is Nora.', { supersedesItemId: old.id })
+      return { output: { items: [{
+        content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.',
+        supersedesItemId: old.id
+      }] } }
+    })
+    expect(await manager.saveMemoryCandidatesFromTurn('Caldera contact is Tomas.', 'Noted.', Date.now())).toBe(0)
+    expect(repository.listPersistentMirrorRecords().map((record) => record.content)).toEqual(['Caldera contact is Nora.'])
+
+    // A queued older turn can start extraction after the newer record already exists.
+    const current = repository.listPersistentMirrorRecords()[0]!
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.',
+      supersedesItemId: current.id
+    }] } })
+    expect(await manager.saveMemoryCandidatesFromTurn('Caldera contact is Tomas.', 'Noted.', current.updatedAt - 1)).toBe(0)
+    expect(repository.getActiveMemoryItem(current.id)?.content).toBe('Caldera contact is Nora.')
+  })
+
+  it('validates the correction version inside its write transaction', async () => {
+    const old = await remember('Caldera contact is Mira.')
+    await expect(remember('Caldera contact is Nora.', {
+      supersedesItemId: old.id, expectedSupersededUpdatedAt: old.updatedAt - 1
+    })).rejects.toThrow('changed')
+    expect(repository.getActiveMemoryItem(old.id)?.content).toBe(old.content)
+  })
+
+  it('preserves unrelated project facts when applying an inferred correction', async () => {
+    const caldera = await remember('Caldera invoices are fortnightly.')
+    const borealis = await remember('Borealis invoices are fortnightly.')
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'Caldera invoices are weekly.', evidence: 'Caldera invoices are weekly.',
+      supersedesItemId: caldera.id
+    }] } })
+    expect(await manager.saveMemoryCandidatesFromTurn('Caldera invoices are weekly.', 'Noted.', Date.now())).toBe(1)
+    expect(repository.getActiveMemoryItem(caldera.id)).toBeNull()
+    expect(repository.getActiveMemoryItem(borealis.id)?.content).toBe(borealis.content)
   })
 
   it.each([

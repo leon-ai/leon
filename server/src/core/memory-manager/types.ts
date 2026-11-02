@@ -39,6 +39,7 @@ export interface MemoryWriteInput {
   expiresAt?: number | null
   isPinned?: boolean
   supersedesItemId?: string
+  expectedSupersededUpdatedAt?: number
   metadata?: Record<string, unknown>
 }
 

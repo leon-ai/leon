@@ -177,6 +177,9 @@ export default class MemoryRepository {
       if (!previous || previous.scope !== input.scope) {
         throw new Error('The memory to correct must be active and in the same scope.')
       }
+      if (input.expectedSupersededUpdatedAt != null && previous.updatedAt !== input.expectedSupersededUpdatedAt) {
+        throw new Error('The memory changed while its correction was being extracted.')
+      }
     }
 
     // Retired content must release its dedupe key without reviving old evidence.
