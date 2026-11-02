@@ -94,6 +94,7 @@ it.skipIf(!SELECTION).concurrent.each(SCENARIOS)('%s', async (scenario) => {
   })
   let pending = ''
   let captured = ''
+  let resultReceivedAt: number | undefined
   child.all?.setEncoding('utf8')
   child.all?.on('data', (chunk: string) => {
     captured += chunk
@@ -102,6 +103,9 @@ it.skipIf(!SELECTION).concurrent.each(SCENARIOS)('%s', async (scenario) => {
     pending = lines.pop() || ''
 
     for (const line of lines) {
+      if (line.startsWith(RESULT_PREFIX)) {
+        resultReceivedAt = Date.now()
+      }
       if (line.startsWith(PROGRESS_PREFIX)) {
         const event = JSON.parse(line.slice(PROGRESS_PREFIX.length)) as {
           stage: string
@@ -127,7 +131,11 @@ it.skipIf(!SELECTION).concurrent.each(SCENARIOS)('%s', async (scenario) => {
     expect(result.skipped, result.reason).toBe(false)
     expect(result.scenarioId).toBe(scenario)
     expect(result.evidence).toBeDefined()
-    console.info(`[scenario:${scenario}] PASS (${Date.now() - startedAt} ms)`)
+    const completedAt = Date.now()
+    console.info(`[scenario:${scenario}] PASS (${completedAt - startedAt} ms)`)
+    if (resultReceivedAt !== undefined) {
+      console.info(`[scenario:${scenario}] Result: ${resultReceivedAt - startedAt} ms; shutdown: ${completedAt - resultReceivedAt} ms`)
+    }
   } catch (error) {
     console.error(`[scenario:${scenario}] FAIL (${Date.now() - startedAt} ms)`)
     throw error
