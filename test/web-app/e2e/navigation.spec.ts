@@ -348,9 +348,9 @@ for (const width of [1_512, 390]) {
     await expect(diff).toHaveAttribute('data-diff-style', 'unified')
 
     const details = page.getByRole('button', { name: 'View details', exact: true })
-    await expect(details.locator('.button-label')).toHaveCount(0)
-    await details.hover()
-    await expect(page.locator('.tooltip-content-open')).toHaveText('View details')
+    await expect(details.locator('.button-label')).toHaveText('View details')
+    await expect(details.locator('.button-icon')).toHaveCount(0)
+    await expect(page.locator('.activity-details-heading').getByRole('button')).toHaveCount(0)
     await details.click()
     const dialog = page.getByRole('dialog', { name: 'Adjust the greeting', exact: true })
     await expect(dialog).toBeVisible()

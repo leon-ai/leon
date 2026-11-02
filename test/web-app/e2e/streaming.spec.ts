@@ -57,7 +57,9 @@ for (const kind of ['skill', 'experience'] as const) {
       await expect(item.getByRole('button', { name: progress.content, exact: true })).toHaveAttribute('aria-expanded', 'true')
       await expect(contents).toContainText('Read the source files before making changes.')
       const details = item.getByRole('button', { name: 'View details', exact: true })
-      await expect(details.locator('.button-label')).toHaveCount(0)
+      await expect(details.locator('.button-label')).toHaveText('View details')
+      await expect(details.locator('.button-icon')).toHaveCount(0)
+      await expect(item.locator('.activity-details-heading').getByRole('button')).toHaveCount(0)
       const dialog = page.getByRole('dialog', { name, exact: true })
       const complete = dialog.getByRole('region', { name: 'SKILL.md', exact: true })
       for (const theme of ['light', 'dark']) {
@@ -69,6 +71,15 @@ for (const kind of ['skill', 'experience'] as const) {
         }
         await expect(item.locator('.ri-book-ai-line')).toBeVisible()
         await expect(item.locator('.activity-details-frame')).toBeVisible()
+        const frameBounds = (await item.locator('.activity-details-frame').boundingBox())!
+        const buttonBounds = (await details.boundingBox())!
+        const footerBounds = (await item.locator('.activity-details-footer').boundingBox())!
+        const previewBounds = (await contents.boundingBox())!
+        expect(Math.abs(buttonBounds.x + buttonBounds.width / 2 - frameBounds.x - frameBounds.width / 2)).toBeLessThanOrEqual(1)
+        expect(Math.abs(buttonBounds.x - footerBounds.x)).toBeLessThanOrEqual(1)
+        expect(Math.abs(buttonBounds.width - footerBounds.width)).toBeLessThanOrEqual(1)
+        expect(Math.abs(buttonBounds.height - footerBounds.height)).toBeLessThanOrEqual(1)
+        expect(buttonBounds.y).toBeGreaterThan(previewBounds.y + previewBounds.height)
         await page.screenshot({ path: testInfo.outputPath(`skill-activity-${theme}.png`) })
         await details.click()
         await expect(dialog).toBeVisible()

@@ -17,12 +17,13 @@ export function ActivityDetails({ title, onViewDetails, notice, children }: {
     <div className="activity-details">
       <div className="activity-details-heading">
         <p className="activity-details-title">{title}</p>
-        <Button iconName="expand-diagonal" tone="muted" tooltipMessage="View details"
-          tooltipPosition="left" onClick={onViewDetails} />
       </div>
       {notice}
       <div className="activity-details-frame">
         {children}
+        <div className="activity-details-footer">
+          <Button tone="muted" onClick={onViewDetails}>View details</Button>
+        </div>
       </div>
     </div>
   )
