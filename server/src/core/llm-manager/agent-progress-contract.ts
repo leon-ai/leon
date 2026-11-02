@@ -1,3 +1,5 @@
+import type { MemoryActivitySnapshot } from './memory-activity-contract'
+
 /**
  * Captures the guidance loaded for a turn independently of later file changes.
  */
@@ -16,4 +18,5 @@ export interface AgentProgressMessage {
   planStepId?: string | null
   iconName?: string
   skill?: AgentSkillSnapshot
+  memory?: MemoryActivitySnapshot
 }

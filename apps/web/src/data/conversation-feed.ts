@@ -205,6 +205,7 @@ function toActivities(
       id: message.id, type: 'summary', content: message.content, startedAt: message.createdAt,
       ...(message.iconName ? { iconName: message.iconName } : {}),
       ...(message.skill ? { skill: message.skill } : {}),
+      ...(message.memory ? { memory: message.memory } : {}),
       planStepId: message.planStepId
     } })
   }

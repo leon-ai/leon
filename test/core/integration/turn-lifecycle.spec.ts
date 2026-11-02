@@ -1,3 +1,4 @@
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -204,13 +205,13 @@ async function createProfile(profile: string): Promise<void> {
   })
 }
 
-async function completeTurn(profile: string, explicitMemory = false, duringTurn?: () => Promise<void>, existingSessionId?: string): Promise<{ sessionId: string, turnId: string }> {
+async function completeTurn(profile: string, explicitMemory = false, duringTurn?: () => Promise<void>, existingSessionId?: string, onActivity?: (message: AgentProgressMessage) => void): Promise<{ sessionId: string, turnId: string }> {
   return runWithProfileContext({ profileName: profile }, async () => {
     const sessionId = existingSessionId ?? CONVERSATION_SESSION_MANAGER.createSession().id
     const turnId = randomUUID()
     const query = `I live in ${profile}. Please keep that in mind when helping me with local suggestions and other future questions.`
     const logger = fixture.services.get(profile)!.logger
-    await runTurnLifecycle({ sessionId, turnId, query }, async () => {
+    await runTurnLifecycle({ sessionId, turnId, query, ...(onActivity ? { onActivity } : {}) }, async () => {
       await logger.upsert({ who: 'owner', message: query, messageId: turnId, isAddedToHistory: true })
       await duringTurn?.()
       const result = await runTurnPhase(TurnPhase.Execution, async () => ({
@@ -465,5 +466,34 @@ it('does not schedule successful-turn maintenance when foreground execution abor
     }
     expect(history.some((record) => record['kind'] === 'maintenance' && record['stage'] === TurnStage.PostTurn)).toBe(false)
     expect(history.some((record) => record['outcome'] === 'failed')).toBe(true)
+  })
+})
+
+
+it('attaches completed memory outcomes to their original answer without changing delivery time', async () => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  const activities: AgentProgressMessage[] = []
+  const gate = Promise.withResolvers<void>()
+  await runWithProfileContext({ profileName: profile }, async () => {
+    const services = fixture.services.get(profile)!
+    services.queue.enqueue('occupied maintenance', () => gate.promise)
+    const first = await completeTurn(profile, false, undefined, undefined, (message) => activities.push(message))
+    const before = CONVERSATION_REPOSITORY.readMessage(first.sessionId, `${first.turnId}:leon`)!
+    try {
+      await completeTurn(profile)
+      expect(activities).toEqual([])
+    } finally {
+      gate.resolve()
+      await services.queue.whenIdle()
+    }
+    const after = CONVERSATION_REPOSITORY.readMessage(first.sessionId, `${first.turnId}:leon`)!
+    expect(activities).toHaveLength(1)
+    expect(after.message).toBe(before.message)
+    expect(after.sentAt).toBe(before.sentAt)
+    expect(after.isAddedToHistory).toBe(true)
+    expect(after.agentResponseTrace?.progressMessages).toEqual(activities)
+    expect(activities[0]?.memory?.entries[0]?.sourceRef).toContain(first.turnId)
+    expect(activities[0]?.iconName).toBe('brain-2-line')
   })
 })

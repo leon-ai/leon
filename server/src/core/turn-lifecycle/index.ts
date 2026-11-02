@@ -1,3 +1,7 @@
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
+import type { AgentResponseTrace } from '@/types'
+import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
+import { LogHelper } from '@/helpers/log-helper'
 import { randomUUID } from 'node:crypto'
 
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
@@ -9,6 +13,8 @@ import { schedulePostTurn } from './post-turn'
 interface AgentTurnContext {
   sessionId: string
   query: string
+  responseId?: string
+  onActivity?: (activity: AgentProgressMessage) => void
   turnId?: string
 }
 
@@ -28,7 +34,20 @@ export async function runTurnLifecycle(
       )
     }
     const result = await executeAndDeliver()
-    schedulePostTurn({ ...context, result })
+    const trace = result?.data?.['agentResponseTrace'] as AgentResponseTrace | undefined
+    const responseId = context.responseId ?? trace?.id ?? (context.turnId ? `${context.turnId}:leon` : undefined)
+    schedulePostTurn({ ...context, result, onActivity: (activity) => {
+      if (!responseId) {
+        return
+      }
+      try {
+        if (CONVERSATION_REPOSITORY.upsertMemoryActivity(context.sessionId, responseId, activity)) {
+          context.onActivity?.(activity)
+        }
+      } catch {
+        LogHelper.warning('Could not publish a completed memory activity.')
+      }
+    } })
 
     return result
   })

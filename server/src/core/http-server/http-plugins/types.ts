@@ -1,3 +1,4 @@
+import type { MemoryActivitySnapshot } from '@/core/llm-manager/memory-activity-contract'
 import type { Artifact } from '@/core/artifacts/artifact-types'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
@@ -89,6 +90,7 @@ export interface HTTPPluginAgentTrace {
     plan_step_id?: string | null
     icon_name?: string
     skill?: AgentSkillSnapshot
+    memory?: MemoryActivitySnapshot
   }[]
   plan_steps: HTTPPluginPlanStep[]
   plan_transitions?: HTTPPluginPlanTransition[]

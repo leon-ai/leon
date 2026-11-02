@@ -20,7 +20,7 @@ for (const kind of ['skill', 'experience'] as const) {
         'Verify the result before answering.'
       ].join('\n') }
       const progress = { id: `skill-activity:task:${kind}:fixture`,
-        content: `Loaded ${kind}: ${name}`, created_at: createdAt, icon_name: 'book-ai-line', skill }
+        content: `Loaded ${kind}: ${name}`, created_at: createdAt, icon_name: kind === 'experience' ? 'brain-2-line' : 'book-ai-line', skill }
       let sequence = 0
       const emit = (): Promise<void> => ui.emit([{
         type: 'progress_message', sequence: ++sequence, session_id: SESSION_ID,
@@ -37,7 +37,7 @@ for (const kind of ['skill', 'experience'] as const) {
       const item = page.getByRole('region', { name: 'Leon’s activity', exact: true }).filter({ hasText: name })
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
-      await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+      await expect(item.locator(kind === 'experience' ? '.ri-brain-2-line' : '.ri-book-ai-line')).toBeVisible()
       const disclosure = item.getByRole('button', { name: progress.content, exact: true })
       const contents = item.getByRole('region', { name: `${name}/SKILL.md`, exact: true })
       await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
@@ -50,7 +50,7 @@ for (const kind of ['skill', 'experience'] as const) {
       await expect(contents).not.toContainText('Verify the result before answering.')
       await expect(contents.locator('.code-view-line').last()).toHaveText('…')
       await expect(contents.locator('.code-view-ellipsis')).toHaveAttribute('aria-label', 'More content omitted')
-      progress.content = `Using ${kind}: ${name}`
+      progress.content = `${kind === 'experience' ? 'Used' : 'Using'} ${kind}: ${name}`
       await emit()
       await emit()
       await expect(item).toHaveCount(1)
@@ -71,7 +71,7 @@ for (const kind of ['skill', 'experience'] as const) {
         if (reducedMotion === 'reduce') {
           await page.setViewportSize({ width: 390, height: 844 })
         }
-        await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+        await expect(item.locator(kind === 'experience' ? '.ri-brain-2-line' : '.ri-book-ai-line')).toBeVisible()
         await expect(item.locator('.activity-details-frame')).toBeVisible()
         const frameBounds = (await item.locator('.activity-details-frame').boundingBox())!
         const buttonBounds = (await details.boundingBox())!
@@ -153,7 +153,7 @@ for (const kind of ['skill', 'experience'] as const) {
       await work.getByRole('button').first().click()
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
-      await expect(item.locator('.ri-book-ai-line')).toBeVisible()
+      await expect(item.locator(kind === 'experience' ? '.ri-brain-2-line' : '.ri-book-ai-line')).toBeVisible()
       const restored = item.getByRole('button', { name: progress.content, exact: true })
       await expect(restored).toHaveAttribute('aria-expanded', 'false')
       await restored.click()

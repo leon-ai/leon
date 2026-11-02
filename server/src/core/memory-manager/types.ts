@@ -1,3 +1,5 @@
+import type { MemoryChange } from '@/core/llm-manager/memory-activity-contract'
+
 export type MemoryScope = 'persistent' | 'daily' | 'discussion' | 'temporary'
 
 export type KnowledgeNamespace =
@@ -118,6 +120,7 @@ export interface RecallResult {
 }
 
 export interface MemoryExtractionTurn {
+  onMemoryChange?: (change: MemoryChange) => void
   userMessage: string
   assistantMessage: string
   sentAt: number

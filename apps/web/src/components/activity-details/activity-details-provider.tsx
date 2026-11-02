@@ -9,7 +9,7 @@ import { ActivityDetailsDialog } from './activity-details-dialog'
 
 enum ActivityDetailsKind {
   Tool = 'tool',
-  Skill = 'skill'
+  Text = 'text'
 }
 
 interface ToolSelection {
@@ -20,13 +20,17 @@ interface ToolSelection {
   opener: HTMLElement | null
 }
 
-interface SkillSelection {
-  kind: ActivityDetailsKind.Skill
-  skill: AgentSkillSnapshot
+interface TextSelection {
+  kind: ActivityDetailsKind.Text
+  title: string
+  path: string
+  content: string
+  contentName: string
+  language: string
   opener: HTMLElement | null
 }
 
-type ActivitySelection = ToolSelection | SkillSelection
+type ActivitySelection = ToolSelection | TextSelection
 
 const ActivityDetailsContext = createContext<((selection: ActivitySelection) => void) | null>(null)
 
@@ -87,13 +91,13 @@ export function ActivityDetailsProvider({ entries, sessionId, children }: {
             onClose={() => setIsOpen(false)} onAfterClose={handleAfterClose} />
         </ConversationDetailsProvider>
       )}
-      {selection?.kind === ActivityDetailsKind.Skill && (
-        <ActivityDetailsDialog open={isOpen} title={selection.skill.name} path={`${selection.skill.name}/SKILL.md`}
-          content={selection.skill.instructions} contentName="SKILL.md" downloadFilename="SKILL.md"
-          toolbar={<span className="activity-details-title">SKILL.md</span>}
+      {selection?.kind === ActivityDetailsKind.Text && (
+        <ActivityDetailsDialog open={isOpen} title={selection.title} path={selection.path}
+          content={selection.content} contentName={selection.contentName} downloadFilename={selection.path.split('/').at(-1)!}
+          toolbar={<span className="activity-details-title">{selection.path.split('/').at(-1)}</span>}
           onClose={() => setIsOpen(false)} onAfterClose={handleAfterClose}>
           <div className="activity-details-reading-pane">
-            <CodeView text={selection.skill.instructions} language="markdown" label="SKILL.md" />
+            <CodeView text={selection.content} language={selection.language} label={selection.contentName} />
           </div>
         </ActivityDetailsDialog>
       )}
@@ -116,8 +120,18 @@ export function useOpenToolDetails(toolCall: FeedToolCall, technicalTitle: strin
  * Keeps the loaded guidance inspectable when its feed row is unmounted.
  */
 export function useOpenSkillDetails(skill: AgentSkillSnapshot): () => void {
+  return useOpenTextActivityDetails({
+    title: skill.name, content: skill.instructions,
+    path: `${skill.name}/SKILL.md`, contentName: 'SKILL.md', language: 'markdown'
+  })
+}
+
+/**
+ * Reuses the feed-owned text inspector for saved guidance and memory evidence.
+ */
+export function useOpenTextActivityDetails(details: Omit<TextSelection, 'kind' | 'opener'>): () => void {
   const open = useContext(ActivityDetailsContext)
 
-  return () => open?.({ kind: ActivityDetailsKind.Skill, skill,
+  return () => open?.({ kind: ActivityDetailsKind.Text, ...details,
     opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
 }

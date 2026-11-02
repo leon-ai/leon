@@ -647,7 +647,10 @@ async function main(): Promise<void> {
                 ? result.data['executionHistory'] as AgentTurnResult['executionHistory'] : [],
               toolCalls: toolCalls.slice(callOffset).filter((call) => toolCallSessions.get(call) === sessionId)
             }
-            await CONVERSATION_LOGGER.push(createConversationLoggerRecord('leon', output))
+            await CONVERSATION_LOGGER.push({ ...createConversationLoggerRecord('leon', output),
+              ...(turn.responseTrace.id ? { messageId: turn.responseTrace.id } : {}),
+              agentResponseTrace: turn.responseTrace
+            })
             printProgress({ provider, stage: 'turn_result', turn: currentTurn, message: scenario.id, data: { output, finalIntent: turn.finalIntent } })
             return turn
           })

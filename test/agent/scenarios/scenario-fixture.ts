@@ -29,6 +29,7 @@ export async function runMaintainedTurn(
 
     return { output: turn.output, data: {
       finalIntent: turn.finalIntent, executionHistory: turn.executionHistory,
+      agentResponseTrace: turn.responseTrace,
       hasExplicitMemoryWrite: turn.hasExplicitMemoryWrite, workspace
     } } as unknown as LLMDutyResult
   })

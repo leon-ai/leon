@@ -1,3 +1,7 @@
+import { performance } from 'node:perf_hooks'
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
+import { createMemoryActivity } from '@/core/memory-manager/memory-activity'
+import type { MemoryChange } from '@/core/llm-manager/memory-activity-contract'
 import { MEMORY_MANAGER, SELF_MODEL_MANAGER, EXPERIENCE_MANAGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import type { ExecutionRecord, FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import { hasExperienceLearningEvidence } from '@/core/experience-manager'
@@ -9,6 +13,7 @@ import { MEMORY_EXTRACTION_MAX_BATCH_TURNS } from '@/constants'
 import { getTurnTimingContext } from '@/core/llm-manager/turn-timing'
 
 export interface CompletedAgentTurn {
+  onActivity?: (activity: AgentProgressMessage) => void
   sessionId: string
   query: string
   result: LLMDutyResult | null
@@ -26,7 +31,7 @@ export function scheduleHistoryCompaction(prepare: PostTurnMaintenanceTaskPrepar
  * Schedules owner-turn maintenance after the answer has been persisted and delivered.
  * Explicit memory mutations must not be repeated by automatic extraction.
  */
-export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTurn): void {
+export function schedulePostTurn({ sessionId, query, result, onActivity }: CompletedAgentTurn): void {
   const output = result?.output as unknown
   if (typeof output !== 'string' || !output.trim()) {
     return
@@ -40,7 +45,7 @@ export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTur
   if (finalIntent === 'answer' && hasExperienceLearningEvidence(executions)) {
     const workspace = typeof result?.data?.['workspace'] === 'string' ? result.data['workspace'] : process.cwd()
     POST_TURN_MAINTENANCE_QUEUE.enqueue('experience learning', () => EXPERIENCE_MANAGER.observeTurn({
-      query, output, executions, workspace, sourceRef: `session:${sessionId}:turn:${sentAt}`
+      query, output, executions, workspace, ...(onActivity ? { onActivity } : {}), sourceRef: `session:${sessionId}:turn:${sentAt}`
     }))
   }
 
@@ -65,12 +70,25 @@ export function schedulePostTurn({ sessionId, query, result }: CompletedAgentTur
       syncOwnerProfileFromTurn(query, output, toolExecutions)
     )
   } else if (finalIntent !== 'cancelled' && finalIntent !== 'error') {
+    const changes: MemoryChange[] = []
     POST_TURN_MAINTENANCE_QUEUE.enqueueBatch('memory extraction', {
+      changes, onActivity, onMemoryChange: (change: MemoryChange) => changes.push(change),
       userMessage: query, assistantMessage: output, sentAt, toolExecutions,
       sourceRef: `session:${sessionId}:turn:${getTurnTimingContext()?.turnId ?? sentAt}`
     }, MEMORY_EXTRACTION_MAX_BATCH_TURNS, async (turns) => {
+      const startedAt = Date.now()
+      const extractionStartedAt = performance.now()
       const savedCounts = await MEMORY_MANAGER.saveMemoryCandidatesFromTurns(turns)
+      const durationMs = performance.now() - extractionStartedAt
       for (const [index, turn] of turns.entries()) {
+        const actions = new Set(turn.changes.map((change) => change.action))
+        for (const action of actions) {
+          turn.onActivity?.(createMemoryActivity(
+            `${turn.sourceRef}:${action}`, action,
+            turn.changes.filter((change) => change.action === action).map((change) => change.entry),
+            startedAt, turns.length === 1 && actions.size === 1 ? durationMs : undefined
+          ))
+        }
         if ((savedCounts[index] ?? 0) > 0) {
           POST_TURN_MAINTENANCE_QUEUE.enqueue('owner profile sync', () =>
             syncOwnerProfileFromTurn(turn.userMessage, turn.assistantMessage, turn.toolExecutions)

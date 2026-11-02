@@ -1,3 +1,4 @@
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import type { AgentResponseTrace } from '@/types'
 
 import type { HTTPPluginAgentTrace } from '../types'
@@ -17,14 +18,7 @@ export function serializeAgentTrace(
       : {}),
     ...(trace.progressMessages
       ? {
-          progress_messages: trace.progressMessages.map((message) => ({
-            id: message.id,
-            content: message.content,
-            created_at: message.createdAt,
-            ...(message.skill ? { skill: message.skill } : {}),
-            ...(message.iconName ? { icon_name: message.iconName } : {}),
-            ...(message.planStepId !== undefined ? { plan_step_id: message.planStepId } : {})
-          }))
+          progress_messages: trace.progressMessages.map(serializeProgressMessage)
         }
       : {}),
     ...(trace.reasoningSummary
@@ -99,6 +93,7 @@ export function deserializeAgentTrace(
             content: message.content,
             createdAt: message.created_at,
             ...(message.skill ? { skill: message.skill } : {}),
+            ...(message.memory ? { memory: message.memory } : {}),
             ...(message.icon_name ? { iconName: message.icon_name } : {}),
             ...(message.plan_step_id !== undefined ? { planStepId: message.plan_step_id } : {})
           }))
@@ -152,5 +147,18 @@ export function deserializeAgentTrace(
         : {})
     })),
     ...(trace.metrics ? { metrics: trace.metrics } : {})
+  }
+}
+
+/**
+ * Shares the same progress payload between live events and archived traces.
+ */
+export function serializeProgressMessage(message: AgentProgressMessage): NonNullable<HTTPPluginAgentTrace['progress_messages']>[number] {
+  return {
+    id: message.id, content: message.content, created_at: message.createdAt,
+    ...(message.iconName ? { icon_name: message.iconName } : {}),
+    ...(message.skill ? { skill: message.skill } : {}),
+    ...(message.memory ? { memory: message.memory } : {}),
+    ...(message.planStepId === undefined ? {} : { plan_step_id: message.planStepId })
   }
 }

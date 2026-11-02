@@ -24,7 +24,7 @@ import type {
   HTTPPluginToolCall
 } from '../types'
 import { publishAgentEvent } from './agent-event-channel'
-import { deserializeAgentTrace, serializeAgentTrace } from './agent-trace-serializer'
+import { deserializeAgentTrace, serializeAgentTrace, serializeProgressMessage } from './agent-trace-serializer'
 import {
   elapsedMilliseconds,
   normalizeConversationSession,
@@ -150,7 +150,11 @@ export async function runAgent(
       is_active: true
     })
     const result = await runTurnLifecycle(
-      { sessionId, query, turnId: requestId ?? messageId },
+      { sessionId, query, turnId: requestId ?? messageId, responseId: messageId,
+        onActivity: (activity) => emit('progress_message', {
+          message: serializeProgressMessage(activity), background: true
+        })
+      },
       async () => {
         // HTTP turns bypass Brain, so persist both sides here to keep history coherent.
         await runTurnPhase(TurnPhase.Owner, () => CONVERSATION_LOGGER.upsert(
@@ -182,14 +186,7 @@ export async function runAgent(
               return
             }
             if (event.type === 'progress_message') {
-              const message = {
-                id: event.message.id,
-                content: event.message.content,
-                created_at: event.message.createdAt,
-                ...(event.message.skill ? { skill: event.message.skill } : {}),
-                ...(event.message.iconName ? { icon_name: event.message.iconName } : {}),
-                ...(event.message.planStepId !== undefined ? { plan_step_id: event.message.planStepId } : {})
-              }
+              const message = serializeProgressMessage(event.message)
               progressMessages.set(message.id, message)
               emit('progress_message', { message })
               return

@@ -1,3 +1,4 @@
+import { MemoryActivityAction } from '@/core/llm-manager/memory-activity-contract'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -795,6 +796,7 @@ describe('HTTP plugin Leon services', () => {
 
   it('streams agent commentary and includes it in the final trace', async () => {
     const skill = { name: 'coding', instructions: 'Read the source before making changes.' }
+    const memory = { action: MemoryActivityAction.TemporaryLoaded, entries: [{ id: 'location', content: 'I am staying in Lyon.' }], durationMs: 1 }
     const inferences = [{
       attemptId: 'attempt', startedAt: 1_000, provider: 'openai', duty: 'react',
       phase: 'agent', transport: 'http', outcome: 'completed', elapsedMs: 900,
@@ -822,6 +824,9 @@ describe('HTTP plugin Leon services', () => {
         type: 'progress_message',
         message: { id: 'progress-1', content: 'Loaded skill: coding', createdAt: 1_000, iconName: 'book-ai-line', skill }
       })
+      onProgress({ type: 'progress_message', message: {
+        id: 'temporary', content: 'Loaded temporary context', createdAt: 1_001, iconName: 'brain-2-line', memory
+      } })
       onProgress({
         type: 'tool_call',
         toolCall: {
@@ -855,7 +860,9 @@ describe('HTTP plugin Leon services', () => {
     expect(events.find((event) => event['type'] === 'progress_message')).toMatchObject({
       turn_id: 'turn-1', response_id: 'turn-1:leon', data: { message: progress }
     })
-    expect(turn.response_trace.progress_messages).toEqual([progress])
+    expect(turn.response_trace.progress_messages).toEqual([progress, {
+      id: 'temporary', content: 'Loaded temporary context', created_at: 1_001, icon_name: 'brain-2-line', memory
+    }])
     expect(turn.response_trace.inferences).toEqual(inferences)
     expect(turn.response_trace.tool_calls[0]).toMatchObject({
       preparation_started_at: 1_600, started_at: 2_000,

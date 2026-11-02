@@ -165,6 +165,7 @@ describe('experience retention and adoption', () => {
   })
 
   it('captures a supported procedure from structured inference output and actual tool result evidence', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
     vi.spyOn(SkillDomainHelper, 'getAgentSkillCatalogContentSync').mockReturnValue('')
     vi.mocked(runInference).mockResolvedValue({
       // Structured provider duties may return the decoded object rather than text.
@@ -174,7 +175,9 @@ describe('experience retention and adoption', () => {
       } } as unknown as string,
       usedInputTokens: 1, usedOutputTokens: 1
     })
-    const outcome = await manager.observeTurn({
+    const onActivity = vi.fn()
+    const input: Parameters<ExperienceManager['observeTurn']>[0] = {
+      onActivity,
       query: 'Restore the stopped service.', output: 'Status confirms the service is serving jobs.',
       sourceRef: 'session:verified', workspace: '/workspace/a',
       executions: ['refresh', 'verify'].map((operation) => ({
@@ -184,11 +187,33 @@ describe('experience retention and adoption', () => {
           output: { serving: operation === 'verify' }
         } })
       }))
-    })
+    }
+    const outcome = await manager.observeTurn(input)
     expect(outcome.outcome).toBe('completed')
+    expect(onActivity).toHaveBeenCalledOnce()
+    expect(onActivity.mock.calls[0]?.[0].memory.durationMs).toBeGreaterThan(0)
+    expect(onActivity.mock.calls[0]?.[0]).toMatchObject({
+      content: 'Learned an experience', iconName: 'brain-2-line',
+      memory: { action: 'experience_learned' }
+    })
     expect(manager.list()[0]).toMatchObject({ workspace: '/workspace/a', loadCount: 0, useCount: 0 })
     expect(JSON.parse(vi.mocked(runInference).mock.calls[0]![0].prompt).evidence[1].observation)
       .toContain('"serving":true')
+
+    expect((await manager.observeTurn(input)).outcome).toBe('skipped')
+    expect(onActivity).toHaveBeenCalledOnce()
+    const record = manager.list()[0]!
+    vi.mocked(runInference).mockResolvedValueOnce({
+      output: JSON.stringify({ experience: {
+        id: record.id, name: record.name, description: record.description,
+        instructions: `${record.instructions} Retain the verified status.`, workspaceOnly: true
+      } }), usedInputTokens: 1, usedOutputTokens: 1
+    })
+    expect((await manager.observeTurn(input)).outcome).toBe('completed')
+    expect(onActivity).toHaveBeenCalledTimes(2)
+    expect(onActivity.mock.calls[1]?.[0]).toMatchObject({
+      content: 'Updated an experience', memory: { action: 'experience_updated' }
+    })
   })
 
   it('keeps independently owned profile archives isolated', () => {

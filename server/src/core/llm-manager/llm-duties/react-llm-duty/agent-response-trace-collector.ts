@@ -63,7 +63,7 @@ export class AgentResponseTraceCollector {
       const previous = this.progressMessages.get(event.message.id)
       const message = { ...event.message,
         createdAt: previous?.createdAt ?? event.message.createdAt,
-        planStepId: previous ? previous.planStepId! : this.getActiveStepId() }
+        planStepId: event.message.memory ? null : previous ? previous.planStepId! : this.getActiveStepId() }
       this.progressMessages.set(message.id, message)
       return { ...event, message }
     }
