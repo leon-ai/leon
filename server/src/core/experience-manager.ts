@@ -1,3 +1,6 @@
+import { createMemoryActivity } from '@/core/memory-manager/memory-activity'
+import { MemoryActivityAction } from '@/core/llm-manager/memory-activity-contract'
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -386,12 +389,14 @@ export default class ExperienceManager {
     query: string
     output: string
     executions: ExecutionRecord[]
+    onActivity?: (activity: AgentProgressMessage) => void
     sourceRef: string
     workspace: string
   }): Promise<MaintenanceTaskResult> {
     if (!this.enabled || !hasExperienceLearningEvidence(input.executions)) {
       return { outcome: 'skipped', reason: 'no-procedural-evidence' }
     }
+    const startedAt = Date.now()
     const evidence = input.executions.slice(-8).map((execution) => {
       const observation = parseToolCallArguments(execution.observation)
       const data = parseProviderResponseData(observation?.['data'])
@@ -434,7 +439,32 @@ export default class ExperienceManager {
       if (!parsed.experience) {
         return { outcome: 'skipped', reason: 'no-reusable-method' }
       }
+      const candidate = parsed.experience
+      const existing = candidate.id
+        ? this.list().find((record) => record.id === candidate.id)
+        : this.list().find((record) => record.name.toLowerCase() === candidate.name?.trim().toLowerCase() &&
+          record.workspace === (candidate.workspaceOnly ? this.resolveWorkspace(input.workspace) : null))
+      // Identical prose can still add a verified tool or change applicability.
+      if (existing && existing.name === candidate.name.trim() &&
+        existing.workspace === (candidate.workspaceOnly ? this.resolveWorkspace(input.workspace) : null) &&
+        existing.instructions === StringHelper.redactSecrets(candidate.instructions.trim()) &&
+        existing.description === candidate.description.trim().slice(0, MAXIMUM_DESCRIPTION_CHARS) &&
+        evidence.every((item) => existing.functions.includes(item.function))) {
+        return { outcome: 'skipped', reason: 'unchanged-experience' }
+      }
       const saved = this.save(parsed.experience, input.sourceRef, evidence.map((item) => item.function), input.workspace)
+      if (saved) {
+        const action = saved.revision > 1 ? MemoryActivityAction.ExperienceUpdated : MemoryActivityAction.ExperienceLearned
+        const activity = createMemoryActivity(`${input.sourceRef}:${action}`, action, [{
+          id: saved.id, content: saved.description, sourceRef: saved.sourceRef
+        }], startedAt, Date.now() - startedAt)
+        activity.skill = { name: saved.name, instructions: saved.instructions }
+        try {
+          input.onActivity?.(activity)
+        } catch {
+          LogHelper.warning('Could not report a committed experience activity.')
+        }
+      }
       return saved ? { outcome: 'completed' } : { outcome: 'rejected', reason: 'invalid-or-protected-experience' }
     } catch (error) {
       LogHelper.warning(`Experience extraction skipped: ${String(error)}`)

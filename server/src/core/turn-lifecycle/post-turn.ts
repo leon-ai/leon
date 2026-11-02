@@ -44,7 +44,7 @@ export function schedulePostTurn({ sessionId, query, result, onActivity }: Compl
   if (finalIntent === 'answer' && hasExperienceLearningEvidence(executions)) {
     const workspace = typeof result?.data?.['workspace'] === 'string' ? result.data['workspace'] : process.cwd()
     POST_TURN_MAINTENANCE_QUEUE.enqueue('experience learning', () => EXPERIENCE_MANAGER.observeTurn({
-      query, output, executions, workspace, sourceRef: `session:${sessionId}:turn:${sentAt}`
+      query, output, executions, workspace, ...(onActivity ? { onActivity } : {}), sourceRef: `session:${sessionId}:turn:${sentAt}`
     }))
   }
 
