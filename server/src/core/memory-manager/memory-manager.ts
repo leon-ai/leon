@@ -1,3 +1,5 @@
+import { MemoryActivityAction, type MemoryChange } from '@/core/llm-manager/memory-activity-contract'
+import { reportMemoryChange } from './memory-activity'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -1272,7 +1274,8 @@ export default class MemoryManager {
     candidates: MemoryCandidate[],
     sourceRef: string,
     nowTs = Date.now(),
-    correctionTargets: Array<{ id: string, updatedAt: number }> = []
+    correctionTargets: Array<{ id: string, updatedAt: number }> = [],
+    onMemoryChange?: (change: MemoryChange) => void
   ): Promise<number> {
     if (!this._isLoaded) {
       await this.load()
@@ -1326,6 +1329,11 @@ export default class MemoryManager {
           evidence: candidate.evidence
         }
       })
+      // Dedupe can return an older record; only a new fact or actual correction
+      // warrants a saved/updated activity.
+      if (saved.sourceRef === sourceRef && (target || saved.createdAt === saved.updatedAt)) {
+        reportMemoryChange(onMemoryChange, target ? MemoryActivityAction.Updated : MemoryActivityAction.Saved, saved, target)
+      }
       existingContents.add(content.toLowerCase())
       savedCount += 1
       savedEntries.push({
@@ -1580,7 +1588,7 @@ No markdown. No explanation.`
         const sourceRef = turn.sourceRef ?? `turn:${turn.sentAt}`
         savedCounts[index] = await this.savePersistentMemoryCandidates(
           candidates.filter((candidate) => candidate.scope !== 'temporary'),
-          sourceRef, turn.sentAt, correctionTargets
+          sourceRef, turn.sentAt, correctionTargets, turn.onMemoryChange
         )
 
         // A slow background result must not overwrite newer foreground evidence.
@@ -1598,8 +1606,10 @@ No markdown. No explanation.`
             continue
           }
           if (candidate.forgetItemId) {
-            savedCounts[index] = (savedCounts[index] ?? 0) +
-              (this.repository.softDeleteById(candidate.forgetItemId) ? 1 : 0)
+            if (this.repository.softDeleteById(candidate.forgetItemId)) {
+              savedCounts[index] = (savedCounts[index] ?? 0) + 1
+              reportMemoryChange(turn.onMemoryChange, MemoryActivityAction.TemporaryEnded, target!)
+            }
             continue
           }
           if (
@@ -1615,6 +1625,11 @@ No markdown. No explanation.`
             ...(candidate.supersedesItemId ? { supersedesItemId: candidate.supersedesItemId } : {}),
             metadata: { evidence: candidate.evidence }
           })
+          if (!savedTemporaryIds.has(saved.id)) {
+            reportMemoryChange(turn.onMemoryChange,
+              target || saved.createdAt < saved.updatedAt ? MemoryActivityAction.TemporaryUpdated : MemoryActivityAction.TemporarySaved,
+              saved, target)
+          }
           savedTemporaryIds.add(saved.id)
           savedCounts[index] = (savedCounts[index] ?? 0) + 1
         }
