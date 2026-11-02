@@ -302,11 +302,13 @@ function buildSearchMessage(
   position: number,
   focusIndex = 0
 ): SessionSearchMessage {
-  const isTruncated = message.message.length > MAX_EXCERPT_CHARS
-  const maximumStart = Math.max(0, message.message.length - MAX_EXCERPT_CHARS)
+  const characters = Array.from(message.message)
+  const focusCharacter = Array.from(message.message.slice(0, focusIndex)).length
+  const isTruncated = characters.length > MAX_EXCERPT_CHARS
+  const maximumStart = Math.max(0, characters.length - MAX_EXCERPT_CHARS)
   const excerptStart = isTruncated
     ? Math.floor(
-        Math.min(maximumStart, Math.max(0, focusIndex - MAX_EXCERPT_CHARS / 3))
+        Math.min(maximumStart, Math.max(0, focusCharacter - MAX_EXCERPT_CHARS / 3))
       )
     : 0
 
@@ -315,10 +317,10 @@ function buildSearchMessage(
     ...(message.messageId ? { messageId: message.messageId } : {}),
     who: message.who,
     sentAt: message.sentAt,
-    message: message.message.slice(
+    message: characters.slice(
       excerptStart,
       excerptStart + MAX_EXCERPT_CHARS
-    ),
+    ).join(''),
     excerptStart,
     isTruncated
   }

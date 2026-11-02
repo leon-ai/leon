@@ -13,6 +13,14 @@ import {
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { MessageLog } from '@/types'
+import {
+  DEFAULT_ARCHIVE_PAGE_CHARACTERS,
+  MAXIMUM_ARCHIVE_PAGE_CHARACTERS
+} from '@@/bridges/runtime/contracts/conversation-archive'
+import type {
+  ArchiveMessagePage,
+  ArchiveMessageReadOptions
+} from '@@/bridges/runtime/contracts/conversation-archive'
 import { TOOL_CONTENT_PREVIEW_CHARACTERS } from './tool-content-contract'
 import type { ToolCallContents, ToolContentPart } from './tool-content-contract'
 
@@ -431,6 +439,50 @@ export class ConversationRepository {
       .get(sessionId, messageId, messageId)
 
     return row ? JSON.parse(String(row['payload'])) as MessageLog : null
+  }
+
+  /**
+   * Pages visible source text in SQLite so a long archived document never requires
+   * transferring its full body or unrelated inference and tool disclosures.
+   */
+  public readMessageText(
+    sessionId: string,
+    messageId: string,
+    options: ArchiveMessageReadOptions = {}
+  ): ArchiveMessagePage | null {
+    const offset = options.offset ?? 0
+    const requestedLimit = options.limit ?? DEFAULT_ARCHIVE_PAGE_CHARACTERS
+    if (!Number.isSafeInteger(offset) || offset < 0 ||
+      !Number.isSafeInteger(requestedLimit) || requestedLimit < 1) {
+      throw new Error('Archive offsets must be non-negative integers and limits must be positive integers.')
+    }
+
+    const limit = Math.min(requestedLimit, MAXIMUM_ARCHIVE_PAGE_CHARACTERS)
+    // SQLite offsets count Unicode characters; continuation must use these units too.
+    const row = this.db.prepare(`SELECT id, role, sent_at,
+        substr(content, ?, ?) AS text, length(content) AS total_characters
+      FROM conversation_messages
+      WHERE session_id = ? AND id = ? AND visible = 1 AND role IN ('owner', 'leon')
+      LIMIT 1`).get(offset + 1, limit, sessionId, messageId)
+    if (!row) {
+      return null
+    }
+
+    const totalCharacters = Number(row['total_characters'])
+    if (offset > totalCharacters) {
+      throw new Error('The archive offset is beyond the end of this message.')
+    }
+
+    return {
+      sessionId,
+      messageId: String(row['id']),
+      who: row['role'] as ArchiveMessagePage['who'],
+      sentAt: Number(row['sent_at']),
+      text: String(row['text']),
+      offset,
+      nextOffset: offset + limit < totalCharacters ? offset + limit : null,
+      totalCharacters
+    }
   }
 
   /**
