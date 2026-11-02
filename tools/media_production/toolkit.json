@@ -1,16 +1,17 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Media Production",
-  "description": "Create and edit images, vector artwork, photos, videos and motion graphics, and deliver downloadable conversation artifacts.",
+  "description": "Create and edit images, vector artwork, interface designs, photos, videos and motion graphics, and deliver downloadable conversation artifacts.",
   "icon_name": "sparkling-2-line",
   "context_files": [],
   "tools": [
     "image",
     "photocraft",
     "vectorcraft",
+    "figcraft",
     "hyperframes",
     "filmcraft",
     "lightcraft"
   ],
-  "progressive_guidance": "Use image for hosted image generation with profile defaults. Use photocraft for precise local image and layered-project edits: discover commands, inspect the source, edit headlessly, and visually verify the returned preview. Its desktop control is optional for work in the live app. Use vectorcraft for editable vector artwork, hyperframes for HTML/CSS motion graphics and animated compositions, filmcraft for timeline editing, and lightcraft for RAW development and explicitly selected photo libraries. These tools run headlessly and deliver new artifacts. Load the Craft tools command registries before constructing edits. For Hyperframes, author local HTML projects with the file tool, choose custom motion or suitable catalog components, and check layout plus preview animation before rendering. Use the document toolkit for Word documents, PDFs, charts and animated slide presentations; use music_audio tools for speech and audio processing."
+  "progressive_guidance": "Use image for hosted image generation with profile defaults. Use photocraft for precise local image and layered-project edits: discover commands, inspect the source, edit headlessly, and visually verify the returned preview. Its desktop control is optional for work in the live app. Use vectorcraft for editable vector artwork, figcraft for interface designs, components and prototypes grounded in the app's existing design system, hyperframes for HTML/CSS motion graphics and animated compositions, filmcraft for timeline editing, and lightcraft for RAW development and explicitly selected photo libraries. These tools run headlessly and deliver new artifacts. Load the Craft tools command registries before constructing edits. For Hyperframes, author local HTML projects with the file tool, choose custom motion or suitable catalog components, and check layout plus preview animation before rendering. Use the document toolkit for Word documents, PDFs, charts and animated slide presentations; use music_audio tools for speech and audio processing."
 }
