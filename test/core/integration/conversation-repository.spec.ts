@@ -1,3 +1,5 @@
+import { createMemoryActivity } from '@/core/memory-manager/memory-activity'
+import { MemoryActivityAction } from '@/core/llm-manager/memory-activity-contract'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -326,4 +328,26 @@ describe('profile conversation archive', () => {
     const next = repository.appendEvent({ session_id: 'chat', body: 'Done' })
     expect(next.sequence).toBeGreaterThan(event.sequence)
   })
+  it('upserts late memory details without changing the answer, metrics or session ordering', () => {
+    const repository = open()
+    repository.saveSession(session('source'))
+    repository.upsertMessage('source', {
+      messageId: 'answer', who: 'leon', message: 'Verified answer.', isAddedToHistory: true,
+      agentResponseTrace: { id: 'trace', planSteps: [], toolCalls: [], metrics: { durationMs: 125 } }
+    }, { sentAt: 1_000 })
+    const before = repository.readSession('source')
+    const activity = createMemoryActivity('outcome', MemoryActivityAction.Saved, [{
+      id: 'fact', content: 'Caldera contact is Nora.'
+    }], 2_000, 12)
+    expect(repository.upsertMemoryActivity('source', 'trace', activity)).toBe(true)
+    expect(repository.upsertMemoryActivity('source', 'trace', activity)).toBe(true)
+    expect(repository.readMessage('source', 'answer')).toMatchObject({
+      message: 'Verified answer.', sentAt: 1_000, isAddedToHistory: true,
+      agentResponseTrace: { metrics: { durationMs: 125 }, progressMessages: [activity] }
+    })
+    expect(repository.readSession('source')).toEqual(before)
+    expect(repository.upsertMemoryActivity('source', 'deleted-answer', activity)).toBe(false)
+    expect(open('other').upsertMemoryActivity('source', 'answer', activity)).toBe(false)
+  })
+
 })

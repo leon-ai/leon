@@ -13,6 +13,7 @@ import {
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { MessageLog } from '@/types'
+import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import {
   DEFAULT_ARCHIVE_PAGE_CHARACTERS,
   MAXIMUM_ARCHIVE_PAGE_CHARACTERS
@@ -439,6 +440,29 @@ export class ConversationRepository {
       .get(sessionId, messageId, messageId)
 
     return row ? JSON.parse(String(row['payload'])) as MessageLog : null
+  }
+
+  /**
+   * Adds completed memory outcomes without rewriting an answer, its clock, or
+   * the session's activity ordering. Deleted turns must never be recreated.
+   */
+  public upsertMemoryActivity(sessionId: string, messageId: string, activity: AgentProgressMessage): boolean {
+    return this.db.transaction(() => {
+      const record = this.readMessage(sessionId, messageId)
+      if (!record?.isAddedToHistory || record.who !== 'leon' || !activity.memory) {
+        return false
+      }
+      const trace = record.agentResponseTrace ?? {
+        id: record.messageId ?? messageId, planSteps: [], toolCalls: []
+      }
+      const messages = new Map((trace.progressMessages ?? []).map((message) => [message.id, message]))
+      messages.set(activity.id, activity)
+      const value = { ...record, agentResponseTrace: { ...trace, progressMessages: [...messages.values()] } }
+      this.db.prepare(`UPDATE conversation_messages SET payload = ?, summary = ?
+        WHERE session_id = ? AND (id = ? OR trace_id = ?)`)
+        .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, messageId, messageId)
+      return true
+    })()
   }
 
   /**
