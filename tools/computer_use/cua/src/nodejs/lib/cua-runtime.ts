@@ -146,6 +146,9 @@ export class CuaRuntime {
     parameters: Record<string, unknown>
   ): Promise<ToolRuntimeResult> {
     if (input.signal?.aborted) return this.failure('Computer-use execution canceled before this action.')
+    if (action === 'observe') {
+      return this.observeFrontmostWindow(input)
+    }
     if (action === COMPUTER_USE_ACTION_SEQUENCE_NAME) {
       return this.executeActionSequence(input, parameters)
     }
@@ -381,7 +384,8 @@ export class CuaRuntime {
       // source window before capture. Never replay the input while waiting.
       if (captureAfter && !actionFailed && Number(settleMs) > 0) await delay(Number(settleMs))
       // A popup can extend beyond its parent window or own a separate surface.
-      const menuAction = action === 'invoke_menu' || (action === 'click' && actionParameters['button'] === 'right')
+      const menuAction = action === 'invoke_menu' || (action === 'click' &&
+        (actionParameters['button'] === 'right' || actionParameters['action'] === 'show_menu'))
       const capture = (targetParameters: Record<string, unknown>): Promise<CapturedComputerUseState | null> =>
         this.captureStateAfterAction(runtime, input,
           menuAction ? { scope: 'desktop', session: actionParameters['session'] } : targetParameters, action)
@@ -533,6 +537,62 @@ export class CuaRuntime {
   }
 
   /**
+   * Resolve and inspect the current window in one read-only tool operation.
+   */
+  private async observeFrontmostWindow(input: ToolExecutionContext): Promise<ToolRuntimeResult> {
+    const runtime = await this.runtimeManager.get(input)
+    const result = await this.callAction(runtime.driver, input, 'list_windows', {
+      on_screen_only: true
+    })
+    const inventory = parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+    if (hasCuaError(result) || !Array.isArray(inventory?.['windows'])) {
+      return this.failure(result.text || 'Window discovery failed. Use list_windows and inspect an explicit target.')
+    }
+
+    const windows = inventory['windows'].map(asRecord).filter((window) =>
+      window && window['is_on_screen'] === true && window['minimized'] !== true &&
+      window['on_current_space'] !== false &&
+      (window['layer'] === undefined || window['layer'] === 0) &&
+      Number.isSafeInteger(window['pid']) && Number(window['pid']) > 0 &&
+      Number.isSafeInteger(window['window_id']) && Number(window['window_id']) > 0
+    ) as Record<string, unknown>[]
+    // Array position is not a stacking-order guarantee. Missing or tied z-order
+    // requires explicit discovery; never guess a target or activate an app.
+    if (windows.length === 0 || windows.some((window) => !Number.isSafeInteger(window['z_index']))) {
+      return this.failure('A unique frontmost window could not be established. Use list_windows, then get_window_state with the intended pid/window_id.')
+    }
+    windows.sort((left, right) => Number(right['z_index']) - Number(left['z_index']))
+    const window = windows[0]!
+    if (windows[1]?.['z_index'] === window['z_index']) {
+      return this.failure('Frontmost window order is ambiguous. Use list_windows, then inspect the intended pid/window_id.')
+    }
+
+    const parameters = {
+      pid: window['pid'],
+      window_id: window['window_id'],
+      ...(hasText(input.parameters['query']) ? { query: input.parameters['query'] } : {})
+    }
+    const observation = await this.executeAction({ ...input, parameters }, 'get_window_state', parameters)
+    const state = asRecord(observation.output['result'])
+    const pid = state?.['pid']
+    const windowId = state?.['window_id']
+    if (!observation.success || !Number.isSafeInteger(pid) || Number(pid) <= 0 ||
+        !Number.isSafeInteger(windowId) || Number(windowId) <= 0) {
+      return observation
+    }
+
+    return {
+      ...observation,
+      // Put the explicit target before the potentially long tree so a bounded
+      // preview still tells the model which window owns these coordinates.
+      output: {
+        capture_target: { kind: 'window', pid, window_id: windowId },
+        ...observation.output
+      }
+    }
+  }
+
+  /**
    * Provides one recovery decision for both individual and batched actions.
    */
   private getActionRecovery(
@@ -673,6 +733,7 @@ export class CuaRuntime {
 
     // Reject unsupported actions before setup or input. Their position in a
     // sequence must not cause an avoidable partial edit.
+    let refreshed = false
     for (const [index, value] of steps.entries()) {
       const step = asRecord(value)
       const stepParameters = asRecord(step?.['parameters'])
@@ -684,6 +745,29 @@ export class CuaRuntime {
 
       try {
         this.resolveSettleMs(stepParameters['settle_ms'])
+        const named = hasText(stepParameters['name'])
+        const readsState = named || hasText(step['wait_for'])
+        const target = asRecord(stepParameters['target'])
+        const pid = target?.['pid'] ?? stepParameters['pid']
+        const windowId = target?.['window_id'] ?? stepParameters['window_id']
+        if (stepParameters['role'] != null && !named) {
+          throw new Error('A named lookup role requires an exact name.')
+        }
+        if ((readsState || hasText(step['expect']) || step['action'] === 'set_value') &&
+            (!Number.isSafeInteger(pid) || Number(pid) <= 0 ||
+              !Number.isSafeInteger(windowId) || Number(windowId) <= 0 ||
+              (target && target['kind'] !== 'window'))) {
+          throw new Error('Named targets, checks and set_value require an explicit window pid/window_id.')
+        }
+        if ((named || readsState || refreshed) &&
+            (stepParameters['element_token'] != null || stepParameters['x'] != null || stepParameters['y'] != null)) {
+          throw new Error('A fresh named lookup or check invalidates earlier tokens and pixels. Use exact names or focused keyboard input after it.')
+        }
+        if (step['action'] === 'set_value' &&
+            (typeof stepParameters['value'] !== 'string' || (!named && !hasText(stepParameters['element_token'])))) {
+          throw new Error('set_value requires value and a current element_token or exact name.')
+        }
+        refreshed ||= readsState || hasText(step['expect'])
       } catch (error) {
         return this.failure(`Step ${index + 1}: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -715,7 +799,7 @@ export class CuaRuntime {
         // Tab, Enter, scrolling or another target can change focus or layout.
         focusedField = undefined
       }
-      return { action, parameters }
+      return { ...step, action, parameters }
     })
     const pixelClickCount = normalizedSteps.filter(({ action, parameters }) =>
       (action === 'click' || action === 'type_text') &&
@@ -739,8 +823,33 @@ export class CuaRuntime {
     for (const [index, value] of normalizedSteps.entries()) {
       const step = asRecord(value)!
       const stepAction = step['action'] as string
-      const stepParameters = asRecord(step['parameters'])!
+      let stepParameters = asRecord(step['parameters'])!
+      const named = hasText(stepParameters['name'])
       const settleMs = this.resolveSettleMs(stepParameters['settle_ms'])
+
+      try {
+        if (hasText(step['wait_for'])) {
+          await this.checkSequenceText(input, stepParameters, step['wait_for'])
+        }
+        if (hasText(stepParameters['name'])) {
+          stepParameters = await this.resolveSequenceTarget(input, stepAction, stepParameters)
+        }
+      } catch (error) {
+        failure = this.executionFailure(error)
+        stepResults.push({ action: stepAction, success: false,
+          result: failure.output, error_code: 'sequence_precondition_failed' })
+        const target = asRecord(stepParameters['target'])
+        const observed = await this.executeAction(input, 'get_window_state', {
+          pid: target?.['pid'] ?? stepParameters['pid'],
+          window_id: target?.['window_id'] ?? stepParameters['window_id']
+        })
+        postActionState = observed.output['result']
+        modelFiles = observed.modelFiles ?? []
+        if (Array.isArray(observed.output['artifacts'])) {
+          artifacts.push(...observed.output['artifacts'])
+        }
+        break
+      }
 
       const boundedParameters = { ...stepParameters }
       delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
@@ -755,7 +864,8 @@ export class CuaRuntime {
         index === steps.length - 1 &&
         COMPUTER_USE_CAPTURE_ACTIONS.has(stepAction)
       ) {
-        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = captureAfter
+        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = captureAfter &&
+          !hasText(step['expect'])
       }
 
       input.onProgress?.({
@@ -787,6 +897,14 @@ export class CuaRuntime {
         action: stepAction,
         success: result.success,
         result: result.output['result'] ?? null,
+        ...(named ? {
+            resolved_target: {
+              ...asRecord(stepParameters['target']),
+              pid: asRecord(stepParameters['target'])?.['pid'] ?? stepParameters['pid'],
+              window_id: asRecord(stepParameters['target'])?.['window_id'] ?? stepParameters['window_id'],
+              element_token: stepParameters['element_token']
+            }
+          } : {}),
         ...(recovery ? { recovery } : {}),
         ...(result.output['error_code'] ? { error_code: result.output['error_code'] } : {})
       })
@@ -794,6 +912,34 @@ export class CuaRuntime {
       if (!result.success) {
         failure = result
         break
+      }
+
+      const expected = step['expect']
+      if (hasText(expected)) {
+        try {
+          const verification = await this.checkSequenceText(input, stepParameters, expected)
+          stepResults.at(-1)!['verification'] = verification
+        } catch (error) {
+          failure = this.executionFailure(error)
+          stepResults.at(-1)!['success'] = false
+          stepResults.at(-1)!['error_code'] = 'sequence_postcondition_failed'
+          stepResults.at(-1)!['verification'] = failure.output
+        }
+        if ((index === steps.length - 1 && captureAfter) || failure) {
+          const target = asRecord(stepParameters['target'])
+          const observed = await this.executeAction(input, 'get_window_state', {
+            pid: target?.['pid'] ?? stepParameters['pid'],
+            window_id: target?.['window_id'] ?? stepParameters['window_id']
+          })
+          postActionState = observed.output['result']
+          modelFiles = observed.modelFiles ?? []
+          if (Array.isArray(observed.output['artifacts'])) {
+            artifacts.push(...observed.output['artifacts'])
+          }
+        }
+        if (failure) {
+          break
+        }
       }
 
       if (index < steps.length - 1 && settleMs > 0) {
@@ -818,6 +964,105 @@ export class CuaRuntime {
       })),
       ...(modelFiles.length > 0 ? { modelFiles } : {})
     }
+  }
+
+  /**
+   * Resolves one exact semantic target without reusing a previous snapshot token.
+   */
+  private async resolveSequenceTarget(
+    input: ToolExecutionContext,
+    action: string,
+    parameters: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const target = asRecord(parameters['target'])
+    const pid = target?.['pid'] ?? parameters['pid']
+    const windowId = target?.['window_id'] ?? parameters['window_id']
+    const runtime = await this.runtimeManager.get(input)
+    const args = await this.runtimeManager.prepareParameters(runtime, input, 'get_window_state', {
+      ...this.applyObservationDefaults('get_window_state', {}),
+      pid, window_id: windowId, query: parameters['name'],
+      tree_format: 'elements', include_screenshot: false
+    })
+    const observed = await this.callAction(runtime.driver, input, 'get_window_state', args)
+    this.forgetVisualState(input, parameters)
+    const state = parseJsonRecord(observed.structuredJson) || parseJsonRecord(observed.rawJson)
+    if (hasCuaError(observed) || !Array.isArray(state?.['elements']) || state['truncated'] === true ||
+        state['pid'] !== pid || state['window_id'] !== windowId) {
+      throw new Error('Fresh named-target observation failed or was incomplete. Observe the exact window before continuing.')
+    }
+    const matches = state['elements'].map(asRecord).filter((element) => element &&
+      (element['label'] === parameters['name'] || element['value'] === parameters['name']) &&
+      (!hasText(parameters['role']) || element['role'] === parameters['role']))
+    if (matches.length !== 1 || !hasText(matches[0]?.['element_token']) || matches[0]?.['enabled'] === false) {
+      throw new Error(`Exact named target matched ${matches.length} elements or was disabled. Observe and choose a current token; no input was sent for this step.`)
+    }
+    const element = matches[0]!
+    // Structured AX names use AXPress/AXShowMenu; Markdown uses press/show_menu.
+    const requestedAction = String(parameters['action'] ?? 'press').split('_').join('').toLowerCase()
+    const supported = Array.isArray(element['actions']) && element['actions'].some((value) => {
+      const name = String(value).split('_').join('').toLowerCase()
+      return name === requestedAction || name === `ax${requestedAction}`
+    })
+    if (action === 'click' && !supported) {
+      throw new Error('The named element does not advertise the requested click action. Observe and use a grounded alternative.')
+    }
+    const resolved: Record<string, unknown> = { ...parameters, element_token: element['element_token'] }
+    delete resolved['name']
+    delete resolved['role']
+    return resolved
+  }
+
+  /**
+   * Reuses native bounded checks without allowing hidden actions or target inheritance.
+   */
+  private async checkSequenceText(
+    input: ToolExecutionContext,
+    parameters: Record<string, unknown>,
+    text: string
+  ): Promise<Record<string, unknown>> {
+    const target = asRecord(parameters['target'])
+    const runtime = await this.runtimeManager.get(input)
+    const pid = target?.['pid'] ?? parameters['pid']
+    const windowId = target?.['window_id'] ?? parameters['window_id']
+    // Native text search can omit editor values derived into display labels.
+    // Inspect the actual AX values before waiting, and once after a timeout.
+    const readText = async (): Promise<Record<string, unknown> | null> => {
+      const observationArgs = await this.runtimeManager.prepareParameters(runtime, input, 'get_window_state', {
+        ...this.applyObservationDefaults('get_window_state', {}),
+        pid, window_id: windowId, tree_format: 'elements', include_screenshot: false
+      })
+      const observed = await this.callAction(runtime.driver, input, 'get_window_state', observationArgs)
+      this.forgetVisualState(input, parameters)
+      const state = parseJsonRecord(observed.structuredJson) || parseJsonRecord(observed.rawJson)
+      if (hasCuaError(observed) || state?.['pid'] !== pid || state['window_id'] !== windowId ||
+          !Array.isArray(state['elements'])) {
+        return null
+      }
+      const element = state['elements'].map(asRecord).find((element) => element &&
+        ['label', 'value'].some((field) => typeof element[field] === 'string' && element[field].includes(text)))
+      return element ? { ok: true, source: 'native_accessibility',
+        snapshot_id: state['snapshot_id'], element_token: element['element_token'], expected_text: text } : null
+    }
+    const present = await readText()
+    if (present) {
+      return present
+    }
+    const args = await this.runtimeManager.prepareParameters(runtime, input, 'run_steps', {
+      pid, window_id: windowId,
+      foreground_fallback: false,
+      steps: [{ wait_for: { text, timeout_ms: COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS } }]
+    })
+    const checked = await this.callAction(runtime.driver, input, 'run_steps', args)
+    this.forgetVisualState(input, parameters)
+    const result = parseJsonRecord(checked.structuredJson) || parseJsonRecord(checked.rawJson)
+    if (hasCuaError(checked) || result?.['ok'] !== true) {
+      const settled = await readText()
+      if (settled) {
+        return settled
+      }
+      throw new Error(`Expected interface text was not established. Input may already have landed; inspect before retrying. ${checked.text}`)
+    }
+    return result
   }
 
   private applyObservationDefaults(

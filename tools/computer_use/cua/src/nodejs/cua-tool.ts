@@ -68,6 +68,13 @@ export default class CuaTool extends Tool {
   }
 
   /**
+   * Observe the current frontmost normal window without switching applications.
+   */
+  public async observe(query?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('observe', { query })
+  }
+
+  /**
    * Execute health report through the retained Cua runtime.
    */
   public async health_report(include?: unknown, skip?: unknown): Promise<Record<string, unknown>> {
@@ -173,9 +180,11 @@ export default class CuaTool extends Tool {
     window_id?: unknown,
     x?: unknown,
     y?: unknown,
-    settle_ms?: unknown
+    settle_ms?: unknown,
+    action?: unknown
   ): Promise<Record<string, unknown>> {
     return this.invoke('click', {
+      action,
       capture_after,
       button,
       count,

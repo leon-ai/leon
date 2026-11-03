@@ -9,6 +9,7 @@ export const COMPUTER_USE_CAPTURE_ACTIONS = new Set([
   'drag',
   'scroll',
   'type_text',
+  'set_value',
   'press_key',
   'hotkey'
 ])

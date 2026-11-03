@@ -4,7 +4,7 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
-  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens. Application menu-bar entries may appear in a window tree but are outside that window; use invoke_menu with an exact observed menu path rather than clicking their window tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse perform_actions for predictable inputs on already observed controls, including semantic button sequences and keyboard input. Load its schema before building the sequence. Keep element_token beside target (or pid/window_id), never inside target; target uses kind=window with pid/window_id or kind=desktop with display_id.",
+  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens. Application menu-bar entries may appear in a window tree but are outside that window; use invoke_menu with an exact observed menu path rather than clicking their window tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse perform_actions for predictable inputs on observed controls and verify its final state. Keep element_token beside target or pid/window_id, never inside target; target is kind=window with pid/window_id or kind=desktop with display_id.",
   "icon_name": "cursor-line",
   "author": {
     "name": "Louis Grenard",
@@ -12,6 +12,26 @@
     "url": "https://x.com/grenlouis"
   },
   "functions": {
+    "observe": {
+      "description": "Inspect the current frontmost normal window: fresh accessibility tree and image, without switching apps. Use for work in the already-open foreground window.",
+      "progressive_guidance": "Check app/title and copy capture_target into target on every input step. Use query for missing controls. For another window or unavailable stacking order, use list_windows and get_window_state. No implicit current-window target.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "Optional native accessibility filter for a missing control or exact text in the current window.",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
     "list_apps": {
       "description": "List installed desktop applications and configured preferred_apps. Use it to choose a launch target when the owner did not name one.",
       "progressive_guidance": "preferred_apps includes saved choices even when query filters the app list. found_in_desktop_inventory=false means no desktop entry matched, not that the app is absent: for a terminal-hosted app, consult ACTIVITY.md process ancestry and inspect the host's correct idle session. The terminal is its host, not a replacement for the selected app. Running time is not proof of preference. Remote context must describe the target device, not the server. Save a new preference only with owner confirmation.",
@@ -134,7 +154,7 @@
     },
     "get_window_state": {
       "description": "Inspect one native window and return its interface tree plus a screenshot. Use this for visible appearance, colors, or controls after list_windows.",
-      "progressive_guidance": "Use the returned accessibility text before Copy or OCR. If only the outer frame is exposed, retry the tree at most once for a missing control. Reuse the latest post-action observation; additions/removals can shift controls. For a loading destination, set settle_ms and observe rather than repeating navigation. Inspect newly opened windows/dialogs before restoring the previous window.",
+      "progressive_guidance": "Read AX text before Copy or OCR. Semantic click needs its listed action (default press); focus other text fields using image pixels or keyboard. Retry an outer-frame-only tree at most once for a missing control. Reuse post-action state. Observe changed or loading destinations (settle_ms), including new windows/dialogs, before continuing.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -974,6 +994,10 @@
             "minimum": 0,
             "maximum": 2000,
             "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
+          },
+          "action": {
+            "type": "string",
+            "description": "Native action listed on the observed element; default press. Use open only when advertised. Unsupported actions are refused."
           }
         },
         "type": "object"
@@ -2332,8 +2356,8 @@
       }
     },
     "perform_actions": {
-      "description": "Run up to eight grounded inputs in order with one final observation, stopping on failure. Prefer this to individual calls for predictable button or keyboard sequences.",
-      "progressive_guidance": "Batch predictable steps without intermediate visual decisions. Multiple semantic clicks from the same current window snapshot are allowed when the controls stay valid; the one-click limit applies only to pixel targeting. Keep element_token at the step parameters root, beside pid/window_id or target={kind:\"window\",pid,window_id}. Never nest element_token inside target. Include an explicit target on every keyboard step. Within one field, combine click, select-all and type_text; do not batch different spatial fields or zoom with its dependent click. Set settle_ms only when a transition needs time; place it on the last step before the final observation when possible. Reuse the final observation and inspect uncertain input before retrying.",
+      "description": "One to eight inputs, one final observation. At most ONE x/y step, including type_text. Includes set_value for dropdowns; click/type/key inputs are already included.",
+      "progressive_guidance": "Prefer set_value for dropdown options; type_text for free text. Every step needs an explicit target or pid/window_id. Batch known inputs; exact name plus optional native role resolves later controls from fresh state. Missing/ambiguous names stop. After a named lookup or check use names or focused keyboard, never old tokens/pixels. At most ONE x/y step in the batch. Click tokens need the listed action (default press). wait_for/expect check literal interface text with bounded waits. Stop before decisions needing review; inspect final state and uncertain delivery before retrying.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2343,7 +2367,7 @@
             "type": "boolean"
           },
           "steps": {
-            "description": "Ordered mechanical actions. Each parameters object uses its action's schema. Include an explicit target on every keyboard step, even when reusing an already focused field; targets are not inherited from previous steps.",
+            "description": "At most ONE step with x/y, including type_text. One to eight mechanical inputs; every step needs an explicit target. Exact names can cross transitions; fresh reads invalidate old tokens/pixels.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -2353,14 +2377,15 @@
                     "scroll",
                     "type_text",
                     "press_key",
-                    "hotkey"
+                    "hotkey",
+                    "set_value"
                   ],
                   "type": "string"
                 },
                 "parameters": {
                   "additionalProperties": false,
                   "type": "object",
-                  "description": "Input fields for this step action. For a semantic click use {pid,window_id,element_token}; alternatively use {target:{kind:\"window\",pid,window_id},element_token}. Keyboard steps require target plus text, key, or keys for their action.",
+                  "description": "At most ONE x/y step in the entire batch. Every step needs target or pid/window_id. Choose a current token or exact name, never both. Keep element_token beside target.",
                   "properties": {
                     "amount": {
                       "maximum": 50,
@@ -2368,7 +2393,7 @@
                       "type": "integer"
                     },
                     "button": {
-                      "description": "Mouse button. Default: \"left\" (legacy back-compat). X11: routed via ButtonPress/Release with the matching evdev code. Native Wayland: only left-button is supported via the virtual-pointer protocol; right/middle return an error.",
+                      "description": "Mouse button: left by default. Native Wayland supports left only; right/middle fail.",
                       "enum": [
                         "left",
                         "right",
@@ -2409,7 +2434,7 @@
                       "pattern": "^s[0-9a-f]{8}:[0-9]+$"
                     },
                     "key": {
-                      "description": "Canonical lowercase CUA key name. Use `return` to submit or commit, not `enter`; common names include `tab`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, and `delete`. Letters, digits, and function keys use their lowercase form.",
+                      "description": "Canonical lowercase CUA key, e.g. tab, escape, space, up/down, home/end. Use return to commit, never enter.",
                       "type": "string"
                     },
                     "keys": {
@@ -2469,7 +2494,7 @@
                     },
                     "target": {
                       "additionalProperties": false,
-                      "description": "Exact observed target: {kind:\"window\",pid,window_id} or {kind:\"desktop\",display_id}. Put element_token beside target, never inside it. Omit target when using top-level pid/window_id for semantic clicks.",
+                      "description": "Exact observed window {kind:\"window\",pid,window_id} or desktop {kind:\"desktop\",display_id}. Keep element_token beside target.",
                       "properties": {
                         "display_id": {
                           "type": "string"
@@ -2503,8 +2528,36 @@
                     },
                     "y": {
                       "type": "number"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Exact dropdown option or native value for set_value; use type_text for free text."
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Exact live element label/value. Fresh lookup before this step; zero, multiple, disabled or truncated matches stop the batch. Do not combine with element_token or pixels."
+                    },
+                    "role": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Optional exact native role from an observation, used with name."
+                    },
+                    "action": {
+                      "type": "string",
+                      "description": "For click: observed native action; default press, open for an element advertising open."
                     }
                   }
+                },
+                "wait_for": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Expected interface text before input. Bounded native wait; unmet condition stops without sending this step."
+                },
+                "expect": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Expected interface text after input. Bounded native check; failure stops and returns current state. Never replay solely because a check failed."
                 }
               },
               "type": "object"
@@ -2525,8 +2578,8 @@
       }
     },
     "set_value": {
-      "description": "Set the value of an editable UI element from the latest window state.",
-      "progressive_guidance": "Use a current editable element from get_window_state. Confirm the field's label and meaning, then verify the resulting value, units and dependent totals rather than relying on dispatch success. If Finder returns file_name_needs_rename, use a permitted keyboard rename flow and verify the filename in a fresh folder listing; changing Get Info text alone does not prove the file was renamed.",
+      "description": "Choose a dropdown option or set a native editable value from a current element token.",
+      "progressive_guidance": "Use for dropdown options, sliders and native editable values; use type_text for free text. Confirm the field and verify its resulting value and dependent state. For sequences, set_value is included in perform_actions. Preserve Finder file_name_needs_rename diagnostics; use an authorized rename flow and verify the filename.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,

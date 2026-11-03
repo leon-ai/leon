@@ -227,6 +227,12 @@ export class ComputerUseRuntimeManager {
     if (managedParameters['element_token'] === '') {
       delete managedParameters['element_token']
     }
+    if (action === 'set_value' && target?.['kind'] === 'window') {
+      // The native setter accepts legacy window fields rather than target.
+      managedParameters['pid'] = target['pid']
+      managedParameters['window_id'] = target['window_id']
+      delete managedParameters['target']
+    }
     if (action === 'clipboard_write' && typeof managedParameters['text'] === 'string') {
       for (const key of ['file_path', 'image_path']) {
         if (managedParameters[key] === '') delete managedParameters[key]
