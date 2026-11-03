@@ -56,7 +56,7 @@ import {
 } from './computer-use-settings'
 import { createCuaDriverAdapter } from './cua/cua-driver-adapter'
 import { CuaDesktopSetupPendingError, CuaDesktopSetupState } from './cua/cua-desktop-setup'
-import { asRecord, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
+import { asRecord, hasText, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
 
 export { COMPUTER_USE_ACTION_NAMES } from './constants'
 export {
@@ -480,7 +480,7 @@ export class CuaRuntime {
             post_action_state: capturedState.result,
             next_step: capturedState.result['success'] === false
               ? 'Input may have landed, but the post-action observation failed. Follow its recovery diagnostics before another pixel action; do not replay input solely because capture failed.'
-              : 'Inspect the post-action state and any attached screenshot before another observation or retry. If navigation opened a new tab, app or dialog, inspect that destination rather than bringing the previous window forward. If it is blank or loading, observe the destination again with settle_ms before declaring a blocker; do not replay the navigation. Otherwise reuse this evidence unless needed information is missing or the interface has changed.'
+              : 'Inspect the fresh post-action state before continuing. Inspect new windows/dialogs instead of restoring the previous window. For loading destinations observe with settle_ms; reuse current evidence and never replay input solely because capture failed.'
           } : {}),
           ...(visualStateUnchanged
             ? {
@@ -490,12 +490,25 @@ export class CuaRuntime {
                 }
               }
             : {}),
-          ...(result.text && !compactedResult?.changed
+          ...(result.text && !compactedResult?.changed && result.text !== primaryResult['summary']
             ? { summary: this.artifactStore.buildTextPreview(succeeded ? result.text : failureMessage) }
             : {}),
-          ...(result.action ? { action_result: result.action } : {}),
+          // Canonical JSON already carries the action evidence. A second typed
+          // mirror can crowd the fresh interface out of the bounded preview.
+          ...(result.action && (!hasText(primaryResult['effect']) || !hasText(primaryResult['route']))
+            ? { action_result: result.action } : {}),
           ...(result.verification
-            ? { verification: result.verification }
+            // Native verification uses u64 counters. Preserve their precision
+            // as decimal strings so the tool worker can send the evidence.
+            ? { verification: {
+                ...result.verification,
+                elapsedMs: String(result.verification.elapsedMs),
+                samples: String(result.verification.samples),
+                predicates: result.verification.predicates.map((predicate) => ({
+                  ...predicate,
+                  index: String(predicate.index)
+                }))
+              } }
             : {}),
           ...(artifacts.length > 0 ? { artifacts } : {}),
           ...(!succeeded && failureCode
@@ -793,7 +806,7 @@ export class CuaRuntime {
       message: failure
         ? `Computer-use sequence stopped at step ${stepResults.length}: ${failure.message}`
         : `Completed ${steps.length} computer-use actions.`,
-      output: this.boundWindowObservation({
+      output: this.boundWindowObservation(this.resultCompactor.compactSequenceRecovery({
         ...(failure ? { success: false } : {}),
         completed_action_count: stepResults.length - (failure ? 1 : 0),
         ...(failure?.output['error_code'] ? { error_code: failure.output['error_code'] } : {}),
@@ -802,7 +815,7 @@ export class CuaRuntime {
         ...(nextStep ? { next_step: nextStep } : {}),
         ...(postActionState ? { post_action_state: postActionState } : {}),
         ...(artifacts.length > 0 ? { artifacts } : {})
-      }),
+      })),
       ...(modelFiles.length > 0 ? { modelFiles } : {})
     }
   }
@@ -823,6 +836,9 @@ export class CuaRuntime {
     return {
       max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
       max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH,
+      // Keep full semantic values compact; native element arrays carry enough
+      // geometry to crowd controls out of the model-facing observation budget.
+      tree_format: 'markdown',
       include_screenshot: true,
       ...parameters
     }
@@ -1092,7 +1108,7 @@ export class CuaRuntime {
       returned_element_count: 0,
       omitted_element_count: elements.length,
       elements_complete: false,
-      hint: 'For exact text absent from these elements, the next extraction step is Copy: right-click the source in the existing screenshot, inspect the menu, then call copy_text. Do not switch to reading zoom, OCR, or guessed URLs until you have tried the source’s Copy action; empty accessibility does not establish that Copy is unavailable. Use current element tokens with their pid/window_id. A newer read replaces tokens. Increase timeout_ms only for a missing control when truncation_reason indicates a timeout, or max_elements/max_depth for their respective limits. query filters results, not traversal cost.'
+      hint: 'Use current window tokens. Query omitted controls; increase walk limits only for matching truncation reasons. For missing exact text, the next extraction step is Copy; use OCR only if Copy fails.'
     }
     // Include paths, metadata and envelope in the budget, not just AX elements.
     // Reserve the worst-case counter width so counters cannot overflow it.
@@ -1166,7 +1182,7 @@ export class CuaRuntime {
           setOfMark.length > 0
             ? 'Numbered labels in the attached image match elements[].som_mark.'
             : '',
-          'pixel_center is in the latest attached screenshot\'s coordinates; use its x,y for a pixel action if AX activation has no effect. Do not use raw log frames as click coordinates.'
+          'pixel_center uses the attached image\'s pixels; use it if AX activation has no effect. Raw log frames are not click coordinates.'
         ].filter(Boolean).join(' ')
       } : {})
     }
@@ -1188,11 +1204,11 @@ export class CuaRuntime {
         zoomed: true,
         zoom_hint: 'This is a window crop. When present, yellow x/y guides label actual crop pixels, not controls. Locate the target center against these guides before clicking; do not guess from the earlier image. Pass crop pixels directly with the same pid/window_id, including inside copy_text. Do not calculate scale/offset or convert to window coordinates; Leon already maps the crop. For unsupported pixel actions or another zoom, first get a full-window screenshot.'
       } : {}),
-      coordinate_hint: `Use only this attached image's pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}. Prefer a current semantic element or its pixel_center. Do not use source-image dimensions, earlier screenshots or a normalized grid.`,
+      coordinate_hint: `Use only this attached image's pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}. Use current elements or pixel_center; never source dimensions, old images or normalized coordinates.`,
       // Ground uncertain positions before delivery rather than relying on
       // post-action no-op detection to correct a guessed click.
       ...(!transform.fromZoom && bounds ? {
-        grounding_hint: 'Locate the source or control in this image before clicking; additions and removals may have moved it. If typing did not change a field, re-locate the field here before retrying. Use zoom for a small control when needed, not as the default text-extraction step, then pass crop pixels directly with capture_target, without converting coordinates.'
+        grounding_hint: 'Locate controls in this image; layout changes invalidate old positions. Re-locate ineffective typing before retrying. Use zoom for small controls, not as the default text-extraction step; pass crop pixels with capture_target directly without conversion.'
       } : {})
     }
   }

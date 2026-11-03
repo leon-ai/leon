@@ -31,10 +31,38 @@ export class ComputerUseResultCompactor {
     if (action === 'list_windows' && Array.isArray(result['windows'])) {
       return this.compactWindowResult(result)
     }
-    if (action === 'get_window_state' && Array.isArray(result['elements'])) {
+    if (action === 'get_window_state' &&
+        (Array.isArray(result['elements']) || hasText(result['tree_markdown']))) {
       return this.compactWindowState(input, result)
     }
     return { result, changed: false }
+  }
+
+  /**
+   * Keeps shared batch recovery advice once while retaining distinct step diagnostics.
+   */
+  public compactSequenceRecovery(result: Record<string, unknown>): Record<string, unknown> {
+    const recovery = result['recovery']
+    const steps = result['steps']
+    if (!hasText(recovery) || !Array.isArray(steps)) {
+      return result
+    }
+
+    let changed = false
+    const compactedSteps = steps.map((value) => {
+      const step = asRecord(value)
+      if (!step || step['recovery'] !== recovery) {
+        return value
+      }
+
+      // The batch already carries this exact text; keep every other field.
+      const compacted = { ...step }
+      delete compacted['recovery']
+      changed = true
+      return compacted
+    })
+
+    return changed ? { ...result, steps: compactedSteps } : result
   }
 
   public getStructuredFailure(
@@ -151,7 +179,7 @@ export class ComputerUseResultCompactor {
     input: ToolExecutionContext,
     result: Record<string, unknown>
   ): CompactedComputerUseResult {
-    const allElements = (result['elements'] as unknown[])
+    const allElements = (Array.isArray(result['elements']) ? result['elements'] : [])
       .map(asRecord)
       .filter((element): element is Record<string, unknown> => element !== null)
     const query = String(input.parameters['query'] || '').trim().toLowerCase()
@@ -194,7 +222,7 @@ export class ComputerUseResultCompactor {
     const omitted = allElements.length - elements.length
     const metadata = Object.fromEntries(
       Object.entries(result).filter(([key]) =>
-        ['pid', 'window_id', 'snapshot_id', 'invalidated_snapshot_ids', 'window_bounds', 'screenshot_width',
+        ['pid', 'window_id', 'app_name', 'window_title', 'snapshot_id', 'invalidated_snapshot_ids', 'window_bounds', 'screenshot_width',
           'screenshot_height', 'screenshot_scale', 'screenshot_frame_valid', 'screenshot_error',
           'elements_complete', 'total_element_count', 'background_input',
           'capture_coverage', 'degraded', 'effect', 'escalation', 'off_space',
@@ -206,6 +234,23 @@ export class ComputerUseResultCompactor {
       metadata['window_bounds'] = {
         x: windowFrame['x'], y: windowFrame['y'],
         width: windowFrame['w'], height: windowFrame['h']
+      }
+    }
+    if (!Array.isArray(result['elements']) && hasText(result['tree_markdown'])) {
+      // Markdown trees already retain roles, values and supported actions.
+      // Keep that evidence once instead of repeating it in the native summary.
+      return {
+        result: {
+          ...metadata,
+          tree_format: result['tree_format'],
+          tree_markdown: result['tree_markdown'],
+          ...(hasText(result['snapshot_id']) ? {
+            element_token_format: `${result['snapshot_id']}:N for row [N]`
+          } : {}),
+          returned_element_count: result['returned_element_count'],
+          element_count: result['element_count']
+        },
+        changed: true
       }
     }
     return {
