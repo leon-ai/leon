@@ -1,3 +1,5 @@
+import { COMPUTER_USE_FOCUSED_SEQUENCE_NAME } from './action-contract'
+
 export const COMPUTER_USE_PROVIDER_ID = 'computer_use'
 export const COMPUTER_USE_ARTIFACT_DIRECTORY = 'computer-use'
 export const COMPUTER_USE_TEXT_PREVIEW_MAX_CHARS = 8_000
@@ -69,6 +71,7 @@ export const COMPUTER_USE_ACTION_NAMES = [
   'press_key',
   'hotkey',
   COMPUTER_USE_ACTION_SEQUENCE_NAME,
+  COMPUTER_USE_FOCUSED_SEQUENCE_NAME,
   'set_value',
   'copy_text',
   'clipboard_read',

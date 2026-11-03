@@ -953,20 +953,21 @@ describe('CuaRuntime', () => {
     const result = await provider.execute({
       toolkitId: 'computer_use',
       toolId: 'cua',
-      functionName: 'perform_actions',
+      functionName: 'act',
       parameters: {
+        target: { kind: 'window', pid: 42, window_id: 7 },
         steps: [
           {
             action: 'hotkey',
-            parameters: { pid: 42, window_id: 7, keys: ['ctrl', 'l'] }
+            parameters: { keys: ['ctrl', 'l'] }
           },
           {
             action: 'type_text',
-            parameters: { pid: 42, window_id: 7, text: 'Leon' }
+            parameters: { text: 'Leon' }
           },
           {
             action: 'press_key',
-            parameters: { pid: 42, window_id: 7, key: 'return' }
+            parameters: { key: 'return' }
           }
         ]
       },
@@ -981,6 +982,10 @@ describe('CuaRuntime', () => {
       'press_key',
       'get_window_state'
     ])
+    const typing = driver.callTool.mock.calls.find(([name]) => name === 'type_text')!
+    expect(JSON.parse(String(typing[1]))).toMatchObject({
+      target: { kind: 'window', pid: 42, window_id: 7 }, text: 'Leon'
+    })
     expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([true, false])
     expect(driver.setAgentCursorEnabled.mock.invocationCallOrder[1])
       .toBeLessThan(driver.callTool.mock.invocationCallOrder.at(-1)!)

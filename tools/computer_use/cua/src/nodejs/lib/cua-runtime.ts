@@ -18,6 +18,11 @@ import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { LogHelper } from '@/helpers/log-helper'
 
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
+import {
+  COMPUTER_USE_FOCUSED_SEQUENCE_NAME,
+  expandComputerUseSequenceSteps,
+  resolveComputerUseSequenceParameters
+} from './action-contract'
 import { ComputerUseApplicationLauncher } from './computer-use-application-launcher'
 import {
   COMPUTER_USE_ACTIONS,
@@ -151,6 +156,28 @@ export class CuaRuntime {
     }
     if (action === COMPUTER_USE_ACTION_SEQUENCE_NAME) {
       return this.executeActionSequence(input, parameters)
+    }
+    if (action === COMPUTER_USE_FOCUSED_SEQUENCE_NAME) {
+      const target = asRecord(parameters['target'])
+      const focus = asRecord(parameters['focus'])
+      const steps = parameters['steps'] ?? []
+      if (!target || !Array.isArray(steps) || (parameters['focus'] != null &&
+          (!focus || !Number.isFinite(focus['x']) || !Number.isFinite(focus['y']) ||
+            Object.keys(focus).some((key) => key !== 'x' && key !== 'y')))) {
+        return this.failure('act requires an exact shared target and at most one focus={x,y}. No input was sent.')
+      }
+      for (const value of steps) {
+        const stepParameters = asRecord(asRecord(value)?.['parameters'])
+        if (!stepParameters || stepParameters['x'] != null || stepParameters['y'] != null ||
+            resolveComputerUseSequenceParameters(stepParameters, target) === stepParameters) {
+          return this.failure('act steps use the shared target and semantic controls or keys. Put pixels only in focus={x,y}. No input was sent.')
+        }
+      }
+
+      return this.executeActionSequence(input, {
+        ...parameters,
+        steps: expandComputerUseSequenceSteps(steps, parameters['focus'])
+      })
     }
     if (action === 'copy_text') return this.copyText(input, parameters)
 
@@ -731,12 +758,25 @@ export class CuaRuntime {
       )
     }
 
+    const batchTarget = asRecord(parameters['target'])
+    if (parameters['target'] != null && (!batchTarget || !(
+      (batchTarget['kind'] === 'window' &&
+        Number.isSafeInteger(batchTarget['pid']) && Number(batchTarget['pid']) > 0 &&
+        Number.isSafeInteger(batchTarget['window_id']) && Number(batchTarget['window_id']) > 0) ||
+      (batchTarget['kind'] === 'desktop' && hasText(batchTarget['display_id']))
+    ))) {
+      return this.failure('A batch target must identify an exact observed window or desktop display.')
+    }
+
     // Reject unsupported actions before setup or input. Their position in a
     // sequence must not cause an avoidable partial edit.
     let refreshed = false
     for (const [index, value] of steps.entries()) {
       const step = asRecord(value)
-      const stepParameters = asRecord(step?.['parameters'])
+      const rawParameters = asRecord(step?.['parameters'])
+      const stepParameters = rawParameters
+        ? resolveComputerUseSequenceParameters(rawParameters, batchTarget)
+        : null
       if (typeof step?.['action'] !== 'string' ||
           !COMPUTER_USE_SEQUENCE_ACTIONS.has(step['action']) ||
           !stepParameters) {
@@ -750,6 +790,19 @@ export class CuaRuntime {
         const target = asRecord(stepParameters['target'])
         const pid = target?.['pid'] ?? stepParameters['pid']
         const windowId = target?.['window_id'] ?? stepParameters['window_id']
+        // An override cannot borrow missing identifiers from the shared target.
+        // Validate all overrides before an earlier step can edit another window.
+        if (batchTarget) {
+          const desktop = target?.['kind'] === 'desktop' || stepParameters['scope'] === 'desktop'
+          const complete = desktop
+            ? hasText(target?.['display_id'] ?? stepParameters['display_id'])
+            : Number.isSafeInteger(pid) && Number(pid) > 0 &&
+              Number.isSafeInteger(windowId) && Number(windowId) > 0 &&
+              (!target || target['kind'] === 'window')
+          if (!complete) {
+            throw new Error('A batch step override must identify its complete window or desktop target.')
+          }
+        }
         if (stepParameters['role'] != null && !named) {
           throw new Error('A named lookup role requires an exact name.')
         }
@@ -779,7 +832,9 @@ export class CuaRuntime {
     const normalizedSteps = steps.map((value) => {
       const step = asRecord(value)!
       const action = step['action'] as string
-      const parameters = { ...asRecord(step['parameters'])! }
+      const parameters = { ...resolveComputerUseSequenceParameters(
+        asRecord(step['parameters'])!, batchTarget
+      ) }
       const hasPixels = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
       const sameWindow = focusedField &&
         this.getVisualTransformKey(input, parameters) === this.getVisualTransformKey(input, focusedField) &&
@@ -807,7 +862,7 @@ export class CuaRuntime {
     ).length
     if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
       return this.failure(
-        'perform_actions accepts at most one pixel-targeted click. For one field, batch click, select-all and type_text; repeated typing coordinates must identify that same field. Observe between different spatial targets.'
+        'perform_actions accepts at most one pixel-targeted click, including type_text with x/y. No input was sent. For another observed control use a current element_token or exact name; observe again for another pixel target. For one field, batch click, select-all and type_text without repeating coordinates.'
       )
     }
 
@@ -990,20 +1045,26 @@ export class CuaRuntime {
         state['pid'] !== pid || state['window_id'] !== windowId) {
       throw new Error('Fresh named-target observation failed or was incomplete. Observe the exact window before continuing.')
     }
-    const matches = state['elements'].map(asRecord).filter((element) => element &&
+    const namedMatches = state['elements'].map(asRecord).filter((element) => element &&
       (element['label'] === parameters['name'] || element['value'] === parameters['name']) &&
       (!hasText(parameters['role']) || element['role'] === parameters['role']))
-    if (matches.length !== 1 || !hasText(matches[0]?.['element_token']) || matches[0]?.['enabled'] === false) {
-      throw new Error(`Exact named target matched ${matches.length} elements or was disabled. Observe and choose a current token; no input was sent for this step.`)
-    }
-    const element = matches[0]!
     // Structured AX names use AXPress/AXShowMenu; Markdown uses press/show_menu.
     const requestedAction = String(parameters['action'] ?? 'press').split('_').join('').toLowerCase()
-    const supported = Array.isArray(element['actions']) && element['actions'].some((value) => {
-      const name = String(value).split('_').join('').toLowerCase()
-      return name === requestedAction || name === `ax${requestedAction}`
-    })
-    if (action === 'click' && !supported) {
+    const supportsAction = (element: Record<string, unknown> | null): boolean =>
+      Array.isArray(element?.['actions']) && element['actions'].some((value) => {
+        const name = String(value).split('_').join('').toLowerCase()
+        return name === requestedAction || name === `ax${requestedAction}`
+      })
+    // Text labels often repeat a control's name. They cannot satisfy a click;
+    // ambiguity between multiple actionable controls must still stop the batch.
+    const matches = action === 'click' && namedMatches.length > 1
+      ? namedMatches.filter(supportsAction)
+      : namedMatches
+    if (matches.length !== 1 || !hasText(matches[0]?.['element_token']) || matches[0]?.['enabled'] === false) {
+      throw new Error(`Exact named target matched ${matches.length} eligible elements or was disabled. Observe and choose a current token; no input was sent for this step.`)
+    }
+    const element = matches[0]!
+    if (action === 'click' && !supportsAction(element)) {
       throw new Error('The named element does not advertise the requested click action. Observe and use a grounded alternative.')
     }
     const resolved: Record<string, unknown> = { ...parameters, element_token: element['element_token'] }

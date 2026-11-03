@@ -1,4 +1,10 @@
-import { COMPUTER_USE_CAPTURE_ACTIONS, isComputerUseEffectUncertain } from '../../../../../../tools/computer_use/cua/src/nodejs/lib/action-contract'
+import {
+  COMPUTER_USE_CAPTURE_ACTIONS,
+  COMPUTER_USE_FOCUSED_SEQUENCE_NAME,
+  expandComputerUseSequenceSteps,
+  isComputerUseEffectUncertain,
+  resolveComputerUseSequenceParameters
+} from '../../../../../../tools/computer_use/cua/src/nodejs/lib/action-contract'
 import { createHash } from 'node:crypto'
 
 import { asRecord, parseJsonRecord } from '../../../../../../tools/computer_use/cua/src/nodejs/lib/utils'
@@ -99,10 +105,14 @@ function parseComputerUseExecutions(
   }
   const parsed = parseComputerUseExecution(execution)
   if (!parsed) return []
-  if (parsed.action !== COMPUTER_USE_ACTION_SEQUENCE_NAME) return [parsed]
+  const focusedSequence = parsed.action === COMPUTER_USE_FOCUSED_SEQUENCE_NAME
+  if (parsed.action !== COMPUTER_USE_ACTION_SEQUENCE_NAME && !focusedSequence) return [parsed]
 
   const input = parseJsonRecord(execution.requestedToolInput)
-  const steps = input?.['steps']
+  const steps = expandComputerUseSequenceSteps(
+    input?.['steps'] ?? (focusedSequence ? [] : undefined),
+    focusedSequence ? input?.['focus'] : undefined
+  )
   if (!Array.isArray(steps)) return []
   const results = findNestedRecord(
     parseJsonRecord(execution.observation),
@@ -119,7 +129,9 @@ function parseComputerUseExecutions(
       ...execution,
       status: proposed || result?.['success'] === true ? 'success' : 'error',
       function: `${COMPUTER_USE_PROVIDER_ID}.cua.${step['action']}`,
-      requestedToolInput: JSON.stringify(parameters),
+      requestedToolInput: JSON.stringify(
+        resolveComputerUseSequenceParameters(parameters, input?.['target'])
+      ),
       observation: JSON.stringify(result ?? {})
     })
     return action ? [action] : []

@@ -36,7 +36,7 @@ it('keeps native Cua action arguments compatible with the installed driver', asy
       hotkey: ['capture_after', 'settle_ms']
     }
     for (const name of Object.keys(manifest.functions)) {
-      if (name === 'perform_actions' || name === 'copy_text' || name === 'observe') {
+      if (name === 'perform_actions' || name === 'act' || name === 'copy_text' || name === 'observe') {
         continue
       }
 

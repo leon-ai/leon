@@ -377,8 +377,24 @@ export default class CuaTool extends Tool {
   /**
    * Execute perform actions through the retained Cua runtime.
    */
-  public async perform_actions(capture_after?: unknown, steps?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('perform_actions', { capture_after, steps })
+  public async perform_actions(
+    capture_after?: unknown,
+    steps?: unknown,
+    target?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('perform_actions', { capture_after, steps, target })
+  }
+
+  /**
+   * Focuses once and executes semantic or keyboard steps on one exact target.
+   */
+  public async act(
+    capture_after?: unknown,
+    focus?: unknown,
+    steps?: unknown,
+    target?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('act', { capture_after, focus, steps, target })
   }
 
   /**
