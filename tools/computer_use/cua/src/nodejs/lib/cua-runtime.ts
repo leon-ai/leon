@@ -18,6 +18,11 @@ import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { LogHelper } from '@/helpers/log-helper'
 
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
+import {
+  COMPUTER_USE_FOCUSED_SEQUENCE_NAME,
+  expandComputerUseSequenceSteps,
+  resolveComputerUseSequenceParameters
+} from './action-contract'
 import { ComputerUseApplicationLauncher } from './computer-use-application-launcher'
 import {
   COMPUTER_USE_ACTIONS,
@@ -56,7 +61,7 @@ import {
 } from './computer-use-settings'
 import { createCuaDriverAdapter } from './cua/cua-driver-adapter'
 import { CuaDesktopSetupPendingError, CuaDesktopSetupState } from './cua/cua-desktop-setup'
-import { asRecord, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
+import { asRecord, hasText, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
 
 export { COMPUTER_USE_ACTION_NAMES } from './constants'
 export {
@@ -146,8 +151,33 @@ export class CuaRuntime {
     parameters: Record<string, unknown>
   ): Promise<ToolRuntimeResult> {
     if (input.signal?.aborted) return this.failure('Computer-use execution canceled before this action.')
+    if (action === 'observe') {
+      return this.observeFrontmostWindow(input)
+    }
     if (action === COMPUTER_USE_ACTION_SEQUENCE_NAME) {
       return this.executeActionSequence(input, parameters)
+    }
+    if (action === COMPUTER_USE_FOCUSED_SEQUENCE_NAME) {
+      const target = asRecord(parameters['target'])
+      const focus = asRecord(parameters['focus'])
+      const steps = parameters['steps'] ?? []
+      if (!target || !Array.isArray(steps) || (parameters['focus'] != null &&
+          (!focus || !Number.isFinite(focus['x']) || !Number.isFinite(focus['y']) ||
+            Object.keys(focus).some((key) => key !== 'x' && key !== 'y')))) {
+        return this.failure('act requires an exact shared target and at most one focus={x,y}. No input was sent.')
+      }
+      for (const value of steps) {
+        const stepParameters = asRecord(asRecord(value)?.['parameters'])
+        if (!stepParameters || stepParameters['x'] != null || stepParameters['y'] != null ||
+            resolveComputerUseSequenceParameters(stepParameters, target) === stepParameters) {
+          return this.failure('act steps use the shared target and semantic controls or keys. Put pixels only in focus={x,y}. No input was sent.')
+        }
+      }
+
+      return this.executeActionSequence(input, {
+        ...parameters,
+        steps: expandComputerUseSequenceSteps(steps, parameters['focus'])
+      })
     }
     if (action === 'copy_text') return this.copyText(input, parameters)
 
@@ -381,7 +411,8 @@ export class CuaRuntime {
       // source window before capture. Never replay the input while waiting.
       if (captureAfter && !actionFailed && Number(settleMs) > 0) await delay(Number(settleMs))
       // A popup can extend beyond its parent window or own a separate surface.
-      const menuAction = action === 'invoke_menu' || (action === 'click' && actionParameters['button'] === 'right')
+      const menuAction = action === 'invoke_menu' || (action === 'click' &&
+        (actionParameters['button'] === 'right' || actionParameters['action'] === 'show_menu'))
       const capture = (targetParameters: Record<string, unknown>): Promise<CapturedComputerUseState | null> =>
         this.captureStateAfterAction(runtime, input,
           menuAction ? { scope: 'desktop', session: actionParameters['session'] } : targetParameters, action)
@@ -480,7 +511,7 @@ export class CuaRuntime {
             post_action_state: capturedState.result,
             next_step: capturedState.result['success'] === false
               ? 'Input may have landed, but the post-action observation failed. Follow its recovery diagnostics before another pixel action; do not replay input solely because capture failed.'
-              : 'Inspect the post-action state and any attached screenshot before another observation or retry. If navigation opened a new tab, app or dialog, inspect that destination rather than bringing the previous window forward. If it is blank or loading, observe the destination again with settle_ms before declaring a blocker; do not replay the navigation. Otherwise reuse this evidence unless needed information is missing or the interface has changed.'
+              : 'Inspect the fresh post-action state before continuing. Inspect new windows/dialogs instead of restoring the previous window. For loading destinations observe with settle_ms; reuse current evidence and never replay input solely because capture failed.'
           } : {}),
           ...(visualStateUnchanged
             ? {
@@ -490,12 +521,25 @@ export class CuaRuntime {
                 }
               }
             : {}),
-          ...(result.text && !compactedResult?.changed
+          ...(result.text && !compactedResult?.changed && result.text !== primaryResult['summary']
             ? { summary: this.artifactStore.buildTextPreview(succeeded ? result.text : failureMessage) }
             : {}),
-          ...(result.action ? { action_result: result.action } : {}),
+          // Canonical JSON already carries the action evidence. A second typed
+          // mirror can crowd the fresh interface out of the bounded preview.
+          ...(result.action && (!hasText(primaryResult['effect']) || !hasText(primaryResult['route']))
+            ? { action_result: result.action } : {}),
           ...(result.verification
-            ? { verification: result.verification }
+            // Native verification uses u64 counters. Preserve their precision
+            // as decimal strings so the tool worker can send the evidence.
+            ? { verification: {
+                ...result.verification,
+                elapsedMs: String(result.verification.elapsedMs),
+                samples: String(result.verification.samples),
+                predicates: result.verification.predicates.map((predicate) => ({
+                  ...predicate,
+                  index: String(predicate.index)
+                }))
+              } }
             : {}),
           ...(artifacts.length > 0 ? { artifacts } : {}),
           ...(!succeeded && failureCode
@@ -516,6 +560,62 @@ export class CuaRuntime {
       LogHelper.debug(`Computer-use ${action} timings (ms): ${JSON.stringify({
         ...timings, total: Math.round(performance.now() - startedAt)
       })}`)
+    }
+  }
+
+  /**
+   * Resolve and inspect the current window in one read-only tool operation.
+   */
+  private async observeFrontmostWindow(input: ToolExecutionContext): Promise<ToolRuntimeResult> {
+    const runtime = await this.runtimeManager.get(input)
+    const result = await this.callAction(runtime.driver, input, 'list_windows', {
+      on_screen_only: true
+    })
+    const inventory = parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+    if (hasCuaError(result) || !Array.isArray(inventory?.['windows'])) {
+      return this.failure(result.text || 'Window discovery failed. Use list_windows and inspect an explicit target.')
+    }
+
+    const windows = inventory['windows'].map(asRecord).filter((window) =>
+      window && window['is_on_screen'] === true && window['minimized'] !== true &&
+      window['on_current_space'] !== false &&
+      (window['layer'] === undefined || window['layer'] === 0) &&
+      Number.isSafeInteger(window['pid']) && Number(window['pid']) > 0 &&
+      Number.isSafeInteger(window['window_id']) && Number(window['window_id']) > 0
+    ) as Record<string, unknown>[]
+    // Array position is not a stacking-order guarantee. Missing or tied z-order
+    // requires explicit discovery; never guess a target or activate an app.
+    if (windows.length === 0 || windows.some((window) => !Number.isSafeInteger(window['z_index']))) {
+      return this.failure('A unique frontmost window could not be established. Use list_windows, then get_window_state with the intended pid/window_id.')
+    }
+    windows.sort((left, right) => Number(right['z_index']) - Number(left['z_index']))
+    const window = windows[0]!
+    if (windows[1]?.['z_index'] === window['z_index']) {
+      return this.failure('Frontmost window order is ambiguous. Use list_windows, then inspect the intended pid/window_id.')
+    }
+
+    const parameters = {
+      pid: window['pid'],
+      window_id: window['window_id'],
+      ...(hasText(input.parameters['query']) ? { query: input.parameters['query'] } : {})
+    }
+    const observation = await this.executeAction({ ...input, parameters }, 'get_window_state', parameters)
+    const state = asRecord(observation.output['result'])
+    const pid = state?.['pid']
+    const windowId = state?.['window_id']
+    if (!observation.success || !Number.isSafeInteger(pid) || Number(pid) <= 0 ||
+        !Number.isSafeInteger(windowId) || Number(windowId) <= 0) {
+      return observation
+    }
+
+    return {
+      ...observation,
+      // Put the explicit target before the potentially long tree so a bounded
+      // preview still tells the model which window owns these coordinates.
+      output: {
+        capture_target: { kind: 'window', pid, window_id: windowId },
+        ...observation.output
+      }
     }
   }
 
@@ -658,11 +758,25 @@ export class CuaRuntime {
       )
     }
 
+    const batchTarget = asRecord(parameters['target'])
+    if (parameters['target'] != null && (!batchTarget || !(
+      (batchTarget['kind'] === 'window' &&
+        Number.isSafeInteger(batchTarget['pid']) && Number(batchTarget['pid']) > 0 &&
+        Number.isSafeInteger(batchTarget['window_id']) && Number(batchTarget['window_id']) > 0) ||
+      (batchTarget['kind'] === 'desktop' && hasText(batchTarget['display_id']))
+    ))) {
+      return this.failure('A batch target must identify an exact observed window or desktop display.')
+    }
+
     // Reject unsupported actions before setup or input. Their position in a
     // sequence must not cause an avoidable partial edit.
+    let refreshed = false
     for (const [index, value] of steps.entries()) {
       const step = asRecord(value)
-      const stepParameters = asRecord(step?.['parameters'])
+      const rawParameters = asRecord(step?.['parameters'])
+      const stepParameters = rawParameters
+        ? resolveComputerUseSequenceParameters(rawParameters, batchTarget)
+        : null
       if (typeof step?.['action'] !== 'string' ||
           !COMPUTER_USE_SEQUENCE_ACTIONS.has(step['action']) ||
           !stepParameters) {
@@ -671,6 +785,42 @@ export class CuaRuntime {
 
       try {
         this.resolveSettleMs(stepParameters['settle_ms'])
+        const named = hasText(stepParameters['name'])
+        const readsState = named || hasText(step['wait_for'])
+        const target = asRecord(stepParameters['target'])
+        const pid = target?.['pid'] ?? stepParameters['pid']
+        const windowId = target?.['window_id'] ?? stepParameters['window_id']
+        // An override cannot borrow missing identifiers from the shared target.
+        // Validate all overrides before an earlier step can edit another window.
+        if (batchTarget) {
+          const desktop = target?.['kind'] === 'desktop' || stepParameters['scope'] === 'desktop'
+          const complete = desktop
+            ? hasText(target?.['display_id'] ?? stepParameters['display_id'])
+            : Number.isSafeInteger(pid) && Number(pid) > 0 &&
+              Number.isSafeInteger(windowId) && Number(windowId) > 0 &&
+              (!target || target['kind'] === 'window')
+          if (!complete) {
+            throw new Error('A batch step override must identify its complete window or desktop target.')
+          }
+        }
+        if (stepParameters['role'] != null && !named) {
+          throw new Error('A named lookup role requires an exact name.')
+        }
+        if ((readsState || hasText(step['expect']) || step['action'] === 'set_value') &&
+            (!Number.isSafeInteger(pid) || Number(pid) <= 0 ||
+              !Number.isSafeInteger(windowId) || Number(windowId) <= 0 ||
+              (target && target['kind'] !== 'window'))) {
+          throw new Error('Named targets, checks and set_value require an explicit window pid/window_id.')
+        }
+        if ((named || readsState || refreshed) &&
+            (stepParameters['element_token'] != null || stepParameters['x'] != null || stepParameters['y'] != null)) {
+          throw new Error('A fresh named lookup or check invalidates earlier tokens and pixels. Use exact names or focused keyboard input after it.')
+        }
+        if (step['action'] === 'set_value' &&
+            (typeof stepParameters['value'] !== 'string' || (!named && !hasText(stepParameters['element_token'])))) {
+          throw new Error('set_value requires value and a current element_token or exact name.')
+        }
+        refreshed ||= readsState || hasText(step['expect'])
       } catch (error) {
         return this.failure(`Step ${index + 1}: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -682,7 +832,9 @@ export class CuaRuntime {
     const normalizedSteps = steps.map((value) => {
       const step = asRecord(value)!
       const action = step['action'] as string
-      const parameters = { ...asRecord(step['parameters'])! }
+      const parameters = { ...resolveComputerUseSequenceParameters(
+        asRecord(step['parameters'])!, batchTarget
+      ) }
       const hasPixels = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
       const sameWindow = focusedField &&
         this.getVisualTransformKey(input, parameters) === this.getVisualTransformKey(input, focusedField) &&
@@ -702,7 +854,7 @@ export class CuaRuntime {
         // Tab, Enter, scrolling or another target can change focus or layout.
         focusedField = undefined
       }
-      return { action, parameters }
+      return { ...step, action, parameters }
     })
     const pixelClickCount = normalizedSteps.filter(({ action, parameters }) =>
       (action === 'click' || action === 'type_text') &&
@@ -710,7 +862,7 @@ export class CuaRuntime {
     ).length
     if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
       return this.failure(
-        'perform_actions accepts at most one pixel-targeted click. For one field, batch click, select-all and type_text; repeated typing coordinates must identify that same field. Observe between different spatial targets.'
+        'perform_actions accepts at most one pixel-targeted click, including type_text with x/y. No input was sent. For another observed control use a current element_token or exact name; observe again for another pixel target. For one field, batch click, select-all and type_text without repeating coordinates.'
       )
     }
 
@@ -726,8 +878,33 @@ export class CuaRuntime {
     for (const [index, value] of normalizedSteps.entries()) {
       const step = asRecord(value)!
       const stepAction = step['action'] as string
-      const stepParameters = asRecord(step['parameters'])!
+      let stepParameters = asRecord(step['parameters'])!
+      const named = hasText(stepParameters['name'])
       const settleMs = this.resolveSettleMs(stepParameters['settle_ms'])
+
+      try {
+        if (hasText(step['wait_for'])) {
+          await this.checkSequenceText(input, stepParameters, step['wait_for'])
+        }
+        if (hasText(stepParameters['name'])) {
+          stepParameters = await this.resolveSequenceTarget(input, stepAction, stepParameters)
+        }
+      } catch (error) {
+        failure = this.executionFailure(error)
+        stepResults.push({ action: stepAction, success: false,
+          result: failure.output, error_code: 'sequence_precondition_failed' })
+        const target = asRecord(stepParameters['target'])
+        const observed = await this.executeAction(input, 'get_window_state', {
+          pid: target?.['pid'] ?? stepParameters['pid'],
+          window_id: target?.['window_id'] ?? stepParameters['window_id']
+        })
+        postActionState = observed.output['result']
+        modelFiles = observed.modelFiles ?? []
+        if (Array.isArray(observed.output['artifacts'])) {
+          artifacts.push(...observed.output['artifacts'])
+        }
+        break
+      }
 
       const boundedParameters = { ...stepParameters }
       delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
@@ -742,7 +919,8 @@ export class CuaRuntime {
         index === steps.length - 1 &&
         COMPUTER_USE_CAPTURE_ACTIONS.has(stepAction)
       ) {
-        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = captureAfter
+        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = captureAfter &&
+          !hasText(step['expect'])
       }
 
       input.onProgress?.({
@@ -774,6 +952,14 @@ export class CuaRuntime {
         action: stepAction,
         success: result.success,
         result: result.output['result'] ?? null,
+        ...(named ? {
+            resolved_target: {
+              ...asRecord(stepParameters['target']),
+              pid: asRecord(stepParameters['target'])?.['pid'] ?? stepParameters['pid'],
+              window_id: asRecord(stepParameters['target'])?.['window_id'] ?? stepParameters['window_id'],
+              element_token: stepParameters['element_token']
+            }
+          } : {}),
         ...(recovery ? { recovery } : {}),
         ...(result.output['error_code'] ? { error_code: result.output['error_code'] } : {})
       })
@@ -781,6 +967,34 @@ export class CuaRuntime {
       if (!result.success) {
         failure = result
         break
+      }
+
+      const expected = step['expect']
+      if (hasText(expected)) {
+        try {
+          const verification = await this.checkSequenceText(input, stepParameters, expected)
+          stepResults.at(-1)!['verification'] = verification
+        } catch (error) {
+          failure = this.executionFailure(error)
+          stepResults.at(-1)!['success'] = false
+          stepResults.at(-1)!['error_code'] = 'sequence_postcondition_failed'
+          stepResults.at(-1)!['verification'] = failure.output
+        }
+        if ((index === steps.length - 1 && captureAfter) || failure) {
+          const target = asRecord(stepParameters['target'])
+          const observed = await this.executeAction(input, 'get_window_state', {
+            pid: target?.['pid'] ?? stepParameters['pid'],
+            window_id: target?.['window_id'] ?? stepParameters['window_id']
+          })
+          postActionState = observed.output['result']
+          modelFiles = observed.modelFiles ?? []
+          if (Array.isArray(observed.output['artifacts'])) {
+            artifacts.push(...observed.output['artifacts'])
+          }
+        }
+        if (failure) {
+          break
+        }
       }
 
       if (index < steps.length - 1 && settleMs > 0) {
@@ -793,7 +1007,7 @@ export class CuaRuntime {
       message: failure
         ? `Computer-use sequence stopped at step ${stepResults.length}: ${failure.message}`
         : `Completed ${steps.length} computer-use actions.`,
-      output: this.boundWindowObservation({
+      output: this.boundWindowObservation(this.resultCompactor.compactSequenceRecovery({
         ...(failure ? { success: false } : {}),
         completed_action_count: stepResults.length - (failure ? 1 : 0),
         ...(failure?.output['error_code'] ? { error_code: failure.output['error_code'] } : {}),
@@ -802,9 +1016,114 @@ export class CuaRuntime {
         ...(nextStep ? { next_step: nextStep } : {}),
         ...(postActionState ? { post_action_state: postActionState } : {}),
         ...(artifacts.length > 0 ? { artifacts } : {})
-      }),
+      })),
       ...(modelFiles.length > 0 ? { modelFiles } : {})
     }
+  }
+
+  /**
+   * Resolves one exact semantic target without reusing a previous snapshot token.
+   */
+  private async resolveSequenceTarget(
+    input: ToolExecutionContext,
+    action: string,
+    parameters: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const target = asRecord(parameters['target'])
+    const pid = target?.['pid'] ?? parameters['pid']
+    const windowId = target?.['window_id'] ?? parameters['window_id']
+    const runtime = await this.runtimeManager.get(input)
+    const args = await this.runtimeManager.prepareParameters(runtime, input, 'get_window_state', {
+      ...this.applyObservationDefaults('get_window_state', {}),
+      pid, window_id: windowId, query: parameters['name'],
+      tree_format: 'elements', include_screenshot: false
+    })
+    const observed = await this.callAction(runtime.driver, input, 'get_window_state', args)
+    this.forgetVisualState(input, parameters)
+    const state = parseJsonRecord(observed.structuredJson) || parseJsonRecord(observed.rawJson)
+    if (hasCuaError(observed) || !Array.isArray(state?.['elements']) || state['truncated'] === true ||
+        state['pid'] !== pid || state['window_id'] !== windowId) {
+      throw new Error('Fresh named-target observation failed or was incomplete. Observe the exact window before continuing.')
+    }
+    const namedMatches = state['elements'].map(asRecord).filter((element) => element &&
+      (element['label'] === parameters['name'] || element['value'] === parameters['name']) &&
+      (!hasText(parameters['role']) || element['role'] === parameters['role']))
+    // Structured AX names use AXPress/AXShowMenu; Markdown uses press/show_menu.
+    const requestedAction = String(parameters['action'] ?? 'press').split('_').join('').toLowerCase()
+    const supportsAction = (element: Record<string, unknown> | null): boolean =>
+      Array.isArray(element?.['actions']) && element['actions'].some((value) => {
+        const name = String(value).split('_').join('').toLowerCase()
+        return name === requestedAction || name === `ax${requestedAction}`
+      })
+    // Text labels often repeat a control's name. They cannot satisfy a click;
+    // ambiguity between multiple actionable controls must still stop the batch.
+    const matches = action === 'click' && namedMatches.length > 1
+      ? namedMatches.filter(supportsAction)
+      : namedMatches
+    if (matches.length !== 1 || !hasText(matches[0]?.['element_token']) || matches[0]?.['enabled'] === false) {
+      throw new Error(`Exact named target matched ${matches.length} eligible elements or was disabled. Observe and choose a current token; no input was sent for this step.`)
+    }
+    const element = matches[0]!
+    if (action === 'click' && !supportsAction(element)) {
+      throw new Error('The named element does not advertise the requested click action. Observe and use a grounded alternative.')
+    }
+    const resolved: Record<string, unknown> = { ...parameters, element_token: element['element_token'] }
+    delete resolved['name']
+    delete resolved['role']
+    return resolved
+  }
+
+  /**
+   * Reuses native bounded checks without allowing hidden actions or target inheritance.
+   */
+  private async checkSequenceText(
+    input: ToolExecutionContext,
+    parameters: Record<string, unknown>,
+    text: string
+  ): Promise<Record<string, unknown>> {
+    const target = asRecord(parameters['target'])
+    const runtime = await this.runtimeManager.get(input)
+    const pid = target?.['pid'] ?? parameters['pid']
+    const windowId = target?.['window_id'] ?? parameters['window_id']
+    // Native text search can omit editor values derived into display labels.
+    // Inspect the actual AX values before waiting, and once after a timeout.
+    const readText = async (): Promise<Record<string, unknown> | null> => {
+      const observationArgs = await this.runtimeManager.prepareParameters(runtime, input, 'get_window_state', {
+        ...this.applyObservationDefaults('get_window_state', {}),
+        pid, window_id: windowId, tree_format: 'elements', include_screenshot: false
+      })
+      const observed = await this.callAction(runtime.driver, input, 'get_window_state', observationArgs)
+      this.forgetVisualState(input, parameters)
+      const state = parseJsonRecord(observed.structuredJson) || parseJsonRecord(observed.rawJson)
+      if (hasCuaError(observed) || state?.['pid'] !== pid || state['window_id'] !== windowId ||
+          !Array.isArray(state['elements'])) {
+        return null
+      }
+      const element = state['elements'].map(asRecord).find((element) => element &&
+        ['label', 'value'].some((field) => typeof element[field] === 'string' && element[field].includes(text)))
+      return element ? { ok: true, source: 'native_accessibility',
+        snapshot_id: state['snapshot_id'], element_token: element['element_token'], expected_text: text } : null
+    }
+    const present = await readText()
+    if (present) {
+      return present
+    }
+    const args = await this.runtimeManager.prepareParameters(runtime, input, 'run_steps', {
+      pid, window_id: windowId,
+      foreground_fallback: false,
+      steps: [{ wait_for: { text, timeout_ms: COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS } }]
+    })
+    const checked = await this.callAction(runtime.driver, input, 'run_steps', args)
+    this.forgetVisualState(input, parameters)
+    const result = parseJsonRecord(checked.structuredJson) || parseJsonRecord(checked.rawJson)
+    if (hasCuaError(checked) || result?.['ok'] !== true) {
+      const settled = await readText()
+      if (settled) {
+        return settled
+      }
+      throw new Error(`Expected interface text was not established. Input may already have landed; inspect before retrying. ${checked.text}`)
+    }
+    return result
   }
 
   private applyObservationDefaults(
@@ -823,6 +1142,9 @@ export class CuaRuntime {
     return {
       max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
       max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH,
+      // Keep full semantic values compact; native element arrays carry enough
+      // geometry to crowd controls out of the model-facing observation budget.
+      tree_format: 'markdown',
       include_screenshot: true,
       ...parameters
     }
@@ -1092,7 +1414,7 @@ export class CuaRuntime {
       returned_element_count: 0,
       omitted_element_count: elements.length,
       elements_complete: false,
-      hint: 'For exact text absent from these elements, the next extraction step is Copy: right-click the source in the existing screenshot, inspect the menu, then call copy_text. Do not switch to reading zoom, OCR, or guessed URLs until you have tried the source’s Copy action; empty accessibility does not establish that Copy is unavailable. Use current element tokens with their pid/window_id. A newer read replaces tokens. Increase timeout_ms only for a missing control when truncation_reason indicates a timeout, or max_elements/max_depth for their respective limits. query filters results, not traversal cost.'
+      hint: 'Use current window tokens. Query omitted controls; increase walk limits only for matching truncation reasons. For missing exact text, the next extraction step is Copy; use OCR only if Copy fails.'
     }
     // Include paths, metadata and envelope in the budget, not just AX elements.
     // Reserve the worst-case counter width so counters cannot overflow it.
@@ -1166,7 +1488,7 @@ export class CuaRuntime {
           setOfMark.length > 0
             ? 'Numbered labels in the attached image match elements[].som_mark.'
             : '',
-          'pixel_center is in the latest attached screenshot\'s coordinates; use its x,y for a pixel action if AX activation has no effect. Do not use raw log frames as click coordinates.'
+          'pixel_center uses the attached image\'s pixels; use it if AX activation has no effect. Raw log frames are not click coordinates.'
         ].filter(Boolean).join(' ')
       } : {})
     }
@@ -1188,11 +1510,11 @@ export class CuaRuntime {
         zoomed: true,
         zoom_hint: 'This is a window crop. When present, yellow x/y guides label actual crop pixels, not controls. Locate the target center against these guides before clicking; do not guess from the earlier image. Pass crop pixels directly with the same pid/window_id, including inside copy_text. Do not calculate scale/offset or convert to window coordinates; Leon already maps the crop. For unsupported pixel actions or another zoom, first get a full-window screenshot.'
       } : {}),
-      coordinate_hint: `Use only this attached image's pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}. Prefer a current semantic element or its pixel_center. Do not use source-image dimensions, earlier screenshots or a normalized grid.`,
+      coordinate_hint: `Use only this attached image's pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}. Use current elements or pixel_center; never source dimensions, old images or normalized coordinates.`,
       // Ground uncertain positions before delivery rather than relying on
       // post-action no-op detection to correct a guessed click.
       ...(!transform.fromZoom && bounds ? {
-        grounding_hint: 'Locate the source or control in this image before clicking; additions and removals may have moved it. If typing did not change a field, re-locate the field here before retrying. Use zoom for a small control when needed, not as the default text-extraction step, then pass crop pixels directly with capture_target, without converting coordinates.'
+        grounding_hint: 'Locate controls in this image; layout changes invalidate old positions. Re-locate ineffective typing before retrying. Use zoom for small controls, not as the default text-extraction step; pass crop pixels with capture_target directly without conversion.'
       } : {})
     }
   }

@@ -746,6 +746,7 @@ describe('CuaRuntime', () => {
       JSON.stringify({
         max_elements: 500,
         max_depth: 32,
+        tree_format: 'markdown',
         include_screenshot: true,
         pid: 42,
         window_id: 7,
@@ -952,20 +953,21 @@ describe('CuaRuntime', () => {
     const result = await provider.execute({
       toolkitId: 'computer_use',
       toolId: 'cua',
-      functionName: 'perform_actions',
+      functionName: 'act',
       parameters: {
+        target: { kind: 'window', pid: 42, window_id: 7 },
         steps: [
           {
             action: 'hotkey',
-            parameters: { pid: 42, window_id: 7, keys: ['ctrl', 'l'] }
+            parameters: { keys: ['ctrl', 'l'] }
           },
           {
             action: 'type_text',
-            parameters: { pid: 42, window_id: 7, text: 'Leon' }
+            parameters: { text: 'Leon' }
           },
           {
             action: 'press_key',
-            parameters: { pid: 42, window_id: 7, key: 'return' }
+            parameters: { key: 'return' }
           }
         ]
       },
@@ -980,6 +982,10 @@ describe('CuaRuntime', () => {
       'press_key',
       'get_window_state'
     ])
+    const typing = driver.callTool.mock.calls.find(([name]) => name === 'type_text')!
+    expect(JSON.parse(String(typing[1]))).toMatchObject({
+      target: { kind: 'window', pid: 42, window_id: 7 }, text: 'Leon'
+    })
     expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([true, false])
     expect(driver.setAgentCursorEnabled.mock.invocationCallOrder[1])
       .toBeLessThan(driver.callTool.mock.invocationCallOrder.at(-1)!)
@@ -1314,17 +1320,17 @@ describe('CuaRuntime', () => {
         {
           action: 'type_text',
           success: true,
-          result: { effect: 'unverifiable' },
-          recovery: expect.stringContaining('does not mean failure')
+          result: { effect: 'unverifiable' }
         },
         {
           action: 'press_key',
           success: true,
-          result: { effect: 'unverifiable' },
-          recovery: expect.any(String)
+          result: { effect: 'unverifiable' }
         }
       ]
     })
+    expect(result.output).not.toHaveProperty('steps.0.recovery')
+    expect(result.output).not.toHaveProperty('steps.1.recovery')
     expect(result.output['error_code']).toBeUndefined()
     expect(driver.callTool.mock.calls.map(([action]) => action)
       .filter((action) => action !== 'start_session'))

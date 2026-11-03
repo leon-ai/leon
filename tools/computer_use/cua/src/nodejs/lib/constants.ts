@@ -1,3 +1,5 @@
+import { COMPUTER_USE_FOCUSED_SEQUENCE_NAME } from './action-contract'
+
 export const COMPUTER_USE_PROVIDER_ID = 'computer_use'
 export const COMPUTER_USE_ARTIFACT_DIRECTORY = 'computer-use'
 export const COMPUTER_USE_TEXT_PREVIEW_MAX_CHARS = 8_000
@@ -50,6 +52,7 @@ export const COMPUTER_USE_SCREEN_CAPTURE_ACTIONS = new Set([
 ])
 
 export const COMPUTER_USE_ACTION_NAMES = [
+  'observe',
   'list_apps',
   'list_windows',
   'health_report',
@@ -68,6 +71,7 @@ export const COMPUTER_USE_ACTION_NAMES = [
   'press_key',
   'hotkey',
   COMPUTER_USE_ACTION_SEQUENCE_NAME,
+  COMPUTER_USE_FOCUSED_SEQUENCE_NAME,
   'set_value',
   'copy_text',
   'clipboard_read',
@@ -82,13 +86,13 @@ export const COMPUTER_USE_ACTIONS = new Set<string>(
 
 export { COMPUTER_USE_CAPTURE_ACTIONS } from './action-contract'
 
-// Sequences are intentionally limited to mechanical input whose next target
-// does not need a fresh observation. Observation and verification remain
-// separate steps so later inputs cannot depend on unseen results.
+// Sequences remain mechanical and bounded. Exact named targets can be resolved
+// from fresh native state; ambiguity returns control to the agent.
 export const COMPUTER_USE_SEQUENCE_ACTIONS = new Set([
   'click',
   'scroll',
   'type_text',
+  'set_value',
   'press_key',
   'hotkey'
 ])

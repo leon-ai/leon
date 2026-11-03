@@ -68,6 +68,13 @@ export default class CuaTool extends Tool {
   }
 
   /**
+   * Observe the current frontmost normal window without switching applications.
+   */
+  public async observe(query?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('observe', { query })
+  }
+
+  /**
    * Execute health report through the retained Cua runtime.
    */
   public async health_report(include?: unknown, skip?: unknown): Promise<Record<string, unknown>> {
@@ -173,9 +180,11 @@ export default class CuaTool extends Tool {
     window_id?: unknown,
     x?: unknown,
     y?: unknown,
-    settle_ms?: unknown
+    settle_ms?: unknown,
+    action?: unknown
   ): Promise<Record<string, unknown>> {
     return this.invoke('click', {
+      action,
       capture_after,
       button,
       count,
@@ -368,8 +377,24 @@ export default class CuaTool extends Tool {
   /**
    * Execute perform actions through the retained Cua runtime.
    */
-  public async perform_actions(capture_after?: unknown, steps?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('perform_actions', { capture_after, steps })
+  public async perform_actions(
+    capture_after?: unknown,
+    steps?: unknown,
+    target?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('perform_actions', { capture_after, steps, target })
+  }
+
+  /**
+   * Focuses once and executes semantic or keyboard steps on one exact target.
+   */
+  public async act(
+    capture_after?: unknown,
+    focus?: unknown,
+    steps?: unknown,
+    target?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('act', { capture_after, focus, steps, target })
   }
 
   /**

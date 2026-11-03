@@ -27,9 +27,9 @@ function batch(): ExecutionRecord {
   return {
     ...click(),
     function: BATCH,
-    requestedToolInput: JSON.stringify({ steps: [
-      { action: 'click', parameters: INPUT },
-      { action: 'press_key', parameters: { target: TARGET, key: 'space' } }
+    requestedToolInput: JSON.stringify({ target: TARGET, steps: [
+      { action: 'click', parameters: { x: INPUT.x, y: INPUT.y } },
+      { action: 'press_key', parameters: { key: 'space' } }
     ] }),
     observation: JSON.stringify({ data: { output: {
       steps: [
@@ -185,7 +185,14 @@ describe('computer-use retry guard', () => {
 
   it('includes clicks inside executed and proposed batches', () => {
     expect(getComputerUseRetryBlocker([batch(), batch()], BATCH, batch().requestedToolInput!)).toContain('retry blocked')
+    expect(getComputerUseRetryBlocker([batch(), batch()], CLICK, JSON.stringify(INPUT))).toContain('retry blocked')
     expect(buildComputerUseConvergenceHint([batch(), batch(), batch()])).toContain('same visual state')
+    const focused = { ...batch(), function: 'computer_use.cua.act', requestedToolInput: JSON.stringify({
+      target: TARGET, focus: { x: INPUT.x, y: INPUT.y },
+      steps: [{ action: 'press_key', parameters: { key: 'space' } }]
+    }) }
+    expect(getComputerUseRetryBlocker([focused, focused], focused.function, focused.requestedToolInput!)).toContain('retry blocked')
+    expect(getComputerUseRetryBlocker([focused, focused], CLICK, JSON.stringify(INPUT))).toContain('retry blocked')
   })
 
   it('does not attribute a batch capture to an earlier, different target', () => {
