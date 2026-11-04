@@ -862,9 +862,11 @@ export default class NLU {
     forcedToolName?: string,
     files?: AgentModelFile[]
   ): Promise<void> {
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
     await runTurnLifecycle({
-      sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
-      query: utterance
+      sessionId,
+      query: utterance,
+      onFyi: (fyi, messageId) => SOCKET_SERVER.emitToChatClients('fyi', { fyi, messageId }, { sessionId })
     }, async () => {
       LogHelper.title('NLU')
       LogHelper.info('Routing to ReAct...')

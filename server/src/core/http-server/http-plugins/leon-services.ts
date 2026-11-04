@@ -111,6 +111,7 @@ export async function getConversationHistory(
         created_at: item.sentAt,
         message_id: item.messageId || null,
         metrics: item.llmMetrics || null,
+        ...(item.fyi ? { fyi: item.fyi } : {}),
         response_trace: item.agentResponseTrace
           ? serializeAgentTrace(
               item.agentResponseTrace,
