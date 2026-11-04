@@ -213,6 +213,7 @@ export interface HTTPPluginListConversationSessionsResult {
 }
 
 export interface HTTPPluginConversationMessage {
+  fyi?: import('@/core/fyi/fyi-contract').Fyi
   inference?: TurnInference
   artifacts?: Artifact[]
   widget?: import('@/types').ConversationWidgetData
@@ -253,6 +254,7 @@ export interface HTTPPluginConversationSessionMutationResult {
 }
 
 export type HTTPPluginAgentEventType =
+  | 'fyi'
   | 'inference_activity'
   | 'text_stream'
   | 'turn_status'

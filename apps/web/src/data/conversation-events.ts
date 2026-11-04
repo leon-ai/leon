@@ -62,6 +62,15 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   const previous = messages[index] ?? {
     who: 'leon' as const, messageId: id, message: '', sentAt: event.created_at, isAddedToHistory: false
   }
+  if (event.type === 'fyi') {
+    const fyi = event.data['fyi'] as ConversationRecord['fyi']
+    // Background enrichment only belongs to an already loaded, accepted answer.
+    // Never create orphan history or replace its text, trace, timing, or status.
+    if (index < 0 || !previous.isAddedToHistory || !fyi?.text || previous.fyi) {
+      return messages
+    }
+    return messages.map((record, position) => position === index ? { ...record, fyi } : record)
+  }
   // Accepted final content is authoritative over delayed draft and retry events.
   if (previous.isAddedToHistory && event.type !== 'final_answer' && event.type !== 'artifacts' && !memoryProgress) {
     return messages

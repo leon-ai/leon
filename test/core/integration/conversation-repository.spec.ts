@@ -1,4 +1,6 @@
 import { createMemoryActivity } from '@/core/memory-manager/memory-activity'
+import { FyiKind } from '@/core/fyi/fyi-contract'
+import { FYI_VISIONS } from '@/core/fyi/visions'
 import { MemoryActivityAction } from '@/core/llm-manager/memory-activity-contract'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -52,6 +54,52 @@ describe('profile conversation archive', () => {
     }
     repositories.clear()
     await fs.rm(directory, { recursive: true, force: true })
+  })
+
+  it('rotates mindset lines atomically across sessions and connections, surviving reopen without repeats', () => {
+    let repository = open()
+    repository.saveSession(session('one'))
+    repository.saveSession(session('two'))
+    const other = open()
+    const texts: string[] = []
+    for (let index = 0; index < FYI_VISIONS.length * 2; index++) {
+      if (index === 7) {
+        close(repository)
+        repository = open()
+      }
+      const connection = index % 2 ? repository : other
+      const sessionId = index % 2 ? 'one' : 'two'
+      const messageId = `answer-${index}`
+      connection.upsertMessage(sessionId, { who: 'leon', messageId, message: 'Done.', isAddedToHistory: true })
+      const metadata = connection.readSession(sessionId)
+      const footer = connection.saveFyi(sessionId, messageId, 'Done.', null)!
+      expect(footer.kind).toBe(FyiKind.Vision)
+      expect(connection.readSession(sessionId)).toEqual(metadata)
+      expect(connection.readMessage(sessionId, messageId)?.fyi).toEqual(footer)
+      expect(connection.readMessages(sessionId, { summary: true }).items.at(-1)?.fyi).toEqual(footer)
+      expect(connection.saveFyi(sessionId, messageId, 'Done.', null)).toBeNull()
+      texts.push(footer.text)
+    }
+    expect(new Set(texts.slice(0, FYI_VISIONS.length)).size).toBe(FYI_VISIONS.length)
+    expect(new Set(texts.slice(FYI_VISIONS.length)).size).toBe(FYI_VISIONS.length)
+    expect(texts[FYI_VISIONS.length]).not.toBe(texts[FYI_VISIONS.length - 1])
+  })
+
+  it('rejects stale or deleted FYI targets and keeps accepted footers out of model context', () => {
+    const repository = open()
+    repository.saveSession(session('chat'))
+    repository.upsertMessage('chat', { who: 'leon', messageId: 'answer', message: 'Accepted.', isAddedToHistory: true })
+    const footer = { kind: FyiKind.Fact, text: 'FYI, a grounded fact.' }
+    expect(repository.saveFyi('chat', 'missing', 'Accepted.', footer)).toBeNull()
+    expect(repository.saveFyi('chat', 'answer', 'Earlier draft.', footer)).toBeNull()
+    expect(repository.saveFyi('chat', 'answer', 'Accepted.', footer)).toEqual(footer)
+    expect(repository.readContextMessages('chat', 5)[0]).not.toHaveProperty('fyi')
+    expect(open('another').saveFyi('chat', 'answer', 'Accepted.', footer)).toBeNull()
+    repository.upsertMessage('chat', { who: 'leon', messageId: 'answer', message: 'Edited.', isAddedToHistory: true })
+    expect(repository.readMessage('chat', 'answer')?.fyi).toBeUndefined()
+    expect(repository.saveFyi('chat', 'answer', 'Accepted.', footer)).toBeNull()
+    repository.deleteSession('chat')
+    expect(repository.saveFyi('chat', 'answer', 'Edited.', footer)).toBeNull()
   })
 
   it('reads bounded invocation previews and complete bodies independently within their session and profile', () => {

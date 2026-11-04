@@ -1,4 +1,6 @@
 import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
+import { FyiKind, type Fyi } from '@/core/fyi/fyi-contract'
+import { Moods } from '@/types'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -35,6 +37,8 @@ interface Services {
   logger: ConversationLogger
 }
 
+const ACCEPTED_ANSWER = 'I will keep your home city in mind when helping with local suggestions. I will distinguish it from places you are only visiting, and use the latest information you share with me.'
+
 const fixture = vi.hoisted(() => ({
   root: '',
   services: new Map<string, Services>(),
@@ -43,7 +47,11 @@ const fixture = vi.hoisted(() => ({
   titleGate: undefined as Promise<void> | undefined,
   failExtraction: false,
   rejectProfile: false,
-  invalidVerification: false
+  invalidVerification: false,
+  fyiGate: undefined as Promise<void> | undefined,
+  releaseFyi: undefined as (() => void) | undefined,
+  failFyi: false,
+  fyiText: undefined as string | undefined
 }))
 
 vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd(), MEMORY_EXTRACTION_MAX_BATCH_TURNS: 3 }))
@@ -56,6 +64,7 @@ vi.mock('@/config', () => ({
 }))
 vi.mock('@/core/config-states/config-state', () => ({
   CONFIG_STATE: {
+    getMoodState: (): { getCurrentMood: () => Moods } => ({ getCurrentMood: (): Moods => Moods.Default }),
     getModelState: (): {
       getWorkflowProvider: () => string
       getWorkflowTarget: () => { provider: string }
@@ -132,13 +141,21 @@ async function providerResponse(_input: unknown, params: CompletionParams): Prom
     if (purpose === InferencePurpose.SessionTitle && fixture.titleGate) {
       await fixture.titleGate
     }
+    if (purpose === InferencePurpose.Fyi && fixture.fyiGate) {
+      await fixture.fyiGate
+    }
+    if (purpose === InferencePurpose.Fyi && fixture.failFyi) {
+      throw new Error('FYI provider unavailable')
+    }
     if (purpose === InferencePurpose.Memory && fixture.failExtraction) {
       recordInferenceUsageOutcome('failed')
       recordTurnInference({ ...timing, elapsedMs: Date.now() - startedAt, outcome: 'failed' })
       throw new Error('Fixture provider unavailable')
     }
     let output: unknown
-    if (purpose === InferencePurpose.SessionTitle) {
+    if (purpose === InferencePurpose.Fyi) {
+      output = { text: fixture.fyiText ?? 'I am taking things gently today.' }
+    } else if (purpose === InferencePurpose.SessionTitle) {
       output = 'Home notes'
     } else if (purpose === InferencePurpose.Memory) {
       output = { items: [{
@@ -167,6 +184,7 @@ async function providerResponse(_input: unknown, params: CompletionParams): Prom
 }
 
 beforeEach(async () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0.1)
   fixture.root = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-turn-lifecycle-'))
   fixture.requests = []
   fixture.failExtraction = false
@@ -174,10 +192,15 @@ beforeEach(async () => {
   fixture.releaseTitle = undefined
   fixture.rejectProfile = false
   fixture.invalidVerification = false
+  fixture.fyiGate = undefined
+  fixture.releaseFyi = undefined
+  fixture.failFyi = false
+  fixture.fyiText = undefined
 })
 
 afterEach(async () => {
   fixture.releaseTitle?.()
+  fixture.releaseFyi?.()
   for (const [profile, services] of fixture.services) {
     await runWithProfileContext({ profileName: profile }, async () => {
       await services.queue.whenIdle()
@@ -205,17 +228,17 @@ async function createProfile(profile: string): Promise<void> {
   })
 }
 
-async function completeTurn(profile: string, explicitMemory = false, duringTurn?: () => Promise<void>, existingSessionId?: string, onActivity?: (message: AgentProgressMessage) => void): Promise<{ sessionId: string, turnId: string }> {
+async function completeTurn(profile: string, explicitMemory = false, duringTurn?: () => Promise<void>, existingSessionId?: string, onActivity?: (message: AgentProgressMessage) => void, onFyi?: (fyi: Fyi, messageId: string) => void): Promise<{ sessionId: string, turnId: string }> {
   return runWithProfileContext({ profileName: profile }, async () => {
     const sessionId = existingSessionId ?? CONVERSATION_SESSION_MANAGER.createSession().id
     const turnId = randomUUID()
     const query = `I live in ${profile}. Please keep that in mind when helping me with local suggestions and other future questions.`
     const logger = fixture.services.get(profile)!.logger
-    await runTurnLifecycle({ sessionId, turnId, query, ...(onActivity ? { onActivity } : {}) }, async () => {
+    await runTurnLifecycle({ sessionId, turnId, query, ...(onActivity ? { onActivity } : {}), ...(onFyi ? { onFyi } : {}) }, async () => {
       await logger.upsert({ who: 'owner', message: query, messageId: turnId, isAddedToHistory: true })
       await duringTurn?.()
       const result = await runTurnPhase(TurnPhase.Execution, async () => ({
-        output: 'I will keep that in mind.', data: {
+        output: ACCEPTED_ANSWER, data: {
           finalIntent: 'answer', hasExplicitMemoryWrite: explicitMemory, executionHistory: []
         }
       } as unknown as LLMDutyResult))
@@ -282,13 +305,13 @@ it('persists title, memory, reflection and owner artifacts without blocking answ
     }
     expect(history.filter((row) => row['kind'] === 'maintenance' && row['outcome'] === 'failed'),
       JSON.stringify(vi.mocked(LogHelper.warning).mock.calls)).toEqual([])
-    expect(history.filter((row) => row['kind'] === 'maintenance' && row['outcome'] === 'completed')).toHaveLength(5)
+    expect(history.filter((row) => row['kind'] === 'maintenance' && row['outcome'] === 'completed')).toHaveLength(6)
     const usage = []
     for await (const row of readInferenceUsage({ turnId })) {
       usage.push(row)
     }
     expect(usage.map((row) => row.purpose).sort()).toEqual([
-      InferencePurpose.SessionTitle, InferencePurpose.SelfModel, InferencePurpose.Memory,
+      InferencePurpose.SessionTitle, InferencePurpose.SelfModel, InferencePurpose.Memory, InferencePurpose.Fyi,
       InferencePurpose.OwnerProfile, InferencePurpose.OwnerProfile, InferencePurpose.OwnerProfile
     ].sort())
     expect(usage.find((row) => row.purpose === InferencePurpose.SessionTitle)?.stage).toBe(TurnStage.PreTurn)
@@ -312,6 +335,108 @@ it('keeps concurrent profiles isolated and avoids extraction after explicit memo
     expect(purposes).toContain(InferencePurpose.OwnerProfile)
     expect(await fs.readFile(path.join(fixture.root, profile, 'context', 'OWNER.md'), 'utf8')).toContain(`Lives in ${profile}.`)
   }))
+})
+
+it('delivers answers and runs maintenance while FYIs wait independently for concurrent sessions', async () => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  const gate = Promise.withResolvers<void>()
+  fixture.fyiGate = gate.promise
+  fixture.releaseFyi = (): void => gate.resolve()
+  const publish = vi.fn<(fyi: Fyi, messageId: string) => void>()
+  const turns = await Promise.all([
+    completeTurn(profile, true, undefined, undefined, undefined, publish),
+    completeTurn(profile, true, undefined, undefined, undefined, publish)
+  ])
+
+  await runWithProfileContext({ profileName: profile }, async () => {
+    const before = turns.map(({ sessionId, turnId }) => CONVERSATION_REPOSITORY.readMessage(sessionId, `${turnId}:leon`)!)
+    await vi.waitFor(() => expect(fixture.requests.filter(({ purpose }) => purpose === InferencePurpose.Fyi)).toHaveLength(2))
+    await vi.waitFor(() => expect(fixture.requests.some(({ purpose }) => purpose === InferencePurpose.OwnerProfile)).toBe(true))
+    expect(publish).not.toHaveBeenCalled()
+    expect(before.every((record) => record.isAddedToHistory && record.message && !record.fyi)).toBe(true)
+
+    gate.resolve()
+    await fixture.services.get(profile)!.queue.whenIdle()
+    expect(publish).toHaveBeenCalledTimes(2)
+    for (const [index, { sessionId, turnId }] of turns.entries()) {
+      const after = CONVERSATION_REPOSITORY.readMessage(sessionId, `${turnId}:leon`)!
+      expect(after.message).toBe(before[index]!.message)
+      expect(after.sentAt).toBe(before[index]!.sentAt)
+      expect(after.isAddedToHistory).toBe(true)
+      expect(after.fyi?.text).toBeTruthy()
+      expect(publish).toHaveBeenCalledWith(after.fyi, after.messageId)
+      const usage = []
+      for await (const row of readInferenceUsage({ turnId })) {
+        usage.push(row)
+      }
+      expect(usage.find((row) => row.purpose === InferencePurpose.Fyi)).toMatchObject({
+        sessionId, stage: TurnStage.PostTurn, taskId: expect.any(String), outcome: 'completed'
+      })
+    }
+  })
+})
+
+it.each(['fails', 'echoes the answer'])('publishes a queued mindset when FYI inference %s without changing the accepted answer', async (outcome) => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  fixture.failFyi = outcome === 'fails'
+  fixture.fyiText = outcome === 'echoes the answer' ? ACCEPTED_ANSWER : undefined
+  const publish = vi.fn<(fyi: Fyi, messageId: string) => void>()
+  const { sessionId, turnId } = await completeTurn(profile, true, undefined, undefined, undefined, publish)
+  await fixture.services.get(profile)!.queue.whenIdle()
+  await runWithProfileContext({ profileName: profile }, async () => {
+    const answer = CONVERSATION_REPOSITORY.readMessage(sessionId, `${turnId}:leon`)!
+    expect(answer.message).toBe(ACCEPTED_ANSWER)
+    expect(answer.fyi?.kind).toBe(FyiKind.Vision)
+    expect(publish).toHaveBeenCalledExactlyOnceWith(answer.fyi, answer.messageId)
+    expect(fixture.requests.filter(({ purpose }) => purpose === InferencePurpose.Fyi)).toHaveLength(1)
+  })
+})
+
+it('leaves brief replies footer-free without scheduling FYI inference or publishing a fallback', async () => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  const publish = vi.fn<(fyi: Fyi, messageId: string) => void>()
+  await runWithProfileContext({ profileName: profile }, async () => {
+    const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
+    const turnId = randomUUID()
+    const messageId = `${turnId}:leon`
+    const answer = 'You are welcome.'
+    await runTurnLifecycle({ sessionId, turnId, responseId: messageId, query: 'Thanks!', onFyi: publish }, async () => {
+      await fixture.services.get(profile)!.logger.upsert({
+        who: 'leon', messageId, message: answer, isAddedToHistory: true
+      })
+      return { output: answer, data: { finalIntent: 'answer' } } as unknown as LLMDutyResult
+    })
+    await fixture.services.get(profile)!.queue.whenIdle()
+    expect(CONVERSATION_REPOSITORY.readMessage(sessionId, messageId)?.fyi).toBeUndefined()
+    expect(fixture.requests.some(({ purpose }) => purpose === InferencePurpose.Fyi)).toBe(false)
+    expect(publish).not.toHaveBeenCalled()
+    const history = []
+    for await (const record of readTurnHistory({ turnId })) {
+      history.push(record)
+    }
+    expect(history.some((record) => record['task'] === 'FYI generation')).toBe(false)
+  })
+})
+
+it('discards a delayed FYI when its session has been deleted', async () => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  const gate = Promise.withResolvers<void>()
+  fixture.fyiGate = gate.promise
+  fixture.releaseFyi = (): void => gate.resolve()
+  const publish = vi.fn<(fyi: Fyi, messageId: string) => void>()
+  const { sessionId } = await completeTurn(profile, true, undefined, undefined, undefined, publish)
+  await vi.waitFor(() => expect(fixture.requests.some(({ purpose }) => purpose === InferencePurpose.Fyi)).toBe(true))
+  await runWithProfileContext({ profileName: profile }, async () => {
+    CONVERSATION_SESSION_MANAGER.deleteSession(sessionId)
+    gate.resolve()
+    await fixture.services.get(profile)!.queue.whenIdle()
+    expect(CONVERSATION_REPOSITORY.readAllMessages(sessionId)).toEqual([])
+    expect(publish).not.toHaveBeenCalled()
+  })
 })
 
 it.each(['renamed', 'deleted', 'recreated'] as const)('coalesces in-flight titles and preserves a session that is %s during inference', async (change) => {

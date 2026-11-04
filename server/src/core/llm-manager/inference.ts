@@ -12,6 +12,8 @@ export interface InferenceOptions {
   disableThinking?: boolean
   reasoningMode?: 'off' | 'guarded' | 'on'
   trackProviderErrors?: boolean
+  timeout?: number
+  maxRetries?: number
 }
 
 export interface InferenceResult {
@@ -29,6 +31,8 @@ export async function runInference(
 ): Promise<InferenceResult | null> {
   const completionParams = {
     dutyType: LLMDuties.Inference,
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    ...(options.maxRetries === undefined ? {} : { maxRetries: options.maxRetries }),
     ...(options.usagePurpose ? { usagePurpose: options.usagePurpose } : {}),
     systemPrompt: options.systemPrompt ?? '',
     ...(options.temperature !== undefined

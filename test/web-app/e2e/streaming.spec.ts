@@ -5,6 +5,73 @@ import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-cont
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
+import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`adds a delayed FYI without reopening the completed turn (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.message = 'Daytime skies look blue because air molecules scatter shorter wavelengths of sunlight more strongly than longer wavelengths. This effect is called Rayleigh scattering.'
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], toolCalls: [],
+      reasoning: [{ id: 'thought', text: 'Checking the source.', phase: 'agent', startedAt: answer.sentAt - 1_000 }],
+      metrics: { durationMs: 6_000 }
+    }
+    await page.goto(SESSION_URL)
+    const footer = page.getByRole('complementary', { name: 'FYI', exact: true })
+    const finalAnswer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+    await expect(finalAnswer).toHaveText(answer.message)
+    await expect(footer).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible()
+    const fyi = { kind: FyiKind.Fact, text: 'FYI, a related detail can make the answer easier to remember.' }
+    const event: ConversationEvent = {
+      type: 'fyi', sequence: 1, session_id: SESSION_ID, turn_id: null,
+      response_id: answer.messageId, created_at: Date.now(), data: { fyi }
+    }
+    answer.fyi = fyi
+    await ui.emit([event])
+    await expect(footer).toHaveText(fyi.text)
+    await expect(footer).toHaveCSS('font-style', 'italic')
+    await expect(finalAnswer).toHaveText(answer.message)
+    await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Stop this turn', exact: true })).toHaveCount(0)
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(footer.locator('.bonus-response-icon')).toHaveCSS('background-image', new RegExp(`logo-for-${theme === 'light' ? 'light' : 'dark'}-bg\\.svg`))
+      await expect(footer).toHaveCSS('font-size', await footer.evaluate((element) => getComputedStyle(element).getPropertyValue('--font-size-sm').trim()))
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await page.screenshot({ path: testInfo.outputPath(`fyi-${theme}.png`) })
+    }
+    await ui.emit([{ ...event, sequence: 2 }, { ...event, sequence: 3, response_id: 'unloaded-answer' }])
+    await expect(footer).toHaveCount(1)
+    expect((await footer.boundingBox())!.y).toBeGreaterThan((await finalAnswer.boundingBox())!.y)
+    await page.screenshot({ path: testInfo.outputPath('fyi-footer.png') })
+    await page.reload()
+    await expect(footer).toHaveText(fyi.text)
+    await expect(footer).toHaveCount(1)
+    await expect(finalAnswer).toHaveText(answer.message)
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible()
+  })
+}
+
+test('keeps brief replies footer-free for saved history and late background events', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.message = 'Hey there. What is on your mind?'
+  answer.fyi = { kind: FyiKind.Mood, text: answer.message }
+  await page.goto(SESSION_URL)
+  const footer = page.getByRole('complementary', { name: 'FYI', exact: true })
+  const finalAnswer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  await expect(finalAnswer).toHaveText(answer.message)
+  await expect(footer).toHaveCount(0)
+  await ui.emit([{
+    type: 'fyi', sequence: 1, session_id: SESSION_ID, turn_id: null,
+    response_id: answer.messageId, created_at: Date.now(), data: { fyi: answer.fyi }
+  }])
+  await expect(footer).toHaveCount(0)
+  await page.reload()
+  await expect(finalAnswer).toHaveText(answer.message)
+  await expect(footer).toHaveCount(0)
+})
 
 for (const kind of ['skill', 'experience'] as const) {
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {

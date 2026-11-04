@@ -58,6 +58,7 @@ export interface ConversationTrace {
 }
 
 export interface ConversationRecord {
+  fyi?: import('../../../../server/src/core/fyi/fyi-contract').Fyi
   who: 'owner' | 'leon'
   messageId: string
   message: string

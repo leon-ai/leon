@@ -732,8 +732,12 @@ describe('HTTP plugin Leon services', () => {
   })
 
   it('schedules the same complete owner-turn maintenance for HTTP and legacy agent entry points', async () => {
+    mocks.agentDutyResult['output'] = 'Coastal weather depends on local winds and ocean temperatures. Sea breezes form when land warms faster than the nearby water, drawing cooler air inland during the day.'
+    ;(mocks.agentDutyResult['data'] as Record<string, unknown>)['agentResponseTrace'] = {
+      id: 'accepted-reply', planSteps: [], toolCalls: []
+    }
     const result = await runAgent({ query: 'Tell me about the coast.', create_session: true })
-    const expected = ['session title generation', 'turn memory observation', 'react self-model reflection', 'memory extraction']
+    const expected = ['session title generation', 'FYI generation', 'turn memory observation', 'react self-model reflection', 'memory extraction']
     expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual(expected)
     mocks.maintenanceTasks.length = 0
     mocks.activeSessionId = result.session_id

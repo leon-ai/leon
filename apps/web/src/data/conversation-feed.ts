@@ -2,6 +2,7 @@ import { FeedTurnStatus } from './feed'
 import type { FeedEntry, FeedToolCall, LeonFeedActivity, LeonFeedEntry, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep, FeedCompactionActivity } from './feed'
 import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
 import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import { isFyiEligible } from '../../../../server/src/core/fyi/fyi-contract'
 import { getProcessingCategory } from './processing-categories'
 import { getActivityLabel, getProcessingLabel } from './activity-labels'
 
@@ -496,6 +497,7 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
       id: record.messageId, planSteps: [], toolCalls: []
     }, active, record.sentAt, metrics, Boolean(record.message.trim())),
     finalAnswer: record.message,
+    ...(record.fyi && isFyiEligible(record.message) ? { bonusResponse: record.fyi.text } : {}),
     answerStartedAt: record.agentResponseTrace?.timings?.findLast((timing) =>
       timing.kind === 'inference' && timing.goal === TurnPhase.Answer)?.startedAt ??
       record.agentResponseTrace?.inferences?.findLast((attempt) => attempt.phase === 'final_answer')?.startedAt ??

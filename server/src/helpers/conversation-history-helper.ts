@@ -262,6 +262,7 @@ export class ConversationHistoryHelper {
           ? { artifacts: conversationLog.artifacts }
           : {}),
         who: conversationLog.who,
+        ...(conversationLog.fyi ? { fyi: conversationLog.fyi } : {}),
         sentAt: conversationLog.sentAt,
         string: bubbleString,
         originalString: bubbleString,

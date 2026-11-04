@@ -477,6 +477,13 @@ export default class SocketServer {
     payload?: unknown,
     options?: { sessionId?: string | null }
   ): void {
+    if (eventName === 'fyi' && options?.sessionId && payload && typeof payload === 'object') {
+      const footer = payload as { messageId: string, fyi: import('@/core/fyi/fyi-contract').Fyi }
+      publishAgentEvent(getActiveProfileName(), {
+        type: 'fyi', session_id: options.sessionId, turn_id: null,
+        response_id: footer.messageId, data: { fyi: footer.fyi }
+      })
+    }
     if (eventName === NEW_MOOD_EVENT) {
       // Profile-wide state shares the existing replayable browser stream.
       publishAgentEvent(getActiveProfileName(), {
