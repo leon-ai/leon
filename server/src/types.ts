@@ -218,6 +218,7 @@ export interface AgentResponseTrace {
 }
 
 export interface MessageLog {
+  fyi?: import('@/core/fyi/fyi-contract').Fyi
   inference?: TurnInference
   artifacts?: Artifact[]
   who: 'owner' | 'leon'
@@ -231,6 +232,7 @@ export interface MessageLog {
 }
 
 export interface ConversationHistoryItem {
+  fyi?: import('@/core/fyi/fyi-contract').Fyi
   inference?: TurnInference
   artifacts?: Artifact[]
   widget?: ConversationWidgetData

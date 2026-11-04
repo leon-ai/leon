@@ -14,6 +14,8 @@ import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtim
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { MessageLog } from '@/types'
 import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
+import { FyiKind, type Fyi } from '@/core/fyi/fyi-contract'
+import { FYI_VISIONS } from '@/core/fyi/visions'
 import {
   DEFAULT_ARCHIVE_PAGE_CHARACTERS,
   MAXIMUM_ARCHIVE_PAGE_CHARACTERS
@@ -35,6 +37,7 @@ const MAXIMUM_PAGE_SIZE = 100
 const MAXIMUM_REPLAY_EVENTS = 10_000
 const MAXIMUM_REPLAY_BYTES = 16 * 1_024 * 1_024
 const MAXIMUM_QUERY_HISTORY_CHARACTERS = 128 * 1_024
+const FYI_VISION_ROTATION_KEY = 'fyi_vision_rotation'
 const UI_MESSAGE_FILTER = `(visible = 1 OR trace_id IS NOT NULL
   OR json_type(summary, '$.agentResponseTrace') = 'object'
   OR json_array_length(summary, '$.artifacts') > 0
@@ -304,6 +307,10 @@ export class ConversationRepository {
         )
       }
 
+      if (existing && existing.message !== value.message && !record.fyi) {
+        delete value.fyi
+      }
+
       if (previous && previous['id'] !== value.messageId) {
         this.db.prepare('UPDATE conversation_messages SET id = ? WHERE session_id = ? AND id = ?')
           .run(value.messageId, sessionId, previous['id'])
@@ -498,6 +505,46 @@ export class ConversationRepository {
         .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, messageId, messageId)
       return true
     })()
+  }
+
+  /**
+   * Commits a footer once against its unchanged accepted answer. Vision selection
+   * and profile-wide rotation advance atomically, including across connections.
+   */
+  public saveFyi(sessionId: string, messageId: string, answer: string, candidate: Fyi | null): Fyi | null {
+    return this.db.transaction(() => {
+      const record = this.db.prepare(`SELECT id FROM conversation_messages
+        WHERE session_id = ? AND (id = ? OR trace_id = ?) AND role = 'leon'
+          AND visible = 1 AND content = ? AND json_type(payload, '$.fyi') IS NULL`)
+        .get(sessionId, messageId, messageId, answer)
+      if (!record) {
+        return null
+      }
+
+      let fyi = candidate
+      if (!fyi) {
+        const row = this.db.prepare('SELECT value FROM conversation_state WHERE key = ?').get(FYI_VISION_ROTATION_KEY)
+        const state = row ? JSON.parse(String(row['value'])) as { remaining: string[], lastId: string } : null
+        let remaining = state?.remaining.filter((id) => FYI_VISIONS.some((vision) => vision.id === id)) ?? []
+        if (!remaining.length) {
+          remaining = FYI_VISIONS.map((vision) => vision.id)
+        }
+        // Avoid an immediate repeat at the boundary between complete rotations.
+        const choices = remaining.filter((id) => id !== state?.lastId)
+        const id = choices[Math.floor(Math.random() * choices.length)]!
+        const vision = FYI_VISIONS.find((item) => item.id === id)!
+        this.db.prepare(`INSERT INTO conversation_state(key, value) VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+          .run(FYI_VISION_ROTATION_KEY, JSON.stringify({ remaining: remaining.filter((item) => item !== id), lastId: id }))
+        fyi = { kind: FyiKind.Vision, text: vision.text }
+      }
+
+      const json = JSON.stringify(fyi)
+      this.db.prepare(`UPDATE conversation_messages SET payload = json_set(payload, '$.fyi', json(?)),
+        summary = json_set(summary, '$.fyi', json(?)) WHERE session_id = ? AND id = ?`)
+        .run(json, json, sessionId, record['id'])
+      return fyi
+    }).immediate()
   }
 
   /**

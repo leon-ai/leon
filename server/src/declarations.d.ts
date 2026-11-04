@@ -16,7 +16,7 @@ declare module 'better-sqlite3' {
   }
 
   export interface Database {
-    transaction<T>(fn: () => T): () => T
+    transaction<T>(fn: () => T): (() => T) & { immediate: () => T }
     exec(sql: string): void
     prepare(sql: string): Statement
     close(): void
