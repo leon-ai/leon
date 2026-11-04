@@ -19,6 +19,7 @@ import type { ProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { applyConversationEvent } from '../../../apps/web/src/data/conversation-events'
 import { toFeedEntry } from '../../../apps/web/src/data/conversation-feed'
 import type { ConversationRecord, ConversationEvent } from '../../../apps/web/src/data/conversation'
+import { FyiKind } from '@/core/fyi/fyi-contract'
 
 const fixture = vi.hoisted(() => ({
   root: '',
@@ -30,7 +31,10 @@ vi.mock('@/core', () => ({
   CONVERSATION_LOGGER: {
     upsert: (...args: Parameters<ConversationLogger['upsert']>): Promise<void> => fixture.logger!.upsert(...args)
   },
-  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn(), startConcurrent: vi.fn() }
+  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn(), enqueueBatch: vi.fn(), startConcurrent: vi.fn() }
+}))
+vi.mock('@/core/fyi', () => ({
+  generateFyi: vi.fn(async () => ({ kind: FyiKind.Fact, text: 'FYI, a related fact can add a little context.' }))
 }))
 vi.mock('@/core/profile-runtime/initialize-profile-runtime', () => ({
   ensureActiveProfileRuntime: vi.fn(async () => undefined)
@@ -239,13 +243,14 @@ describe('web conversation runtime', () => {
   it('runs different sessions concurrently, deduplicates delivery, and stops only the addressed session', async () => {
     const first = await create()
     const second = await create()
+    const secondQuery = 'Second session: explain how concurrent conversations retain independent model settings, cancellation, and answer delivery without affecting each other.'
     await request('PATCH', `/api/v1/sessions/${first}/model`, { provider: 'openai', model: 'gpt-6.1-sol' })
     await request('PATCH', `/api/v1/sessions/${second}/model`, { provider: 'openai', model: 'gpt-6' })
     const id = randomUUID()
     expect((await request('POST', `/api/v1/sessions/${first}/messages`, { id, query: 'First' })).statusCode).toBe(202)
     expect((await request('POST', `/api/v1/sessions/${first}/messages`, { id, query: 'First' })).statusCode).toBe(202)
     expect((await request('POST', `/api/v1/sessions/${first}/messages`, { id, query: 'Different' })).statusCode).toBe(409)
-    await request('POST', `/api/v1/sessions/${second}/messages`, { id: randomUUID(), query: 'Second' })
+    await request('POST', `/api/v1/sessions/${second}/messages`, { id: randomUUID(), query: secondQuery })
     await vi.waitFor(() => expect(fixture.executions).toHaveLength(2))
     expect(fixture.executions.find((execution) => execution.session === first)?.target).toBe('openai/gpt-6.1-sol')
     expect(fixture.executions.find((execution) => execution.session === second)?.target).toBe('openai/gpt-6')
@@ -259,14 +264,24 @@ describe('web conversation runtime', () => {
       const result = (await request('GET', `/api/v1/sessions/${second}`)).json()
       expect(result.is_running).toBe(false)
       expect(result.messages.filter((message: { who: string }) => message.who === 'leon'))
-        .toEqual([expect.objectContaining({ message: 'Done: Second' })])
+        .toEqual([expect.objectContaining({ message: `Done: ${secondQuery}` })])
     })
     const history = (await request('GET', `/api/v1/sessions/${first}`)).json()
     expect(history.messages.filter((message: { who: string }) => message.who === 'owner')).toHaveLength(1)
     expect(history.messages.some((message: { message: string }) => message.message.includes('Second'))).toBe(false)
     expect(vi.mocked(POST_TURN_MAINTENANCE_QUEUE.enqueue).mock.calls.map(([label]) => label)).toEqual([
-      'turn memory observation', 'react self-model reflection', 'memory extraction'
+      'turn memory observation', 'react self-model reflection'
     ])
+    expect(vi.mocked(POST_TURN_MAINTENANCE_QUEUE.enqueueBatch).mock.calls[0]?.[0]).toBe('memory extraction')
+    const background = vi.mocked(POST_TURN_MAINTENANCE_QUEUE.startConcurrent).mock.calls.find(([label]) => label === 'FYI generation')![1]
+    await runWithProfileContext({ profileName: profile }, () => background())
+    const enriched = (await request('GET', `/api/v1/sessions/${second}`)).json()
+    expect(enriched.is_running).toBe(false)
+    expect(enriched.messages.at(-1)).toMatchObject({ message: `Done: ${secondQuery}`, fyi: { kind: FyiKind.Fact } })
+    await runWithProfileContext({ profileName: profile }, () => {
+      const event = CONVERSATION_REPOSITORY.readEvents<ConversationEvent>(0).items.find((event) => event.type === 'fyi')
+      expect(event).toMatchObject({ session_id: second, response_id: enriched.messages.at(-1).messageId })
+    })
   })
 
   it('validates model capabilities and preserves settings per session', async () => {
