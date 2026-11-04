@@ -18,6 +18,8 @@ const MAXIMUM_LIVE_STAGGER_MS = 120
 interface CharacterReveal {
   delay: number
   completesAt: number
+  animation?: Animation
+  animationStartTime?: number
 }
 
 interface StreamingTextProps {
@@ -104,6 +106,7 @@ export function StreamingText({
   text
 }: StreamingTextProps) {
   const registry = useContext(FeedAnimationContext)
+  const containerRef = useRef<HTMLSpanElement>(null)
   const stateRef = useRef<StreamingTextState>({
     animationId,
     reveals: new Map(),
@@ -154,6 +157,41 @@ export function StreamingText({
     }
   }
 
+  if (!animateInitial) {
+    const now = performance.now()
+    // Settled labels must be plain text before a parent moves their DOM nodes.
+    for (const [index, reveal] of stateRef.current.reveals) {
+      const animation = reveal.animation
+      if (animation?.playState === 'finished' ||
+        (!animation || animation.playState === 'idle') && reveal.completesAt <= now) {
+        stateRef.current.reveals.delete(index)
+      } else if (typeof animation?.startTime === 'number') {
+        reveal.animationStartTime = animation.startTime
+      }
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (animateInitial) {
+      return
+    }
+
+    for (const element of containerRef.current?.querySelectorAll<HTMLElement>('[data-streaming-character-index]') ?? []) {
+      const reveal = stateRef.current.reveals.get(Number(element.dataset['streamingCharacterIndex']))
+      const animation = element.getAnimations()[0]
+      if (!reveal || !animation) {
+        continue
+      }
+
+      // A DOM move can replace a CSS animation without remounting the label.
+      // Resume only replacement animations, leaving ordinary renders untouched.
+      if (reveal.animation && reveal.animation !== animation && reveal.animationStartTime !== undefined) {
+        animation.startTime = reveal.animationStartTime
+      }
+      reveal.animation = animation
+    }
+  })
+
   useLayoutEffect(() => {
     if (registry === null) {
       return
@@ -180,6 +218,7 @@ export function StreamingText({
     content.push(
       <span
         key={`${animationId}:${index}-${characters[index]}`}
+        data-streaming-character-index={animateInitial ? undefined : index}
         className="streaming-text-character-new"
         style={{ animationDelay: `${reveal.delay}ms` }}
       >
@@ -193,6 +232,7 @@ export function StreamingText({
 
   return (
     <span
+      ref={containerRef}
       className={className}
       aria-label={text}
       style={{ '--streaming-text-duration': `${CHARACTER_REVEAL_DURATION_MS}ms` } as CSSProperties}

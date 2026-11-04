@@ -971,6 +971,9 @@ test('updates session titles from metadata-only notifications during and after a
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`reveals live titles once while preserving ellipsis, hover scrolling and virtualized remounts (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
+    if (reducedMotion === 'reduce') {
+      await page.clock.install()
+    }
     for (let index = 3; index < 80; index++) {
       ui.sessions.push({
         ...ui.sessions[1]!,
@@ -994,11 +997,13 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(resting).toHaveCSS('text-overflow', 'ellipsis')
     await expect(link).toHaveCSS('height', '40px')
     await expect(characters.last()).toHaveCSS('opacity', '1')
-    const start = await characters.first().evaluate((element) => element.getAnimations()[0]?.startTime ?? null)
+    if (reducedMotion === 'reduce') {
+      await page.clock.fastForward(2_000)
+    }
     const requests = ui.completedRequests.filter((url) => url.pathname.endsWith('/page')).length
     await ui.emit([{ type: 'sessions_changed' }])
     await expect.poll(() => ui.completedRequests.filter((url) => url.pathname.endsWith('/page')).length).toBeGreaterThan(requests)
-    expect(await characters.first().evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).toBe(start)
+    await expect(characters).toHaveCount(0)
     await link.hover()
     const viewport = link.locator('.session-list-item-title')
     if (reducedMotion === 'reduce') {
@@ -1016,6 +1021,55 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await sidebar.evaluate((element) => element.scrollTo({ top: 0 }))
     await expect(link).toBeVisible()
     await expect(link.locator('.streaming-text-character-new')).toHaveCount(0)
+  })
+
+  test(`keeps title fades continuous when pinning reorders existing rows (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    if (reducedMotion === 'reduce') {
+      await page.clock.install()
+    }
+    const session = ui.sessions[0]!
+    const other = ui.sessions[1]!
+    await page.route(`**/api/v1/sessions/${OTHER_SESSION_ID}?compact=true`, async (route) => {
+      const changes = route.request().postDataJSON() as { is_pinned: boolean }
+      other.isPinned = changes.is_pinned
+      ui.sessions.sort((left, right) => Number(right.isPinned) - Number(left.isPinned) || left.id.localeCompare(right.id))
+      await route.fulfill({ json: { session: other } })
+    })
+    await page.goto(SESSION_URL)
+    const otherRow = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: other.title, exact: true }) })
+    await otherRow.hover()
+    await otherRow.getByRole('button', { name: 'Session options', exact: true }).click()
+    session.title = 'A freshly generated session title with enough detail to stay readable while another session moves to the pinned position'
+    await ui.emit([{ type: 'sessions_changed' }])
+    const link = page.getByRole('link', { name: session.title, exact: true })
+    const characters = link.locator('.session-list-item-title-resting .streaming-text-character-new')
+    await expect(characters).not.toHaveCount(0)
+    const character = (await characters.last().elementHandle())!
+    let start: number | null = null
+    if (reducedMotion === 'no-preference') {
+      await expect.poll(() => character.evaluate((element) => Number(element.getAnimations()[0]?.currentTime ?? 0))).toBeGreaterThan(80)
+      start = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+    }
+    await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
+    await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', OTHER_SESSION_ID)
+    if (reducedMotion === 'no-preference') {
+      await expect.poll(() => character.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
+      const after = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+      expect(Math.abs(after - start!)).toBeLessThan(35)
+      await finishFiniteAnimations(link)
+    } else {
+      await expect(characters.last()).toHaveCSS('animation-name', 'none')
+      await expect(characters.last()).toHaveCSS('opacity', '1')
+      await page.clock.fastForward(2_000)
+    }
+    await otherRow.hover()
+    await otherRow.getByRole('button', { name: 'Session options', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Unpin session', exact: true }).click()
+    await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', SESSION_ID)
+    await expect(characters).toHaveCount(0)
+    await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
+    await character.dispose()
   })
 
   test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {
