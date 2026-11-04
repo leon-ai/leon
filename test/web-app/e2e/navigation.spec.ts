@@ -670,6 +670,105 @@ test('reveals active session options on hover or keyboard focus rather than sele
   await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeVisible()
 })
 
+for (const pinned of [false, true]) {
+  test(`tracks unread concurrent completions through hover, navigation and refresh (pinned: ${pinned})`, async ({ page, ui }, testInfo) => {
+    ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+    ui.sessions[1]!.status = 'wip' as typeof ui.sessions[1]['status']
+    ui.sessions[1]!.isPinned = pinned
+    await page.goto(SESSION_URL)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    const otherLink = page.getByRole('link', { name: /Test session 1/ })
+    const row = page.getByRole('listitem').filter({ has: otherLink })
+    const dot = row.locator('.session-list-item-unread-dot')
+    const options = row.getByRole('button', { name: 'Session options', exact: true })
+    ui.sessions[1]!.status = 'idle' as typeof ui.sessions[1]['status']
+    const completion = { type: 'turn_status', sequence: 10, session_id: OTHER_SESSION_ID,
+      turn_id: 'other-turn', response_id: 'other-answer', created_at: Date.now(), data: { status: 'completed' } }
+    await ui.emit([completion, {
+      ...completion, type: 'session_changed', sequence: 11, data: { is_running: false }
+    }])
+    await expect(otherLink).toHaveAccessibleName('Test session 1, Unread response')
+    await composer.hover()
+    await expect(dot).toBeVisible()
+    await expect(options).toHaveCSS('opacity', '1')
+    await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '0')
+    const dotBounds = (await dot.boundingBox())!
+    const optionsBounds = (await options.boundingBox())!
+    expect(Math.abs(dotBounds.x + dotBounds.width / 2 - optionsBounds.x - optionsBounds.width / 2)).toBeLessThanOrEqual(1)
+    expect(Math.abs(dotBounds.y + dotBounds.height / 2 - optionsBounds.y - optionsBounds.height / 2)).toBeLessThanOrEqual(1)
+    if (pinned) {
+      const pinBounds = (await row.locator('.session-list-item-pinned-icon').boundingBox())!
+      expect(pinBounds.x + pinBounds.width).toBeLessThan(dotBounds.x)
+    }
+    expect(ui.historyRequests.some((url) => url.pathname.endsWith(OTHER_SESSION_ID))).toBe(false)
+    await row.hover()
+    await expect(dot).not.toBeVisible()
+    await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
+    await composer.hover()
+    await expect(dot).toBeVisible()
+    await otherLink.focus()
+    await expect(dot).not.toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(options).toBeFocused()
+    await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
+    await composer.focus()
+    await composer.hover()
+    await expect(dot).toBeVisible()
+
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await composer.focus()
+      await composer.hover()
+      await expect(dot).toBeVisible()
+      await expect(dot).toHaveCSS('background-color', 'rgb(28, 117, 219)')
+      await page.screenshot({ path: testInfo.outputPath(`unread-${theme}.png`) })
+    }
+
+    await page.reload()
+    await expect(dot).toBeVisible()
+    await otherLink.click()
+    await expect(page).toHaveURL(new RegExp(`/session/${OTHER_SESSION_ID}$`))
+    await expect(dot).toHaveCount(0)
+    await page.getByRole('link', { name: /Test session 0/ }).click()
+    await composer.hover()
+    await expect(dot).toHaveCount(0)
+    await ui.emit([completion])
+    await expect(dot).toHaveCount(0)
+    await page.reload()
+    await expect(dot).toHaveCount(0)
+  })
+}
+
+test('marks only unseen successful completions and scopes them to the profile', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const third = ui.sessions[2]!.id
+  let sequence = 0
+  const emit = (sessionId: string, type: string, data: Record<string, unknown>): ReturnType<typeof ui.emit> => ui.emit([{
+    type, sequence: ++sequence, session_id: sessionId, turn_id: `turn-${sequence}`,
+    response_id: `answer-${sequence}`, created_at: Date.now(), data
+  }])
+  const dots = page.locator('.session-list-item-unread-dot')
+  await emit(SESSION_ID, 'turn_status', { status: 'completed' })
+  await emit(OTHER_SESSION_ID, 'turn_status', { status: 'stopped' })
+  await emit(third, 'turn_status', { status: 'error' })
+  await emit(OTHER_SESSION_ID, 'turn_status', { status: 'completed', consumed: true })
+  await emit(OTHER_SESSION_ID, 'fyi', { fyi: { kind: 'mood', text: 'I am taking it gently today.' } })
+  await emit(OTHER_SESSION_ID, 'session_changed', { is_running: false })
+  await emit(OTHER_SESSION_ID, 'progress_message', { background: true, message: { id: 'background', content: 'Saved a useful detail.' } })
+  await expect(dots).toHaveCount(0)
+  await emit(OTHER_SESSION_ID, 'turn_status', { status: 'completed' })
+  await expect(dots).toHaveCount(1)
+  const profile = ui.profile
+  ui.profile = 'another-owner'
+  await page.reload()
+  await expect(page.getByRole('link', { name: 'Test session 1', exact: true })).toBeVisible()
+  await expect(dots).toHaveCount(0)
+  ui.profile = profile
+  await page.reload()
+  await expect(dots).toHaveCount(1)
+})
+
 test('drafts immediately while history loads and opens the latest messages at the bottom', async ({ page, ui }, testInfo) => {
   const release = ui.holdHistory()
   await page.goto(SESSION_URL)

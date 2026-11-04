@@ -4,6 +4,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { useProfile } from './profile'
 import { useSessions } from './sessions'
 import { conversationQueryOptions, useConversationEvents } from './conversation-queries'
+import { useSessionReadTracking } from './session-read-state'
 
 /**
  * Keeps one connection at layout lifetime rather than one per feed component.
@@ -11,6 +12,7 @@ import { conversationQueryOptions, useConversationEvents } from './conversation-
 export function ConversationConnection() {
   const profile = useProfile()
   const { sessionId } = useParams({ strict: false })
+  useSessionReadTracking(profile, sessionId)
   const sessions = useSessions(profile)
   const detail = useInfiniteQuery({
     ...conversationQueryOptions(profile, sessionId ?? ''), enabled: Boolean(profile && sessionId)

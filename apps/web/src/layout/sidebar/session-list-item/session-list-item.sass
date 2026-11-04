@@ -52,6 +52,28 @@
     line-height: 16px
     transform: translateY(-50%)
 
+  .session-list-item-unread-dot
+    position: absolute
+    top: 50%
+    right: 21px
+    width: 6px
+    height: 6px
+    border-radius: 50%
+    background-color: var(--color-accent)
+    pointer-events: none
+    transform: translateY(-50%)
+
+  &.session-list-item-unread
+    .session-list-item-link
+      padding-right: 44px
+
+    &.session-list-item-pinned
+      .session-list-item-link
+        padding-right: 64px
+
+      .session-list-item-pinned-icon
+        right: 44px
+
   &:hover,
   &:has(:focus-visible)
     .session-list-item-link:where(:not([aria-disabled='true']))
@@ -61,6 +83,9 @@
     .session-list-item-actions
       opacity: 1
       pointer-events: auto
+
+    .session-list-item-unread-dot
+      display: none
 
     .session-list-item-pinned-icon
       right: 44px
@@ -88,7 +113,8 @@
 
   &.session-list-item-editing
     .session-list-item-actions,
-    .session-list-item-pinned-icon
+    .session-list-item-pinned-icon,
+    .session-list-item-unread-dot
       opacity: 0
       pointer-events: none
 

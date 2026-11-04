@@ -11,6 +11,7 @@ import { useNavigate, useParams } from '@tanstack/react-router'
 
 import { useSessions, useSessionMutation } from '@/data/sessions'
 import { useProfile } from '@/data/profile'
+import { useSessionReadState } from '@/data/session-read-state'
 import { SessionListItem } from '@/layout/sidebar/session-list-item'
 import { Loader } from '@/components/loader'
 import { getListNavigationIndex } from '@/utils/list-navigation'
@@ -33,6 +34,7 @@ export function SessionList({
   const navigate = useNavigate()
   const { sessionId: viewedSessionId } = useParams({ strict: false })
   const profile = useProfile()
+  const readState = useSessionReadState(profile)
   const query = useSessions(profile)
   const mutation = useSessionMutation(profile)
   const scrollMaskRef = useRef<HTMLDivElement>(null)
@@ -210,6 +212,7 @@ export function SessionList({
               key={session.id}
               id={session.id}
               isPinned={session.isPinned}
+              isUnread={session.id !== viewedSessionId && Object.hasOwn(readState.unread, session.id)}
               status={session.status}
               title={session.title}
               onDelete={deleteSession}

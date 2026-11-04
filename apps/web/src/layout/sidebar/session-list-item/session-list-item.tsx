@@ -31,6 +31,7 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 interface SessionListItemProps {
   id: string
   isPinned: boolean
+  isUnread: boolean
   status: SessionStatus
   onDelete: (sessionId: string) => void
   onRename: (sessionId: string, title: string) => void
@@ -42,6 +43,7 @@ interface SessionListItemProps {
 export function SessionListItem({
   id,
   isPinned,
+  isUnread,
   status,
   onDelete,
   onRename,
@@ -60,6 +62,7 @@ export function SessionListItem({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [draftTitle, setDraftTitle] = useState(title)
   const isWorking = status === SessionStatus.Wip
+  const showUnread = isUnread && !isWorking
   const pinDropdownItem = isPinned
     ? {
         iconName: 'unpin',
@@ -272,7 +275,8 @@ export function SessionListItem({
       className={clsx('session-list-item list-item-slot', {
         'session-list-item-editing': editing,
         'session-list-item-pinned': isPinned,
-        'session-list-item-wip': isWorking
+        'session-list-item-wip': isWorking,
+        'session-list-item-unread': showUnread
       })}
       style={style}
       onMouseEnter={startTitleScroll}
@@ -296,7 +300,7 @@ export function SessionListItem({
           params={{ sessionId: id }}
           className="session-list-item-link"
           data-session-id={id}
-          aria-label={isWorking ? `${title}, Leon is working` : title}
+          aria-label={isWorking ? `${title}, Leon is working` : showUnread ? `${title}, Unread response` : title}
           activeProps={{
             className: clsx('session-list-item-link', 'session-list-item-active')
           }}
@@ -353,6 +357,9 @@ export function SessionListItem({
           className="session-list-item-pinned-icon ri-unpin-fill"
           aria-hidden="true"
         />
+      )}
+      {showUnread && (
+        <span className="session-list-item-unread-dot" aria-hidden="true" />
       )}
       <div className="session-list-item-actions">
         <Dropdown
