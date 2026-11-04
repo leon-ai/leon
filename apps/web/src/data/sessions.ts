@@ -7,6 +7,7 @@ import type { ModelSettings } from './model-catalog'
 import { useToast } from '@/components/toast'
 import { PROFILE_AUTH_QUERY_KEY } from './profile-query'
 import type { ProfileAuthentication } from '../../../../server/src/core/http-server/profile-auth-contract'
+import { markSessionRead } from './session-read-state'
 
 export enum SessionStatus {
   Idle = 'idle',
@@ -102,13 +103,17 @@ export function useSessionMutation(profile: string): UseMutationResult<
         method: changes ? 'PATCH' : 'DELETE',
         ...(changes ? { body: JSON.stringify(changes) } : {})
       }),
-    onSuccess: (_result, { changes }) => {
+    onSuccess: (_result, { id, changes }) => {
       if (queryClient.getQueryData<ProfileAuthentication>(PROFILE_AUTH_QUERY_KEY)?.profile_name !== profile) {
         return
       }
       const action = !changes ? 'deleted'
         : changes.title !== undefined ? 'renamed'
           : changes.is_pinned ? 'pinned' : 'unpinned'
+
+      if (!changes) {
+        markSessionRead(profile, id)
+      }
 
       showToast({
         type: 'success', title: `Session ${action}`,

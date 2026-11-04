@@ -670,6 +670,143 @@ test('reveals active session options on hover or keyboard focus rather than sele
   await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeVisible()
 })
 
+for (const pinned of [false, true]) {
+  test(`tracks unread concurrent completions through hover, navigation and refresh (pinned: ${pinned})`, async ({ page, ui }, testInfo) => {
+    ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+    ui.sessions[1]!.status = 'wip' as typeof ui.sessions[1]['status']
+    ui.sessions[1]!.isPinned = pinned
+    await page.goto(SESSION_URL)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    const otherLink = page.getByRole('link', { name: /Test session 1/ })
+    const row = page.getByRole('listitem').filter({ has: otherLink })
+    const dot = row.locator('.session-list-item-unread-dot')
+    const options = row.getByRole('button', { name: 'Session options', exact: true })
+    ui.sessions[1]!.status = 'idle' as typeof ui.sessions[1]['status']
+    const completion = { type: 'turn_status', sequence: 10, session_id: OTHER_SESSION_ID,
+      turn_id: 'other-turn', response_id: 'other-answer', created_at: Date.now(), data: { status: 'completed' } }
+    await ui.emit([completion, {
+      ...completion, type: 'session_changed', sequence: 11, data: { is_running: false }
+    }])
+    await expect(otherLink).toHaveAccessibleName('Test session 1, Unread response')
+    await composer.hover()
+    await expect(dot).toBeVisible()
+    await expect(options).toHaveCSS('opacity', '1')
+    await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '0')
+    const dotBounds = (await dot.boundingBox())!
+    const optionsBounds = (await options.boundingBox())!
+    expect(Math.abs(dotBounds.x + dotBounds.width / 2 - optionsBounds.x - optionsBounds.width / 2)).toBeLessThanOrEqual(1)
+    expect(Math.abs(dotBounds.y + dotBounds.height / 2 - optionsBounds.y - optionsBounds.height / 2)).toBeLessThanOrEqual(1)
+    if (pinned) {
+      const pinBounds = (await row.locator('.session-list-item-pinned-icon').boundingBox())!
+      expect(pinBounds.x + pinBounds.width).toBeLessThan(dotBounds.x)
+    }
+    expect(ui.historyRequests.some((url) => url.pathname.endsWith(OTHER_SESSION_ID))).toBe(false)
+    await row.hover()
+    await expect(dot).not.toBeVisible()
+    await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
+    await composer.hover()
+    await expect(dot).toBeVisible()
+    await otherLink.focus()
+    await expect(dot).not.toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(options).toBeFocused()
+    await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
+    await composer.focus()
+    await composer.hover()
+    await expect(dot).toBeVisible()
+
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await composer.focus()
+      await composer.hover()
+      await expect(dot).toBeVisible()
+      await expect(dot).toHaveCSS('background-color', 'rgb(28, 117, 219)')
+      await page.screenshot({ path: testInfo.outputPath(`unread-${theme}.png`) })
+    }
+
+    await page.reload()
+    await expect(dot).toBeVisible()
+    await otherLink.click()
+    await expect(page).toHaveURL(new RegExp(`/session/${OTHER_SESSION_ID}$`))
+    await expect(dot).toHaveCount(0)
+    await page.getByRole('link', { name: /Test session 0/ }).click()
+    await composer.hover()
+    await expect(dot).toHaveCount(0)
+    await ui.emit([completion])
+    await expect(dot).toHaveCount(0)
+    await page.reload()
+    await expect(dot).toHaveCount(0)
+  })
+}
+
+test('marks only unseen successful completions and scopes them to the profile', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const third = ui.sessions[2]!.id
+  let sequence = 0
+  const emit = (sessionId: string, type: string, data: Record<string, unknown>): ReturnType<typeof ui.emit> => ui.emit([{
+    type, sequence: ++sequence, session_id: sessionId, turn_id: `turn-${sequence}`,
+    response_id: `answer-${sequence}`, created_at: Date.now(), data
+  }])
+  const dots = page.locator('.session-list-item-unread-dot')
+  await emit(SESSION_ID, 'turn_status', { status: 'completed' })
+  await emit(OTHER_SESSION_ID, 'turn_status', { status: 'stopped' })
+  await emit(third, 'turn_status', { status: 'error' })
+  await emit(OTHER_SESSION_ID, 'turn_status', { status: 'completed', consumed: true })
+  await emit(OTHER_SESSION_ID, 'fyi', { fyi: { kind: 'mood', text: 'I am taking it gently today.' } })
+  await emit(OTHER_SESSION_ID, 'session_changed', { is_running: false })
+  await emit(OTHER_SESSION_ID, 'progress_message', { background: true, message: { id: 'background', content: 'Saved a useful detail.' } })
+  await expect(dots).toHaveCount(0)
+  await emit(OTHER_SESSION_ID, 'turn_status', { status: 'completed' })
+  await expect(dots).toHaveCount(1)
+  const profile = ui.profile
+  ui.profile = 'another-owner'
+  await page.reload()
+  await expect(page.getByRole('link', { name: 'Test session 1', exact: true })).toBeVisible()
+  await expect(dots).toHaveCount(0)
+  ui.profile = profile
+  await page.reload()
+  await expect(dots).toHaveCount(1)
+})
+
+test('distinguishes the selected session from concurrent WIP rows in both themes', async ({ page, ui }, testInfo) => {
+  for (const session of ui.sessions) {
+    session.status = 'wip' as typeof session.status
+  }
+  await page.goto(SESSION_URL)
+  const selected = page.getByRole('link', { name: /Test session 0/ })
+  const other = page.getByRole('link', { name: /Test session 1/ })
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  for (const theme of ['light', 'dark']) {
+    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+    await composer.hover()
+    const colors = await selected.evaluate((element) => {
+      const actual = getComputedStyle(element).backgroundColor
+      const probe = document.createElement('span')
+      probe.style.position = 'fixed'
+      probe.style.backgroundColor = 'var(--color-sidebar-background-active)'
+      document.body.appendChild(probe)
+      const expected = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return { actual, expected }
+    })
+    expect(colors.actual).toBe(colors.expected)
+    expect(colors.actual).not.toBe(await other.evaluate((element) => getComputedStyle(element).backgroundColor))
+    await selected.hover()
+    await expect(selected).toHaveCSS('background-color', colors.expected)
+    await other.hover()
+    await page.mouse.down()
+    await expect(other).toHaveCSS('background-color', colors.expected)
+    await composer.hover()
+    await page.mouse.up()
+    await composer.hover()
+    await expect(selected.locator('.session-work-indicator')).toHaveCount(1)
+    await expect(other.locator('.session-work-indicator')).toHaveCount(1)
+    await page.screenshot({ path: testInfo.outputPath(`concurrent-selection-${theme}.png`) })
+  }
+})
+
 test('drafts immediately while history loads and opens the latest messages at the bottom', async ({ page, ui }, testInfo) => {
   const release = ui.holdHistory()
   await page.goto(SESSION_URL)
@@ -834,6 +971,9 @@ test('updates session titles from metadata-only notifications during and after a
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`reveals live titles once while preserving ellipsis, hover scrolling and virtualized remounts (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
+    if (reducedMotion === 'reduce') {
+      await page.clock.install()
+    }
     for (let index = 3; index < 80; index++) {
       ui.sessions.push({
         ...ui.sessions[1]!,
@@ -857,11 +997,13 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(resting).toHaveCSS('text-overflow', 'ellipsis')
     await expect(link).toHaveCSS('height', '40px')
     await expect(characters.last()).toHaveCSS('opacity', '1')
-    const start = await characters.first().evaluate((element) => element.getAnimations()[0]?.startTime ?? null)
+    if (reducedMotion === 'reduce') {
+      await page.clock.fastForward(2_000)
+    }
     const requests = ui.completedRequests.filter((url) => url.pathname.endsWith('/page')).length
     await ui.emit([{ type: 'sessions_changed' }])
     await expect.poll(() => ui.completedRequests.filter((url) => url.pathname.endsWith('/page')).length).toBeGreaterThan(requests)
-    expect(await characters.first().evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).toBe(start)
+    await expect(characters).toHaveCount(0)
     await link.hover()
     const viewport = link.locator('.session-list-item-title')
     if (reducedMotion === 'reduce') {
@@ -879,6 +1021,55 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await sidebar.evaluate((element) => element.scrollTo({ top: 0 }))
     await expect(link).toBeVisible()
     await expect(link.locator('.streaming-text-character-new')).toHaveCount(0)
+  })
+
+  test(`keeps title fades continuous when pinning reorders existing rows (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    if (reducedMotion === 'reduce') {
+      await page.clock.install()
+    }
+    const session = ui.sessions[0]!
+    const other = ui.sessions[1]!
+    await page.route(`**/api/v1/sessions/${OTHER_SESSION_ID}?compact=true`, async (route) => {
+      const changes = route.request().postDataJSON() as { is_pinned: boolean }
+      other.isPinned = changes.is_pinned
+      ui.sessions.sort((left, right) => Number(right.isPinned) - Number(left.isPinned) || left.id.localeCompare(right.id))
+      await route.fulfill({ json: { session: other } })
+    })
+    await page.goto(SESSION_URL)
+    const otherRow = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: other.title, exact: true }) })
+    await otherRow.hover()
+    await otherRow.getByRole('button', { name: 'Session options', exact: true }).click()
+    session.title = 'A freshly generated session title with enough detail to stay readable while another session moves to the pinned position'
+    await ui.emit([{ type: 'sessions_changed' }])
+    const link = page.getByRole('link', { name: session.title, exact: true })
+    const characters = link.locator('.session-list-item-title-resting .streaming-text-character-new')
+    await expect(characters).not.toHaveCount(0)
+    const character = (await characters.last().elementHandle())!
+    let start: number | null = null
+    if (reducedMotion === 'no-preference') {
+      await expect.poll(() => character.evaluate((element) => Number(element.getAnimations()[0]?.currentTime ?? 0))).toBeGreaterThan(80)
+      start = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+    }
+    await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
+    await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', OTHER_SESSION_ID)
+    if (reducedMotion === 'no-preference') {
+      await expect.poll(() => character.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
+      const after = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+      expect(Math.abs(after - start!)).toBeLessThan(35)
+      await finishFiniteAnimations(link)
+    } else {
+      await expect(characters.last()).toHaveCSS('animation-name', 'none')
+      await expect(characters.last()).toHaveCSS('opacity', '1')
+      await page.clock.fastForward(2_000)
+    }
+    await otherRow.hover()
+    await otherRow.getByRole('button', { name: 'Session options', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Unpin session', exact: true }).click()
+    await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', SESSION_ID)
+    await expect(characters).toHaveCount(0)
+    await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
+    await character.dispose()
   })
 
   test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {

@@ -14,6 +14,7 @@ import { sessionsQueryKey, SESSION_PAGE_SIZE, SessionStatus, type SessionsPage }
 import type { FeedEntry } from './feed'
 import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
 import { queryHistoryKey } from './query-history'
+import { recordSessionCompletion } from './session-read-state'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
 const MAXIMUM_HISTORY_PAGES = 10
@@ -286,6 +287,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
         return
       }
       const event = notification
+      recordSessionCompletion(profile, sessionId, event)
       if (event.type === 'owner_message' || event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {
         void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, event.session_id || sessionId || ''), exact: true })
       }
