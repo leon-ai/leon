@@ -769,6 +769,44 @@ test('marks only unseen successful completions and scopes them to the profile', 
   await expect(dots).toHaveCount(1)
 })
 
+test('distinguishes the selected session from concurrent WIP rows in both themes', async ({ page, ui }, testInfo) => {
+  for (const session of ui.sessions) {
+    session.status = 'wip' as typeof session.status
+  }
+  await page.goto(SESSION_URL)
+  const selected = page.getByRole('link', { name: /Test session 0/ })
+  const other = page.getByRole('link', { name: /Test session 1/ })
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  for (const theme of ['light', 'dark']) {
+    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+    await composer.hover()
+    const colors = await selected.evaluate((element) => {
+      const actual = getComputedStyle(element).backgroundColor
+      const probe = document.createElement('span')
+      probe.style.position = 'fixed'
+      probe.style.backgroundColor = 'var(--color-sidebar-background-active)'
+      document.body.appendChild(probe)
+      const expected = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return { actual, expected }
+    })
+    expect(colors.actual).toBe(colors.expected)
+    expect(colors.actual).not.toBe(await other.evaluate((element) => getComputedStyle(element).backgroundColor))
+    await selected.hover()
+    await expect(selected).toHaveCSS('background-color', colors.expected)
+    await other.hover()
+    await page.mouse.down()
+    await expect(other).toHaveCSS('background-color', colors.expected)
+    await composer.hover()
+    await page.mouse.up()
+    await composer.hover()
+    await expect(selected.locator('.session-work-indicator')).toHaveCount(1)
+    await expect(other.locator('.session-work-indicator')).toHaveCount(1)
+    await page.screenshot({ path: testInfo.outputPath(`concurrent-selection-${theme}.png`) })
+  }
+})
+
 test('drafts immediately while history loads and opens the latest messages at the bottom', async ({ page, ui }, testInfo) => {
   const release = ui.holdHistory()
   await page.goto(SESSION_URL)

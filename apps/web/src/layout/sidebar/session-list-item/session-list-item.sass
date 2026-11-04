@@ -92,6 +92,10 @@
 
   .session-list-item-link
     @include list-row.interactions
+    --list-row-pressed-background: var(--color-sidebar-background-active)
+
+    &.session-list-item-active
+      background-color: var(--color-sidebar-background-active)
 
   .session-list-item-input
     height: 100%
@@ -162,7 +166,7 @@
     background-color: var(--color-sidebar-background-active)
 
   .session-list-item-active .session-list-item-title-mask
-    background-color: var(--color-sidebar-background-hover)
+    background-color: var(--color-sidebar-background-active)
 
   .session-list-item-title-mask-left
     left: 0
@@ -183,6 +187,9 @@
 
     .session-list-item-title-mask
       background-color: var(--color-sidebar-background-hover)
+
+  .session-list-item-active .session-list-item-title-scrolling .session-list-item-title-mask
+    background-color: var(--color-sidebar-background-active)
 
 @media (prefers-reduced-motion: reduce)
   .session-list-item .session-list-item-pinned-icon
