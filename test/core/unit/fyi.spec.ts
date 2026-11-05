@@ -39,7 +39,7 @@ describe('FYI selection', () => {
   })
 
   it('keeps all approved mindset lines short with stable, distinct identities', () => {
-    expect(FYI_VISIONS).toHaveLength(15)
+    expect(FYI_VISIONS).toHaveLength(16)
     expect(new Set(FYI_VISIONS.map((vision) => vision.id)).size).toBe(FYI_VISIONS.length)
     const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' })
     for (const vision of FYI_VISIONS) {
