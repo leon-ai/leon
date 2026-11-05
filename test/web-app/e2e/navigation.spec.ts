@@ -1120,12 +1120,18 @@ for (const { theme, motion, width } of [
         const button = element.querySelector('button')!
         const style = getComputedStyle(element)
         const dateStyle = getComputedStyle(date)
+        const dateBounds = date.getBoundingClientRect()
+        const buttonBounds = button.getBoundingClientRect()
+        const dateCenter = dateBounds.top + dateBounds.height / 2
+        const buttonCenter = buttonBounds.top + buttonBounds.height / 2
+
         return {
           sameColor: dateStyle.color === getComputedStyle(button).color,
           mediumSize: dateStyle.fontSize === style.getPropertyValue('--font-size-md').trim(),
-          mediumLineHeight: dateStyle.lineHeight === style.getPropertyValue('--line-height-md').trim()
+          mediumLineHeight: dateStyle.lineHeight === style.getPropertyValue('--line-height-md').trim(),
+          verticallyCentered: Math.abs(dateCenter - buttonCenter) < 0.5
         }
-      })).toEqual({ sameColor: true, mediumSize: true, mediumLineHeight: true })
+      })).toEqual({ sameColor: true, mediumSize: true, mediumLineHeight: true, verticallyCentered: true })
       await page.getByRole('textbox', { name: 'Message Leon' }).hover()
       await expect(actions).toHaveCSS('opacity', '0')
     }
