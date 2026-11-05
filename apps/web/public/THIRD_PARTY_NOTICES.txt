@@ -327,6 +327,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+Interface icons
+---------------
+
+The interface uses local SVG paths from Remix Icon 4.9.1 with selected Leon Soft B
+redraws and authored morph pairs. Original paths are retained in the common and
+tool registries; filled morph endpoints preserve the original source geometry.
+Unmodified Discord, Notion, Spotify, YouTube, Grok, Qwen and OpenAI brand paths in
+src/components/icon/brand-icons.ts retain their original appearance and identify
+their respective owners.
+Copyright (c) 2017-2026 Remix Design. Remix Icon License v1.0.
+Source: https://github.com/Remix-Design/RemixIcon
+License: https://github.com/Remix-Design/RemixIcon/blob/master/License
+
 Provider logos (img/providers/)
 ------------------------------
 

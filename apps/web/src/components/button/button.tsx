@@ -1,4 +1,5 @@
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
+import { Icon } from '@/components/icon'
 import { Link } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
@@ -17,6 +18,7 @@ export type ButtonVariant = 'ghost' | 'secondary' | 'primary' | 'danger'
 interface ButtonBaseProps {
   children?: ReactNode
   className?: string
+  icon?: ReactNode
   iconName?: string
   iconType?: ButtonIconType
   iconPosition?: ButtonIconPosition
@@ -24,6 +26,7 @@ interface ButtonBaseProps {
   tooltipPosition?: TooltipPosition
   ariaLabel?: string
   ariaPressed?: boolean
+  ariaBusy?: boolean
   tone?: ButtonTone
   variant?: ButtonVariant
   size?: ButtonSize
@@ -65,6 +68,7 @@ export function Button({
   href,
   target,
   rel,
+  icon,
   iconName,
   iconType = 'line',
   iconPosition = 'left',
@@ -72,6 +76,7 @@ export function Button({
   tooltipPosition = 'bottom',
   ariaLabel,
   ariaPressed,
+  ariaBusy,
   tone = 'default',
   variant = 'ghost',
   size = 'md',
@@ -83,19 +88,19 @@ export function Button({
   const isDisabled = disabled || loading
   const isIconOnly = children === undefined
   const accessibleLabel = ariaLabel ?? tooltipMessage
-  const iconClassName = iconType === null ? `ri-${iconName}` : `ri-${iconName}-${iconType}`
   const buttonClassName = clsx('button', `button-${variant}`, `button-${size}`, `button-tone-${tone}`, className, {
     'button-icon-only': isIconOnly
   })
+  const iconContent = icon !== undefined ? (
+    <span className="button-icon" aria-hidden="true">{icon}</span>
+  ) : iconName ? (
+    <Icon className="button-icon" name={iconType === null ? iconName : `${iconName}-${iconType}`} selected={ariaPressed} morph />
+  ) : null
   const content = (
     <>
-      {iconName && iconPosition === 'left' && (
-        <i className={clsx('button-icon', iconClassName)} aria-hidden="true" />
-      )}
+      {iconPosition === 'left' && iconContent}
       {children && <span className="button-label">{children}</span>}
-      {iconName && iconPosition === 'right' && (
-        <i className={clsx('button-icon', iconClassName)} aria-hidden="true" />
-      )}
+      {iconPosition === 'right' && iconContent}
     </>
   )
   const button = to !== undefined ? (
@@ -104,7 +109,7 @@ export function Button({
       className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-pressed={ariaPressed}
-      aria-busy={loading}
+      aria-busy={ariaBusy ?? loading}
       aria-disabled={isDisabled}
       style={{ cursor: loading ? 'wait' : cursorStyle }}
       onClick={(event: MouseEvent<HTMLAnchorElement>) => {
@@ -124,7 +129,7 @@ export function Button({
       className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-pressed={ariaPressed}
-      aria-busy={loading}
+      aria-busy={ariaBusy ?? loading}
       disabled={isDisabled}
       style={{ cursor: loading ? 'wait' : cursorStyle }}
       onClick={onClick}
@@ -137,7 +142,7 @@ export function Button({
       className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-pressed={ariaPressed}
-      aria-busy={loading}
+      aria-busy={ariaBusy ?? loading}
       aria-disabled={isDisabled}
       target={target}
       rel={rel}

@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import {
   useEffect,
   useId,
@@ -280,7 +281,7 @@ export function ModelSelectorMenu({
               searchRef.current?.focus()
             }}
           >
-            <i className="ri-arrow-left-s-line" aria-hidden="true" />
+            <Icon name="arrow-left-s-line" />
             <span>{search !== '' ? 'Search results' : provider?.label}</span>
           </button>
         </div>
@@ -347,9 +348,9 @@ export function ModelSelectorMenu({
                       )}
                     </span>
                     {row.kind === PickerRowKind.Provider ? (
-                      <i className="ri-arrow-right-s-line" aria-hidden="true" />
+                      <Icon name="arrow-right-s-line" />
                     ) : selected ? (
-                      <i className="ri-check-fill model-selector-selected" aria-hidden="true" />
+                      <Icon name="check-fill" className="model-selector-selected" />
                     ) : null}
                   </button>
                 </div>

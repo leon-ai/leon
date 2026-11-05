@@ -1,0 +1,85 @@
+.app-icon
+  display: inline-block
+  flex: 0 0 auto
+  width: 1em
+  height: 1em
+  vertical-align: -.125em
+  overflow: visible
+
+.icon-part-writing
+  opacity: 0
+
+.icon-part-pencil
+  transform-origin: 11px 13px
+
+.icon-part-gear, .icon-part-page
+  transform-origin: 12px 12px
+
+.menu-item:is(:hover, :focus-visible):not(:disabled):not([aria-disabled='true'])
+  .icon-part-pencil
+    animation: icon-write var(--transition-duration-sidebar) var(--transition-timing-main)
+
+  .icon-part-writing
+    stroke-dasharray: 7
+    animation: icon-ink var(--transition-duration-sidebar) var(--transition-timing-main)
+
+  .icon-part-magnifier
+    animation: icon-search-circle var(--transition-duration-sidebar) var(--transition-timing-main)
+
+  .icon-part-gear
+    animation: icon-turn var(--transition-duration-sidebar) var(--transition-timing-main)
+
+  .icon-part-download
+    animation: icon-download var(--transition-duration-sidebar) var(--transition-timing-main)
+
+  .icon-part-page
+    animation: icon-page var(--transition-duration-sidebar) var(--transition-timing-main)
+
+@keyframes icon-write
+  0%, 100%
+    transform: none
+  35%
+    transform: translate(-1px, 1px) rotate(-6deg)
+  70%
+    transform: translate(1px, 0) rotate(3deg)
+
+@keyframes icon-ink
+  0%
+    opacity: 0
+    stroke-dashoffset: 7
+  30%, 75%
+    opacity: 1
+  85%, 100%
+    opacity: 0
+    stroke-dashoffset: 0
+
+@keyframes icon-search-circle
+  from
+    transform: translateX(-1px) rotate(0deg) translateX(1px) rotate(0deg)
+  to
+    transform: translateX(-1px) rotate(360deg) translateX(1px) rotate(-360deg)
+
+@keyframes icon-turn
+  0%, 100%
+    transform: none
+  55%
+    transform: rotate(30deg)
+
+@keyframes icon-download
+  0%, 100%
+    transform: none
+  35%
+    transform: translateY(-2px)
+  70%
+    transform: translateY(1px)
+
+@keyframes icon-page
+  0%, 100%
+    transform: none
+  50%
+    transform: scaleX(.78)
+
+@media (prefers-reduced-motion: reduce)
+  .app-icon, .app-icon *
+    animation: none !important
+    transition: none !important

@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import { useEffect, useId, useRef, type KeyboardEvent } from 'react'
 
 import { Dropdown } from '@/components/dropdown'
@@ -141,9 +142,9 @@ function SettingsSection<TValue extends string>({
               onClick={() => onChange(option.value)}
             >
               <span className="dropdown-item-label">{option.label}</span>
-              {option.icon !== undefined && <i className={option.icon} aria-hidden="true" />}
+              {option.icon !== undefined && <Icon name={option.icon} />}
               {selected === option.value && (
-                <i className="ri-check-fill" aria-hidden="true" />
+                <Icon name="check-fill" />
               )}
             </button>
           ))}
@@ -237,7 +238,7 @@ export function ModelSettingsSelector({
       value: speed,
       label: SPEED_LABELS[speed],
       description: speed === 'auto' ? 'Use the project service-tier setting' : policy[speed],
-      ...(speed === 'fast' ? { icon: 'ri-flashlight-fill' } : {})
+      ...(speed === 'fast' ? { icon: 'flashlight-fill' } : {})
     }))
   const menuHeight = Math.min(
     MAXIMUM_SELECTOR_HEIGHT_PX,
@@ -288,7 +289,7 @@ export function ModelSettingsSelector({
         >
           <span className="button-label model-settings-label">{reasoningLabel}</span>
           {settings.speed === 'fast' && (
-            <i className="ri-flashlight-fill model-settings-fast" aria-hidden="true" />
+            <Icon name="flashlight-fill" className="model-settings-fast" />
           )}
         </button>
       )}

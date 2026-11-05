@@ -14,6 +14,7 @@ export interface ConversationTool {
   toolkitName?: string
   toolName?: string
   toolIconName?: string
+  toolkitIconName?: string
   startedAt?: number
   preparationStartedAt?: number
   durationMs?: number

@@ -1,3 +1,4 @@
+import { resolveIconName } from '../../../apps/web/src/components/icon/icon-name'
 import fs from 'node:fs/promises'
 import type { ElementHandle, Locator } from '@playwright/test'
 import type { ConversationEvent, ConversationRecord } from '../../../apps/web/src/data/conversation'
@@ -104,7 +105,7 @@ for (const kind of ['skill', 'experience'] as const) {
       const item = page.getByRole('region', { name: 'Leon’s activity', exact: true }).filter({ hasText: name })
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
-      await expect(item.locator(kind === 'experience' ? '.ri-brain-2-line' : '.ri-book-ai-line')).toBeVisible()
+      await expect(item.locator(kind === 'experience' ? '[data-icon="brain-2"]' : '[data-icon="book-ai"]')).toBeVisible()
       const disclosure = item.getByRole('button', { name: progress.content, exact: true })
       const contents = item.getByRole('region', { name: `${name}/SKILL.md`, exact: true })
       await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
@@ -138,7 +139,7 @@ for (const kind of ['skill', 'experience'] as const) {
         if (reducedMotion === 'reduce') {
           await page.setViewportSize({ width: 390, height: 844 })
         }
-        await expect(item.locator(kind === 'experience' ? '.ri-brain-2-line' : '.ri-book-ai-line')).toBeVisible()
+        await expect(item.locator(kind === 'experience' ? '[data-icon="brain-2"]' : '[data-icon="book-ai"]')).toBeVisible()
         await expect(item.locator('.activity-details-frame')).toBeVisible()
         const frameBounds = (await item.locator('.activity-details-frame').boundingBox())!
         const buttonBounds = (await details.boundingBox())!
@@ -220,7 +221,7 @@ for (const kind of ['skill', 'experience'] as const) {
       await work.getByRole('button').first().click()
       await expect(item).toHaveCount(1)
       await expect(item).toContainText(progress.content)
-      await expect(item.locator(kind === 'experience' ? '.ri-brain-2-line' : '.ri-book-ai-line')).toBeVisible()
+      await expect(item.locator(kind === 'experience' ? '[data-icon="brain-2"]' : '[data-icon="book-ai"]')).toBeVisible()
       const restored = item.getByRole('button', { name: progress.content, exact: true })
       await expect(restored).toHaveAttribute('aria-expanded', 'false')
       await restored.click()
@@ -350,7 +351,7 @@ test('replaces send with a danger stop action without submitting or losing the d
   await expect(send).toHaveCount(0)
   await expect(stop).toHaveClass(/button-danger/)
   await expect(stop).toHaveAttribute('type', 'button')
-  await expect(stop.locator('.ri-stop-mini-fill')).toBeVisible()
+  await expect(stop.locator('[data-icon="stop-mini"]')).toBeVisible()
   await stop.hover()
   await expect(page.getByRole('tooltip')).toHaveText('Stop this turn')
   await composer.hover()
@@ -369,7 +370,7 @@ test('replaces send with a danger stop action without submitting or losing the d
   await emit('session_changed', { is_running: false })
   await expect(stop).toHaveCount(0)
   await expect(send).toBeEnabled()
-  await expect(send.locator('.ri-send-ins-line')).toBeVisible()
+  await expect(send.locator('[data-icon="send-ins"]')).toBeVisible()
   await expect(composer).toHaveValue('Draft for later')
 })
 
@@ -857,7 +858,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       error_message: 'The weather service did not respond.'
     } })
     const failed = group.locator('.tool-call-error')
-    await expect(failed.locator('.tool-call-error-indicator.ri-close-line')).toBeVisible()
+    await expect(failed.locator('.tool-call-error-indicator[data-icon="close"]')).toBeVisible()
     await expect(failed.locator('.tool-call-trigger')).toHaveAccessibleDescription('Tool call failed')
     await expect(failed.locator('.tool-call-duration')).toHaveText('435ms')
     await expect(failed.locator('.activity-wave-active')).toHaveCount(0)
@@ -907,7 +908,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(review).toHaveCount(1)
     await expect(review.getByRole('button')).toHaveCount(0)
     await expect(review.locator('.process-group-title')).toHaveText('Reviewing...')
-    await expect(review.locator('.ri-search-eye-line')).toBeVisible()
+    await expect(review.locator('[data-icon="search-eye"]')).toBeVisible()
     await expect(page.getByRole('region', { name: 'Leon’s work', exact: true })).toHaveCount(0)
     await expect(page.getByText('Thinking...', { exact: true })).toHaveCount(0)
     await emit('metrics', { metrics: { durationMs: 500 } })
@@ -1353,7 +1354,7 @@ test('replaces one standalone processing row in place and retains completed requ
     await expect(request).toHaveCount(1)
     await expect(request.getByRole('button')).toHaveCount(0)
     await expect(request.locator('.process-group-title')).toHaveText(label)
-    await expect(request.locator(`.ri-${icon}`)).toBeVisible()
+    await expect(request.locator(`[data-icon="${resolveIconName(icon)}"]`)).toBeVisible()
     await expect(request.locator('.activity-wave')).toHaveClass(/activity-wave-active/)
     originalRow ??= await request.elementHandle()
     expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)

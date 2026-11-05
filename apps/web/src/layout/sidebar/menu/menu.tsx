@@ -74,11 +74,10 @@ export function Menu({
 
   const fixedItems = (
     <>
-      <MenuItem iconName="edit-box" label="New session" iconAnimation="write" to="/" shortcutKeys={[modifierKey, 'Shift', 'O']} collapsed={collapsed} />
+      <MenuItem iconName="edit-box" label="New session" to="/" shortcutKeys={[modifierKey, 'Shift', 'O']} collapsed={collapsed} />
       <MenuItem
         iconName="search"
         label="Search sessions"
-        iconAnimation="search"
         shortcutKeys={[modifierKey, 'K']}
         collapsed={collapsed}
         {...(onSearchSessions === undefined ? {} : { onClick: onSearchSessions })}
@@ -87,9 +86,9 @@ export function Menu({
   )
   const scrollableItems = (
     <>
-      <MenuItem iconName="settings" label="Settings" iconAnimation="settings" shortcutKeys={['/']} collapsed={collapsed} />
-      <MenuItem iconName="download-cloud-2" label="Update" iconAnimation="download" badge={NewBadge} collapsed={collapsed} />
-      <MenuItem iconName="book-open" label="Docs" iconAnimation="book" disabled badge={SoonBadge} collapsed={collapsed} />
+      <MenuItem iconName="settings" label="Settings" shortcutKeys={['/']} collapsed={collapsed} />
+      <MenuItem iconName="download-cloud-2" label="Update" badge={NewBadge} collapsed={collapsed} />
+      <MenuItem iconName="book-open" label="Docs" disabled badge={SoonBadge} collapsed={collapsed} />
     </>
   )
 

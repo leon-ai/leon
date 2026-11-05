@@ -41,7 +41,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await work.getByRole('button', { name: 'Worked for 6s', exact: true }).click()
     const outcome = work.getByRole('region', { name: 'Leon’s activity', exact: true })
     await expect(outcome).toHaveCount(1)
-    await expect(outcome.locator('.ri-brain-2-line')).toBeVisible()
+    await expect(outcome.locator('[data-icon="brain-2"]')).toBeVisible()
     await outcome.getByRole('button', { name: 'Saved 2 memories in 32ms', exact: true }).click()
     await outcome.getByRole('button', { name: 'View details', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Saved 2 memories', exact: true })
@@ -111,7 +111,7 @@ for (const durationMs of [0, 0.125]) {
     await expect(tools).not.toContainText('Loaded temporary context')
     await tools.getByRole('button', { name: 'Used 1 tool for 12ms', exact: true }).click()
     await expect(tools.getByRole('button', { name: /Read current temporary context/ })).toBeVisible()
-    await expect(tools.locator('.ri-brain-2-line')).toBeVisible()
+    await expect(tools.locator('[data-icon="brain-2"]')).toBeVisible()
   })
 
 }

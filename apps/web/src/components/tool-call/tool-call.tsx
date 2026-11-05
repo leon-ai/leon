@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import { useId, useMemo, useState, type CSSProperties, type Ref } from 'react'
 import { clsx } from 'clsx'
 
@@ -99,13 +100,10 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
               active={isActive}
               className="tool-call-heading-layer"
             >
-              <i
-                className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
-                aria-hidden="true"
-              />
+              <Icon name={toolCall.toolIconName} fallbackName={toolCall.toolkitIconName} className="tool-call-tool-icon" />
               <span className="tool-call-title">{toolCall.toolCallTitle || formatFunctionName(toolCall.functionName)}</span>
               {toolCall.status === 'error' && (
-                <i className="tool-call-error-indicator ri-close-line" aria-hidden="true" />
+                <Icon name="close-line" className="tool-call-error-indicator" />
               )}
             </ActivityWave>
             {duration && (
@@ -119,10 +117,7 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
               </span>
             )}
           </span>
-          <i
-            className="tool-call-chevron ri-arrow-right-s-line"
-            aria-hidden="true"
-          />
+          <Icon name="arrow-right-s-line" className="tool-call-chevron" />
         </button>
         <ActivityTimestamp timestamp={toolCall.startedAt ?? toolCall.preparationStartedAt} />
       </div>

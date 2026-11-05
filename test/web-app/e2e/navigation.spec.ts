@@ -1,8 +1,95 @@
+import { resolveIconName } from '../../../apps/web/src/components/icon/icon-name'
 import type { Locator, Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`retains icon states and reverses interrupted toggle morphs (${reducedMotion})`, async ({ page, ui }) => {
+    const requests: string[] = []
+    page.on('request', (request) => requests.push(request.url()))
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+    const mute = page.getByRole('button', { name: 'Mute sounds', exact: true })
+    const unmute = page.getByRole('button', { name: 'Unmute sounds', exact: true })
+    const initial = await mute.locator('animate[attributeName="d"]').first().getAttribute('from')
+    expect(initial).toBeNull()
+    await mute.click()
+    await expect(unmute.locator('[data-icon-state="off"]')).toBeVisible()
+    if (reducedMotion === 'no-preference') {
+      const before = await unmute.locator('svg').evaluate((element) => {
+        const svg = element as SVGSVGElement
+        svg.pauseAnimations()
+        const path = svg.querySelectorAll('path')[1]!
+        const animation = path.querySelector('animate')!
+        svg.setCurrentTime(animation.getStartTime() + animation.getSimpleDuration() * 0.4)
+
+        return path.getPointAtLength(0).y
+      })
+      await unmute.click()
+      const after = await mute.locator('svg').evaluate((element) => {
+        const svg = element as SVGSVGElement
+        const path = svg.querySelectorAll('path')[1]!
+        const from = path.querySelector('animate')!.getAttribute('from')!
+        svg.unpauseAnimations()
+
+        return Number(from.split('C')[0]!.split(' ')[1])
+      })
+      expect(after).toBeCloseTo(before, 3)
+    } else {
+      expect(await unmute.locator('animate[attributeName="d"]').first().getAttribute('from')).toBeNull()
+      await unmute.click()
+    }
+    await expect(mute.locator('[data-icon-state="on"]')).toBeVisible()
+    await page.reload()
+    await expect(mute).toBeVisible()
+    expect(await mute.locator('animate[attributeName="d"]').first().getAttribute('from')).toBeNull()
+    expect(requests.some((url) => url.includes('remixicon') || /\.(woff2?|ttf|eot)(\?|$)/.test(url) && url.includes('icon'))).toBe(false)
+    expect(ui.requests.filter((url) => url.pathname.includes('/sessions/')).length).toBeGreaterThan(0)
+  })
+}
+
+test('resolves dynamic SVG artwork locally and highlights running tools with safe fallbacks', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.message = ''
+  answer.isAddedToHistory = false
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [
+    ['terminal-line', 'Shell'], ['football-line', 'Sport'], ['spotify-line', 'Music'],
+    ['cursor-line', 'Cursor'], ['file-text-line', 'File'], ['file-list-3-line', 'File list'],
+    ['constructor', 'Unknown'], ['<svg onload="alert(1)">', 'Untrusted']
+  ].map(([icon, label], index) => ({ id: `icon-${index}`, name: 'test.tools.run', toolCallTitle: label!,
+    toolIconName: icon!, toolkitIconName: label === 'Unknown' ? 'global-line' : 'tools-line', status: 'running', input: {}, output: '' })) }
+  ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+  await page.goto(SESSION_URL)
+  await expect(page.getByRole('button', { name: 'Sport', exact: true }).locator('[data-icon="football"]')).not.toHaveAttribute('data-icon-fallback')
+  for (const [label, name, artwork] of [
+    ['Cursor', 'cursor', 'soft-b'], ['File', 'file-text', 'soft-b'],
+    ['File list', 'file-list-3', 'original'], ['Shell', 'terminal', 'original']
+  ]) {
+    await expect(page.getByRole('button', { name: label!, exact: true }).locator(`[data-icon="${name}"]`))
+      .toHaveAttribute('data-icon-artwork', artwork!)
+  }
+  for (const label of ['Shell', 'Sport', 'Music', 'Unknown', 'Untrusted']) {
+    const icon = page.getByRole('button', { name: label, exact: true }).locator('.tool-call-tool-icon')
+    await expect(icon).toBeVisible()
+    expect(await icon.locator('path').count()).toBeGreaterThan(0)
+    if (label === 'Unknown' || label === 'Untrusted') {
+      await expect(icon).toHaveAttribute('data-icon-fallback', label === 'Unknown' ? 'global' : 'tools')
+    }
+    if (label !== 'Sport') {
+      await expect.poll(() => icon.locator('path').first().evaluate((element) => {
+        const style = getComputedStyle(element)
+
+        return style.stroke.startsWith('url(') || style.fill.startsWith('url(')
+      })).toBe(true)
+    }
+  }
+  expect(await page.locator('[onload]').count()).toBe(0)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(page.locator('.tool-call-tool-icon defs')).toHaveCount(0)
+})
 
 async function expectBottom(page: Page): Promise<void> {
   await expect.poll(() => page.locator('.app-main').evaluate((main) =>
@@ -382,7 +469,7 @@ for (const width of [1_512, 390]) {
     expect(await views.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))))
       .toEqual(['Inline view', 'Split view'])
     await expect(views.getByRole('button', { name: 'Inline view', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    await expect(views.locator('.ri-list-check')).toHaveCount(1)
+    await expect(views.locator('[data-icon="list-check"]')).toHaveCount(1)
     await expect(dialog.getByRole('button', { name: 'Hunk view', exact: true })).toHaveCount(0)
     const dialogToggle = dialogDiff.getByRole('button', { name: 'Split view', exact: true })
     await expect(dialogToggle.locator('.button-label')).toHaveCount(0)
@@ -472,8 +559,8 @@ test('bounds long diff previews and retains recorded context in both inspector l
   const controls = diff.getByRole('group', { name: 'Diff view', exact: true })
   const inline = controls.getByRole('button', { name: 'Inline view', exact: true })
   const split = controls.getByRole('button', { name: 'Split view', exact: true })
-  expect(await controls.locator('.ri-list-check').evaluateAll((icons) =>
-    icons.every((icon) => getComputedStyle(icon, '::before').content !== 'none'))).toBe(true)
+  expect(await controls.locator('[data-icon="list-check"]').evaluateAll((icons) =>
+    icons.every((icon) => icon.querySelector('path') !== null && (icon as SVGSVGElement).getBBox().width > 0))).toBe(true)
   await expect.poll(text).toContain('marker10')
   await expect.poll(text).toContain('marker45')
   await split.click()
@@ -1591,7 +1678,14 @@ test('confirms session management actions once and only after the server accepts
       await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
       await page.getByRole('alertdialog').getByRole('button', { name: 'Delete session', exact: true }).click()
     } else {
-      await page.getByRole('menuitem', { name: action === 'pinned' ? 'Pin session' : 'Unpin session', exact: true }).click()
+      const item = page.getByRole('menuitem', { name: action === 'pinned' ? 'Pin session' : 'Unpin session', exact: true })
+      if (action === 'unpinned') {
+        const status = row.locator('.session-list-item-pinned-icon')
+        await expect(status).toHaveAttribute('data-icon-variant', 'fill')
+        await expect(item.locator('[data-icon="unpin"]')).toHaveAttribute('data-icon-variant', 'line')
+        expect(await item.locator('path').first().getAttribute('d')).not.toBe(await status.locator('path').first().getAttribute('d'))
+      }
+      await item.click()
     }
     const route = await pending.promise
     pending = Promise.withResolvers<Route>()
@@ -1692,13 +1786,13 @@ for (const status of ['success', 'error'] as const) {
     await expect(tool.locator('.tool-call-duration')).toHaveText('1.5s')
     await expect(tool.locator('.activity-wave-active')).toHaveCount(0)
     await expect(tool.locator('.tool-call-error-indicator')).toHaveCount(status === 'error' ? 1 : 0)
-    await expect(tool.locator('.ri-check-line, .ri-check-fill')).toHaveCount(0)
+    await expect(tool.locator('[data-icon="check"], [data-icon="check"]')).toHaveCount(0)
 
     for (const theme of ['dark', 'light']) {
       await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
       if (status === 'error') {
         await expect(tool).toHaveAccessibleDescription('Tool call failed')
-        await expect(tool.locator('.tool-call-error-indicator.ri-close-line')).toHaveCSS('color', 'rgb(172, 10, 10)')
+        await expect(tool.locator('.tool-call-error-indicator[data-icon="close"]')).toHaveCSS('color', 'rgb(172, 10, 10)')
       }
       const title = await tool.locator('.tool-call-title').boundingBox()
       const duration = await tool.locator('.tool-call-duration').boundingBox()
@@ -1791,8 +1885,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const review = work.getByRole('region', { name: 'Leon’s review' })
     await expect(generation).toHaveText('Generated answer in 5s')
     await expect(review).toHaveText('Reviewed for 3s')
-    await expect(generation.locator('.ri-pencil-ai-line')).toHaveCount(1)
-    await expect(review.locator('.ri-search-eye-line')).toHaveCount(1)
+    await expect(generation.locator('[data-icon="pencil-ai"]')).toHaveCount(1)
+    await expect(review.locator('[data-icon="search-eye"]')).toHaveCount(1)
     await expect(generation.getByRole('button')).toHaveCount(0)
     await expect(review.getByRole('button')).toHaveCount(0)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
@@ -1899,7 +1993,7 @@ for (const retryCount of [0, 1, 4]) {
     } else {
       const label = `Retried ${retryCount} ${retryCount === 1 ? 'time' : 'times'}`
       await expect(retries.locator('.process-group-title')).toHaveText(label)
-      await expect(retries.locator('.ri-refresh-line')).toHaveCount(1)
+      await expect(retries.locator('[data-icon="refresh"]')).toHaveCount(1)
       await expect(retries.getByRole('button')).toHaveCount(0)
       await page.reload()
       await work.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
@@ -1996,7 +2090,7 @@ test('keeps thoughts separate and closes completed work with categorized model r
     const request = processing.getByRole('region', { name: 'Leon’s inference', exact: true })
       .filter({ hasText: `${category.label} 1s` })
     await expect(request).toHaveCount(1)
-    await expect(request.locator(`.ri-${category.icon}`)).toHaveCount(1)
+    await expect(request.locator(`[data-icon="${resolveIconName(category.icon)}"]`)).toHaveCount(1)
   }
 })
 
@@ -2013,7 +2107,7 @@ for (const otherDuration of [undefined, 0, 500, 3_000]) {
     const other = work.getByRole('region', { name: 'Leon’s other processing' })
     if (otherDuration === 3_000) {
       await expect(other).toHaveText('Other processing for 3s')
-      await expect(other.locator('.ri-more-line')).toHaveCount(1)
+      await expect(other.locator('[data-icon="more"]')).toHaveCount(1)
       await expect(other.getByRole('button')).toHaveCount(0)
       await page.reload()
       await work.getByRole('button', { name: 'Worked for 12s', exact: true }).click()

@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 
@@ -40,18 +41,15 @@ export function TaskListItem({ step, renderActivity }: TaskListItemProps) {
   }, [step.status])
 
   const marker = step.status === 'completed'
-    ? <i className="task-list-item-marker-icon ri-check-line" aria-hidden="true" />
+    ? <Icon name="check-line" className="task-list-item-marker-icon" />
     : step.status === 'error'
-      ? <i className="task-list-item-marker-icon ri-close-line" aria-hidden="true" />
+      ? <Icon name="close-line" className="task-list-item-marker-icon" />
       : null
   const label = (
     <>
       <span className="task-list-item-label">{step.label}</span>
       {hasToolCalls && (
-        <i
-          className="task-list-item-chevron ri-arrow-right-s-line"
-          aria-hidden="true"
-        />
+        <Icon name="arrow-right-s-line" className="task-list-item-chevron" />
       )}
     </>
   )
