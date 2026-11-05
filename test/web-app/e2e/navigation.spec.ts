@@ -1,6 +1,7 @@
 import { resolveIconName } from '../../../apps/web/src/components/icon/icon-name'
 import type { Locator, Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
+import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
@@ -46,6 +47,53 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.reload()
     await expect(mute).toBeVisible()
     expect(await mute.locator('animate[attributeName="d"]').first().getAttribute('from')).toBeNull()
+    const sidebar = page.locator('.sidebar')
+    const sidebarIcon = sidebar.locator('.sidebar-controls [data-icon="sidebar-fold"], .sidebar-controls [data-icon="sidebar-unfold"]')
+    const frame = await sidebarIcon.locator('path').first().getAttribute('d')
+    const divider = await sidebarIcon.locator('path').nth(1).getAttribute('d')
+    await expect(sidebarIcon.locator('path')).toHaveCount(3)
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('opacity', '1')
+    await expect(sidebarIcon.locator('path').nth(2)).toHaveAttribute('fill-opacity', '0.5')
+    await page.getByRole('button', { name: 'Close sidebar', exact: true }).click()
+    await expect(sidebar).toHaveClass(/sidebar-collapsed/)
+    await expect(sidebarIcon.locator('[data-icon-state="unfold"]')).toHaveCount(1)
+    await expect(sidebarIcon.locator('path').first()).toHaveAttribute('d', frame!)
+    await expect(sidebarIcon.locator('path').nth(1)).not.toHaveAttribute('d', divider!)
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('opacity', '1')
+    await expect(sidebarIcon.locator('path').nth(2)).toHaveAttribute('fill-opacity', '0')
+    if (reducedMotion === 'no-preference') {
+      const middle = await sidebarIcon.evaluate((element) => {
+        const svg = element as SVGSVGElement
+        const pane = svg.querySelectorAll('path')[2]!
+        const motion = pane.querySelector<SVGAnimateElement>('animate[attributeName="fill-opacity"]')!
+        svg.pauseAnimations()
+        svg.setCurrentTime(motion.getStartTime() + motion.getSimpleDuration() / 2)
+        const opacity = Number(getComputedStyle(pane).fillOpacity)
+        const dividerX = svg.querySelectorAll('path')[1]!.getPointAtLength(0).x
+        svg.unpauseAnimations()
+
+        return { opacity, dividerX }
+      })
+      expect(middle.opacity).toBeCloseTo(0.25, 2)
+      expect(middle.dividerX).toBeCloseTo(7.5, 2)
+    } else {
+      expect(await sidebarIcon.locator('animate').first().getAttribute('from')).toBeNull()
+    }
+    await finishFiniteAnimations(sidebar)
+    expect(await sidebarIcon.locator('path').nth(1).evaluate((element) => (element as SVGPathElement).getPointAtLength(0).x)).toBe(6)
+    await expect(sidebar).toHaveClass(/sidebar-content-collapsed/)
+    await sidebar.locator('.sidebar-logo-slot').hover()
+    await expect(sidebar.locator('.sidebar-logo-open-button')).toHaveCSS('opacity', '1')
+    await sidebar.locator('.sidebar-header').screenshot({ path: testInfo.outputPath(`sidebar-collapsed-${reducedMotion}.png`) })
+    await sidebar.locator('.sidebar-logo-open-button button').click()
+    await expect(sidebar).not.toHaveClass(/sidebar-collapsed/)
+    await expect(sidebarIcon.locator('[data-icon-state="fold"]')).toHaveCount(1)
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('opacity', '1')
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('d', divider!)
+    await expect(sidebarIcon.locator('path').nth(2)).toHaveAttribute('fill-opacity', '0.5')
+    await expect(sidebarIcon.locator('path').first()).toHaveAttribute('d', frame!)
+    await finishFiniteAnimations(sidebar)
+    await sidebar.locator('.sidebar-header').screenshot({ path: testInfo.outputPath(`sidebar-expanded-${reducedMotion}.png`) })
     const logo = Promise.withResolvers<Route>()
     await page.route('**/img/logo-for-light-bg-text.svg', (route) => logo.resolve(route))
     const transitionStyles = await page.addStyleTag({ content: `
@@ -1024,6 +1072,195 @@ test('keeps owner text directly selectable with its bubble selection colors and 
   }
 })
 
+for (const { theme, motion, width } of [
+  { theme: 'dark', motion: 'no-preference', width: 1_512 },
+  { theme: 'light', motion: 'reduce', width: 390 }
+] as const) {
+  test(`reveals message copy, dates and recorded token information without shifting text (${theme})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: motion })
+    await page.clock.setFixedTime(new Date(2026, 10, 6, 17))
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    const timestamp = new Date(2026, 10, 6, 16, 28, 15).getTime()
+    const ownerText = '  Keep these spaces.\nAnd this second line.'
+    const answerText = 'A clear answer with enough detail to explain the result.\n\nKeep this paragraph and its new lines when copying.\nOne more line.'
+    ui.history.set(SESSION_ID, [
+      { who: 'owner', messageId: 'metadata-owner', message: ownerText, sentAt: timestamp, isAddedToHistory: true },
+      { who: 'leon', messageId: 'metadata-answer', message: answerText, sentAt: timestamp,
+        isAddedToHistory: true, fyi: { kind: FyiKind.Vision, text: 'A separate FYI.' },
+        llmMetrics: { inputTokens: 1_200, outputTokens: 80, totalTokens: 1_280,
+          tokensPerSecond: 0, averagedPhaseTokensPerSecond: 42.5,
+          durationMs: 12_345, reviewCount: 2, reviewDurationMs: 500,
+          contextUsedTokens: 4_096, contextWindowTokens: 32_768, contextUsagePercent: 12.5,
+          contextUsageEstimated: true, completionCount: 2,
+          usageAccounting: { cachedInputTokens: 400, cacheReadCompletionCount: 1, cacheWriteInputTokens: 64 } } }
+    ])
+    await page.goto(SESSION_URL)
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    }
+    await page.setViewportSize({ width, height: 982 })
+    await expect(page.getByText('A separate FYI.', { exact: true })).toBeVisible()
+    await finishFiniteAnimations(page.locator('.app-main'))
+    const owner = page.locator('.owner-message')
+    const ownerActions = page.getByRole('group', { name: 'Owner message actions', exact: true })
+    const answer = page.locator('.final-answer')
+    const answerActions = answer.getByRole('group', { name: 'Answer actions', exact: true })
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(ownerActions).toHaveCSS('opacity', '0')
+    await expect(answerActions).toHaveCSS('opacity', '0')
+    for (const actions of [ownerActions, answerActions]) {
+      const bounds = (await actions.boundingBox())!
+      expect(bounds.width).toBeGreaterThanOrEqual((await page.locator('.feed').boundingBox())!.width)
+      const pointerX = actions === ownerActions ? bounds.x + 16 : bounds.x + bounds.width - 16
+      await page.mouse.move(pointerX, bounds.y + 1)
+      await expect(actions).toHaveCSS('opacity', '1')
+      expect(await actions.evaluate((element) => {
+        const date = element.querySelector('time')!
+        const button = element.querySelector('button')!
+        const style = getComputedStyle(element)
+        const dateStyle = getComputedStyle(date)
+        return {
+          sameColor: dateStyle.color === getComputedStyle(button).color,
+          mediumSize: dateStyle.fontSize === style.getPropertyValue('--font-size-md').trim(),
+          mediumLineHeight: dateStyle.lineHeight === style.getPropertyValue('--line-height-md').trim()
+        }
+      })).toEqual({ sameColor: true, mediumSize: true, mediumLineHeight: true })
+      await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+      await expect(actions).toHaveCSS('opacity', '0')
+    }
+    const position = await owner.boundingBox()
+    const feedBounds = (await page.locator('.feed').boundingBox())!
+    await page.mouse.move(feedBounds.x + 1, position!.y + position!.height / 2)
+    await expect(ownerActions).toHaveCSS('opacity', '0')
+    await owner.hover()
+    await expect(ownerActions).toHaveCSS('opacity', '1')
+    expect(await owner.boundingBox()).toEqual(position)
+    const ownerDate = ownerActions.locator('time')
+    await expect(ownerDate).toHaveText('Today, 16:28')
+    await ownerDate.hover()
+    await expect(page.locator('.tooltip-content-open')).toHaveText('2026-11-06 16:28:15')
+    const ownerCopy = ownerActions.getByRole('button', { name: 'Copy message', exact: true })
+    const ownerIcon = (await ownerCopy.locator('.app-icon').boundingBox())!
+    expect(Math.abs(ownerIcon.x + ownerIcon.width - position!.x - position!.width)).toBeLessThan(1)
+    expect((await ownerDate.boundingBox())!.x).toBeLessThan((await ownerCopy.boundingBox())!.x)
+    await ownerCopy.hover()
+    await expect(page.locator('.tooltip-content-open')).toHaveText('Copy message')
+    await ownerCopy.click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(ownerText)
+    await expect(ownerActions.locator('[data-icon-state="copied"]')).toBeVisible()
+    await answer.locator('.streaming-text-characters').first().hover()
+    await expect(answerActions).toHaveCSS('opacity', '1')
+    const answerCopy = answerActions.getByRole('button', { name: 'Copy message', exact: true })
+    const answerIcon = (await answerCopy.locator('.app-icon').boundingBox())!
+    expect(Math.abs(answerIcon.x - (await answer.boundingBox())!.x)).toBeLessThan(1)
+    expect(await answer.evaluate((element) => {
+      const footer = element.querySelector('.bonus-response')!
+      const button = element.querySelector('.message-metadata button')!
+      const gap = button.getBoundingClientRect().top - footer.getBoundingClientRect().bottom
+      return Math.abs(gap - parseFloat(getComputedStyle(element).getPropertyValue('--space-md')))
+    })).toBeLessThan(1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await answerCopy.click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(answerText)
+    const info = answerActions.getByRole('button', { name: 'Turn info', exact: true })
+    const copyBounds = (await answerActions.locator('button').first().boundingBox())!
+    const infoBounds = (await info.boundingBox())!
+    expect(Math.abs(infoBounds.x - copyBounds.x - copyBounds.width)).toBeLessThan(0.5)
+    expect((await info.boundingBox())!.x).toBeLessThan((await answerActions.locator('time').boundingBox())!.x)
+    await info.hover()
+    await expect(page.locator('.tooltip-content-open')).toHaveText('Turn info')
+    await info.click()
+    const dialog = page.getByRole('dialog', { name: 'Turn info', exact: true })
+    await expect(dialog).toBeVisible()
+    await dialog.hover()
+    await expect(answerActions).toHaveCSS('opacity', '1')
+    const rows = dialog.locator('.message-info-row')
+    await expect(rows.locator('dt')).toHaveText([
+      'Tokens', 'Cached input tokens', 'Tokens per second', 'Context usage'
+    ])
+    for (const [label, value] of [
+      ['Tokens', '1,200 in · 80 out · 1,280 total'],
+      ['Cached input tokens', '400 (partial)'],
+      ['Tokens per second', '42.50'], ['Context usage', '~4,096 / 32,768 (12.5%)']
+    ]) {
+      const row = rows.filter({ has: page.getByText(label!, { exact: true }) })
+      await expect(row.locator('dd')).toHaveText(value!)
+      await expect(row.locator('.app-icon')).not.toHaveAttribute('data-icon-fallback')
+    }
+    await expect(rows.filter({ hasText: 'Cached input tokens' }).locator('.app-icon'))
+      .toHaveAttribute('data-icon', 'database')
+    await expect(dialog).not.toContainText(/duration|review/i)
+    await expect(info).toHaveAttribute('aria-expanded', 'true')
+    const screenshot = testInfo.outputPath(`message-information-${theme}.png`)
+    await page.screenshot({ path: screenshot })
+    await testInfo.attach(`message-information-${theme}`, { path: screenshot, contentType: 'image/png' })
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(info).toBeFocused()
+    await expect(info).toHaveCSS('outline-style', 'none')
+    await page.reload()
+    await answer.locator('.streaming-text-characters').first().hover()
+    await info.click()
+    await expect(dialog.locator('.message-info-row').filter({ has: page.getByText('Tokens', { exact: true }) }))
+      .toContainText('1,200 in · 80 out · 1,280 total')
+  })
+}
+
+test('keeps absent accounting unknown and updates recorded turn info from live events', async ({ page, ui }) => {
+  const response = ui.history.get(SESSION_ID)!.at(-1)!
+  response.message = 'A saved answer without recorded usage.'
+  response.isAddedToHistory = false
+  ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+  await page.goto(SESSION_URL)
+  const answer = page.locator('.final-answer').last()
+  expect(await answer.locator('.message-metadata').evaluate((element) => {
+    const style = getComputedStyle(element)
+    return style.paddingTop === style.getPropertyValue('--space-xs').trim()
+  })).toBe(true)
+  await answer.locator('.streaming-text-characters').first().hover()
+  const info = answer.getByRole('button', { name: 'Turn info', exact: true })
+  await info.focus()
+  await info.press('Enter')
+  const dialog = page.getByRole('dialog', { name: 'Turn info', exact: true })
+  await expect(dialog).toHaveText('No usage data recorded.')
+  await expect(dialog.getByLabel('Recorded token metrics', { exact: true })).toBeFocused()
+  await ui.emit([{ type: 'metrics', sequence: 1, session_id: SESSION_ID, turn_id: 'live-metrics',
+    response_id: response.messageId, created_at: Date.now(),
+    data: { metrics: { inputTokens: 0, outputTokens: 18, totalTokens: 18, tokensPerSecond: 12.5,
+      contextUsedTokens: 640, contextUsageEstimated: false,
+      usageAccounting: { cachedInputTokens: 0, cacheReadCompletionCount: 0, cacheWriteInputTokens: 0 } } } }])
+  await expect(dialog.locator('.message-info-row')).toHaveCount(3)
+  await expect(dialog.locator('.message-info-row').filter({ has: page.getByText('Tokens', { exact: true }) }))
+    .toContainText('0 in · 18 out · 18 total')
+  await expect(dialog.locator('.message-info-row').filter({ hasText: 'Context usage' })).toContainText('640 tokens')
+  await expect(dialog).not.toContainText(/cache|duration|review/i)
+  await page.keyboard.press('Escape')
+  await expect(info).toBeFocused()
+})
+
+test.describe('touch message actions', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
+
+  test('keeps copy and information available without hover', async ({ page, ui }) => {
+    ui.history.set(SESSION_ID, ui.history.get(SESSION_ID)!.slice(-2))
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.goto(SESSION_URL)
+    const ownerActions = page.getByRole('group', { name: 'Owner message actions', exact: true })
+    const answerActions = page.getByRole('group', { name: 'Answer actions', exact: true })
+    await expect(ownerActions).toHaveCSS('opacity', '1')
+    await expect(answerActions).toHaveCSS('opacity', '1')
+    await answerActions.getByRole('button', { name: 'Copy message', exact: true }).tap()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(LATEST_ANSWER)
+    await answerActions.getByRole('button', { name: 'Turn info', exact: true }).tap()
+    const dialog = page.getByRole('dialog', { name: 'Turn info', exact: true })
+    await expect(dialog).toBeVisible()
+    await page.getByRole('textbox', { name: 'Message Leon' }).tap()
+    await expect(dialog).toHaveCount(0)
+    await expect(answerActions).toHaveCSS('opacity', '1')
+  })
+})
+
 test('centers general errors in the usable feed area on session and new-session pages', async ({ page, ui }, testInfo) => {
   ui.failure = { path: '/api/v1/profile-auth', status: 503, message: 'I could not complete this request. Please try again.' }
   for (const url of [SESSION_URL, './']) {
@@ -1689,7 +1926,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
       .locator('.streaming-text-characters').hover()
     await expect(tooltip).toHaveCount(0)
-    await expect(page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last().locator('.activity-timestamp')).toHaveCount(0)
+    await expect(page.locator('.final-answer').last()
+      .getByRole('group', { name: 'Answer actions', exact: true }).locator('.activity-timestamp')).toHaveCount(1)
     await page.reload()
     await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
     await work.getByRole('button', { name: 'Used 1 tool for 618ms', exact: true }).click()

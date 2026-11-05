@@ -1,3 +1,5 @@
+import { SIDEBAR_PANE_FILL_OPACITY } from './icon-definitions'
+
 // Compatible contours are authored ahead of time; interaction never parses or
 // normalizes SVGs. Filled original endpoints retain their exact source geometry.
 export interface MorphPose {
@@ -9,6 +11,19 @@ export interface MorphPose {
 }
 
 export type MorphFrames = Readonly<Record<string, readonly MorphPose[]>>
+
+const SIDEBAR_FRAME: MorphPose = {
+  points: [6,3,6,3,18,3,18,3,19.65685,3,21,4.34315,21,6,21,6,21,18,21,18,21,19.65685,19.65685,21,18,21,18,21,6,21,6,21,4.34315,21,3,19.65685,3,18,3,18,3,6,3,6,3,4.34315,4.34315,3,6,3],
+  opacity: 1,
+  fill: 0
+}
+
+const SIDEBAR_DIVIDER: MorphPose = {
+  points: [9,3,9,3,9,21,9,21],
+  opacity: 1,
+  fill: 0
+}
+const SIDEBAR_PANE_POINTS = [6,3,6,3,9,3,9,3,9,3,9,21,9,21,9,21,6,21,6,21,4.34315,21,3,19.65685,3,18,3,18,3,6,3,6,3,4.34315,4.34315,3,6,3]
 
 export const ICON_MORPHS: Readonly<Record<string, MorphFrames>> = {
   'copy': {
@@ -121,37 +136,28 @@ export const ICON_MORPHS: Readonly<Record<string, MorphFrames>> = {
   },
   'sidebar': {
     'fold': [
+      SIDEBAR_FRAME,
+      SIDEBAR_DIVIDER,
       {
-        'points': [6,3,6,3,18,3,18,3,19.65685,3,21,4.34315,21,6,21,6,21,18,21,18,21,19.65685,19.65685,21,18,21,18,21,6,21,6,21,4.34315,21,3,19.65685,3,18,3,18,3,6,3,6,3,4.34315,4.34315,3,6,3],
+        'points': SIDEBAR_PANE_POINTS,
         'opacity': 1,
-        'fill': 0
-      },
-      {
-        'points': [9,3,9,3,9,21,9,21],
-        'opacity': 1,
-        'fill': 0
-      },
-      {
-        'points': [16,8,16,8,12,12,12,12,12,12,16,16,16,16],
-        'opacity': 1,
-        'fill': 0
+        'fill': SIDEBAR_PANE_FILL_OPACITY,
+        'stroke': 0
       }
     ],
     'unfold': [
+      SIDEBAR_FRAME,
       {
-        'points': [6,3,6,3,18,3,18,3,19.65685,3,21,4.34315,21,6,21,6,21,18,21,18,21,19.65685,19.65685,21,18,21,18,21,6,21,6,21,4.34315,21,3,19.65685,3,18,3,18,3,6,3,6,3,4.34315,4.34315,3,6,3],
+        'points': [6,3,6,3,6,21,6,21],
         'opacity': 1,
         'fill': 0
       },
       {
-        'points': [9,3,9,3,9,21,9,21],
+        // The fading fill narrows with the divider, keeping the pane connected.
+        'points': [6,3,6,3,6,3,6,3,6,3,6,21,6,21,6,21,6,21,6,21,4.34315,21,3,19.65685,3,18,3,18,3,6,3,6,3,4.34315,4.34315,3,6,3],
         'opacity': 1,
-        'fill': 0
-      },
-      {
-        'points': [13,8,13,8,17,12,17,12,17,12,13,16,13,16],
-        'opacity': 1,
-        'fill': 0
+        'fill': 0,
+        'stroke': 0
       }
     ]
   },

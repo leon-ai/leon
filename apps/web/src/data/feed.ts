@@ -1,5 +1,6 @@
 import type { MemoryActivitySnapshot } from '../../../../server/src/core/llm-manager/memory-activity-contract'
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
+import type { ConversationMetrics } from './conversation'
 import type { AgentSkillSnapshot } from '../../../../server/src/core/llm-manager/agent-progress-contract'
 
 export enum FeedTurnStatus {
@@ -170,6 +171,8 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  sentAt?: number | undefined
+  metrics?: ConversationMetrics | undefined
   isMaintenance?: boolean
   // Presentation segments share one durable response and its lazy disclosures.
   responseId?: string

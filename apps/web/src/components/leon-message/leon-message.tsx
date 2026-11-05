@@ -322,16 +322,15 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
         <ArtifactAttachments artifacts={entry.artifacts} />
       )}
       {entry.finalAnswer.trim().length > 0 && (
-        <FinalAnswer animationId={`${entry.id}:${entry.answerGenerationId ?? 'accepted'}:final-answer`}>
+        <FinalAnswer animationId={`${entry.id}:${entry.answerGenerationId ?? 'accepted'}:final-answer`}
+          timestamp={entry.sentAt} metrics={entry.metrics}
+          footer={bonusResponse !== undefined && bonusResponse.trim().length > 0 ? (
+            <BonusResponse animationId={`${entry.id}:bonus-response`}>
+              {bonusResponse}
+            </BonusResponse>
+          ) : undefined}>
           {entry.finalAnswer}
         </FinalAnswer>
-      )}
-      {entry.finalAnswer.trim().length > 0 &&
-        bonusResponse !== undefined &&
-        bonusResponse.trim().length > 0 && (
-        <BonusResponse animationId={`${entry.id}:bonus-response`}>
-          {bonusResponse}
-        </BonusResponse>
       )}
     </div>
   )

@@ -1,4 +1,6 @@
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
+import type { ContextUsageMetrics } from '../../../../server/src/core/llm-manager/llm-usage/context-usage'
+import type { UsageAccounting } from '../../../../server/src/core/llm-manager/llm-usage/usage-accounting'
 import type { AgentProgressMessage } from '../../../../server/src/core/llm-manager/agent-progress-contract'
 import type { InferenceActivity, TurnTiming } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import type { FeedPlanStepStatus, FeedToolCallStatus, JsonValue } from './feed'
@@ -25,7 +27,14 @@ export interface ConversationTool {
   errorMessage?: string
 }
 
-export interface ConversationMetrics {
+export interface ConversationMetrics extends Partial<ContextUsageMetrics> {
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  tokensPerSecond?: number
+  averagedPhaseTokensPerSecond?: number
+  completionCount?: number
+  usageAccounting?: Partial<UsageAccounting> | undefined
   durationMs?: number
   reviewCount?: number
   reviewRetryCount?: number
