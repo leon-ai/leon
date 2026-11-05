@@ -19,9 +19,22 @@
   actionable failures once. Preserve profile isolation; do not duplicate cache-owned
   errors or toast background fetches, streaming updates, or optimistic success.
 
+## Design intent
+
+- Make Leon feel cozy, warm, quietly creative, and unhurried: a human-centered
+  space for craft, not urgency, hype, FOMO, or pressure to keep producing.
+  Support the owner's pace through clear, friendly language, soft forms, calm
+  hierarchy, and restrained, purposeful motion; avoid decorative noise.
+- A slow-paced atmosphere must never mean slow software. Keep typing, navigation,
+  loading, and feedback responsive; do not add artificial waits or blocking motion.
+  Express warmth through the existing palette and interactions, not new colors.
+
 ## Design tokens and shared styles
 
 - Write user-facing messages spoken by Leon in first person (“I”, “me”, “my”), not third person; preserve branding, technical identifiers, and neutral descriptive/accessibility labels.
+- Use sentence case for authored titles, headings, labels, tooltips, and toast copy:
+  capitalize only the first word, preserving proper names, acronyms, filenames,
+  and user/model-authored content.
 - Check `src/styles/_includes/themes.sass`, `variables.sass`, and existing components
   first. Reuse semantic tokens/shared components for colors, gradients, spacing,
   typography, radii, shadows, and motion where suitable.
@@ -39,6 +52,28 @@
 - Decide label typography, icon size, geometry, and hit area separately; align
   controls and balance visual weight. Main icons, brand marks, and secondary
   indicators need not match label size; verify rendered optical corrections.
+- Use local SVGs through the shared icon component. Keep original artwork by
+  default; use rounded redraws only for explicitly approved icons. Rounding must
+  preserve the original silhouette, details, orientation, and meaning, not redesign
+  the symbol. Keep canvas and optical weight consistent. Resolve dynamic names through
+  an allowlisted local registry with compatibility aliases and category/generic
+  fallbacks; never inject untrusted SVG or fetch/generate unknown icons at runtime.
+  Keep brand artwork accurate and retain asset provenance/licenses; modification
+  does not remove upstream rights or imply permission to publish an independent set.
+- Use outline icons for actions and filled variants to communicate state/status,
+  such as pinned sessions or fast service tier. Preserve explicit line/fill variants
+  through the shared renderer; SVG fill-based outline geometry is not a filled icon.
+- Icon motion should express the action through suitable SVG parts, play once on
+  hover or keyboard focus, and respect reduced motion. Keep common icons readily
+  available and uncommon assets locally cached; do not load an entire catalog.
+- Stateful icon controls use the shared morph renderer and explicitly authored,
+  compatible path pairs whose endpoints respect each icon's approved artwork,
+  including original shapes and filled/outline styling. Animate actual state changes, never
+  initial rendering/remounts; retain the final shape, preserve each control's
+  meaning, and reverse interrupted motion from its current geometry. Confirm
+  asynchronous success before showing it. Use native finite animations, skip
+  motion when reduced, clean up on unmount, and avoid per-frame React work or
+  runtime normalization of arbitrary SVGs.
 - Keep targets accessible regardless of glyph size: meet WCAG 2.2 AA target sizing,
   consider enhanced 44px touch targets where feasible, and prevent overlapping
   hit areas.
