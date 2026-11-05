@@ -9,7 +9,7 @@ import { useOpenTextActivityDetails } from './activity-details-provider'
 export function MemoryDetails({ memory, title }: { memory: MemoryActivitySnapshot, title: string }) {
   const content = JSON.stringify(memory.entries, null, 2)
   const openDetails = useOpenTextActivityDetails({
-    title, content, path: 'memory.json', contentName: 'Memory', language: 'json'
+    title, content, path: 'memory.json', contentName: 'memory', language: 'json'
   })
 
   return (

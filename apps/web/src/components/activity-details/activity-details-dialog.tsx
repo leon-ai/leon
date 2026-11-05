@@ -2,7 +2,7 @@ import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react'
 
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/button'
-import { useToast } from '@/components/toast'
+import { CopyButton } from '@/components/copy-button'
 
 import './activity-details.sass'
 
@@ -24,7 +24,6 @@ export function ActivityDetailsDialog({
   open, title, path, content, contentName, downloadFilename,
   canCopy = true, notice, toolbar, children, onClose, onAfterClose
 }: ActivityDetailsDialogProps) {
-  const { showToast } = useToast()
   const downloadURL = useRef<string | undefined>(undefined)
 
   useEffect(() => (): void => {
@@ -32,20 +31,6 @@ export function ActivityDetailsDialog({
       URL.revokeObjectURL(downloadURL.current)
     }
   }, [])
-
-  async function copy(): Promise<void> {
-    if (content === undefined) {
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(content)
-      showToast({ type: 'success', title: `Copied ${contentName}`, description: 'The text is in your clipboard.' })
-    } catch {
-      showToast({ type: 'error', title: 'I couldn’t copy this text',
-        description: 'Your browser did not allow clipboard access. You can download the text instead.' })
-    }
-  }
 
   function download(): void {
     if (content === undefined) {
@@ -74,8 +59,8 @@ export function ActivityDetailsDialog({
       <div className="activity-details-toolbar">
         {toolbar}
         {canCopy && (
-          <Button iconName="file-copy" tone="muted" tooltipMessage={`Copy ${contentName}`} tooltipPosition="left"
-            disabled={content === undefined} onClick={() => void copy()} />
+          <CopyButton text={content} tone="muted" label={`Copy ${contentName}`} tooltipPosition="left"
+            disabled={!open} />
         )}
       </div>
       {children}
