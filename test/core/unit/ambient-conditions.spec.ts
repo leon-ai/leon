@@ -4,6 +4,8 @@ import AmbientConditionsManager, { AmbientWeatherCondition, type AmbientWeatherS
 
 const fixture = vi.hoisted(() => ({
   cache: null as { locationQuery: string | null, weather: AmbientWeatherSnapshot | null } | null,
+  settings: {} as Record<string, unknown>,
+  city: 'Test town' as string | null,
   weather: {
     success: true,
     data: {
@@ -24,8 +26,11 @@ vi.mock('@/core', () => ({
   TOOL_EXECUTOR: { executeTool: fixture.execute }
 }))
 vi.mock('@/config', () => ({ CONFIG_MANAGER: { getConfig: (): object => ({ time_zone: 'UTC' }) } }))
+vi.mock('@/core/tool-manager/tool-settings', () => ({
+  ToolSettings: { loadToolSettings: (): object => fixture.settings }
+}))
 vi.mock('@/core/context-manager/owner-profile', () => ({
-  readOwnerProfileSync: (): object => ({ owner_current_city: 'Test town' })
+  readOwnerProfileSync: (): object => ({ owner_current_city: fixture.city })
 }))
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: { title: vi.fn(), success: vi.fn(), warning: vi.fn() }
@@ -46,6 +51,9 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-30T12:00:00Z'))
   fixture.cache = null
+  fixture.settings = {}
+  fixture.city = 'Test town'
+  fixture.execute.mockClear()
   fixture.weather.data.timezone = 'Europe/Paris'
   fixture.weather.data.daily = {
     time: ['2026-10-30'], sunrise: ['2026-10-30T07:00'], sunset: ['2026-10-30T19:00']
@@ -109,6 +117,67 @@ it.each(['missing', 'polar', 'invalid-zone', 'invalid-time', 'reversed', 'wrong-
     expect(fixture.execute).toHaveBeenCalledTimes(1)
   }
 )
+
+it('refreshes Vibes for an explicit city and returns home when the override expires or is cleared', async () => {
+  const manager = new AmbientConditionsManager()
+  await manager.getSnapshot()
+
+  fixture.settings = {
+    vibesLocation: { location: ' Lyon, France ', expiresAt: Date.now() + 60_000 }
+  }
+  await manager.getSnapshot()
+  expect(fixture.cache?.locationQuery).toBe('Lyon, France')
+  expect(fixture.execute.mock.calls[1]?.[0].parsedInput.location).toBe('Lyon, France')
+
+  vi.advanceTimersByTime(60_000)
+  await manager.getSnapshot()
+  expect(fixture.cache?.locationQuery).toBe('Test town')
+
+  fixture.settings = {
+    vibesLocation: { location: 'Nantes, France', expiresAt: Date.now() + 60_000 }
+  }
+  await manager.getSnapshot()
+  expect(fixture.cache?.locationQuery).toBe('Nantes, France')
+
+  fixture.settings = { vibesLocation: null }
+  await manager.getSnapshot()
+  expect(fixture.cache?.locationQuery).toBe('Test town')
+  expect(fixture.execute).toHaveBeenCalledTimes(5)
+})
+
+it.each([
+  { location: 'Lyon' },
+  { location: ' ', expiresAt: Number.MAX_SAFE_INTEGER },
+  { location: 'Lyon', expiresAt: 'tomorrow' },
+  { location: 'Lyon', expiresAt: Number.NaN }
+])('falls back home for an invalid Vibes override %j', async (vibesLocation) => {
+  fixture.settings = { vibesLocation }
+
+  await new AmbientConditionsManager().getSnapshot()
+  expect(fixture.cache?.locationQuery).toBe('Test town')
+})
+
+it('leaves weather unavailable without a selected or home city', async () => {
+  fixture.city = null
+
+  expect((await new AmbientConditionsManager().getSnapshot()).weather).toBeNull()
+  expect(fixture.execute).not.toHaveBeenCalled()
+})
+
+it('discards weather when the Vibes override changes during the request', async () => {
+  fixture.execute.mockImplementationOnce(async (): Promise<object> => {
+    fixture.settings = {
+      vibesLocation: { location: 'Lyon, France', expiresAt: Date.now() + 60_000 }
+    }
+
+    return { status: 'success', data: { output: { result: fixture.weather } } }
+  })
+  const manager = new AmbientConditionsManager()
+
+  expect((await manager.getSnapshot()).weather).toBeNull()
+  await manager.getSnapshot()
+  expect(fixture.cache?.locationQuery).toBe('Lyon, France')
+})
 
 it('refreshes cached weather when solar availability has not been checked', async () => {
   fixture.cache = {

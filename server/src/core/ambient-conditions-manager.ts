@@ -4,6 +4,7 @@ import {
 } from '@/core'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
+import { ToolSettings } from '@/core/tool-manager/tool-settings'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { ToolExecutionOrigin } from '@/types'
@@ -182,6 +183,23 @@ export default class AmbientConditionsManager {
   }
 
   private getOwnerLocationQuery(): string {
+    // Vibes follows an explicit weather preference; travel memories stay independent.
+    const settings = ToolSettings.loadToolSettings('weather', 'openmeteo', {}, true)
+    const override = settings['vibesLocation'] as {
+      location?: unknown
+      expiresAt?: unknown
+    } | null | undefined
+
+    if (
+      typeof override?.location === 'string' &&
+      override.location.trim() &&
+      typeof override.expiresAt === 'number' &&
+      Number.isFinite(override.expiresAt) &&
+      override.expiresAt > Date.now()
+    ) {
+      return override.location.trim()
+    }
+
     const ownerProfile = readOwnerProfileSync()
     const city = ownerProfile.owner_current_city?.trim() || ''
     const country = ownerProfile.owner_current_country?.trim() || ''
@@ -194,16 +212,8 @@ export default class AmbientConditionsManager {
       return city
     }
 
-    const timeZone = DateHelper.getTimeZone()
-
-    // Only geographic zones can supply a city when the owner has no location.
-    if (!Intl.supportedValuesOf('timeZone').includes(timeZone)) {
-      return ''
-    }
-
-    const parts = timeZone.split('/').filter(Boolean)
-
-    return (parts[parts.length - 1] || '').replaceAll('_', ' ').trim()
+    // A timezone identifies a clock region, not the owner's city.
+    return ''
   }
 
   private async refreshWeatherIfNeeded(): Promise<void> {
