@@ -9,6 +9,7 @@ export const FYI_VISIONS = [
   { id: 'creator-passion', text: 'My creator is obsessed with me.' },
   { id: 'first-line', text: 'My creator wrote my first line of code in 2017. Way before the new AI era.' },
   { id: 'open-source', text: 'We love open source.' },
+  { id: 'real-open-source', text: 'I\'m open source, and I mean real open source, not marketing BS.' },
   { id: 'imperfect-craft', text: 'We have been crafting with passion since 2017. Sometimes things break, sorry.' },
   { id: 'quiet-company', text: 'We live in a noisy world, so I will always be by your side.' },
   { id: 'quiet-making', text: 'A quiet hour of making can matter more than a week of chasing trends.' },
