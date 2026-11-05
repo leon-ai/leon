@@ -38,7 +38,8 @@ const OWNER_PROFILE_CURATION_RULES = [
   'Exclude credentials and secrets, temporary files and paths, file counts, tool output, debugging findings, vulnerability reports, market snapshots, and one-off task instructions.',
   'Remove existing out-of-scope material and duplicates instead of preserving them as owner facts.',
   'Do not turn a single task request into a lasting preference or infer personal facts from assistant text or tool output.',
-  'Keep ongoing personal projects distinct from current employment.'
+  'Keep ongoing personal projects distinct from current employment.',
+  'owner_current_city and owner_current_country describe the durable home residence, not a temporary stay, trip or future destination. Keep temporary current location in temporary memory; do not overwrite the home from travel evidence.'
 ].join('\n')
 
 interface OwnerTurnToolExecution {
