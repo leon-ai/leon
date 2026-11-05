@@ -1,4 +1,4 @@
-import { circle, paths, type IconDefinition } from '@/components/icon/icon-definitions'
+import { circle, COMMON_ICONS, paths, type IconDefinition } from '@/components/icon/icon-definitions'
 
 // Design studies stay preview-only; the application ships only approved redraws.
 export const SOFT_COMMON_ICONS = {
@@ -22,8 +22,8 @@ export const SOFT_COMMON_ICONS = {
   'add-large': paths('M12 4v16M4 12h16'),
   'more-2': paths({ d: `${circle(12, 5, 1)}${circle(12, 12, 1)}${circle(12, 19, 1)}`, fill: true }),
   more: paths({ d: `${circle(5, 12, 1)}${circle(12, 12, 1)}${circle(19, 12, 1)}`, fill: true }),
-  'sidebar-fold': paths('M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3ZM9 3v18m7-13-4 4 4 4'),
-  'sidebar-unfold': paths('M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3ZM9 3v18m4-13 4 4-4 4'),
+  'sidebar-fold': COMMON_ICONS['sidebar-fold'],
+  'sidebar-unfold': COMMON_ICONS['sidebar-unfold'],
   'volume-up': paths('M4 9h4l5-5v16l-5-5H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1ZM17 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14'),
   'volume-mute': paths('M4 9h4l5-5v16l-5-5H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Zm13 0 5 6m0-6-5 6'),
   sun: paths(`${circle(12, 12, 4)}M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5`),

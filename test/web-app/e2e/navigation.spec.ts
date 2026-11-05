@@ -46,6 +46,53 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.reload()
     await expect(mute).toBeVisible()
     expect(await mute.locator('animate[attributeName="d"]').first().getAttribute('from')).toBeNull()
+    const sidebar = page.locator('.sidebar')
+    const sidebarIcon = sidebar.locator('.sidebar-controls [data-icon="sidebar-fold"], .sidebar-controls [data-icon="sidebar-unfold"]')
+    const frame = await sidebarIcon.locator('path').first().getAttribute('d')
+    const divider = await sidebarIcon.locator('path').nth(1).getAttribute('d')
+    await expect(sidebarIcon.locator('path')).toHaveCount(3)
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('opacity', '1')
+    await expect(sidebarIcon.locator('path').nth(2)).toHaveAttribute('fill-opacity', '0.5')
+    await page.getByRole('button', { name: 'Close sidebar', exact: true }).click()
+    await expect(sidebar).toHaveClass(/sidebar-collapsed/)
+    await expect(sidebarIcon.locator('[data-icon-state="unfold"]')).toHaveCount(1)
+    await expect(sidebarIcon.locator('path').first()).toHaveAttribute('d', frame!)
+    await expect(sidebarIcon.locator('path').nth(1)).not.toHaveAttribute('d', divider!)
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('opacity', '1')
+    await expect(sidebarIcon.locator('path').nth(2)).toHaveAttribute('fill-opacity', '0')
+    if (reducedMotion === 'no-preference') {
+      const middle = await sidebarIcon.evaluate((element) => {
+        const svg = element as SVGSVGElement
+        const pane = svg.querySelectorAll('path')[2]!
+        const motion = pane.querySelector<SVGAnimateElement>('animate[attributeName="fill-opacity"]')!
+        svg.pauseAnimations()
+        svg.setCurrentTime(motion.getStartTime() + motion.getSimpleDuration() / 2)
+        const opacity = Number(getComputedStyle(pane).fillOpacity)
+        const dividerX = svg.querySelectorAll('path')[1]!.getPointAtLength(0).x
+        svg.unpauseAnimations()
+
+        return { opacity, dividerX }
+      })
+      expect(middle.opacity).toBeCloseTo(0.25, 2)
+      expect(middle.dividerX).toBeCloseTo(7.5, 2)
+    } else {
+      expect(await sidebarIcon.locator('animate').first().getAttribute('from')).toBeNull()
+    }
+    await finishFiniteAnimations(sidebar)
+    expect(await sidebarIcon.locator('path').nth(1).evaluate((element) => (element as SVGPathElement).getPointAtLength(0).x)).toBe(6)
+    await expect(sidebar).toHaveClass(/sidebar-content-collapsed/)
+    await sidebar.locator('.sidebar-logo-slot').hover()
+    await expect(sidebar.locator('.sidebar-logo-open-button')).toHaveCSS('opacity', '1')
+    await sidebar.locator('.sidebar-header').screenshot({ path: testInfo.outputPath(`sidebar-collapsed-${reducedMotion}.png`) })
+    await sidebar.locator('.sidebar-logo-open-button button').click()
+    await expect(sidebar).not.toHaveClass(/sidebar-collapsed/)
+    await expect(sidebarIcon.locator('[data-icon-state="fold"]')).toHaveCount(1)
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('opacity', '1')
+    await expect(sidebarIcon.locator('path').nth(1)).toHaveAttribute('d', divider!)
+    await expect(sidebarIcon.locator('path').nth(2)).toHaveAttribute('fill-opacity', '0.5')
+    await expect(sidebarIcon.locator('path').first()).toHaveAttribute('d', frame!)
+    await finishFiniteAnimations(sidebar)
+    await sidebar.locator('.sidebar-header').screenshot({ path: testInfo.outputPath(`sidebar-expanded-${reducedMotion}.png`) })
     const logo = Promise.withResolvers<Route>()
     await page.route('**/img/logo-for-light-bg-text.svg', (route) => logo.resolve(route))
     const transitionStyles = await page.addStyleTag({ content: `
