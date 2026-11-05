@@ -491,6 +491,8 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
   } : {
     id: record.messageId,
     role: 'leon',
+    sentAt: record.sentAt,
+    metrics,
     status: active ? FeedTurnStatus.InProgress : FeedTurnStatus.Completed,
     ...(record.draftGeneration ? { answerGenerationId: record.draftGeneration } : {}),
     durationMs: metrics.durationMs ?? 0,

@@ -1,0 +1,95 @@
+.message-metadata
+  --message-metadata-pointer-events: none
+  --message-metadata-icon-inset: calc((var(--button-md-icon-only-size) - var(--font-size-md)) / 2)
+  position: absolute
+  top: 100%
+  // Align glyphs to the message edges without shrinking their button hit areas.
+  left: calc(var(--message-metadata-icon-inset) * -1)
+  right: calc(var(--message-metadata-icon-inset) * -1)
+  display: flex
+  align-items: center
+  gap: 0
+  padding-top: var(--space-xs)
+  opacity: 0
+  // Keep the row discoverable by hover while its hidden controls stay inactive.
+  pointer-events: auto
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main)
+  user-select: none
+
+  > *
+    pointer-events: var(--message-metadata-pointer-events)
+
+  &.message-metadata-owner
+    justify-content: flex-end
+
+    > .activity-timestamp
+      margin-right: var(--space-xs)
+
+  &.message-metadata-leon > .activity-timestamp
+    margin-left: var(--space-xs)
+
+  > .activity-timestamp
+    opacity: 1
+    transition: none
+
+    .activity-metadata
+      color: var(--color-text-secondary)
+      font-size: var(--font-size-md)
+      line-height: var(--line-height-md)
+
+.final-answer > .bonus-response + .message-metadata
+  padding-top: var(--space-md)
+
+.owner-message:hover + .message-metadata,
+.final-answer:hover > .message-metadata,
+.message-metadata:hover,
+.message-metadata:has(:focus-visible),
+.message-metadata-open
+  --message-metadata-pointer-events: auto
+  opacity: 1
+
+.message-info-list
+  padding: 0
+  margin: 0
+
+.message-info-row
+  display: grid
+  grid-template-columns: minmax(0, 1fr) max-content
+  align-items: center
+  gap: var(--space-sm)
+  box-sizing: border-box
+  height: var(--message-info-row-height)
+  padding: var(--space-xs) var(--space-sm)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+  dt
+    display: flex
+    align-items: center
+    gap: var(--space-sm)
+    min-width: 0
+    color: var(--color-text-secondary)
+
+    .app-icon
+      font-size: var(--font-size-lg)
+
+  dd
+    margin: 0
+    color: var(--color-text)
+    text-align: right
+    font-variant-numeric: tabular-nums
+
+.message-info-empty
+  margin: 0
+  padding: var(--space-sm)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+
+@media (hover: none)
+  .message-metadata
+    --message-metadata-pointer-events: auto
+    opacity: 1
+
+@media (prefers-reduced-motion: reduce)
+  .message-metadata
+    transition: none

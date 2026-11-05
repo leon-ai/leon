@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEvent, ReactNode } from 'react'
+import type { AriaAttributes, CSSProperties, MouseEvent, ReactNode } from 'react'
 import { Icon } from '@/components/icon'
 import { Link } from '@tanstack/react-router'
 import { clsx } from 'clsx'
@@ -27,6 +27,9 @@ interface ButtonBaseProps {
   ariaLabel?: string
   ariaPressed?: boolean
   ariaBusy?: boolean
+  ariaExpanded?: boolean
+  ariaControls?: string | undefined
+  ariaHasPopup?: AriaAttributes['aria-haspopup']
   tone?: ButtonTone
   variant?: ButtonVariant
   size?: ButtonSize
@@ -77,6 +80,9 @@ export function Button({
   ariaLabel,
   ariaPressed,
   ariaBusy,
+  ariaExpanded,
+  ariaControls,
+  ariaHasPopup,
   tone = 'default',
   variant = 'ghost',
   size = 'md',
@@ -110,6 +116,9 @@ export function Button({
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-pressed={ariaPressed}
       aria-busy={ariaBusy ?? loading}
+      aria-expanded={ariaExpanded}
+      aria-controls={ariaControls}
+      aria-haspopup={ariaHasPopup}
       aria-disabled={isDisabled}
       style={{ cursor: loading ? 'wait' : cursorStyle }}
       onClick={(event: MouseEvent<HTMLAnchorElement>) => {
@@ -130,6 +139,9 @@ export function Button({
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-pressed={ariaPressed}
       aria-busy={ariaBusy ?? loading}
+      aria-expanded={ariaExpanded}
+      aria-controls={ariaControls}
+      aria-haspopup={ariaHasPopup}
       disabled={isDisabled}
       style={{ cursor: loading ? 'wait' : cursorStyle }}
       onClick={onClick}
@@ -143,6 +155,9 @@ export function Button({
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-pressed={ariaPressed}
       aria-busy={ariaBusy ?? loading}
+      aria-expanded={ariaExpanded}
+      aria-controls={ariaControls}
+      aria-haspopup={ariaHasPopup}
       aria-disabled={isDisabled}
       target={target}
       rel={rel}

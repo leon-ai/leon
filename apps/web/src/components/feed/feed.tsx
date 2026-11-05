@@ -515,7 +515,7 @@ export function Feed({
                     <div key={entry.id} className="feed-entry">
                       <Message role={entry.role}>
                         {entry.role === 'owner' ? (
-                          <OwnerMessage animationId={`${entry.id}:owner`}>
+                          <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}>
                             {entry.content}
                           </OwnerMessage>
                         ) : (
