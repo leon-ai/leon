@@ -19,7 +19,7 @@ const globs = [
   'scripts/**/*.{ts,js}',
   'bridges/runtime/**/*.ts',
   'server/src/**/*.{ts,js}',
-  'test/**/*.{ts,js}',
+  'test/**/*.{ts,tsx,js}',
   'tools/**/*.ts'
 ]
 

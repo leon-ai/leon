@@ -72,6 +72,9 @@ try {
           }
         }
         for (const chunk of chunks) {
+          if (chunk.moduleIds.some((id) => id.includes('/test/web-app/previews/'))) {
+            this.error(`Design previews must stay outside the production build: ${chunk.fileName}`)
+          }
           if (initial.has(chunk.fileName) && chunk.moduleIds.some((id) =>
             id.includes('/@pierre/') || id.includes('/@shikijs/') || id.includes('/shiki/'))) {
             this.error(`Syntax engines must stay outside the startup graph: ${chunk.fileName}`)
