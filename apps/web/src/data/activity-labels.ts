@@ -1,86 +1,190 @@
 import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 
 const WORKING_LABELS = [
-  'Working...', 'Here with you...', 'Right here...', 'Let me see...',
-  'Taking a look...', 'Just a moment...', 'One little moment...', 'Working on this...',
-  'Working with care...', 'Putting this together...'
+  'Working...',
+  'Working on this...',
+  'Working with care...',
+  'Working through this...',
+  'Handling your request...',
+  'Continuing this task...',
+  'Giving this attention...',
+  'Giving this care...',
+  'Working with you...',
+  'Helping with this...'
 ] as const
 
 const PROCESSING_LABELS = [
-  'Processing...', 'Taking a look...', 'Considering the details...', 'Looking more closely...',
-  'Reading the details...', 'Exploring your request...', 'Reviewing the context...', 'Considering your request...',
-  'Checking the details...', 'Working through this...'
+  'Processing...',
+  'Processing your request...',
+  'Considering your request...',
+  'Reading your request...',
+  'Reading the context...',
+  'Considering the context...',
+  'Understanding your request...',
+  'Exploring your request...',
+  'Interpreting your request...',
+  'Checking your request...'
 ] as const
 
 const TOOL_SCHEMA_LABELS = [
-  'Loading tools...', 'Gathering my tools...', 'Getting tools ready...', 'Preparing my tools...',
-  'Loading tool details...', 'Fetching tool details...', 'Reading tool details...', 'Checking available tools...',
-  'Reading tool instructions...', 'Reviewing tool details...'
+  'Loading tools...',
+  'Loading tool guides...',
+  'Loading tool details...',
+  'Reading tool guides...',
+  'Reading tool details...',
+  'Reading tool instructions...',
+  'Getting tool details...',
+  'Opening tool guides...',
+  'Checking tool instructions...',
+  'Getting tools ready...'
+] as const
+
+const TOOL_SELECTION_LABELS = [
+  'Choosing tools...',
+  'Choosing a tool...',
+  'Selecting tools...',
+  'Selecting helpful tools...',
+  'Finding suitable tools...',
+  'Choosing suitable tools...',
+  'Matching available tools...',
+  'Checking tool options...',
+  'Considering tool options...',
+  'Comparing tool options...'
 ] as const
 
 const TOOL_REQUEST_LABELS = [
-  'Preparing tool calls...', 'Choosing a tool...', 'Choosing my tools...', 'Preparing tool requests...',
-  'Organizing tool calls...', 'Preparing tool inputs...', 'Considering available tools...', 'Arranging tool requests...',
-  'Checking tool details...', 'Selecting a tool...'
+  'Preparing tool calls...',
+  'Preparing tool inputs...',
+  'Writing tool inputs...',
+  'Preparing tool requests...',
+  'Writing tool requests...',
+  'Building tool calls...',
+  'Building tool requests...',
+  'Organizing tool calls...',
+  'Arranging tool requests...',
+  'Setting tool inputs...'
 ] as const
 
 const SKILL_LABELS = [
-  'Loading skills...', 'Finding a skill...', 'Opening skill guides...', 'Reading skill instructions...',
-  'Gathering skill details...', 'Preparing a skill...', 'Browsing my skills...', 'Checking skill guides...',
-  'Fetching skill details...', 'Reviewing skill instructions...'
+  'Loading skills...',
+  'Loading skill guides...',
+  'Opening skill guides...',
+  'Reading skill guides...',
+  'Reading skill instructions...',
+  'Loading skill instructions...',
+  'Getting skill details...',
+  'Reading skill details...',
+  'Checking skill instructions...',
+  'Gathering skill guidance...'
 ] as const
 
 const PLAN_LABELS = [
-  'Updating the plan...', 'Arranging the steps...', 'Preparing a plan...', 'Reviewing the plan...',
-  'Considering the steps...', 'Organizing the steps...', 'Refining the steps...', 'Preparing the steps...',
-  'Adjusting the plan...', 'Planning ahead...'
+  'Updating the plan...',
+  'Arranging the steps...',
+  'Preparing a plan...',
+  'Planning next steps...',
+  'Organizing the steps...',
+  'Adjusting the plan...',
+  'Improving the plan...',
+  'Choosing next steps...',
+  'Setting plan steps...',
+  'Writing plan steps...'
 ] as const
 
 const CLARIFICATION_LABELS = [
-  'Preparing a question...', 'Considering a question...', 'Writing a question...', 'Checking missing details...',
-  'Preparing my question...', 'Gathering my questions...', 'Preparing to ask...', 'Checking with you...',
-  'Choosing my question...', 'Refining my question...'
+  'Preparing a question...',
+  'Writing a question...',
+  'Preparing my question...',
+  'Choosing my question...',
+  'Writing my question...',
+  'Preparing to ask...',
+  'Clarifying my question...',
+  'Checking my question...',
+  'Organizing my questions...',
+  'Reviewing my question...'
 ] as const
 
 const CANCELLATION_LABELS = [
-  'Preparing to stop...', 'Stopping this task...', 'Closing this task...', 'Noting your change...',
-  'Noting your request...', 'Acknowledging your change...', 'Preparing to pause...', 'Closing this request...',
-  'Stopping here...', 'Acknowledging your request...'
+  'Preparing to stop...',
+  'Stopping this task...',
+  'Ending this task...',
+  'Stopping this work...',
+  'Preparing to cancel...',
+  'Canceling this task...',
+  'Stopping this request...',
+  'Ending this request...',
+  'Stopping my work...',
+  'Ending this work...'
 ] as const
 
 const CONNECTION_LABELS = [
-  'Preparing connection setup...', 'Getting setup ready...', 'Preparing the connection...', 'Gathering setup details...',
-  'Preparing to connect...', 'Reading connection details...', 'Preparing connection guidance...', 'Arranging setup steps...',
-  'Opening setup notes...', 'Organizing setup details...'
+  'Preparing connection setup...',
+  'Preparing the connection...',
+  'Preparing to connect...',
+  'Reading connection details...',
+  'Checking setup details...',
+  'Preparing setup steps...',
+  'Organizing setup steps...',
+  'Reading setup instructions...',
+  'Checking connection details...',
+  'Preparing connection guidance...'
 ] as const
 
 const ANSWER_LABELS = [
-  'Generating an answer...', 'Writing my reply...', 'Preparing the answer...', 'Choosing my words...',
-  'Preparing my reply...', 'Writing a reply...', 'Writing this carefully...', 'Forming the answer...',
-  'Composing an answer...', 'Composing my reply...'
+  'Generating an answer...',
+  'Writing my answer...',
+  'Preparing my reply...',
+  'Writing my reply...',
+  'Preparing the answer...',
+  'Choosing my words...',
+  'Forming the answer...',
+  'Building my answer...',
+  'Writing the answer...',
+  'Putting words together...'
 ] as const
 
 const REVIEW_LABELS = [
-  'Reviewing...', 'Taking another look...', 'One more look...', 'Checking the details...',
-  'Reviewing my work...', 'Checking my work...', 'Reviewing the result...', 'Checking this carefully...',
-  'Checking the result...', 'Reviewing the details...'
+  'Reviewing...',
+  'Checking my answer...',
+  'Reviewing my work...',
+  'Checking my work...',
+  'Reviewing the answer...',
+  'Checking the answer...',
+  'Reviewing the result...',
+  'Checking the result...',
+  'Checking answer details...',
+  'Reviewing answer details...'
 ] as const
 
 const INSPECTION_LABELS = [
-  'Inspecting images...', 'Checking the picture...', 'Studying the picture...', 'Looking more closely...',
-  'Checking visual details...', 'Reading the image...', 'Examining the image...', 'Studying image details...',
-  'Exploring the picture...', 'Inspecting the details...'
+  'Inspecting images...',
+  'Inspecting the image...',
+  'Reading image details...',
+  'Checking the picture...',
+  'Studying the picture...',
+  'Checking visual details...',
+  'Reading the image...',
+  'Examining the image...',
+  'Studying image details...',
+  'Checking image contents...'
 ] as const
 
 const COMPACTION_LABELS = [
-  'Compacting context...', 'Summarizing the context...', 'Gathering the essentials...', 'Organizing the context...',
-  'Shortening the context...', 'Organizing my notes...', 'Keeping the essentials...', 'Tidying my notes...',
-  'Combining my notes...', 'Summarizing my notes...'
+  'Compacting context...',
+  'Summarizing earlier messages...',
+  'Shortening the context...',
+  'Summarizing the context...',
+  'Shortening earlier messages...',
+  'Summarizing earlier work...',
+  'Keeping key context...',
+  'Keeping useful context...',
+  'Saving context space...',
+  'Freeing context space...'
 ] as const
 
 const PHASE_LABELS: Readonly<Partial<Record<TurnPhase, readonly string[]>>> = {
   [TurnPhase.Request]: PROCESSING_LABELS,
-  [TurnPhase.Tools]: TOOL_REQUEST_LABELS,
+  [TurnPhase.Tools]: TOOL_SELECTION_LABELS,
   [TurnPhase.ToolSchemas]: TOOL_SCHEMA_LABELS,
   [TurnPhase.ToolRequest]: TOOL_REQUEST_LABELS,
   [TurnPhase.Skill]: SKILL_LABELS,

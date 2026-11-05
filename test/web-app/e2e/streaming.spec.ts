@@ -1049,10 +1049,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await emit('turn_status', { status: 'accepted' })
     await emit('text_stream', { kind: 'answer', generationId: 'waiting-answer', token: '', reset: true })
     const working = page.getByRole('region', { name: 'Leon’s work', exact: true })
-    await expect(working).toHaveText('Putting this together...')
+    await expect(working).toHaveText('Helping with this...')
     await expect(working.locator('.process-group-indicator, i, svg')).toHaveCount(0)
     await emit('metrics', { metrics: { durationMs: 100 } })
-    await expect(working).toHaveText('Putting this together...')
+    await expect(working).toHaveText('Helping with this...')
     await expect(page.getByText('Thinking...', { exact: true })).toHaveCount(0)
     await emit('text_stream', { kind: 'reasoning', generationId: 'live-thinking', token: 'Checking ' })
     const thinking = page.getByRole('region', { name: 'Leon’s thinking' }).last()
@@ -1328,6 +1328,7 @@ test('replaces one standalone processing row in place and retains completed requ
   const phases = [
     [TurnPhase.Request, 'Processing...', 'cpu-line'],
     [TurnPhase.ToolSchemas, 'Loading tools...', 'stack-line'],
+    [TurnPhase.Tools, 'Choosing tools...', 'wrench-line'],
     [TurnPhase.ToolRequest, 'Preparing tool calls...', 'wrench-line'],
     [TurnPhase.Skill, 'Loading skills...', 'book-open-line'],
     [TurnPhase.Plan, 'Updating the plan...', 'list-check-3'],
