@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   createContext,
@@ -102,7 +103,7 @@ function ToastCard({
       <div className="toast-content-container">
         <div className="toast-header">
           <span className="toast-icon" aria-hidden="true">
-            <i className={`toast-icon-symbol ri-${TOAST_ICONS[toast.type]}`} />
+            <Icon name={`${TOAST_ICONS[toast.type]}`} className="toast-icon-symbol" />
           </span>
           <strong className="toast-title">{toast.title}</strong>
         </div>

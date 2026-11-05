@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import type { ComponentType, MouseEvent , ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { clsx } from 'clsx'
@@ -7,7 +8,6 @@ import { Tooltip } from '@/components/tooltip'
 import './menu-item.sass'
 
 type AppRouteTo = '/'
-type MenuItemIconAnimation = 'write' | 'search' | 'settings' | 'download' | 'book'
 type MenuItemShortcutKey = string | {
   iconName: string
   label: string
@@ -34,10 +34,7 @@ function renderShortcutHint(
       {typeof shortcutKey === 'string' ? (
         <span>{shortcutKey}</span>
       ) : (
-        <i
-          className={`tooltip-hint-icon ri-${shortcutKey.iconName}-line`}
-          aria-label={shortcutKey.label}
-        />
+        <Icon name={`${shortcutKey.iconName}-line`} className="tooltip-hint-icon" ariaLabel={shortcutKey.label} />
       )}
     </span>
   ))
@@ -46,7 +43,6 @@ function renderShortcutHint(
 interface MenuItemBaseProps {
   iconName: string
   label: string
-  iconAnimation: MenuItemIconAnimation
   badge?: ComponentType
   shortcutKeys?: MenuItemShortcutKey[]
   collapsed?: boolean
@@ -72,7 +68,6 @@ type MenuItemProps = MenuItemBaseProps & (
 export function MenuItem({
   iconName,
   label,
-  iconAnimation,
   to,
   href,
   badge: Badge,
@@ -83,12 +78,11 @@ export function MenuItem({
 }: MenuItemProps) {
   const className = clsx(
     'menu-item',
-    `menu-item-animation-${iconAnimation}`,
     { 'menu-item-collapsed': collapsed }
   )
   const content = (
     <>
-      <i className={`menu-item-icon ri-${iconName}-line`} aria-hidden="true" />
+      <Icon name={`${iconName}-line`} className="menu-item-icon" />
       <span className="menu-item-label">{label}</span>
       {shortcutKeys !== undefined && (
         <span className="menu-item-shortcut" aria-hidden="true">
@@ -108,10 +102,7 @@ export function MenuItem({
 
             return (
               <span className="menu-item-shortcut-key" key={shortcutKey.label}>
-                <i
-                  className={`menu-item-shortcut-icon ri-${shortcutKey.iconName}-line`}
-                  aria-hidden="true"
-                />
+                <Icon name={`${shortcutKey.iconName}-line`} className="menu-item-shortcut-icon" />
               </span>
             )
           })}

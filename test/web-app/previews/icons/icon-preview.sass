@@ -1,0 +1,297 @@
+*
+  box-sizing: border-box
+
+body
+  margin: 0
+  overflow: auto
+  background: var(--color-background)
+  color: var(--color-text)
+  font-family: var(--font-family)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+
+main
+  max-width: 1240px
+  margin: auto
+  padding: 48px var(--space-xl)
+
+h1, h2, h3, p
+  margin: 0
+
+h1
+  margin: var(--space-md) 0
+  font-size: 36px
+  font-weight: var(--font-weight-semi-bold)
+  line-height: 1.2
+  letter-spacing: -.02em
+
+h2
+  font-size: var(--font-size-xl)
+  font-weight: var(--font-weight-semi-bold)
+
+h3
+  font-size: var(--font-size-md)
+  font-weight: var(--font-weight-semi-bold)
+
+.eyebrow, .section-header p, .morph-current, footer
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+.preview-header
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-xl)
+
+.introduction
+  max-width: 540px
+  color: var(--color-feed-text)
+
+.preview-controls
+  display: flex
+  align-items: center
+  flex-wrap: wrap
+  gap: var(--space-sm)
+  font-size: var(--font-size-sm)
+
+.selection-summary
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-lg)
+  margin-top: var(--space-xl)
+  padding: var(--space-lg)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-lg)
+  background: var(--color-surface-elevated)
+
+.selection-note
+  margin-top: var(--space-xs)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+
+.comparison-grid
+  display: grid
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))
+  gap: var(--space-md)
+  padding: 0
+  margin: 0
+  list-style: none
+
+.comparison-tile
+  min-width: 0
+  padding: var(--space-lg)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-lg)
+  background: var(--color-surface-elevated)
+  text-align: center
+
+  h3
+    overflow-wrap: anywhere
+
+.comparison-options
+  display: grid
+  grid-template-columns: repeat(2, minmax(0, 1fr))
+  gap: var(--space-sm)
+  margin-top: var(--space-md)
+
+  .artwork-choice.button
+    flex-direction: column
+    gap: var(--space-sm)
+    min-height: 88px
+    padding: var(--space-md)
+    border: 1px solid var(--color-border)
+    border-radius: var(--border-radius-md)
+    color: var(--color-text)
+    font-size: var(--font-size-sm)
+    font-weight: var(--font-weight-regular)
+
+    &[aria-pressed='true']
+      border-color: var(--color-accent)
+
+    .button-icon
+      display: flex
+      font-size: var(--preview-icon-size)
+
+.original-artwork
+  display: inline-block
+  width: 1em
+  height: 1em
+  background-color: currentColor
+  mask-position: center
+  mask-size: contain
+  mask-repeat: no-repeat
+
+.original-filename
+  margin-top: var(--space-sm)
+  color: var(--color-text-tertiary)
+  font-size: var(--font-size-xs)
+  overflow-wrap: anywhere
+
+select
+  padding: var(--space-sm)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-sm)
+  background: var(--color-surface-elevated)
+  color: var(--color-text)
+  font: inherit
+
+button:focus-visible, select:focus-visible, a:focus-visible
+  outline: 2px solid var(--color-accent)
+  outline-offset: 3px
+
+.gallery-navigation
+  display: flex
+  flex-wrap: wrap
+  gap: var(--space-md) var(--space-xl)
+  margin-top: var(--space-xl)
+  padding-bottom: var(--space-lg)
+  border-bottom: 1px solid var(--color-border)
+
+  a
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+    text-decoration: none
+
+    &:hover
+      color: var(--color-text)
+
+.gallery-section
+  margin-top: 40px
+  scroll-margin-top: var(--space-xl)
+
+.section-header
+  display: grid
+  gap: var(--space-sm)
+  margin-bottom: var(--space-lg)
+
+.section-count
+  margin-left: var(--space-xs)
+  color: var(--color-text-tertiary)
+  font-size: var(--font-size-sm)
+  font-weight: var(--font-weight-regular)
+
+.gesture-grid
+  display: grid
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr))
+  gap: var(--space-sm)
+  padding: var(--space-md)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-lg)
+  background: var(--color-surface-elevated)
+
+  .menu-item-icon
+    font-size: var(--preview-icon-size)
+
+.morph-grid
+  display: grid
+  grid-template-columns: repeat(4, minmax(0, 1fr))
+  gap: var(--space-md)
+
+.morph-card
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: var(--space-md)
+  padding: var(--space-lg)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-lg)
+  background: var(--color-surface-elevated)
+
+  .morph-trigger.button
+    width: 64px
+    height: 64px
+    padding: var(--space-lg)
+    border-radius: var(--border-radius-lg)
+    font-size: var(--preview-icon-size)
+
+.morph-endpoints
+  display: flex
+  justify-content: space-around
+  align-self: stretch
+  gap: var(--space-lg)
+  color: var(--color-text-secondary)
+
+  > span
+    display: flex
+    flex-direction: column
+    align-items: center
+    gap: var(--space-xs)
+    font-size: var(--font-size-xs)
+
+  .app-icon
+    font-size: var(--preview-icon-size)
+
+.morph-current
+  min-height: var(--line-height-sm)
+
+.icon-grid
+  display: grid
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr))
+  gap: var(--space-sm)
+  padding: 0
+  margin: 0
+  list-style: none
+
+.icon-tile
+  display: flex
+  flex-direction: column
+  align-items: center
+  justify-content: center
+  gap: var(--space-md)
+  min-width: 0
+  min-height: 100px
+  padding: var(--space-md)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-md)
+  background: var(--color-surface-elevated)
+  text-align: center
+
+.icon-tile-artwork
+  display: flex
+  align-items: center
+  justify-content: center
+  min-height: 32px
+  font-size: var(--preview-icon-size)
+
+  > svg, > img
+    width: var(--preview-icon-size)
+    height: var(--preview-icon-size)
+
+.icon-tile-name
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+  overflow-wrap: anywhere
+
+footer
+  display: grid
+  gap: var(--space-sm)
+  margin-top: 40px
+  padding-top: var(--space-lg)
+  border-top: 1px solid var(--color-border)
+
+@media (max-width: 800px)
+  main
+    padding: var(--space-xl) var(--space-lg)
+
+  .preview-header
+    align-items: flex-start
+    flex-direction: column
+
+  .morph-grid
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+
+@media (max-width: 420px)
+  .gesture-grid
+    grid-template-columns: 1fr
+
+  .morph-grid
+    gap: var(--space-sm)
+
+  .morph-card
+    padding: var(--space-md)
+
+  .morph-endpoints
+    gap: var(--space-sm)

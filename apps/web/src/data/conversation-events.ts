@@ -14,6 +14,7 @@ export function readEventTool(value: Record<string, unknown>): ConversationTool 
     ...(value['toolkit_name'] ? { toolkitName: String(value['toolkit_name']) } : {}),
     ...(value['tool_name'] ? { toolName: String(value['tool_name']) } : {}),
     ...(value['tool_icon_name'] ? { toolIconName: String(value['tool_icon_name']) } : {}),
+    ...(value['toolkit_icon_name'] ? { toolkitIconName: String(value['toolkit_icon_name']) } : {}),
     ...(typeof value['started_at'] === 'number' ? { startedAt: value['started_at'] } : {}),
     ...(typeof value['preparation_started_at'] === 'number' ? { preparationStartedAt: value['preparation_started_at'] } : {}),
     ...(typeof value['duration_ms'] === 'number' ? { durationMs: value['duration_ms'] } : {}),

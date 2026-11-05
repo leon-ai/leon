@@ -23,7 +23,7 @@ interface ActivityWaveMetrics {
 }
 
 /**
- * Maps the heading's sweep into SVG stroke coordinates using its animation clock.
+ * Maps the heading's sweep into SVG paint coordinates using its animation clock.
  */
 function animateSvgStrokes(
   heading: HTMLSpanElement,
@@ -32,7 +32,7 @@ function animateSvgStrokes(
   waveId: string
 ): (() => void) | undefined {
   const strokes = heading.querySelectorAll<SVGGraphicsElement>(
-    'svg [stroke="currentColor"]'
+    'svg [stroke="currentColor"], svg [fill="currentColor"]'
   )
 
   if (strokes.length === 0) {
@@ -96,6 +96,7 @@ function animateSvgStrokes(
     const gradient = document.createElementNS(SVG_NAMESPACE, 'linearGradient')
     const animation = document.createElementNS(SVG_NAMESPACE, 'animateTransform')
     const previousStroke = stroke.style.stroke
+    const previousFill = stroke.style.fill
 
     gradient.id = gradientId
     gradient.setAttribute('gradientUnits', 'userSpaceOnUse')
@@ -125,6 +126,7 @@ function animateSvgStrokes(
     highlights.push({ animation, gradientId, stroke })
     cleanupTasks.push(() => {
       stroke.style.stroke = previousStroke
+      stroke.style.fill = previousFill
       defs.remove()
     })
   }
@@ -146,7 +148,12 @@ function animateSvgStrokes(
 
     for (const { animation, gradientId, stroke } of highlights) {
       animation.beginElementAt(offset)
-      stroke.style.stroke = `url(#${gradientId})`
+      if (stroke.getAttribute('stroke') === 'currentColor') {
+        stroke.style.stroke = `url(#${gradientId})`
+      }
+      if (stroke.getAttribute('fill') === 'currentColor') {
+        stroke.style.fill = `url(#${gradientId})`
+      }
     }
   }).catch(cleanup)
 

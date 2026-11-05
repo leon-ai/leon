@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import type { CSSProperties } from 'react'
 
 import { Tooltip } from '@/components/tooltip'
@@ -47,10 +48,7 @@ export function SidebarFooter({
         target="_blank"
         rel="noreferrer"
       >
-        <i
-          className="sidebar-footer-link-icon ri-discord-line"
-          aria-hidden="true"
-        />
+        <Icon name="discord-line" className="sidebar-footer-link-icon" />
         <span className="sidebar-footer-link-label">
           Join us on Discord
         </span>

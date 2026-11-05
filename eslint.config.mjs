@@ -95,6 +95,17 @@ export default [
     }
   },
   {
+    files: ['test/web-app/previews/**/*.{ts,tsx}'],
+    settings: {
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          project: 'test/web-app/tsconfig.json'
+        }),
+        createNodeResolver()
+      ]
+    }
+  },
+  {
     files: ['**/*.ts'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'error'

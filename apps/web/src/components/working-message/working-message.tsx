@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import { ProcessGroup } from '@/components/process-group'
 import { getActivityLabel } from '@/data/activity-labels'
 
@@ -21,7 +22,7 @@ export function WorkingMessage({ phaseId, label, iconName, startedAt }: WorkingM
       activeLabel={label ?? getActivityLabel(phaseId)}
       ariaLabel={iconName ? 'Leon’s inference' : 'Leon’s work'}
       completedLabel="Worked"
-      indicator={iconName ? <i className={`ri-${iconName}`} aria-hidden="true" /> : undefined}
+      indicator={iconName ? <Icon name={`${iconName}`} /> : undefined}
     />
   )
 }

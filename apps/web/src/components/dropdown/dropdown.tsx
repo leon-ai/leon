@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import type { CSSProperties, ReactNode, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -352,10 +353,7 @@ export function Dropdown({
                 closeDropdown(true)
               }}
             >
-              <i
-                className={`dropdown-item-icon ri-${item.iconName}-line`}
-                aria-hidden="true"
-              />
+              <Icon name={`${item.iconName}-line`} className="dropdown-item-icon" />
               <span className="dropdown-item-label">{item.label}</span>
             </button>
           )) : content(() => closeDropdown(true), open)}

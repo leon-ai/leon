@@ -1,7 +1,6 @@
 import '@fontsource/source-sans-pro/latin-400.css'
 import '@fontsource/source-sans-pro/latin-600.css'
 import '@fontsource/source-sans-pro/latin-700.css'
-import 'remixicon/fonts/remixicon.css'
 import './styles/main.sass'
 
 import { StrictMode } from 'react'

@@ -16,6 +16,7 @@ interface TooltipProps {
   className?: string
   multiline?: boolean
   blurOnClick?: boolean
+  closeOnClick?: boolean
   disabled?: boolean
 }
 
@@ -60,12 +61,14 @@ export function Tooltip({
   className,
   multiline = false,
   blurOnClick = true,
+  closeOnClick = true,
   disabled = false
 }: TooltipProps) {
   const [rendered, setRendered] = useState(false)
   const [open, setOpen] = useState(false)
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties>()
   const triggerRef = useRef<HTMLSpanElement>(null)
+  const hoveredRef = useRef(false)
   const contentRef = useRef<HTMLSpanElement>(null)
   const [content, setContent] = useState<{ message: string, hint: ReactNode }>({ message: '', hint: null })
   useExitCleanup(contentRef, rendered && !open, () => setRendered(false))
@@ -92,7 +95,9 @@ export function Tooltip({
   }
 
   function closeTooltipAndBlurTrigger(): void {
-    closeTooltip()
+    if (closeOnClick) {
+      closeTooltip()
+    }
 
     if (
       blurOnClick && document.activeElement instanceof HTMLElement &&
@@ -100,6 +105,21 @@ export function Tooltip({
     ) {
       document.activeElement.blur()
     }
+  }
+
+  function closeInactiveTooltip(): void {
+    const activeElement = document.activeElement
+
+    // Persistent action feedback follows hover or keyboard focus, not the focus
+    // left behind by a pointer click after the pointer has moved away.
+    if (!closeOnClick && (
+      hoveredRef.current || activeElement instanceof HTMLElement &&
+      triggerRef.current?.contains(activeElement) && activeElement.matches(':focus-visible')
+    )) {
+      return
+    }
+
+    closeTooltip()
   }
 
   useEffect(() => {
@@ -133,10 +153,16 @@ export function Tooltip({
       <span
         ref={triggerRef}
         className={clsx('tooltip', className)}
-        onMouseEnter={openTooltip}
-        onMouseLeave={closeTooltip}
+        onMouseEnter={() => {
+          hoveredRef.current = true
+          openTooltip()
+        }}
+        onMouseLeave={() => {
+          hoveredRef.current = false
+          closeInactiveTooltip()
+        }}
         onFocus={openTooltip}
-        onBlur={closeTooltip}
+        onBlur={closeInactiveTooltip}
         onClick={closeTooltipAndBlurTrigger}
       >
         {children}

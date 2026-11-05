@@ -149,6 +149,7 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     toolName: call.toolName ?? parts[1] ?? '',
     functionName: parts.at(-1) ?? call.name,
     toolIconName: call.toolIconName ?? 'tools-line',
+    ...(call.toolkitIconName ? { toolkitIconName: call.toolkitIconName } : {}),
     status: !active && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
     startedAt: call.startedAt,
     preparationStartedAt: call.preparationStartedAt,

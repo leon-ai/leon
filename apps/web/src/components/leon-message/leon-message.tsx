@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import { MemoryDetails } from '@/components/activity-details/memory-details'
 import { clsx } from 'clsx'
 import { memo } from 'react'
@@ -74,7 +75,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           className="activity-timeline-parent"
           completedLabel={(activity.complete ?? activity.steps.every((step) => step.status === 'completed'))
             ? `Completed plan${planDuration ? ` for ${planDuration}` : ''}` : 'Execution plan'}
-          indicator={<i className="ri-map-2-line" aria-hidden="true" />}
+          indicator={<Icon name="map-2-line" />}
         >
           <TaskList steps={activity.steps} renderActivity={renderActivity} />
         </ProcessGroup>
@@ -106,7 +107,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
           toolCount === 1 ? 'tool' : 'tools'
         }${duration ? ` for ${duration}` : ''}`}
         indicator={(
-          <i className="ri-pencil-ruler-2-line" aria-hidden="true" />
+          <Icon name="pencil-ruler-2-line" />
         )}
       >
         {hasVisibleToolCalls ? <ToolCallList toolCalls={activity.toolCalls} /> : undefined}
@@ -129,7 +130,7 @@ function renderActivity(activity: LeonFeedActivity) {
         ariaLabel="History compaction"
         completedLabel={completed ? `Compacted history${duration ? ` in ${duration}` : ''}`
           : `History compaction failed${duration ? ` after ${duration}` : ''}`}
-        indicator={<i className="ri-file-reduce-line" aria-hidden="true" />}
+        indicator={<Icon name="file-reduce-line" />}
         startedAt={activity.startedAt}
       />
     )
@@ -169,7 +170,7 @@ function renderActivity(activity: LeonFeedActivity) {
           activeLabel="Processing..."
           ariaLabel="Leon’s inference"
           completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
-          indicator={<i className={`ri-${request.iconName}`} aria-hidden="true" />}
+          indicator={<Icon name={`${request.iconName}`} />}
           startedAt={request.startedAt}
         />
       )
@@ -183,7 +184,7 @@ function renderActivity(activity: LeonFeedActivity) {
         ariaLabel="Leon’s processing"
         className="activity-timeline-parent"
         completedLabel={`Processed for ${formatToolDuration(activity.durationMs, DurationFormat.Compact)}`}
-        indicator={<i className="ri-cpu-line" aria-hidden="true" />}
+        indicator={<Icon name="cpu-line" />}
       >
         {activity.requests?.length ? (
           <div className="leon-message-activities activity-timeline">
@@ -194,7 +195,7 @@ function renderActivity(activity: LeonFeedActivity) {
                 activeLabel="Processing..."
                 ariaLabel="Leon’s inference"
                 completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
-                indicator={<i className={`ri-${request.iconName}`} aria-hidden="true" />}
+                indicator={<Icon name={`${request.iconName}`} />}
                 startedAt={request.startedAt}
               />
             ))}
@@ -211,7 +212,7 @@ function renderActivity(activity: LeonFeedActivity) {
         activeLabel="Processing..."
         ariaLabel="Leon’s other processing"
         completedLabel={`Other processing for ${formatToolDuration(activity.durationMs, DurationFormat.Compact)}`}
-        indicator={<i className="ri-more-line" aria-hidden="true" />}
+        indicator={<Icon name="more-line" />}
       />
     )
   }
@@ -225,7 +226,7 @@ function renderActivity(activity: LeonFeedActivity) {
         ariaLabel="Leon’s retries"
         startedAt={activity.startedAt}
         completedLabel={`Retried ${activity.count} ${activity.count === 1 ? 'time' : 'times'}`}
-        indicator={<i className="ri-refresh-line" aria-hidden="true" />}
+        indicator={<Icon name="refresh-line" />}
       />
     )
   }
@@ -242,7 +243,7 @@ function renderActivity(activity: LeonFeedActivity) {
         ariaLabel={isReview ? 'Leon’s review' : 'Leon’s answer generation'}
         startedAt={activity.startedAt}
         completedLabel={isReview ? `Reviewed for ${duration}` : `Generated answer in ${duration}`}
-        indicator={<i className={isReview ? 'ri-search-eye-line' : 'ri-pencil-ai-line'} aria-hidden="true" />}
+        indicator={<Icon name={isReview ? 'search-eye-line' : 'pencil-ai-line'} />}
       />
     )
   }
@@ -272,7 +273,7 @@ function renderActivity(activity: LeonFeedActivity) {
           completedLabel={label}
           ariaLabel="Leon’s activity"
           startedAt={activity.startedAt}
-          indicator={<i className={`ri-${activity.iconName}`} aria-hidden="true" />}
+          indicator={<Icon name={`${activity.iconName}`} />}
         >
           {activity.memory || activity.skill ? (
             <>

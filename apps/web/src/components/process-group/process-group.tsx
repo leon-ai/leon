@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import {
   createContext,
   useContext,
@@ -115,10 +116,7 @@ export function ProcessGroup({
               onClick={handleToggle}
             >
               {heading}
-              <i
-                className="process-group-chevron ri-arrow-right-s-line"
-                aria-hidden="true"
-              />
+              <Icon name="arrow-right-s-line" className="process-group-chevron" />
             </button>
           )}
           <ActivityTimestamp timestamp={startedAt} />

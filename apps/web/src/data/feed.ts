@@ -35,6 +35,7 @@ export interface FeedToolCall extends FeedActivityTime {
   toolkitName: string
   toolName: string
   toolIconName: string
+  toolkitIconName?: string
   functionName: string
   status: FeedToolCallStatus
   durationMs?: number

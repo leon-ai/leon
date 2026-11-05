@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import type {
   InputHTMLAttributes,
   Ref,
@@ -86,10 +87,7 @@ export function Input({
   return (
     <span className={inputClassName}>
       {iconName !== undefined && (
-        <i
-          className={`input-icon ri-${iconName}-${iconType}`}
-          aria-hidden="true"
-        />
+        <Icon name={`${iconName}-${iconType}`} className="input-icon" />
       )}
       {multiline ? (
         <textarea

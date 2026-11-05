@@ -1,3 +1,4 @@
+import { Icon } from '@/components/icon'
 import {
   useEffect,
   useRef,
@@ -353,10 +354,7 @@ export function SessionListItem({
         </Link>
       )}
       {isPinned && (
-        <i
-          className="session-list-item-pinned-icon ri-unpin-fill"
-          aria-hidden="true"
-        />
+        <Icon name="unpin-fill" className="session-list-item-pinned-icon" />
       )}
       {showUnread && (
         <span className="session-list-item-unread-dot" aria-hidden="true" />

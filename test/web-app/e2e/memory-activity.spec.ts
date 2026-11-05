@@ -41,13 +41,70 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await work.getByRole('button', { name: 'Worked for 6s', exact: true }).click()
     const outcome = work.getByRole('region', { name: 'Leon’s activity', exact: true })
     await expect(outcome).toHaveCount(1)
-    await expect(outcome.locator('.ri-brain-2-line')).toBeVisible()
+    await expect(outcome.locator('[data-icon="brain-2"]')).toBeVisible()
     await outcome.getByRole('button', { name: 'Saved 2 memories in 32ms', exact: true }).click()
     await outcome.getByRole('button', { name: 'View details', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Saved 2 memories', exact: true })
     await expect(dialog).toContainText('Caldera contact is Nora.')
     await expect(dialog).toContainText('Borealis invoices are paid every Friday.')
     await expect(dialog).toContainText('session:owner:turn:one')
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    const copy = dialog.getByRole('button', { name: 'Copy memory', exact: true })
+    const icon = copy.locator('svg')
+    const copyPath = await icon.locator('path').first().getAttribute('d')
+    for (const theme of ['light', 'dark']) {
+      await page.keyboard.press('Escape')
+      await expect(dialog).toHaveCount(0)
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await outcome.getByRole('button', { name: 'View details', exact: true }).click()
+      await copy.click()
+      const copied = dialog.getByRole('button', { name: 'Copied', exact: true })
+      await expect(copied).toBeEnabled()
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(JSON.stringify(memory.entries, null, 2))
+      const glyph = copied.locator('svg')
+      await glyph.evaluate((element) => (element as SVGSVGElement).pauseAnimations())
+      const geometry = await glyph.evaluate((element, reduced) => {
+        const svg = element as SVGSVGElement
+        const path = svg.querySelector('path')!
+        const animation = svg.querySelector('animate')!
+        if (reduced) {
+          return { before: path.getTotalLength(), middle: path.getTotalLength(), after: path.getTotalLength(), duration: 0 }
+        }
+
+        // Sample actual rendered outlines, not just the target attribute.
+        animation.beginElement()
+        const start = animation.getStartTime()
+        const duration = animation.getSimpleDuration()
+        // Sample inside the interval: SVG clock rounding can put its exact start
+        // just before the native animation becomes active.
+        svg.setCurrentTime(start + duration * 0.001)
+        const before = path.getTotalLength()
+        svg.setCurrentTime(start + duration / 2)
+        const middle = path.getTotalLength()
+        svg.setCurrentTime(start + duration)
+
+        return { before, middle, after: path.getTotalLength(), duration }
+      }, reducedMotion === 'reduce')
+      if (reducedMotion === 'no-preference') {
+        expect(geometry.duration).toBeCloseTo(0.2)
+        expect(geometry.before).not.toBeCloseTo(geometry.after)
+        expect(geometry.middle).not.toBeCloseTo(geometry.before)
+        expect(geometry.middle).not.toBeCloseTo(geometry.after)
+      } else {
+        expect(geometry.before).toBeCloseTo(geometry.after)
+      }
+      await glyph.evaluate((element) => (element as SVGSVGElement).unpauseAnimations())
+      await expect(page.getByRole('tooltip')).toHaveText('Copied')
+      await expect(page.getByRole('tooltip')).toHaveClass(/tooltip-content-open/)
+      await expect(page.getByRole('tooltip')).toHaveCSS('opacity', '1')
+      await expect(page.locator('.toast-success')).toHaveCount(0)
+      await expect(copy).toBeVisible()
+      await expect(page.getByRole('tooltip')).toHaveText('Copy memory')
+      await dialog.getByRole('heading').hover()
+      await expect(page.locator('.tooltip-content-open')).toHaveCount(0)
+      await expect(icon.locator('path').first()).toHaveAttribute('d', copyPath!)
+      await expect(dialog.getByRole('button', { name: 'Download memory', exact: true })).toBeVisible()
+    }
     await page.keyboard.press('Escape')
 
     // A subsequent owner turn must not inherit the older turn's late activity.
@@ -75,6 +132,89 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(restored.getByRole('button', { name: 'Saved 2 memories in 32ms', exact: true })).toHaveCount(1)
   })
 }
+
+test('settles clipboard feedback once and ignores dismissed copy operations', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [],
+    progressMessages: [{ id: 'memory', content: 'Saved a memory', createdAt: answer.sentAt, iconName: 'brain-2-line',
+      memory: { action: MemoryActivityAction.Saved, durationMs: 20, entries: [{ id: 'one', content: 'Keep OpenAI and SKILL.md intact.' }] } }] }
+  await page.goto(SESSION_URL)
+  await page.clock.install()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.clipboard, 'writeText', { value: () => new Promise<void>((resolve, reject) => {
+      function settle(event: Event): void {
+        document.removeEventListener('settle-copy', settle)
+        if ((event as CustomEvent<boolean>).detail) {
+          resolve()
+        } else {
+          reject(new Error('Clipboard denied'))
+        }
+      }
+
+      document.addEventListener('settle-copy', settle)
+    }) })
+  })
+  const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
+  await work.getByRole('button').first().click()
+  await work.getByRole('button', { name: 'Saved a memory in 20ms', exact: true }).click()
+  const details = work.getByRole('button', { name: 'View details', exact: true })
+  await details.click()
+  const dialog = page.getByRole('dialog', { name: 'Saved a memory', exact: true })
+  const copy = dialog.getByRole('button', { name: 'Copy memory', exact: true })
+  await copy.click()
+  await expect(copy).toBeEnabled()
+  await expect(copy).toHaveAttribute('aria-busy', 'true')
+  await expect(dialog.getByRole('button', { name: 'Copied', exact: true })).toHaveCount(0)
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('settle-copy', { detail: false })))
+  await expect(copy).toBeEnabled()
+  await expect(copy).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.toast-title')).toHaveText('I couldn’t copy this text')
+  await expect(page.locator('.toast-description')).toContainText('copy it manually')
+  await page.getByRole('button', { name: 'Close notification', exact: true }).click()
+  await copy.click()
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('settle-copy', { detail: true })))
+  const copied = dialog.getByRole('button', { name: 'Copied', exact: true })
+  await expect(copied).toBeEnabled()
+  await page.clock.runFor(1_000)
+  await copied.click()
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('settle-copy', { detail: true })))
+  await expect(copied).toBeEnabled()
+  await page.clock.runFor(1_000)
+  await expect(copied).toBeVisible()
+  await expect(page.locator('.tooltip-content-open')).toHaveText('Copied')
+  await page.clock.runFor(600)
+  await expect(copy).toBeVisible()
+  await expect(page.locator('.tooltip-content-open')).toHaveText('Copy memory')
+
+  await dialog.getByRole('heading').hover()
+  await expect(page.locator('.tooltip-content-open')).toHaveCount(0)
+  await copy.press('Tab')
+  await page.keyboard.press('Shift+Tab')
+  await expect(copy).toBeFocused()
+  await copy.press('Enter')
+  await expect(copy).toBeFocused()
+  await expect(copy).toHaveAttribute('aria-busy', 'true')
+  await copy.press('Enter')
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('settle-copy', { detail: true })))
+  await expect(copied).toBeFocused()
+  await page.clock.runFor(400)
+  await expect(page.locator('.tooltip-content-open')).toHaveText('Copied')
+  await expect(page.locator('.tooltip-content-open')).toHaveCSS('opacity', '1')
+  await copied.press('Tab')
+  await expect(page.locator('.tooltip-content-open').filter({ hasText: 'Copied' })).toHaveCount(0)
+  await page.clock.runFor(1_200)
+
+  await copy.click()
+  await page.keyboard.press('Escape')
+  await page.clock.runFor(500)
+  await expect(dialog).toHaveCount(0)
+  await details.click()
+  await expect(copy).toBeEnabled()
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('settle-copy', { detail: false })))
+  await expect(page.locator('.toast-error')).toHaveCount(0)
+  await expect(copy).toBeEnabled()
+  await expect(dialog.getByRole('button', { name: 'Copied', exact: true })).toHaveCount(0)
+})
 
 // Automatic context loading is Core work; an additional lookup is an ordinary tool.
 for (const durationMs of [0, 0.125]) {
@@ -111,7 +251,7 @@ for (const durationMs of [0, 0.125]) {
     await expect(tools).not.toContainText('Loaded temporary context')
     await tools.getByRole('button', { name: 'Used 1 tool for 12ms', exact: true }).click()
     await expect(tools.getByRole('button', { name: /Read current temporary context/ })).toBeVisible()
-    await expect(tools.locator('.ri-brain-2-line')).toBeVisible()
+    await expect(tools.locator('[data-icon="brain-2"]')).toBeVisible()
   })
 
 }
