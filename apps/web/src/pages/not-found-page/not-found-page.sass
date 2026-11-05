@@ -1,0 +1,63 @@
+.not-found-page
+  display: grid
+  box-sizing: border-box
+  place-items: center
+  min-height: 100vh
+  padding: calc(var(--space-xl) * 2) 0
+
+.not-found-page-content
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: var(--space-lg)
+  width: 100%
+  max-width: 34ch
+  color: var(--color-text)
+  text-align: center
+  animation: not-found-enter var(--transition-duration-sidebar) var(--transition-timing-sidebar) both
+
+  h1
+    font-size: var(--font-size-xl)
+    font-weight: var(--font-weight-semi-bold)
+    line-height: var(--line-height-xl)
+
+  p
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-md)
+    line-height: var(--line-height-md)
+
+  > .button
+    margin-top: var(--space-sm)
+
+.not-found-page-mark
+  display: flex
+  align-items: center
+  justify-content: center
+  gap: var(--space-md)
+  margin-bottom: var(--space-sm)
+  color: var(--color-text-secondary)
+  font-size: clamp(80px, 18vw, 120px)
+  line-height: 1
+
+.not-found-page-logo
+  flex: 0 0 auto
+  width: .65em
+  aspect-ratio: 44 / 46
+  background: url('/img/logo-for-dark-bg.svg') center / contain no-repeat
+  opacity: .6
+  transform: rotate(-8deg)
+
+[data-theme='light'] .not-found-page-logo
+  background-image: url('/img/logo-for-light-bg.svg')
+
+@keyframes not-found-enter
+  from
+    opacity: 0
+    transform: translateY(var(--space-sm))
+  to
+    opacity: 1
+    transform: none
+
+@media (prefers-reduced-motion: reduce)
+  .not-found-page-content
+    animation: none

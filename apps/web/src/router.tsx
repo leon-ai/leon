@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 
 import { AppLayout } from '@/layout/app-layout'
+import { NotFoundPage } from '@/pages/not-found-page'
 import { queryClient } from '@/query-client'
 import { PROFILE_AUTH_QUERY_KEY } from '@/data/profile'
 import { prepareConversationForNavigation } from '@/data/conversation-queries'
@@ -15,7 +16,8 @@ import {
 } from '@/pages/vibes-preview-page/vibes-preview-search'
 
 const rootRoute = createRootRoute({
-  component: AppLayout
+  component: AppLayout,
+  notFoundComponent: NotFoundPage
 })
 
 const indexRoute = createRoute({

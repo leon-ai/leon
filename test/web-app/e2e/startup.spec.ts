@@ -1,4 +1,49 @@
-import { test, expect, SESSION_URL, LATEST_ANSWER } from './fixtures'
+import { test, expect, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
+
+for (const { theme, reducedMotion, width } of [
+  { theme: 'dark', reducedMotion: 'no-preference', width: 1_512 },
+  { theme: 'light', reducedMotion: 'reduce', width: 390 }
+] as const) {
+  test(`keeps unknown pages cozy and provides a keyboard route home (${theme})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    await page.goto('a-quiet-detour/unknown-page')
+    const pageContent = page.getByRole('region', { name: 'A little detour.', exact: true })
+    await expect(pageContent).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toBeVisible()
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    }
+    await page.setViewportSize({ width, height: 982 })
+    await expect(pageContent.getByRole('heading', { level: 1 })).toHaveText('A little detour.')
+    await expect(pageContent.getByRole('img', { name: '404: Page not found', exact: true })).toBeVisible()
+    await expect(pageContent.locator('p')).toHaveText('I couldn’t find this page. Let’s head back and make something.')
+    await expect(pageContent.locator('.not-found-page-logo')).toHaveCSS(
+      'background-image', new RegExp(`logo-for-${theme === 'light' ? 'light' : 'dark'}-bg\\.svg`)
+    )
+    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toHaveCount(0)
+    await expect(page.locator('.toast')).toHaveCount(0)
+    expect(ui.historyRequests).toHaveLength(0)
+    const composition = pageContent.locator('.not-found-page-content')
+    await expect(composition).toHaveCSS('animation-name', reducedMotion === 'reduce' ? 'none' : 'not-found-enter')
+    await finishFiniteAnimations(pageContent)
+    const bounds = (await composition.boundingBox())!
+    const main = (await page.getByRole('main').boundingBox())!
+    expect(Math.abs(bounds.x + bounds.width / 2 - main.x - main.width / 2)).toBeLessThan(1)
+    expect(Math.abs(bounds.y + bounds.height / 2 - main.y - main.height / 2)).toBeLessThan(1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    const screenshot = testInfo.outputPath(`not-found-${theme}.png`)
+    await page.screenshot({ path: screenshot })
+    await testInfo.attach(`not-found-${theme}`, { path: screenshot, contentType: 'image/png' })
+    const home = pageContent.getByRole('link', { name: 'Back home', exact: true })
+    await expect(home).toHaveAttribute('href', '/web-app/')
+    await home.focus()
+    await home.press('Enter')
+    await expect(page).toHaveURL(/\/web-app\/$/)
+    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+    await expect(pageContent).toHaveCount(0)
+  })
+}
 
 test('renders the frame and editable composer during slow authentication without private requests', async ({ page, ui }) => {
   const releaseAuth = ui.holdAuthentication()
