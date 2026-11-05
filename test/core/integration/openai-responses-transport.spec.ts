@@ -12,7 +12,7 @@ import { formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-pro
 import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
 import { LogHelper } from '@/helpers/log-helper'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
-import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { CompletionFailureKind, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 
@@ -286,6 +286,114 @@ describe('Responses connection lifecycle', () => {
     expect(requests[1]?.['previous_response_id']).toBe('response')
     expect(requests[2]?.['previous_response_id']).toBeUndefined()
     expect(requests[2]?.['input']).toEqual(next)
+  })
+
+  it.each([
+    { details: { code: 'server_is_overloaded' }, exhausted: false },
+    { details: { type: 'service_unavailable_error' }, exhausted: false },
+    {
+      details: { code: 'server_is_overloaded', type: 'service_unavailable_error' },
+      exhausted: true
+    }
+  ])('retries structured availability failures within the provider budget: $details (exhausted=$exhausted)', async ({ details, exhausted }) => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
+    const provider = new AISDKRemoteLLMProvider({
+      name: 'Fixture',
+      providerName: LLMProviders.OpenAI,
+      credentials: { api_key: 'fixture' },
+      apiKeyEnv: 'LEON_OPENAI_API_KEY',
+      model: 'gpt-6.1-sol',
+      baseURL: url.slice(0, -'/responses'.length),
+      flavor: 'openai-responses'
+    })
+    const requests: Record<string, unknown>[] = []
+    const onAttempt = vi.fn()
+    const reportError = vi.fn()
+
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        requests.push(JSON.parse(data.toString()))
+        const response = {
+          id: `response-${requests.length}`,
+          model: 'gpt-6.1-sol',
+          created_at: 1,
+          status: 'in_progress',
+          output: []
+        }
+
+        socket.send(JSON.stringify({ type: 'response.in_progress', response }))
+        if (requests.length === 1 || exhausted) {
+          socket.send(JSON.stringify({
+            type: 'error',
+            error: { ...details, message: 'Temporarily unavailable.' }
+          }))
+          return
+        }
+
+        for (const event of [
+          { type: 'response.output_item.added', output_index: 0, item: { ...OUTPUT[0], content: [] } },
+          { type: 'response.output_text.delta', item_id: 'message', output_index: 0, content_index: 0, delta: 'Ready.' },
+          { type: 'response.output_item.done', output_index: 0, item: OUTPUT[0] },
+          { type: 'response.completed', response: { ...response, status: 'completed', output: OUTPUT } }
+        ]) {
+          socket.send(JSON.stringify(event))
+        }
+      })
+    })
+    const complete = (params: PreparedCompletionParams): ReturnType<typeof runCompletionAttempt> => {
+      return runCompletionAttempt(
+        provider, LLMProviders.OpenAI, 'Continue.', params, 'fixture',
+        (retry) => complete({ ...params, ...retry }), reportError
+      )
+    }
+
+    try {
+      const pending = complete({
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        shouldStream: true,
+        timeout: 120_000,
+        temperature: 0,
+        data: null,
+        maxRetries: 1,
+        remoteProviderErrorRetries: 1,
+        onAttempt
+      })
+      await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+        failureKind: CompletionFailureKind.Unavailable,
+        retryDecision: 'retry',
+        retryReason: 'quick_transient_failure',
+        requestAcceptedMs: expect.any(Number),
+        providerCompleted: false
+      }))
+      await vi.advanceTimersByTimeAsync(4_999)
+      expect(requests).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject(
+        exhausted
+          ? { retryDecision: 'stop', retryReason: 'retry_budget_exhausted' }
+          : { outcome: 'completed' }
+      ))
+
+      const result = await pending
+
+      if (exhausted) {
+        expect(result).toBeNull()
+        expect(reportError).toHaveBeenCalledOnce()
+      } else {
+        expect(result?.output).toBe('Ready.')
+        expect(reportError).not.toHaveBeenCalled()
+      }
+
+      expect(requests).toHaveLength(2)
+      expect(requests[1]).toEqual(requests[0])
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      provider.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it('cancels a pending response and reconnects with the full transcript', async () => {

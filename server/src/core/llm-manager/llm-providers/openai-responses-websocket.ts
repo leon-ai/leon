@@ -27,6 +27,10 @@ const KEEP_ALIVE_INTERVAL_MS = 5_000
 // Leave headroom below the authenticated route's observed 16 MiB boundary.
 const MAXIMUM_REQUEST_BYTES = 15 * 1_024 * 1_024
 const CONNECTION_LIMIT_ERROR_CODE = 'websocket_connection_limit_reached'
+const ERROR_STATUSES = new Map([
+  ['server_is_overloaded', 503],
+  ['service_unavailable_error', 503]
+])
 const TERMINAL_EVENTS = new Set([
   'response.completed',
   'response.failed',
@@ -313,10 +317,15 @@ export class OpenAIResponsesWebSocket {
             if (event['type'] === 'error') {
               const message = error?.['message'] ?? event['message'] ??
                 'The provider WebSocket request failed.'
+              // Availability events can omit HTTP status; preserve their retry
+              // semantics when the SDK wraps a failed stream as a 200 response.
+              const statusCode = event['status'] ??
+                ERROR_STATUSES.get(String(code)) ??
+                ERROR_STATUSES.get(String(error?.['type']))
 
               fail(Object.assign(
                 new Error(String(message)),
-                { code, statusCode: event['status'], error }
+                { code, statusCode, error }
               ))
               return
             }
