@@ -6,7 +6,7 @@ import type { ConversationPage, ConversationTool } from '../../../apps/web/src/d
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`retains icon states and reverses interrupted toggle morphs (${reducedMotion})`, async ({ page, ui }) => {
+  test(`retains icon states and reverses interrupted toggle morphs (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     const requests: string[] = []
     page.on('request', (request) => requests.push(request.url()))
     await page.emulateMedia({ reducedMotion })
@@ -46,6 +46,51 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.reload()
     await expect(mute).toBeVisible()
     expect(await mute.locator('animate[attributeName="d"]').first().getAttribute('from')).toBeNull()
+    const logo = Promise.withResolvers<Route>()
+    await page.route('**/img/logo-for-light-bg-text.svg', (route) => logo.resolve(route))
+    const transitionStyles = await page.addStyleTag({ content: `
+      html[data-theme-transition]::view-transition-group(root),
+      html[data-theme-transition]::view-transition-old(root),
+      html[data-theme-transition]::view-transition-new(root) { animation-duration: 1s; }
+    ` })
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator(`.sidebar-controls [data-icon-state="${theme === 'light' ? 'sun' : 'moon'}"]`)).toBeVisible()
+      if (theme === 'light') {
+        const pending = await logo.promise
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+        await expect(page.locator('.sidebar-logo-slot img')).toHaveAttribute('src', /logo-for-dark-bg-text\.svg$/)
+        const animation = page.locator('.sidebar-theme-toggle animate[attributeName="d"]').first()
+        if (reducedMotion === 'no-preference') {
+          await expect(animation).toHaveAttribute('from', /^M/)
+        } else {
+          expect(await animation.getAttribute('from')).toBeNull()
+        }
+        await pending.abort()
+        await page.unroute('**/img/logo-for-light-bg-text.svg')
+        await expect(page.getByRole('button', { name: 'Apply light theme', exact: true })).toBeVisible()
+        await expect(page.locator('.sidebar-theme-toggle [data-icon-state="moon"]')).toBeVisible()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+        await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      }
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      if (reducedMotion === 'no-preference') {
+        await expect(page.locator('html')).toHaveAttribute('data-theme-transition')
+        const liveLayer = await page.locator('.sidebar-theme-toggle').evaluate((element) => ({
+          name: getComputedStyle(element).viewTransitionName,
+          old: getComputedStyle(document.documentElement, '::view-transition-old(theme-toggle)').display,
+          motion: getComputedStyle(document.documentElement, '::view-transition-new(theme-toggle)').animationName
+        }))
+        expect(liveLayer).toEqual({ name: 'theme-toggle', old: 'none', motion: 'none' })
+      }
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      const screenshot = testInfo.outputPath(`rounded-icons-${theme}-${reducedMotion}.png`)
+      await page.screenshot({ path: screenshot })
+      await testInfo.attach(`rounded-icons-${theme}-${reducedMotion}`, { path: screenshot, contentType: 'image/png' })
+    }
+    await transitionStyles.evaluate((element) => {
+      element.parentNode?.removeChild(element)
+    })
     expect(requests.some((url) => url.includes('remixicon') || /\.(woff2?|ttf|eot)(\?|$)/.test(url) && url.includes('icon'))).toBe(false)
     expect(ui.requests.filter((url) => url.pathname.includes('/sessions/')).length).toBeGreaterThan(0)
   })

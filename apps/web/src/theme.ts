@@ -8,9 +8,10 @@ const SOUNDS_ENABLED_STORAGE_KEY = 'leon.web-app.sounds-enabled'
 const THEME_STORAGE_KEY = 'leon.web-app.theme'
 const THEMES = ['dark', 'light'] as const
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
-const THEME_TRANSITION_ATTRIBUTE = 'data-theme-transition'
+export const THEME_TRANSITION_ATTRIBUTE = 'data-theme-transition'
 
 export const THEME_CHANGE_EVENT = 'leon:web-app-theme-change'
+export const THEME_REQUEST_EVENT = 'leon:web-app-theme-request'
 
 export type Theme = (typeof THEMES)[number]
 
@@ -88,6 +89,7 @@ export async function applyTheme(theme: Theme): Promise<boolean> {
   const request = ++themeRequest
 
   requestedTheme = theme
+  window.dispatchEvent(new CustomEvent<Theme>(THEME_REQUEST_EVENT, { detail: theme }))
   activeThemeTransition?.skipTransition()
   activeThemeTransition = null
   root.removeAttribute(THEME_TRANSITION_ATTRIBUTE)
@@ -152,6 +154,9 @@ export async function applyTheme(theme: Theme): Promise<boolean> {
   } finally {
     if (request === themeRequest) {
       requestedTheme = null
+      // Controls follow the requested palette immediately, but must return to
+      // the rendered one if preparation fails or a request is cancelled.
+      window.dispatchEvent(new CustomEvent<Theme>(THEME_REQUEST_EVENT, { detail: getCurrentTheme() }))
 
       if (activeThemeTransition === null) {
         root.removeAttribute(THEME_TRANSITION_ATTRIBUTE)
@@ -173,6 +178,13 @@ export function getCurrentTheme(): Theme {
   const theme = document.documentElement.dataset['theme'] ?? null
 
   return isTheme(theme) ? theme : getStoredTheme()
+}
+
+/**
+ * Returns the latest requested palette for controls that acknowledge pending work.
+ */
+export function getRequestedTheme(): Theme {
+  return requestedTheme ?? getCurrentTheme()
 }
 
 /**

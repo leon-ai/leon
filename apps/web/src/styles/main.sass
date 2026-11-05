@@ -47,6 +47,21 @@ button
 html[data-theme-transition] *
   view-transition-name: none !important
 
+// A live layer keeps the icon moving while the rest of the palette crossfades.
+html[data-theme-transition] .sidebar-theme-toggle
+  view-transition-name: theme-toggle !important
+
+::view-transition-group(theme-toggle)
+  z-index: 1
+  animation: none
+
+::view-transition-old(theme-toggle)
+  display: none
+
+::view-transition-new(theme-toggle)
+  animation: none
+  mix-blend-mode: normal
+
 html[data-theme-transition],
 html[data-theme-transition] *,
 html[data-theme-transition] *::before,

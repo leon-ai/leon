@@ -40,6 +40,7 @@ export function Sidebar() {
   const searchReturnFocusRef = useRef<HTMLElement | null>(null)
   const [soundsEnabled, setSoundsEnabled] = useState(getStoredSoundsEnabled)
   const theme = useTheme()
+  const requestedTheme = useTheme({ includeRequested: true })
   const [sidebarExpanded, setSidebarExpanded] = useState(getStoredSidebarExpanded)
   const [sidebarContentCollapsed, setSidebarContentCollapsed] = useState(
     () => !getStoredSidebarExpanded()
@@ -206,9 +207,10 @@ export function Sidebar() {
             onClick={() => updateSoundsEnabled(!soundsEnabled)}
           />
           <Button
-            iconName={theme === 'dark' ? 'moon' : 'sun'}
+            className="sidebar-theme-toggle"
+            iconName={requestedTheme === 'dark' ? 'moon' : 'sun'}
             tone="muted"
-            tooltipMessage={theme === 'dark' ? 'Apply light theme' : 'Apply dark theme'}
+            tooltipMessage={requestedTheme === 'dark' ? 'Apply light theme' : 'Apply dark theme'}
             onClick={toggleTheme}
           />
           <Button
