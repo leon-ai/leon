@@ -7,6 +7,8 @@ import {
   LEON_PROFILE_PATH,
   LEON_TOOLKITS_PATH,
   MODELS_PATH,
+  LLM_DIR_PATH,
+  LLM_MANIFEST_PATH,
   PROFILE_CONTEXT_PATH,
   PROFILE_AGENT_SKILLS_PATH,
   PROFILE_LOGS_PATH,
@@ -20,6 +22,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { ensureConnectionEncryptionKey } from '@/core/connections/connection-store'
 import { NetworkHelper } from '@/helpers/network-helper'
+import { readLLMManifest, resolveConfiguredLLMTarget } from '@/core/llm-manager/llm-routing'
 
 import buildApp from '../app/build-app'
 import buildServer from '../build-server'
@@ -65,8 +68,6 @@ import createInstanceID from './create-instance-id'
 import setFfprobePermissions from './set-ffprobe-permissions'
 import setupGitHooks from './setup-git-hooks'
 
-const LOCAL_LLM_TARGET_VALUE = 'llamacpp'
-
 /**
  * Create Leon home directories that setup and runtime expect to exist.
  */
@@ -95,12 +96,10 @@ async function ensureLeonHomeStructure() {
 
 function isExplicitLocalLLMTarget(value) {
   const normalizedValue = (value || '').trim()
-
-  return (
-    normalizedValue.startsWith('llamacpp/') ||
-    normalizedValue.startsWith('sglang/') ||
-    normalizedValue.startsWith('/')
-  )
+  return resolveConfiguredLLMTarget(normalizedValue, {
+    llmDirPath: LLM_DIR_PATH,
+    defaultInstalledLLMPath: readLLMManifest(LLM_MANIFEST_PATH)?.defaultInstalledLLMPath || ''
+  }).isLocal
 }
 
 function getOptionalLLMTarget(value) {
@@ -188,8 +187,8 @@ async function syncLLMSetupChoice(preferences) {
   }
 
   if (preferences.setupLocalAI) {
-    await CONFIG_MANAGER.setValue(['llm', 'default'], LOCAL_LLM_TARGET_VALUE)
-
+    // Bind the profile only after its selected model is verified. An unfinished
+    // setup must not inherit another profile's shared legacy default.
     return
   }
 
@@ -272,7 +271,10 @@ async function syncLLMSetupChoice(preferences) {
       currentStep = 'resolveExistingLLMChoice'
       const existingLLMChoice = await resolveExistingLLMChoice()
       currentStep = 'inspectLocalAISetupState'
-      localAISetupState = inspectLocalAISetupState()
+      // Shared cached weights do not opt a new profile into local AI.
+      localAISetupState = existingLLMChoice.setupLocalAI
+        ? inspectLocalAISetupState()
+        : localAISetupState
       // currentStep = 'inspectVoiceSetupState'
       // voiceSetupState = inspectVoiceSetupState()
 
@@ -360,7 +362,7 @@ async function syncLLMSetupChoice(preferences) {
         currentStep = 'setupLLMFit'
         await setupLLMFit()
         currentStep = 'setupLocalLLM'
-        await setupLocalLLM(localAICapability)
+        await setupLocalLLM(localAICapability, localAISetupState)
       } else if (localAICapability?.canInstallLocalAI) {
         SetupUI.info('I will skip local AI for now. You can add it later.')
       } else {

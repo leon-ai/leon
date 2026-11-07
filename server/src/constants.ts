@@ -545,8 +545,6 @@ export const AGENT_LLM_TARGET = resolveConfiguredLLMTarget(
     llmDirPath: LLM_DIR_PATH
   }
 )
-export const LLM_MINIMUM_TOTAL_VRAM = 6
-export const LLM_HIGH_TIER_MINIMUM_TOTAL_VRAM = 18
 /*export const LLM_HF_DOWNLOAD_URL =
   'https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q5_K_S.gguf?download=true'
 */
