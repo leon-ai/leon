@@ -1,13 +1,12 @@
-import { DIAGRAM_VIEW_MORPH } from './diagram-view-morph'
 import { memo, useEffect, useState } from 'react'
 import { clsx } from 'clsx'
 import { getPublicAssetPath } from '@/config'
-import { ASSET_ICONS } from './asset-icons'
 
 import { COMMON_ICONS, ICON_VARIANT_ARTWORK, SOFT_ICON_NAMES, TOOL_ICON_NAMES, type IconDefinition } from './icon-definitions'
 import { getIconVariant, resolveIconName } from './icon-name'
-import { BRAND_ICONS } from './brand-icons'
-import { ICON_MORPHS } from './icon-morphs'
+import { BRAND_ICONS, RARE_BRAND_NAMES } from './brand-icons'
+import { ASSET_ICONS } from './asset-icons'
+import { ICON_MORPHS, type MorphFrames } from './icon-morphs'
 import { MorphPaths } from './morph-paths'
 
 import './icon.sass'
@@ -32,6 +31,20 @@ const MORPH_TARGETS: Readonly<Record<string, readonly [string, string]>> = {
 }
 let toolArtwork: Readonly<Record<string, IconDefinition>> | undefined
 let toolArtworkRequest: Promise<void> | undefined
+let rareMorphs: Record<string, MorphFrames> | undefined
+let rareBrands: Readonly<Record<string, IconDefinition>> | undefined
+let rareArtworkRequest: Promise<void> | undefined
+
+function loadRareArtwork(): Promise<void> {
+  rareArtworkRequest ??= Promise.all([import('./rare-icon-morphs'), import('./rare-brand-icons')]).then(([morphs, brands]) => {
+    rareMorphs = morphs.RARE_ICON_MORPHS
+    rareBrands = brands.RARE_BRAND_ICONS
+  }).catch(() => {
+    rareArtworkRequest = undefined
+  })
+
+  return rareArtworkRequest
+}
 
 function loadToolArtwork(): Promise<void> {
   toolArtworkRequest ??= import('./tool-icons').then((module) => {
@@ -68,11 +81,31 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
   const variant = getIconVariant(name)
   const explicit = variant ? getArtwork(ICON_VARIANT_ARTWORK, `${resolved}-${variant}`) : undefined
   const common = explicit ?? getArtwork(COMMON, resolved)
-  const brand = getArtwork(BRAND_ICONS, resolved)
+  const brand = getArtwork(BRAND_ICONS, resolved) ?? getArtwork(rareBrands, resolved)
   const asset = Object.hasOwn(ASSET_ICONS, resolved) ? ASSET_ICONS[resolved] : undefined
   const tool = getArtwork(toolArtwork, resolved)
-  const isTool = !common && !brand && !asset && (TOOL_ICON_NAMES.has(resolved) || TOOL_ICON_NAMES.has(fallback))
-  const [, setLoaded] = useState(false)
+  const diagramToggle = resolved === 'code-s-slash' && state !== undefined
+  const rare = diagramToggle || selected !== undefined && (resolved === 'list-check' || resolved === 'layout-column') ||
+    RARE_BRAND_NAMES.has(resolved) || RARE_BRAND_NAMES.has(fallback)
+  const isTool = !diagramToggle && !RARE_BRAND_NAMES.has(resolved) && !common && !brand && !asset &&
+    (TOOL_ICON_NAMES.has(resolved) || TOOL_ICON_NAMES.has(fallback))
+  const [, setLoaded] = useState(0)
+
+  useEffect(() => {
+    if (!rare || rareMorphs !== undefined) {
+      return
+    }
+    let cancelled = false
+    void loadRareArtwork().then(() => {
+      if (!cancelled) {
+        setLoaded((revision) => revision + 1)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [rare])
 
   useEffect(() => {
     if (!isTool || toolArtwork !== undefined) {
@@ -82,7 +115,7 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
     let cancelled = false
     void loadToolArtwork().then(() => {
       if (!cancelled) {
-        setLoaded(true)
+        setLoaded((revision) => revision + 1)
       }
     })
 
@@ -108,20 +141,20 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
         style={{ backgroundColor: 'currentColor', mask: `url("${src}") center / contain no-repeat` }} />
   }
 
-  const category = getArtwork(COMMON, fallback) ?? getArtwork(BRAND_ICONS, fallback) ?? getArtwork(toolArtwork, fallback)
+  const category = getArtwork(COMMON, fallback) ?? getArtwork(BRAND_ICONS, fallback) ?? getArtwork(rareBrands, fallback) ?? getArtwork(toolArtwork, fallback)
   const definition = common ?? brand ?? tool ?? category ?? COMMON_ICONS.tools
   const artworkName = common || brand || tool ? resolved : category ? fallback : 'tools'
   const selectionFamily = selected !== undefined
     ? resolved === 'list-check' ? 'list-selection' : resolved === 'layout-column' ? 'column-selection' : undefined
     : undefined
-  const morph = resolved === 'code-s-slash' && state !== undefined ? ['diagram-view', state] as const : resolved === 'file-copy' && state !== undefined
+  const morph = diagramToggle ? ['diagram-view', state] as const : resolved === 'file-copy' && state !== undefined
     ? ['copy', state] as const
     : selectionFamily ? [selectionFamily, selected ? 'selected' : 'idle'] as const
       : morphEnabled && !explicit && Object.hasOwn(MORPH_TARGETS, resolved) ? MORPH_TARGETS[resolved] : undefined
-  const frames = morph ? (morph[0] === 'diagram-view' ? DIAGRAM_VIEW_MORPH : ICON_MORPHS[morph[0]]) : undefined
+  const frames = morph ? ICON_MORPHS[morph[0]] ?? rareMorphs?.[morph[0]] : undefined
 
   return (
-    <svg {...shared} data-icon-fallback={!common && !brand && !tool ? category ? fallback : 'tools' : undefined}
+    <svg {...shared} data-icon-fallback={!frames && !common && !brand && !tool ? category ? fallback : 'tools' : undefined}
       data-icon-artwork={SOFT_ICON_NAMES.has(artworkName) ? 'soft-b' : 'original'}
       data-icon-variant={variant}
       data-selected={selected} viewBox="0 0 24 24" fill="none" strokeWidth="2.1"
