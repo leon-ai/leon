@@ -1,17 +1,11 @@
-import type { Theme } from '@pierre/highlights'
+import type { CSSProperties } from 'react'
+import dark from '@pierre/highlights/themes/pierre-dark'
+import light from '@pierre/highlights/themes/pierre-light'
 
-const syntaxColors: Record<string, string> = {
-  comment: 'text-tertiary', keyword: 'pink', string: 'yellow', number: 'purple',
-  boolean: 'pink', constant: 'purple', property: 'text', function: 'accent',
-  type: 'purple', punctuation: 'text-tertiary', variable: 'text-secondary'
-}
+export const CODE_THEMES = { dark, light }
 
-export const CODE_THEME: Theme = {
-  name: 'leon-code', appearance: 'dark', cssVariables: {
-    prefix: '--color-', defaults: { foreground: 'var(--color-text-secondary)' }
-  },
-  style: {
-    'editor.foreground': 'text-secondary', 'editor.background': 'surface-elevated',
-    syntax: syntaxColors
-  }
-}
+// Browser color-scheme changes both palettes atomically without another lexer pass.
+export const CODE_THEME_STYLE = {
+  '--code-background': `light-dark(var(--color-surface-elevated), ${dark.style['editor.background']})`,
+  '--code-foreground': `light-dark(${light.style['editor.foreground']}, ${dark.style['editor.foreground']})`
+} as CSSProperties

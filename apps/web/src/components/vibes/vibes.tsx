@@ -8,7 +8,8 @@ import {
   type CSSProperties
 } from 'react'
 
-import { WeatherLayer } from './weather-layer'
+import { LazyWeatherLayer } from './weather-layer/lazy-weather-layer'
+import { canPrefetch } from '@/utils/prefetch'
 import {
   normalizeVibeEnvironment,
   resolveVibeScene,
@@ -32,13 +33,8 @@ import './vibes.sass'
 
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const VIBE_PRELOAD_IDLE_TIMEOUT_MS = 2_000
-const CONSTRAINED_CONNECTION_TYPES = new Set(['slow-2g', '2g'])
 const preloadedVibeSources = new Set<string>()
 
-interface NavigatorConnection {
-  effectiveType?: string
-  saveData?: boolean
-}
 
 interface IdleCallbackWindow {
   cancelIdleCallback?: (handle: number) => void
@@ -122,15 +118,6 @@ function getNextSolarPhase(
   const nextIndex = (currentIndex + 1) % VIBE_SOLAR_PHASES.length
 
   return VIBE_SOLAR_PHASES[nextIndex] ?? VIBE_SOLAR_PHASES[0]
-}
-
-function shouldPreloadVibeSources(): boolean {
-  const connection = (navigator as Navigator & {
-    connection?: NavigatorConnection
-  }).connection
-
-  return connection?.saveData !== true &&
-    !CONSTRAINED_CONNECTION_TYPES.has(connection?.effectiveType ?? '')
 }
 
 function preloadVibeSource(src: string): void {
@@ -243,7 +230,7 @@ function VibeFrame({
           draggable="false"
         />
         <div className="vibes-weather-window">
-          <WeatherLayer weather={environment.weather} />
+          <LazyWeatherLayer weather={environment.weather} />
         </div>
       </div>
       <div className="vibes-tone" />
@@ -355,7 +342,7 @@ export function Vibes({
   }, [animateTransitions, hasResolvedScene, requestedVibe.assetSrc])
 
   useEffect(() => {
-    if (!shouldPreloadVibeSources()) {
+    if (!canPrefetch()) {
       return
     }
 

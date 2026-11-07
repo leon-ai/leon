@@ -5,7 +5,7 @@ import type {
   ToolRuntimeProgress
 } from '@/core/tool-manager/tool-executor'
 
-export const SATELLITE_PROTOCOL_VERSION = 2
+export const SATELLITE_PROTOCOL_VERSION = 3
 // Visual tool results include base64 screenshots, unlike ordinary chat events.
 export const SATELLITE_MAX_MESSAGE_BYTES = 16 * 1_024 * 1_024
 
@@ -78,6 +78,7 @@ export interface SatelliteToolInvocation {
 
 export interface SatelliteToolCancellation {
   invocationId: string
+  interruptOnly?: boolean
 }
 
 export interface SatelliteToolProgressPayload {

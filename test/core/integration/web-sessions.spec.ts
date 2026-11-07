@@ -176,6 +176,15 @@ describe('web conversation runtime', () => {
     expect((await request('GET', `/api/v1/sessions/${first}/text?limit=0`)).statusCode).toBe(400)
     expect((await request('GET', '/api/v1/sessions/missing/text')).statusCode).toBe(404)
     expect(fixture.executions).toHaveLength(0)
+    await runWithProfileContext({ profileName: profile }, async () => {
+      CONVERSATION_REPOSITORY.upsertMessage(second, {
+        who: 'owner', messageId: 'camera-source', message: 'A quiet note about the camera.', isAddedToHistory: true
+      })
+    })
+    const matches = (await request('GET', '/api/v1/sessions/page?query=camera')).json()
+    expect(matches.sessions.map((session: { id: string }) => session.id)).toEqual([first, second])
+    expect(matches.search_matches).toEqual({ [second]: { excerpt: 'A quiet note about the camera.' } })
+    expect((await request('GET', '/api/v1/sessions/page')).json()).not.toHaveProperty('search_matches')
     await request('DELETE', `/api/v1/sessions/${first}?compact=true`)
     expect((await request('GET', `/api/v1/sessions/${first}`)).statusCode).toBe(404)
   })

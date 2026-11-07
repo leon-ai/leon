@@ -11,6 +11,7 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { TOOL_WORKER_MANAGER } from '@/core'
 import { ToolCallLogger } from '@/tool-call-logger'
 import { ToolConcurrency, ToolExecutionOrigin } from '@/types'
+import { ToolRuntimePhase } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 interface FilesystemValueNormalizer {
   normalizePossibleFilesystemPath(value: string): string
@@ -44,7 +45,13 @@ it('retains caller attribution in tool results and artifact logs', async () => {
   }
 })
 
-it('yields one retained execution after its wait window and makes its completed result reusable', async () => {
+it.each([
+  { boundary: 'wait window', cancel: false, background: true },
+  { boundary: 'follow-up message', cancel: false, background: true },
+  { boundary: 'follow-up message', cancel: true, background: true },
+  { boundary: 'follow-up message', cancel: false, background: false },
+  { boundary: 'follow-up message', cancel: true, background: false }
+])('retains work across $boundary (background: $background, canceled: $cancel)', async ({ boundary, cancel, background }) => {
   const executor = new ToolExecutor()
   const completed: ToolExecutionResult = {
     status: 'success', message: 'Done', data: {
@@ -57,30 +64,61 @@ it('yields one retained execution after its wait window and makes its completed 
     finish = resolve
   })
   const execute = vi.spyOn(executor as unknown as ExecutorInternals, 'executeToolInternal')
-    .mockReturnValue(gate)
+    .mockImplementation((input) => {
+      if (!background) {
+        input.onProgress?.({ source: 'report', message: 'Preparing tool assets.', phase: ToolRuntimePhase.Preparation })
+      }
+      input.onProgress?.({
+        source: 'report', key: 'bridges.tools.download_progress_with_details',
+        message: 'Downloading fixture: 40%.', data: { percentage: 40 }
+      })
+      return gate
+    })
   vi.spyOn(ToolkitRegistry.prototype, 'getToolFunctions').mockReturnValue({
-    run: { description: 'Read a fixture', parameters: {}, background: true }
+    run: { description: 'Read a fixture', parameters: {}, background }
   })
   vi.useFakeTimers()
+  const turn = new AbortController()
+  const followUp = new AbortController()
+  const onProgress = vi.fn()
 
   try {
     const pending = runWithConversationSession({ sessionId: 'retained-executor' }, () =>
       executor.executeTool({
         toolkitId: 'test', toolId: 'fixture', functionName: 'run',
-        toolInput: '{}', retainExecution: true
+        toolInput: '{}', retainExecution: true,
+        signal: followUp.signal, retainedSignal: turn.signal, onProgress
       })
     )
-    await vi.advanceTimersByTimeAsync(TOOL_EXECUTION_WAIT_MS)
+    if (boundary === 'follow-up message') {
+      followUp.abort(new Error('New owner instructions require reassessment.'))
+      await vi.advanceTimersByTimeAsync(0)
+    } else {
+      await vi.advanceTimersByTimeAsync(TOOL_EXECUTION_WAIT_MS)
+    }
     const yielded = await pending
     const execution = yielded.data.output['execution'] as { id: string, state: string }
     expect(execution.state).toBe('running')
     expect(yielded.message).toContain('do not restart')
+    expect(execute.mock.calls[0]![0].signal!.aborted).toBe(!background && boundary === 'follow-up message')
+    expect(execute.mock.calls[0]![0].retainedSignal!.aborted).toBe(false)
+    expect(execution).toMatchObject({ progress: { data: { percentage: 40 } } })
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+      stream: { id: execution.id, state: 'running' }, data: { percentage: 40 }
+    }))
+    if (cancel) {
+      turn.abort(new Error('Stopped by the owner.'))
+      expect(execute.mock.calls[0]![0].retainedSignal!.aborted).toBe(true)
+    }
     finish(completed)
     const retained = await TOOL_EXECUTION_MANAGER.wait(
       getActiveProfileName(), 'retained-executor', execution.id
     )
-    expect(retained.execution.state).toBe('completed')
+    expect(retained.execution.state).toBe(cancel ? 'canceled' : 'completed')
     expect(retained.result).toEqual(completed)
+    expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
+      stream: { id: execution.id, state: cancel ? 'failed' : 'completed' }, data: completed.data.output
+    }))
     expect(execute).toHaveBeenCalledTimes(1)
     expect(execute.mock.calls[0]?.[0].retainExecution).toBe(false)
   } finally {

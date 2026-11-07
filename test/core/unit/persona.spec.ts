@@ -19,6 +19,7 @@ vi.mock('@/core', () => ({
   SOCKET_SERVER: null,
   TOOLKIT_REGISTRY: { isLoaded: true },
   TOOL_EXECUTOR: { executeTool: mocks.execute },
+  MEMORY_MANAGER: { getTemporaryLocation: async (): Promise<null> => null },
   AMBIENT_CONDITIONS_MANAGER: { getSnapshot: mocks.getSnapshot },
   PERSONA: {
     get mood(): { type: string } {

@@ -23,18 +23,35 @@
 
 .search-sessions-dialog-link
   display: flex
-  align-items: center
-  justify-content: space-between
-  gap: var(--space-lg)
+  flex-direction: column
+  justify-content: center
+  gap: var(--space-xs)
   box-sizing: border-box
   width: 100%
-  height: 100%
-  padding: 0 var(--space-md)
+  min-height: calc(var(--session-search-item-height) - 1px)
+  padding: var(--space-sm) var(--space-md)
   border-radius: var(--border-radius-md)
   color: var(--color-text)
   text-decoration: none
 
   @include list-row.interactions
+
+.search-sessions-dialog-heading
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-lg)
+  min-width: 0
+
+.search-sessions-dialog-excerpt
+  display: -webkit-box
+  overflow: hidden
+  -webkit-box-orient: vertical
+  -webkit-line-clamp: 2
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+  overflow-wrap: anywhere
 
 .search-sessions-dialog-title
   min-width: 0

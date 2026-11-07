@@ -38,11 +38,21 @@ CREATE INDEX IF NOT EXISTS idx_memory_items_supersedes
 CREATE INDEX IF NOT EXISTS idx_memory_items_temporary_priority
   ON memory_items((source_type = 'explicit_user') DESC, importance DESC, updated_at DESC, id)
   WHERE scope = 'temporary' AND is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_memory_items_temporary_recent
+  ON memory_items(updated_at DESC, id DESC)
+  WHERE scope = 'temporary' AND is_deleted = 0;
 DROP INDEX IF EXISTS idx_memory_items_temporary;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_memory_items_scope_dedupe
   ON memory_items(scope, dedupe_hash)
   WHERE dedupe_hash IS NOT NULL AND is_deleted = 0;
+
+CREATE TABLE IF NOT EXISTS temporary_location_backfill (
+  item_id TEXT PRIMARY KEY REFERENCES memory_items(id) ON DELETE CASCADE,
+  expected_updated_at INTEGER NOT NULL,
+  retry_after INTEGER NOT NULL DEFAULT 0,
+  completed_at INTEGER
+);
 
 CREATE TABLE IF NOT EXISTS memory_chunks (
   id TEXT PRIMARY KEY,

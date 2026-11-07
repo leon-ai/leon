@@ -253,29 +253,6 @@ export default class OpenMeteoTool extends Tool {
   }
 
   /**
-   * Use an owner-selected city for Vibes until it expires, or clear the override.
-   */
-  public configureVibesLocation(
-    location: string | null,
-    expiresAt?: number
-  ): { success: boolean } {
-    const city = location?.trim()
-
-    if (location !== null && (
-      !city || typeof expiresAt !== 'number' ||
-      !Number.isFinite(expiresAt) || expiresAt <= Date.now()
-    )) {
-      throw new Error('A Vibes location requires a city and a future expiry in Unix milliseconds.')
-    }
-
-    ToolkitConfig.saveToolSettings(this.toolkit, this.toolName, {
-      vibesLocation: location === null ? null : { location: city, expiresAt }
-    })
-
-    return { success: true }
-  }
-
-  /**
    * Returns current conditions and today's forecast, or a requested interval.
    */
   async getWeather(

@@ -10,6 +10,7 @@ import { useComposerModel } from '@/data/composer-model'
 import { conversationQueryOptions, useSendMessage } from '@/data/conversation-queries'
 import type { ConversationSession } from '@/data/sessions'
 import { queryClient } from '@/query-client'
+import { prefetchModule } from '@/utils/prefetch'
 
 import './new-session-page.sass'
 
@@ -24,6 +25,7 @@ export function NewSessionPage() {
   const create = useMutation({
     meta: { errorTitle: 'Could not start the session', profile },
     mutationFn: async ({ id, query }: { id: string, query: string }) => {
+      prefetchModule(() => import('@/components/markdown-content'))
       await requestAPI<{ session: ConversationSession }>('sessions?compact=true', {
         method: 'POST', body: JSON.stringify({ id: sessionId })
       })

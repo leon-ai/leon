@@ -4,11 +4,13 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { ScrollContainer } from '@/components/scroll-container'
 import { useCodeHighlight } from './use-code-highlight'
 import { CODE_PREVIEW_LINES, MAXIMUM_CODE_LINE_CHARACTERS, type CodeToken } from './code-highlight-types'
+import { CODE_THEME_STYLE } from './code-theme'
 
 import '@fontsource/jetbrains-mono/latin-400.css'
 import './code-view.sass'
 
 const CODE_LINE_HEIGHT_PX = 22
+const MAXIMUM_CODE_VIEW_HEIGHT_PX = 236
 const FOLLOW_TOLERANCE_PX = 24
 
 interface CodeViewProps {
@@ -19,6 +21,7 @@ interface CodeViewProps {
   preview?: boolean
   previewTail?: boolean
   truncated?: boolean
+  fitContent?: boolean
 }
 
 interface CodeRow {
@@ -49,7 +52,7 @@ function getRowTokens(row: CodeRow, tokens: CodeToken[][] | null): CodeToken[] |
  * Renders only visible output lines, bounds pathological single-line payloads,
  * and follows live output only while its reader remains at the end.
  */
-export function CodeView({ text, label, language = 'text', active = false, preview = false, previewTail = false, truncated = false }: CodeViewProps) {
+export function CodeView({ text, label, language = 'text', active = false, preview = false, previewTail = false, truncated = false, fitContent = false }: CodeViewProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const rows = useMemo(() => text.split('\n').flatMap((text, line) => {
@@ -94,7 +97,7 @@ export function CodeView({ text, label, language = 'text', active = false, previ
 
     return (
       <div className="code-view code-view-preview code-view-viewport" role="region" aria-label={label} tabIndex={0}
-        style={{ '--code-preview-lines': CODE_PREVIEW_LINES } as CSSProperties}>
+        style={{ ...CODE_THEME_STYLE, '--code-preview-lines': CODE_PREVIEW_LINES } as CSSProperties}>
         <pre className="code-view-content"><code>
           {previewTail && ellipsis}
           {visibleRows.map((row) => (
@@ -109,6 +112,9 @@ export function CodeView({ text, label, language = 'text', active = false, previ
   return (
     <ScrollContainer
       className="code-view"
+      style={{ ...CODE_THEME_STYLE, ...(fitContent ? {
+        height: `min(${MAXIMUM_CODE_VIEW_HEIGHT_PX}px, calc(${rows.length * CODE_LINE_HEIGHT_PX}px + var(--space-md) * 2))`
+      } : {}) }}
       scrollRef={viewportRef}
       viewportClassName="code-view-viewport"
       aria-label={label}

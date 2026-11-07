@@ -2,6 +2,8 @@
   min-width: 0
   height: 236px
   flex: 0 1 auto
+  background: var(--code-background)
+  --scroll-container-surface: var(--code-background)
 
 .code-view-viewport
   padding: var(--space-md) var(--space-lg)
@@ -10,7 +12,8 @@
   font-weight: var(--font-weight-regular)
   font-variant-ligatures: none
   line-height: 22px
-  color: var(--color-text-secondary)
+  color: var(--code-foreground)
+  overscroll-behavior: contain
 
 .code-view-content
   position: relative
@@ -32,6 +35,7 @@
   max-height: calc(var(--code-preview-lines) * 22px + var(--space-md) * 2)
   overflow-x: auto
   overflow-y: hidden
+  overscroll-behavior-y: auto
   scrollbar-width: thin
   scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
 

@@ -287,7 +287,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await expect.poll(() => main.evaluate((element) =>
         Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop)
       )).toBeLessThanOrEqual(2)
-      await main.evaluate((element, amount) => element.scrollTo({ top: element.scrollTop - amount }), distance)
+      // A real gesture relinquishes any still-settling programmatic scroll.
+      await main.hover()
+      await page.mouse.wheel(0, -distance)
       await expect(scrollButton).toBeVisible()
       await captureScrollTiming(scrollButton)
       if (activation === 'pointer') {

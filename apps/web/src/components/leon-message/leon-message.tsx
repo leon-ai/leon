@@ -17,7 +17,8 @@ import { BonusResponse } from '@/components/bonus-response'
 import { FinalAnswer } from '@/components/final-answer'
 import { SkillDetails } from '@/components/activity-details/skill-details'
 import { ProcessGroup } from '@/components/process-group'
-import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
+import { useAnimateOnce } from '@/components/streaming-text'
+import { MarkdownContent } from '@/components/markdown-content'
 import { TaskList } from '@/components/task-list'
 import { ThinkingMessage } from '@/components/thinking-message'
 import { ToolCallList } from '@/components/tool-call-list'
@@ -285,15 +286,16 @@ function renderActivity(activity: LeonFeedActivity) {
       )
     }
     return (
-      <p key={activity.id} className="leon-message-summary">
-        <StreamingText
+      <div key={activity.id} className="leon-message-summary">
+        <MarkdownContent
           animationId={activity.id}
           startDelay={420}
           text={activity.content}
+          active
         />
         {' '}
         <ActivityTimestamp timestamp={activity.startedAt} />
-      </p>
+      </div>
     )
   }
 
@@ -323,6 +325,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
       )}
       {entry.finalAnswer.trim().length > 0 && (
         <FinalAnswer animationId={`${entry.id}:${entry.answerGenerationId ?? 'accepted'}:final-answer`}
+          active={entry.status !== FeedTurnStatus.Completed}
           timestamp={entry.sentAt} metrics={entry.metrics}
           footer={bonusResponse !== undefined && bonusResponse.trim().length > 0 ? (
             <BonusResponse animationId={`${entry.id}:bonus-response`}>

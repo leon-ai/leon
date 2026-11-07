@@ -760,6 +760,52 @@ textarea::-webkit-scrollbar-thumb {
   font-size: 1.8rem;
   line-height: 2.4rem;
 }
+.bubble-container.leon .bubble {
+  > * + * {
+    margin-top: 12px;
+  }
+
+  ul, ol {
+    padding-left: 24px;
+  }
+
+  ul {
+    list-style: disc;
+  }
+
+  ol {
+    list-style: decimal;
+  }
+
+  h1, h2, h3, h4, h5, h6, strong {
+    font-weight: 600;
+  }
+
+  em {
+    font-style: italic;
+  }
+
+  blockquote {
+    padding-left: 12px;
+    border-left: 2px solid var(--grey-color);
+  }
+
+  pre {
+    overflow: auto;
+    max-height: 320px;
+    white-space: pre;
+  }
+
+  code {
+    font-family: monospace;
+  }
+
+  th, td {
+    padding: 4px 8px;
+    border: 1px solid var(--grey-color);
+  }
+}
+
 .bubble-metrics {
   cursor: default;
   margin-top: 2px;

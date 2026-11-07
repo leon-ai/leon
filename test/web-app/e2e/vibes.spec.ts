@@ -14,6 +14,7 @@ test('uses the ambient season, solar phase and weather in the production scene',
   await expect(scene).toHaveAttribute('data-season', 'winter')
   await expect(scene).toHaveClass(/vibes-solar-sunset/)
   await expect(scene).toHaveClass(/vibes-weather-snow/)
+  await expect(scene.locator('canvas.weather-layer')).toHaveCount(1)
 })
 
 for (const mood of ['default', 'tired', 'sad', 'angry', 'cocky'] as const) {

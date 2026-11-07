@@ -12,7 +12,7 @@ import {
   PROFILE_SESSIONS_PATH
 } from '@bridge/constants'
 import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
-import { getTemporaryContextSize, resolveTemporaryExpiration, resolveTemporaryMemoryPolicy } from '@@/bridges/runtime/nodejs/temporary-memory'
+import { getTemporaryContextSize, normalizeTemporaryLocation, resolveTemporaryExpiration, resolveTemporaryMemoryPolicy, TEMPORARY_LOCATION_QUERY } from '@@/bridges/runtime/nodejs/temporary-memory'
 import {
   type QMDCollectionDefinition,
   type QMDStoreRow,
@@ -916,6 +916,10 @@ export default class MemoryTool extends Tool {
     let sourceRef = options.sourceRef || (sessionId ? `session:${sessionId}` : null)
     if (scope === 'temporary') {
       const policy = resolveTemporaryMemoryPolicy(this.settings)
+      const currentLocation = normalizeTemporaryLocation(options.metadata?.['currentLocation'])
+      if (options.metadata?.['currentLocation'] != null && !currentLocation) {
+        return { success: false, error: 'A temporary current location requires a city and an optional country.' }
+      }
       const evidence = options.evidence?.trim()
       if (!sessionId || !evidence) {
         return { success: false, error: 'Temporary memory requires an exact quote from the current owner message.' }
@@ -951,11 +955,15 @@ export default class MemoryTool extends Tool {
         ...options,
         expiresAt: resolveTemporaryExpiration(now, options.expiresAt, policy),
         isPinned: false,
-        metadata: { ...options.metadata, evidence }
+        metadata: {
+          ...options.metadata, evidence, evidenceAt: owner.sentAt,
+          ...(currentLocation ? { currentLocation } : {})
+        }
       }
       if (getTemporaryContextSize([{
         id: newItemId, content: normalizedContent, source: sourceRef, sourceType,
-        expiresAt: new Date(options.expiresAt as number).toISOString()
+        expiresAt: new Date(options.expiresAt as number).toISOString(),
+        ...(currentLocation ? { currentLocation } : {})
       }]) > policy.tokenBudget) {
         return { success: false, error: 'This fact and its source exceed the temporary context budget. Shorten the content while preserving its meaning.' }
       }
@@ -966,6 +974,24 @@ export default class MemoryTool extends Tool {
       .digest('hex')
 
     const { itemId, createdAt, previous } = db.transaction(() => {
+      if (scope === 'temporary' && normalizeTemporaryLocation(options.metadata?.['currentLocation'])) {
+        const current = db.prepare(TEMPORARY_LOCATION_QUERY).get(now)
+        if (current) {
+          const metadata = JSON.parse(String(current['metadata_json'])) as Record<string, unknown>
+          if (Number(metadata['evidenceAt'] ?? current['updated_at']) > Number(options.metadata?.['evidenceAt'])) {
+            throw new Error('Newer current-location evidence is already saved.')
+          }
+          if (options.supersedesItemId && options.supersedesItemId !== current['id']) {
+            throw new Error('Current-location corrections must replace the current location record.')
+          }
+          // Retire the former location in this transaction; an ended stay must
+          // not reveal a different, older city that happened to expire later.
+          if (!options.supersedesItemId &&
+            (current['source_ref'] !== sourceRef || current['content_md'] !== normalizedContent)) {
+            options = { ...options, supersedesItemId: String(current['id']) }
+          }
+        }
+      }
       const previous = options.supersedesItemId
         ? db.prepare('SELECT * FROM active_memory_items WHERE id = ?').get(options.supersedesItemId)
         : undefined

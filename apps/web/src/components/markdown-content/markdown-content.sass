@@ -1,23 +1,295 @@
 .markdown-content
-  display: grid
-  gap: var(--space-sm)
-  padding-top: var(--space-lg)
-  border-top: 1px solid var(--color-border)
-  color: var(--color-text)
-
-  h2,
-  h3
-    margin-top: var(--space-md)
-    color: var(--color-text)
-    font-size: 24px
-    font-weight: var(--font-weight-bold)
-    line-height: 30px
+  min-width: 0
+  overflow-wrap: anywhere
+  color: inherit
+  line-height: inherit
 
   p
-    color: var(--color-text-secondary)
-    font-size: var(--font-size-md)
-    line-height: 28px
+    white-space: pre-wrap
+
+  .streaming-text-characters
+    white-space: inherit
+
+  > * + *
+    margin-top: var(--space-md)
+
+  h1, h2, h3, h4, h5, h6
+    margin-top: var(--space-xl)
+    font-size: inherit
+    font-weight: var(--font-weight-bold)
+    line-height: var(--line-height-lg)
+
+  h1
+    font-size: var(--font-size-3xl)
+    line-height: var(--line-height-xl)
+
+  h2
+    font-size: var(--font-size-2xl)
+
+  h3
+    font-size: var(--font-size-xl)
+
+  > :first-child
+    margin-top: 0
 
   strong
-    color: var(--color-text)
     font-weight: var(--font-weight-bold)
+
+  em
+    font-style: italic
+
+  del
+    text-decoration: line-through
+
+  ul, ol
+    padding-left: var(--space-xl)
+
+  ul
+    list-style: disc
+
+  ol
+    list-style: decimal
+
+  li + li, li > * + *
+    margin-top: var(--space-xs)
+
+  li > ul, li > ol
+    margin-top: var(--space-xs)
+
+  ul.contains-task-list
+    padding-left: 0
+    list-style: none
+
+    > li
+      position: relative
+      padding-left: var(--space-xl)
+
+    .markdown-task-checkbox
+      position: absolute
+      top: .35em
+      left: 0
+      display: grid
+      place-items: center
+      width: 16px
+      height: 16px
+      color: var(--color-accent-contrast)
+
+      input
+        position: absolute
+        box-sizing: border-box
+        inset: 0
+        width: 100%
+        height: 100%
+        margin: 0
+        appearance: none
+        border: 1px solid var(--color-border-strong)
+        border-radius: var(--border-radius-sm)
+        background: transparent
+        opacity: 1
+
+        &:checked
+          border-color: var(--color-accent)
+          background: var(--color-accent)
+
+      > .app-icon
+        z-index: 1
+        width: 14px
+        height: 14px
+        pointer-events: none
+
+  details
+    padding: var(--space-md) var(--space-lg)
+    border: 1px solid var(--color-border)
+    border-radius: var(--border-radius-md)
+
+    > summary
+      cursor: pointer
+      color: var(--color-text-secondary)
+
+    &[open] > summary
+      margin-bottom: var(--space-sm)
+
+  .markdown-alert
+    padding: var(--space-md) var(--space-lg)
+    border-left: 2px solid
+    border-radius: 0
+    background: transparent
+
+    > * + *
+      margin-top: var(--space-sm)
+
+    .markdown-alert-title
+      display: flex
+      align-items: center
+      gap: var(--space-sm)
+      font-weight: var(--font-weight-semi-bold)
+
+      > .app-icon
+        width: 16px
+        height: 16px
+
+    @each $type in note, tip, important, warning, caution
+      &-#{$type}
+        border-left-color: var(--color-markdown-alert-#{$type}-border)
+
+        .markdown-alert-title
+          color: var(--color-markdown-alert-#{$type})
+
+  .footnotes
+    margin-top: var(--space-xl)
+    padding-top: var(--space-md)
+    border-top: 1px solid var(--color-border)
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+    > h2
+      margin: 0 0 var(--space-sm)
+      font-size: inherit
+
+  .katex-display
+    max-width: 100%
+    overflow: auto
+    overscroll-behavior-x: contain
+    padding: var(--space-xs) 0
+
+  blockquote
+    padding-left: var(--space-lg)
+    border-left: 2px solid var(--color-border-strong)
+    color: var(--color-text-secondary)
+
+  hr
+    border: 0
+    border-top: 1px solid var(--color-border)
+
+  code
+    padding: 1px var(--space-xs)
+    border-radius: var(--border-radius-sm)
+    background: var(--color-surface)
+    font-family: var(--font-family-code)
+    font-size: .875em
+    font-variant-ligatures: none
+
+  pre code
+    padding: 0
+    border-radius: 0
+    background: none
+    font-size: inherit
+
+  .markdown-image-alt
+    color: var(--color-text-secondary)
+
+.markdown-link
+  color: var(--color-accent)
+  text-decoration: none
+  text-underline-offset: 5px
+  padding: 1px var(--space-xs)
+  border-radius: var(--border-radius-sm)
+  background-color: transparent
+  text-decoration-color: var(--color-accent)
+  transition: background-color var(--transition-duration-main)
+
+  &:hover
+    background-color: var(--color-accent-soft)
+
+.markdown-link-tooltip
+  display: inline
+
+.markdown-link-icon
+  position: relative
+  display: inline-block
+  width: 14px
+  height: 14px
+  margin-right: var(--space-xs)
+  vertical-align: -.1em
+
+  > .icon, > img
+    position: absolute
+    inset: 0
+    width: 100%
+    height: 100%
+
+  > img
+    opacity: 0
+    object-fit: contain
+    background: var(--color-background)
+    border-radius: 2px
+
+    &[data-loaded='true']
+      opacity: 1
+
+.markdown-table
+  max-width: 100%
+  overflow-x: auto
+  overscroll-behavior-x: contain
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-md)
+  scrollbar-width: thin
+  scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
+
+  table
+    border-collapse: separate
+    border-spacing: 0
+    min-width: 100%
+    font-size: var(--font-size-md)
+    line-height: var(--line-height-md)
+
+  th, td
+    padding: var(--space-sm) var(--space-md)
+    border: 0
+    border-bottom: 1px solid var(--color-border)
+    text-align: left
+
+    + th, + td
+      border-left: 1px solid var(--color-border)
+
+  tbody tr:last-child td
+    border-bottom: 0
+
+  th
+    background: var(--color-surface)
+    font-weight: var(--font-weight-semi-bold)
+
+.markdown-code
+  overflow: hidden
+  border-radius: var(--border-radius-md)
+  background: var(--code-background)
+
+.markdown-code-header
+  display: flex
+  align-items: center
+  justify-content: space-between
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-lg)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-xs)
+  line-height: var(--line-height-xs)
+
+.markdown-code-actions
+  display: flex
+  align-items: center
+
+.markdown-diagram-block
+  width: 100%
+
+.markdown-diagram-block .markdown-diagram
+  display: block
+  width: 100%
+
+  > svg
+    width: 100%
+    // The feed owns sizing rather than the renderer's intrinsic dimensions.
+    max-width: 100% !important
+    max-height: none
+    height: auto
+
+.markdown-diagram-loading, .markdown-diagram-notice
+  padding: var(--space-lg)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+
+.markdown-language-icon
+  display: inline-flex
+  align-items: center
+
+  > .app-icon
+    width: 1em
+    height: 1em

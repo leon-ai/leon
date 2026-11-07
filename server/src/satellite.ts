@@ -38,6 +38,7 @@ const PROFILE_TOKEN_ARGUMENT = '--token'
 const DEVICE_ID_ARGUMENT = '--device-id'
 const DEFAULT_SATELLITE_NAME = 'Leon Satellite'
 const activeInvocations = new Map<string, AbortController>()
+const activePreparations = new Map<string, AbortController>()
 
 function buildSatelliteToolError(
   invocation: SatelliteToolInvocation,
@@ -142,12 +143,16 @@ async function startSatellite(): Promise<void> {
   const contextTimer = setInterval(() => void publishContext(), SATELLITE_CONTEXT_REFRESH_MS)
   contextTimer.unref()
 
-  socket.on(SATELLITE_EVENTS.cancelTool, ({ invocationId }: SatelliteToolCancellation) => {
+  socket.on(SATELLITE_EVENTS.cancelTool, ({ invocationId, interruptOnly }: SatelliteToolCancellation) => {
     activeInvocations.get(invocationId)?.abort()
+    if (!interruptOnly) {
+      activePreparations.get(invocationId)?.abort()
+    }
   })
   socket.on('disconnect', () => {
     // A reconnect must not resume desktop work whose caller has disconnected.
     for (const controller of activeInvocations.values()) controller.abort()
+    for (const controller of activePreparations.values()) controller.abort()
   })
 
   socket.on('connect', () => {
@@ -181,7 +186,9 @@ async function startSatellite(): Promise<void> {
     async (invocation: SatelliteToolInvocation) => {
       if (activeInvocations.has(invocation.invocationId)) return
       const controller = new AbortController()
+      const preparationController = new AbortController()
       activeInvocations.set(invocation.invocationId, controller)
+      activePreparations.set(invocation.invocationId, preparationController)
       let result: ToolExecutionResult
       let artifacts: SatelliteArtifactBundle | undefined
 
@@ -198,8 +205,9 @@ async function startSatellite(): Promise<void> {
                   token: credential.value
                 },
                 signal: controller.signal,
+                retainedSignal: preparationController.signal,
                 onProgress: (progress) => {
-                  const transport = progress.stream ? socket : socket.volatile
+                  const transport = progress.stream || progress.phase ? socket : socket.volatile
                   transport.emit(SATELLITE_EVENTS.toolProgress, {
                     invocationId: invocation.invocationId,
                     progress
@@ -237,6 +245,7 @@ async function startSatellite(): Promise<void> {
         result = buildSatelliteToolError(invocation, error)
       } finally {
         activeInvocations.delete(invocation.invocationId)
+        activePreparations.delete(invocation.invocationId)
       }
 
       const payload: SatelliteToolResultPayload = {

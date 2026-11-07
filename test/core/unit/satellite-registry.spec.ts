@@ -74,11 +74,16 @@ describe('SatelliteRegistry', () => {
       toolkits: [], transport
     })
     const controller = new AbortController()
+    const followUp = new AbortController()
     const execution = SATELLITE_REGISTRY.invokeTool({
       profileName: PROFILE_NAME, deviceId: DEVICE_ID, conversationSessionId: 'session',
-      toolInput: TOOL_INPUT, signal: controller.signal
+      toolInput: TOOL_INPUT, signal: controller.signal, interruptionSignal: followUp.signal
     })
     const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
+    followUp.abort()
+    expect(transport.emit).toHaveBeenCalledWith(SATELLITE_EVENTS.cancelTool, {
+      invocationId: invocation.invocationId, interruptOnly: true
+    })
     const payload = { invocationId: invocation.invocationId, result: TOOL_RESULT, artifacts: { root: '/device/artifacts', entries: [] } }
     SATELLITE_REGISTRY.handleResult('another-owner', DEVICE_ID, payload, transport)
     SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, { emit: vi.fn() })

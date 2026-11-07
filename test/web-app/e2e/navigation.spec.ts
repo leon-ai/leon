@@ -6,6 +6,77 @@ import type { ConversationPage, ConversationTool } from '../../../apps/web/src/d
 
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
+test('warms session intent and search code without navigating, consuming state, or fetching older history', async ({ page, ui }) => {
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  await page.goto('./')
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  expect(resources.some((url) => /search-sessions-dialog-|rare-icon-morphs-|rare-brand-icons-|weather-layer-/.test(url))).toBe(false)
+  await page.getByRole('button', { name: 'Search sessions', exact: true }).hover()
+  await expect.poll(() => resources.some((url) => url.includes('search-sessions-dialog-'))).toBe(true)
+  await expect(page.getByRole('dialog', { name: 'Search sessions', exact: true })).toHaveCount(0)
+  const link = page.getByRole('link', { name: 'Test session 1', exact: true })
+  await link.hover()
+  await expect.poll(() => ui.historyRequests.filter((url) => url.pathname.endsWith(OTHER_SESSION_ID)).length).toBe(1)
+  expect(ui.historyRequests.every((url) => !url.searchParams.has('before') && !url.searchParams.has('after'))).toBe(true)
+  await expect(page).not.toHaveURL(new RegExp(OTHER_SESSION_ID))
+  await link.click()
+  await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  expect(ui.historyRequests.filter((url) => url.pathname.endsWith(OTHER_SESSION_ID))).toHaveLength(1)
+})
+
+test('skips speculative work on data-saving connections without blocking requested search', async ({ page, ui }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', { value: { saveData: true, effectiveType: '4g' }, configurable: true })
+  })
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  await page.goto('./')
+  const search = page.getByRole('button', { name: 'Search sessions', exact: true })
+  await search.hover()
+  await page.getByRole('link', { name: 'Test session 1', exact: true }).hover()
+  await finishFiniteAnimations(page.getByRole('navigation', { name: 'Main menu', exact: true }))
+  expect(ui.historyRequests).toHaveLength(0)
+  expect(resources.some((url) => url.includes('search-sessions-dialog-'))).toBe(false)
+  await search.click()
+  await expect(page.getByRole('combobox', { name: 'Search sessions', exact: true })).toBeFocused()
+})
+
+test('warms Markdown alongside submission before session creation returns', async ({ page, ui }) => {
+  const gate = Promise.withResolvers<void>()
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  await page.route('**/api/v1/sessions?compact=true', async (route) => {
+    await gate.promise
+    await route.fallback()
+  })
+  try {
+    await page.goto('./')
+    expect(resources.some((url) => url.includes('markdown-vendor-'))).toBe(false)
+    await page.getByRole('textbox', { name: 'Message Leon' }).fill('Make room for a small idea')
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await expect.poll(() => resources.some((url) => url.includes('markdown-vendor-'))).toBe(true)
+    expect(ui.historyRequests).toHaveLength(0)
+    expect(resources.some((url) => /markdown-math-engine-|tool-diff-|markdown-mermaid-/.test(url))).toBe(false)
+  } finally {
+    gate.resolve()
+  }
+})
+
+test('keeps the sidebar usable and reports an explicitly requested search download failure', async ({ page, ui }) => {
+  void ui
+  await page.route('**/assets/search-sessions-dialog-*.js', (route) => route.abort())
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+  await expect(dialog.getByRole('button', { name: 'Retry loading search', exact: true })).toBeVisible()
+  await expect(page.getByText('Could not load search', { exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeVisible()
+})
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`retains icon states and reverses interrupted toggle morphs (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     const requests: string[] = []
@@ -237,6 +308,11 @@ test('reveals conversation loading only after one second and cancels it on navig
 
 test('bounds inline output, virtualizes complete logs, and retains the inspector when work finishes', async ({ page, ui }, testInfo) => {
   expect(page.workers()).toHaveLength(0)
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  await page.goto('/web-app/')
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  expect(resources.some((url) => /\/assets\/(markdown-|tool-diff-|highlights-)/.test(url))).toBe(false)
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   const tool: ConversationTool = { id: 'large-log', name: 'test.shell.run', toolCallTitle: 'Inspect the logs',
     status: 'running', input: { command: 'read logs' },
@@ -377,10 +453,15 @@ for (const active of [false, true]) {
 }
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`keeps the feed as the only vertical scroll area (${reducedMotion})`, async ({ page, ui }) => {
+  test(`chains reading panes into the feed without trapping scrolling (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
     const answer = ui.history.get(SESSION_ID)!.at(-1)!
-    answer.message = Array.from({ length: 60 }, (_, index) => `Answer paragraph ${index}.`).join('\n\n')
+    const paragraphs = Array.from({ length: 60 }, (_, index) => `Answer paragraph ${index}.`)
+    answer.message = [
+      ...paragraphs.slice(0, 30),
+      '```javascript\n' + Array.from({ length: 80 }, (_, index) => `const idea${index} = ${index};`).join('\n') + '\n```',
+      ...paragraphs.slice(30)
+    ].join('\n\n')
     answer.agentResponseTrace = {
       id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
       toolCalls: Array.from({ length: 16 }, (_, index) => ({
@@ -398,7 +479,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
     await finishFiniteAnimations(page.locator('.feed'))
     await firstOutput.scrollIntoViewIfNeeded()
-    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    await expect(tools.locator('.scroll-container-viewport')).toHaveCount(0)
     expect(await firstOutput.locator('.code-view-line').count()).toBeLessThanOrEqual(16)
     await firstOutput.hover()
     const mainTop = await main.evaluate((element) => element.scrollTop)
@@ -414,6 +495,33 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.mouse.wheel(0, -120)
     await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(beforeUp)
 
+    const code = page.getByRole('region', { name: 'Code block', exact: true })
+    await expect(code).toHaveCSS('overscroll-behavior-y', 'auto')
+    for (const direction of [1, -1]) {
+      await code.scrollIntoViewIfNeeded()
+      await main.evaluate((element) => {
+        const code = element.querySelector('[aria-label="Code block"]')!
+        element.scrollTop += code.getBoundingClientRect().top - element.getBoundingClientRect().top - 160
+      })
+      await code.evaluate((element) => {
+        element.scrollTop = (element.scrollHeight - element.clientHeight) / 2
+      })
+      await code.hover()
+      const feedBefore = await main.evaluate((element) => element.scrollTop)
+      const codeBefore = await code.evaluate((element) => element.scrollTop)
+      await page.mouse.wheel(0, direction * 120)
+      await expect.poll(async () => direction * (await code.evaluate((element) => element.scrollTop) - codeBefore))
+        .toBeGreaterThan(0)
+      expect(await main.evaluate((element) => element.scrollTop)).toBe(feedBefore)
+
+      await code.evaluate((element, direction) => {
+        element.scrollTop = direction > 0 ? element.scrollHeight : 0
+      }, direction)
+      await page.mouse.wheel(0, direction * 120)
+      await expect.poll(async () => direction * (await main.evaluate((element) => element.scrollTop) - feedBefore))
+        .toBeGreaterThan(0)
+    }
+
     await page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true }).click()
     const menuViewport = page.locator('.dropdown-content .scroll-container-viewport')
     await expect(menuViewport).toBeVisible()
@@ -422,7 +530,15 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 }
 
 test('highlights session JSON with long output strings in previews and the tabbed inspector', async ({ page, ui }) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  // Generic binary MIME types must remain usable without streaming compilation.
+  await page.route('**/highlights-*.wasm', async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, contentType: 'application/octet-stream' })
+  })
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.message = 'A quiet formula: $a^2 + b^2 = c^2$.'
   answer.agentResponseTrace = {
     id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
       id: 'session-output', name: 'operating_system_control.shell.readSession', toolCallTitle: 'Read the command session',
@@ -433,6 +549,7 @@ test('highlights session JSON with long output strings in previews and the tabbe
     }]
   }
   await page.goto(SESSION_URL)
+  await expect(page.locator('.katex')).toHaveCount(1)
   await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
   await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
   await page.getByRole('button', { name: 'Read the command session', exact: true }).click()
@@ -442,6 +559,7 @@ test('highlights session JSON with long output strings in previews and the tabbe
   await page.getByRole('button', { name: 'View details', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Read the command session', exact: true })
   const output = dialog.getByRole('region', { name: 'Output JSON', exact: true })
+  await expect(output).toHaveCSS('overscroll-behavior-y', 'contain')
   await expect.poll(() => output.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
   await expect(dialog.locator('.scroll-container-viewport')).toHaveCount(1)
   const outputTab = dialog.getByRole('tab', { name: 'Output', exact: true })
@@ -453,6 +571,19 @@ test('highlights session JSON with long output strings in previews and the tabbe
   await page.keyboard.press('ArrowRight')
   await expect(outputTab).toHaveAttribute('aria-selected', 'true')
   await expect(output).toContainText('A shell output line.')
+  let failedSyntaxRequests = 0
+  await page.route('**/highlights-*.wasm', (route) => {
+    failedSyntaxRequests += 1
+    return route.abort()
+  })
+  await page.reload()
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+  await page.getByRole('button', { name: 'Read the command session', exact: true }).click()
+  await expect(preview).toContainText('command-session')
+  await expect.poll(() => failedSyntaxRequests).toBeGreaterThan(0)
+  await expect(preview.locator('.code-view-line > span[style]')).toHaveCount(0)
+  expect(errors).toEqual([])
 })
 
 test('shows native file-read content as code without exposing its result envelope', async ({ page, ui }) => {
@@ -520,8 +651,8 @@ for (const width of [1_512, 390]) {
     await expect.poll(() => diff.evaluate((element) => element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? ''))
       .toContain('Welcome')
     await expect.poll(() => diff.evaluate((element) => Array.from(
-      element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
-    ).filter((span) => span.textContent?.trim() === 'const' && span.style.color).length)).toBeGreaterThan(0)
+      element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span') ?? []
+    ).filter((span) => span.textContent?.trim() === 'const' && getComputedStyle(span).color !== getComputedStyle(span.parentElement!).color).length)).toBeGreaterThan(0)
     await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
     await expect(diff.getByRole('button')).toHaveCount(0)
     expect(await page.locator('.tool-changes-preview').evaluate((element) => element.clientHeight)).toBeLessThan(200)
@@ -601,7 +732,7 @@ for (const width of [1_512, 390]) {
     await expect(details).not.toHaveCSS('outline-style', 'none')
     await expect(diff).toHaveAttribute('data-diff-style', 'unified')
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0)
-    expect(resources.some((url) => new URL(url).pathname.endsWith('.wasm'))).toBe(false)
+    expect(resources.some((url) => new URL(url).pathname.includes('/onig-'))).toBe(false)
     await testInfo.attach('syntax-resource-requests', {
       body: JSON.stringify(resources, null, 2), contentType: 'application/json'
     })
@@ -692,8 +823,8 @@ for (const wasm of [true, false]) {
     )).toContain('count = 2')
     if (wasm) {
       await expect.poll(() => diff.evaluate((element) => Array.from(
-        element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
-      ).filter((span) => span.textContent?.trim() === 'int' && span.style.color).length)).toBeGreaterThan(0)
+        element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span') ?? []
+      ).filter((span) => span.textContent?.trim() === 'int' && getComputedStyle(span).color !== getComputedStyle(span.parentElement!).color).length)).toBeGreaterThan(0)
     }
     await expect(diff.getByRole('button')).toHaveCount(0)
     await page.getByRole('button', { name: 'View details', exact: true }).click()
@@ -756,6 +887,100 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await search.press('Enter')
     await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
     await expect(dialog).toBeHidden()
+    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  })
+}
+
+for (const { theme, reducedMotion, width } of [
+  { theme: 'dark', reducedMotion: 'no-preference', width: 1_512 },
+  { theme: 'light', reducedMotion: 'reduce', width: 390 }
+] as const) {
+  test(`shows highlighted content-only excerpts in paginated session search (${theme})`, async ({ page, ui }, testInfo) => {
+    ui.sessions[0]!.title = 'Sharing - context'
+    ui.sessions[1]!.title = 'Sharing context notes'
+    const titleMatches = ui.sessions.slice(0, 2)
+    const contentMatches = Array.from({ length: 64 }, (_, index) => ({
+      ...ui.sessions[0]!,
+      id: `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+      title: `Workshop notes ${index}`
+    }))
+    for (const session of contentMatches) {
+      ui.sessions.push(session)
+      ui.history.set(session.id, [])
+    }
+    const requests: URL[] = []
+    await page.route('**/api/v1/sessions/page?*', async (route) => {
+      const url = new URL(route.request().url())
+      const query = url.searchParams.get('query')
+      if (!query) {
+        await route.fallback()
+        return
+      }
+      requests.push(url)
+      const offset = Number(url.searchParams.get('cursor') ?? 0)
+      const limit = Number(url.searchParams.get('limit'))
+      const candidates = query === 'sharing context' ? [...titleMatches, ...contentMatches] : []
+      const sessions = candidates.slice(offset, offset + limit)
+      await route.fulfill({ json: {
+        sessions, event_cursor: 0,
+        next_cursor: offset + limit < candidates.length ? String(offset + limit) : null,
+        search_matches: Object.fromEntries(sessions.filter((session) => contentMatches.includes(session)).map((session) => [
+          session.id, { excerpt: 'A few useful notes about sharing - context between sessions, keeping the right details nearby while leaving enough room for new ideas and a calm place to work.' }
+        ]))
+      } })
+    })
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    }
+    const historyReads = ui.historyRequests.length
+    await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+    await page.setViewportSize({ width, height: 982 })
+    const dialog = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+    const input = dialog.getByRole('combobox', { name: 'Search sessions', exact: true })
+    const results = dialog.getByRole('listbox', { name: 'Matching sessions', exact: true })
+    await input.fill('sharing context')
+    await expect(input).toHaveAttribute('aria-busy', 'false')
+    const title = results.getByRole('option').filter({ has: page.getByText('Sharing - context', { exact: true }) })
+    await expect(title.locator('.search-sessions-dialog-title-highlight')).toHaveText('Sharing - context')
+    await expect(title.locator('.search-sessions-dialog-excerpt')).toHaveCount(0)
+    const excerpt = results.locator('.search-sessions-dialog-excerpt').first()
+    await expect(excerpt).toBeVisible()
+    await expect(excerpt.locator('.search-sessions-dialog-title-highlight')).toHaveText('sharing - context')
+    await expect(excerpt).toHaveCSS('-webkit-line-clamp', '2')
+    const excerptBounds = (await excerpt.boundingBox())!
+    expect(excerptBounds.height).toBeLessThanOrEqual(await excerpt.evaluate((element) => parseFloat(getComputedStyle(element).lineHeight) * 2))
+    expect(await results.getByRole('option').count()).toBeLessThan(30)
+    expect(requests.some((url) => url.searchParams.has('cursor'))).toBe(false)
+    expect(ui.historyRequests).toHaveLength(historyReads)
+    await finishFiniteAnimations(dialog)
+    const screenshot = testInfo.outputPath(`session-search-excerpts-${theme}.png`)
+    await page.screenshot({ path: screenshot })
+    await testInfo.attach(`session-search-excerpts-${theme}`, { path: screenshot, contentType: 'image/png' })
+    const viewport = dialog.locator('.search-sessions-dialog-results .scroll-container-viewport')
+    await viewport.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+    await expect.poll(() => requests.some((url) => url.searchParams.get('cursor') === '40')).toBe(true)
+    await viewport.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+    await expect(results.getByText('Workshop notes 63', { exact: true })).toBeVisible()
+    expect(await results.locator('li').evaluateAll((elements) => {
+      const bounds = elements.map((element) => element.getBoundingClientRect()).sort((a, b) => a.y - b.y)
+      return bounds.every((row, index) => index === 0 || row.top >= bounds[index - 1]!.bottom - 0.5)
+    })).toBe(true)
+    await input.fill('no matching content')
+    await expect(dialog.getByText('No session found.', { exact: true })).toBeVisible()
+    await expect(dialog.locator('.search-sessions-dialog-excerpt')).toHaveCount(0)
+    await input.fill('sharing context')
+    await expect(input).toHaveAttribute('aria-busy', 'false')
+    await input.press('ArrowUp')
+    const last = results.getByRole('option').filter({ has: page.getByText('Workshop notes 63', { exact: true }) })
+    await expect(last).toHaveAttribute('aria-selected', 'true')
+    await expect(last).toBeVisible()
+    await expect(input).toBeFocused()
+    await input.press('Enter')
+    await expect(page).toHaveURL(new RegExp(contentMatches.at(-1)!.id))
     await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
   })
 }
@@ -1365,13 +1590,17 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const resting = link.locator('.session-list-item-title-resting')
     const characters = resting.locator('.streaming-text-character-new')
     await expect(link).toBeVisible()
-    await expect(characters).toHaveCount(Array.from(title).length)
-    await expect(characters.first()).toHaveCSS('animation-name',
-      reducedMotion === 'reduce' ? 'none' : 'streaming-text-character-enter')
+    if (reducedMotion === 'no-preference') {
+      await expect(characters).toHaveCount(Array.from(title).length)
+      await expect(characters.first()).toHaveCSS('animation-name', 'streaming-text-character-enter')
+      await expect(characters.last()).toHaveCSS('opacity', '1')
+    } else {
+      await expect(characters).toHaveCount(0)
+      await expect(resting).toHaveText(title)
+    }
     await expect(resting.locator('.streaming-text-characters')).toHaveCSS('white-space', 'nowrap')
     await expect(resting).toHaveCSS('text-overflow', 'ellipsis')
     await expect(link).toHaveCSS('height', '40px')
-    await expect(characters.last()).toHaveCSS('opacity', '1')
     if (reducedMotion === 'reduce') {
       await page.clock.fastForward(2_000)
     }
@@ -1419,23 +1648,25 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await ui.emit([{ type: 'sessions_changed' }])
     const link = page.getByRole('link', { name: session.title, exact: true })
     const characters = link.locator('.session-list-item-title-resting .streaming-text-character-new')
-    await expect(characters).not.toHaveCount(0)
-    const character = (await characters.last().elementHandle())!
+    const character = reducedMotion === 'no-preference' ? await characters.last().elementHandle() : null
     let start: number | null = null
     if (reducedMotion === 'no-preference') {
-      await expect.poll(() => character.evaluate((element) => Number(element.getAnimations()[0]?.currentTime ?? 0))).toBeGreaterThan(80)
-      start = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+      await expect(characters).not.toHaveCount(0)
+      await expect.poll(() => character!.evaluate((element) => Number(element.getAnimations()[0]?.currentTime ?? 0))).toBeGreaterThan(80)
+      start = await character!.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+    } else {
+      await expect(characters).toHaveCount(0)
     }
     await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', OTHER_SESSION_ID)
     if (reducedMotion === 'no-preference') {
-      await expect.poll(() => character.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
-      const after = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+      await expect.poll(() => character!.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
+      const after = await character!.evaluate((element) => element.getAnimations()[0]!.startTime as number)
       expect(Math.abs(after - start!)).toBeLessThan(35)
       await finishFiniteAnimations(link)
     } else {
-      await expect(characters.last()).toHaveCSS('animation-name', 'none')
-      await expect(characters.last()).toHaveCSS('opacity', '1')
+      await expect(characters).toHaveCount(0)
+      await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
       await page.clock.fastForward(2_000)
     }
     await otherRow.hover()
@@ -1444,7 +1675,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', SESSION_ID)
     await expect(characters).toHaveCount(0)
     await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
-    await character.dispose()
+    await character?.dispose()
   })
 
   test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {
@@ -1520,7 +1751,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const expectSavedAnswer = async (): Promise<void> => {
       const answer = page.getByRole('region', { name: 'Leon’s final answer' })
         .filter({ hasText: lines.at(-1)! })
-      await expect(answer.locator('.streaming-text-characters')).toHaveCSS('white-space', 'pre-wrap')
+      await expect(answer.locator('p')).toHaveText(lines)
+      await expect(answer.locator('p').last()).toHaveCSS('white-space', 'pre-wrap')
       expect(await answer.innerText()).toBe(text)
       await expect.poll(() => page.locator('.app-main').evaluate((main) =>
         Math.abs(main.scrollHeight - main.clientHeight - main.scrollTop)

@@ -3,6 +3,66 @@ Third-party notices for Leon Web App assets
 
 These notices cover third-party assets and do not replace Leon's project license.
 
+Language logos
+--------------
+
+File and language icons use the complete built-in sprite and original scoped
+artwork palette from @pierre/trees 1.0.0-beta.6.
+Source: https://github.com/pierrecomputer/pierre/tree/main/packages/trees
+Copyright Pierre Computer Company and contributors. Apache License 2.0 (below).
+Brand marks identify their respective owners and do not imply endorsement.
+
+Pierre Trees upstream notice
+----------------------------
+
+This project includes some code derived from
+[@headless-tree/core](https://github.com/lukasbach/headless-tree).
+
+The initial version of this project used `headless-tree` as the underlying tree
+implementation. We have since written our own core at `packages/path-store`, but
+many of the best ideas from `headless-tree` made their way to `path-store` and
+`trees`. It's hard to identify exactly which code this is at this point, but
+definitely things like the drag and drop implementation and the general list
+approach to rendering and I'm sure more. The work that `@lukasbach` has
+contributed to this space is greatly appreciated. `<3`
+
+Original license for `headless-tree/core`:
+
+```
+MIT License
+
+Copyright (c) 2023 Lukas Bach
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+GitHub Markdown alerts
+----------------------
+
+Original Octicons from remark-github-blockquote-alert and Primer's default
+light/dark alert colors identify Note, Tip, Important, Warning and Caution.
+Sources: https://github.com/primer/octicons
+https://github.com/jaywcjlove/remark-github-blockquote-alert
+https://github.com/primer/primitives (published @primer/primitives 10.0.0)
+Copyright (c) 2026 GitHub Inc.
+Copyright (c) 2025 Kenny Wang(小弟调调™) <kennyiseeyou@gmail.com> (https://github.com/jaywcjlove)
+MIT License (permission notice below).
+
 Code font and rendering libraries
 --------------------------------
 
@@ -106,7 +166,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 @pierre/highlights and @pierre/diffs
 Source: https://github.com/pierrecomputer/pierre
 Copyright Pierre Computer Company and contributors. Apache License 2.0.
-Only Leon's own syntax palette is used; third-party color themes are not selected.
+Syntax highlighting uses the Pierre dark and Pierre light themes.
+
+Streamdown and its math plugin
+Source: https://github.com/vercel/streamdown
+Copyright 2023 Vercel, Inc. Apache License 2.0 (below).
+
+DOMPurify SVG sanitization
+Source: https://github.com/cure53/DOMPurify
+Copyright (c) 2015-present, Cure53 and other contributors.
+Licensed under Apache License 2.0 (below).
 
                                  Apache License
                            Version 2.0, January 2004
@@ -308,6 +377,21 @@ MIT License
 
 Copyright (c) 2021 Pine Wu
 Copyright (c) 2023 Anthony Fu <https://github.com/antfu>
+
+KaTeX renderer and locally served fonts
+Source: https://github.com/KaTeX/KaTeX
+Copyright (c) 2013-2020 Khan Academy and other contributors
+
+Pele renderer for Mermaid diagrams
+Source: https://github.com/obsidianmd/pele
+Copyright (c) 2026 kepano
+
+These projects use the MIT License (below).
+
+The same permission notice covers the GitHub alert assets above:
+Copyright (c) 2015 konpa
+Copyright (c) 2026 GitHub Inc.
+Copyright (c) 2025 Kenny Wang(小弟调调™) <kennyiseeyou@gmail.com> (https://github.com/jaywcjlove)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

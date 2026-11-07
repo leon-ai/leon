@@ -34,6 +34,7 @@ import type {
   ToolModelFile,
   ToolRuntimeProgress
 } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import { ToolRuntimePhase } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
@@ -52,6 +53,10 @@ export interface ToolExecutionInput {
   deferArtifactDelivery?: boolean
   leonService?: { baseURL: string, token: string }
   signal?: AbortSignal
+  /**
+   * Retained work follows turn cancellation/deadlines, not a follow-up message.
+   */
+  retainedSignal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
   retainExecution?: boolean
 }
@@ -249,48 +254,128 @@ export default class ToolExecutor {
       ? TOOLKIT_REGISTRY.getToolFunctions(input.toolkitId, input.toolId)?.[input.functionName]
       : undefined
 
-    if (input.retainExecution && sessionId && functionConfig?.background === true) {
+    if (input.retainExecution && sessionId) {
       const profileName = getActiveProfileName()
+      const retainedSignal = input.retainedSignal ?? input.signal
+      const background = functionConfig?.background === true
+      const preparationStarted = Promise.withResolvers<void>()
+      const settled = Promise.withResolvers<void>()
+      let preparing = false
+      let didPrepare = false
+      let failure: unknown
       const id = TOOL_EXECUTION_MANAGER.start(
         profileName,
         sessionId,
         `${input.toolkitId}.${input.toolId}.${input.functionName}`,
-        (signal, onProgress) => this.executeTool({
-          ...input,
-          retainExecution: false,
-          signal,
-          onProgress: (progress) => {
-            onProgress(progress)
-            input.onProgress?.(progress)
+        async (signal, onProgress) => {
+          let nativeStream: ToolRuntimeProgress['stream']
+          if (background) {
+            input.onProgress?.({
+              source: 'report', message: 'Tool execution is running.', stream: { id, state: 'running' }
+            })
           }
-        }),
-        input.signal
-      )
-      const snapshot = await TOOL_EXECUTION_MANAGER.wait(profileName, sessionId, id)
-      input.signal?.throwIfAborted()
 
-      if (snapshot.result) {
-        // Keep the handle even for a fast call: later filtering reuses its data.
-        return {
-          ...snapshot.result,
-          data: {
-            ...snapshot.result.data,
-            output: { ...snapshot.result.data.output, execution: snapshot.execution }
+          try {
+            const result = await this.executeTool({
+              ...input,
+              retainExecution: false,
+              signal: !background && input.signal ? AbortSignal.any([signal, input.signal]) : signal,
+              retainedSignal: signal,
+              onProgress: (progress) => {
+                if (progress.phase) {
+                  preparing = progress.phase === ToolRuntimePhase.Preparation
+                  if (preparing) {
+                    if (!didPrepare && !background) {
+                      TOOL_EXECUTION_MANAGER.keep(profileName, sessionId, id)
+                    }
+                    didPrepare = true
+                    preparationStarted.resolve()
+                  }
+                }
+                nativeStream = progress.stream ?? nativeStream
+                onProgress(progress)
+                input.onProgress?.({
+                  ...progress,
+                  ...(background || didPrepare ? {
+                    stream: progress.stream ?? { id, state: 'running' }
+                  } : {})
+                })
+              }
+            })
+
+            if (!nativeStream && (background || didPrepare)) {
+              input.onProgress?.({
+                source: 'report', message: signal.aborted ? String(signal.reason) : result.message,
+                data: result.data.output,
+                stream: { id, state: result.status === 'success' && !signal.aborted ? 'completed' : 'failed' }
+              })
+            }
+
+            return result
+          } catch (error) {
+            failure = error
+            if (background || didPrepare) {
+              input.onProgress?.({
+                source: 'report', message: String(error), stream: { id, state: 'failed' }
+              })
+            }
+            throw error
+          } finally {
+            settled.resolve()
+          }
+        },
+        retainedSignal,
+        background
+      )
+      try {
+        if (!background) {
+          await Promise.race([settled.promise, preparationStarted.promise])
+        }
+        let snapshot = await TOOL_EXECUTION_MANAGER.wait(profileName, sessionId, id, undefined, input.signal)
+        retainedSignal?.throwIfAborted()
+        if (!background && !preparing && !snapshot.result) {
+          await settled.promise
+          snapshot = await TOOL_EXECUTION_MANAGER.wait(profileName, sessionId, id)
+          retainedSignal?.throwIfAborted()
+        }
+
+        if (!background && !didPrepare &&
+          (!snapshot.result || JSON.stringify(snapshot.result.data.output).length <= TOOL_RESULT_INLINE_MAX_CHARS)) {
+          TOOL_EXECUTION_MANAGER.discard(profileName, sessionId, id)
+          if (failure) {
+            throw failure
+          }
+          return snapshot.result!
+        }
+        TOOL_EXECUTION_MANAGER.keep(profileName, sessionId, id)
+
+        if (snapshot.result) {
+          // Keep the handle even for a fast call: later filtering reuses its data.
+          return {
+            ...snapshot.result,
+            data: {
+              ...snapshot.result.data,
+              output: { ...snapshot.result.data.output, execution: snapshot.execution }
+            }
           }
         }
-      }
 
-      return {
-        status: snapshot.execution.error ? 'error' : 'success',
-        message: snapshot.execution.error || 'Tool execution is still running. Use system_utilities.tool_executions.wait/read with its id; do not restart it or claim completion.',
-        data: {
-          ...(input.origin ? { origin: input.origin } : {}),
-          tool_id: input.toolId,
-          toolkit_id: input.toolkitId || null,
-          function_name: input.functionName || null,
-          input: input.toolInput || null,
-          parsed_input: input.parsedInput || null,
-          output: { execution: snapshot.execution }
+        return {
+          status: snapshot.execution.error ? 'error' : 'success',
+          message: snapshot.execution.error || 'Tool execution is still running. Use system_utilities.tool_executions.wait/read with its id; do not restart it or claim completion.',
+          data: {
+            ...(input.origin ? { origin: input.origin } : {}),
+            tool_id: input.toolId,
+            toolkit_id: input.toolkitId || null,
+            function_name: input.functionName || null,
+            input: input.toolInput || null,
+            parsed_input: input.parsedInput || null,
+            output: { execution: snapshot.execution }
+          }
+        }
+      } finally {
+        if (!background && !didPrepare && retainedSignal?.aborted) {
+          TOOL_EXECUTION_MANAGER.discard(profileName, sessionId, id)
         }
       }
     }
@@ -513,7 +598,7 @@ export default class ToolExecutor {
 
     if (satelliteDeviceId) {
       try {
-        const { onProgress, signal, ...serializableInput } = input
+        const { onProgress, signal, retainedSignal, ...serializableInput } = input
 
         return await SATELLITE_REGISTRY.invokeTool({
           profileName: getActiveProfileName(),
@@ -524,7 +609,8 @@ export default class ToolExecutor {
             executionTarget: 'any'
           },
           ...(onProgress ? { onProgress } : {}),
-          ...(signal ? { signal } : {})
+          ...(retainedSignal || signal ? { signal: retainedSignal ?? signal } : {}),
+          ...(signal && retainedSignal ? { interruptionSignal: signal } : {})
         })
       } catch (error) {
         return this.buildResult({
@@ -655,6 +741,7 @@ export default class ToolExecutor {
           },
           ...(Object.keys(connections).length ? { connections } : {}),
           ...(input.signal ? { signal: input.signal } : {}),
+          ...(input.retainedSignal ? { preparationSignal: input.retainedSignal } : {}),
           ...(timeout ? { timeout } : {}),
           ...(input.onProgress ? { onProgress: input.onProgress } : {})
         },

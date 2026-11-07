@@ -155,6 +155,7 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
             status: WEB_SESSION_RUNTIME.isRunning(session.id) ? 'wip' : 'idle'
           })),
           next_cursor: page.nextCursor,
+          ...(page.searchMatches ? { search_matches: page.searchMatches } : {}),
           event_cursor: CONVERSATION_REPOSITORY.getReplayBounds().latest
         })
       } catch (error) {

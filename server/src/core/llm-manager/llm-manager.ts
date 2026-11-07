@@ -144,6 +144,8 @@ export default class LLMManager {
     )
     LogHelper.success(`LLM manager initialized with ${llmDisplay.value}`)
     LogHelper.timeEnd('LLM Manager init')
+    const { MEMORY_MANAGER } = await import('@/core')
+    void MEMORY_MANAGER.requestTemporaryLocationBackfill()
   }
 
   public async refreshSkillListContent(): Promise<void> {

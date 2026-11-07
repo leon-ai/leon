@@ -8,6 +8,7 @@ import { useToast } from '@/components/toast'
 import { PROFILE_AUTH_QUERY_KEY } from './profile-query'
 import type { ProfileAuthentication } from '../../../../server/src/core/http-server/profile-auth-contract'
 import { markSessionRead } from './session-read-state'
+import type { SessionSearchMatch } from '../../../../server/src/core/session-manager/session-search-contract'
 
 export enum SessionStatus {
   Idle = 'idle',
@@ -37,6 +38,7 @@ export interface SessionsPage {
   sessions: ConversationSession[]
   next_cursor: string | null
   event_cursor: number
+  search_matches?: Record<string, SessionSearchMatch>
 }
 
 export const sessionsQueryKey = ['sessions'] as const
@@ -70,22 +72,28 @@ export function sessionsQueryOptions(profile: string, query = ''): UseInfiniteQu
  */
 export function useSessions(profile: string, query = ''): UseInfiniteQueryResult<InfiniteData<SessionsPage>, Error> & {
   sessions: ConversationSession[]
+  searchMatches: Record<string, SessionSearchMatch>
 } {
   const result = useInfiniteQuery(sessionsQueryOptions(profile, query))
-  const sessions = useMemo(() => {
+  const { sessions, searchMatches } = useMemo(() => {
     const unique = new Map<string, ConversationSession>()
+    const matches = new Map<string, SessionSearchMatch>()
     for (const page of result.data?.pages ?? []) {
       for (const session of page.sessions) {
         if (!unique.has(session.id)) {
           unique.set(session.id, session)
+          const match = page.search_matches?.[session.id]
+          if (match) {
+            matches.set(session.id, match)
+          }
         }
       }
     }
 
-    return [...unique.values()]
+    return { sessions: [...unique.values()], searchMatches: Object.fromEntries(matches) }
   }, [result.data])
 
-  return { ...result, sessions }
+  return { ...result, sessions, searchMatches }
 }
 
 /**

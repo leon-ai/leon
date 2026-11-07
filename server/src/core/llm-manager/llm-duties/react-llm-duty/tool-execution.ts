@@ -17,6 +17,7 @@ import { getConnectionRequirements } from '@/core/connections/connection-catalog
 import { LEON_HOME_PATH } from '@/leon-roots'
 import { ToolExecutionOrigin } from '@/types'
 import type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import type { ToolExecutionInput } from '@/core/tool-manager/tool-executor'
 
 import { DUTY_NAME } from './agent-constants'
 import { buildBoundedToolObservation } from './agent-context-budget'
@@ -294,6 +295,9 @@ export function emitToolExecutionOutputToWebApp(params: {
   })
 }
 
+/**
+ * Runs an agent tool call and keeps retained preparation/output on its original card.
+ */
 export async function runToolExecution(
   toolkitId: string,
   toolId: string,
@@ -307,25 +311,17 @@ export async function runToolExecution(
   ) => void,
   signal?: AbortSignal,
   onPreparationProgress?: (message: string) => Promise<void>,
-  streamedToolGroupId?: string
+  streamedToolGroupId?: string,
+  retainedSignal?: AbortSignal
 ): Promise<ToolExecutionResult> {
   signal?.throwIfAborted()
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
   const requestedToolInput = toolInput
 
-  const toolExecutionInput: {
-    origin: ToolExecutionOrigin
-    signal?: AbortSignal
-    toolId: string
-    toolkitId: string
-    functionName: string
-    retainExecution: boolean
-    toolInput: string
-    parsedInput?: Record<string, unknown>
-    onProgress?: (progress: ToolRuntimeProgress) => void
-  } = {
+  const toolExecutionInput: ToolExecutionInput = {
     origin: ToolExecutionOrigin.Agent,
     ...(signal ? { signal } : {}),
+    ...(retainedSignal ? { retainedSignal } : {}),
     toolId,
     toolkitId,
     functionName,
@@ -461,6 +457,7 @@ export async function runToolExecution(
   let commandOutput = ''
   let progressStream: ToolRuntimeProgress['stream']
   let completedStreamProgress: ToolRuntimeProgress | undefined
+  let lastPreparationProgress: ToolRuntimeProgress | undefined
 
   toolExecutionInput.onProgress = (progress): void => {
     // Explicit streams belong to retained work; ordinary reports still end
@@ -502,6 +499,11 @@ export async function runToolExecution(
           ...(toolCallTitle ? { toolCallTitle } : {}),
           ...(stepLabel ? { stepLabel } : {})
         })
+        if (didFinishToolCall && didNotifyOwnerPreparationStarted && status === 'success') {
+          void onPreparationProgress?.(
+            BRAIN.wernicke('react.tool.ready', '', { '{{ tool_name }}': toolDisplayContext.toolName })
+          )
+        }
         return
       }
     }
@@ -563,6 +565,12 @@ export async function runToolExecution(
 
     if (isPreparationStart) {
       didObservePreparationStarted = true
+    }
+    if (
+      isPreparationStart || isPreparationFailure ||
+      (didObservePreparationStarted && TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key))
+    ) {
+      lastPreparationProgress = progress
     }
 
     // Cached binaries also report readiness; only actual setup belongs in
@@ -645,18 +653,28 @@ export async function runToolExecution(
 
   try {
     toolExecutionResult = await runTurnPhase(TurnPhase.Tool, () => TOOL_EXECUTOR.executeTool(toolExecutionInput))
-    signal?.throwIfAborted()
+    // A follow-up interrupts waiting, not the retained operation. Return its
+    // handle and latest report so the next inference can inspect the same work.
+    if (toolExecutionResult.data.output['execution']) {
+      const executionSignal = retainedSignal ?? signal
+      executionSignal?.throwIfAborted()
+    } else {
+      signal?.throwIfAborted()
+    }
   } catch (error) {
     didFinishToolCall = true
     const durationMs = Math.max(0, performance.now() - executionStartedAt)
-    const message = error instanceof Error ? error.message : String(error)
+    const reason = error instanceof Error ? error.message : String(error)
+    const message = lastPreparationProgress
+      ? `${reason}\nLast preparation report (not proof of ongoing work): ${lastPreparationProgress.message}`
+      : reason
 
     emitToolExecutionOutputToWebApp({
       toolkitId,
       toolId,
       functionName,
       toolGroupId,
-      output: {},
+      output: lastPreparationProgress ? { preparation: lastPreparationProgress } : {},
       status: 'error',
       message,
       durationMs,
@@ -676,7 +694,7 @@ export async function runToolExecution(
       ...(stepLabel ? { stepLabel } : {})
     })
 
-    throw error
+    throw lastPreparationProgress ? new Error(message, { cause: error }) : error
   }
 
   didFinishToolCall = true
@@ -738,7 +756,8 @@ export async function runToolExecution(
   if (
     didNotifyOwnerPreparationStarted &&
     !didObservePreparationFailure &&
-    effectiveStatus === 'success'
+    effectiveStatus === 'success' &&
+    progressStream?.state !== 'running'
   ) {
     await onPreparationProgress?.(
       BRAIN.wernicke('react.tool.ready', '', {
@@ -755,7 +774,7 @@ export async function runToolExecution(
     ? 'running'
     : progressStream?.state === 'failed' ? 'error' : effectiveStatus
   const displayedMessage = isStreamRunning
-    ? 'The command is running. Output will appear as it arrives.'
+    ? lastPreparationProgress?.message || 'The tool is running. Progress will appear as it arrives.'
     : completedStreamProgress?.message || effectiveMessage
 
   emitToolExecutionOutputToWebApp({

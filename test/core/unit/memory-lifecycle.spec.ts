@@ -34,7 +34,7 @@ vi.mock('@/core/config-states/config-state', () => ({
     })
   }
 }))
-vi.mock('@/core', () => ({ LLM_PROVIDER: { prompt: state.prompt } }))
+vi.mock('@/core', () => ({ LLM_PROVIDER: { prompt: state.prompt, isLLMProviderReady: false } }))
 vi.mock('@/core/tool-manager/tool-settings', () => ({
   ToolSettings: { loadToolSettings: (): Record<string, unknown> => state.settings }
 }))
@@ -77,6 +77,111 @@ describe('memory lifecycle', () => {
       sourceRef: 'session:owner:turn:1', ...options
     })
   }
+
+  function queueLocationBackfill(...records: MemoryRecord[]): void {
+    const { db } = repository as unknown as { db: Database }
+    const insert = db.prepare('INSERT INTO temporary_location_backfill (item_id, expected_updated_at) VALUES (?, ?)')
+    for (const record of records) {
+      insert.run(record.id, record.updatedAt)
+    }
+  }
+
+  function normalizeQueuedLocations(): Promise<void> {
+    return (manager as unknown as { normalizeQueuedTemporaryLocations(): Promise<void> }).normalizeQueuedTemporaryLocations()
+  }
+
+  it('normalizes queued owner evidence once without rewriting its validity or provenance', async () => {
+    const record = await remember('I am staying in Lyon for a week.', {
+      scope: 'temporary', metadata: { evidence: 'I am staying in Lyon for a week.' }
+    })
+    queueLocationBackfill(record)
+    state.prompt.mockResolvedValueOnce({ output: {
+      itemId: record.id, currentLocation: { city: 'Lyon', country: 'France' }, evidence: record.metadata['evidence']
+    } })
+    await normalizeQueuedLocations()
+    const current = repository.getMemoryItem(record.id)!
+    expect({ ...current, metadata: record.metadata }).toEqual(record)
+    expect(current.metadata).toEqual({ ...record.metadata, currentLocation: { city: 'Lyon', country: 'France' } })
+    expect(await manager.getTemporaryLocation()).toEqual({ city: 'Lyon', country: 'France' })
+    await normalizeQueuedLocations()
+    expect(state.prompt).toHaveBeenCalledTimes(1)
+  })
+
+  it('resolves a later return home without reviving older queued stays', async () => {
+    const former = await remember('I am in Lyon.', { scope: 'temporary', metadata: { evidence: 'I am in Lyon.' } })
+    const home = await remember('I am back home.', { scope: 'temporary', metadata: { evidence: 'I am back home.' } })
+    queueLocationBackfill(former, home)
+    state.prompt.mockResolvedValueOnce({ output: {
+      itemId: home.id, currentLocation: null, evidence: 'I am back home.'
+    } })
+    await normalizeQueuedLocations()
+    expect(await manager.getTemporaryLocation()).toBeNull()
+    expect(repository.getMemoryItem(former.id)).toEqual(former)
+    expect(repository.getMemoryItem(home.id)).toEqual(home)
+    expect(repository.hasTemporaryLocationBackfill()).toBe(false)
+  })
+
+  it.each(['expired', 'edited'])('skips %s evidence instead of applying an in-flight normalization', async (change) => {
+    const record = await remember('I am in Lyon.', { scope: 'temporary', metadata: { evidence: 'I am in Lyon.' } })
+    queueLocationBackfill(record)
+    state.prompt.mockImplementationOnce(async () => {
+      const { db } = repository as unknown as { db: Database }
+      if (change === 'expired') {
+        db.prepare('UPDATE memory_items SET expires_at = ? WHERE id = ?').run(Date.now() - 1, record.id)
+      } else {
+        db.prepare('UPDATE memory_items SET content_md = ?, updated_at = ? WHERE id = ?')
+          .run('The owner corrected this fact.', record.updatedAt + 1, record.id)
+      }
+      return { output: { itemId: record.id, currentLocation: { city: 'Lyon' }, evidence: 'I am in Lyon.' } }
+    })
+    await normalizeQueuedLocations()
+    expect(repository.getMemoryItem(record.id)?.metadata).toEqual(record.metadata)
+    expect(await manager.getTemporaryLocation()).toBeNull()
+    expect(repository.hasTemporaryLocationBackfill()).toBe(false)
+  })
+
+  it('preserves newer current-location evidence that arrives while backfill is running', async () => {
+    const record = await remember('I am in Lyon.', { scope: 'temporary', metadata: { evidence: 'I am in Lyon.' } })
+    queueLocationBackfill(record)
+    state.prompt.mockImplementationOnce(async () => {
+      await remember('I am now in Nantes.', {
+        scope: 'temporary', sourceRef: 'fixture:new-owner-message',
+        metadata: { evidence: 'I am now in Nantes.', evidenceAt: record.updatedAt + 1_000, currentLocation: { city: 'Nantes' } }
+      })
+      return { output: { itemId: record.id, currentLocation: { city: 'Lyon' }, evidence: 'I am in Lyon.' } }
+    })
+    await normalizeQueuedLocations()
+    expect(await manager.getTemporaryLocation()).toEqual({ city: 'Nantes' })
+    expect(repository.getMemoryItem(record.id)?.metadata).toEqual(record.metadata)
+  })
+
+  it('leases durable work and retries failures without renewing the source record', async () => {
+    const record = await remember('I am in Lyon.', { scope: 'temporary', metadata: { evidence: 'I am in Lyon.' } })
+    queueLocationBackfill(record)
+    state.prompt.mockRejectedValueOnce(new Error('Offline'))
+    await expect(normalizeQueuedLocations()).rejects.toThrow('Offline')
+    expect(repository.claimTemporaryLocationBackfill(6, 60_000)).toEqual([])
+    expect(repository.getMemoryItem(record.id)).toEqual(record)
+    const { db } = repository as unknown as { db: Database }
+    db.prepare('UPDATE temporary_location_backfill SET retry_after = 0').run()
+    state.prompt.mockResolvedValueOnce({ output: { itemId: null, currentLocation: null, evidence: null } })
+    await normalizeQueuedLocations()
+    expect(repository.hasTemporaryLocationBackfill()).toBe(false)
+    expect(repository.getMemoryItem(record.id)).toEqual(record)
+  })
+
+  it('keeps normalization pending when its result invents owner evidence', async () => {
+    const record = await remember('I am in Lyon.', { scope: 'temporary', metadata: { evidence: 'I am in Lyon.' } })
+    queueLocationBackfill(record)
+    state.prompt.mockResolvedValueOnce({ output: {
+      itemId: record.id, currentLocation: { city: 'Madrid' }, evidence: 'I am in Madrid.'
+    } })
+    await expect(normalizeQueuedLocations()).rejects.toThrow('valid owner evidence')
+    expect(repository.getMemoryItem(record.id)).toEqual(record)
+    const { db } = repository as unknown as { db: Database }
+    expect(db.prepare('SELECT completed_at FROM temporary_location_backfill WHERE item_id = ?').get(record.id))
+      .toEqual({ completed_at: null })
+  })
 
   function mirrorPath(record: MemoryRecord): string {
     if (record.scope !== 'persistent') {
@@ -455,13 +560,78 @@ describe('memory lifecycle', () => {
   it('extracts temporary circumstances with multilingual owner evidence in the existing background call', async () => {
     const evidence = '这周我住在株洲。'
     state.prompt.mockResolvedValueOnce({ output: { items: [{
-      scope: 'temporary', content: evidence, evidence, expiresAt: null
+      scope: 'temporary', content: evidence, evidence, expiresAt: null,
+      currentLocation: { city: '株洲', country: 'China' }
     }] } })
     expect(await manager.saveMemoryCandidatesFromTurn(evidence, 'Noted.', Date.now())).toBe(1)
     expect(state.prompt).toHaveBeenCalledTimes(1)
     expect((await manager.getTemporaryContext()).map((entry) => entry.content)).toEqual([evidence])
     expect(repository.listPersistentMirrorRecords()).toEqual([])
+    expect(await manager.getTemporaryLocation()).toEqual({ city: '株洲', country: 'China' })
   })
+
+  it('reads structured location independently of prompt limits without interpreting travel text', async () => {
+    await remember('Next month I will visit Madrid.', {
+      scope: 'temporary', metadata: { evidence: 'Next month I will visit Madrid.' }
+    })
+    expect(await manager.getTemporaryLocation()).toBeNull()
+    const location = await remember('I am staying in Lyon for a week.', {
+      scope: 'temporary', importance: 0.1,
+      metadata: { evidence: 'I am staying in Lyon for a week.', currentLocation: { city: ' Lyon ', country: ' France ' } }
+    })
+    for (let index = 0; index < DEFAULT_TEMPORARY_MEMORY_POLICY.maxItems; index++) {
+      await remember(`Project ${index} has a review this week.`, {
+        scope: 'temporary', importance: 1, metadata: { evidence: `Project ${index} has a review this week.` }
+      })
+    }
+
+    expect((await manager.getTemporaryContext()).some((entry) => entry.id === location.id)).toBe(false)
+    expect(await manager.getTemporaryLocation()).toEqual({ city: 'Lyon', country: 'France' })
+    expect(state.prompt).not.toHaveBeenCalled()
+  })
+
+  it('retires older stays so expiry cannot revive a previous location', async () => {
+    const former = await remember('I am in Lyon.', {
+      scope: 'temporary', expiresAt: Date.now() + 14 * 24 * 60 * 60 * 1_000,
+      metadata: { evidence: 'I am in Lyon.', currentLocation: { city: 'Lyon' } }
+    })
+    const current = await remember('I am now in Nantes.', {
+      scope: 'temporary', sourceRef: 'session:owner:turn:2',
+      expiresAt: Date.now() + 60_000,
+      metadata: { evidence: 'I am now in Nantes.', currentLocation: { city: 'Nantes' } }
+    })
+    expect(repository.getActiveMemoryItem(former.id)).toBeNull()
+    expect(await manager.getTemporaryLocation()).toEqual({ city: 'Nantes' })
+    const { db } = repository as unknown as { db: Database }
+    db.prepare('UPDATE memory_items SET expires_at = ? WHERE id = ?').run(Date.now() - 1_000, current.id)
+    expect(await manager.getTemporaryLocation()).toBeNull()
+  })
+
+  it('keeps location retries idempotent and rejects stale owner evidence', async () => {
+    const now = Date.now()
+    const options: Partial<MemoryWriteInput> = {
+      scope: 'temporary', expiresAt: now + 60_000,
+      metadata: { evidence: 'I am in Lyon.', evidenceAt: now, currentLocation: { city: 'Lyon' } }
+    }
+    const first = await remember('I am in Lyon.', options)
+    const retried = await remember('I am in Lyon.', { ...options, expiresAt: now + 120_000 })
+    expect(retried.expiresAt).toBe(first.expiresAt)
+    await expect(remember('I am in Madrid.', {
+      scope: 'temporary', sourceRef: 'session:earlier:turn:1',
+      metadata: { evidence: 'I am in Madrid.', evidenceAt: now - 1_000, currentLocation: { city: 'Madrid' } }
+    })).rejects.toThrow('Newer current-location evidence')
+    expect(await manager.getTemporaryLocation()).toEqual({ city: 'Lyon' })
+    await manager.forgetById(first.id)
+    expect(await manager.getTemporaryLocation()).toBeNull()
+  })
+
+  it.each([{ city: ' ' }, { city: 'Lyon', country: 42 }, ['Lyon']])(
+    'rejects malformed structured current locations: %j', async (currentLocation) => {
+      await expect(remember('A temporary fact.', {
+        scope: 'temporary', metadata: { evidence: 'A temporary fact.', currentLocation }
+      })).rejects.toThrow('temporary current location')
+    }
+  )
 
   it('uses fresh background evidence to correct or end an existing temporary situation', async () => {
     const first = await remember('Staying in Lyon.', {

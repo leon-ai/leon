@@ -6,7 +6,9 @@ import './sidebar.sass'
 import { getPublicAssetPath } from '@/config'
 import { Button } from '@/components/button'
 import { Dialog } from '@/components/dialog'
-import { SearchSessionsDialog } from '@/components/search-sessions-dialog'
+import { Loader } from '@/components/loader'
+import { prefetchModule } from '@/utils/prefetch'
+import { useToast } from '@/components/toast'
 import { useTheme } from '@/hooks/use-theme'
 import { loadImage } from '@/utils/load-image'
 import {
@@ -29,6 +31,58 @@ const LIGHT_THEME_LOGO_SRC = getPublicAssetPath(
 )
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SCROLL_MASK_FADE_DISTANCE_PX = 54
+type SearchModule = typeof import('@/components/search-sessions-dialog')
+// Warmed dialogs render immediately; failed imports remain retryable on demand.
+let searchModule: SearchModule | undefined
+let searchRequest: Promise<SearchModule> | undefined
+
+function loadSearchSessions(): Promise<SearchModule> {
+  searchRequest ??= import('@/components/search-sessions-dialog').then((module) => {
+    searchModule = module
+    return module
+  }).catch((error: unknown) => {
+    searchRequest = undefined
+    throw error
+  })
+
+  return searchRequest
+}
+
+function DeferredSearchSessions({ onSessionSelect }: { onSessionSelect: () => void }) {
+  const [content, setContent] = useState(() => searchModule)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const { showToast } = useToast()
+  useEffect(() => {
+    let cancelled = false
+    void loadSearchSessions().then((module) => {
+      if (!cancelled) {
+        setContent(module)
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setFailed(true)
+        showToast({ type: 'error', title: 'Could not load search', description: 'Check your network connection and try again.' })
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [attempt, showToast])
+
+  if (content) {
+    return <content.SearchSessionsDialog onSessionSelect={onSessionSelect} />
+  }
+  if (failed) {
+    return <Button onClick={() => {
+      setFailed(false)
+      setAttempt((value) => value + 1)
+    }}>Retry loading search</Button>
+  }
+
+  return <Loader size="sm" label="Loading search…" />
+}
 
 function shouldReduceMotion(): boolean {
   return window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
@@ -225,6 +279,7 @@ export function Sidebar() {
         collapsed={sidebarContentCollapsed}
         variant="fixed"
         onSearchSessions={openSearchSessionsDialog}
+        onSearchIntent={() => prefetchModule(loadSearchSessions)}
       />
       <div
         className={clsx('sidebar-scroll-area', {
@@ -261,7 +316,7 @@ export function Sidebar() {
         ]}
         onClose={closeSearchSessionsDialog}
       >
-        <SearchSessionsDialog
+        <DeferredSearchSessions
           onSessionSelect={() => {
             searchReturnFocusRef.current = null
             setSearchSessionsDialogOpen(false)

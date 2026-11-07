@@ -1,0 +1,43 @@
+.visual-preview
+  display: block
+  max-width: 100%
+  padding: 0
+  border: 0
+  border-radius: var(--border-radius-md)
+  background: transparent
+  color: inherit
+  cursor: zoom-in
+
+  &:focus-visible
+    outline: 2px solid var(--color-accent)
+    outline-offset: var(--space-xs)
+
+  > img, svg
+    display: block
+    max-width: 100%
+    max-height: 480px
+    object-fit: contain
+    border-radius: inherit
+
+.visual-preview-full-width
+  width: 100%
+
+.visual-dialog-content
+  max-height: calc(100dvh - 160px)
+  overflow: auto
+  overscroll-behavior: contain
+  scrollbar-width: thin
+
+  > img, svg
+    display: block
+    width: auto
+    max-width: none
+    min-width: min(100%, 600px)
+    height: auto
+    margin: auto
+
+  > img
+    min-width: 0
+
+  > .visual-diagram-image
+    min-width: min(100%, 600px)

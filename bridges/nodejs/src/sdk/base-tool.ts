@@ -4,6 +4,7 @@ import type {
   ToolRuntimeProgress
 } from './tool-runtime-types'
 export type { ToolModelFile } from './tool-runtime-types'
+import { ToolRuntimePhase } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -73,6 +74,11 @@ export class ConnectionRequiredError extends Error {}
 
 export abstract class Tool {
   protected executionContext: ToolExecutionContext | null = null
+  private readonly preparations = new Set<Promise<unknown>>()
+  /**
+   * Declares emitted text as rich prose only when the producer opts in.
+   */
+  protected outputFormat = 'text'
 
   /**
    * Reset per-call evidence even when the tool instance survives between requests.
@@ -80,6 +86,48 @@ export abstract class Tool {
   public async prepareExecution(context: ToolExecutionContext): Promise<void> {
     this.executionContext = context
     this.modelFiles.length = 0
+  }
+
+  /**
+   * Drains parallel asset preparation before a worker releases its resources.
+   */
+  public async waitForPreparation(): Promise<void> {
+    while (this.preparations.size > 0) {
+      await Promise.allSettled([...this.preparations])
+    }
+  }
+
+  /**
+   * Keeps asset preparation separate from the action that depends on it.
+   */
+  private async withPreparation<T>(prepare: () => Promise<T>): Promise<T> {
+    const context = this.executionContext
+    context?.signal?.throwIfAborted()
+    if (this.preparations.size === 0) {
+      context?.onProgress?.({
+        source: 'report', message: 'Preparing tool assets.', phase: ToolRuntimePhase.Preparation
+      })
+    }
+
+    const pending = Promise.resolve().then(async () => {
+      const result = await prepare()
+      context?.signal?.throwIfAborted()
+      await context?.onPreparationComplete?.()
+      context?.signal?.throwIfAborted()
+
+      return result
+    })
+    this.preparations.add(pending)
+    try {
+      return await pending
+    } finally {
+      this.preparations.delete(pending)
+      if (this.preparations.size === 0) {
+        context?.onProgress?.({
+          source: 'report', message: 'Tool asset preparation finished.', phase: ToolRuntimePhase.Execution
+        })
+      }
+    }
   }
 
   /**
@@ -107,11 +155,17 @@ export abstract class Tool {
           activity: true,
           key: 'bridges.tools.output_delta',
           message: chunk,
-          data: { output: chunk },
+          data: {
+            output: chunk,
+            ...(this.outputFormat === 'text' ? {} : { format: this.outputFormat })
+          },
           ...(stream ? { stream } : {})
         })
       } else {
-        void this.report('bridges.tools.output_delta', { output: chunk })
+        void this.report('bridges.tools.output_delta', {
+          output: chunk,
+          ...(this.outputFormat === 'text' ? {} : { format: this.outputFormat })
+        })
       }
     }
   }
@@ -120,12 +174,17 @@ export abstract class Tool {
    * Report advancing work without fabricating text output or exposing private data.
    */
   protected emitProgress(message: string, context = this.executionContext): void {
-    if (context?.signal?.aborted) {
+    if (context?.signal?.aborted && this.preparations.size === 0) {
       return
     }
 
     if (context?.onProgress) {
-      context.onProgress({ source: 'report', message, activity: true })
+      context.onProgress({
+        source: 'report',
+        message,
+        activity: true,
+        ...(this.outputFormat === 'text' ? {} : { data: { format: this.outputFormat } })
+      })
     } else {
       this.log(message)
     }
@@ -850,33 +909,35 @@ export abstract class Tool {
       }
     }
 
-    await this.report('bridges.tools.checking_binary', {
-      binary_name: binaryName
-    })
-
-    // Ensure toolkit bins directory exists
-    if (!fs.existsSync(binsPath)) {
-      await this.report('bridges.tools.creating_bins_directory', {
-        toolkit: this.toolkit
-      })
-      fs.mkdirSync(binsPath, { recursive: true })
-    }
-
-    // Ensure binary is available before returning path
-    if (!binaryExists) {
-      await this.downloadBinaryOnDemand(binaryName, binaryUrl, executable)
-    } else if (!isWindows()) {
-      await this.report('bridges.tools.applying_permissions', {
+    return this.withPreparation(async () => {
+      await this.report('bridges.tools.checking_binary', {
         binary_name: binaryName
       })
-      fs.chmodSync(binaryPath, 0o755)
-    }
 
-    await this.report('bridges.tools.binary_ready', {
-      binary_name: binaryName
+      // Ensure toolkit bins directory exists
+      if (!fs.existsSync(binsPath)) {
+        await this.report('bridges.tools.creating_bins_directory', {
+          toolkit: this.toolkit
+        })
+        fs.mkdirSync(binsPath, { recursive: true })
+      }
+
+      // Ensure binary is available before returning path
+      if (!binaryExists) {
+        await this.downloadBinaryOnDemand(binaryName, binaryUrl, executable)
+      } else if (!isWindows()) {
+        await this.report('bridges.tools.applying_permissions', {
+          binary_name: binaryName
+        })
+        fs.chmodSync(binaryPath, 0o755)
+      }
+
+      await this.report('bridges.tools.binary_ready', {
+        binary_name: binaryName
+      })
+
+      return binaryPath
     })
-
-    return binaryPath
   }
 
   private formatCommandOutput(output: string): string | null {
@@ -945,16 +1006,6 @@ export abstract class Tool {
       resourceName
     )
 
-    // Ensure toolkit bins directory exists
-    if (!fs.existsSync(resourcePath)) {
-      await this.report('bridges.tools.creating_resource_directory', {
-        resource_name: resourceName,
-        resource_path: formatFilePath(resourcePath)
-      })
-
-      fs.mkdirSync(resourcePath, { recursive: true })
-    }
-
     // Check if all resource files exist and are complete
     if (this.isResourceComplete(resourcePath, resourceUrls)) {
       await this.report('bridges.tools.resource_already_exists', {
@@ -965,64 +1016,69 @@ export abstract class Tool {
       return resourcePath
     }
 
-    await this.report('bridges.tools.downloading_resource', {
-      resource_name: resourceName
-    })
-
-    // Download each resource file
-    for (const resourceUrl of resourceUrls) {
-      const adjustedUrl = await setHuggingFaceURL(resourceUrl)
-
-      const relativePath = this.getResourceRelativePath(adjustedUrl)
-
-      if (!relativePath) {
-        throw new Error(`Invalid filename extracted from URL: ${adjustedUrl}`)
+    return this.withPreparation(async () => {
+      if (!fs.existsSync(resourcePath)) {
+        await this.report('bridges.tools.creating_resource_directory', {
+          resource_name: resourceName,
+          resource_path: formatFilePath(resourcePath)
+        })
+        fs.mkdirSync(resourcePath, { recursive: true })
       }
 
-      const fileName = path.basename(relativePath)
-      const filePath = path.join(resourcePath, relativePath)
-
-      await this.report('bridges.tools.downloading_resource_file', {
-        resource_name: resourceName,
-        file_name: fileName,
-        url: adjustedUrl
+      await this.report('bridges.tools.downloading_resource', {
+        resource_name: resourceName
       })
 
-      try {
-        await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-        await FileDownloader.downloadFile(adjustedUrl, filePath, {
-          cliProgress: false,
-          parallelStreams: 3,
-          skipExisting: false,
-          onProgress: this.createDownloadProgressListener(fileName)
+      // Download each resource file
+      for (const resourceUrl of resourceUrls) {
+        const adjustedUrl = await setHuggingFaceURL(resourceUrl)
+        const relativePath = this.getResourceRelativePath(adjustedUrl)
+
+        if (!relativePath) {
+          throw new Error(`Invalid filename extracted from URL: ${adjustedUrl}`)
+        }
+
+        const fileName = path.basename(relativePath)
+        const filePath = path.join(resourcePath, relativePath)
+        await this.report('bridges.tools.downloading_resource_file', {
+          resource_name: resourceName,
+          file_name: fileName,
+          url: adjustedUrl
         })
 
-        await this.report('bridges.tools.resource_file_downloaded', {
-          resource_name: resourceName,
-          file_name: fileName,
-          file_path: filePath
-        })
-      } catch (error) {
-        await this.report('bridges.tools.resource_file_download_failed', {
-          resource_name: resourceName,
-          file_name: fileName,
-          url: adjustedUrl,
-          error: (error as Error).message
-        })
-        throw new Error(
-          `Failed to download resource file ${fileName}: ${
-            (error as Error).message
-          }`
-        )
+        try {
+          await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+          await FileDownloader.downloadFile(adjustedUrl, filePath, {
+            cliProgress: false,
+            parallelStreams: 3,
+            skipExisting: false,
+            onProgress: this.createDownloadProgressListener(fileName)
+          })
+          await this.report('bridges.tools.resource_file_downloaded', {
+            resource_name: resourceName,
+            file_name: fileName,
+            file_path: filePath
+          })
+        } catch (error) {
+          await this.report('bridges.tools.resource_file_download_failed', {
+            resource_name: resourceName,
+            file_name: fileName,
+            url: adjustedUrl,
+            error: (error as Error).message
+          })
+          throw new Error(
+            `Failed to download resource file ${fileName}: ${(error as Error).message}`
+          )
+        }
       }
-    }
 
-    await this.report('bridges.tools.resource_downloaded', {
-      resource_name: resourceName,
-      resource_path: formatFilePath(resourcePath)
+      await this.report('bridges.tools.resource_downloaded', {
+        resource_name: resourceName,
+        resource_path: formatFilePath(resourcePath)
+      })
+
+      return resourcePath
     })
-
-    return resourcePath
   }
 
   /**

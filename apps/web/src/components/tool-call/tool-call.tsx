@@ -9,9 +9,9 @@ import { Collapse } from '@/components/collapse'
 import { useToolCallContents } from '@/data/conversation-details'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
 import { ActivityDetails } from '@/components/activity-details/activity-details'
-import { toToolContent, toToolInput } from '@/utils/tool-content'
+import { getToolOutputFormat, toToolContent, toToolDisplayContent, toToolInput } from '@/utils/tool-content'
 import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
-import { ToolChanges, ToolOutput } from './tool-output'
+import { prefetchToolDiff, ToolChanges, ToolOutput } from './tool-output'
 import { useOpenToolDetails } from '@/components/activity-details/activity-details-provider'
 
 import './tool-call.sass'
@@ -59,9 +59,11 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
   const [isExpanded, setIsExpanded] = useState(false)
   const disclosure = useToolCallContents(toolCall.id, isExpanded)
   const liveOutput = useMemo(() => toToolContent(toolCall.output), [toolCall.output])
-  const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, false, true), [toolCall.commandOutput])
-  const command = liveCommand ?? disclosure.data?.commandOutput ?? disclosure.data?.displayOutput
-  const output = command ?? liveOutput ?? disclosure.data?.output
+  const format = getToolOutputFormat(toolCall.output)
+  const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, false, format !== 'markdown', format), [toolCall.commandOutput, format])
+  const display = useMemo(() => toToolDisplayContent(toolCall.output), [toolCall.output])
+  const command = liveCommand ?? disclosure.data?.commandOutput
+  const output = display ?? disclosure.data?.displayOutput ?? command ?? liveOutput ?? disclosure.data?.output
   const liveInput = useMemo(() => toToolInput(toolCall.input === null ? undefined : toolCall.input), [toolCall.input])
   const changesAvailable = toolCall.status === 'success' && (hasToolChanges(toolCall.output) || disclosure.data?.hasChanges === true)
   const input = liveInput ?? disclosure.data?.input
@@ -93,7 +95,12 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
           aria-expanded={isExpanded}
           aria-controls={detailsId}
           aria-description={toolCall.status === 'error' ? 'Tool call failed' : undefined}
-          onClick={() => setIsExpanded((isOpen) => !isOpen)}
+          onClick={() => {
+            if (!isExpanded && changesAvailable) {
+              prefetchToolDiff()
+            }
+            setIsExpanded((isOpen) => !isOpen)
+          }}
         >
           <span className="tool-call-label">
             <ActivityWave
@@ -130,6 +137,7 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
               fallback={<ToolOutput content={output} label="Tool output" preview />} />
           ) : (
             <ToolOutput content={output} label="Tool output" active={isActive}
+              animationId={`${toolCall.id}:output`}
               loading={disclosure.isFetching} preview
               previewTail={liveCommand !== undefined || disclosure.data?.commandOutput !== undefined} />
           )}

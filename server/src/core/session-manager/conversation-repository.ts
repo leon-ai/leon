@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import SQLite from 'better-sqlite3'
 import type { Database } from 'better-sqlite3'
@@ -31,17 +31,28 @@ import type { ToolCallContents, ToolContentPart } from './tool-content-contract'
 
 import type { ConversationSession } from './index'
 import { getSessionSearchTerms } from './session-search'
+import { normalizeSearchText, prepareSearchQuery, rankSearchFields, SearchRank } from '@/helpers/search-helper'
+import type { SearchQuery } from '@/helpers/search-helper'
+import { MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS } from './session-search-contract'
+import type { SessionSearchMatch } from './session-search-contract'
 
 const DEFAULT_PAGE_SIZE = 40
 const MAXIMUM_PAGE_SIZE = 100
 const MAXIMUM_REPLAY_EVENTS = 10_000
 const MAXIMUM_REPLAY_BYTES = 16 * 1_024 * 1_024
 const MAXIMUM_QUERY_HISTORY_CHARACTERS = 128 * 1_024
+const SESSION_SEARCH_EXCERPT_TOKENS = 16
+const SESSION_SEARCH_EXCERPT_LEADING_CHARACTERS = 24
 const FYI_VISION_ROTATION_KEY = 'fyi_vision_rotation'
 const UI_MESSAGE_FILTER = `(visible = 1 OR trace_id IS NOT NULL
   OR json_type(summary, '$.agentResponseTrace') = 'object'
   OR json_array_length(summary, '$.artifacts') > 0
   OR json_type(summary, '$.widget') = 'object')`
+
+enum ContentMatchRank {
+  Phrase,
+  Terms
+}
 
 export type ConversationCommandStatus = 'accepted' | 'completed' | 'stopped' | 'error' | 'interrupted'
 
@@ -71,6 +82,15 @@ interface SessionCursor {
   pinned: number
   activity: number
   id: string
+  rank?: number
+  search?: string
+  phrase?: ContentMatchRank
+  score?: number
+  source?: number | null
+}
+
+interface SessionPage extends ConversationPage<ConversationSession> {
+  searchMatches?: Record<string, SessionSearchMatch>
 }
 
 interface ArchiveCursor {
@@ -139,6 +159,9 @@ export class ConversationRepository {
     fs.mkdirSync(sessionsPath, { recursive: true })
     this.db = new SQLite(path.join(sessionsPath, CONVERSATION_DATABASE_FILENAME))
     try {
+      this.db.function('session_title_rank', { deterministic: true }, (title: string, query: string) =>
+        rankSearchFields([normalizeSearchText(title)], JSON.parse(query) as SearchQuery)
+      )
       initializeConversationArchive(this.db, sessionsPath)
     } catch (error) {
       this.db.close()
@@ -232,28 +255,24 @@ export class ConversationRepository {
     limit?: number
     cursor?: string
     query?: string
-  } = {}): ConversationPage<ConversationSession> {
+  } = {}): SessionPage {
     const limit = pageSize(options.limit)
     const cursor = parseSessionCursor(options.cursor)
-    const query = options.query?.normalize('NFKC').trim() ?? ''
+    const query = options.query?.trim() ?? ''
+    const prepared = prepareSearchQuery(query)
+    if (prepared.compact) {
+      return this.db.transaction(() => this.searchSessionPage(query, prepared, limit, cursor))()
+    }
+    if (cursor?.rank !== undefined || cursor?.search !== undefined ||
+      cursor?.phrase !== undefined || cursor?.score !== undefined || cursor?.source !== undefined) {
+      throw new Error('The session cursor belongs to another search.')
+    }
     const filters: string[] = []
     const values: unknown[] = []
 
     if (cursor) {
       filters.push('(pinned, activity_at, id) < (?, ?, ?)')
       values.push(cursor.pinned, cursor.activity, cursor.id)
-    }
-
-    if (query) {
-      const terms = getSessionSearchTerms(query)
-      const match = terms.map((term) => `"${term.replaceAll('"', '""')}"*`).join(' AND ')
-      filters.push(terms.length > 0
-        ? `(instr(lower(title), lower(?)) > 0 OR id IN (
-            SELECT session_id FROM conversation_search WHERE conversation_search MATCH ?
-          ))`
-        : 'instr(lower(title), lower(?)) > 0')
-      // Quoting treats FTS operators as text rather than accepting query syntax.
-      values.push(query, ...(match ? [match] : []))
     }
 
     const rows = this.db.prepare(`SELECT id, pinned, activity_at, payload
@@ -266,6 +285,125 @@ export class ConversationRepository {
       items: selected.map((row) => JSON.parse(String(row['payload'])) as ConversationSession),
       nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({
         pinned: last['pinned'], activity: last['activity_at'], id: last['id']
+      })).toString('base64url') : null
+    }
+  }
+
+  /**
+   * Ranks title matches before indexed content, then pages by relevance and recency.
+   * Only selected content-only hits need excerpts; history and trace payloads stay out.
+   */
+  private searchSessionPage(
+    query: string,
+    prepared: SearchQuery,
+    limit: number,
+    cursor: SessionCursor | null
+  ): SessionPage {
+    const encodedQuery = JSON.stringify(prepared)
+    // FTS operators remain literal input; prefixes preserve partial-word searching.
+    const words = getSessionSearchTerms(query, { unique: false })
+      .map((term) => `"${term.replaceAll('"', '""')}"*`)
+    const match = [...new Set(words)].join(' AND ')
+    const phrase = words.join(' + ')
+    const search = createHash('sha256').update(encodedQuery).update(match).update(phrase).digest('hex')
+    if (cursor && (
+      cursor.search !== search || !Number.isInteger(cursor.rank) ||
+      cursor.rank! < SearchRank.Exact || cursor.rank! > SearchRank.None ||
+      (cursor.phrase !== ContentMatchRank.Phrase && cursor.phrase !== ContentMatchRank.Terms) ||
+      typeof cursor.score !== 'number' || !Number.isFinite(cursor.score) ||
+      (cursor.rank === SearchRank.None && (!Number.isSafeInteger(cursor.source) || cursor.source! < 1))
+    )) {
+      throw new Error('Invalid search cursor.')
+    }
+
+    // Unrelated new messages change corpus-wide BM25 statistics. Re-score the
+    // cursor's passage in the same read snapshot, rather than comparing old scores.
+    const anchor = cursor?.rank === SearchRank.None && match ? this.db.prepare(`
+      SELECT rank AS score FROM conversation_search
+      WHERE rowid = CAST(@rowid AS INTEGER) AND conversation_search MATCH @match LIMIT 1
+    `).get({ rowid: cursor.source, match }) : undefined
+    const cursorScore = typeof anchor?.['score'] === 'number' ? anchor['score'] : cursor?.score
+    const bindings: Record<string, string | number> = {
+      query: encodedQuery, noMatch: SearchRank.None, limit: limit + 1,
+      phraseMatch: ContentMatchRank.Phrase, termMatch: ContentMatchRank.Terms,
+      ...(match ? { match, phrase } : {}),
+      ...(cursor ? { rank: cursor.rank!, activity: cursor.activity, id: cursor.id,
+        cursorPhrase: cursor.phrase!, score: cursorScore! } : {})
+    }
+    // Evaluate BM25 while the FTS cursor is active, before grouping/windowing.
+    // Keep one best passage per session, preferring adjacent words before score.
+    const rows = this.db.prepare(`WITH title_ranks AS MATERIALIZED (
+        SELECT id, session_title_rank(title, @query) AS search_rank
+        FROM conversation_sessions
+      ), phrase_matches AS MATERIALIZED (
+        ${match ? `SELECT rowid AS message_rowid FROM conversation_search
+          WHERE conversation_search MATCH @phrase`
+          : 'SELECT NULL AS message_rowid WHERE 0'}
+      ), content_scores AS MATERIALIZED (
+        ${match ? `SELECT session_id, rowid AS message_rowid, rank AS score
+          FROM conversation_search WHERE conversation_search MATCH @match`
+          : 'SELECT NULL AS session_id, NULL AS message_rowid, 0 AS score WHERE 0'}
+      ), ordered_content AS (
+        SELECT c.*, CASE WHEN p.message_rowid IS NULL THEN @termMatch ELSE @phraseMatch END AS phrase_rank,
+          row_number() OVER (PARTITION BY c.session_id
+            ORDER BY (p.message_rowid IS NULL), c.score, c.message_rowid DESC) AS choice
+        FROM content_scores c LEFT JOIN phrase_matches p ON p.message_rowid = c.message_rowid
+      ), content_matches AS (
+        SELECT session_id, message_rowid, score, phrase_rank FROM ordered_content WHERE choice = 1
+      ), ranked_sessions AS (
+        SELECT s.id, s.pinned, s.activity_at, t.search_rank, c.message_rowid,
+          CASE WHEN t.search_rank = @noMatch THEN c.phrase_rank ELSE @phraseMatch END AS phrase_rank,
+          CASE WHEN t.search_rank = @noMatch THEN c.score ELSE 0 END AS content_score
+        FROM conversation_sessions s
+        JOIN title_ranks t ON t.id = s.id
+        LEFT JOIN content_matches c ON c.session_id = s.id
+        WHERE (t.search_rank < @noMatch OR c.message_rowid IS NOT NULL)
+      )
+      SELECT r.*, s.payload FROM ranked_sessions r JOIN conversation_sessions s ON s.id = r.id
+      ${cursor ? `WHERE ((r.search_rank, r.phrase_rank, r.content_score) > (@rank, @cursorPhrase, @score)
+        OR ((r.search_rank, r.phrase_rank, r.content_score) = (@rank, @cursorPhrase, @score)
+          AND (r.activity_at, r.id) < (@activity, @id)))` : ''}
+      ORDER BY r.search_rank, r.phrase_rank, r.content_score, r.activity_at DESC, r.id DESC
+      LIMIT @limit`).all(bindings)
+    const selected = rows.slice(0, limit)
+    const last = selected.at(-1)
+    // Native match positions keep excerpts focused even beside giant tokens. The
+    // per-request markers are stripped in SQLite; only bounded plain text leaves it.
+    // Limit materialization to one source row instead of exhausting FTS candidates.
+    // FTS point lookups need integer rowids; JavaScript numbers bind as REAL.
+    const marker = randomUUID()
+    const excerptQuery = match ? this.db.prepare(`WITH fragment AS MATERIALIZED (
+        SELECT snippet(conversation_search, 0, @opening, @closing, '…', @tokens) AS marked
+        FROM conversation_search WHERE rowid = CAST(@rowid AS INTEGER)
+          AND conversation_search MATCH @match LIMIT 1
+      ), focused AS (
+        SELECT replace(replace(marked, @opening, ''), @closing, '') AS text,
+          max(1, instr(marked, @opening) - @leading) AS offset FROM fragment
+      ) SELECT CASE WHEN offset > 1 THEN '…' ELSE '' END ||
+        substr(text, offset, @characters - (offset > 1)) AS excerpt FROM focused`) : null
+    const searchMatches = Object.fromEntries(selected.flatMap((row) => {
+      if (row['search_rank'] !== SearchRank.None || !excerptQuery) {
+        return []
+      }
+      const result = excerptQuery.get({
+        opening: `[${marker}]`, closing: `[/${marker}]`,
+        tokens: SESSION_SEARCH_EXCERPT_TOKENS,
+        leading: SESSION_SEARCH_EXCERPT_LEADING_CHARACTERS,
+        characters: MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS,
+        rowid: row['message_rowid'],
+        match: row['phrase_rank'] === ContentMatchRank.Phrase ? phrase : match
+      })
+
+      return result ? [[String(row['id']), { excerpt: String(result['excerpt']) }]] : []
+    }))
+
+    return {
+      items: selected.map((row) => JSON.parse(String(row['payload'])) as ConversationSession),
+      searchMatches,
+      nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({
+        pinned: last['pinned'], activity: last['activity_at'], id: last['id'],
+        rank: last['search_rank'], phrase: last['phrase_rank'], score: last['content_score'],
+        source: last['message_rowid'], search
       })).toString('base64url') : null
     }
   }
@@ -677,6 +815,10 @@ export class ConversationRepository {
         WHEN json_type(body, '$.output') = 'object' THEN json_extract(body, '$.output')
         ELSE '{}' END AS result
       FROM invocation
+    ), formatted_results AS (
+      SELECT body, result, CASE WHEN json_extract(result, '$.format') = 'markdown'
+        OR (json_type(result, '$.sources') = 'array' AND json_type(result, '$.content') = 'text')
+        THEN 'markdown' ELSE 'text' END AS document_format FROM results
     ), contents AS (
       SELECT
         CASE WHEN json_type(body, '$.input') = 'text' THEN
@@ -694,22 +836,32 @@ export class ConversationRepository {
         (json_extract(result, '$.changed') = 1 AND json_type(result, '$.diff') = 'text') AS has_changes,
         coalesce(json_extract(result, '$.diffTruncated'), 0) AS diff_truncated,
         CASE WHEN json_type(result, '$.path') = 'text' AND json_type(result, '$.content') = 'text'
-          AND json_type(result, '$.contentHash') = 'text' THEN json_extract(result, '$.content') END AS file_content,
-        json_extract(result, '$.path') AS source_path,
+          AND json_type(result, '$.contentHash') = 'text' THEN json_extract(result, '$.content')
+          WHEN document_format = 'markdown' THEN CASE
+            WHEN json_type(result, '$.content') = 'text' AND length(trim(json_extract(result, '$.content'))) > 0
+              THEN json_extract(result, '$.content')
+            WHEN json_type(result, '$.text') = 'text' AND length(trim(json_extract(result, '$.text'))) > 0
+              THEN json_extract(result, '$.text') END
+          END AS display_content,
+        CASE WHEN json_type(result, '$.contentHash') = 'text'
+          THEN json_extract(result, '$.path') END AS source_path,
+        document_format,
         CASE WHEN json_type(body, '$.input') = 'text' AND NOT json_valid(json_extract(body, '$.input'))
           THEN 'text' ELSE 'json' END AS input_language,
         CASE WHEN json_type(body, '$.output') IS NOT NULL AND json_type(body, '$.output') != 'text'
           THEN 'json' ELSE 'text' END AS output_language
-      FROM results
+      FROM formatted_results
     ) SELECT CASE WHEN @complete THEN input ELSE substr(input, 1, @limit) END AS input,
       length(input) AS input_length, input_language,
       has_changes, diff_truncated,
       CASE WHEN @complete THEN output ELSE substr(output, 1, @limit) END AS output,
       length(output) AS output_length, output_language,
-      CASE WHEN @complete THEN command_output ELSE substr(command_output, -@limit) END AS command_output,
-      length(command_output) AS command_length,
-      CASE WHEN @complete THEN file_content ELSE substr(file_content, 1, @limit) END AS file_content,
-      length(file_content) AS file_length, source_path
+      CASE WHEN @complete THEN command_output
+        WHEN document_format = 'markdown' THEN substr(command_output, 1, @limit)
+        ELSE substr(command_output, -@limit) END AS command_output,
+      length(command_output) AS command_length, document_format,
+      CASE WHEN @complete THEN display_content ELSE substr(display_content, 1, @limit) END AS display_content,
+      length(display_content) AS display_length, source_path
       FROM contents`).get({ sessionId, messageId, toolId,
       limit: TOOL_CONTENT_PREVIEW_CHARACTERS, complete: Number(complete) })
 
@@ -730,10 +882,11 @@ export class ConversationRepository {
       input: part('input', 'input_length', row['input_language'] as ToolContentPart['language']),
       output: part('output', 'output_length', row['output_language'] as ToolContentPart['language']),
       ...(row['command_output'] === null ? {} : {
-        commandOutput: part('command_output', 'command_length', 'text')
+        commandOutput: part('command_output', 'command_length', row['document_format'] as string)
       }),
-      ...(row['file_content'] === null ? {} : {
-        displayOutput: part('file_content', 'file_length', path.extname(String(row['source_path'])).slice(1).toLocaleLowerCase() || 'text')
+      ...(row['display_content'] === null ? {} : {
+        displayOutput: part('display_content', 'display_length', row['source_path']
+          ? path.extname(String(row['source_path'])).slice(1).toLocaleLowerCase() || 'text' : 'markdown')
       })
     }
   }

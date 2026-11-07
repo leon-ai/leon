@@ -112,6 +112,14 @@ it('retains one execution across wait windows, progress and completed reads', as
     id, state: ToolExecutionState.Running, progress: { message: 'Scanning' }
   })
   await manager.wait('a', 'one', id, 0)
+  const followUp = new AbortController()
+  const waiting = manager.wait('a', 'one', id, undefined, followUp.signal)
+  followUp.abort(new Error('New owner instructions require reassessment.'))
+  expect((await waiting).execution).toMatchObject({
+    id, state: ToolExecutionState.Running, progress: { message: 'Scanning' }
+  })
+  expect((await manager.wait('a', 'one', id, undefined, followUp.signal)).execution.state)
+    .toBe(ToolExecutionState.Running)
   expect(() => manager.read('b', 'one', id)).toThrow('not found')
   expect(() => manager.read('a', 'two', id)).toThrow('not found')
   finish(result)
@@ -154,6 +162,22 @@ it('retains failures instead of reissuing calls', async () => {
   expect((await manager.wait('a', 'one', id)).execution).toMatchObject({
     state: ToolExecutionState.Failed, error: 'Error: scan failed'
   })
+})
+
+it('releases temporary foreground bookkeeping without consuming retained-work capacity', async () => {
+  const finish = Promise.withResolvers<ToolExecutionResult>()
+  const temporary = Array.from({ length: 40 }, () => manager.start(
+    'a', 'one', 'test.fixture.run', async () => finish.promise, undefined, false
+  ))
+  for (const id of temporary) {
+    manager.discard('a', 'one', id)
+  }
+  const retained = manager.start('a', 'one', 'test.fixture.run', async () => finish.promise)
+  finish.resolve(result)
+  expect((await manager.wait('a', 'one', retained)).execution.state).toBe(ToolExecutionState.Completed)
+  for (const id of temporary) {
+    expect(() => manager.read('a', 'one', id)).toThrow('not found')
+  }
 })
 
 it('queries the entire retained JSON before bounding or paging its HTTP preview', async () => {

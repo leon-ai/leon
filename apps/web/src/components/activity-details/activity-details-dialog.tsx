@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react'
+import { clsx } from 'clsx'
 
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/button'
@@ -13,7 +14,7 @@ interface ActivityDetailsDialogProps extends Pick<ComponentProps<typeof Dialog>,
   downloadFilename: string
   canCopy?: boolean
   notice?: ReactNode
-  toolbar: ReactNode
+  toolbar?: ReactNode
   children: ReactNode
 }
 
@@ -25,6 +26,7 @@ export function ActivityDetailsDialog({
   canCopy = true, notice, toolbar, children, onClose, onAfterClose
 }: ActivityDetailsDialogProps) {
   const downloadURL = useRef<string | undefined>(undefined)
+  const hasToolbar = Boolean(toolbar)
 
   useEffect(() => (): void => {
     if (downloadURL.current) {
@@ -54,10 +56,10 @@ export function ActivityDetailsDialog({
         <Button iconName="download" tone="muted" tooltipMessage={`Download ${contentName}`} tooltipPosition="left"
           disabled={content === undefined} onClick={download} />
       )}>
-      <p className="activity-details-path">{path}</p>
+      {hasToolbar && <p className="activity-details-path">{path}</p>}
       {notice}
-      <div className="activity-details-toolbar">
-        {toolbar}
+      <div className={clsx('activity-details-toolbar', { 'activity-details-toolbar-document': !hasToolbar })}>
+        {hasToolbar ? toolbar : <p className="activity-details-path">{path}</p>}
         {canCopy && (
           <CopyButton text={content} tone="muted" label={`Copy ${contentName}`} tooltipPosition="left"
             disabled={!open} />

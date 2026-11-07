@@ -28,6 +28,7 @@ interface ToolExecution {
   error?: string
   controller: AbortController
   settled: Promise<void>
+  retained: boolean
 }
 
 /**
@@ -48,13 +49,15 @@ export class ToolExecutionManager {
       signal: AbortSignal,
       progress: (value: ToolRuntimeProgress) => void
     ) => Promise<ToolExecutionResult>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    retained = true
   ): string {
     signal?.throwIfAborted()
-    const execution = this.create(profileName, sessionId, tool)
+    const execution = this.create(profileName, sessionId, tool, ToolExecutionState.Running, retained)
     const { controller } = execution
     const abort = (): void => controller.abort(signal?.reason)
     signal?.addEventListener('abort', abort, { once: true })
+    // Progress consumers need the returned handle before dispatch can report.
     execution.settled = Promise.resolve().then(async () => {
       try {
         execution.result = await execute(controller.signal, (progress) => {
@@ -102,20 +105,21 @@ export class ToolExecutionManager {
     profileName: string,
     sessionId: string,
     tool: string,
-    state = ToolExecutionState.Running
+    state = ToolExecutionState.Running,
+    retained = true
   ): ToolExecution {
     this.prune()
     const owned = [...this.executions.values()].filter((execution) =>
-      execution.profileName === profileName
+      execution.profileName === profileName && execution.retained
     )
 
-    if (state === ToolExecutionState.Running &&
+    if (retained && state === ToolExecutionState.Running &&
         owned.filter((execution) => execution.state === ToolExecutionState.Running).length >=
         MAX_ACTIVE_EXECUTIONS_PER_PROFILE) {
       throw new Error('Too many active tool executions; wait for or cancel an existing execution.')
     }
 
-    if (owned.length >= MAX_EXECUTIONS_PER_PROFILE) {
+    if (retained && owned.length >= MAX_EXECUTIONS_PER_PROFILE) {
       const completed = owned.find((execution) => execution.completedAt !== undefined)
       if (!completed) {
         throw new Error('Too many active tool executions; wait for or cancel an existing execution.')
@@ -131,6 +135,7 @@ export class ToolExecutionManager {
       sessionId,
       tool,
       state,
+      retained,
       startedAt: Date.now(),
       controller,
       settled: Promise.resolve()
@@ -141,13 +146,14 @@ export class ToolExecutionManager {
   }
 
   /**
-   * Wait for the same execution; a wait timeout never cancels or restarts it.
+   * Wait for the same execution; a timeout or interrupted wait leaves it running.
    */
   public async wait(
     profileName: string,
     sessionId: string,
     id: string,
-    waitMs = TOOL_EXECUTION_WAIT_MS
+    waitMs = TOOL_EXECUTION_WAIT_MS,
+    signal?: AbortSignal
   ): Promise<ReturnType<ToolExecutionManager['read']>> {
     if (!Number.isInteger(waitMs) || waitMs < 0 || waitMs > TOOL_EXECUTION_MAX_WAIT_MS) {
       throw new Error(`waitMs must be from 0 to ${TOOL_EXECUTION_MAX_WAIT_MS}`)
@@ -155,16 +161,25 @@ export class ToolExecutionManager {
 
     const execution = this.get(profileName, sessionId, id)
     let timer: ReturnType<typeof setTimeout> | undefined
+    let finishWaiting: (() => void) | undefined
 
     try {
       await Promise.race([
         execution.settled,
         new Promise<void>((resolve) => {
+          finishWaiting = (): void => resolve()
           timer = setTimeout(resolve, waitMs)
+          signal?.addEventListener('abort', finishWaiting, { once: true })
+          if (signal?.aborted) {
+            resolve()
+          }
         })
       ])
     } finally {
       clearTimeout(timer)
+      if (finishWaiting) {
+        signal?.removeEventListener('abort', finishWaiting)
+      }
     }
 
     return this.read(profileName, sessionId, id)
@@ -198,6 +213,36 @@ export class ToolExecutionManager {
         ...(execution.error ? { error: execution.error } : {})
       },
       ...(execution.result ? { result: execution.result } : {})
+    }
+  }
+
+  /**
+   * Releases temporary bookkeeping after ordinary calls have settled.
+   * Releasing a record never cancels its underlying work.
+   */
+  public discard(profileName: string, sessionId: string, id: string): void {
+    const execution = this.get(profileName, sessionId, id)
+    void execution.settled.then(() => this.executions.delete(id))
+  }
+
+  /**
+   * Keeps a foreground call once it exposes preparation or oversized results.
+   * Ordinary in-flight calls do not consume background-work capacity.
+   */
+  public keep(profileName: string, sessionId: string, id: string): void {
+    this.get(profileName, sessionId, id).retained = true
+    const owned = [...this.executions.values()].filter((execution) =>
+      execution.profileName === profileName && execution.retained
+    )
+    let retainedCount = owned.length
+    for (const execution of owned) {
+      if (retainedCount <= MAX_EXECUTIONS_PER_PROFILE) {
+        break
+      }
+      if (execution.id !== id && execution.completedAt !== undefined) {
+        this.executions.delete(execution.id)
+        retainedCount -= 1
+      }
     }
   }
 

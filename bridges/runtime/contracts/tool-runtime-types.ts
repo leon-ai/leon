@@ -27,6 +27,11 @@ export interface ToolTimeoutPolicy {
   totalMs?: number
 }
 
+export enum ToolRuntimePhase {
+  Preparation = 'preparation',
+  Execution = 'execution'
+}
+
 export interface ToolRuntimeProgress {
   source: 'log' | 'report'
   message: string
@@ -36,6 +41,7 @@ export interface ToolRuntimeProgress {
    * Actual output or advancing work, never a heartbeat or repeated status.
    */
   activity?: boolean
+  phase?: ToolRuntimePhase
   /**
    * Keeps progress attached to its originating call until retained work ends.
    */
@@ -58,8 +64,13 @@ export interface ToolExecutionContext {
   connections?: Record<string, Record<string, unknown>>
   leonService?: { baseURL: string, token: string }
   signal?: AbortSignal
+  preparationSignal?: AbortSignal
   timeout?: ToolTimeoutPolicy
   onProgress?: (progress: ToolRuntimeProgress) => void
+  /**
+   * Rechecks host instructions before a prepared tool can perform its action.
+   */
+  onPreparationComplete?: () => Promise<void>
 }
 
 export interface ToolRuntimeResult {
@@ -78,12 +89,14 @@ export enum ToolRuntimeLifetime {
 }
 
 export type ToolWorkerRequest =
-  | { type: 'execute', requestId: string, context: Omit<ToolExecutionContext, 'onProgress' | 'signal'>, args: unknown[] }
+  | { type: 'execute', requestId: string, context: Omit<ToolExecutionContext, 'onProgress' | 'onPreparationComplete' | 'signal' | 'preparationSignal'>, args: unknown[] }
   | { type: 'shutdown' }
-  | { type: 'cancel', requestId: string, reason: string }
+  | { type: 'cancel', requestId: string, reason: string, name?: string }
+  | { type: 'preparation-result', requestId: string, preparationId: string, error?: string }
 
 export type ToolWorkerResponse = {
   type: 'result'
   lifetime: ToolRuntimeLifetime
   result: ToolRuntimeResult
 } | { type: 'progress', requestId: string, progress: ToolRuntimeProgress }
+  | { type: 'prepared', requestId: string, preparationId: string }

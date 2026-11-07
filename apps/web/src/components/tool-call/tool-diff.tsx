@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MultiFileDiff } from '@pierre/diffs/react'
-import { canUseWASM, createCSSVariablesTheme, disposeHighlighter, getFiletypeFromFileName, registerCustomTheme } from '@pierre/diffs'
+import { canUseWASM, disposeHighlighter, getFiletypeFromFileName } from '@pierre/diffs'
 
-import { CODE_THEME } from '@/components/code-view/code-theme'
+import { CODE_THEME_STYLE } from '@/components/code-view/code-theme'
 import { bundledLanguages } from '@/components/code-view/fallback-languages'
 import { ScrollContainer } from '@/components/scroll-container'
 import { Button } from '@/components/button'
@@ -14,7 +14,7 @@ import '@fontsource/jetbrains-mono/latin-400.css'
 const MAXIMUM_DIFF_LINES = 64
 const MAXIMUM_DIFF_CHARACTERS = 8_192
 const MAXIMUM_DIFF_EXCERPTS = 4
-const THEME_NAME = 'leon-code'
+const DIFF_THEMES = { dark: 'pierre-dark', light: 'pierre-light' }
 
 enum DiffView {
   Hunks = 'hunks',
@@ -28,18 +28,6 @@ const DIFF_VIEWS = [
 ] as const
 
 let viewers = 0
-registerCustomTheme(THEME_NAME, async () => CODE_THEME, 'zed')
-registerCustomTheme(THEME_NAME, async () => createCSSVariablesTheme({
-  name: THEME_NAME,
-  variableDefaults: {
-    foreground: 'var(--color-text-secondary)', background: 'var(--color-surface-elevated)',
-    'token-comment': 'var(--color-text-tertiary)', 'token-keyword': 'var(--color-pink)',
-    'token-string-expression': 'var(--color-yellow)', 'token-string': 'var(--color-yellow)',
-    'token-constant': 'var(--color-purple)', 'token-function': 'var(--color-accent)',
-    'token-parameter': 'var(--color-text-secondary)', 'token-punctuation': 'var(--color-text-tertiary)'
-  }
-}), 'diffs')
-
 const DIFF_CSS = `:host {
   --diffs-font-family: var(--font-family-code);
   --diffs-header-font-family: var(--font-family);
@@ -54,8 +42,8 @@ const DIFF_CSS = `:host {
   --diffs-bg-addition-override: var(--color-success-soft);
   --diffs-bg-addition-number-override: var(--color-success-soft);
   --diffs-bg-addition-emphasis-override: var(--color-success-soft);
-  --diffs-bg-context-override: var(--color-surface-elevated);
-  --diffs-bg-context-gutter-override: var(--color-surface-elevated);
+  --diffs-bg-context-override: var(--code-background);
+  --diffs-bg-context-gutter-override: var(--code-background);
   --diffs-bg-separator-override: var(--color-surface);
   --diffs-bg-hover-override: var(--color-surface-hover);
   --diffs-fg-number-override: var(--color-text-tertiary);
@@ -66,6 +54,7 @@ const DIFF_CSS = `:host {
 const DIFF_PREVIEW_CSS = `[data-code] {
   max-height: calc(var(--code-preview-lines) * var(--diffs-line-height));
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
 }`
 
 function excerpt(text: string): string {
@@ -109,7 +98,7 @@ export function ToolDiff({ changes, truncated = false, preview = false }: {
     diffStyle: split ? 'split' as const : 'unified' as const,
     diffIndicators: 'classic' as const,
     preferredHighlighter: canUseWASM() ? 'highlights' as const : 'shiki-js' as const,
-    theme: THEME_NAME, themeType: theme, unsafeCSS: preview ? `${DIFF_CSS}\n${DIFF_PREVIEW_CSS}` : DIFF_CSS,
+    theme: DIFF_THEMES, themeType: theme, unsafeCSS: preview ? `${DIFF_CSS}\n${DIFF_PREVIEW_CSS}` : DIFF_CSS,
     disableFileHeader: true, tokenizeMaxLength: MAXIMUM_DIFF_CHARACTERS,
     // Hunk rendering remains available for version-backed comparisons; tool
     // invocations show their recorded replacement context instead.
@@ -135,7 +124,7 @@ export function ToolDiff({ changes, truncated = false, preview = false }: {
   const diffContent = files.map((file, index) => <MultiFileDiff key={index} {...file} options={options} />)
 
   return (
-    <div className="tool-diff" data-diff-style={split ? 'split' : 'unified'} data-diff-view={view}>
+    <div className="tool-diff" style={CODE_THEME_STYLE} data-diff-style={split ? 'split' : 'unified'} data-diff-view={view}>
       <div className="tool-diff-header">
         <p className="tool-diff-filename">{changes[0]?.path}</p>
         {!preview && <div className="tool-diff-views" role="group" aria-label="Diff view">

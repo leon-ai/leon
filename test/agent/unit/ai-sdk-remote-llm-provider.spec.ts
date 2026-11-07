@@ -1212,7 +1212,10 @@ describe('AISDKRemoteLLMProvider', () => {
       type: 'reasoning',
       id: 'rs_test',
       encrypted_content: 'encrypted-test',
-      summary: [{ type: 'summary_text', text: 'Checking the note.' }]
+      summary: [
+        { type: 'summary_text', text: 'Checking the note.' },
+        { type: 'summary_text', text: '**Preparing the reply**\n\nKeep it clear.' }
+      ]
     }
     const message = {
       type: 'message', id: 'msg_progress', role: 'assistant', phase: 'commentary',
@@ -1229,6 +1232,14 @@ describe('AISDKRemoteLLMProvider', () => {
       { type: 'response.output_item.added', output_index: 0, item: { ...reasoning, summary: [] } },
       { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, output_index: 0,
         summary_index: 0, delta: 'Checking the note.' },
+      { type: 'response.reasoning_summary_part.added', item_id: reasoning.id, output_index: 0,
+        summary_index: 1, part: { type: 'summary_text', text: '' } },
+      { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, output_index: 0,
+        summary_index: 1, delta: '**Preparing the reply**' },
+      { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, output_index: 0,
+        summary_index: 1, delta: '\n\n' },
+      { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, output_index: 0,
+        summary_index: 1, delta: 'Keep it clear.' },
       { type: 'response.output_item.done', output_index: 0, item: reasoning },
       { type: 'response.output_item.added', output_index: 1, item: { ...message, content: [] } },
       { type: 'response.output_text.delta', item_id: message.id, output_index: 1, content_index: 0, delta: 'Checking your note.' },
@@ -1296,6 +1307,8 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
     expect(onReasoningToken).toHaveBeenCalledWith('Checking the note.')
+    expect(onReasoningToken.mock.calls.map(([chunk]) => chunk).join(''))
+      .toBe('Checking the note.\n\n**Preparing the reply**\n\nKeep it clear.')
     expect(provider.transport).toBe('websocket')
     expect(onStreamEvent.mock.calls.filter(([event]) => event.type !== 'prompt-cache').slice(0, 3).map(([event]) => event)).toEqual([
       { type: 'request-dispatched', transport: 'websocket' },
@@ -1312,7 +1325,7 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(normalized.accounting?.cachedInputTokens).toBe(1_024)
     expect(normalized.accounting?.reasoningOutputTokens).toBe(10)
     expect(normalized.reasoningItems).toEqual([{
-      provider: LLMProviders.OpenAI, id: 'rs_test', text: 'Checking the note.',
+      provider: LLMProviders.OpenAI, id: 'rs_test', text: 'Checking the note.\n\n**Preparing the reply**\n\nKeep it clear.',
       encryptedContent: 'encrypted-test', binding: provider.compactionBinding
     }])
 
@@ -1323,7 +1336,10 @@ describe('AISDKRemoteLLMProvider', () => {
       { role: 'tool', toolName: 'read_note', toolCallId: 'call_test', content: 'Note contents.' }
     ], params)
     const replay = JSON.parse(websocketMocks.fetch.mock.calls[1]![1].body)
-    expect(replay.input).toContainEqual(reasoning)
+    expect(replay.input).toContainEqual({
+      ...reasoning,
+      summary: [{ type: 'summary_text', text: reasoning.summary.map((part) => part.text).join('\n\n') }]
+    })
     expect(replay.input).toContainEqual({ role: 'assistant', content: 'Checking your note.', phase: 'commentary' })
     expect(replay.input).toContainEqual(expect.objectContaining({
       type: 'function_call', call_id: call.call_id, arguments: call.arguments

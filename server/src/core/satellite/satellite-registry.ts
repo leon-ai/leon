@@ -125,6 +125,7 @@ class SatelliteRegistry {
     toolInput: ToolExecutionInput
     onProgress?: (progress: ToolRuntimeProgress) => void
     signal?: AbortSignal
+    interruptionSignal?: AbortSignal
   }): Promise<ToolExecutionResult> {
     input.signal?.throwIfAborted()
     const connection = this.getConnection(input.profileName, input.deviceId)
@@ -149,6 +150,9 @@ class SatelliteRegistry {
       const onAbort = (): void => this.cancelInvocation(invocationId,
         new Error('Satellite tool call canceled; already-delivered input may have executed.')
       )
+      const onInterrupt = (): void => {
+        connection.transport.emit(SATELLITE_EVENTS.cancelTool, { invocationId, interruptOnly: true })
+      }
 
       timeout.unref?.()
       this.pendingInvocations.set(invocationId, {
@@ -161,9 +165,13 @@ class SatelliteRegistry {
         timeout,
         transport: connection.transport,
         ...(input.conversationSessionId ? { conversationSessionId: input.conversationSessionId } : {}),
-        removeAbortListener: () => input.signal?.removeEventListener('abort', onAbort)
+        removeAbortListener: () => {
+          input.signal?.removeEventListener('abort', onAbort)
+          input.interruptionSignal?.removeEventListener('abort', onInterrupt)
+        }
       })
       input.signal?.addEventListener('abort', onAbort, { once: true })
+      input.interruptionSignal?.addEventListener('abort', onInterrupt, { once: true })
       try {
         connection.transport.emit(SATELLITE_EVENTS.invokeTool, invocation)
       } catch (error) {

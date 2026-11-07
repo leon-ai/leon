@@ -14,6 +14,7 @@ import type { MessageLog } from '@/types'
 import { MAXIMUM_ARCHIVE_PAGE_CHARACTERS, type ArchiveMessagePage } from '@@/bridges/runtime/contracts/conversation-archive'
 import { searchConversationSessions } from '@/core/session-manager/session-search'
 import { TOOL_CONTENT_PREVIEW_CHARACTERS } from '@/core/session-manager/tool-content-contract'
+import { MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS } from '@/core/session-manager/session-search-contract'
 
 function session(id: string, timestamp = 1): ConversationSession {
   return {
@@ -138,6 +139,41 @@ describe('profile conversation archive', () => {
     expect(repository.readToolContents('chat', 'trace', 'missing')).toBeNull()
     expect(repository.readToolContents('other', 'trace', 'one')).toBeNull()
     expect(open('another-profile').readToolContents('chat', 'trace', 'one')).toBeNull()
+  })
+
+  it('projects readable Markdown separately from raw results and preserves bounded live document heads', () => {
+    const repository = open()
+    repository.saveSession(session('documents'))
+    const text = `# A useful guide\n\n${'An idea worth keeping.\n\n'.repeat(1_200)}End of document.`
+    const sources = [{ url: 'https://example.com/guide', title: 'A guide' }]
+    repository.upsertMessage('documents', {
+      who: 'leon', message: 'Ready.', messageId: 'documents-answer', isAddedToHistory: true,
+      agentResponseTrace: { id: 'documents-trace', planSteps: [], toolCalls: [
+        { id: 'search', name: 'test.search', status: 'success',
+          output: { result: { content: text, sources } }, commandOutput: 'Old progress and source listings.' },
+        { id: 'page', name: 'test.page', status: 'success',
+          output: { result: { data: { text, format: 'markdown', path: 'document.md' } } } },
+        { id: 'live', name: 'test.document', status: 'running',
+          output: { output: 'Latest chunk.', format: 'markdown' }, commandOutput: text }
+      ] }
+    })
+
+    for (const id of ['search', 'page']) {
+      const preview = repository.readToolContents('documents', 'documents-answer', id)!
+      expect(preview.displayOutput).toMatchObject({ language: 'markdown', truncated: true })
+      expect(preview.displayOutput?.text).toBe(text.slice(0, TOOL_CONTENT_PREVIEW_CHARACTERS))
+      const full = repository.readToolContents('documents', 'documents-answer', id, true)!
+      expect(full.displayOutput).toMatchObject({ text, language: 'markdown', truncated: false })
+      expect(full.output.language).toBe('json')
+      if (id === 'search') {
+        expect(JSON.parse(full.output.text)).toEqual({ result: { content: text, sources } })
+      }
+    }
+
+    const live = repository.readToolContents('documents', 'documents-answer', 'live')!
+    expect(live.commandOutput).toMatchObject({ language: 'markdown', truncated: true,
+      text: text.slice(0, TOOL_CONTENT_PREVIEW_CHARACTERS) })
+    expect(live.displayOutput).toBeUndefined()
   })
 
   it('pages complete visible source text without gaps, disclosures or cross-session access', async () => {
@@ -305,6 +341,166 @@ describe('profile conversation archive', () => {
     expect(next.items[0]?.id).toBe('new')
     expect(() => repository.listSessions({ cursor: 'invalid' })).toThrow()
     expect(() => repository.readMessages('new', { before: 'NaN' })).toThrow()
+  })
+
+  it('ranks normalized title matches before content and preserves relevance through cursor pages', () => {
+    const repository = open()
+    const entries = [
+      { ...session('exact', 1), title: 'Sharing - context' },
+      { ...session('prefix', 2), title: 'Sharing / context notes' },
+      { ...session('substring', 3), title: 'Notes on sharing context' },
+      { ...session('terms', 4), title: 'Context while sharing notes' },
+      { ...session('recent-content', 90), title: 'Our workbench', isPinned: true },
+      { ...session('older-content', 80), title: 'Our earlier work' },
+      { ...session('partial', 100), title: 'Sharing alone' }
+    ]
+    for (const entry of entries) {
+      repository.saveSession(entry)
+    }
+    for (const id of ['recent-content', 'older-content']) {
+      repository.upsertMessage(id, {
+        who: 'owner', messageId: `${id}:source`, isAddedToHistory: true,
+        message: `${'An unrelated paragraph. '.repeat(1_000)}Latest notes about sharing - context with care. ${'More notes. '.repeat(100)}`
+      }, { sentAt: id === 'recent-content' ? 90 : 80 })
+    }
+    repository.upsertMessage('partial', {
+      who: 'leon', messageId: 'hidden', message: 'Hidden sharing context', isAddedToHistory: false
+    })
+    const ids: string[] = []
+    let cursor: string | null = null
+    do {
+      const page = repository.listSessions({ query: 'sharing context', limit: 2, ...(cursor ? { cursor } : {}) })
+      ids.push(...page.items.map((item) => item.id))
+      for (const item of page.items) {
+        const excerpt = page.searchMatches?.[item.id]?.excerpt
+        if (item.id.endsWith('content')) {
+          expect(excerpt).toContain('sharing - context')
+          expect(Array.from(excerpt!).length).toBeLessThanOrEqual(MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS)
+          expect(excerpt).not.toContain('Hidden')
+        } else {
+          expect(excerpt).toBeUndefined()
+        }
+      }
+      cursor = page.nextCursor
+    } while (cursor)
+    expect(ids).toEqual(['exact', 'prefix', 'substring', 'terms', 'recent-content', 'older-content'])
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(repository.listSessions().items[0]?.id).toBe('recent-content')
+    expect(repository.listSessions().searchMatches).toBeUndefined()
+    expect(open('another').listSessions({ query: 'sharing context' }).items).toEqual([])
+    const first = repository.listSessions({ query: 'sharing context', limit: 1 })
+    expect(() => repository.listSessions({ query: 'context sharing', cursor: first.nextCursor! })).toThrow('cursor')
+    expect(() => repository.listSessions({ cursor: first.nextCursor! })).toThrow('cursor')
+    expect(() => repository.listSessions({ query: 'sharing context', cursor: repository.listSessions({ limit: 1 }).nextCursor! })).toThrow('cursor')
+    const compact = repository.listSessions({ query: 'sharingcontext', limit: 1 })
+    expect(() => repository.listSessions({ query: 'sharing-context', cursor: compact.nextCursor! })).toThrow('cursor')
+  })
+
+  it('prefers phrases and stronger passages over newer mentions while paging each session once', () => {
+    const repository = open()
+    repository.saveSession({ ...session('title', 1), title: 'Sharing - context' })
+    const entries = [
+      { id: 'older-phrase', time: 10, message: 'Sharing - context.' },
+      { id: 'newer-phrase', time: 20, message: 'Sharing - context.' },
+      { id: 'best-source', time: 30, message: 'Best passage: sharing - context, with care.' },
+      { id: 'verbose-phrase', time: 80, message: `Sharing context. ${'Other notes. '.repeat(100)}` },
+      { id: 'loose-strong', time: 100, message: 'Sharing notes about context.' },
+      { id: 'loose-weak', time: 1_000, message: `Sharing ${'Other notes. '.repeat(1_000)}context.` }
+    ]
+    for (const entry of entries) {
+      repository.saveSession(session(entry.id, entry.time))
+      repository.upsertMessage(entry.id, {
+        who: 'owner', messageId: entry.id, message: entry.message, isAddedToHistory: true
+      }, { sentAt: entry.time })
+    }
+    repository.upsertMessage('best-source', {
+      who: 'leon', messageId: 'newer-noise', isAddedToHistory: true,
+      message: `Newer loose mention: sharing ${'Other notes. '.repeat(200)}context.`
+    }, { sentAt: 2_000 })
+    const ids: string[] = []
+    let cursor: string | null = null
+    do {
+      const page = repository.listSessions({ query: 'sharing context', limit: 2, ...(cursor ? { cursor } : {}) })
+      ids.push(...page.items.map((item) => item.id))
+      if (page.searchMatches?.['best-source']) {
+        expect(page.searchMatches['best-source'].excerpt).toContain('Best passage: sharing - context')
+        expect(page.searchMatches['best-source'].excerpt).not.toContain('Newer loose mention')
+      }
+      cursor = page.nextCursor
+    } while (cursor)
+    expect(ids).toEqual([
+      'title', 'newer-phrase', 'older-phrase', 'best-source',
+      'verbose-phrase', 'loose-strong', 'loose-weak'
+    ])
+    expect(repository.listSessions({ query: 'shar con' }).items.map((item) => item.id)).toEqual(ids)
+    const first = repository.listSessions({ query: 'sharing context', limit: 1 })
+    const malformed = JSON.parse(Buffer.from(first.nextCursor!, 'base64url').toString('utf8'))
+    malformed.score = 'not-a-score'
+    expect(() => repository.listSessions({
+      query: 'sharing context', cursor: Buffer.from(JSON.stringify(malformed)).toString('base64url')
+    })).toThrow('cursor')
+  })
+
+  it('continues content ranking when unrelated sessions change the full-text statistics', () => {
+    const repository = open()
+    for (const [id, message] of [
+      ['brief', 'Sharing context.'],
+      ['medium', 'Sharing context with care.'],
+      ['long', 'Sharing context with a few more useful details.']
+    ] as const) {
+      repository.saveSession(session(id))
+      repository.upsertMessage(id, {
+        who: 'owner', messageId: id, message, isAddedToHistory: true
+      })
+    }
+    const first = repository.listSessions({ query: 'sharing context', limit: 1 })
+    expect(first.items.map((item) => item.id)).toEqual(['brief'])
+    repository.saveSession(session('unrelated'))
+    for (let index = 0; index < 10; index += 1) {
+      repository.upsertMessage('unrelated', {
+        who: 'owner', messageId: `unrelated-${index}`,
+        message: 'A separate topic with other words.', isAddedToHistory: true
+      })
+    }
+    const rest = repository.listSessions({ query: 'sharing context', cursor: first.nextCursor! })
+    expect(rest.items.map((item) => item.id)).toEqual(['medium', 'long'])
+  })
+
+  it('preserves repeated query words when prioritizing phrases', () => {
+    const repository = open()
+    repository.saveSession(session('phrase', 1))
+    repository.saveSession(session('single', 100))
+    repository.upsertMessage('phrase', {
+      who: 'owner', messageId: 'phrase', isAddedToHistory: true,
+      message: `Red red. ${'Other notes. '.repeat(100)}`
+    }, { sentAt: 1 })
+    repository.upsertMessage('single', {
+      who: 'owner', messageId: 'single', message: 'Red now.', isAddedToHistory: true
+    }, { sentAt: 100 })
+    expect(repository.listSessions({ query: 'red red' }).items.map((item) => item.id)).toEqual(['phrase', 'single'])
+  })
+
+  it('centers bounded excerpts on indexed matches even beside very long tokens', () => {
+    const repository = open()
+    repository.saveSession(session('notes'))
+    repository.upsertMessage('notes', {
+      who: 'leon', messageId: 'source', isAddedToHistory: true,
+      message: `${'x'.repeat(5_000)} sharing - context with care.`
+    })
+    const excerpt = repository.listSessions({ query: 'sharing context' }).searchMatches?.['notes']?.excerpt
+    expect(excerpt).toContain('sharing - context')
+    expect(excerpt).toMatch(/^…/)
+    expect(Array.from(excerpt!).length).toBeLessThanOrEqual(MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS)
+  })
+
+  it('folds title accents, Unicode forms and separators without interpreting full-text operators', () => {
+    const repository = open()
+    repository.saveSession({ ...session('unicode'), title: 'Café / ＧＰＴ-６.１ notes' })
+    for (const query of ['cafe gpt61', 'GPT 6.1 CAFÉ', 'cafe - gpt 61']) {
+      expect(repository.listSessions({ query }).items.map((item) => item.id)).toEqual(['unicode'])
+    }
+    expect(repository.listSessions({ query: 'gpt62' }).items).toEqual([])
+    expect(repository.listSessions({ query: '" OR NOT *' }).items).toEqual([])
   })
 
   it('recalls complete visible owner queries in durable sequence order with bounded text pages', () => {

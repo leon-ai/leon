@@ -49,12 +49,14 @@ function getPlatform(): string | undefined {
 interface MenuProps {
   collapsed?: boolean
   onSearchSessions?: () => void
+  onSearchIntent?: () => void
   variant?: 'fixed' | 'scrollable'
 }
 
 export function Menu({
   collapsed = false,
   onSearchSessions,
+  onSearchIntent,
   variant = 'fixed'
 }: MenuProps) {
   const [modifierKey, setModifierKey] = useState<string | typeof MACOS_MODIFIER_KEY>(
@@ -80,6 +82,7 @@ export function Menu({
         label="Search sessions"
         shortcutKeys={[modifierKey, 'K']}
         collapsed={collapsed}
+        onIntent={onSearchIntent}
         {...(onSearchSessions === undefined ? {} : { onClick: onSearchSessions })}
       />
     </>

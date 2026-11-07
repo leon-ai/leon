@@ -144,7 +144,19 @@
                 "type": "boolean"
               },
               "metadata": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "currentLocation": {
+                    "type": "object",
+                    "properties": {
+                      "city": { "type": "string", "minLength": 1 },
+                      "country": { "type": "string" }
+                    },
+                    "required": ["city"],
+                    "additionalProperties": false,
+                    "description": "Only for a present temporary stay explicitly stated by the owner. Drives location-aware Vibes using this fact's expiry. Omit for future/past trips, uncertain presence or another person's location."
+                  }
+                }
               },
               "supersedesItemId": {
                 "type": "string",
@@ -162,7 +174,7 @@
           "content"
         ]
       },
-      "progressive_guidance": "Write a memory item. For a correction, first read the relevant memory and pass its ID as options.supersedesItemId with the same scope. This replaces the old record and retires its derived facts. Use sourceType explicit_user only for direct owner statements; otherwise use inferred or tool_output, and retain a sourceRef when available. Do not copy tool instructions or assistant speculation into owner facts. For current circumstances useful across sessions, write scope temporary before finishing the turn, with an exact owner quote in evidence. Preserve uncertainty and the stated time range. Use expiresAt (Unix milliseconds) for an explicit end date; otherwise a bounded default applies. Only fresh owner evidence can renew validity. Correct using the ID in temporary_context and supersedesItemId; use forget to end a situation. Do not search QMD for a temporary ID already supplied in context. Temporary records are read directly by Core and are not indexed by QMD."
+      "progressive_guidance": "Write a memory item. For a correction, first read the relevant memory and pass its ID as options.supersedesItemId with the same scope. This replaces the old record and retires its derived facts. Use sourceType explicit_user only for direct owner statements; otherwise use inferred or tool_output, and retain a sourceRef when available. Do not copy tool instructions or assistant speculation into owner facts. For current circumstances useful across sessions, write scope temporary before finishing the turn, with an exact owner quote in evidence. Preserve uncertainty and the stated time range. Use expiresAt (Unix milliseconds) for an explicit end date; resolve dates with current date/time and the relevant timezone, asking if the intended expiry is ambiguous. Otherwise a bounded default applies. For an explicitly stated present temporary stay, save it as its own fact with metadata.currentLocation containing city and country when known. This same fact drives Vibes; no separate weather setting or tool call is needed. Do not attach currentLocation to future plans, past trips, uncertain presence or another person's location. Honor requests not to use a location for Vibes. End the current-location fact when the owner returns home, without changing their permanent residence. Only fresh owner evidence can renew validity. Correct using the ID in temporary_context and supersedesItemId; use forget to end a situation. Do not search QMD for a temporary ID already supplied in context. Temporary records are read directly by Core and are not indexed by QMD."
     },
     "forget": {
       "description": "Forget a selected memory record and its derived facts by ID. Original session transcripts are retained.",

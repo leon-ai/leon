@@ -1,11 +1,15 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
   type ReactNode
 } from 'react'
+
+import { useAnimationVisibility } from '@/hooks/use-animation-visibility'
 
 import './streaming-text.sass'
 
@@ -28,6 +32,7 @@ interface StreamingTextProps {
   className?: string
   startDelay?: number
   text: string
+  compact?: boolean
 }
 
 interface StreamingTextState {
@@ -50,6 +55,16 @@ interface FeedAnimationRegistry {
 }
 
 const FeedAnimationContext = createContext<FeedAnimationRegistry | null>(null)
+
+/**
+ * Keeps wrapper cleanup from replacing nodes that belong to a native selection.
+ */
+function hasSelection(container: HTMLElement | null): boolean {
+  const selection = window.getSelection()
+
+  return Boolean(container && selection && !selection.isCollapsed &&
+    selection.containsNode(container, true))
+}
 
 export function FeedAnimationProvider({
   children,
@@ -103,19 +118,34 @@ export function StreamingText({
   animateInitial = true,
   className,
   startDelay = 0,
-  text
+  text,
+  compact = false
 }: StreamingTextProps) {
   const registry = useContext(FeedAnimationContext)
+  const canAnimate = useAnimationVisibility()
   const containerRef = useRef<HTMLSpanElement>(null)
+  const isHistorical = registry?.historicalIds.some((id) => animationId.startsWith(id)) ?? false
   const stateRef = useRef<StreamingTextState>({
     animationId,
     reveals: new Map(),
     // Cached labels should appear immediately and only reveal subsequent changes.
     text: animateInitial ? '' : text
   })
-  const characters = Array.from(text)
+  const characters = isHistorical ? [] : Array.from(text)
+  const [, compactReveals] = useState(0)
+  const preserveSelection = !canAnimate && !isHistorical &&
+    stateRef.current.reveals.size > 0 && stateRef.current.animationId === animationId &&
+    text.startsWith(stateRef.current.text) && hasSelection(containerRef.current)
 
-  if (
+  if (!canAnimate || isHistorical) {
+    // Hidden arrivals stay settled on return. Selected wrappers remain stable,
+    // but no new character animations are allocated while motion is disabled.
+    stateRef.current = {
+      animationId,
+      text,
+      reveals: preserveSelection ? stateRef.current.reveals : new Map()
+    }
+  } else if (
     stateRef.current.animationId !== animationId ||
     stateRef.current.text !== text
   ) {
@@ -157,7 +187,7 @@ export function StreamingText({
     }
   }
 
-  if (!animateInitial) {
+  if (!animateInitial && !preserveSelection) {
     const now = performance.now()
     // Settled labels must be plain text before a parent moves their DOM nodes.
     for (const [index, reveal] of stateRef.current.reveals) {
@@ -172,7 +202,7 @@ export function StreamingText({
   }
 
   useLayoutEffect(() => {
-    if (animateInitial) {
+    if (animateInitial || !canAnimate) {
       return
     }
 
@@ -193,14 +223,35 @@ export function StreamingText({
   })
 
   useLayoutEffect(() => {
-    if (registry === null) {
+    if (registry === null || isHistorical) {
       return
     }
 
     registry.streamedCharacterCounts.set(animationId, characters.length)
-  }, [animationId, characters.length, registry])
+  }, [animationId, characters.length, registry, isHistorical])
 
-  if (registry?.historicalIds.some((id) => animationId.startsWith(id))) {
+  useEffect(() => {
+    if (!compact || !canAnimate || isHistorical || stateRef.current.reveals.size === 0) {
+      return undefined
+    }
+
+    // Markdown has many text leaves. Retire their finished character wrappers
+    // even when a settled block receives no further streaming updates.
+    const completesAt = Math.max(...Array.from(stateRef.current.reveals.values(), (reveal) => reveal.completesAt))
+    const timer = setTimeout(() => {
+      // Native selections can span several leaves, including their middle nodes.
+      if (hasSelection(containerRef.current)) {
+        return
+      }
+
+      stateRef.current.reveals.clear()
+      compactReveals((revision) => revision + 1)
+    }, Math.max(0, completesAt - performance.now()))
+
+    return () => clearTimeout(timer)
+  }, [animationId, text, compact, isHistorical, canAnimate])
+
+  if (isHistorical || (!canAnimate && !preserveSelection)) {
     return (
       <span className={className}>
         <span className="streaming-text-characters">{text}</span>

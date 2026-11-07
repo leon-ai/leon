@@ -7,6 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { randomUUID } from 'node:crypto'
 import { resolveToolDirectory } from '@/leon-roots'
 
 import { ConnectionRequiredError } from '@sdk/base-tool'
@@ -102,6 +103,7 @@ let closing = false
 let activeCall: AbortController | undefined
 let activeRequestId: string | undefined
 let execution: Promise<void> = Promise.resolve()
+const preparationApprovals = new Map<string, { resolve: () => void, reject: (error: Error) => void }>()
 
 /**
  * Wait for delivered native input to settle before releasing its resources.
@@ -110,6 +112,10 @@ const shutdown = async (): Promise<void> => {
   if (closing) return
   closing = true
   activeCall?.abort(new Error('Tool execution canceled during worker shutdown.'))
+  for (const approval of preparationApprovals.values()) {
+    approval.reject(new Error('Tool worker shutting down.'))
+  }
+  preparationApprovals.clear()
   await execution
   try {
     await toolInstance?.dispose?.()
@@ -132,11 +138,13 @@ const execute = async (context: ToolExecutionContext, args: unknown[]): Promise<
     const method = (toolInstance as unknown as Record<string, unknown>)[context.functionName]
     if (typeof method !== 'function') throw new Error(`Function ${context.functionName} not found on ${context.toolId}.`)
     const result = await method.apply(toolInstance, args)
+    await toolInstance.waitForPreparation?.()
     return {
       success: true, message: 'Tool executed successfully.', output: { result },
       ...(toolInstance.getModelFiles().length ? { modelFiles: toolInstance.getModelFiles() } : {})
     }
   } catch (error) {
+    await toolInstance?.waitForPreparation?.()
     const { isMissingToolSettingsError } = await import('@sdk/tool-manager')
 
     return {
@@ -159,7 +167,17 @@ const run = async (): Promise<void> => {
       if (request.type === 'shutdown') { void shutdown(); return }
       if (request.type === 'cancel') {
         if (request.requestId === activeRequestId) {
-          activeCall?.abort(new DOMException(request.reason, 'TimeoutError'))
+          activeCall?.abort(new DOMException(request.reason, request.name ?? 'TimeoutError'))
+        }
+        return
+      }
+      if (request.type === 'preparation-result') {
+        const approval = preparationApprovals.get(request.preparationId)
+        preparationApprovals.delete(request.preparationId)
+        if (request.error) {
+          approval?.reject(new Error(request.error))
+        } else {
+          approval?.resolve()
         }
         return
       }
@@ -178,6 +196,16 @@ const run = async (): Promise<void> => {
           () => execute({
             ...request.context,
             signal: activeCall!.signal,
+            onPreparationComplete: () => new Promise<void>((resolve, reject) => {
+              const preparationId = randomUUID()
+              preparationApprovals.set(preparationId, { resolve, reject })
+              process.send?.({ type: 'prepared', requestId: request.requestId, preparationId }, (error: Error | null) => {
+                if (error) {
+                  preparationApprovals.delete(preparationId)
+                  reject(error)
+                }
+              })
+            }),
             onProgress: (progress) => {
               if (process.connected) {
                 process.send?.({ type: 'progress', requestId: request.requestId, progress }, () => {})

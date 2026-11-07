@@ -6,12 +6,14 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, expect, it, vi } from 'vitest'
 import { parse, stringify } from 'yaml'
+import SQLite from 'better-sqlite3'
 
 import { getProfilePaths, type ProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { runProfileMigrations } from '@@/scripts/setup/setup-migrations'
 import migrateMediaToolSettings from '@@/scripts/setup/migrations/2026100812124300-migrate-media-tool-settings'
 import migrateInferenceUsage from '@@/scripts/setup/migrations/2026100823413300-backfill-inference-usage'
 import migrateTemporaryContextBudget from '@@/scripts/setup/migrations/2026110101531712-increase-temporary-context-budget'
+import migrateTemporaryLocationBackfill from '@@/scripts/setup/migrations/2026110704012858-queue-temporary-location-backfill'
 import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 
 const FIRST = '2026100120203102-z-first.js'
@@ -80,6 +82,51 @@ async function usageRecords(profile: ProfilePaths): Promise<InferenceUsageRecord
 
   return records
 }
+
+it('queues only eligible legacy temporary evidence once without altering facts or creating fresh storage', async () => {
+  await fixture()
+  const profile = pathsFor('a')
+  const file = path.join(profile.memory, 'index.sqlite')
+  await migrateTemporaryLocationBackfill(profile)
+  expect(await fs.access(file).then(() => true, () => false)).toBe(false)
+  await fs.mkdir(profile.memory, { recursive: true })
+  const db = new SQLite(file)
+  try {
+    db.exec(await fs.readFile('server/src/core/memory-manager/sql/schema.sql', 'utf8'))
+    const now = Date.now()
+    const insert = db.prepare(`INSERT INTO memory_items
+      (id, scope, kind, content_md, content_text, source_type, source_ref, created_at, updated_at, expires_at, is_deleted, metadata_json)
+      VALUES (?, ?, 'note', 'Original fact', 'Original fact', 'explicit_user', 'fixture:owner', ?, ?, ?, ?, ?)`)
+    for (const [id, scope, expiry, deleted, metadata] of [
+      ['eligible', 'temporary', now + 60_000, 0, { evidence: 'I am staying in Lyon.' }],
+      ['unrelated', 'temporary', now + 60_000, 0, { evidence: 'I am working on a project.' }],
+      ['expired', 'temporary', now - 1, 0, { evidence: 'Earlier stay.' }],
+      ['forgotten', 'temporary', now + 60_000, 1, { evidence: 'Earlier stay.' }],
+      ['structured', 'temporary', now + 60_000, 0, { evidence: 'I am in Paris.', currentLocation: { city: 'Paris' } }],
+      ['unsupported', 'temporary', now + 60_000, 0, {}],
+      ['permanent', 'persistent', now + 60_000, 0, { evidence: 'My home is Paris.' }]
+    ] as const) {
+      insert.run(id, scope, now, now, expiry, deleted, JSON.stringify(metadata))
+    }
+    db.prepare('UPDATE memory_items SET supersedes_item_id = ? WHERE id = ?').run('superseded', 'structured')
+    insert.run('superseded', 'temporary', now, now, now + 60_000, 0, JSON.stringify({ evidence: 'Former stay.' }))
+    const original = db.prepare('SELECT * FROM memory_items ORDER BY id').all()
+    db.exec('DROP TABLE temporary_location_backfill')
+    insert.run('malformed', 'temporary', now, now, now + 60_000, 0, '{invalid')
+    const malformed = db.prepare('SELECT * FROM memory_items WHERE id = ?').get('malformed')
+    await migrateTemporaryLocationBackfill(profile)
+    expect(db.prepare('SELECT item_id FROM temporary_location_backfill ORDER BY item_id').all())
+      .toEqual([{ item_id: 'eligible' }, { item_id: 'unrelated' }])
+    db.prepare('UPDATE temporary_location_backfill SET completed_at = ? WHERE item_id = ?').run(now, 'eligible')
+    await migrateTemporaryLocationBackfill(profile)
+    expect(db.prepare('SELECT completed_at FROM temporary_location_backfill WHERE item_id = ?').get('eligible'))
+      .toEqual({ completed_at: now })
+    expect(db.prepare('SELECT * FROM memory_items WHERE id != ? ORDER BY id').all('malformed')).toEqual(original)
+    expect(db.prepare('SELECT * FROM memory_items WHERE id = ?').get('malformed')).toEqual(malformed)
+  } finally {
+    db.close()
+  }
+})
 
 it('updates the temporary context default once while preserving custom profile settings', async () => {
   await fixture()

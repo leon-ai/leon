@@ -28,6 +28,7 @@ class ToolRuntimeProgress(TypedDict):
     data: NotRequired[dict[str, Any]]
     stream: NotRequired[ToolProgressStream]
     activity: NotRequired[bool]
+    phase: NotRequired[Literal["preparation", "execution"]]
 
 
 class ToolTimeoutPolicy(TypedDict, total=False):

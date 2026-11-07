@@ -15,6 +15,7 @@ import { Dropdown } from '@/components/dropdown'
 import { Input } from '@/components/input'
 import { StreamingText } from '@/components/streaming-text'
 import { SessionStatus } from '@/data/sessions'
+import { canPrefetch } from '@/utils/prefetch'
 
 import { SessionWorkIndicator } from './session-work-indicator'
 
@@ -297,6 +298,7 @@ export function SessionListItem({
         />
       ) : (
         <Link
+          preload={canPrefetch() ? 'intent' : false}
           to="/session/$sessionId"
           params={{ sessionId: id }}
           className="session-list-item-link"

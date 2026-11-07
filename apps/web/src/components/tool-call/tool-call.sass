@@ -95,6 +95,38 @@
   min-width: 0
   min-height: 0
 
+.tool-output-markdown
+  height: 236px
+
+.tool-output-document-source
+  display: flex
+  flex-direction: column
+
+  > .code-view
+    flex: 1 1 auto
+
+  > .tool-diff-notice
+    flex: 0 0 auto
+
+.tool-output-markdown-viewport
+  padding: var(--space-md) var(--space-lg)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+  overscroll-behavior: contain
+
+.tool-output-markdown-preview
+  height: auto
+  max-height: calc(var(--code-preview-lines) * 22px + var(--space-md) * 2)
+
+  .tool-output-markdown-viewport
+    max-height: inherit
+    overflow-y: hidden
+    overscroll-behavior-y: auto
+
+.tool-output-ellipsis
+  margin: 0
+  color: var(--color-text-tertiary)
+
 .tool-output-loading
   position: absolute
   inset: 0
