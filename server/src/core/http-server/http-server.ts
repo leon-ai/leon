@@ -34,6 +34,7 @@ import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
 import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
 import { connectionsPlugin } from '@/core/http-server/api/connections'
 import { ambientPlugin } from '@/core/http-server/api/ambient'
+import { faviconsPlugin } from '@/core/http-server/api/favicons'
 import {
   authenticateProfileHTTPRequest,
   profileAuthRoutes
@@ -215,7 +216,7 @@ export default class HTTPServer {
 
       // Session browsing must remain usable while a model is booting or offline.
       await authenticateProfileHTTPRequest(request, reply, {
-        initializeRuntime: !isConversationMetadata
+        initializeRuntime: !isConversationMetadata && requestPath !== `/api/${API_VERSION}/favicons`
       })
     })
 
@@ -237,6 +238,7 @@ export default class HTTPServer {
     this.fastify.register(extensionFilesPlugin, { apiVersion: API_VERSION })
     this.fastify.register(connectionsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(ambientPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(faviconsPlugin, { apiVersion: API_VERSION })
     await registerHTTPPlugins(this.fastify, { apiVersion: API_VERSION })
 
     await this.listen()
