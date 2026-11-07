@@ -94,6 +94,8 @@ class BaseTool(ABC):
     def __init__(self):
         """Initialize the tool with default settings"""
         self.execution_context: ToolExecutionContext | None = None
+        # Rich text is opt-in; command output remains literal by default.
+        self.output_format = "text"
         self._model_files: list[ToolModelFile] = []
         self.cli_progress = True
         self.settings: Dict[str, Any] = {}
@@ -127,11 +129,17 @@ class BaseTool(ABC):
                     "activity": True,
                     "key": "bridges.tools.output_delta",
                     "message": chunk,
-                    "data": {"output": chunk},
+                    "data": {
+                        "output": chunk,
+                        **({"format": self.output_format} if self.output_format != "text" else {}),
+                    },
                     **({"stream": stream} if stream else {}),
                 })
             else:
-                self.report("bridges.tools.output_delta", {"output": chunk})
+                self.report("bridges.tools.output_delta", {
+                    "output": chunk,
+                    **({"format": self.output_format} if self.output_format != "text" else {}),
+                })
 
     def emit_progress(
         self, message: str, context: ToolExecutionContext | None = None
@@ -142,7 +150,10 @@ class BaseTool(ABC):
             return
 
         if context and context.on_progress:
-            context.on_progress({"source": "report", "message": message, "activity": True})
+            context.on_progress({
+                "source": "report", "message": message, "activity": True,
+                **({"data": {"format": self.output_format}} if self.output_format != "text" else {}),
+            })
         else:
             self.log(message)
 

@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-11-04T21:36:18+08:00
+- Generated at: 2026-11-06T23:54:50+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -41,6 +41,7 @@
 - The model batches independent calls within or across planned work. Tools run concurrently in isolated workers by default; tool-level serial declarations preserve shared sessions and instance state, and function-level overrides allow both in one tool. Bookkeeping stays ordered, and results retain their emitted transcript order.
 - Coding runs directly in the existing agent loop, guided by an Agent Skill and repository instructions. The file tool supports targeted patches; the shell tool supports finite commands and retained conversation-owned command sessions. External coding agents are optional owner-selected delegates.
 - Core retains opted-in background and oversized synchronous agent results per profile/conversation, with handles, cancellation, progress, bounded waits and structured queries without reexecution.
+- SDK binary/resource preparation is retained independently of tool background settings. Follow-up messages leave downloads running but require reassessment before the dependent action; explicit cancellation and deadlines still stop preparation. Worker and Satellite boundaries preserve this separation.
 - Workers load assets from the codebase and resolve relative task files in the caller's workspace; Satellite uses its device's workspace.
 - Plans track scope, collection coverage and verified outcomes; their worklists persist through checkpointing and continuation.
 - The agent can share progress updates alongside tool calls during longer tasks.

@@ -195,6 +195,10 @@ it.each(['success', 'error', 'background', 'throw'])(
       now.mockReturnValue(2_234)
 
       if (outcome === 'throw') {
+        input.onProgress({
+          source: 'report', key: 'bridges.tools.download_progress_with_details',
+          message: 'Downloading fixture: 40%.', data: { percentage: 40 }
+        })
         throw new Error('Worker disconnected.')
       }
 
@@ -211,6 +215,7 @@ it.each(['success', 'error', 'background', 'throw'])(
 
     if (outcome === 'throw') {
       await expect(execution).rejects.toThrow('Worker disconnected.')
+      await expect(execution).rejects.toThrow('Last preparation report (not proof of ongoing work): Downloading fixture: 40%.')
     } else {
       await execution
     }
@@ -313,6 +318,37 @@ it('announces binary readiness only after actual preparation starts', async () =
       message: 'Downloading missing binary.'
     })
   )
+
+  onPreparationProgress.mockClear()
+  const onProgress = vi.fn()
+  const stream = { id: 'preparing-fixture', state: 'running' }
+  const followUp = new AbortController()
+  const turn = new AbortController()
+  coreMocks.executeTool.mockImplementationOnce(async (input) => {
+    input.onProgress({
+      source: 'report', key: 'bridges.tools.download_progress_with_details',
+      message: 'Downloading fixture: 40%.', data: { percentage: 40 }, stream
+    })
+    followUp.abort(new Error('New owner instructions require reassessment.'))
+
+    return { status: 'success', data: { output: { execution: { ...stream,
+      progress: { message: 'Downloading fixture: 40%.', data: { percentage: 40 } }
+    } } } }
+  })
+  const retained = await runToolExecution(
+    'test', 'lookup', 'run', '{}', {}, undefined, undefined, onProgress,
+    followUp.signal, onPreparationProgress, undefined, turn.signal
+  )
+  expect(retained.executionHandle).toEqual(stream)
+  expect(JSON.parse(retained.execution.observation).execution.progress.data.percentage).toBe(40)
+  expect(onPreparationProgress).not.toHaveBeenCalledWith('react.tool.ready')
+  expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'running' }))
+  coreMocks.executeTool.mock.lastCall![0].onProgress({
+    source: 'report', message: 'Done.', data: { result: 'Prepared' },
+    stream: { ...stream, state: 'completed' }
+  })
+  expect(onPreparationProgress).toHaveBeenLastCalledWith('react.tool.ready')
+  expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'success' }))
 })
 
 it('submits connection secrets without retaining them in the loop transcript', async () => {

@@ -5,3 +5,4 @@ export type {
   ToolRuntimeResult,
   ToolTimeoutPolicy
 } from '@@/bridges/runtime/contracts/tool-runtime-types'
+export { ToolRuntimePhase } from '@@/bridges/runtime/contracts/tool-runtime-types'

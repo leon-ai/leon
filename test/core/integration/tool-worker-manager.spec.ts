@@ -11,8 +11,15 @@ import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { extractArchive } from '@sdk/utils'
 import { runRipgrep } from '@@/tools/file_system/ripgrep/src/nodejs/lib/run-ripgrep'
 import { DocumentReader } from '@@/tools/file_system/file/src/nodejs/lib/document-reader'
+import { exerciseToolPreparation } from '../fixtures/tool-preparation'
 
 const LARGE_RESULT_BYTES = 4 * 1_024 * 1_024
+
+it.each(['resource', 'binary', 'parallel', 'stop', 'complete', 'action'] as const)(
+  'keeps preparation separate from owner-interrupted actions (%s)', async (mode) => {
+    await exerciseToolPreparation(mode)
+  }, 20_000
+)
 
 it.each(['recordLimit', 'timeout', 'canceled'])(
   'preserves the %s guard while awaiting an asynchronous ripgrep sink',

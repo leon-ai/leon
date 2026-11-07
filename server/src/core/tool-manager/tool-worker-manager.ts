@@ -16,6 +16,7 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import { ToolConcurrency } from '@/types'
 import {
   ToolRuntimeLifetime,
+  ToolRuntimePhase,
   type ToolExecutionContext,
   type ToolRuntimeProgress,
   type ToolRuntimeResult,
@@ -33,6 +34,7 @@ interface Worker {
   fail?: (message: string) => void
   log?: (line: string) => void
   diagnostics: string
+  approvePreparation?: (request: Extract<ToolWorkerResponse, { type: 'prepared' }>) => void
   progress: Map<string, {
     receive: (progress: ToolRuntimeProgress) => void
     streams: Set<string>
@@ -141,6 +143,8 @@ export class ToolWorkerManager {
     child.on('message', (message: ToolWorkerResponse) => {
       if (message.type === 'result') {
         worker.result?.(message)
+      } else if (message.type === 'prepared') {
+        worker.approvePreparation?.(message)
       } else if (message.type === 'progress') {
         const subscription = worker.progress.get(message.requestId)
         if (!subscription) {
@@ -202,12 +206,23 @@ export class ToolWorkerManager {
     const timeout = context.timeout ? new ToolTimeout(context.timeout) : undefined
     const worker = this.workers.get(key) ?? this.create(context, key)
     const requestId = randomUUID()
+    let preparing = false
+    let forceStopTimer: NodeJS.Timeout | undefined
     // A persistent worker may serve another conversation while earlier work
     // still emits output. Correlate progress with the original call and owner.
     const subscription = {
       streams: new Set<string>(),
       returned: false,
       receive: (progress: ToolRuntimeProgress): void => {
+        if (progress.phase) {
+          preparing = progress.phase === ToolRuntimePhase.Preparation
+          if (preparing && !timeout?.signal.aborted) {
+            clearTimeout(forceStopTimer)
+            forceStopTimer = undefined
+          } else if (!preparing && context.signal?.aborted && !forceStopTimer) {
+            forceStopTimer = setTimeout(() => void this.stop(worker, 0), SHUTDOWN_TIMEOUT_MS)
+          }
+        }
         if (!subscription.returned && progress.activity) {
           timeout?.touch()
         }
@@ -223,10 +238,25 @@ export class ToolWorkerManager {
     worker.log = log
     worker.diagnostics = ''
     const abort = (): void => {
+      if (!context.preparationSignal) {
+        void this.stop(worker)
+        return
+      }
+      if (context.preparationSignal.aborted) {
+        return
+      }
+
+      worker.process.send({ type: 'cancel', requestId,
+        reason: 'New owner instructions require reassessment.', name: 'AbortError' }, () => {})
+      if (!preparing) {
+        forceStopTimer = setTimeout(() => void this.stop(worker, 0), SHUTDOWN_TIMEOUT_MS)
+      }
+    }
+    const cancelPreparation = (): void => {
       void this.stop(worker)
     }
     context.signal?.addEventListener('abort', abort, { once: true })
-    let forceStopTimer: NodeJS.Timeout | undefined
+    context.preparationSignal?.addEventListener('abort', cancelPreparation, { once: true })
     const cancelTimedOutCall = (): void => {
       if (worker.process.connected) {
         worker.process.send({
@@ -246,6 +276,7 @@ export class ToolWorkerManager {
       const finish = (value: ToolRuntimeResult): void => {
         delete worker.result
         delete worker.fail
+        delete worker.approvePreparation
         resolve(value)
       }
       worker.fail = (message): void => {
@@ -256,10 +287,25 @@ export class ToolWorkerManager {
         retire = isolated || message.lifetime !== ToolRuntimeLifetime.Persistent
         finish(message.result)
       }
+      worker.approvePreparation = (request): void => {
+        if (request.requestId !== requestId) {
+          return
+        }
+        // The acknowledgement closes the IPC race between finishing a download
+        // and starting an action after newer owner instructions have arrived.
+        worker.process.send({ type: 'preparation-result', requestId,
+          preparationId: request.preparationId,
+          ...(context.signal?.aborted || timeout?.signal.aborted
+            ? { error: 'Tool assets are prepared; reassess the latest owner instructions before executing the action.' }
+            : {})
+        }, () => {})
+      }
       // Progress callbacks are local; only serializable call context crosses IPC.
       const callContext = { ...context }
       delete callContext.onProgress
       delete callContext.signal
+      delete callContext.preparationSignal
+      delete callContext.onPreparationComplete
       worker.process.send({ type: 'execute', requestId, context: callContext, args }, (error) => {
         if (error) {
           worker.fail?.(error.message)
@@ -270,6 +316,7 @@ export class ToolWorkerManager {
     timeout?.signal.removeEventListener('abort', cancelTimedOutCall)
     timeout?.dispose()
     context.signal?.removeEventListener('abort', abort)
+    context.preparationSignal?.removeEventListener('abort', cancelPreparation)
     subscription.returned = true
     if (subscription.streams.size === 0) {
       worker.progress.delete(requestId)

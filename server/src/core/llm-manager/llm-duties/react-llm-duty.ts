@@ -784,7 +784,8 @@ export class ReActLLMDuty extends LLMDuty {
             },
             this.getExecutionSignal(),
             (message) => this.emitProgress(message),
-            preview?.groupId
+            preview?.groupId,
+            this.getExecutionSignal(false)
           )
 
           if (activeSkill && !activeSkill.id.startsWith(EXPERIENCE_PREFIX)) {
@@ -923,11 +924,15 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   /**
-   * Shares owner interruptions and the run deadline with every in-flight operation.
+   * Shares turn cancellation and deadlines; foreground work also follows owner edits.
    */
-  private getExecutionSignal(): AbortSignal | undefined {
-    const signals = [this.signal, this.agentTurnSignal, this.getOwnerMessageSignal?.(), this.runBudget?.signal]
-      .filter((signal): signal is AbortSignal => Boolean(signal))
+  private getExecutionSignal(includeOwnerMessage = true): AbortSignal | undefined {
+    const signals = [
+      this.signal,
+      this.agentTurnSignal,
+      this.runBudget?.signal,
+      ...(includeOwnerMessage ? [this.getOwnerMessageSignal?.()] : [])
+    ].filter((signal): signal is AbortSignal => Boolean(signal))
 
     if (signals.length > 1) {
       return AbortSignal.any(signals)
