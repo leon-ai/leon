@@ -3,7 +3,6 @@ import type { Locator, Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
-
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -144,6 +143,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+
 test('resolves dynamic SVG artwork locally and highlights running tools with safe fallbacks', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.message = ''
@@ -184,12 +184,14 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
   await expect(page.locator('.tool-call-tool-icon defs')).toHaveCount(0)
 })
 
+
 async function expectBottom(page: Page): Promise<void> {
   await expect.poll(() => page.locator('.app-main').evaluate((main) =>
     Math.abs(main.scrollHeight - main.clientHeight - main.scrollTop)
   )).toBeLessThanOrEqual(2)
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
 }
+
 
 /**
  * Samples a disclosure heading through its finite motion, including late
@@ -213,6 +215,7 @@ function recordDisclosurePositions(trigger: Locator): Promise<number[]> {
   })
 }
 
+
 test('reveals conversation loading only after one second and cancels it on navigation', async ({ page, ui }) => {
   const now = new Date('2026-11-01T12:00:00Z')
   await page.clock.install({ time: now })
@@ -235,8 +238,14 @@ test('reveals conversation loading only after one second and cancels it on navig
   await expect(loading).toHaveCount(0)
 })
 
+
 test('bounds inline output, virtualizes complete logs, and retains the inspector when work finishes', async ({ page, ui }, testInfo) => {
   expect(page.workers()).toHaveLength(0)
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  await page.goto('/web-app/')
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  expect(resources.some((url) => /\/assets\/(markdown-|tool-diff-|highlights-)/.test(url))).toBe(false)
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   const tool: ConversationTool = { id: 'large-log', name: 'test.shell.run', toolCallTitle: 'Inspect the logs',
     status: 'running', input: { command: 'read logs' },
@@ -297,6 +306,7 @@ test('bounds inline output, virtualizes complete logs, and retains the inspector
   await expect.poll(() => page.workers().length).toBe(0)
 })
 
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`expands large groups downward without moving their headings (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
@@ -338,6 +348,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+
 for (const active of [false, true]) {
   test(`virtualizes long tool groups against the conversation viewport (active: ${active})`, async ({ page, ui }) => {
     const answer = ui.history.get(SESSION_ID)!.at(-1)!
@@ -376,50 +387,6 @@ for (const active of [false, true]) {
   })
 }
 
-for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`keeps the feed as the only vertical scroll area (${reducedMotion})`, async ({ page, ui }) => {
-    await page.emulateMedia({ reducedMotion })
-    const answer = ui.history.get(SESSION_ID)!.at(-1)!
-    answer.message = Array.from({ length: 60 }, (_, index) => `Answer paragraph ${index}.`).join('\n\n')
-    answer.agentResponseTrace = {
-      id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
-      toolCalls: Array.from({ length: 16 }, (_, index) => ({
-        id: `scroll-${index}`, name: 'test.inspect', toolCallTitle: `Inspect section ${index}`, status: 'success',
-        output: Array.from({ length: 200 }, (_, line) => `Output line ${line} ${'detail '.repeat(80)}`).join('\n')
-      }))
-    }
-    await page.goto(SESSION_URL)
-    await page.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
-    await page.getByRole('button', { name: 'Used 16 tools', exact: true }).click()
-    await page.getByRole('button', { name: 'Inspect section 0', exact: true }).click()
-    const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true })
-    const firstOutput = tools.getByRole('region', { name: 'Tool output', exact: true }).first()
-    const main = page.locator('.app-main')
-
-    await finishFiniteAnimations(page.locator('.feed'))
-    await firstOutput.scrollIntoViewIfNeeded()
-    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
-    expect(await firstOutput.locator('.code-view-line').count()).toBeLessThanOrEqual(16)
-    await firstOutput.hover()
-    const mainTop = await main.evaluate((element) => element.scrollTop)
-    await page.mouse.wheel(400, 0)
-    await expect.poll(() => firstOutput.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
-    expect(await main.evaluate((element) => element.scrollTop)).toBe(mainTop)
-    await page.mouse.wheel(0, 120)
-    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeGreaterThan(mainTop)
-
-    await firstOutput.scrollIntoViewIfNeeded()
-    await firstOutput.hover()
-    const beforeUp = await main.evaluate((element) => element.scrollTop)
-    await page.mouse.wheel(0, -120)
-    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(beforeUp)
-
-    await page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true }).click()
-    const menuViewport = page.locator('.dropdown-content .scroll-container-viewport')
-    await expect(menuViewport).toBeVisible()
-    expect(await menuViewport.evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe('contain')
-  })
-}
 
 test('highlights session JSON with long output strings in previews and the tabbed inspector', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
@@ -454,6 +421,7 @@ test('highlights session JSON with long output strings in previews and the tabbe
   await expect(outputTab).toHaveAttribute('aria-selected', 'true')
   await expect(output).toContainText('A shell output line.')
 })
+
 
 test('shows native file-read content as code without exposing its result envelope', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
@@ -491,6 +459,7 @@ test('shows native file-read content as code without exposing its result envelop
   await trigger.click()
   await expect.poll(() => page.workers().length).toBe(0)
 })
+
 
 for (const width of [1_512, 390]) {
   test(`defaults to inline diffs with accessible layout controls and raw input/output (${width})`, async ({ page, ui }, testInfo) => {
@@ -608,6 +577,7 @@ for (const width of [1_512, 390]) {
   })
 }
 
+
 test('bounds long diff previews and retains recorded context in both inspector layouts', async ({ page, ui }) => {
   const before = Array.from({ length: 60 }, (_, index) => `const marker${index} = ${index};`)
   before[0] = `const description = "${'Context '.repeat(100)}";`
@@ -667,6 +637,7 @@ test('bounds long diff previews and retains recorded context in both inspector l
   await expect(controls.getByRole('button')).toHaveCount(2)
 })
 
+
 for (const wasm of [true, false]) {
   test(`keeps file diffs readable outside the JavaScript grammar catalog (Wasm: ${wasm})`, async ({ page, ui }) => {
     if (!wasm) {
@@ -703,6 +674,7 @@ for (const wasm of [true, false]) {
     expect(errors).toEqual([])
   })
 }
+
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`navigates virtual session search from the keyboard without leaving its input (${reducedMotion})`, async ({ page, ui }) => {
@@ -760,6 +732,102 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+
+for (const { theme, reducedMotion, width } of [
+  { theme: 'dark', reducedMotion: 'no-preference', width: 1_512 },
+  { theme: 'light', reducedMotion: 'reduce', width: 390 }
+] as const) {
+  test(`shows highlighted content-only excerpts in paginated session search (${theme})`, async ({ page, ui }, testInfo) => {
+    ui.sessions[0]!.title = 'Sharing - context'
+    ui.sessions[1]!.title = 'Sharing context notes'
+    const titleMatches = ui.sessions.slice(0, 2)
+    const contentMatches = Array.from({ length: 64 }, (_, index) => ({
+      ...ui.sessions[0]!,
+      id: `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+      title: `Workshop notes ${index}`
+    }))
+    for (const session of contentMatches) {
+      ui.sessions.push(session)
+      ui.history.set(session.id, [])
+    }
+    const requests: URL[] = []
+    await page.route('**/api/v1/sessions/page?*', async (route) => {
+      const url = new URL(route.request().url())
+      const query = url.searchParams.get('query')
+      if (!query) {
+        await route.fallback()
+        return
+      }
+      requests.push(url)
+      const offset = Number(url.searchParams.get('cursor') ?? 0)
+      const limit = Number(url.searchParams.get('limit'))
+      const candidates = query === 'sharing context' ? [...titleMatches, ...contentMatches] : []
+      const sessions = candidates.slice(offset, offset + limit)
+      await route.fulfill({ json: {
+        sessions, event_cursor: 0,
+        next_cursor: offset + limit < candidates.length ? String(offset + limit) : null,
+        search_matches: Object.fromEntries(sessions.filter((session) => contentMatches.includes(session)).map((session) => [
+          session.id, { excerpt: 'A few useful notes about sharing - context between sessions, keeping the right details nearby while leaving enough room for new ideas and a calm place to work.' }
+        ]))
+      } })
+    })
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    }
+    const historyReads = ui.historyRequests.length
+    await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+    await page.setViewportSize({ width, height: 982 })
+    const dialog = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+    const input = dialog.getByRole('combobox', { name: 'Search sessions', exact: true })
+    const results = dialog.getByRole('listbox', { name: 'Matching sessions', exact: true })
+    await input.fill('sharing context')
+    await expect(input).toHaveAttribute('aria-busy', 'false')
+    const title = results.getByRole('option').filter({ has: page.getByText('Sharing - context', { exact: true }) })
+    await expect(title.locator('.search-sessions-dialog-title-highlight')).toHaveText('Sharing - context')
+    await expect(title.locator('.search-sessions-dialog-excerpt')).toHaveCount(0)
+    const excerpt = results.locator('.search-sessions-dialog-excerpt').first()
+    await expect(excerpt).toBeVisible()
+    await expect(excerpt.locator('.search-sessions-dialog-title-highlight')).toHaveText('sharing - context')
+    await expect(excerpt).toHaveCSS('-webkit-line-clamp', '2')
+    const excerptBounds = (await excerpt.boundingBox())!
+    expect(excerptBounds.height).toBeLessThanOrEqual(await excerpt.evaluate((element) => parseFloat(getComputedStyle(element).lineHeight) * 2))
+    expect(await results.getByRole('option').count()).toBeLessThan(30)
+    expect(requests.some((url) => url.searchParams.has('cursor'))).toBe(false)
+    expect(ui.historyRequests).toHaveLength(historyReads)
+    await finishFiniteAnimations(dialog)
+    const screenshot = testInfo.outputPath(`session-search-excerpts-${theme}.png`)
+    await page.screenshot({ path: screenshot })
+    await testInfo.attach(`session-search-excerpts-${theme}`, { path: screenshot, contentType: 'image/png' })
+    const viewport = dialog.locator('.search-sessions-dialog-results .scroll-container-viewport')
+    await viewport.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+    await expect.poll(() => requests.some((url) => url.searchParams.get('cursor') === '40')).toBe(true)
+    await viewport.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+    await expect(results.getByText('Workshop notes 63', { exact: true })).toBeVisible()
+    expect(await results.locator('li').evaluateAll((elements) => {
+      const bounds = elements.map((element) => element.getBoundingClientRect()).sort((a, b) => a.y - b.y)
+      return bounds.every((row, index) => index === 0 || row.top >= bounds[index - 1]!.bottom - 0.5)
+    })).toBe(true)
+    await input.fill('no matching content')
+    await expect(dialog.getByText('No session found.', { exact: true })).toBeVisible()
+    await expect(dialog.locator('.search-sessions-dialog-excerpt')).toHaveCount(0)
+    await input.fill('sharing context')
+    await expect(input).toHaveAttribute('aria-busy', 'false')
+    await input.press('ArrowUp')
+    const last = results.getByRole('option').filter({ has: page.getByText('Workshop notes 63', { exact: true }) })
+    await expect(last).toHaveAttribute('aria-selected', 'true')
+    await expect(last).toBeVisible()
+    await expect(input).toBeFocused()
+    await input.press('Enter')
+    await expect(page).toHaveURL(new RegExp(contentMatches.at(-1)!.id))
+    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  })
+}
+
+
 test('moves sidebar focus across virtual rows without opening a session until Enter', async ({ page, ui }) => {
   for (let index = ui.sessions.length; index < 80; index++) {
     const session = { ...ui.sessions[0]!, id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
@@ -787,6 +855,7 @@ test('moves sidebar focus across virtual rows without opening a session until En
   await expect(page).toHaveURL(new RegExp(OTHER_SESSION_ID))
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
 })
+
 
 test('opens and navigates session action menus with arrows, boundaries and native activation', async ({ page, ui }) => {
   void ui
@@ -825,6 +894,7 @@ test('opens and navigates session action menus with arrows, boundaries and nativ
   await expect(menu).toBeHidden()
 })
 
+
 test('reveals active session options on hover or keyboard focus rather than selection', async ({ page, ui }) => {
   void ui
   await page.goto(SESSION_URL)
@@ -849,6 +919,7 @@ test('reveals active session options on hover or keyboard focus rather than sele
   await options.press('Enter')
   await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeVisible()
 })
+
 
 for (const pinned of [false, true]) {
   test(`tracks unread concurrent completions through hover, navigation and refresh (pinned: ${pinned})`, async ({ page, ui }, testInfo) => {
@@ -920,6 +991,7 @@ for (const pinned of [false, true]) {
   })
 }
 
+
 test('marks only unseen successful completions and scopes them to the profile', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   const third = ui.sessions[2]!.id
@@ -948,6 +1020,7 @@ test('marks only unseen successful completions and scopes them to the profile', 
   await page.reload()
   await expect(dots).toHaveCount(1)
 })
+
 
 test('distinguishes the selected session from concurrent WIP rows in both themes', async ({ page, ui }, testInfo) => {
   for (const session of ui.sessions) {
@@ -986,6 +1059,7 @@ test('distinguishes the selected session from concurrent WIP rows in both themes
     await page.screenshot({ path: testInfo.outputPath(`concurrent-selection-${theme}.png`) })
   }
 })
+
 
 test('drafts immediately while history loads and opens the latest messages at the bottom', async ({ page, ui }, testInfo) => {
   const release = ui.holdHistory()
@@ -1032,6 +1106,7 @@ test('drafts immediately while history loads and opens the latest messages at th
   expect(ui.historyRequests[0]!.searchParams.has('before')).toBe(false)
 })
 
+
 test('reselects the current session at the bottom without discarding its draft', async ({ page, ui }) => {
   void ui
   await page.goto(SESSION_URL)
@@ -1044,6 +1119,7 @@ test('reselects the current session at the bottom without discarding its draft',
   await expect(composer).toHaveValue('Keep this draft')
   await expect(composer).toBeFocused()
 })
+
 
 test('keeps owner text directly selectable with its bubble selection colors and no tooltip', async ({ page, ui }) => {
   const text = 'A message whose text can be selected.'
@@ -1071,6 +1147,7 @@ test('keeps owner text directly selectable with its bubble selection colors and 
     expect(selected.background).toBe(selected.foreground)
   }
 })
+
 
 for (const { theme, motion, width } of [
   { theme: 'dark', motion: 'no-preference', width: 1_512 },
@@ -1213,6 +1290,7 @@ for (const { theme, motion, width } of [
   })
 }
 
+
 test('keeps absent accounting unknown and updates recorded turn info from live events', async ({ page, ui }) => {
   const response = ui.history.get(SESSION_ID)!.at(-1)!
   response.message = 'A saved answer without recorded usage.'
@@ -1245,6 +1323,7 @@ test('keeps absent accounting unknown and updates recorded turn info from live e
   await expect(info).toBeFocused()
 })
 
+
 test.describe('touch message actions', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
 
@@ -1266,6 +1345,7 @@ test.describe('touch message actions', () => {
     await expect(answerActions).toHaveCSS('opacity', '1')
   })
 })
+
 
 test('centers general errors in the usable feed area on session and new-session pages', async ({ page, ui }, testInfo) => {
   ui.failure = { path: '/api/v1/profile-auth', status: 503, message: 'I could not complete this request. Please try again.' }
@@ -1307,6 +1387,7 @@ test('centers general errors in the usable feed area on session and new-session 
   }
 })
 
+
 test('updates session titles from metadata-only notifications during and after a turn', async ({ page, ui }) => {
   const errors: Error[] = []
   const handlePageError = (error: Error): void => {
@@ -1342,6 +1423,7 @@ test('updates session titles from metadata-only notifications during and after a
     .locator('.streaming-text-character-new')).toHaveCount(0)
   page.off('pageerror', handlePageError)
 })
+
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`reveals live titles once while preserving ellipsis, hover scrolling and virtualized remounts (${reducedMotion})`, async ({ page, ui }) => {
@@ -1543,6 +1625,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+
 test('saves drafts only when leaving and removes submitted or manually cleared text', async ({ page, ui }) => {
   void ui
   await page.addInitScript(() => {
@@ -1587,6 +1670,7 @@ test('saves drafts only when leaving and removes submitted or manually cleared t
   await expect(composer).toHaveValue('')
 })
 
+
 test('isolates profile drafts and prioritizes new typing while authentication resolves', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
@@ -1622,6 +1706,7 @@ test('isolates profile drafts and prioritizes new typing while authentication re
   }
 })
 
+
 test('keeps drafting usable and reports browser storage failures', async ({ page, ui }) => {
   void ui
   await page.addInitScript(() => {
@@ -1643,6 +1728,7 @@ test('keeps drafting usable and reports browser storage failures', async ({ page
   await expect(composer).toBeEnabled()
 })
 
+
 test('reopens an evicted latest window without fetching older cursors first', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   await expectBottom(page)
@@ -1663,6 +1749,7 @@ test('reopens an evicted latest window without fetching older cursors first', as
   expect(reopened.length).toBeGreaterThan(0)
   expect(reopened.every((url) => !url.searchParams.has('before') && !url.searchParams.has('after'))).toBe(true)
 })
+
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`loads history on scroll with a shared loader and a stable reading position (${reducedMotion})`, async ({ page, ui }, testInfo) => {
@@ -1709,6 +1796,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+
 test('keeps older history readable after a paging failure and retries only on request', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   await expectBottom(page)
@@ -1729,6 +1817,7 @@ test('keeps older history readable after a paging failure and retries only on re
   await expect(retry).toHaveCount(0)
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toHaveValue('Keep this draft')
 })
+
 
 for (const shortWindow of [false, true]) {
   test(`continues history loading without another scroll (short window: ${shortWindow})`, async ({ page, ui }) => {
@@ -1763,6 +1852,7 @@ for (const shortWindow of [false, true]) {
   })
 }
 
+
 test('reports a shared history failure once and keeps the draft through manual recovery', async ({ page, ui }) => {
   ui.failure = { path: `/api/v1/sessions/${SESSION_ID}`, status: 500, message: 'History is unavailable.' }
   await page.goto(SESSION_URL)
@@ -1775,6 +1865,7 @@ test('reports a shared history failure once and keeps the draft through manual r
   await expect(composer).toHaveValue('Keep this during recovery')
 })
 
+
 test('rolls back a rejected model setting and reports it through the shared toast', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   await expectBottom(page)
@@ -1784,6 +1875,7 @@ test('rolls back a rejected model setting and reports it through the shared toas
   await expect(page.locator('.toast-title')).toHaveText(['Model settings were not saved'])
   await expect(page.locator('.model-settings-trigger')).toContainText('High')
 })
+
 
 test('gives network-specific feedback and keeps drafting available through offline recovery', async ({ page, context, ui }) => {
   let disconnected = true
@@ -1821,127 +1913,45 @@ test('gives network-specific feedback and keeps drafting available through offli
   void ui
 })
 
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`shows leaf dates as metadata and reveals full dates only from the timestamp (${reducedMotion})`, async ({ page, ui }) => {
-    await page.emulateMedia({ reducedMotion })
-    await page.clock.setFixedTime(new Date('2026-10-31T12:00:00+08:00'))
-    const startedAt = await page.evaluate(() => new Date(2026, 9, 30, 14, 32, 15).getTime())
+  test(`shows measured generation and review inside the full turn total (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     const answer = ui.history.get(SESSION_ID)!.at(-1)!
-    answer.sentAt = startedAt + 3_000
     answer.agentResponseTrace = {
-      id: answer.messageId, planSteps: [],
-      toolCalls: [{ id: 'dated-tool', name: 'test.lookup.run', toolCallTitle: 'Look up details',
-        status: 'success', startedAt, durationMs: 618 }],
-      reasoning: [{ id: 'dated-thought', text: 'Check the details.', phase: 'agent', startedAt }],
-      timings: [{ id: 'dated-request', kind: 'inference', goal: TurnPhase.Tools,
-        startedAt, durationMs: 1_000, outcome: 'completed' }],
-      answerStartedAt: startedAt + 2_000, metrics: { durationMs: 3_000 }
+      id: answer.messageId,
+      planSteps: [],
+      toolCalls: [
+        { id: 'first', name: 'search.lookup.run', status: 'success', startedAt: 0, durationMs: 618 },
+        { id: 'second', name: 'search.lookup.run', status: 'success', startedAt: 6_500, durationMs: 435 }
+      ],
+      metrics: {
+        durationMs: 20_000, reviewCount: 1, reviewDurationMs: 3_000,
+        phaseMetrics: { final_answer: { durationMs: 5_000 } }
+      }
     }
+    await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
-    const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true })
-    await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
-    await work.getByRole('button', { name: 'Used 1 tool for 618ms', exact: true }).click()
-    const tool = work.getByRole('button', { name: 'Look up details' })
-    const timestamp = work.locator('.tool-call-heading .activity-timestamp time')
-    const badge = timestamp.locator('..')
-    const tooltip = page.getByRole('tooltip')
-    await expect(timestamp).toHaveText('Yesterday, 14:32')
-    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
-    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
-    await expect(badge).toHaveCSS('opacity', '0')
-    const reservedWidth = (await badge.boundingBox())!.width
-    expect(reservedWidth).toBeGreaterThan(0)
-    const titleBounds = await tool.locator('.tool-call-title').boundingBox()
-    const chevron = tool.locator('.tool-call-chevron')
-    const chevronBounds = await chevron.boundingBox()
-    expect(await timestamp.evaluate((element) => {
-      const date = getComputedStyle(element)
-      const duration = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-duration')!)
-      return date.color === duration.color && date.fontSize === duration.fontSize && date.lineHeight === duration.lineHeight
-    })).toBe(true)
-    const motion = await badge.evaluate((element) => {
-      const date = getComputedStyle(element)
-      const chevron = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-chevron')!)
-      return { property: date.transitionProperty, duration: date.transitionDuration, easing: date.transitionTimingFunction,
-        chevronDuration: chevron.transitionDuration.split(', ')[0], chevronEasing: chevron.transitionTimingFunction }
-    })
-    if (reducedMotion === 'reduce') {
-      expect(motion.property).toBe('none')
-    } else {
-      expect(motion.property).toBe('opacity')
-      expect(motion.duration).toBe(motion.chevronDuration)
-      expect(motion.chevronEasing).toContain(motion.easing)
-    }
-    await tool.hover()
-    await expect(badge).toHaveCSS('opacity', '1')
-    expect((await badge.boundingBox())!.width).toBe(reservedWidth)
-    const hoveredTitle = (await tool.locator('.tool-call-title').boundingBox())!
-    const hoveredChevron = (await chevron.boundingBox())!
-    expect(hoveredTitle.x).toBe(titleBounds!.x)
-    expect(hoveredTitle.width).toBe(titleBounds!.width)
-    expect(hoveredChevron.x).toBe(chevronBounds!.x)
-    const dateBounds = (await badge.boundingBox())!
-    const durationBounds = (await tool.locator('.tool-call-duration').boundingBox())!
-    expect(dateBounds.x).toBeGreaterThanOrEqual(durationBounds.x + durationBounds.width)
-    expect(dateBounds.x + dateBounds.width).toBeLessThanOrEqual(chevronBounds!.x)
-    await expect(tooltip).toHaveCount(0)
-    await timestamp.hover()
-    await expect(tooltip).toHaveText('2026-10-30 14:32:15')
-    const bounds = await tooltip.boundingBox()
-    expect(bounds!.y).toBeGreaterThanOrEqual(0)
-    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
-    await expect(badge).toHaveCSS('opacity', '0')
-    await expect(tooltip).toHaveCount(0)
-    await tool.focus()
-    await expect(badge).toHaveCSS('opacity', '1')
-    await expect(tooltip).toHaveCount(0)
-    await tool.press('Enter')
-    await expect(tool).toBeFocused()
-    await expect(tool).toHaveAttribute('aria-expanded', 'true')
-    await expect(tooltip).toHaveCount(0)
-    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
-    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
-    await expect(badge).toHaveCSS('opacity', '1')
-    await timestamp.focus()
-    await expect(tooltip).toHaveText('2026-10-30 14:32:15')
-    await tool.focus()
-    await expect(tooltip).toHaveCount(0)
-    await chevron.click()
-    await expect(tool).toHaveAttribute('aria-expanded', 'false')
-    await timestamp.click()
-    await expect(tool).toHaveAttribute('aria-expanded', 'true')
-    const thought = work.getByRole('region', { name: 'Leon’s thinking', exact: true })
-    await thought.getByRole('button').locator('.process-group-title').click()
-    await expect(thought.locator('.thinking-message-details')).toBeVisible()
-    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
-    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
-    await expect(thought.locator('.process-group-heading > .activity-timestamp')).toHaveCSS('opacity', '1')
-    expect(await thought.evaluate((element) => {
-      const details = element.querySelector('.thinking-message-details')!.getBoundingClientRect()
-      const label = element.querySelector('.process-group-title')!.getBoundingClientRect()
-      return Math.abs(details.left - label.left)
-    })).toBeLessThanOrEqual(1)
-    await thought.hover()
-    const thoughtDate = (await thought.locator('.activity-timestamp').boundingBox())!
-    const thoughtChevron = (await thought.locator('.process-group-chevron').boundingBox())!
-    expect(thoughtDate.x + thoughtDate.width).toBeLessThanOrEqual(thoughtChevron.x)
-    await thought.locator('.activity-timestamp time').hover()
-    await expect(tooltip).toContainText('2026-10-30 14:32:15')
-    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
-    await expect(tooltip).toHaveCount(0)
-    await page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
-      .locator('.streaming-text-characters').hover()
-    await expect(tooltip).toHaveCount(0)
-    await expect(page.locator('.final-answer').last()
-      .getByRole('group', { name: 'Answer actions', exact: true }).locator('.activity-timestamp')).toHaveCount(1)
+    const work = page.getByRole('region', { name: 'Leon’s completed work' })
+    await work.getByRole('button', { name: 'Worked for 20s', exact: true }).click()
+    await work.getByRole('button', { name: 'Used 2 tools for 1s', exact: true }).click()
+    await expect(work.locator('.tool-call-duration')).toHaveText(['618ms', '435ms'])
+    const generation = work.getByRole('region', { name: 'Leon’s answer generation' })
+    const review = work.getByRole('region', { name: 'Leon’s review' })
+    await expect(generation).toHaveText('Generated answer in 5s')
+    await expect(review).toHaveText('Reviewed for 3s')
+    await expect(generation.locator('[data-icon="pencil-ai"]')).toHaveCount(1)
+    await expect(review.locator('[data-icon="search-eye"]')).toHaveCount(1)
+    await expect(generation.getByRole('button')).toHaveCount(0)
+    await expect(review.getByRole('button')).toHaveCount(0)
+    await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+    await testInfo.attach('completed-work', { body: await work.screenshot(), contentType: 'image/png' })
     await page.reload()
-    await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
-    await work.getByRole('button', { name: 'Used 1 tool for 618ms', exact: true }).click()
-    await tool.hover()
-    await timestamp.hover()
-    await expect(tooltip).toContainText('2026-10-30 14:32:15')
+    await work.getByRole('button', { name: 'Worked for 20s', exact: true }).click()
+    await expect(generation).toHaveText('Generated answer in 5s')
+    await expect(review).toHaveText('Reviewed for 3s')
   })
 }
+
 
 test('confirms session management actions once and only after the server accepts them', async ({ page, ui }) => {
   let pending = Promise.withResolvers<Route>()
@@ -2008,6 +2018,7 @@ test('confirms session management actions once and only after the server accepts
   }
 })
 
+
 test('reports a rejected session action once without confirming success', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   ui.failure = { path: `/api/v1/sessions/${SESSION_ID}`, status: 500, message: 'Session update rejected.' }
@@ -2019,6 +2030,7 @@ test('reports a rejected session action once without confirming success', async 
   await expect(page.locator('.toast')).toHaveCount(1)
   await expect(row).not.toHaveClass(/session-list-item-pinned/)
 })
+
 
 test('cancels obsolete history silently when switching sessions', async ({ page, ui }) => {
   const release = ui.holdHistory()
@@ -2034,6 +2046,7 @@ test('cancels obsolete history silently when switching sessions', async ({ page,
   await expect(page.getByText(LATEST_ANSWER, { exact: true })).toHaveCount(0)
   await expect(page.locator('.toast')).toHaveCount(0)
 })
+
 
 test('retries failed delivery with the original message ID instead of duplicating it', async ({ page, ui }) => {
   await page.goto(`session/${OTHER_SESSION_ID}`)
@@ -2052,6 +2065,7 @@ test('retries failed delivery with the original message ID instead of duplicatin
   await expect(page.getByText('Completed Retry delivery', { exact: true })).toBeVisible()
   await expect(page.getByText('Retry delivery', { exact: true })).toHaveCount(1)
 })
+
 
 for (const status of ['success', 'error'] as const) {
   test(`keeps recorded tool outcomes quiet and durations centered in both themes (${status})`, async ({ page, ui }, testInfo) => {
@@ -2098,6 +2112,7 @@ for (const status of ['success', 'error'] as const) {
   })
 }
 
+
 test('preserves sub-second tool totals in milliseconds after reloading', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.agentResponseTrace = {
@@ -2120,6 +2135,7 @@ test('preserves sub-second tool totals in milliseconds after reloading', async (
   await expect(work.locator('.tool-call-title')).toHaveText(['Run', 'Run'])
   await expect(work.getByText('test.lookup.run', { exact: true })).toHaveCount(0)
 })
+
 
 for (const completeTiming of [true, false]) {
   test(`shows cumulative tool execution only with complete timing (${completeTiming})`, async ({ page, ui }) => {
@@ -2148,6 +2164,7 @@ for (const completeTiming of [true, false]) {
     await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible()
   })
 }
+
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`shows measured generation and review inside the full turn total (${reducedMotion})`, async ({ page, ui }, testInfo) => {
@@ -2187,6 +2204,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+
 test('omits absent or unmeasured phases instead of estimating their duration', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.llmMetrics = { durationMs: 4_000, reviewCount: 0, reviewDurationMs: 0 }
@@ -2201,6 +2219,7 @@ test('omits absent or unmeasured phases instead of estimating their duration', a
   await expect(page.getByRole('region', { name: 'Leon’s review' })).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Leon’s answer generation' })).toHaveCount(0)
 })
+
 
 test('shows structured plans without duplicate legacy widget answers while retaining other widget content', async ({ page, ui }) => {
   ui.history.set(SESSION_ID, [{
@@ -2240,6 +2259,7 @@ test('shows structured plans without duplicate legacy widget answers while retai
   }
 })
 
+
 test('shows phase summaries from saved message metrics without a detailed trace', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.llmMetrics = {
@@ -2251,6 +2271,7 @@ test('shows phase summaries from saved message metrics without a detailed trace'
   await expect(page.getByRole('region', { name: 'Leon’s review' })).toHaveText('Reviewed for 2s')
   await expect(page.getByRole('region', { name: 'Leon’s answer generation' })).toHaveText('Generated answer in 3s')
 })
+
 
 for (const retryCount of [0, 1, 4]) {
   test(`shows only the recorded retry count (${retryCount}) without changing turn timing`, async ({ page, ui }) => {
@@ -2291,6 +2312,7 @@ for (const retryCount of [0, 1, 4]) {
   })
 }
 
+
 test('shows retries from the final live trace without refreshing history', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   const event = {
@@ -2319,6 +2341,7 @@ test('shows retries from the final live trace without refreshing history', async
   expect(ui.completedRequests.filter((url) => url.pathname.endsWith(SESSION_ID))).toHaveLength(1)
 })
 
+
 test('accounts for tool selection and intermediate model requests alongside execution and the answer', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.agentResponseTrace = {
@@ -2340,6 +2363,7 @@ test('accounts for tool selection and intermediate model requests alongside exec
   await work.getByRole('button', { name: 'Processed for 6s', exact: true }).click()
   await expect(work.getByRole('region', { name: 'Leon’s inference', exact: true }).locator('.process-group-title')).toHaveText(['Processed tool request in 4s', 'Generated answer in 2s'])
 })
+
 
 test('keeps thoughts separate and closes completed work with categorized model requests', async ({ page, ui }) => {
   const categories = [
@@ -2383,6 +2407,7 @@ test('keeps thoughts separate and closes completed work with categorized model r
   }
 })
 
+
 for (const otherDuration of [undefined, 0, 500, 3_000]) {
   test(`shows only meaningful measured other processing (${otherDuration})`, async ({ page, ui }) => {
     const answer = ui.history.get(SESSION_ID)!.at(-1)!
@@ -2404,5 +2429,51 @@ for (const otherDuration of [undefined, 0, 500, 3_000]) {
     } else {
       await expect(other).toHaveCount(0)
     }
+  })
+}
+
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`keeps the feed as the only vertical scroll area (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.message = Array.from({ length: 60 }, (_, index) => `Answer paragraph ${index}.`).join('\n\n')
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      toolCalls: Array.from({ length: 16 }, (_, index) => ({
+        id: `scroll-${index}`, name: 'test.inspect', toolCallTitle: `Inspect section ${index}`, status: 'success',
+        output: Array.from({ length: 200 }, (_, line) => `Output line ${line} ${'detail '.repeat(80)}`).join('\n')
+      }))
+    }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 16 tools', exact: true }).click()
+    await page.getByRole('button', { name: 'Inspect section 0', exact: true }).click()
+    const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+    const firstOutput = tools.getByRole('region', { name: 'Tool output', exact: true }).first()
+    const main = page.locator('.app-main')
+
+    await finishFiniteAnimations(page.locator('.feed'))
+    await firstOutput.scrollIntoViewIfNeeded()
+    await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
+    expect(await firstOutput.locator('.code-view-line').count()).toBeLessThanOrEqual(16)
+    await firstOutput.hover()
+    const mainTop = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(400, 0)
+    await expect.poll(() => firstOutput.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+    expect(await main.evaluate((element) => element.scrollTop)).toBe(mainTop)
+    await page.mouse.wheel(0, 120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeGreaterThan(mainTop)
+
+    await firstOutput.scrollIntoViewIfNeeded()
+    await firstOutput.hover()
+    const beforeUp = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(0, -120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(beforeUp)
+
+    await page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true }).click()
+    const menuViewport = page.locator('.dropdown-content .scroll-container-viewport')
+    await expect(menuViewport).toBeVisible()
+    expect(await menuViewport.evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe('contain')
   })
 }

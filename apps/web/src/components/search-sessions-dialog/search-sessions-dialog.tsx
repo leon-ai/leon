@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent
 } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -17,7 +18,7 @@ import {
   type ConversationSession
 } from '@/data/sessions'
 import { useProfile } from '@/data/profile'
-import { createSearchIndex, getSearchSegments, searchIndex } from '@/utils/search'
+import { createSearchIndex, getSearchSegments, getSearchTextSegments, searchIndex } from '@/utils/search'
 import { formatRelativeDate } from '@/utils/format-date'
 import { getListNavigationIndex } from '@/utils/list-navigation'
 
@@ -29,6 +30,7 @@ interface SearchSessionsDialogProps {
 
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_RESULT_ITEM_HEIGHT = 46
+const SEARCH_RESULT_EXCERPT_HEIGHT = 86
 const SEARCH_RESULT_OVERSCAN = 6
 
 function useDebouncedValue<TValue>(
@@ -65,17 +67,22 @@ export function SearchSessionsDialog({
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
   const sessionsQuery = useSessions(useProfile(), debouncedQuery)
   const sessions = sessionsQuery.sessions
+  const searchMatches = sessionsQuery.searchMatches
   const activeIndex = sessions.findIndex((session) => session.id === activeId)
   const searchResults = useMemo(
     () => new Map(searchIndex(createSearchIndex(sessions, (session) => [session.title]), debouncedQuery)
       .map((result) => [result.item.id, result])),
     [debouncedQuery, sessions]
   )
+  const excerpts = useMemo(() => new Map(Object.entries(searchMatches).map(([id, match]) =>
+    [id, getSearchTextSegments(match.excerpt, debouncedQuery)]
+  )), [searchMatches, debouncedQuery])
   const rowVirtualizer = useVirtualizer({
     count: sessions.length,
     getItemKey: (index) => sessions[index]?.id ?? index,
     getScrollElement: () => scrollElementRef.current,
-    estimateSize: () => SEARCH_RESULT_ITEM_HEIGHT,
+    estimateSize: (index) => searchMatches[sessions[index]?.id ?? '']
+      ? SEARCH_RESULT_EXCERPT_HEIGHT : SEARCH_RESULT_ITEM_HEIGHT,
     overscan: SEARCH_RESULT_OVERSCAN,
     scrollPaddingStart: SCROLL_LIST_MASK_HEIGHT_PX,
     scrollPaddingEnd: SCROLL_LIST_MASK_HEIGHT_PX
@@ -122,7 +129,8 @@ export function SearchSessionsDialog({
   }
 
   return (
-    <div className="search-sessions-dialog">
+    <div className="search-sessions-dialog"
+      style={{ '--session-search-item-height': `${SEARCH_RESULT_ITEM_HEIGHT}px` } as CSSProperties}>
       <Input
         ariaLabel="Search sessions"
         autoFocus
@@ -167,14 +175,16 @@ export function SearchSessionsDialog({
 
               const result = searchResults.get(session.id)
               const segments = result ? getSearchSegments(result) : [{ text: session.title, highlighted: false }]
+              const excerpt = excerpts.get(session.id)
 
               return (
                 <li
                   className="search-sessions-dialog-item list-item-slot"
                   key={session.id}
                   role="presentation"
+                  data-index={virtualRow.index}
+                  ref={rowVirtualizer.measureElement}
                   style={{
-                    height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`
                   }}
                 >
@@ -190,21 +200,33 @@ export function SearchSessionsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={onSessionSelect}
                   >
-                    <span className="search-sessions-dialog-title">
-                      {segments.map((segment, segmentIndex) => (
-                        <span
-                          className={segment.highlighted
-                            ? 'search-sessions-dialog-title-highlight'
-                            : undefined}
-                          key={`${segment.text}-${segmentIndex}`}
-                        >
-                          {segment.text}
-                        </span>
-                      ))}
+                    <span className="search-sessions-dialog-heading">
+                      <span className="search-sessions-dialog-title">
+                        {segments.map((segment, segmentIndex) => (
+                          <span
+                            className={segment.highlighted
+                              ? 'search-sessions-dialog-title-highlight'
+                              : undefined}
+                            key={`${segment.text}-${segmentIndex}`}
+                          >
+                            {segment.text}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="search-sessions-dialog-date">
+                        {formatRelativeDate(getSessionTimestamp(session))}
+                      </span>
                     </span>
-                    <span className="search-sessions-dialog-date">
-                      {formatRelativeDate(getSessionTimestamp(session))}
-                    </span>
+                    {excerpt && (
+                      <span className="search-sessions-dialog-excerpt">
+                        {excerpt.map((segment, index) => (
+                          <span key={index} className={segment.highlighted
+                            ? 'search-sessions-dialog-title-highlight' : undefined}>
+                            {segment.text}
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </Link>
                 </li>
               )
