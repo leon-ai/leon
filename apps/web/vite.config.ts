@@ -133,6 +133,35 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
           codeSplitting: {
             groups: [
               {
+                // Shared UI helpers must not make the shell import Markdown.
+                name: 'ui-runtime',
+                test: (id: string): boolean => id.includes('/node_modules/clsx/') || id.includes('vite/preload-helper'),
+                includeDependenciesRecursively: false,
+                priority: 40
+              },
+              {
+                name: 'markdown-math-engine',
+                test: /node_modules\/katex\//,
+                includeDependenciesRecursively: false,
+                priority: 30
+              },
+              {
+                name: 'markdown-math-parser',
+                test: /node_modules\/(?:@streamdown\/math|remark-math|rehype-katex|micromark-extension-math|mdast-util-math)\//,
+                includeDependenciesRecursively: false,
+                priority: 30
+              },
+              {
+                name: 'markdown-parser',
+                test: /node_modules\/(?:marked|unified|remark-[^/]+|micromark[^/]*|mdast-[^/]+)\//,
+                priority: 16
+              },
+              {
+                name: 'markdown-vendor',
+                test: /node_modules\/(?:streamdown|marked|remend|unified|remark-[^/]+|rehype-[^/]+|micromark[^/]*|mdast-[^/]+|hast-[^/]+|unist-[^/]+)\//,
+                priority: 15
+              },
+              {
                 name: 'react-vendor',
                 test: /node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
                 priority: 20

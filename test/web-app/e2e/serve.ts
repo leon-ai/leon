@@ -14,6 +14,7 @@ let server: PreviewServer | undefined
 let closing = false
 const streams = new Map<string, ServerResponse>()
 const MAXIMUM_TEST_EVENT_CHARACTERS = 1_048_576
+const MAXIMUM_STARTUP_JAVASCRIPT_BYTES = 600_000
 
 async function cleanup(): Promise<void> {
   if (closing) {
@@ -65,6 +66,11 @@ try {
           initial.add(fileName)
           pending.push(...(byName.get(fileName)?.imports ?? []))
         }
+        const startupBytes = chunks.reduce((total, chunk) =>
+          total + (initial.has(chunk.fileName) ? Buffer.byteLength(chunk.code) : 0), 0)
+        if (startupBytes > MAXIMUM_STARTUP_JAVASCRIPT_BYTES) {
+          this.error(`Startup JavaScript exceeds its budget: ${startupBytes} bytes`)
+        }
         for (const output of outputs) {
           const source = output.type === 'chunk' ? output.code : output.source
           if (output.fileName.endsWith('.js') && Buffer.byteLength(source) > chunkSizeLimit) {
@@ -72,12 +78,20 @@ try {
           }
         }
         for (const chunk of chunks) {
+          if (initial.has(chunk.fileName) && chunk.moduleIds.some((id) =>
+            id.endsWith('/search-sessions-dialog/search-sessions-dialog.tsx') ||
+            id.endsWith('/weather-layer/weather-layer.tsx') ||
+            id.endsWith('/icon/rare-icon-morphs.ts') || id.endsWith('/icon/rare-brand-icons.ts'))) {
+            this.error(`Optional interaction code must stay outside startup: ${chunk.fileName}`)
+          }
           if (chunk.moduleIds.some((id) => id.includes('/test/web-app/previews/'))) {
             this.error(`Design previews must stay outside the production build: ${chunk.fileName}`)
           }
           if (initial.has(chunk.fileName) && chunk.moduleIds.some((id) =>
-            id.includes('/@pierre/') || id.includes('/@shikijs/') || id.includes('/shiki/'))) {
-            this.error(`Syntax engines must stay outside the startup graph: ${chunk.fileName}`)
+            id.includes('/@pierre/') || id.includes('/@shikijs/') || id.includes('/shiki/') ||
+            id.includes('/pele/') || id.includes('/dompurify/') || id.includes('/katex/') ||
+            id.includes('/streamdown/') || id.includes('/marked/') || id.includes('/unified/'))) {
+            this.error(`Rendering engines must stay outside the startup graph: ${chunk.fileName}`)
           }
         }
       }
