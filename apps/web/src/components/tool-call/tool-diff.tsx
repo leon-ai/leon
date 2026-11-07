@@ -54,6 +54,7 @@ const DIFF_CSS = `:host {
 const DIFF_PREVIEW_CSS = `[data-code] {
   max-height: calc(var(--code-preview-lines) * var(--diffs-line-height));
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
 }`
 
 function excerpt(text: string): string {
