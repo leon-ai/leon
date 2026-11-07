@@ -21,7 +21,7 @@ const KIMI_SEARCH_ENDPOINT = '/tools/search_pro'
 const DEEPSEEK_SEARCH_ENDPOINT = '/tools/search'
 const DEEPSEEK_MAX_QUERY_CHARS = 128
 const SEARCH_SYSTEM_PROMPT =
-  'Search the web to answer the user request. Base the answer on retrieved sources and cite their URLs. Return a concise, direct answer.'
+  'Search the web to answer the user request. Base the answer on retrieved sources and cite URLs inline using descriptive Markdown links. Return a concise, direct answer without a separate sources list.'
 const MAX_CONTENT_CHARS = 40_000
 const MAX_CONTENT_TOKENS = 10_000
 const MAX_OUTPUT_TOKENS = 4_000
@@ -43,6 +43,7 @@ interface HostedFetchResult {
   url: string
   title?: string
   content: string
+  format: 'markdown'
   content_kind: 'extracted_text' | 'summary'
   truncated: boolean
 }
@@ -58,6 +59,7 @@ interface HostedSearchResult {
   provider: HostedWebProvider
   model: string
   content: string
+  format: 'markdown'
   success?: boolean
   complete?: boolean
   error?: string
@@ -117,6 +119,7 @@ export default class HostedTool extends Tool {
 
   constructor() {
     super()
+    this.outputFormat = 'markdown'
     this.config = ToolkitConfig.load(TOOLKIT_ID, this.toolName)
     this.settings = ToolkitConfig.loadToolSettings(
       TOOLKIT_ID,
@@ -293,6 +296,7 @@ export default class HostedTool extends Tool {
     return {
       provider, url, ...(title ? { title } : {}),
       content: content.slice(0, maxChars),
+      format: 'markdown',
       content_kind: contentKind,
       truncated: content.length > maxChars
     }
@@ -389,15 +393,14 @@ export default class HostedTool extends Tool {
               url: chunk.url,
               ...(chunk.title ? { title: chunk.title } : {})
             })
-            this.emitOutput(`\nSource: ${chunk.url}\n`)
           } else if (!sources.has(chunk.url)) {
             truncated = true
           }
         } else if (chunk.type === 'tool-call' && chunk.providerExecuted) {
-          this.emitOutput('\nSearching the web...\n')
+          this.emitProgress('Searching the web...')
         } else if (chunk.type === 'tool-result') {
           completedSearchCalls += 1
-          this.emitOutput('\nSearch step completed; preparing the answer...\n')
+          this.emitProgress('Preparing search results...')
         } else if (chunk.type === 'reasoning-delta' && chunk.text.length > 0) {
           this.emitProgress('Preparing search results...')
         } else if (chunk.type === 'finish-step') {
@@ -441,6 +444,7 @@ export default class HostedTool extends Tool {
       success: complete,
       complete,
       content: content.trim(),
+      format: 'markdown',
       sources: [...sources.values()],
       completed_search_calls: completedSearchCalls,
       truncated,
@@ -578,13 +582,11 @@ export default class HostedTool extends Tool {
     if (data.choices?.[0]?.finish_reason === 'length') {
       throw new Error('Z.AI hosted search reached its output limit before completing the answer.')
     }
-    const sources = data.web_search.map((source) =>
-      `${source.refer || source.title}: ${source.link}`
-    ).join('\n')
-
     return {
       ...target,
-      content: sources ? `${answer}\n\nSources:\n${sources}` : answer,
+      content: answer,
+      format: 'markdown',
+      sources: data.web_search.map(({ link, title }) => ({ url: link, ...(title ? { title } : {}) })),
       ...(typeof data.usage?.prompt_tokens === 'number'
         ? { used_input_tokens: data.usage.prompt_tokens } : {}),
       ...(typeof data.usage?.completion_tokens === 'number'
@@ -621,7 +623,12 @@ export default class HostedTool extends Tool {
       ...(source.chunks || []).map((chunk) => chunk.text)
     ].filter(Boolean).join('\n')).join('\n\n')
 
-    return { ...target, content: content || 'No web search results were found.' }
+    return {
+      ...target,
+      content: content || 'No web search results were found.',
+      format: 'markdown',
+      sources: data.search_results.map(({ url, title }) => ({ url, ...(title ? { title } : {}) }))
+    }
   }
 
   /**
@@ -651,6 +658,7 @@ export default class HostedTool extends Tool {
     return {
       ...target,
       content: content.slice(0, MAX_CONTENT_CHARS) || 'No web search results were found.',
+      format: 'markdown',
       success: true,
       complete: true,
       sources: data.results.map(({ url, title }) => ({ url, title })),
