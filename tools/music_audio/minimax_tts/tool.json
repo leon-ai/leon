@@ -1,0 +1,110 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "minimax_tts",
+  "toolkit_id": "music_audio",
+  "name": "MiniMax TTS",
+  "description": "A tool for text-to-speech synthesis using MiniMax speech models.",
+  "icon_name": "voiceprint-line",
+  "author": {
+    "name": "octo-patch",
+    "url": "https://github.com/octo-patch"
+  },
+  "functions": {
+    "synthesizeToFile": {
+      "description": "Synthesize speech from text and save the generated audio to a file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to synthesize into speech."
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Path of the audio file to write."
+          },
+          "options": {
+            "type": "object",
+            "description": "Optional synthesis settings. Defaults come from the tool settings.",
+            "properties": {
+              "model": {
+                "type": "string",
+                "enum": [
+                  "speech-2.8-hd",
+                  "speech-2.8-turbo",
+                  "speech-2.6-hd",
+                  "speech-2.6-turbo",
+                  "speech-02-hd",
+                  "speech-02-turbo",
+                  "speech-01-hd",
+                  "speech-01-turbo"
+                ],
+                "description": "Speech model to synthesize with."
+              },
+              "region": {
+                "type": "string",
+                "enum": [
+                  "global_en",
+                  "cn_zh"
+                ],
+                "description": "Regional endpoint to call."
+              },
+              "outputFormat": {
+                "type": "string",
+                "enum": [
+                  "hex",
+                  "url"
+                ],
+                "description": "Encoding of the audio returned by the API."
+              },
+              "languageBoost": {
+                "type": "string",
+                "description": "Language or dialect to prioritize during synthesis."
+              },
+              "subtitleEnable": {
+                "type": "boolean",
+                "description": "Whether the API should also generate subtitles."
+              },
+              "voiceSetting": {
+                "type": "object",
+                "description": "Voice options. A voice_id is required by the API.",
+                "additionalProperties": true
+              },
+              "audioSetting": {
+                "type": "object",
+                "description": "Output audio options such as format, sample rate and bitrate.",
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "mp3",
+                      "wav",
+                      "flac",
+                      "pcm"
+                    ]
+                  }
+                },
+                "additionalProperties": true
+              },
+              "pronunciationDict": {
+                "type": "object",
+                "description": "Pronunciation replacement rules applied to the text.",
+                "additionalProperties": true
+              },
+              "voiceModify": {
+                "type": "object",
+                "description": "Voice modification options such as pitch, intensity and timbre.",
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "text",
+          "outputPath"
+        ]
+      }
+    }
+  }
+}
