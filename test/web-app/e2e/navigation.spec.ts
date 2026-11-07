@@ -388,8 +388,94 @@ for (const active of [false, true]) {
 }
 
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`chains reading panes into the feed without trapping scrolling (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    const paragraphs = Array.from({ length: 60 }, (_, index) => `Answer paragraph ${index}.`)
+    answer.message = [
+      ...paragraphs.slice(0, 30),
+      '```javascript\n' + Array.from({ length: 80 }, (_, index) => `const idea${index} = ${index};`).join('\n') + '\n```',
+      ...paragraphs.slice(30)
+    ].join('\n\n')
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [], metrics: { durationMs: 2_000 },
+      toolCalls: Array.from({ length: 16 }, (_, index) => ({
+        id: `scroll-${index}`, name: 'test.inspect', toolCallTitle: `Inspect section ${index}`, status: 'success',
+        output: Array.from({ length: 200 }, (_, line) => `Output line ${line} ${'detail '.repeat(80)}`).join('\n')
+      }))
+    }
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+    await page.getByRole('button', { name: 'Used 16 tools', exact: true }).click()
+    await page.getByRole('button', { name: 'Inspect section 0', exact: true }).click()
+    const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+    const firstOutput = tools.getByRole('region', { name: 'Tool output', exact: true }).first()
+    const main = page.locator('.app-main')
+
+    await finishFiniteAnimations(page.locator('.feed'))
+    await firstOutput.scrollIntoViewIfNeeded()
+    await expect(tools.locator('.scroll-container-viewport')).toHaveCount(0)
+    expect(await firstOutput.locator('.code-view-line').count()).toBeLessThanOrEqual(16)
+    await firstOutput.hover()
+    const mainTop = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(400, 0)
+    await expect.poll(() => firstOutput.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+    expect(await main.evaluate((element) => element.scrollTop)).toBe(mainTop)
+    await page.mouse.wheel(0, 120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeGreaterThan(mainTop)
+
+    await firstOutput.scrollIntoViewIfNeeded()
+    await firstOutput.hover()
+    const beforeUp = await main.evaluate((element) => element.scrollTop)
+    await page.mouse.wheel(0, -120)
+    await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeLessThan(beforeUp)
+
+    const code = page.getByRole('region', { name: 'Code block', exact: true })
+    await expect(code).toHaveCSS('overscroll-behavior-y', 'auto')
+    for (const direction of [1, -1]) {
+      await code.scrollIntoViewIfNeeded()
+      await main.evaluate((element) => {
+        const code = element.querySelector('[aria-label="Code block"]')!
+        element.scrollTop += code.getBoundingClientRect().top - element.getBoundingClientRect().top - 160
+      })
+      await code.evaluate((element) => {
+        element.scrollTop = (element.scrollHeight - element.clientHeight) / 2
+      })
+      await code.hover()
+      const feedBefore = await main.evaluate((element) => element.scrollTop)
+      const codeBefore = await code.evaluate((element) => element.scrollTop)
+      await page.mouse.wheel(0, direction * 120)
+      await expect.poll(async () => direction * (await code.evaluate((element) => element.scrollTop) - codeBefore))
+        .toBeGreaterThan(0)
+      expect(await main.evaluate((element) => element.scrollTop)).toBe(feedBefore)
+
+      await code.evaluate((element, direction) => {
+        element.scrollTop = direction > 0 ? element.scrollHeight : 0
+      }, direction)
+      await page.mouse.wheel(0, direction * 120)
+      await expect.poll(async () => direction * (await main.evaluate((element) => element.scrollTop) - feedBefore))
+        .toBeGreaterThan(0)
+    }
+
+    await page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true }).click()
+    const menuViewport = page.locator('.dropdown-content .scroll-container-viewport')
+    await expect(menuViewport).toBeVisible()
+    expect(await menuViewport.evaluate((element) => getComputedStyle(element).overscrollBehaviorY)).toBe('contain')
+  })
+}
+
+
 test('highlights session JSON with long output strings in previews and the tabbed inspector', async ({ page, ui }) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  // Generic binary MIME types must remain usable without streaming compilation.
+  await page.route('**/highlights-*.wasm', async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, contentType: 'application/octet-stream' })
+  })
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.message = 'A quiet formula: $a^2 + b^2 = c^2$.'
   answer.agentResponseTrace = {
     id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
       id: 'session-output', name: 'operating_system_control.shell.readSession', toolCallTitle: 'Read the command session',
@@ -400,6 +486,7 @@ test('highlights session JSON with long output strings in previews and the tabbe
     }]
   }
   await page.goto(SESSION_URL)
+  await expect(page.locator('.katex')).toHaveCount(1)
   await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
   await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
   await page.getByRole('button', { name: 'Read the command session', exact: true }).click()
@@ -409,6 +496,7 @@ test('highlights session JSON with long output strings in previews and the tabbe
   await page.getByRole('button', { name: 'View details', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Read the command session', exact: true })
   const output = dialog.getByRole('region', { name: 'Output JSON', exact: true })
+  await expect(output).toHaveCSS('overscroll-behavior-y', 'contain')
   await expect.poll(() => output.locator('.code-view-line > span[style]').count()).toBeGreaterThan(0)
   await expect(dialog.locator('.scroll-container-viewport')).toHaveCount(1)
   const outputTab = dialog.getByRole('tab', { name: 'Output', exact: true })
@@ -420,6 +508,19 @@ test('highlights session JSON with long output strings in previews and the tabbe
   await page.keyboard.press('ArrowRight')
   await expect(outputTab).toHaveAttribute('aria-selected', 'true')
   await expect(output).toContainText('A shell output line.')
+  let failedSyntaxRequests = 0
+  await page.route('**/highlights-*.wasm', (route) => {
+    failedSyntaxRequests += 1
+    return route.abort()
+  })
+  await page.reload()
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+  await page.getByRole('button', { name: 'Read the command session', exact: true }).click()
+  await expect(preview).toContainText('command-session')
+  await expect.poll(() => failedSyntaxRequests).toBeGreaterThan(0)
+  await expect(preview.locator('.code-view-line > span[style]')).toHaveCount(0)
+  expect(errors).toEqual([])
 })
 
 
@@ -489,8 +590,8 @@ for (const width of [1_512, 390]) {
     await expect.poll(() => diff.evaluate((element) => element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? ''))
       .toContain('Welcome')
     await expect.poll(() => diff.evaluate((element) => Array.from(
-      element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
-    ).filter((span) => span.textContent?.trim() === 'const' && span.style.color).length)).toBeGreaterThan(0)
+      element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span') ?? []
+    ).filter((span) => span.textContent?.trim() === 'const' && getComputedStyle(span).color !== getComputedStyle(span.parentElement!).color).length)).toBeGreaterThan(0)
     await expect(page.locator('.feed .scroll-container-viewport')).toHaveCount(0)
     await expect(diff.getByRole('button')).toHaveCount(0)
     expect(await page.locator('.tool-changes-preview').evaluate((element) => element.clientHeight)).toBeLessThan(200)
@@ -570,7 +671,7 @@ for (const width of [1_512, 390]) {
     await expect(details).not.toHaveCSS('outline-style', 'none')
     await expect(diff).toHaveAttribute('data-diff-style', 'unified')
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0)
-    expect(resources.some((url) => new URL(url).pathname.endsWith('.wasm'))).toBe(false)
+    expect(resources.some((url) => new URL(url).pathname.includes('/onig-'))).toBe(false)
     await testInfo.attach('syntax-resource-requests', {
       body: JSON.stringify(resources, null, 2), contentType: 'application/json'
     })
@@ -663,8 +764,8 @@ for (const wasm of [true, false]) {
     )).toContain('count = 2')
     if (wasm) {
       await expect.poll(() => diff.evaluate((element) => Array.from(
-        element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span[style]') ?? []
-      ).filter((span) => span.textContent?.trim() === 'int' && span.style.color).length)).toBeGreaterThan(0)
+        element.querySelector('diffs-container')?.shadowRoot?.querySelectorAll<HTMLSpanElement>('span') ?? []
+      ).filter((span) => span.textContent?.trim() === 'int' && getComputedStyle(span).color !== getComputedStyle(span.parentElement!).color).length)).toBeGreaterThan(0)
     }
     await expect(diff.getByRole('button')).toHaveCount(0)
     await page.getByRole('button', { name: 'View details', exact: true }).click()
@@ -1447,13 +1548,17 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const resting = link.locator('.session-list-item-title-resting')
     const characters = resting.locator('.streaming-text-character-new')
     await expect(link).toBeVisible()
-    await expect(characters).toHaveCount(Array.from(title).length)
-    await expect(characters.first()).toHaveCSS('animation-name',
-      reducedMotion === 'reduce' ? 'none' : 'streaming-text-character-enter')
+    if (reducedMotion === 'no-preference') {
+      await expect(characters).toHaveCount(Array.from(title).length)
+      await expect(characters.first()).toHaveCSS('animation-name', 'streaming-text-character-enter')
+      await expect(characters.last()).toHaveCSS('opacity', '1')
+    } else {
+      await expect(characters).toHaveCount(0)
+      await expect(resting).toHaveText(title)
+    }
     await expect(resting.locator('.streaming-text-characters')).toHaveCSS('white-space', 'nowrap')
     await expect(resting).toHaveCSS('text-overflow', 'ellipsis')
     await expect(link).toHaveCSS('height', '40px')
-    await expect(characters.last()).toHaveCSS('opacity', '1')
     if (reducedMotion === 'reduce') {
       await page.clock.fastForward(2_000)
     }
@@ -1501,23 +1606,25 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await ui.emit([{ type: 'sessions_changed' }])
     const link = page.getByRole('link', { name: session.title, exact: true })
     const characters = link.locator('.session-list-item-title-resting .streaming-text-character-new')
-    await expect(characters).not.toHaveCount(0)
-    const character = (await characters.last().elementHandle())!
+    const character = reducedMotion === 'no-preference' ? await characters.last().elementHandle() : null
     let start: number | null = null
     if (reducedMotion === 'no-preference') {
-      await expect.poll(() => character.evaluate((element) => Number(element.getAnimations()[0]?.currentTime ?? 0))).toBeGreaterThan(80)
-      start = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+      await expect(characters).not.toHaveCount(0)
+      await expect.poll(() => character!.evaluate((element) => Number(element.getAnimations()[0]?.currentTime ?? 0))).toBeGreaterThan(80)
+      start = await character!.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+    } else {
+      await expect(characters).toHaveCount(0)
     }
     await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', OTHER_SESSION_ID)
     if (reducedMotion === 'no-preference') {
-      await expect.poll(() => character.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
-      const after = await character.evaluate((element) => element.getAnimations()[0]!.startTime as number)
+      await expect.poll(() => character!.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
+      const after = await character!.evaluate((element) => element.getAnimations()[0]!.startTime as number)
       expect(Math.abs(after - start!)).toBeLessThan(35)
       await finishFiniteAnimations(link)
     } else {
-      await expect(characters.last()).toHaveCSS('animation-name', 'none')
-      await expect(characters.last()).toHaveCSS('opacity', '1')
+      await expect(characters).toHaveCount(0)
+      await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
       await page.clock.fastForward(2_000)
     }
     await otherRow.hover()
@@ -1526,7 +1633,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', SESSION_ID)
     await expect(characters).toHaveCount(0)
     await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
-    await character.dispose()
+    await character?.dispose()
   })
 
   test(`preserves independent session and new-session drafts across navigation and refresh (${reducedMotion})`, async ({ page, ui }) => {
@@ -1602,7 +1709,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const expectSavedAnswer = async (): Promise<void> => {
       const answer = page.getByRole('region', { name: 'Leon’s final answer' })
         .filter({ hasText: lines.at(-1)! })
-      await expect(answer.locator('.streaming-text-characters')).toHaveCSS('white-space', 'pre-wrap')
+      await expect(answer.locator('p')).toHaveText(lines)
+      await expect(answer.locator('p').last()).toHaveCSS('white-space', 'pre-wrap')
       expect(await answer.innerText()).toBe(text)
       await expect.poll(() => page.locator('.app-main').evaluate((main) =>
         Math.abs(main.scrollHeight - main.clientHeight - main.scrollTop)
@@ -1915,40 +2023,124 @@ test('gives network-specific feedback and keeps drafting available through offli
 
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
-  test(`shows measured generation and review inside the full turn total (${reducedMotion})`, async ({ page, ui }, testInfo) => {
-    const answer = ui.history.get(SESSION_ID)!.at(-1)!
-    answer.agentResponseTrace = {
-      id: answer.messageId,
-      planSteps: [],
-      toolCalls: [
-        { id: 'first', name: 'search.lookup.run', status: 'success', startedAt: 0, durationMs: 618 },
-        { id: 'second', name: 'search.lookup.run', status: 'success', startedAt: 6_500, durationMs: 435 }
-      ],
-      metrics: {
-        durationMs: 20_000, reviewCount: 1, reviewDurationMs: 3_000,
-        phaseMetrics: { final_answer: { durationMs: 5_000 } }
-      }
-    }
+  test(`shows leaf dates as metadata and reveals full dates only from the timestamp (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
+    await page.clock.setFixedTime(new Date('2026-10-31T12:00:00+08:00'))
+    const startedAt = await page.evaluate(() => new Date(2026, 9, 30, 14, 32, 15).getTime())
+    const answer = ui.history.get(SESSION_ID)!.at(-1)!
+    answer.sentAt = startedAt + 3_000
+    answer.agentResponseTrace = {
+      id: answer.messageId, planSteps: [],
+      toolCalls: [{ id: 'dated-tool', name: 'test.lookup.run', toolCallTitle: 'Look up details',
+        status: 'success', startedAt, durationMs: 618 }],
+      reasoning: [{ id: 'dated-thought', text: 'Check the details.', phase: 'agent', startedAt }],
+      timings: [{ id: 'dated-request', kind: 'inference', goal: TurnPhase.Tools,
+        startedAt, durationMs: 1_000, outcome: 'completed' }],
+      answerStartedAt: startedAt + 2_000, metrics: { durationMs: 3_000 }
+    }
     await page.goto(SESSION_URL)
-    const work = page.getByRole('region', { name: 'Leon’s completed work' })
-    await work.getByRole('button', { name: 'Worked for 20s', exact: true }).click()
-    await work.getByRole('button', { name: 'Used 2 tools for 1s', exact: true }).click()
-    await expect(work.locator('.tool-call-duration')).toHaveText(['618ms', '435ms'])
-    const generation = work.getByRole('region', { name: 'Leon’s answer generation' })
-    const review = work.getByRole('region', { name: 'Leon’s review' })
-    await expect(generation).toHaveText('Generated answer in 5s')
-    await expect(review).toHaveText('Reviewed for 3s')
-    await expect(generation.locator('[data-icon="pencil-ai"]')).toHaveCount(1)
-    await expect(review.locator('[data-icon="search-eye"]')).toHaveCount(1)
-    await expect(generation.getByRole('button')).toHaveCount(0)
-    await expect(review.getByRole('button')).toHaveCount(0)
-    await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
-    await testInfo.attach('completed-work', { body: await work.screenshot(), contentType: 'image/png' })
+    const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true })
+    await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
+    await work.getByRole('button', { name: 'Used 1 tool for 618ms', exact: true }).click()
+    const tool = work.getByRole('button', { name: 'Look up details' })
+    const timestamp = work.locator('.tool-call-heading .activity-timestamp time')
+    const badge = timestamp.locator('..')
+    const tooltip = page.getByRole('tooltip')
+    await expect(timestamp).toHaveText('Yesterday, 14:32')
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(badge).toHaveCSS('opacity', '0')
+    const reservedWidth = (await badge.boundingBox())!.width
+    expect(reservedWidth).toBeGreaterThan(0)
+    const titleBounds = await tool.locator('.tool-call-title').boundingBox()
+    const chevron = tool.locator('.tool-call-chevron')
+    const chevronBounds = await chevron.boundingBox()
+    expect(await timestamp.evaluate((element) => {
+      const date = getComputedStyle(element)
+      const duration = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-duration')!)
+      return date.color === duration.color && date.fontSize === duration.fontSize && date.lineHeight === duration.lineHeight
+    })).toBe(true)
+    const motion = await badge.evaluate((element) => {
+      const date = getComputedStyle(element)
+      const chevron = getComputedStyle(element.closest('.tool-call-heading')!.querySelector('.tool-call-chevron')!)
+      return { property: date.transitionProperty, duration: date.transitionDuration, easing: date.transitionTimingFunction,
+        chevronDuration: chevron.transitionDuration.split(', ')[0], chevronEasing: chevron.transitionTimingFunction }
+    })
+    if (reducedMotion === 'reduce') {
+      expect(motion.property).toBe('none')
+    } else {
+      expect(motion.property).toBe('opacity')
+      expect(motion.duration).toBe(motion.chevronDuration)
+      expect(motion.chevronEasing).toContain(motion.easing)
+    }
+    await tool.hover()
+    await expect(badge).toHaveCSS('opacity', '1')
+    expect((await badge.boundingBox())!.width).toBe(reservedWidth)
+    const hoveredTitle = (await tool.locator('.tool-call-title').boundingBox())!
+    const hoveredChevron = (await chevron.boundingBox())!
+    expect(hoveredTitle.x).toBe(titleBounds!.x)
+    expect(hoveredTitle.width).toBe(titleBounds!.width)
+    expect(hoveredChevron.x).toBe(chevronBounds!.x)
+    const dateBounds = (await badge.boundingBox())!
+    const durationBounds = (await tool.locator('.tool-call-duration').boundingBox())!
+    expect(dateBounds.x).toBeGreaterThanOrEqual(durationBounds.x + durationBounds.width)
+    expect(dateBounds.x + dateBounds.width).toBeLessThanOrEqual(chevronBounds!.x)
+    await expect(tooltip).toHaveCount(0)
+    await timestamp.hover()
+    await expect(tooltip).toHaveText('2026-10-30 14:32:15')
+    const bounds = await tooltip.boundingBox()
+    expect(bounds!.y).toBeGreaterThanOrEqual(0)
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(badge).toHaveCSS('opacity', '0')
+    await expect(tooltip).toHaveCount(0)
+    await tool.focus()
+    await expect(badge).toHaveCSS('opacity', '1')
+    await expect(tooltip).toHaveCount(0)
+    await tool.press('Enter')
+    await expect(tool).toBeFocused()
+    await expect(tool).toHaveAttribute('aria-expanded', 'true')
+    await expect(tooltip).toHaveCount(0)
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(badge).toHaveCSS('opacity', '1')
+    await timestamp.focus()
+    await expect(tooltip).toHaveText('2026-10-30 14:32:15')
+    await tool.focus()
+    await expect(tooltip).toHaveCount(0)
+    await chevron.click()
+    await expect(tool).toHaveAttribute('aria-expanded', 'false')
+    await timestamp.click()
+    await expect(tool).toHaveAttribute('aria-expanded', 'true')
+    const thought = work.getByRole('region', { name: 'Leon’s thinking', exact: true })
+    await thought.getByRole('button').locator('.process-group-title').click()
+    await expect(thought.locator('.thinking-message-details')).toBeVisible()
+    await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(thought.locator('.process-group-heading > .activity-timestamp')).toHaveCSS('opacity', '1')
+    expect(await thought.evaluate((element) => {
+      const details = element.querySelector('.thinking-message-details')!.getBoundingClientRect()
+      const label = element.querySelector('.process-group-title')!.getBoundingClientRect()
+      return Math.abs(details.left - label.left)
+    })).toBeLessThanOrEqual(1)
+    await thought.hover()
+    const thoughtDate = (await thought.locator('.activity-timestamp').boundingBox())!
+    const thoughtChevron = (await thought.locator('.process-group-chevron').boundingBox())!
+    expect(thoughtDate.x + thoughtDate.width).toBeLessThanOrEqual(thoughtChevron.x)
+    await thought.locator('.activity-timestamp time').hover()
+    await expect(tooltip).toContainText('2026-10-30 14:32:15')
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(tooltip).toHaveCount(0)
+    await page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+      .locator('.streaming-text-characters').hover()
+    await expect(tooltip).toHaveCount(0)
+    await expect(page.locator('.final-answer').last()
+      .getByRole('group', { name: 'Answer actions', exact: true }).locator('.activity-timestamp')).toHaveCount(1)
     await page.reload()
-    await work.getByRole('button', { name: 'Worked for 20s', exact: true }).click()
-    await expect(generation).toHaveText('Generated answer in 5s')
-    await expect(review).toHaveText('Reviewed for 3s')
+    await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
+    await work.getByRole('button', { name: 'Used 1 tool for 618ms', exact: true }).click()
+    await tool.hover()
+    await timestamp.hover()
+    await expect(tooltip).toContainText('2026-10-30 14:32:15')
   })
 }
 

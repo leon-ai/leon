@@ -8,6 +8,31 @@ import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFinit
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 
+test('does not execute Markdown HTML, unsafe links, or remote images', async ({ page, ui }) => {
+  const outbound: string[] = []
+  await page.route('https://**', async (route) => {
+    outbound.push(route.request().url())
+    await route.abort()
+  })
+  ui.history.get(SESSION_ID)!.at(-1)!.message = [
+    'A safe paragraph.',
+    '<script>window.markdownExecuted = true</script>',
+    '<img src="https://untrusted.example/track" onerror="window.markdownExecuted = true">',
+    '[unsafe](javascript:alert%281%29)',
+    '[private](file:///etc/passwd)',
+    '![No automatic image](https://untrusted.example/image.png)',
+    '[credentials](https://user:password@example.com/private)'
+  ].join('\n\n')
+  await page.goto(SESSION_URL)
+  const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  await expect(answer).toContainText('A safe paragraph.')
+  await expect(answer.locator('script, img, a')).toHaveCount(0)
+  await expect(answer).toContainText('No automatic image')
+  expect(await page.evaluate(() => Reflect.get(window, 'markdownExecuted'))).toBeUndefined()
+  expect(outbound).toEqual([])
+})
+
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`adds a delayed FYI without reopening the completed turn (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion })
@@ -55,6 +80,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+
 test('keeps brief replies footer-free for saved history and late background events', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.message = 'Hey there. What is on your mind?'
@@ -73,6 +99,7 @@ test('keeps brief replies footer-free for saved history and late background even
   await expect(finalAnswer).toHaveText(answer.message)
   await expect(footer).toHaveCount(0)
 })
+
 
 for (const kind of ['skill', 'experience'] as const) {
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -154,6 +181,9 @@ for (const kind of ['skill', 'experience'] as const) {
         await details.click()
         await expect(dialog).toBeVisible()
         await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused()
+        await expect(dialog.getByText(`${name}/SKILL.md`, { exact: true })).toHaveCount(1)
+        await expect(dialog.locator('.activity-details-path')).toHaveText(`${name}/SKILL.md`)
+        await expect(dialog.locator('.activity-details-toolbar .activity-details-title')).toHaveCount(0)
         await expect(complete).toContainText(`# ${name}`)
         await complete.evaluate((element) => { element.scrollTop = element.scrollHeight })
         await expect(complete).toContainText('Verify the result before answering.')
@@ -236,6 +266,7 @@ for (const kind of ['skill', 'experience'] as const) {
   }
 }
 
+
 for (const withPlan of [false, true]) {
   test(`updates post-answer compaction independently of turn and plan state (plan: ${withPlan})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion: withPlan ? 'reduce' : 'no-preference' })
@@ -301,6 +332,7 @@ for (const withPlan of [false, true]) {
   })
 }
 
+
 test('updates and restores legacy compaction from its checkbox without inventing duration', async ({ page, ui }) => {
   const label = 'Compacting history...'
   const widget: NonNullable<ConversationRecord['widget']> = { widget: 'PlanWidget', fallbackText: label, componentTree: {
@@ -329,6 +361,7 @@ test('updates and restores legacy compaction from its checkbox without inventing
   await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
   await expect(page.locator('.leon-message').filter({ has: status }).locator('.final-answer')).toHaveCount(0)
 })
+
 
 test('replaces send with a danger stop action without submitting or losing the draft', async ({ page, ui }) => {
   const stopPath = `/api/v1/sessions/${SESSION_ID}/stop`
@@ -373,6 +406,7 @@ test('replaces send with a danger stop action without submitting or losing the d
   await expect(send.locator('[data-icon="send-ins"]')).toBeVisible()
   await expect(composer).toHaveValue('Draft for later')
 })
+
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   for (const withPlan of [false, true]) {
@@ -526,7 +560,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         input: { source: 'first' }, output: { sources: Array.from({ length: 40 }, (_, index) => `Source ${index}`) } },
       { id: 'second-source', name: 'test.lookup.run', toolCallTitle: 'Read second source',
         status: 'success', startedAt: startedAt + 300, durationMs: 100, planStepId: first.id }],
-      reasoning: [{ id: 'compare-sources', text: 'Compare source details.\nKeep the conclusion grounded.',
+      reasoning: [{ id: 'compare-sources', text: '**Compare source details**\nKeep the conclusion grounded.\n\n**Check the conclusion**\nUse the observed result.',
         phase: 'agent', startedAt: startedAt + 600, planStepId: first.id }]
     }
     await page.goto(SESSION_URL)
@@ -538,6 +572,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await plan.getByRole('button', { name: 'Used 2 tools for 200ms', exact: true }).click()
     const thought = plan.getByRole('region', { name: 'Leon’s thinking', exact: true })
     await thought.getByRole('button').locator('.process-group-title').click()
+    await expect(thought.locator('.thinking-message-details p')).toHaveCount(2)
+    await expect(thought.locator('strong')).toHaveText(['Compare source details', 'Check the conclusion'])
+    await expect(thought.locator('.thinking-message-details p').first())
+      .toHaveText('Compare source details\nKeep the conclusion grounded.')
     const tool = plan.locator('.tool-call').first()
     const initialTop = await tool.evaluate((element) => getComputedStyle(element, '::after').top)
     await tool.getByRole('button', { name: 'Read first source' }).click()
@@ -1030,8 +1068,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     }
     const checkAppend = async (target: Locator, append: () => Promise<void>): Promise<void> => {
       const first = target.locator('.streaming-text-characters > span').first()
-      await expect(first).toHaveClass('streaming-text-character-new')
       if (reducedMotion === 'no-preference') {
+        await expect(first).toHaveClass('streaming-text-character-new')
         await expect(first).toHaveCSS('animation-duration', '0.42s')
         await expect.poll(() => first.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
         const startedAt = await first.evaluate((element) => element.getAnimations()[0]!.startTime)
@@ -1039,9 +1077,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         await expect(first).toHaveClass('streaming-text-character-new')
         await expect.poll(() => first.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).toBe(startedAt)
       } else {
+        await expect(target.locator('.streaming-text-character-new')).toHaveCount(0)
         await append()
-        await expect(first).toHaveCSS('animation-name', 'none')
-        await expect(first).toHaveCSS('opacity', '1')
+        await expect(target.locator('.streaming-text-character-new')).toHaveCount(0)
       }
     }
 
@@ -1059,8 +1097,14 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(thinking).toContainText('Thinking...')
     await checkAppend(thinking, async () => {
       await emit('text_stream', { kind: 'reasoning', generationId: 'live-thinking', token: 'the details.' })
-      await expect(thinking.locator('.thinking-message-details')).toHaveAttribute('aria-label', 'Checking the details.')
+      await expect(thinking.locator('.thinking-message-details .streaming-text-characters')).toHaveText('Checking the details.')
     })
+    await emit('text_stream', { kind: 'reasoning', generationId: 'live-thinking', token: '\n\n' })
+    await emit('text_stream', { kind: 'reasoning', generationId: 'live-thinking',
+      token: '**Checking the source**\nKeep the useful details.\n\n**Preparing the reply**\nKeep it clear.' })
+    await expect(thinking.locator('.thinking-message-details p')).toHaveCount(3)
+    await expect(thinking.locator('strong')).toHaveText(['Checking the source', 'Preparing the reply'])
+    await expect(thinking.locator('.thinking-message-details p').last()).toHaveText('Preparing the reply\nKeep it clear.')
     await emit('text_stream', { kind: 'answer', generationId: 'provisional-answer', token: 'I will look this up.' })
     await expect(page.getByText('Thinking...', { exact: true })).toHaveCount(0)
     await expect(page.getByRole('region', { name: 'Leon’s final answer' }).last()).toContainText('I will look this up.')
@@ -1068,7 +1112,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const progress = page.locator('.leon-message-summary').last()
     await checkAppend(progress, async () => {
       await emit('progress_message', { message: { id: 'live-progress', content: 'Looking closer.', created_at: createdAt + sequence } })
-      await expect(progress.locator('[aria-label]')).toHaveAttribute('aria-label', 'Looking closer.')
+      await expect(progress.locator('.streaming-text-characters')).toHaveText('Looking closer.')
     })
     await emit('text_stream', { kind: 'answer', generationId: 'live-answer', token: 'Hello ' })
     const answer = page.getByRole('region', { name: 'Leon’s final answer' }).last()
@@ -1076,7 +1120,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await checkAppend(answer, async () => {
       // Bursts larger than the usual character window must retain in-flight fades.
       await emit('text_stream', { kind: 'answer', generationId: 'live-answer', token: finalText.slice('Hello '.length) })
-      await expect(answer.locator('[aria-label]')).toHaveAttribute('aria-label', finalText)
+      await expect(answer.locator('.streaming-text-characters')).toHaveText(finalText.trimEnd())
     })
 
     ui.history.get(SESSION_ID)!.push({
@@ -1089,12 +1133,17 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await emit('session_changed', { is_running: false })
     await expect.poll(() => ui.historyRequests.length).toBeGreaterThan(requests)
     await expect(page.locator('.leon-message-work')).toHaveCount(0)
-    await expect(answer.locator('.streaming-text-character-new')).not.toHaveCount(0)
+    if (reducedMotion === 'no-preference') {
+      await expect(answer.locator('.streaming-text-character-new')).not.toHaveCount(0)
+    } else {
+      await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
+    }
     await page.reload()
     await expect(answer).toContainText(finalText.trim())
     await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
   })
 }
+
 
 for (const recordedTimestamps of [true, false]) {
   test(`preserves tool and thinking chronology while streaming and after reload (recorded timestamps: ${recordedTimestamps})`, async ({ page, ui }) => {
@@ -1192,6 +1241,7 @@ for (const recordedTimestamps of [true, false]) {
     await assertOrder(work.locator('.leon-message-activities').first())
   })
 }
+
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   for (const followBottom of [true, false]) {
@@ -1315,6 +1365,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     })
   }
 }
+
 
 test('replaces one standalone processing row in place and retains completed request history', async ({ page, ui }) => {
   await page.goto(SESSION_URL)

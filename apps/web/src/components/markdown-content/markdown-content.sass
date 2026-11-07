@@ -1,23 +1,104 @@
 .markdown-content
-  display: grid
-  gap: var(--space-sm)
-  padding-top: var(--space-lg)
-  border-top: 1px solid var(--color-border)
-  color: var(--color-text)
-
-  h2,
-  h3
-    margin-top: var(--space-md)
-    color: var(--color-text)
-    font-size: 24px
-    font-weight: var(--font-weight-bold)
-    line-height: 30px
+  min-width: 0
+  overflow-wrap: anywhere
+  color: inherit
+  line-height: inherit
 
   p
-    color: var(--color-text-secondary)
-    font-size: var(--font-size-md)
-    line-height: 28px
+    white-space: pre-wrap
+
+  .streaming-text-characters
+    white-space: inherit
+
+  > * + *
+    margin-top: var(--space-md)
+
+  h1, h2, h3, h4, h5, h6
+    margin-top: var(--space-xl)
+    font-size: inherit
+    font-weight: var(--font-weight-bold)
+    line-height: var(--line-height-lg)
+
+  > :first-child
+    margin-top: 0
 
   strong
-    color: var(--color-text)
     font-weight: var(--font-weight-bold)
+
+  em
+    font-style: italic
+
+  del
+    text-decoration: line-through
+
+  ul, ol
+    padding-left: var(--space-xl)
+
+  ul
+    list-style: disc
+
+  ol
+    list-style: decimal
+
+  li + li, li > * + *
+    margin-top: var(--space-xs)
+
+  li > ul, li > ol
+    margin-top: var(--space-xs)
+
+  blockquote
+    padding-left: var(--space-lg)
+    border-left: 2px solid var(--color-border-strong)
+    color: var(--color-text-secondary)
+
+  hr
+    border: 0
+    border-top: 1px solid var(--color-border)
+
+  code
+    padding: 1px var(--space-xs)
+    border-radius: var(--border-radius-sm)
+    background: var(--color-surface)
+    font-family: var(--font-family-code)
+    font-size: .875em
+    font-variant-ligatures: none
+
+  pre code
+    padding: 0
+    border-radius: 0
+    background: none
+    font-size: inherit
+
+  .markdown-image-alt
+    color: var(--color-text-secondary)
+
+.markdown-link
+  color: var(--color-accent)
+  text-decoration: none
+  text-underline-offset: 5px
+  padding: 1px var(--space-xs)
+  border-radius: var(--border-radius-sm)
+  background-color: transparent
+  text-decoration-color: var(--color-accent)
+  transition: background-color var(--transition-duration-main)
+
+  &:hover
+    background-color: var(--color-accent-soft)
+
+.markdown-code
+  overflow: hidden
+  border-radius: var(--border-radius-md)
+  background: var(--color-surface-elevated)
+
+.markdown-code-header
+  display: flex
+  align-items: center
+  justify-content: space-between
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-lg)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-xs)
+  line-height: var(--line-height-xs)
+
+.markdown-code-actions
+  display: flex
+  align-items: center

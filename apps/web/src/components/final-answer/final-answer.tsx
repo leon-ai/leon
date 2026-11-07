@@ -1,4 +1,4 @@
-import { StreamingText } from '@/components/streaming-text'
+import { MarkdownContent } from '@/components/markdown-content'
 import { MessageMetadata } from '@/components/message-metadata'
 import type { ConversationMetrics } from '@/data/conversation'
 import type { ReactNode } from 'react'
@@ -13,6 +13,7 @@ interface FinalAnswerProps {
   timestamp?: number | undefined
   metrics?: ConversationMetrics | undefined
   footer?: ReactNode
+  active?: boolean | undefined
 }
 
 export function FinalAnswer({
@@ -20,13 +21,15 @@ export function FinalAnswer({
   children,
   timestamp,
   metrics,
-  footer
+  footer,
+  active
 }: FinalAnswerProps) {
   return (
     <div className="final-answer">
       <section className="final-answer-body" aria-label="Leon’s final answer">
-        <StreamingText
+        <MarkdownContent
           animationId={animationId}
+          active={active}
           startDelay={FINAL_ANSWER_ANIMATION_DELAY}
           text={children}
         />

@@ -4,7 +4,8 @@ import { useConversationDetails } from '@/data/conversation-details'
 
 import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { ProcessGroup } from '@/components/process-group'
-import { StreamingText, useAnimateOnce } from '@/components/streaming-text'
+import { useAnimateOnce } from '@/components/streaming-text'
+import { MarkdownContent } from '@/components/markdown-content'
 import { ThoughtIcon } from '@/components/thought-icon'
 import { WorkingMessage } from '@/components/working-message'
 import { Loader } from '@/components/loader'
@@ -55,8 +56,9 @@ export function ThinkingMessage({
         {disclosure.isFetching && !detailText ? (
           <span className="thinking-message-details"><Loader size="sm" label="Loading reasoning…" /></span>
         ) : (
-          <StreamingText
+          <MarkdownContent
             animationId={animationId}
+            active={isActive}
             className="thinking-message-details"
             startDelay={120}
             text={detailText}

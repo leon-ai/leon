@@ -127,10 +127,12 @@
     "ps-list": "7.2.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "rehype-sanitize": "6.0.0",
     "remixicon": "4.9.1",
     "shiki": "4.5.0",
     "socket.io": "4.8.3",
     "socket.io-client": "4.8.3",
+    "streamdown": "2.7.1",
     "tree-kill": "1.2.2",
     "ws": "8.22.0",
     "yaml": "2.8.3"
