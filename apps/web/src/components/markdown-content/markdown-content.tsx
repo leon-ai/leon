@@ -1,11 +1,12 @@
-import { createContext, memo, useCallback, useContext, useId, useMemo, useRef } from 'react'
+import { createContext, memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import {
   Block,
   Streamdown,
   parseMarkdownIntoBlocks,
   type BlockProps,
-  type Components
+  type Components,
+  type PluginConfig
 } from 'streamdown'
 
 import { StreamingText } from '@/components/streaming-text'
@@ -34,6 +35,7 @@ const LINK_SAFETY = { enabled: false }
 const ALERT_ICONS: Record<string, string> = {
   NOTE: 'github-note', TIP: 'github-tip', IMPORTANT: 'github-important', WARNING: 'github-warning', CAUTION: 'github-caution'
 }
+let mathRequest: Promise<typeof import('./markdown-math')> | undefined
 
 interface MarkdownContentProps {
   animationId: string
@@ -123,15 +125,37 @@ const COMPONENTS: Components = {
 export function MarkdownContent({ animationId, text, active = false, startDelay = 0, className }: MarkdownContentProps) {
   const scopeId = useId()
   const profile = useProfile()
+  const [math, setMath] = useState<PluginConfig['math']>()
+  const hasMath = text.includes('$')
+  useEffect(() => {
+    if (!hasMath || math) {
+      return
+    }
+    let cancelled = false
+    mathRequest ??= import('./markdown-math').catch((error: unknown) => {
+      mathRequest = undefined
+      throw error
+    })
+    void mathRequest.then((module) => {
+      if (!cancelled) {
+        setMath(module.math)
+      }
+    }).catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasMath, math])
+  const plugins = useMemo(() => math ? { math } : {}, [math])
   const animation = useMemo(() => ({
     animationId,
     startDelay,
     scopeId: `leon-${scopeId}-`,
     profile,
     completed: !active,
-    math: false,
+    math: Boolean(math),
     revealWindow: { firstBlock: 0, offset: 0 }
-  }), [animationId, startDelay, scopeId, profile, active])
+  }), [animationId, startDelay, scopeId, profile, active, math])
   const parseBlocks = useCallback((markdown: string): string[] => {
     const blocks = parseMarkdownIntoBlocks(markdown)
     let remaining = MAXIMUM_ANIMATED_SOURCE_CHARACTERS
@@ -150,7 +174,7 @@ export function MarkdownContent({ animationId, text, active = false, startDelay 
     <MarkdownAnimationContext.Provider value={animation}>
       <Streamdown className={clsx('markdown-content', className)}
         components={COMPONENTS} BlockComponent={MarkdownBlock}
-        rehypePlugins={MARKDOWN_REHYPE_PLUGINS} remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+        rehypePlugins={MARKDOWN_REHYPE_PLUGINS} remarkPlugins={MARKDOWN_REMARK_PLUGINS} plugins={plugins}
         parseMarkdownIntoBlocksFn={parseBlocks}
         animated={false} isAnimating={active} controls={false}
         linkSafety={LINK_SAFETY}>

@@ -74,6 +74,9 @@ importers:
       '@sinclair/typebox':
         specifier: 0.31.23
         version: 0.31.23
+      '@streamdown/math':
+        specifier: 1.0.3
+        version: 1.0.3(react@19.2.6)(supports-color@5.5.0)
       '@tanstack/react-query':
         specifier: 5.104.5
         version: 5.104.5(@types/react@19.2.15)(react@19.2.6)
@@ -137,6 +140,9 @@ importers:
       jose:
         specifier: 6.2.12
         version: 6.2.12
+      katex:
+        specifier: 0.16.47
+        version: 0.16.47
       marked:
         specifier: 18.0.11
         version: 18.0.11
@@ -1455,6 +1461,11 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: { integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w== }
 
+  '@streamdown/math@1.0.3':
+    resolution: { integrity: sha512-TOTRlPYs4LBNT8GaIWNCEVrcGVQsVcfc8WZ/x/0IyO+Rvsu6W+nF+YCS4Pl3JTVWQK8QX7LbWUChSilwlyzPZw== }
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+
   '@stylistic/eslint-plugin@5.10.0':
     resolution: { integrity: sha512-nPK52ZHvot8Ju/0A4ucSX1dcPV2/1clx0kLcH5wDmrE4naKso7TUC/voUyU1O9OTKTrR6MYip6LP0ogEMQ9jPQ== }
     engines: { node: ^18.18.0 || ^20.9.0 || >=21.1.0 }
@@ -1543,6 +1554,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: { integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA== }
+
+  '@types/katex@0.16.8':
+    resolution: { integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg== }
 
   '@types/mdast@4.0.4':
     resolution: { integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA== }
@@ -2417,6 +2431,10 @@ packages:
     resolution: { integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA== }
     engines: { node: '>= 6' }
 
+  commander@8.3.0:
+    resolution: { integrity: sha512-OkTL9umf+He2DZkUq8f8J9of7yL6RJKI24dVITBmNfZBmri9zYZQrKkuXiKhyfPSu8tUhnVBB1iKXevvnlR4Ww== }
+    engines: { node: '>= 12' }
+
   comment-parser@1.4.7:
     resolution: { integrity: sha512-0h+uSNtQGW3D98eQt3jJ8L06Fves8hncB4V/PKdw/Qb8Hnk19VaKuTr55UNRYiSoVa7WwrFls+rh3ux9agmkeQ== }
     engines: { node: '>= 12.0.0' }
@@ -2978,6 +2996,15 @@ packages:
     resolution: { integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A== }
     engines: { node: '>= 0.4' }
 
+  hast-util-from-dom@5.0.1:
+    resolution: { integrity: sha512-N+LqofjR2zuzTjCPzyDUdSshy4Ma6li7p/c3pA78uTwzFgENbgbUrm2ugwsOdcjI1muO+o6Dgzp9p8WHtn/39Q== }
+
+  hast-util-from-html-isomorphic@2.0.0:
+    resolution: { integrity: sha512-zJfpXq44yff2hmE0XmwEOzdWin5xwH+QIhMLOScpX91e/NSGPsAzNCvLQDIEPyO2TXi+lBmU6hjLIhV8MwP2kw== }
+
+  hast-util-from-html@2.0.3:
+    resolution: { integrity: sha512-CUSRHXyKjzHov8yKsQjGOElXy/3EKpyX56ELnkHH34vDVw1N1XSQ1ZcAvTyAPtGqLTuKP/uxM+aLkSPqF/EtMw== }
+
   hast-util-from-parse5@8.0.4:
     resolution: { integrity: sha512-Yq7XlXor0Cpb71sI2E0zpv8QxQ5a6rfhDEETk4bcgrFX2SvJAY2PHocWwFtL6U9qyfiyByW3wZ6sZEfP2kW81g== }
 
@@ -2998,6 +3025,9 @@ packages:
 
   hast-util-to-parse5@8.0.1:
     resolution: { integrity: sha512-MlWT6Pjt4CG9lFCjiz4BH7l9wmrMkfkJYCxFwKQic8+RTZgWPuWxwAfjJElsXkex7DJjfSJsQIt931ilUgmwdA== }
+
+  hast-util-to-text@4.0.3:
+    resolution: { integrity: sha512-5yrlWOvGFs6CqHriUpSsNrjzT/Tdo+IOQudbznxOn8K5qblp18MJyzOg8IgDOKQ8MYgQcJA7SusuCjSpDr8mSA== }
 
   hast-util-whitespace@3.0.0:
     resolution: { integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw== }
@@ -3218,6 +3248,10 @@ packages:
   jsonfile@6.1.0:
     resolution: { integrity: sha512-5dgndWOriYSm5cnYaJNhalLNDKOqFwyDB/rr1E9ZsGciGvKPs8R2xYGCacuf3z6K1YKDz182fd+fY3cn3pMqXQ== }
 
+  katex@0.16.47:
+    resolution: { integrity: sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg== }
+    hasBin: true
+
   keyv@4.5.4:
     resolution: { integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw== }
 
@@ -3409,6 +3443,9 @@ packages:
   mdast-util-gfm@3.1.0:
     resolution: { integrity: sha512-0ulfdQOM3ysHhCJ1p06l0b0VKlhU0wuQs3thxZQagjcjPrlFRqY215uZGHHJan9GEAXd9MbfPjFJz+qMkVR6zQ== }
 
+  mdast-util-math@3.0.0:
+    resolution: { integrity: sha512-Tl9GBNeG/AhJnQM221bJR2HPvLOSnLE/T9cJI9tlc6zwQk2nPk/4f0cHkOdEixQPC/j8UtKDdITswvLAy1OZ1w== }
+
   mdast-util-mdx-expression@2.0.1:
     resolution: { integrity: sha512-J6f+9hUp+ldTZqKRSg7Vw5V6MqjATc+3E4gf3CFNcuZNWD8XdyI6zQ8GqH7f8169MM6P7hMBRDVGnn7oHB9kXQ== }
 
@@ -3463,6 +3500,9 @@ packages:
 
   micromark-extension-gfm@3.0.0:
     resolution: { integrity: sha512-vsKArQsicm7t0z2GugkCKtZehqUm31oeGBV/KVSorWSy8ZlNAv7ytjFhvaryUiCUJYqs+NoE6AFhpQvBTM6Q4w== }
+
+  micromark-extension-math@3.1.0:
+    resolution: { integrity: sha512-lvEqd+fHjATVs+2v/8kg9i5Q0AP2k85H0WUOwpIVvUML8BapsMvh1XAogmQjOCsLpoKRCVQqEkQBB3NhVBcsOg== }
 
   micromark-factory-destination@2.0.1:
     resolution: { integrity: sha512-Xe6rDdJlkmbFRExpTOmRj9N3MaWmbAgdpSrBQvCFqhezUn4AHqJHbaEnfbVYYiexVSs//tqOdY/DxhjdCiJnIA== }
@@ -3944,6 +3984,9 @@ packages:
   rehype-harden@1.1.8:
     resolution: { integrity: sha512-Qn7vR1xrf6fZCrkm9TDWi/AB4ylrHy+jqsNm1EHOAmbARYA6gsnVJBq/sdBh6kmT4NEZxH5vgIjrscefJAOXcw== }
 
+  rehype-katex@7.0.1:
+    resolution: { integrity: sha512-OiM2wrZ/wuhKkigASodFoo8wimG3H12LWQaH8qSPVJn9apWKFSH3YOCtbKpBorTVw/eI7cuT21XBbvwEswbIOA== }
+
   rehype-raw@7.0.0:
     resolution: { integrity: sha512-/aE8hCfKlQeA8LmyeyQvQF3eBiLRGNlfBJEvWH7ivp9sBqs7TNqBL5X3v157rM4IFETqDnIOO+z5M/biZbo9Ww== }
 
@@ -3956,6 +3999,9 @@ packages:
   remark-github-blockquote-alert@2.1.0:
     resolution: { integrity: sha512-J392jmIP684d7iGsENN0uguL10IGbRdc8bTUSrd/jOLzdWkwg721Fj3JPQGN8tF6fTIrE5HHOIA3nBuwuaeuPQ== }
     engines: { node: '>=16' }
+
+  remark-math@6.0.0:
+    resolution: { integrity: sha512-MMqgnP74Igy+S3WwnhQ7kqGlEerTETXMvJhrUzDikVZ2/uogJCb+WHUg97hK9/jcfc0dkD73s3LN8zU49cTEtA== }
 
   remark-parse@11.0.0:
     resolution: { integrity: sha512-FCxlKLNGknS5ba/1lmpYijMUzX2esxW5xQqjWxw2eHFfS2MSdaHVINFmhjo+qN1WhZhNimq0dZATN9pH0IDrpA== }
@@ -4461,6 +4507,9 @@ packages:
 
   unist-util-position@5.0.0:
     resolution: { integrity: sha512-fucsC7HjXvkB5R3kTCO7kUjRdrS0BJt3M/FPxmHMBOm8JQi2BsHAHFsy27E0EolP8rp0NzXsJ+jNPyDWvOJZPA== }
+
+  unist-util-remove-position@5.0.0:
+    resolution: { integrity: sha512-Hp5Kh3wLxv0PHj9m2yZhhLt58KzPtEYKQQ4yxfYFEO7EvHwzyDYnduhHnY1mDxoqr7VUwVuHXk9RXKIiYS1N8Q== }
 
   unist-util-stringify-position@4.0.0:
     resolution: { integrity: sha512-0ASV06AAoKCDkS2+xw5RXJywruurpbC4JZSm7nr7MOt1ojAzvyyaO+UxZf18j8FCF6kmzCZKcAgN/yu2gm2XgQ== }
@@ -5641,6 +5690,15 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@streamdown/math@1.0.3(react@19.2.6)(supports-color@5.5.0)':
+    dependencies:
+      katex: 0.16.47
+      react: 19.2.6
+      rehype-katex: 7.0.1
+      remark-math: 6.0.0(supports-color@5.5.0)
+    transitivePeerDependencies:
+      - supports-color
+
   '@stylistic/eslint-plugin@5.10.0(eslint@10.7.0(supports-color@5.5.0))':
     dependencies:
       '@eslint-community/eslint-utils': 4.9.1(eslint@10.7.0(supports-color@5.5.0))
@@ -5757,6 +5815,8 @@ snapshots:
       '@types/unist': 3.0.3
 
   '@types/json-schema@7.0.15': {}
+
+  '@types/katex@0.16.8': {}
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -6842,6 +6902,8 @@ snapshots:
 
   commander@4.1.1: {}
 
+  commander@8.3.0: {}
+
   comment-parser@1.4.7: {}
 
   concat-stream@2.0.0:
@@ -7527,6 +7589,28 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
+  hast-util-from-dom@5.0.1:
+    dependencies:
+      '@types/hast': 3.0.5
+      hastscript: 9.0.3
+      web-namespaces: 2.0.1
+
+  hast-util-from-html-isomorphic@2.0.0:
+    dependencies:
+      '@types/hast': 3.0.5
+      hast-util-from-dom: 5.0.1
+      hast-util-from-html: 2.0.3
+      unist-util-remove-position: 5.0.0
+
+  hast-util-from-html@2.0.3:
+    dependencies:
+      '@types/hast': 3.0.5
+      devlop: 1.1.0
+      hast-util-from-parse5: 8.0.4
+      parse5: 7.3.0
+      vfile: 6.0.3
+      vfile-message: 4.0.3
+
   hast-util-from-parse5@8.0.4:
     dependencies:
       '@types/hast': 3.0.5
@@ -7607,6 +7691,10 @@ snapshots:
       space-separated-tokens: 2.0.2
       web-namespaces: 2.0.1
       zwitch: 2.0.4
+
+  hast-util-to-text@4.0.3:
+    dependencies:
+      '@types/hast': 3.0.5
 
   hast-util-whitespace@3.0.0:
     dependencies:
@@ -7798,6 +7886,10 @@ snapshots:
       universalify: 2.0.1
     optionalDependencies:
       graceful-fs: 4.2.11
+
+  katex@0.16.47:
+    dependencies:
+      commander: 8.3.0
 
   keyv@4.5.4:
     dependencies:
@@ -8031,6 +8123,18 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  mdast-util-math@3.0.0(supports-color@5.5.0):
+    dependencies:
+      '@types/hast': 3.0.5
+      '@types/mdast': 4.0.4
+      devlop: 1.1.0
+      longest-streak: 3.1.0
+      mdast-util-from-markdown: 2.1.0(supports-color@5.5.0)
+      mdast-util-to-markdown: 2.2.2
+      unist-util-remove-position: 5.0.0
+    transitivePeerDependencies:
+      - supports-color
+
   mdast-util-mdx-expression@2.0.1(supports-color@5.5.0):
     dependencies:
       '@types/estree-jsx': 1.0.5
@@ -8187,6 +8291,16 @@ snapshots:
       micromark-extension-gfm-tagfilter: 2.0.0
       micromark-extension-gfm-task-list-item: 2.1.0
       micromark-util-combine-extensions: 2.0.1
+      micromark-util-types: 2.0.3
+
+  micromark-extension-math@3.1.0:
+    dependencies:
+      '@types/katex': 0.16.8
+      devlop: 1.1.0
+      katex: 0.16.47
+      micromark-factory-space: 2.1.0
+      micromark-util-character: 2.1.1
+      micromark-util-symbol: 2.0.1
       micromark-util-types: 2.0.3
 
   micromark-factory-destination@2.0.1:
@@ -8758,6 +8872,16 @@ snapshots:
     dependencies:
       unist-util-visit: 5.2.0
 
+  rehype-katex@7.0.1:
+    dependencies:
+      '@types/hast': 3.0.5
+      '@types/katex': 0.16.8
+      hast-util-from-html-isomorphic: 2.0.0
+      hast-util-to-text: 4.0.3
+      katex: 0.16.47
+      unist-util-visit-parents: 6.1.0
+      vfile: 6.0.3
+
   rehype-raw@7.0.0:
     dependencies:
       '@types/hast': 3.0.5
@@ -8783,6 +8907,15 @@ snapshots:
   remark-github-blockquote-alert@2.1.0:
     dependencies:
       unist-util-visit: 5.2.0
+
+  remark-math@6.0.0(supports-color@5.5.0):
+    dependencies:
+      '@types/mdast': 4.0.4
+      mdast-util-math: 3.0.0(supports-color@5.5.0)
+      micromark-extension-math: 3.1.0
+      unified: 11.0.5
+    transitivePeerDependencies:
+      - supports-color
 
   remark-parse@11.0.0(supports-color@5.5.0):
     dependencies:
@@ -9312,6 +9445,11 @@ snapshots:
   unist-util-position@5.0.0:
     dependencies:
       '@types/unist': 3.0.3
+
+  unist-util-remove-position@5.0.0:
+    dependencies:
+      '@types/unist': 3.0.3
+      unist-util-visit: 5.2.0
 
   unist-util-stringify-position@4.0.0:
     dependencies:
