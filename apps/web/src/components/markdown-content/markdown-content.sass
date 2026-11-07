@@ -19,6 +19,16 @@
     font-weight: var(--font-weight-bold)
     line-height: var(--line-height-lg)
 
+  h1
+    font-size: var(--font-size-3xl)
+    line-height: var(--line-height-xl)
+
+  h2
+    font-size: var(--font-size-2xl)
+
+  h3
+    font-size: var(--font-size-xl)
+
   > :first-child
     margin-top: 0
 
@@ -45,6 +55,96 @@
 
   li > ul, li > ol
     margin-top: var(--space-xs)
+
+  ul.contains-task-list
+    padding-left: 0
+    list-style: none
+
+    > li
+      position: relative
+      padding-left: var(--space-xl)
+
+    .markdown-task-checkbox
+      position: absolute
+      top: .35em
+      left: 0
+      display: grid
+      place-items: center
+      width: 16px
+      height: 16px
+      color: var(--color-accent-contrast)
+
+      input
+        position: absolute
+        box-sizing: border-box
+        inset: 0
+        width: 100%
+        height: 100%
+        margin: 0
+        appearance: none
+        border: 1px solid var(--color-border-strong)
+        border-radius: var(--border-radius-sm)
+        background: transparent
+        opacity: 1
+
+        &:checked
+          border-color: var(--color-accent)
+          background: var(--color-accent)
+
+      > .app-icon
+        z-index: 1
+        width: 14px
+        height: 14px
+        pointer-events: none
+
+  details
+    padding: var(--space-md) var(--space-lg)
+    border: 1px solid var(--color-border)
+    border-radius: var(--border-radius-md)
+
+    > summary
+      cursor: pointer
+      color: var(--color-text-secondary)
+
+    &[open] > summary
+      margin-bottom: var(--space-sm)
+
+  .markdown-alert
+    padding: var(--space-md) var(--space-lg)
+    border-left: 2px solid
+    border-radius: 0
+    background: transparent
+
+    > * + *
+      margin-top: var(--space-sm)
+
+    .markdown-alert-title
+      display: flex
+      align-items: center
+      gap: var(--space-sm)
+      font-weight: var(--font-weight-semi-bold)
+
+      > .app-icon
+        width: 16px
+        height: 16px
+
+    @each $type in note, tip, important, warning, caution
+      &-#{$type}
+        border-left-color: var(--color-markdown-alert-#{$type}-border)
+
+        .markdown-alert-title
+          color: var(--color-markdown-alert-#{$type})
+
+  .footnotes
+    margin-top: var(--space-xl)
+    padding-top: var(--space-md)
+    border-top: 1px solid var(--color-border)
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+    > h2
+      margin: 0 0 var(--space-sm)
+      font-size: inherit
 
   blockquote
     padding-left: var(--space-lg)
@@ -84,6 +184,37 @@
 
   &:hover
     background-color: var(--color-accent-soft)
+
+.markdown-table
+  max-width: 100%
+  overflow-x: auto
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-md)
+  scrollbar-width: thin
+  scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
+
+  table
+    border-collapse: separate
+    border-spacing: 0
+    min-width: 100%
+    font-size: var(--font-size-md)
+    line-height: var(--line-height-md)
+
+  th, td
+    padding: var(--space-sm) var(--space-md)
+    border: 0
+    border-bottom: 1px solid var(--color-border)
+    text-align: left
+
+    + th, + td
+      border-left: 1px solid var(--color-border)
+
+  tbody tr:last-child td
+    border-bottom: 0
+
+  th
+    background: var(--color-surface)
+    font-weight: var(--font-weight-semi-bold)
 
 .markdown-code
   overflow: hidden

@@ -158,6 +158,9 @@ importers:
       rehype-sanitize:
         specifier: 6.0.0
         version: 6.0.0
+      remark-github-blockquote-alert:
+        specifier: 2.1.0
+        version: 2.1.0
       remixicon:
         specifier: 4.9.1
         version: 4.9.1
@@ -3949,6 +3952,10 @@ packages:
 
   remark-gfm@4.0.1:
     resolution: { integrity: sha512-1quofZ2RQ9EWdeN34S79+KExV1764+wCUGop5CPL1WGdD0ocPpu91lzPGbwWMECpEpd42kJGQwzRfyov9j4yNg== }
+
+  remark-github-blockquote-alert@2.1.0:
+    resolution: { integrity: sha512-J392jmIP684d7iGsENN0uguL10IGbRdc8bTUSrd/jOLzdWkwg721Fj3JPQGN8tF6fTIrE5HHOIA3nBuwuaeuPQ== }
+    engines: { node: '>=16' }
 
   remark-parse@11.0.0:
     resolution: { integrity: sha512-FCxlKLNGknS5ba/1lmpYijMUzX2esxW5xQqjWxw2eHFfS2MSdaHVINFmhjo+qN1WhZhNimq0dZATN9pH0IDrpA== }
@@ -8772,6 +8779,10 @@ snapshots:
       unified: 11.0.5
     transitivePeerDependencies:
       - supports-color
+
+  remark-github-blockquote-alert@2.1.0:
+    dependencies:
+      unist-util-visit: 5.2.0
 
   remark-parse@11.0.0(supports-color@5.5.0):
     dependencies:

@@ -3,6 +3,18 @@ Third-party notices for Leon Web App assets
 
 These notices cover third-party assets and do not replace Leon's project license.
 
+GitHub Markdown alerts
+----------------------
+
+Original Octicons from remark-github-blockquote-alert and Primer's default
+light/dark alert colors identify Note, Tip, Important, Warning and Caution.
+Sources: https://github.com/primer/octicons
+https://github.com/jaywcjlove/remark-github-blockquote-alert
+https://github.com/primer/primitives (published @primer/primitives 10.0.0)
+Copyright (c) 2026 GitHub Inc.
+Copyright (c) 2025 Kenny Wang(小弟调调™) <kennyiseeyou@gmail.com> (https://github.com/jaywcjlove)
+MIT License (permission notice below).
+
 Code font and rendering libraries
 --------------------------------
 

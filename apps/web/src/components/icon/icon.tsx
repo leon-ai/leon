@@ -1,5 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { clsx } from 'clsx'
+import { getPublicAssetPath } from '@/config'
+import { ASSET_ICONS } from './asset-icons'
 
 import { COMMON_ICONS, ICON_VARIANT_ARTWORK, SOFT_ICON_NAMES, TOOL_ICON_NAMES, type IconDefinition } from './icon-definitions'
 import { getIconVariant, resolveIconName } from './icon-name'
@@ -66,8 +68,9 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
   const explicit = variant ? getArtwork(ICON_VARIANT_ARTWORK, `${resolved}-${variant}`) : undefined
   const common = explicit ?? getArtwork(COMMON, resolved)
   const brand = getArtwork(BRAND_ICONS, resolved)
+  const asset = Object.hasOwn(ASSET_ICONS, resolved) ? ASSET_ICONS[resolved] : undefined
   const tool = getArtwork(toolArtwork, resolved)
-  const isTool = !common && !brand && (TOOL_ICON_NAMES.has(resolved) || TOOL_ICON_NAMES.has(fallback))
+  const isTool = !common && !brand && !asset && (TOOL_ICON_NAMES.has(resolved) || TOOL_ICON_NAMES.has(fallback))
   const [, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -93,6 +96,15 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
     'aria-hidden': ariaLabel === undefined ? true as const : undefined,
     'aria-label': ariaLabel,
     role: ariaLabel === undefined ? undefined : 'img'
+  }
+
+  if (asset) {
+    const src = getPublicAssetPath(asset.path)
+
+    return asset.colored ? <img {...shared} src={src} alt={ariaLabel ?? ''}
+      width={24} height={24} loading="lazy" decoding="async" data-icon-artwork="original" /> :
+      <span {...shared} data-icon-artwork="original"
+        style={{ backgroundColor: 'currentColor', mask: `url("${src}") center / contain no-repeat` }} />
   }
 
   const category = getArtwork(COMMON, fallback) ?? getArtwork(BRAND_ICONS, fallback) ?? getArtwork(toolArtwork, fallback)

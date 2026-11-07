@@ -9,6 +9,7 @@ import {
 } from 'streamdown'
 
 import { StreamingText } from '@/components/streaming-text'
+import { Icon } from '@/components/icon'
 import { useProfile } from '@/data/profile'
 import { MarkdownLink } from './markdown-link'
 import { animateMarkdown } from './animate-markdown'
@@ -30,6 +31,9 @@ const MarkdownAnimationContext = createContext({
   revealWindow: { firstBlock: 0, offset: 0 }
 })
 const LINK_SAFETY = { enabled: false }
+const ALERT_ICONS: Record<string, string> = {
+  NOTE: 'github-note', TIP: 'github-tip', IMPORTANT: 'github-important', WARNING: 'github-warning', CAUTION: 'github-caution'
+}
 
 interface MarkdownContentProps {
   animationId: string
@@ -68,11 +72,24 @@ const MarkdownBlock = memo(function MarkdownBlock(props: BlockProps) {
 const COMPONENTS: Components = {
   a: MarkdownLink,
   h1: 'h1', h2: 'h2', h3: 'h3', h4: 'h4', h5: 'h5', h6: 'h6',
-  p: 'p', ul: 'ul', ol: 'ol', li: 'li', blockquote: 'blockquote', hr: 'hr',
+  p: ({ node, children, className }) => {
+    if (className === 'markdown-alert-title') {
+      const title = node?.children.find((child) => child.type === 'text')?.value.trim() ?? 'NOTE'
+      return <p className={className}><Icon name={ALERT_ICONS[title] ?? 'github-note'} />{title[0]}{title.slice(1).toLowerCase()}</p>
+    }
+
+    return <p>{children}</p>
+  },
+  ul: 'ul', ol: 'ol', li: 'li', blockquote: 'blockquote', hr: 'hr',
   div: 'div', span: 'span', section: 'section', sup: 'sup', sub: 'sub',
   details: 'details', summary: 'summary',
+  input: ({ checked }) => <span className="markdown-task-checkbox">
+    <input type="checkbox" checked={Boolean(checked)} disabled readOnly
+      aria-label={checked ? 'Completed task' : 'Pending task'} />
+    {checked && <Icon name="check-fill" />}
+  </span>,
   strong: 'strong', em: 'em', del: 'del',
-  table: 'table',
+  table: ({ children }) => <div className="markdown-table"><table>{children}</table></div>,
   thead: 'thead', tbody: 'tbody', tr: 'tr', th: 'th', td: 'td',
   // External images can leak conversation data through model-authored URLs.
   img: ({ alt }) => alt ? <span className="markdown-image-alt">{alt}</span> : null,

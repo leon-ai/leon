@@ -1,4 +1,5 @@
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import remarkAlert from 'remark-github-blockquote-alert'
 import { defaultRehypePlugins, defaultRemarkPlugins, type BlockProps } from 'streamdown'
 
 interface MarkdownElement {
@@ -23,7 +24,7 @@ const SCHEMA = {
 }
 
 export const MARKDOWN_REMARK_PLUGINS: NonNullable<BlockProps['remarkPlugins']> = [
-  ...Object.values(defaultRemarkPlugins)
+  ...Object.values(defaultRemarkPlugins), remarkAlert
 ]
 export const MARKDOWN_REHYPE_PLUGINS: NonNullable<BlockProps['rehypePlugins']> = [
   defaultRehypePlugins['raw']!, [rehypeSanitize, SCHEMA]

@@ -130,6 +130,7 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "rehype-sanitize": "6.0.0",
+    "remark-github-blockquote-alert": "2.1.0",
     "remixicon": "4.9.1",
     "shiki": "4.5.0",
     "socket.io": "4.8.3",
