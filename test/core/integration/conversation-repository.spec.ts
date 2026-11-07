@@ -5,15 +5,14 @@ import { MemoryActivityAction } from '@/core/llm-manager/memory-activity-contrac
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 import type { ConversationSession } from '@/core/session-manager'
 import type { MessageLog } from '@/types'
 import { MAXIMUM_ARCHIVE_PAGE_CHARACTERS, type ArchiveMessagePage } from '@@/bridges/runtime/contracts/conversation-archive'
 import { searchConversationSessions } from '@/core/session-manager/session-search'
 import { TOOL_CONTENT_PREVIEW_CHARACTERS } from '@/core/session-manager/tool-content-contract'
+import { MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS } from '@/core/session-manager/session-search-contract'
 
 function session(id: string, timestamp = 1): ConversationSession {
   return {
@@ -29,9 +28,12 @@ function session(id: string, timestamp = 1): ConversationSession {
   }
 }
 
+
 describe('profile conversation archive', () => {
   let directory = ''
+
   const repositories = new Set<ConversationRepository>()
+
 
   function open(profile = 'owner'): ConversationRepository {
     const repository = new ConversationRepository(path.join(directory, profile, 'sessions'))
@@ -39,14 +41,17 @@ describe('profile conversation archive', () => {
     return repository
   }
 
+
   function close(repository: ConversationRepository): void {
     repository.close()
     repositories.delete(repository)
   }
 
+
   beforeEach(async () => {
     directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-conversation-archive-'))
   })
+
 
   afterEach(async () => {
     for (const repository of repositories) {
@@ -55,6 +60,7 @@ describe('profile conversation archive', () => {
     repositories.clear()
     await fs.rm(directory, { recursive: true, force: true })
   })
+
 
   it('rotates mindset lines atomically across sessions and connections, surviving reopen without repeats', () => {
     let repository = open()
@@ -85,6 +91,7 @@ describe('profile conversation archive', () => {
     expect(texts[FYI_VISIONS.length]).not.toBe(texts[FYI_VISIONS.length - 1])
   })
 
+
   it('rejects stale or deleted FYI targets and keeps accepted footers out of model context', () => {
     const repository = open()
     repository.saveSession(session('chat'))
@@ -101,6 +108,7 @@ describe('profile conversation archive', () => {
     repository.deleteSession('chat')
     expect(repository.saveFyi('chat', 'answer', 'Edited.', footer)).toBeNull()
   })
+
 
   it('reads bounded invocation previews and complete bodies independently within their session and profile', () => {
     const repository = open()
@@ -139,6 +147,7 @@ describe('profile conversation archive', () => {
     expect(repository.readToolContents('other', 'trace', 'one')).toBeNull()
     expect(open('another-profile').readToolContents('chat', 'trace', 'one')).toBeNull()
   })
+
 
   it('pages complete visible source text without gaps, disclosures or cross-session access', async () => {
     const repository = open()
@@ -183,6 +192,7 @@ describe('profile conversation archive', () => {
     expect(() => repository.readMessageText('report', 'source', { limit: 0 })).toThrow('limits')
     expect(() => repository.readMessageText('report', 'source', { offset: text.length + 1 })).toThrow('beyond')
   })
+
 
   it('reads ordered source fragments across messages with bounded text and stable continuation', () => {
     const repository = open()
@@ -230,6 +240,7 @@ describe('profile conversation archive', () => {
     expect(() => repository.readSessionText('book', { limit: 0 })).toThrow('limit')
   })
 
+
   it('imports legacy sessions once, preserves their files, and survives reopening', async () => {
     const root = path.join(directory, 'owner', 'sessions')
     await fs.mkdir(path.join(root, 'legacy'), { recursive: true })
@@ -252,6 +263,7 @@ describe('profile conversation archive', () => {
     expect(reopened.listSessions({ query: 'camera' }).items[0]?.id).toBe('legacy')
   })
 
+
   it('rolls back incomplete migration and retries without duplicating earlier sessions', async () => {
     const root = path.join(directory, 'owner', 'sessions')
     await fs.mkdir(path.join(root, 'broken'), { recursive: true })
@@ -265,6 +277,7 @@ describe('profile conversation archive', () => {
     expect(open().readIndex()?.sessions.map((entry) => entry.id).sort())
       .toEqual(['broken', 'good'])
   })
+
 
   it('isolates profiles, retains history beyond model limits, and pages without duplicates', () => {
     const first = open('first')
@@ -293,6 +306,7 @@ describe('profile conversation archive', () => {
     expect(newer.previousCursor).toBeNull()
   })
 
+
   it('uses indexed session cursors with pinned sessions first and rejects invalid cursors', () => {
     const repository = open()
     repository.saveSession(session('old', 1))
@@ -306,6 +320,173 @@ describe('profile conversation archive', () => {
     expect(() => repository.listSessions({ cursor: 'invalid' })).toThrow()
     expect(() => repository.readMessages('new', { before: 'NaN' })).toThrow()
   })
+
+
+  it('ranks normalized title matches before content and preserves relevance through cursor pages', () => {
+    const repository = open()
+    const entries = [
+      { ...session('exact', 1), title: 'Sharing - context' },
+      { ...session('prefix', 2), title: 'Sharing / context notes' },
+      { ...session('substring', 3), title: 'Notes on sharing context' },
+      { ...session('terms', 4), title: 'Context while sharing notes' },
+      { ...session('recent-content', 90), title: 'Our workbench', isPinned: true },
+      { ...session('older-content', 80), title: 'Our earlier work' },
+      { ...session('partial', 100), title: 'Sharing alone' }
+    ]
+    for (const entry of entries) {
+      repository.saveSession(entry)
+    }
+    for (const id of ['recent-content', 'older-content']) {
+      repository.upsertMessage(id, {
+        who: 'owner', messageId: `${id}:source`, isAddedToHistory: true,
+        message: `${'An unrelated paragraph. '.repeat(1_000)}Latest notes about sharing - context with care. ${'More notes. '.repeat(100)}`
+      }, { sentAt: id === 'recent-content' ? 90 : 80 })
+    }
+    repository.upsertMessage('partial', {
+      who: 'leon', messageId: 'hidden', message: 'Hidden sharing context', isAddedToHistory: false
+    })
+    const ids: string[] = []
+    let cursor: string | null = null
+    do {
+      const page = repository.listSessions({ query: 'sharing context', limit: 2, ...(cursor ? { cursor } : {}) })
+      ids.push(...page.items.map((item) => item.id))
+      for (const item of page.items) {
+        const excerpt = page.searchMatches?.[item.id]?.excerpt
+        if (item.id.endsWith('content')) {
+          expect(excerpt).toContain('sharing - context')
+          expect(Array.from(excerpt!).length).toBeLessThanOrEqual(MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS)
+          expect(excerpt).not.toContain('Hidden')
+        } else {
+          expect(excerpt).toBeUndefined()
+        }
+      }
+      cursor = page.nextCursor
+    } while (cursor)
+    expect(ids).toEqual(['exact', 'prefix', 'substring', 'terms', 'recent-content', 'older-content'])
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(repository.listSessions().items[0]?.id).toBe('recent-content')
+    expect(repository.listSessions().searchMatches).toBeUndefined()
+    expect(open('another').listSessions({ query: 'sharing context' }).items).toEqual([])
+    const first = repository.listSessions({ query: 'sharing context', limit: 1 })
+    expect(() => repository.listSessions({ query: 'context sharing', cursor: first.nextCursor! })).toThrow('cursor')
+    expect(() => repository.listSessions({ cursor: first.nextCursor! })).toThrow('cursor')
+    expect(() => repository.listSessions({ query: 'sharing context', cursor: repository.listSessions({ limit: 1 }).nextCursor! })).toThrow('cursor')
+    const compact = repository.listSessions({ query: 'sharingcontext', limit: 1 })
+    expect(() => repository.listSessions({ query: 'sharing-context', cursor: compact.nextCursor! })).toThrow('cursor')
+  })
+
+
+  it('prefers phrases and stronger passages over newer mentions while paging each session once', () => {
+    const repository = open()
+    repository.saveSession({ ...session('title', 1), title: 'Sharing - context' })
+    const entries = [
+      { id: 'older-phrase', time: 10, message: 'Sharing - context.' },
+      { id: 'newer-phrase', time: 20, message: 'Sharing - context.' },
+      { id: 'best-source', time: 30, message: 'Best passage: sharing - context, with care.' },
+      { id: 'verbose-phrase', time: 80, message: `Sharing context. ${'Other notes. '.repeat(100)}` },
+      { id: 'loose-strong', time: 100, message: 'Sharing notes about context.' },
+      { id: 'loose-weak', time: 1_000, message: `Sharing ${'Other notes. '.repeat(1_000)}context.` }
+    ]
+    for (const entry of entries) {
+      repository.saveSession(session(entry.id, entry.time))
+      repository.upsertMessage(entry.id, {
+        who: 'owner', messageId: entry.id, message: entry.message, isAddedToHistory: true
+      }, { sentAt: entry.time })
+    }
+    repository.upsertMessage('best-source', {
+      who: 'leon', messageId: 'newer-noise', isAddedToHistory: true,
+      message: `Newer loose mention: sharing ${'Other notes. '.repeat(200)}context.`
+    }, { sentAt: 2_000 })
+    const ids: string[] = []
+    let cursor: string | null = null
+    do {
+      const page = repository.listSessions({ query: 'sharing context', limit: 2, ...(cursor ? { cursor } : {}) })
+      ids.push(...page.items.map((item) => item.id))
+      if (page.searchMatches?.['best-source']) {
+        expect(page.searchMatches['best-source'].excerpt).toContain('Best passage: sharing - context')
+        expect(page.searchMatches['best-source'].excerpt).not.toContain('Newer loose mention')
+      }
+      cursor = page.nextCursor
+    } while (cursor)
+    expect(ids).toEqual([
+      'title', 'newer-phrase', 'older-phrase', 'best-source',
+      'verbose-phrase', 'loose-strong', 'loose-weak'
+    ])
+    expect(repository.listSessions({ query: 'shar con' }).items.map((item) => item.id)).toEqual(ids)
+    const first = repository.listSessions({ query: 'sharing context', limit: 1 })
+    const malformed = JSON.parse(Buffer.from(first.nextCursor!, 'base64url').toString('utf8'))
+    malformed.score = 'not-a-score'
+    expect(() => repository.listSessions({
+      query: 'sharing context', cursor: Buffer.from(JSON.stringify(malformed)).toString('base64url')
+    })).toThrow('cursor')
+  })
+
+
+  it('continues content ranking when unrelated sessions change the full-text statistics', () => {
+    const repository = open()
+    for (const [id, message] of [
+      ['brief', 'Sharing context.'],
+      ['medium', 'Sharing context with care.'],
+      ['long', 'Sharing context with a few more useful details.']
+    ] as const) {
+      repository.saveSession(session(id))
+      repository.upsertMessage(id, {
+        who: 'owner', messageId: id, message, isAddedToHistory: true
+      })
+    }
+    const first = repository.listSessions({ query: 'sharing context', limit: 1 })
+    expect(first.items.map((item) => item.id)).toEqual(['brief'])
+    repository.saveSession(session('unrelated'))
+    for (let index = 0; index < 10; index += 1) {
+      repository.upsertMessage('unrelated', {
+        who: 'owner', messageId: `unrelated-${index}`,
+        message: 'A separate topic with other words.', isAddedToHistory: true
+      })
+    }
+    const rest = repository.listSessions({ query: 'sharing context', cursor: first.nextCursor! })
+    expect(rest.items.map((item) => item.id)).toEqual(['medium', 'long'])
+  })
+
+
+  it('preserves repeated query words when prioritizing phrases', () => {
+    const repository = open()
+    repository.saveSession(session('phrase', 1))
+    repository.saveSession(session('single', 100))
+    repository.upsertMessage('phrase', {
+      who: 'owner', messageId: 'phrase', isAddedToHistory: true,
+      message: `Red red. ${'Other notes. '.repeat(100)}`
+    }, { sentAt: 1 })
+    repository.upsertMessage('single', {
+      who: 'owner', messageId: 'single', message: 'Red now.', isAddedToHistory: true
+    }, { sentAt: 100 })
+    expect(repository.listSessions({ query: 'red red' }).items.map((item) => item.id)).toEqual(['phrase', 'single'])
+  })
+
+
+  it('centers bounded excerpts on indexed matches even beside very long tokens', () => {
+    const repository = open()
+    repository.saveSession(session('notes'))
+    repository.upsertMessage('notes', {
+      who: 'leon', messageId: 'source', isAddedToHistory: true,
+      message: `${'x'.repeat(5_000)} sharing - context with care.`
+    })
+    const excerpt = repository.listSessions({ query: 'sharing context' }).searchMatches?.['notes']?.excerpt
+    expect(excerpt).toContain('sharing - context')
+    expect(excerpt).toMatch(/^…/)
+    expect(Array.from(excerpt!).length).toBeLessThanOrEqual(MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS)
+  })
+
+
+  it('folds title accents, Unicode forms and separators without interpreting full-text operators', () => {
+    const repository = open()
+    repository.saveSession({ ...session('unicode'), title: 'Café / ＧＰＴ-６.１ notes' })
+    for (const query of ['cafe gpt61', 'GPT 6.1 CAFÉ', 'cafe - gpt 61']) {
+      expect(repository.listSessions({ query }).items.map((item) => item.id)).toEqual(['unicode'])
+    }
+    expect(repository.listSessions({ query: 'gpt62' }).items).toEqual([])
+    expect(repository.listSessions({ query: '" OR NOT *' }).items).toEqual([])
+  })
+
 
   it('recalls complete visible owner queries in durable sequence order with bounded text pages', () => {
     const repository = open()
@@ -343,6 +524,7 @@ describe('profile conversation archive', () => {
     expect(open('isolated').readQueryHistory('chat').items).toEqual([])
   })
 
+
   it('keeps completed answers authoritative over delayed trace snapshots and loads details on demand', () => {
     const repository = open()
     repository.saveSession(session('chat'))
@@ -377,6 +559,7 @@ describe('profile conversation archive', () => {
     expect(() => repository.upsertMessage('chat', record)).toThrow()
   })
 
+
   it('replays stable session-filtered event cursors after the database is reopened', () => {
     const repository = open()
     const first = repository.appendEvent({ session_id: 'first', type: 'progress' })
@@ -390,6 +573,7 @@ describe('profile conversation archive', () => {
       .toEqual([{ session_id: 'first', type: 'completed', sequence: next.sequence }])
   })
 
+
   it('includes profile-wide state in session replay without leaking another profile or session', () => {
     const owner = open()
     const other = open('other')
@@ -399,6 +583,7 @@ describe('profile conversation archive', () => {
     const selected = owner.appendEvent({ session_id: 'selected', type: 'progress' })
     expect(owner.readEvents(0, 'selected').items).toEqual([mood, selected])
   })
+
 
   it('recovers accepted commands as interrupted without repeating their owner messages', () => {
     const repository = open()
@@ -414,6 +599,7 @@ describe('profile conversation archive', () => {
     expect(recovered.readAllMessages('chat')).toHaveLength(1)
   })
 
+
   it('bounds durable replay by payload bytes while preserving its monotonic frontier', () => {
     const repository = open()
     const event = repository.appendEvent({ session_id: 'chat', body: 'x'.repeat(17 * 1_024 * 1_024) })
@@ -422,6 +608,7 @@ describe('profile conversation archive', () => {
     const next = repository.appendEvent({ session_id: 'chat', body: 'Done' })
     expect(next.sequence).toBeGreaterThan(event.sequence)
   })
+
   it('upserts late memory details without changing the answer, metrics or session ordering', () => {
     const repository = open()
     repository.saveSession(session('source'))
@@ -443,5 +630,4 @@ describe('profile conversation archive', () => {
     expect(repository.upsertMemoryActivity('source', 'deleted-answer', activity)).toBe(false)
     expect(open('other').upsertMemoryActivity('source', 'answer', activity)).toBe(false)
   })
-
 })

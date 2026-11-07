@@ -110,17 +110,21 @@ function normalizeText(value: string): string {
 
 /**
  * Uses the same Unicode word boundaries for indexed and legacy archive search.
+ * Phrase queries retain repeated words; coverage calculations need unique terms.
  */
-export function getSessionSearchTerms(value: string): string[] {
-  const tokens = new Set<string>()
+export function getSessionSearchTerms(
+  value: string,
+  { unique = true }: { unique?: boolean } = {}
+): string[] {
+  const tokens: string[] = []
 
   for (const segment of WORD_SEGMENTER.segment(normalizeText(value))) {
     if (segment.isWordLike) {
-      tokens.add(segment.segment)
+      tokens.push(segment.segment)
     }
   }
 
-  return [...tokens]
+  return unique ? [...new Set(tokens)] : tokens
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
