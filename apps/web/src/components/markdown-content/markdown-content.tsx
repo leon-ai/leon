@@ -114,7 +114,7 @@ const COMPONENTS: Components = {
     const text = typeof children === 'string' ? children : ''
 
     return <StreamingText animationId={`${animationId}:block:${index}:${node?.properties['offset']}`}
-      text={text} startDelay={startDelay} />
+      text={text} startDelay={startDelay} compact />
   }
 }
 

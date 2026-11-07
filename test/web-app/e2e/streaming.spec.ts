@@ -271,6 +271,48 @@ test('enlarges diagrams from tool inspectors without closing their parent dialog
 })
 
 
+test('bounds large Markdown reveals and code rows while keeping settled selections stable', async ({ page, ui }, testInfo) => {
+  await page.goto(SESSION_URL)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  const responseId = 'long-markdown'
+  let sequence = 0
+  const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID,
+    turn_id: 'long-markdown-turn', response_id: responseId, created_at: Date.now()
+  }])
+  await emit('turn_status', { status: 'accepted' })
+  const source = Array.from({ length: 180 }, (_, index) => `Paragraph ${index}: **Keep a little room** for curiosity, with *one useful idea* at a time.`).join('\n\n')
+  const started = performance.now()
+  await emit('text_stream', { kind: 'answer', generationId: 'long-markdown-generation', token: source })
+  const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  await expect(answer.locator('p')).toHaveCount(180)
+  expect(await answer.locator('.streaming-text-character-new').count()).toBeLessThanOrEqual(1_024)
+  await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
+  const paragraph = answer.locator('p').last()
+  await paragraph.evaluate((element) => {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  })
+  const selected = await page.evaluate(() => window.getSelection()!.toString())
+  const node = await paragraph.elementHandle()
+  await emit('text_stream', { kind: 'answer', generationId: 'long-markdown-generation', token: '\n\nMore space for the next idea.\n\n```js\n' + Array.from({ length: 240 }, (_, index) => `const idea${index} = "Make something useful";`).join('\n') + '\n```' })
+  const code = answer.getByRole('region', { name: 'Code block', exact: true })
+  await expect(code).toBeVisible()
+  expect(await code.locator('.code-view-line').count()).toBeLessThan(30)
+  expect(await node!.evaluate((element) => element.isConnected)).toBe(true)
+  expect(await page.evaluate(() => window.getSelection()!.toString())).toBe(selected)
+  await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
+  await testInfo.attach('large-markdown-observations', {
+    body: JSON.stringify({ sourceCharacters: source.length, paragraphs: 180, codeLines: 240,
+      visibleCodeRows: await code.locator('.code-view-line').count(),
+      descendantElements: await answer.locator('*').count(), elapsedMs: Math.round(performance.now() - started) }),
+    contentType: 'application/json'
+  })
+})
+
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`adds a delayed FYI without reopening the completed turn (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion })
