@@ -90,6 +90,7 @@ export const PNPM_INSTALL_PATH = path.join(BIN_PATH, 'pnpm')
 export const PYTHON_INSTALL_PATH = path.join(BIN_PATH, 'python')
 export const UV_INSTALL_PATH = path.join(BIN_PATH, 'uv')
 export const JQ_INSTALL_PATH = path.join(BIN_PATH, 'jq')
+export const LLMFIT_INSTALL_PATH = path.join(BIN_PATH, 'llmfit')
 export const SKILLS_PATH = path.join(CODEBASE_PATH, 'skills')
 export const NATIVE_SKILLS_PATH = path.join(SKILLS_PATH, 'native')
 export const AGENT_SKILLS_PATH = path.join(SKILLS_PATH, 'agent')
@@ -297,6 +298,11 @@ export const JQ_VERSIONS_PATH = path.join(CODEBASE_BIN_PATH, 'jq', 'versions.jso
 export const JQ_MANIFEST_PATH = path.join(JQ_INSTALL_PATH, 'manifest.json')
 const JQ_VERSIONS = JSON.parse(fs.readFileSync(JQ_VERSIONS_PATH, 'utf8'))
 export const JQ_VERSION = JQ_VERSIONS.jq
+
+export const LLMFIT_VERSIONS_PATH = path.join(CODEBASE_BIN_PATH, 'llmfit', 'versions.json')
+export const LLMFIT_MANIFEST_PATH = path.join(LLMFIT_INSTALL_PATH, 'manifest.json')
+const LLMFIT_VERSIONS = JSON.parse(fs.readFileSync(LLMFIT_VERSIONS_PATH, 'utf8'))
+export const LLMFIT_VERSION = LLMFIT_VERSIONS.llmfit
 
 /**
  * llama.cpp paths and versions.

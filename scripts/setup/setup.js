@@ -46,6 +46,7 @@ import setupTCPServerEnv from './setup-tcp-server-env'
 import setupCMake from './setup-cmake'
 import setupNinja from './setup-ninja'
 import setupLlamaCPP from './setup-llama-cpp'
+import setupLLMFit from './setup-llmfit'
 import setupLocalLLM from './setup-local-llm'
 import setupQMDLLM from './setup-qmd-llm'
 // import setupVoiceResources from './setup-voice-resources.js'
@@ -356,6 +357,8 @@ async function syncLLMSetupChoice(preferences) {
         await setupNinja()
         currentStep = 'setupLlamaCPP'
         await setupLlamaCPP()
+        currentStep = 'setupLLMFit'
+        await setupLLMFit()
         currentStep = 'setupLocalLLM'
         await setupLocalLLM(localAICapability)
       } else if (localAICapability?.canInstallLocalAI) {
