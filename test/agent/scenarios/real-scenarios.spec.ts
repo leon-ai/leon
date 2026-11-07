@@ -6,7 +6,8 @@ import { execa } from 'execa'
 import { expect, it } from 'vitest'
 
 import { CONFIG_MANAGER } from '@/config'
-import { DEFAULT_INSTALLED_LLM_PATH, LLM_DIR_PATH } from '@/constants'
+import { DEFAULT_INSTALLED_LLM_PATH, LLM_DIR_PATH, LLAMACPP_PATH } from '@/constants'
+import { LLMProviders } from '@/core/llm-manager/types'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { resolveConfiguredLLMTarget } from '@/core/llm-manager/llm-routing'
 import type { ConversationSession } from '@/core/session-manager'
@@ -69,6 +70,12 @@ it.skipIf(!SELECTION).concurrent.each(SCENARIOS)('%s', async (scenario) => {
 
   console.info(`[scenario:${scenario}] START profile=${profile.name} model=${target.label}`)
   const testHome = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-agent-e2e-'))
+  if (target.provider === LLMProviders.LlamaCPP) {
+    // Share installed runtime assets while all mutable state stays disposable.
+    const binaryRoot = path.join(testHome, 'bin')
+    await fs.mkdir(binaryRoot, { recursive: true })
+    await fs.symlink(LLAMACPP_PATH, path.join(binaryRoot, 'llama.cpp'), 'junction')
+  }
   const directory = path.join('tmp', 'agent-scenarios')
   await fs.mkdir(directory, { recursive: true })
   const evidencePath = path.join(directory, `${scenario.split('/').join('--')}-${Date.now()}.log`)
