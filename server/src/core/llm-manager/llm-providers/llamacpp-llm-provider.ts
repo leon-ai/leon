@@ -14,12 +14,15 @@ import type {
   CompletionParams,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
+import { InferencePurpose } from '@/core/llm-manager/types'
 import { CODEBASE_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { getLlamaCPPServerBinaryPath, getLlamaCPPModelArguments, resolveLlamaCPPContextPlan } from './llamacpp-context'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
-import { recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
+import { recordInferenceUsage, getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'
+import { getTurnTimingContext, runTurnPhase, TurnPhase, TurnStage } from '@/core/llm-manager/turn-timing'
 
 const DEFAULT_LLAMACPP_BASE_URL = 'http://127.0.0.1:8080/v1'
 const LLAMACPP_READY_TIMEOUT_MS = 120_000
@@ -154,6 +157,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   private static serverReadyPromise: Promise<void> | null = null
   private static instanceCount = 0
   private static contextWindowTokens: number | undefined
+  private static readonly inferenceScheduler = new LocalInferenceScheduler()
 
   private readonly modelPath: string
   private readonly configuredBaseURL: string
@@ -209,6 +213,41 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       LlamaCPPLLMProvider.configuredBaseURL === this.configuredBaseURL
       ? LlamaCPPLLMProvider.contextWindowTokens
       : undefined
+  }
+
+  /**
+   * Gives the owner's whole turn priority without interrupting active work.
+   */
+  public beginForegroundTurn(): () => void {
+    return LlamaCPPLLMProvider.inferenceScheduler.beginForegroundTurn()
+  }
+
+  /**
+   * Defers auxiliary inference until the local slot and foreground turn permit it.
+   * Queue timing stays separate from the provider's inference timeout and decode.
+   */
+  public async acquireInference(params: CompletionParams): Promise<() => void> {
+    const purpose = params.usagePurpose ?? getActiveInferencePurpose()
+    const priority = getTurnTimingContext()?.stage === TurnStage.PostTurn ||
+      purpose === InferencePurpose.SessionTitle
+      ? LocalInferencePriority.Background
+      : LocalInferencePriority.Foreground
+    const signal = params.cancellationSignal
+      ? AbortSignal.any([
+          params.cancellationSignal,
+          ...(params.signal ? [params.signal] : [])
+        ])
+      : params.signal
+    const startedAt = performance.now()
+    const release = await runTurnPhase(TurnPhase.Wait, () =>
+      LlamaCPPLLMProvider.inferenceScheduler.acquire(
+        priority,
+        signal
+      )
+    )
+    LogHelper.debug(`Local inference queue | priority=${priority} | wait_ms=${Math.round(performance.now() - startedAt)}`)
+
+    return release
   }
 
   public async boot(): Promise<void> {

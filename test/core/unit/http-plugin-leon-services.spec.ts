@@ -167,7 +167,10 @@ vi.mock('@/core', () => ({
     isLLMEnabled: true,
     coreLLMDuties: { 'action-calling': { temperature: 0 } }
   },
-  LLM_PROVIDER: { prompt: mocks.controlledPrompt },
+  LLM_PROVIDER: {
+    prompt: mocks.controlledPrompt,
+    runForegroundTurn: <T>(execute: () => Promise<T>): Promise<T> => execute()
+  },
   NLU: {
     get nluProcessResult(): Record<string, unknown> {
       return mocks.nluProcessResult

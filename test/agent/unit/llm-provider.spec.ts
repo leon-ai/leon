@@ -16,6 +16,7 @@ import { attachProviderFailureDiagnostics, formatPromptErrorForLog } from '@/cor
 import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
 import { CompletionFailureKind, InferencePurpose, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 import { appendInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
+import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'
 
 vi.mock('@/core/llm-manager/llm-usage/usage-ledger', () => ({
   appendInferenceUsage: vi.fn().mockResolvedValue(undefined)
@@ -85,6 +86,78 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('releases foreground priority when execution or delivery fails', async () => {
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    const release = vi.fn()
+    const beginForegroundTurn = vi.fn(() => release)
+    state.agentLLMProvider = Object.assign({
+      modelName: 'celeris-1', runChatCompletion: vi.fn()
+    }, { beginForegroundTurn })
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+    const reason = new Error('Delivery failed')
+
+    await expect(manager.runForegroundTurn(async () => {
+      throw reason
+    })).rejects.toBe(reason)
+    expect(beginForegroundTurn).toHaveBeenCalledOnce()
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('starts the inference timeout only after acquiring a local slot', async () => {
+    vi.useFakeTimers()
+    try {
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      const gate = Promise.withResolvers<() => void>()
+      const release = vi.fn()
+      const runChatCompletion = vi.fn().mockResolvedValue({ data: {
+        choices: [{ message: { content: 'Ready' } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      } })
+      state.agentLLMProvider = Object.assign({ modelName: 'celeris-1', runChatCompletion }, {
+        acquireInference: () => gate.promise
+      })
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Respond.', {
+        dutyType: LLMDuties.ReAct, timeout: 10, maxRetries: 0
+      })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(runChatCompletion).not.toHaveBeenCalled()
+      gate.resolve(release)
+      expect((await pending)?.output).toBe('Ready')
+      expect(release).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('releases a local permit before retrying an empty response', async () => {
+    vi.useFakeTimers()
+    try {
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      const scheduler = new LocalInferenceScheduler()
+      const acquireInference = vi.fn(() => scheduler.acquire(LocalInferencePriority.Foreground))
+      const runChatCompletion = vi.fn()
+        .mockResolvedValueOnce({ data: { choices: [{ message: { content: '' } }] } })
+        .mockResolvedValueOnce({ data: {
+          choices: [{ message: { content: 'Recovered' } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        } })
+      state.agentLLMProvider = Object.assign({ modelName: 'celeris-1', runChatCompletion }, { acquireInference })
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Respond.', { dutyType: LLMDuties.ReAct, maxRetries: 1 })
+
+      await vi.runAllTimersAsync()
+      expect((await pending)?.output).toBe('Recovered')
+      expect(acquireInference).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps provider progress separate from transport activity and retains bounded failure evidence', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
