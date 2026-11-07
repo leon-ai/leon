@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-11-06T23:54:50+08:00
+- Generated at: 2026-11-07T17:38:12+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -30,6 +30,7 @@
 ## Agent Loop
 - Owner-agent turns enter `core/turn-lifecycle/`: pre-turn preparation, the existing agent loop, foreground persistence/delivery, then shared asynchronous post-turn maintenance. Execution-time inferences stay inside the loop; transport adapters do not independently select maintenance tasks.
 - Session title inference starts alongside the first owner-agent turn without blocking it; in-flight generation is coalesced and manual renames or deletion take precedence over late results.
+- Local AI setup uses llmfit and native allocation estimates to select a model and precision against available memory with safety headroom. Local llama.cpp prioritizes owner turns over auxiliary inference and rechecks capacity for context sizing, token admission and output fitting.
 - Profile-local `logs/turns/` journals and `logs/usage/` ledgers correlate turn/stage/task/attempt identities, timings and reported tokens, cache usage and cost. Auxiliary tasks have independent trace scopes and do not inflate foreground turn duration; audit replay never automatically repeats model calls or memory mutations. Owner-profile sync records rejected revisions separately from extraction, retaining only content-free reason codes and issue counts.
 - One provider transcript preserves requests, matching tool exchanges, recovery and answers across conversation turns; edited chat invalidates reuse.
 - Tool schemas load progressively from the toolkit catalog as the task needs them. Guidance follows toolkit -> tool -> function, with function-specific instructions loaded alongside selected schemas before use.
