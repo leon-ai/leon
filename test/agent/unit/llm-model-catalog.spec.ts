@@ -8,12 +8,24 @@ import {
   LLM_MODEL_SPEED_VALUES
 } from '@/core/llm-manager/llm-model-catalog'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { getPublicModelCatalog } from '@/core/llm-manager/public-model-catalog'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
   resolveModelContextWindowTokens
 } from '@/core/llm-manager/model-context-windows'
 
 describe('LLM model catalog', () => {
+  it('exposes installed local filenames without assuming model-specific inference controls', () => {
+    expect(getPublicModelCatalog().some((provider) => provider.id === 'llamacpp')).toBe(false)
+    const local = getPublicModelCatalog(['example.gguf']).find((provider) => provider.id === 'llamacpp')
+
+    expect(local).toMatchObject({
+      label: 'llama.cpp', models: [{
+        model: 'example.gguf', label: 'example', reasoning: ['auto'], speed: ['auto']
+      }]
+    })
+  })
+
   it('resolves known capacities without assigning a default to independently hosted models', () => {
     expect(resolveModelContextWindowTokens(LLMProviders.OpenAI, 'gpt-6.1-sol'))
       .toBe(1_050_000)

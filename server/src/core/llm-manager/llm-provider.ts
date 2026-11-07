@@ -82,6 +82,30 @@ export default class LLMProvider {
     return provider.modelName || 'unknown'
   }
 
+  /**
+   * Resolves native admission for the active session before preparing its context.
+   */
+  public async getAgentNativeContextWindowTokens(): Promise<number | undefined> {
+    const provider = await this.resolveProviderForDuty(LLMDuties.ReAct)
+
+    return provider?.nativeContextWindowTokens
+  }
+
+  /**
+   * Keeps a local owner's multi-call turn ahead of deferred auxiliary inference.
+   * Remote providers retain their ordinary independent request lifecycle.
+   */
+  public async runForegroundTurn<T>(execute: () => Promise<T>): Promise<T> {
+    const provider = await this.resolveProviderForDuty(LLMDuties.ReAct)
+    const release = provider?.beginForegroundTurn?.()
+
+    try {
+      return await execute()
+    } finally {
+      release?.()
+    }
+  }
+
   public get workflowLLMName(): string {
     const provider = this.getProviderForDuty(null)
     if (!provider) {
@@ -555,19 +579,35 @@ export default class LLMProvider {
         purpose: completionParams.usagePurpose || getActiveInferencePurpose() ||
           completionParams.dutyType || LLMDuties.Inference
       },
-      () => runCompletionAttempt(
-        provider,
-        providerName,
-        promptOrChatHistory,
-        completionParams,
-        measureExecutionTimeLabel,
-        (params) => this.prompt(promptOrChatHistory, params),
-        (message, preserveExisting) => {
-          if (!preserveExisting || !this.lastProviderErrorMessage) {
-            this.lastProviderErrorMessage = message
-          }
+      async () => {
+        let release = provider.acquireInference
+          ? await provider.acquireInference(completionParams)
+          : undefined
+
+        try {
+          return await runCompletionAttempt(
+            provider,
+            providerName,
+            promptOrChatHistory,
+            completionParams,
+            measureExecutionTimeLabel,
+            (params) => {
+              // Retries re-enter scheduling so a background retry cannot hold the
+              // slot while waiting behind a newly arrived foreground turn.
+              release?.()
+              release = undefined
+              return this.prompt(promptOrChatHistory, params)
+            },
+            (message, preserveExisting) => {
+              if (!preserveExisting || !this.lastProviderErrorMessage) {
+                this.lastProviderErrorMessage = message
+              }
+            }
+          )
+        } finally {
+          release?.()
         }
-      )
+      }
     )
 
     const active = this.activeCompletions.get(provider) ?? new Set<Promise<CompletionResult | null>>()

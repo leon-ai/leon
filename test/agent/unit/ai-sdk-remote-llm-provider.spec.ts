@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
+import axios from 'axios'
 
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
@@ -17,6 +19,7 @@ import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-p
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
+import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
 import { ProviderPromptCache } from '@/core/llm-manager/llm-providers/prompt-cache'
 import { AGENT_PROMPT_CACHE_KEY } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
@@ -34,6 +37,10 @@ import {
 } from '@/core/llm-manager/inference-metadata'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 import { normalizeCompletionResultForOpenAICompatibleProvider } from '@/core/llm-manager/llm-provider/llm-provider-response'
+import { resolveLlamaCPPContextPlan } from '@/core/llm-manager/llm-providers/llamacpp-context'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { SystemHelper } from '@/helpers/system-helper'
+import { CPUArchitectures } from '@/types'
 
 const mediaMocks = vi.hoisted(() => ({
   persist: vi
@@ -91,14 +98,19 @@ vi.mock('@openrouter/ai-sdk-provider', () => ({
   createOpenRouter: openRouterMocks.createOpenRouter
 }))
 
-vi.mock('@/config', () => ({
-  CONFIG_MANAGER: {
+vi.mock('@/config', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { parse } = await import('yaml')
+  const config = parse(readFileSync(new URL('../../../config.sample.yml', import.meta.url), 'utf8'))
+
+  return { CONFIG_MANAGER: {
     getProviderAPIKeyEnv: vi.fn(() => null),
     getProviderAPIKey: vi.fn(() => 'test-openrouter-key'),
     getProviderBaseURL: vi.fn(() => null),
-    getConfig: vi.fn(() => ({ llm: { model_settings: {} } }))
-  }
-}))
+    resolveSecretReference: vi.fn(() => ''),
+    getConfig: vi.fn(() => config)
+  } }
+})
 
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: {
@@ -191,6 +203,63 @@ const CHAT_RESPONSE = {
 describe('AISDKRemoteLLMProvider', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it.each([false, true])('preserves llama.cpp schemas, explicit thinking controls and native output capacity (stream=%s)', async (shouldStream) => {
+    const model = path.resolve('local-model')
+    const log = vi.spyOn(LlamaCPPLLMProvider as unknown as {
+      writeServerLogLine(line: string): void
+    }, 'writeServerLogLine').mockImplementation(() => undefined)
+    const get = vi.spyOn(axios, 'get').mockImplementation(async (url) => ({
+      data: String(url).endsWith('/props')
+        ? { model_path: model, default_generation_settings: { n_ctx: 1_024 } }
+        : { data: [{ id: model }] }
+    }))
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { input_tokens: 100 } })
+    const fetch = vi.fn().mockResolvedValue(shouldStream
+      ? new Response('data: {"choices":[{"index":0,"delta":{"content":"{\\"safe\\":true}"}}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', {
+          headers: { 'content-type': 'text/event-stream' }
+        })
+      : Response.json({
+          ...CHAT_RESPONSE,
+          choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: '{"safe":true}' } }]
+        }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new LlamaCPPLLMProvider({
+      ...TARGET, provider: LLMProviders.LlamaCPP, model
+    })
+
+    try {
+      await provider.boot()
+      expect(provider.nativeContextWindowTokens).toBe(1_024)
+      await provider.runChatCompletion('Verify.', {
+        ...createCompletionParams({
+          type: 'object', properties: { safe: { type: 'boolean' } },
+          required: ['safe'], additionalProperties: false
+        }),
+        shouldStream, disableThinking: true, maxTokens: 2_048
+      })
+
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      expect(body.response_format).toMatchObject({
+        type: 'json_schema', json_schema: { schema: { required: ['safe'], additionalProperties: false } }
+      })
+      expect(body.chat_template_kwargs.enable_thinking).toBe(false)
+      expect(body).not.toHaveProperty('reasoning_format')
+      expect(body.max_tokens).toBe(860)
+      expect(post.mock.calls.at(-1)?.[1]).toEqual({ ...body, stream: false, max_tokens: 2_048 })
+
+      post.mockResolvedValue({ data: { input_tokens: 1_024 } })
+      await expect(provider.runChatCompletion('Verify.', {
+        ...createCompletionParams({ type: 'object', properties: {} }), shouldStream
+      })).rejects.toMatchObject({ code: 'context_length_exceeded' })
+      expect(fetch).toHaveBeenCalledTimes(1)
+    } finally {
+      provider.dispose()
+      get.mockRestore()
+      post.mockRestore()
+      log.mockRestore()
+    }
   })
 
   it.each([
@@ -2239,4 +2308,102 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(response.data.choices[0].message.reasoningItems[0].providerOptions.openrouter.reasoning_details).toEqual(reasoningDetails)
   })
 
+})
+
+describe('managed llama.cpp memory budgets', () => {
+  const server = path.resolve('runtime', 'llama-server')
+  const modelArguments = ['--model', path.resolve('fixture.gguf')]
+  const device = { kind: 'device', name: 'GPU0', total: 16_384, free: 12_288, self: 6_000 }
+  const host = { kind: 'host', name: 'Host', self: 1_000 }
+  const estimate = (rows: unknown[]): string => JSON.stringify({
+    type: 'fit_memory_breakdown', data: { unit: 'MiB', rows }
+  })
+
+  beforeEach(() => {
+    vi.spyOn(SystemHelper, 'isWindows').mockReturnValue(false)
+    vi.spyOn(SystemHelper, 'isMacOS').mockReturnValue(false)
+    vi.spyOn(SystemHelper, 'getTotalRAM').mockReturnValue(32)
+    vi.spyOn(SystemHelper, 'getFreeRAMInBytes').mockReturnValue(20 * 1_024 ** 3)
+  })
+
+  it('keeps the native fitted context and placement within independent GPU and host budgets', async () => {
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce('-c 262144 -ngl -1 -ot "blk.*.ffn_up_exps.weight=CPU"')
+      .mockResolvedValueOnce(estimate([device, host]))
+    const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
+
+    expect(plan.contextTokens).toBe(262_144)
+    expect(plan.arguments).toEqual(['-c', '262144', '-ngl', '-1',
+      '-ot', 'blk.*.ffn_up_exps.weight=CPU', '--fit', 'off', '--cache-ram', '2048'])
+    expect(plan.hostBudgetMiB).toBe(15_155)
+    expect(run.mock.calls[1]![1]).toContain('1639')
+    expect(run.mock.calls[1]![1]).not.toContain('--ctx-size')
+    expect(run.mock.calls[2]![1]).toContain('blk.*.ffn_up_exps.weight=CPU')
+  })
+
+  it('accounts for occupied RAM when the native CPU fitter uses total host memory', async () => {
+    vi.spyOn(SystemHelper, 'getTotalRAM').mockReturnValue(16)
+    vi.spyOn(SystemHelper, 'getFreeRAMInBytes').mockReturnValue(8 * 1_024 ** 3)
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([{ ...host, self: 12_000 }]))
+      .mockResolvedValueOnce('-c 65536 -ngl 0')
+      .mockResolvedValueOnce(estimate([{ ...host, self: 4_000 }]))
+    const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
+
+    expect(plan.contextTokens).toBe(65_536)
+    expect(plan.hostBudgetMiB).toBe(5_325)
+    expect(run.mock.calls[1]![1]).toContain('11059')
+  })
+
+  it('checks GPU and host allocations together on Apple unified memory', async () => {
+    vi.spyOn(SystemHelper, 'isMacOS').mockReturnValue(true)
+    vi.spyOn(SystemHelper, 'getInformation').mockReturnValue({ cpuArchitecture: CPUArchitectures.ARM64 } as ReturnType<typeof SystemHelper.getInformation>)
+    vi.spyOn(SystemHelper, 'getTotalRAM').mockReturnValue(48)
+    vi.spyOn(SystemHelper, 'getFreeRAMInBytes').mockReturnValue(12 * 1_024 ** 3)
+    const metal = { ...device, total: 38_338, free: 38_337 }
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([metal, host]))
+      .mockResolvedValueOnce('-c 32768 -ngl -1')
+      .mockResolvedValueOnce(estimate([{ ...metal, self: 4_500 }, host]))
+    const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
+
+    expect(plan.hostBudgetMiB).toBe(6_144)
+    expect(plan.estimatedMiB).toBe(5_500)
+    expect(run.mock.calls[1]![1]).toContain('33193')
+  })
+
+  it('reduces context when device fitting spills more weights into RAM than the host can hold', async () => {
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce('-c 262144 -ngl 12')
+      .mockResolvedValueOnce(estimate([device, { ...host, self: 16_000 }]))
+      .mockResolvedValueOnce('-c 131072 -ngl 24')
+      .mockResolvedValueOnce(estimate([device, { ...host, self: 2_000 }]))
+    const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
+
+    expect(plan.contextTokens).toBe(131_072)
+    expect(run.mock.calls[3]![1]).toContain('--ctx-size')
+    expect(run.mock.calls[3]![1]).toContain('131072')
+  })
+
+  it('honors an explicit reserve and refuses a minimum context that exceeds available memory', async () => {
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce('-c 4096 -ngl 0')
+      .mockResolvedValueOnce(estimate([{ ...host, self: 20_000 }]))
+
+    await expect(resolveLlamaCPPContextPlan(server, modelArguments, 4_096))
+      .rejects.toThrow('cannot fit')
+    expect(run.mock.calls[1]![1]).toContain('4096')
+    expect(run).toHaveBeenCalledTimes(3)
+  })
+
+  it('refuses automatic allocation when available RAM cannot preserve headroom', async () => {
+    vi.spyOn(SystemHelper, 'getFreeRAMInBytes').mockReturnValue(1_024 ** 3)
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+
+    await expect(resolveLlamaCPPContextPlan(server, modelArguments)).rejects.toThrow('Not enough available RAM')
+    expect(run).not.toHaveBeenCalled()
+  })
 })

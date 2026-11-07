@@ -445,6 +445,14 @@ huggingface.svg:
   Source: https://github.com/simple-icons/simple-icons/blob/develop/icons/huggingface.svg
   Simple Icons. CC0-1.0: https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
 
+llamacpp.svg:
+  Source: https://github.com/ggml-org/llama.brand/blob/534b6e01955619b8f7bd36cec83a554d9b1d04b9/logo/svg/icon/icon-light.svg
+  Unmodified standalone mark from ggml-org/llama.brand, without the wordmark.
+  CC BY-NC 4.0: https://github.com/ggml-org/llama.brand/blob/534b6e01955619b8f7bd36cec83a554d9b1d04b9/LICENSE
+  Additional permission for project identification, including commercial software
+  distribution and monochrome rendering:
+  https://github.com/ggml-org/llama.brand/blob/534b6e01955619b8f7bd36cec83a554d9b1d04b9/BRAND-USAGE.md
+
 celeris.svg:
   Source: https://celeris.ai/favicon-48.png
   Monochrome vector contour of the provider's favicon, for identification.

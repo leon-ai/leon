@@ -73,8 +73,11 @@ export interface PromptAbortError extends Error {
  */
 export interface Provider {
   modelName?: string
+  nativeContextWindowTokens?: number | undefined
   transport?: CompletionAttemptTiming['transport']
   compactionBinding?: string
+  beginForegroundTurn?: () => () => void
+  acquireInference?: (params: CompletionParams) => Promise<() => void>
   runChatCompletion: (
     promptOrChatHistory: PromptOrChatHistory,
     completionParams: CompletionParams

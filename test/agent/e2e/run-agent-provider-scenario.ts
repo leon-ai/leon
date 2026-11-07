@@ -14,6 +14,7 @@ import type { LLMModelReasoning } from '../../../server/src/core/llm-manager/llm
 import type { AgentResponseTrace, MessageLog } from '../../../server/src/types'
 import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
 import type { AgentModelFile } from '../../../server/src/core/llm-manager/types'
+import { LLMProviders } from '../../../server/src/core/llm-manager/types'
 import type { ToolExecutionInput, ToolExecutionResult } from '../../../server/src/core/tool-manager/tool-executor'
 import type { AgentProvider } from './provider-matrix'
 import { PROVIDER_MATRIX, PROVIDER_REQUIRED_ENV } from './provider-matrix'
@@ -286,6 +287,12 @@ async function prepareTestProfileConfig(
   document.setIn(['llm', 'default'], llmTarget)
   document.setIn(['llm', 'workflow'], null)
   document.setIn(['llm', 'agent'], null)
+
+  if (useProfileModel && llmTarget.split('/')[0] === LLMProviders.LlamaCPP) {
+    // The inference service must stay separate from the owner's warm runtime.
+    document.setIn(['llm', 'providers', LLMProviders.LlamaCPP, 'base_url'],
+      `http://127.0.0.1:${await getTestServerPort()}/v1`)
+  }
 
   if (!useProfileModel) {
     // Provider matrix tests explicitly select an API-key-backed target.

@@ -112,7 +112,10 @@ vi.mock('@/core', () => ({
     const value = Reflect.get(service, key)
     return typeof value === 'function' ? value.bind(service) : value
   } }),
-  LLM_PROVIDER: { prompt: (input: unknown, params: CompletionParams): ReturnType<typeof providerResponse> => providerResponse(input, params) },
+  LLM_PROVIDER: {
+    runForegroundTurn: <T>(execute: () => Promise<T>): Promise<T> => execute(),
+    prompt: (input: unknown, params: CompletionParams): ReturnType<typeof providerResponse> => providerResponse(input, params)
+  },
   CONTEXT_MANAGER: { refreshOwnerContext: (): void => undefined },
   PERSONA: { refreshContextInfo: (): void => undefined }
 }))

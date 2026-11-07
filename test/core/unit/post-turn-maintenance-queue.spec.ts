@@ -5,6 +5,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { TurnStage } from '@/core/llm-manager/turn-timing'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
+import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'
 
 describe('PostTurnMaintenanceQueue', () => {
   beforeEach(() => {
@@ -102,5 +103,62 @@ describe('PostTurnMaintenanceQueue', () => {
     }
     await queue.whenIdle()
     expect(batches).toEqual([['first', 'fourth'], ['second'], ['third']])
+  })
+})
+
+describe('local inference scheduling', () => {
+  it('finishes active work and keeps queued auxiliary inference behind the whole foreground turn', async () => {
+    const scheduler = new LocalInferenceScheduler()
+    const first = await scheduler.acquire(LocalInferencePriority.Background)
+    const backgroundStarted = vi.fn()
+    const pending = scheduler.acquire(LocalInferencePriority.Background).then((release) => {
+      backgroundStarted()
+      release()
+    })
+    const endTurn = scheduler.beginForegroundTurn()
+    const foreground = scheduler.acquire(LocalInferencePriority.Foreground)
+    first()
+    const release = await foreground
+
+    expect(backgroundStarted).not.toHaveBeenCalled()
+    release()
+    await Promise.resolve()
+    expect(backgroundStarted).not.toHaveBeenCalled()
+    endTurn()
+    endTurn()
+    await pending
+    expect(backgroundStarted).toHaveBeenCalledOnce()
+  })
+
+  it('removes canceled waiters without consuming the next inference permit', async () => {
+    const scheduler = new LocalInferenceScheduler()
+    const active = await scheduler.acquire(LocalInferencePriority.Foreground)
+    const controller = new AbortController()
+    const reason = new Error('Owner canceled')
+    const canceled = scheduler.acquire(LocalInferencePriority.Foreground, controller.signal)
+    const rejected = expect(canceled).rejects.toBe(reason)
+    controller.abort(reason)
+    await rejected
+    const next = scheduler.acquire(LocalInferencePriority.Background)
+    active()
+    const release = await next
+    release()
+  })
+
+  it('retains profile and session attribution when another profile releases the slot', async () => {
+    const scheduler = new LocalInferenceScheduler()
+    const first = await scheduler.acquire(LocalInferencePriority.Foreground)
+    const result = runWithProfileContext({ profileName: 'queued-owner' }, () =>
+      runWithConversationSession({ sessionId: 'queued-session' }, async () => {
+        const release = await scheduler.acquire(LocalInferencePriority.Background)
+        const { getActiveProfileName } = await import('@/core/profile-runtime/profile-context')
+        const { getActiveConversationSessionId } = await import('@/core/session-manager/session-context')
+        const scope = [getActiveProfileName(), getActiveConversationSessionId()]
+        release()
+        return scope
+      })
+    )
+    runWithProfileContext({ profileName: 'active-owner' }, first)
+    expect(await result).toEqual(['queued-owner', 'queued-session'])
   })
 })

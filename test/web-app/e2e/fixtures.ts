@@ -1,6 +1,6 @@
 import { test as base, expect, type Locator, type Response, type Route } from '@playwright/test'
 
-import type { ConversationPage, ConversationRecord, ConversationTool, ModelCatalog, ConversationNotification } from '../../../apps/web/src/data/conversation'
+import type { ConversationPage, ConversationRecord, ConversationTool, ModelCatalog, ModelSelection, ConversationNotification } from '../../../apps/web/src/data/conversation'
 import { getToolOutputFormat, getToolResultData, toToolContent, toToolDisplayContent, toToolInput } from '../../../apps/web/src/utils/tool-content'
 import path from 'node:path'
 import { hasToolChanges } from '../../../apps/web/src/utils/tool-changes'
@@ -88,13 +88,14 @@ const catalog: ModelCatalog = {
 export const test = base.extend<{ ui: UIFixture }>({
   ui: async ({ page }, use): Promise<void> => {
     const streamId = crypto.randomUUID()
-    const sessions = Array.from({ length: SESSION_COUNT }, (_, index) => ({
+    const sessions: ConversationSession[] = Array.from({ length: SESSION_COUNT }, (_, index) => ({
       id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
       title: `Test session ${index}`, isTitleGenerated: false, isPinned: false,
       status: 'idle' as ConversationSession['status'], createdAt: index, updatedAt: index,
       lastMessageAt: null, messageCount: 0, modelTarget: null
     }))
     const history = new Map<string, ConversationRecord[]>(sessions.map((session) => [session.id, []]))
+    const modelSelections = new Map<string, ModelSelection>()
     for (let index = 0; index < HISTORY_TURNS; index++) {
       history.get(SESSION_ID)!.push({
         who: 'owner', messageId: `question-${index}`, message: `Saved question ${index}`,
@@ -186,6 +187,23 @@ export const test = base.extend<{ ui: UIFixture }>({
         return
       }
       const session = sessions.find((candidate) => candidate.id === parts[3])
+      if (session && request.method() === 'PATCH' && parts[4] === 'model') {
+        const input = request.postDataJSON() as {
+          provider: string
+          model: string
+          reasoning: ModelSelection['settings']['reasoning']
+          speed: ModelSelection['settings']['speed']
+        }
+        const target = `${input.provider}/${input.model}`
+        const selection: ModelSelection = {
+          provider: input.provider, model: input.model, target,
+          settings: { reasoning: input.reasoning, speed: input.speed }
+        }
+        session.modelTarget = target
+        modelSelections.set(session.id, selection)
+        await json(route, { selection, session })
+        return
+      }
       if (session && request.method() === 'GET' && parts[4] === 'queries') {
         const records = history.get(session.id)!
         const before = Number(url.searchParams.get('before') ?? records.length + 1)
@@ -240,7 +258,8 @@ export const test = base.extend<{ ui: UIFixture }>({
             } } : {})
           })), next_cursor: start > 0 ? String(start) : null,
           newer_cursor: end < records.length ? String(end) : null, event_cursor: 0,
-          is_running: session.status === 'wip', command: null, selection: ui.models.selection
+          is_running: session.status === 'wip', command: null,
+          selection: modelSelections.get(session.id) ?? ui.models.selection
         }
         await json(route, data)
         return

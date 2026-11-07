@@ -97,8 +97,13 @@ interface AISDKRemoteProviderConfig {
   requiresApiKey?: boolean
   sendApiKeyAsBearer?: boolean
   supportsToolResultFiles?: boolean
+  supportsStructuredOutputs?: boolean
   headers?: (apiKey: string) => Record<string, string>
   transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown>
+  prepareRequestBody?: (
+    args: Record<string, unknown>,
+    signal?: AbortSignal
+  ) => Promise<Record<string, unknown>>
   buildProviderOptions?: (
     context: AISDKProviderOptionsContext
   ) => Record<string, unknown>
@@ -289,6 +294,14 @@ export default class AISDKRemoteLLMProvider {
     const fetch: typeof globalThis.fetch = async (input, init) => {
       let response: Response
 
+      if (this.config.prepareRequestBody && typeof init?.body === 'string') {
+        const body = await this.config.prepareRequestBody(
+          JSON.parse(init.body) as Record<string, unknown>,
+          init.signal ?? undefined
+        )
+        init = { ...init, body: JSON.stringify(body) }
+      }
+
       if (this.config.flavor === 'openai-responses') {
         if (contexts.length > 0 || originalCalls.size > 0) {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>
@@ -390,6 +403,9 @@ export default class AISDKRemoteLLMProvider {
         name: this.config.providerName,
         baseURL: this.config.baseURL,
         includeUsage: true,
+        ...(this.config.supportsStructuredOutputs === undefined
+          ? {}
+          : { supportsStructuredOutputs: this.config.supportsStructuredOutputs }),
         ...(this.config.transformRequestBody
           ? { transformRequestBody: this.config.transformRequestBody }
           : {}),
