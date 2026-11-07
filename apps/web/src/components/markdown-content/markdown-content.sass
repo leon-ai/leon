@@ -238,3 +238,22 @@
 .markdown-code-actions
   display: flex
   align-items: center
+
+.markdown-diagram-block
+  width: 100%
+
+.markdown-diagram-block .markdown-diagram
+  display: block
+  width: 100%
+
+  > svg
+    width: 100%
+    // The feed owns sizing rather than the renderer's intrinsic dimensions.
+    max-width: 100% !important
+    max-height: none
+    height: auto
+
+.markdown-diagram-loading, .markdown-diagram-notice
+  padding: var(--space-lg)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)

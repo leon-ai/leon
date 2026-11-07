@@ -131,6 +131,104 @@ test('does not execute Markdown HTML, unsafe links, or remote images', async ({ 
 })
 
 
+test('renders independently loaded diagram families and safe mathematical labels', async ({ page, ui }) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  const sources = [
+    'sequenceDiagram\n Alice->>Bob: Hello',
+    'classDiagram\n class Idea',
+    'stateDiagram-v2\n [*] --> Ready',
+    'erDiagram\n OWNER ||--o{ IDEA : creates',
+    'mindmap\n root((Ideas))\n  Craft',
+    'architecture-beta\n service app(server)[App]',
+    'pie title Quiet time\n "Craft": 80\n "Rest": 20',
+    'packet-beta\n 0-7: "Ideas"',
+    'gitGraph\n commit\n branch ideas\n checkout ideas\n commit',
+    'flowchart LR\n A["$$x^2 + y^2$$"] --> B[Craft]'
+  ]
+  ui.history.get(SESSION_ID)!.at(-1)!.message = sources.map((source) => `\`\`\`mermaid\n${source}\n\`\`\``).join('\n\n')
+  await page.goto(SESSION_URL)
+  const diagrams = page.getByRole('button', { name: 'Enlarge diagram', exact: true })
+  await expect(diagrams.locator('.markdown-diagram > svg')).toHaveCount(sources.length)
+  await expect(diagrams.last().locator('math')).toHaveCount(1)
+  await expect(diagrams.locator('a, image, img, script, style')).toHaveCount(0)
+  await diagrams.last().click()
+  const image = page.getByRole('dialog', { name: 'Diagram', exact: true }).getByRole('img', { name: 'Diagram', exact: true })
+  await expect(image).toBeVisible()
+  expect(await image.evaluate((element: HTMLImageElement) => element.naturalWidth > 0)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+
+test('keeps diagram directives from enabling scripts or remote image requests', async ({ page, ui }) => {
+  const outbound: string[] = []
+  await page.route('https://**', async (route) => {
+    outbound.push(route.request().url())
+    await route.abort()
+  })
+  ui.history.get(SESSION_ID)!.at(-1)!.message = [
+    '```mermaid',
+    '---',
+    'config:',
+    '  securityLevel: loose',
+    '  htmlLabels: true',
+    '  themeCSS: "@import url(https://untrusted.example/style.css);"',
+    '---',
+    'flowchart LR',
+    ' A["<img src=https://untrusted.example/track onerror=alert(1)>"] --> B[Safe]',
+    '```'
+  ].join('\n')
+  await page.goto(SESSION_URL)
+  const preview = page.getByRole('button', { name: 'Enlarge diagram', exact: true })
+  await expect(preview.locator('svg')).toBeVisible()
+  await expect(preview.locator('img, image, script, foreignObject')).toHaveCount(0)
+  expect(outbound).toEqual([])
+})
+
+
+test('preserves prose and source copying when the optional diagram download fails', async ({ page, ui }) => {
+  await page.route('**/assets/markdown-mermaid-*.js', (route) => route.abort())
+  ui.history.get(SESSION_ID)!.at(-1)!.message = 'A quiet idea.\n\n```mermaid\nflowchart LR\n A --> B\n```\n\nThere is still room to create.'
+  await page.goto(SESSION_URL)
+  const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  await expect(answer).toContainText('I couldn’t load this diagram. Check your connection; its source is available to copy.')
+  await expect(answer).toContainText('A quiet idea.')
+  await expect(answer).toContainText('There is still room to create.')
+  await answer.locator('.markdown-diagram-block').hover()
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await answer.getByRole('button', { name: 'Copy code', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('A --> B')
+})
+
+
+test('enlarges diagrams from tool inspectors without closing their parent dialog', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = {
+    id: answer.messageId, planSteps: [], metrics: { durationMs: 1_000 }, toolCalls: [{
+      id: 'diagram-tool', name: 'test.render', toolCallTitle: 'Sketch the idea', status: 'success',
+      output: { result: { content: '```mermaid\nflowchart LR\n A[Ideas] --> B[Craft]\n```', format: 'markdown' } }
+    }]
+  }
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Worked for 1s', exact: true }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: true }).click()
+  await page.getByRole('button', { name: 'Sketch the idea', exact: true }).click()
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const inspector = page.getByRole('dialog', { name: 'Sketch the idea', exact: true })
+  const preview = inspector.getByRole('button', { name: 'Enlarge diagram', exact: true })
+  await expect(preview.locator('svg')).toBeVisible()
+  await preview.click()
+  const viewer = page.getByRole('dialog', { name: 'Diagram', exact: true })
+  await expect(viewer.getByRole('img', { name: 'Diagram', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(viewer).toHaveCount(0)
+  await expect(inspector).toBeVisible()
+  await expect(preview).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(inspector).toHaveCount(0)
+})
+
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`adds a delayed FYI without reopening the completed turn (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion })

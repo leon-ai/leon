@@ -152,6 +152,9 @@ importers:
       os-name:
         specifier: 4.0.1
         version: 4.0.1
+      pele:
+        specifier: 1.13.0
+        version: 1.13.0
       ps-list:
         specifier: 7.2.0
         version: 7.2.0
@@ -3813,6 +3816,10 @@ packages:
   path-scurry@2.0.2:
     resolution: { integrity: sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg== }
     engines: { node: 18 || 20 || >=22 }
+
+  pele@1.13.0:
+    resolution: { integrity: sha512-Ie8UKY9x00MsuR3jO6AzUwzK2Z6MIV3Tf4EDdITiuk8Uaz8K7g0R082WqsqNaSU8DdgkrRvZThzhit83mi/uiw== }
+    engines: { node: '>=20' }
 
   perfect-freehand@1.2.3:
     resolution: { integrity: sha512-bHZSfqDHGNlPpgH2yxXgPHlQSPpEbo+qg7li0M78J9vNAi2yjwLeA4x79BEQhX44lEWpCLSFCeRZwpw0niiXPA== }
@@ -8720,6 +8727,8 @@ snapshots:
     dependencies:
       lru-cache: 11.3.3
       minipass: 7.1.3
+
+  pele@1.13.0: {}
 
   perfect-freehand@1.2.3: {}
 

@@ -1,3 +1,4 @@
+import { DIAGRAM_VIEW_MORPH } from './diagram-view-morph'
 import { memo, useEffect, useState } from 'react'
 import { clsx } from 'clsx'
 import { getPublicAssetPath } from '@/config'
@@ -113,11 +114,11 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
   const selectionFamily = selected !== undefined
     ? resolved === 'list-check' ? 'list-selection' : resolved === 'layout-column' ? 'column-selection' : undefined
     : undefined
-  const morph = resolved === 'file-copy' && state !== undefined
+  const morph = resolved === 'code-s-slash' && state !== undefined ? ['diagram-view', state] as const : resolved === 'file-copy' && state !== undefined
     ? ['copy', state] as const
     : selectionFamily ? [selectionFamily, selected ? 'selected' : 'idle'] as const
       : morphEnabled && !explicit && Object.hasOwn(MORPH_TARGETS, resolved) ? MORPH_TARGETS[resolved] : undefined
-  const frames = morph ? ICON_MORPHS[morph[0]] : undefined
+  const frames = morph ? (morph[0] === 'diagram-view' ? DIAGRAM_VIEW_MORPH : ICON_MORPHS[morph[0]]) : undefined
 
   return (
     <svg {...shared} data-icon-fallback={!common && !brand && !tool ? category ? fallback : 'tools' : undefined}
