@@ -328,6 +328,7 @@ const LLAMACPP_VERSIONS = JSON.parse(
   fs.readFileSync(LLAMACPP_VERSIONS_PATH, 'utf8')
 )
 export const LLAMACPP_RELEASE_VERSION = LLAMACPP_VERSIONS['llama.cpp']
+export const LLAMACPP_MAX_OUTPUT_TOKENS = 32_768
 export const MINIMUM_LOCAL_CONTEXT_TOKENS = 4_096
 
 /**

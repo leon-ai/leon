@@ -57,6 +57,7 @@ import { CONNECTION_SETUP_TOOL_NAME } from '@/core/connections/connection-tool'
 import { CONFIG_MANAGER } from '@/config'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { LLAMACPP_MAX_OUTPUT_TOKENS } from '@/constants'
 
 const TRACE_SAVE_INTERVAL_MS = 1_000
 const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
@@ -89,6 +90,7 @@ import {
   AGENT_PROMPT_CACHE_KEY,
   AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
   AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
+  AGENT_CONTEXT_RECOVERY_BUDGET_RATIO,
   AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT
 } from './react-llm-duty/agent-constants'
 import type {
@@ -1262,10 +1264,18 @@ export class ReActLLMDuty extends LLMDuty {
     if (providerName === LLMProviders.OpenAI && options.isContextRecoveryAttempt) {
       this.automaticCompactionFailed = true
     }
-    const providerManagesContext = providerName === LLMProviders.OpenAI &&
+    const nativeContextWindowTokens = providerName === LLMProviders.LlamaCPP
+      ? await LLM_PROVIDER.getAgentNativeContextWindowTokens()
+      : undefined
+    const nativeContextAdmission = Boolean(nativeContextWindowTokens) && !options.isContextRecoveryAttempt
+    const providerManagesContext = nativeContextAdmission || (
+      providerName === LLMProviders.OpenAI &&
       !this.automaticCompactionFailed && !options.hasPendingImages
+    )
     const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
-      ? resolveAgentContextRecoveryTriggerTokens(providerName)
+      ? nativeContextWindowTokens
+        ? Math.floor(nativeContextWindowTokens * AGENT_CONTEXT_RECOVERY_BUDGET_RATIO)
+        : resolveAgentContextRecoveryTriggerTokens(providerName)
       : resolveAgentContextCompactionTriggerTokens(providerName)
     let preparedContext = prepareAgentModelContext({
       transcript,
@@ -1273,12 +1283,13 @@ export class ReActLLMDuty extends LLMDuty {
       tools,
       // Reviews need the complete capability contract even when text compacts.
       preserveToolSchemas: options.isCompletionReview === true,
-      // OpenAI measures actual request tokens and triggers compaction itself.
+      // Native admission counts the serialized request before reducing evidence.
       compactionTriggerTokens: providerManagesContext
         ? Number.POSITIVE_INFINITY
         : contextCompactionTriggerTokens,
-      forceCompaction:
-        options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
+      forceCompaction: nativeContextAdmission
+        ? false
+        : options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
     if (
       !providerManagesContext &&
@@ -1386,10 +1397,9 @@ export class ReActLLMDuty extends LLMDuty {
         ? 'default'
         : undefined
     const disableThinking = reasoningMode === 'off'
-    const maxOutputTokens = resolveAgentMaxOutputTokens(
-      providerName,
-      preparedContext.estimatedInputTokens
-    )
+    const maxOutputTokens = nativeContextWindowTokens
+      ? LLAMACPP_MAX_OUTPUT_TOKENS
+      : resolveAgentMaxOutputTokens(providerName, preparedContext.estimatedInputTokens)
     if (options.isOutputRecoveryAttempt) {
       LogHelper.info(
         `Retrying truncated agent output with max_tokens=${maxOutputTokens ?? 'provider default'}; reasoning effort=${reasoningEffort ?? 'provider default'}`
@@ -1437,7 +1447,7 @@ export class ReActLLMDuty extends LLMDuty {
     const modelResponseStartedAt = Date.now()
     const modelResponseMaximumDeadlineAt = modelResponseStartedAt +
       (this.runBudget?.capTimeout(AGENT_MODEL_RESPONSE_MAX_DURATION_MS) ?? AGENT_MODEL_RESPONSE_MAX_DURATION_MS)
-    const contextWindowTokens = resolveModelContextWindowTokens(
+    const contextWindowTokens = nativeContextWindowTokens ?? resolveModelContextWindowTokens(
       agentTarget.provider,
       agentTarget.model
     )

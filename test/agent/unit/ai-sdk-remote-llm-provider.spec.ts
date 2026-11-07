@@ -205,7 +205,7 @@ describe('AISDKRemoteLLMProvider', () => {
     vi.unstubAllGlobals()
   })
 
-  it.each([false, true])('preserves llama.cpp schemas and explicit thinking controls (stream=%s)', async (shouldStream) => {
+  it.each([false, true])('preserves llama.cpp schemas, explicit thinking controls and native output capacity (stream=%s)', async (shouldStream) => {
     const model = path.resolve('local-model')
     const log = vi.spyOn(LlamaCPPLLMProvider as unknown as {
       writeServerLogLine(line: string): void
@@ -246,6 +246,14 @@ describe('AISDKRemoteLLMProvider', () => {
       })
       expect(body.chat_template_kwargs.enable_thinking).toBe(false)
       expect(body).not.toHaveProperty('reasoning_format')
+      expect(body.max_tokens).toBe(860)
+      expect(post.mock.calls.at(-1)?.[1]).toEqual({ ...body, stream: false, max_tokens: 2_048 })
+
+      post.mockResolvedValue({ data: { input_tokens: 1_024 } })
+      await expect(provider.runChatCompletion('Verify.', {
+        ...createCompletionParams({ type: 'object', properties: {} }), shouldStream
+      })).rejects.toMatchObject({ code: 'context_length_exceeded' })
+      expect(fetch).toHaveBeenCalledTimes(1)
     } finally {
       provider.dispose()
       get.mockRestore()

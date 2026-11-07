@@ -15,7 +15,10 @@ import type {
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { InferencePurpose } from '@/core/llm-manager/types'
-import { CODEBASE_PATH } from '@/constants'
+import {
+  CODEBASE_PATH,
+  LLAMACPP_MAX_OUTPUT_TOKENS
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { getLlamaCPPServerBinaryPath, getLlamaCPPModelArguments, resolveLlamaCPPContextPlan } from './llamacpp-context'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
@@ -30,6 +33,7 @@ const LLAMACPP_READY_POLL_INTERVAL_MS = 250
 const LLAMA_SERVER_LOG_RESET_INTERVAL_MS = 12 * 60 * 60 * 1_000
 const LLAMACPP_MAX_PORT_CHECKS = 10
 const LLAMACPP_METADATA_TIMEOUT_MS = 5_000
+const LLAMACPP_CONTEXT_RESERVE_TOKENS = 64
 const LLAMA_SERVER_LOG_FILENAME = 'llama-server.log'
 const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
   enable_thinking: false
@@ -178,6 +182,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         requiresApiKey: false,
         supportsStructuredOutputs: true,
         transformRequestBody: configureStructuredRequestThinking,
+        prepareRequestBody: LlamaCPPLLMProvider.prepareRequestBody,
         buildProviderOptions: ({ completionParams, reasoningMode }) => ({
           llamacpp: {
             ...(completionParams.disableThinking || reasoningMode === 'off'
@@ -309,7 +314,10 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   ): Promise<AxiosResponse> {
     const response = await axios.post(
       LlamaCPPLLMProvider.getChatCompletionsURL(),
-      this.buildDirectPlainTextPayload(prompt, completionParams, false),
+      await LlamaCPPLLMProvider.prepareRequestBody(
+        this.buildDirectPlainTextPayload(prompt, completionParams, false),
+        completionParams.signal
+      ),
       this.buildDirectRequestConfig(completionParams)
     )
 
@@ -322,7 +330,10 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   ): Promise<AxiosResponse> {
     const response = await axios.post(
       LlamaCPPLLMProvider.getChatCompletionsURL(),
-      this.buildDirectPlainTextPayload(prompt, completionParams, true),
+      await LlamaCPPLLMProvider.prepareRequestBody(
+        this.buildDirectPlainTextPayload(prompt, completionParams, true),
+        completionParams.signal
+      ),
       {
         ...this.buildDirectRequestConfig(completionParams),
         responseType: 'stream'
@@ -367,6 +378,52 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     }
 
     return payload
+  }
+
+  /**
+   * Counts the final wire request, including its rendered template and tools,
+   * and fits generation before inference can overrun the server's actual slot.
+   */
+  private static async prepareRequestBody(
+    body: Record<string, unknown>,
+    signal?: AbortSignal
+  ): Promise<Record<string, unknown>> {
+    const capacity = LlamaCPPLLMProvider.contextWindowTokens
+    if (!capacity) {
+      return body
+    }
+
+    const response = await axios.post(
+      `${LlamaCPPLLMProvider.getChatCompletionsURL()}/input_tokens`,
+      { ...body, stream: false },
+      {
+        timeout: LLAMACPP_METADATA_TIMEOUT_MS,
+        ...(signal ? { signal } : {}),
+        headers: { Authorization: `Bearer ${CONFIG_MANAGER.getProviderAPIKey('llamacpp') || 'no-key'}` }
+      }
+    )
+    const inputTokens: unknown = response.data?.input_tokens
+    if (typeof inputTokens !== 'number' || !Number.isSafeInteger(inputTokens) || inputTokens < 0) {
+      throw new Error('llama.cpp returned an invalid input token count.')
+    }
+
+    const remainingTokens = capacity - inputTokens - LLAMACPP_CONTEXT_RESERVE_TOKENS
+    if (remainingTokens < 1) {
+      // The ordinary context-recovery path owns reduction and its one retry.
+      throw Object.assign(
+        new Error(`llama.cpp context window exceeded: ${inputTokens} input tokens for a ${capacity}-token slot.`),
+        { code: 'context_length_exceeded' }
+      )
+    }
+
+    const requestedTokens = typeof body['max_tokens'] === 'number' && body['max_tokens'] > 0
+      ? body['max_tokens']
+      : LLAMACPP_MAX_OUTPUT_TOKENS
+
+    return {
+      ...body,
+      max_tokens: Math.min(requestedTokens, remainingTokens)
+    }
   }
 
   private buildDirectRequestConfig(

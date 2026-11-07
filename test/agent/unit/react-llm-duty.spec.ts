@@ -93,7 +93,8 @@ const coreMocks = vi.hoisted(() => ({
   prompt: vi.fn(),
   loadConversationLogs: vi.fn(),
   consumeLastProviderErrorMessage: vi.fn(),
-  prepareAgentTranscript: vi.fn(async (transcript: AgentToolTranscriptMessage[]) => transcript)
+  prepareAgentTranscript: vi.fn(async (transcript: AgentToolTranscriptMessage[]) => transcript),
+  getAgentNativeContextWindowTokens: vi.fn<() => Promise<number | undefined>>().mockResolvedValue(undefined)
 }))
 
 vi.mock('@/core/connections/connection-service', () => ({
@@ -117,7 +118,8 @@ vi.mock('@/core', () => ({
   LLM_PROVIDER: {
     prompt: coreMocks.prompt,
     consumeLastProviderErrorMessage: coreMocks.consumeLastProviderErrorMessage,
-    prepareAgentTranscript: coreMocks.prepareAgentTranscript
+    prepareAgentTranscript: coreMocks.prepareAgentTranscript,
+    getAgentNativeContextWindowTokens: coreMocks.getAgentNativeContextWindowTokens
   },
   BRAIN: {
     wernicke: (
@@ -4875,6 +4877,36 @@ describe('model response status', () => {
       budget.dispose()
       clock.mockRestore()
     }
+  })
+
+  it('preserves native-admitted evidence during output recovery and reduces it only after context rejection', async () => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.LlamaCPP, model: 'local.gguf'
+    })
+    coreMocks.getAgentNativeContextWindowTokens.mockResolvedValueOnce(32_768)
+    coreMocks.prompt.mockResolvedValueOnce({ output: 'Done.', usedInputTokens: 100 })
+    const duty = new ReActLLMDuty({ input: 'Inspect the files.' })
+    const summarize = vi.spyOn(duty as unknown as {
+      prepareContinuation(): Promise<AgentToolTranscriptMessage[]>
+    }, 'prepareContinuation').mockResolvedValue([])
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: ' '.repeat(140_000) }]
+
+    await duty['callAgentModel'](transcript, 'Follow the request.', [], {
+      isRecoveryAttempt: true, isOutputRecoveryAttempt: true
+    })
+
+    expect(summarize).not.toHaveBeenCalled()
+    expect(coreMocks.prompt.mock.calls[0]?.[0]).toEqual(transcript)
+    expect(coreMocks.prompt.mock.calls[0]?.[1].maxTokens).toBe(32_768)
+    expect(statuses().at(-1)?.contextUsage?.contextWindowTokens).toBe(32_768)
+
+    coreMocks.getAgentNativeContextWindowTokens.mockResolvedValueOnce(32_768)
+    coreMocks.prompt.mockResolvedValueOnce({ output: 'Recovered.', usedInputTokens: 50 })
+    await duty['callAgentModel'](transcript, 'Follow the request.', [], {
+      isRecoveryAttempt: true, isContextRecoveryAttempt: true
+    })
+    expect(summarize).toHaveBeenCalledOnce()
   })
 
   it('retains the prepared prompt estimate when an adapter reports no input usage', async () => {
