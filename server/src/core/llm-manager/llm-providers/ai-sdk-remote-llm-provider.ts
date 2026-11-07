@@ -111,6 +111,7 @@ interface CallState {
   accounting?: CompletionAccounting
   text: string
   reasoning: string
+  reasoningBoundaryPending?: boolean
   reasoningItems: Map<string, ProviderReasoningItem>
   toolCallsById: Record<
     string,
@@ -1835,6 +1836,10 @@ export default class AISDKRemoteLLMProvider {
       item.text += part['delta']
     } else if (part['type'] === 'reasoning' && typeof part['text'] === 'string') {
       item.text += part['text']
+    } else if (part['type'] === 'reasoning-start' && item.text) {
+      // Providers can split one signed/encrypted item into several summaries.
+      // Keep those paragraphs distinct in its text replay, not just the feed.
+      item.text += '\n\n'
     }
 
     state.reasoningItems.set(itemId, item)
@@ -1971,7 +1976,7 @@ export default class AISDKRemoteLLMProvider {
       }
 
       if (type === 'reasoning' && typeof part['text'] === 'string') {
-        state.reasoning += part['text'] as string
+        state.reasoning += `${state.reasoning ? '\n\n' : ''}${part['text']}`
         continue
       }
 
@@ -2135,6 +2140,12 @@ export default class AISDKRemoteLLMProvider {
         continue
       }
 
+      if (type === 'reasoning-start') {
+        // Summary parts are separate paragraphs, not adjacent pieces of one word.
+        state.reasoningBoundaryPending = state.reasoning.length > 0
+        continue
+      }
+
       if (type === 'reasoning-delta' || type === 'reasoning') {
         const delta = readString(part['delta'], part['textDelta'], part['text'])
         if (!delta) {
@@ -2142,12 +2153,14 @@ export default class AISDKRemoteLLMProvider {
         }
         // SDK delta events are incremental. Overlap removal corrupts repeated
         // words and whitespace needed for provider reasoning replay.
-        const mergedDelta = type === 'reasoning-delta'
+        const chunk = type === 'reasoning-delta'
           ? delta
           : mergeStreamingChunk(state.reasoning, delta)
-        if (!mergedDelta) {
+        if (!chunk) {
           continue
         }
+        const mergedDelta = `${state.reasoningBoundaryPending ? '\n\n' : ''}${chunk}`
+        state.reasoningBoundaryPending = false
         state.reasoning += mergedDelta
         completionParams.onReasoningToken?.(mergedDelta)
         continue

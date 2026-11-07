@@ -1414,11 +1414,15 @@ describe('LLMProvider', () => {
 
 
 describe('provider stream normalization', () => {
-  it('recovers completed Responses API output across split SSE chunks', async () => {
+  it.each([false, true])('recovers completed Responses API output across split SSE chunks (reasoning streamed: %s)', async (streamed) => {
+    const summaries = ['**Check the conditions**', '**Prepare the reply**\n\nKeep it clear.']
+    const reasoning = { type: 'reasoning', id: 'rs-weather',
+      summary: summaries.map((text) => ({ type: 'summary_text', text })) }
     const event = {
       type: 'response.completed',
       response: {
         output: [
+          reasoning,
           {
             type: 'message',
             content: [{ type: 'output_text', text: 'Checking the weather.' }]
@@ -1433,19 +1437,26 @@ describe('provider stream normalization', () => {
         usage: { input_tokens: 24, output_tokens: 9 }
       }
     }
-    const wire = `data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`
+    const incremental = streamed ? summaries.flatMap((text, summary_index) => [
+      { type: 'response.reasoning_summary_part.added', item_id: reasoning.id, summary_index },
+      { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, summary_index, delta: text },
+      { type: 'response.reasoning_summary_text.done', item_id: reasoning.id, summary_index, text }
+    ]) : []
+    const wire = [...incremental, event].map((event) => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n'
+    const onReasoningToken = vi.fn()
     const response = {
       data: Readable.from([wire.slice(0, 37), wire.slice(37)])
     } as AxiosResponse
 
     const result = await normalizeStreamingCompletionResult(
       response,
-      { dutyType: LLMDuties.ReAct, systemPrompt: '' },
+      { dutyType: LLMDuties.ReAct, systemPrompt: '', onReasoningToken },
       LLMProviders.OpenAI
     )
 
     expect(result).toMatchObject({
       rawResult: 'Checking the weather.',
+      reasoning: summaries.join('\n\n'),
       usedInputTokens: 24,
       usedOutputTokens: 9,
       toolCalls: [{
@@ -1454,6 +1465,7 @@ describe('provider stream normalization', () => {
         function: { name: 'getWeather', arguments: '{"city":"Shanghai"}' }
       }]
     })
+    expect(onReasoningToken.mock.calls.map(([chunk]) => chunk).join('')).toBe(summaries.join('\n\n'))
   })
 
   it('preserves compatible reasoning, text deltas, and trailing usage', async () => {
@@ -1461,6 +1473,8 @@ describe('provider stream normalization', () => {
     const onReasoningToken = vi.fn()
     const events = [
       { choices: [{ delta: { reasoning_content: 'Check the conditions.' } }] },
+      { choices: [{ delta: { reasoning_content: '\n\n' } }] },
+      { choices: [{ delta: { reasoning_content: '**Prepare the reply**' } }] },
       { choices: [{ delta: { content: 'Hello ' } }] },
       { choices: [{ delta: { content: 'world' }, finish_reason: 'stop' }] },
       { choices: [], usage: { prompt_tokens: 12, completion_tokens: 5 } }
@@ -1476,12 +1490,14 @@ describe('provider stream normalization', () => {
 
     expect(result).toMatchObject({
       rawResult: 'Hello world',
-      reasoning: 'Check the conditions.',
+      reasoning: 'Check the conditions.\n\n**Prepare the reply**',
       usedInputTokens: 12,
       usedOutputTokens: 5,
       finishReason: 'stop'
     })
     expect(onToken.mock.calls.map(([chunk]) => chunk).join('')).toBe('Hello world')
     expect(onReasoningToken).toHaveBeenCalledWith('Check the conditions.')
+    expect(onReasoningToken.mock.calls.map(([chunk]) => chunk).join(''))
+      .toBe(result.reasoning)
   })
 })

@@ -54,6 +54,7 @@ export async function normalizeStreamingCompletionResult(
 
   let textOutput = ''
   let reasoningOutput = ''
+  let reasoningBoundaryPending = false
   let accounting: CompletionAccounting = {}
   let usedInputTokens = 0
   let usedOutputTokens = 0
@@ -71,28 +72,26 @@ export async function normalizeStreamingCompletionResult(
     LLMProviders.OpenRouter
   ].includes(providerName)
 
-  const appendReasoningChunk = (reasoningChunk: string): void => {
+  const appendReasoningChunk = (reasoningChunk: string, incremental = false): void => {
     if (!reasoningChunk) {
       return
     }
 
     const trimmed = reasoningChunk.trim()
-    if (!trimmed) {
+    if (!incremental && trimmed.length >= 16 && reasoningChunkCache.has(trimmed)) {
       return
     }
 
-    if (trimmed.length >= 16 && reasoningChunkCache.has(trimmed)) {
-      return
-    }
-
-    const mergedChunk = mergeStreamingChunk(reasoningOutput, reasoningChunk)
-    if (!mergedChunk || !mergedChunk.trim()) {
+    const chunk = incremental ? reasoningChunk : mergeStreamingChunk(reasoningOutput, reasoningChunk)
+    if (!chunk) {
       if (trimmed.length >= 16) {
         reasoningChunkCache.add(trimmed)
       }
       return
     }
 
+    const mergedChunk = `${reasoningBoundaryPending ? '\n\n' : ''}${chunk}`
+    reasoningBoundaryPending = false
     reasoningOutput += mergedChunk
     completionParams.onReasoningToken?.(mergedChunk)
 
@@ -248,7 +247,7 @@ export async function normalizeStreamingCompletionResult(
     for (const reasoningChunk of extractOpenAICompatibleReasoningFragments(
       deltaObject
     )) {
-      appendReasoningChunk(reasoningChunk)
+      appendReasoningChunk(reasoningChunk, true)
     }
 
     const toolCalls = Array.isArray(deltaObject['tool_calls'])
@@ -325,6 +324,13 @@ export async function normalizeStreamingCompletionResult(
         ? (parsedChunk['response'] as Record<string, unknown>)
         : null
     const responseStatus = response?.['status'] ?? parsedChunk['status']
+    if (
+      type === 'response.reasoning_summary_part.added' ||
+      (type === 'response.output_item.added' &&
+        (parsedChunk['item'] as Record<string, unknown> | undefined)?.['type'] === 'reasoning')
+    ) {
+      reasoningBoundaryPending = reasoningOutput.length > 0
+    }
     if (responseStatus === 'incomplete' || type === 'response.incomplete') {
       const incompleteDetails =
         response?.['incomplete_details'] &&
@@ -338,11 +344,17 @@ export async function normalizeStreamingCompletionResult(
           : 'incomplete'
     }
 
-    for (const reasoningChunk of extractOpenAIResponsesReasoningFragments(
+    const reasoningChunks = extractOpenAIResponsesReasoningFragments(
       parsedChunk,
       eventName
-    )) {
-      appendReasoningChunk(reasoningChunk)
+    )
+    if (type.endsWith('.delta')) {
+      for (const reasoningChunk of reasoningChunks) {
+        appendReasoningChunk(reasoningChunk, true)
+      }
+    } else {
+      // Complete summaries replay the same paragraphs as incremental parts.
+      appendReasoningChunk(reasoningChunks.join('\n\n'))
     }
 
     if (type === 'response.output_text.delta') {
