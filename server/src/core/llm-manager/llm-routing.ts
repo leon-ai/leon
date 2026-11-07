@@ -27,6 +27,27 @@ const LOCAL_PROVIDERS = new Set<LLMProviders>([
   LLMProviders.LlamaCPP,
   LLMProviders.SGLang
 ])
+const GGUF_EXTENSION = '.gguf'
+
+/**
+ * Lists managed local model files without loading weights or probing inference.
+ */
+export async function listInstalledLLMModels(llmDirPath: string): Promise<string[]> {
+  try {
+    const entries = await fs.promises.readdir(llmDirPath, { withFileTypes: true })
+
+    return entries
+      .filter((entry) => entry.isFile() && path.extname(entry.name).toLowerCase() === GGUF_EXTENSION)
+      .map((entry) => entry.name)
+      .sort((first, second) => first.localeCompare(second))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return []
+    }
+
+    throw error
+  }
+}
 
 export function readLLMManifest(llmManifestPath: string): LLMManifest | null {
   if (!fs.existsSync(llmManifestPath)) {

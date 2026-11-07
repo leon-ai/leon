@@ -446,6 +446,35 @@ test('retargets the fast return when streamed content grows before landing', asy
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`selects and persists a local model through the provider menu (${reducedMotion})`, async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion })
+    ui.models.providers = [...ui.models.providers, {
+      id: 'llamacpp', label: 'llama.cpp', models: [{
+        model: 'fixture-9b.gguf', label: 'Fixture 9B', recommended: false,
+        reasoning: ['auto'], speed: ['auto'], defaultReasoningLabel: 'Model default'
+      }]
+    }]
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Choose model, current: OpenAI, GPT-6.1 Sol', exact: true }).click()
+    const popup = page.getByRole('dialog', { name: 'Choose a model', exact: true })
+    await popup.getByRole('option', { name: 'llama.cpp', exact: true }).click()
+    await popup.getByRole('option', { name: 'Fixture 9B', exact: true }).click()
+
+    const trigger = page.getByRole('button', { name: 'Choose model, current: llama.cpp, Fixture 9B', exact: true })
+    await expect(trigger).toBeVisible()
+    await expect.poll(() => ui.sessions.find((session) => session.id === SESSION_ID)?.modelTarget)
+      .toBe('llamacpp/fixture-9b.gguf')
+    await page.reload()
+    await expect(trigger).toBeVisible()
+    await trigger.click()
+    await popup.getByRole('combobox', { name: 'Search models', exact: true }).fill('fixture-9b')
+    await expect(popup.getByRole('option', { name: 'Fixture 9B llama.cpp', exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(trigger).toBeFocused()
+  })
+}
+
 test('shares keyboard navigation across virtual model results and reasoning/service-tier choices', async ({ page, ui }) => {
   const provider = ui.models.providers[0]!
   const model = provider.models[0]!

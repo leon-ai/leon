@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import path from 'node:path'
 import { Type } from '@sinclair/typebox'
 import type { Static } from '@sinclair/typebox'
 
@@ -13,6 +14,8 @@ import type { ConversationSession } from '@/core/session-manager'
 import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
+import { LLM_DIR_PATH } from '@/constants'
+import { listInstalledLLMModels } from '@/core/llm-manager/llm-routing'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 const MAXIMUM_STREAM_BACKLOG_BYTES = 1_024 * 1_024
@@ -49,7 +52,9 @@ export function getSessionSelection(session?: ConversationSession, targetValue?:
 
     return {
       provider: target.provider,
-      model: target.model,
+      model: target.isLocal && path.dirname(target.model) === LLM_DIR_PATH
+        ? path.basename(target.model)
+        : target.model,
       target: target.label,
       settings: {
         ...CONFIG_STATE.getModelSettingsState().getSettings(target),
@@ -67,7 +72,7 @@ export const webSessionRoutes: FastifyPluginAsync<APIOptions> = async (fastify, 
   const base = `/api/${options.apiVersion}/sessions`
 
   fastify.get(`${base}/models`, async () => {
-    const providers = getPublicModelCatalog()
+    const providers = getPublicModelCatalog(await listInstalledLLMModels(LLM_DIR_PATH))
 
     return {
       providers,
@@ -96,7 +101,8 @@ export const webSessionRoutes: FastifyPluginAsync<APIOptions> = async (fastify, 
         }
         const target = state.createConfiguredTargetValue(body.provider, body.model)
         const selection = getSessionSelection(session, target)
-        const model = getPublicModelCatalog().find((provider) => provider.id === body.provider)
+        const model = getPublicModelCatalog(await listInstalledLLMModels(LLM_DIR_PATH))
+          .find((provider) => provider.id === body.provider)
           ?.models.find((candidate) => candidate.model === body.model)
         if ((body.reasoning !== undefined && !model?.reasoning.includes(body.reasoning)) ||
           (body.speed !== undefined && !model?.speed.includes(body.speed))) {
