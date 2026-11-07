@@ -48,6 +48,7 @@ interface MenuItemBaseProps {
   collapsed?: boolean
   disabled?: boolean
   onClick?: () => void
+  onIntent?: (() => void) | undefined
 }
 
 type MenuItemProps = MenuItemBaseProps & (
@@ -74,7 +75,8 @@ export function MenuItem({
   shortcutKeys,
   collapsed = false,
   disabled = false,
-  onClick
+  onClick,
+  onIntent
 }: MenuItemProps) {
   const className = clsx(
     'menu-item',
@@ -120,6 +122,8 @@ export function MenuItem({
           className={className}
           activeProps={{ className: 'menu-item-active' }}
           aria-disabled={disabled}
+          onMouseEnter={disabled ? undefined : onIntent}
+          onFocus={disabled ? undefined : onIntent}
           onClick={(event: MouseEvent<HTMLAnchorElement>) => {
             if (disabled) {
               event.preventDefault()
@@ -140,6 +144,8 @@ export function MenuItem({
           href={href}
           className={className}
           aria-disabled={disabled}
+          onMouseEnter={disabled ? undefined : onIntent}
+          onFocus={disabled ? undefined : onIntent}
           onClick={(event: MouseEvent<HTMLAnchorElement>) => {
             if (disabled) {
               event.preventDefault()
@@ -160,6 +166,8 @@ export function MenuItem({
         className={className}
         disabled={disabled}
         onClick={onClick}
+        onMouseEnter={onIntent}
+        onFocus={onIntent}
       >
         {content}
       </button>

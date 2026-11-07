@@ -5,6 +5,60 @@ import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
+test('skips speculative work on data-saving connections without blocking requested search', async ({ page, ui }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', { value: { saveData: true, effectiveType: '4g' }, configurable: true })
+  })
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  await page.goto('./')
+  const search = page.getByRole('button', { name: 'Search sessions', exact: true })
+  await search.hover()
+  await page.getByRole('link', { name: 'Test session 1', exact: true }).hover()
+  await finishFiniteAnimations(page.getByRole('navigation', { name: 'Main menu', exact: true }))
+  expect(ui.historyRequests).toHaveLength(0)
+  expect(resources.some((url) => url.includes('search-sessions-dialog-'))).toBe(false)
+  await search.click()
+  await expect(page.getByRole('combobox', { name: 'Search sessions', exact: true })).toBeFocused()
+})
+
+
+test('warms Markdown alongside submission before session creation returns', async ({ page, ui }) => {
+  const gate = Promise.withResolvers<void>()
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  await page.route('**/api/v1/sessions?compact=true', async (route) => {
+    await gate.promise
+    await route.fallback()
+  })
+  try {
+    await page.goto('./')
+    expect(resources.some((url) => url.includes('markdown-vendor-'))).toBe(false)
+    await page.getByRole('textbox', { name: 'Message Leon' }).fill('Make room for a small idea')
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await expect.poll(() => resources.some((url) => url.includes('markdown-vendor-'))).toBe(true)
+    expect(ui.historyRequests).toHaveLength(0)
+    expect(resources.some((url) => /markdown-math-engine-|tool-diff-|markdown-mermaid-/.test(url))).toBe(false)
+  } finally {
+    gate.resolve()
+  }
+})
+
+
+test('keeps the sidebar usable and reports an explicitly requested search download failure', async ({ page, ui }) => {
+  void ui
+  await page.route('**/assets/search-sessions-dialog-*.js', (route) => route.abort())
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+  await expect(dialog.getByRole('button', { name: 'Retry loading search', exact: true })).toBeVisible()
+  await expect(page.getByText('Could not load search', { exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeVisible()
+})
+
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`retains icon states and reverses interrupted toggle morphs (${reducedMotion})`, async ({ page, ui }, testInfo) => {
     const requests: string[] = []
