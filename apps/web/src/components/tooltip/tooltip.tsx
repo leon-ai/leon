@@ -132,10 +132,17 @@ export function Tooltip({
         return
       }
 
-      setTooltipStyle(getTooltipStyle(
+      const style = getTooltipStyle(
         triggerRef.current.getBoundingClientRect(),
         position
-      ))
+      )
+      if (multiline && (position === 'top' || position === 'bottom')) {
+        const halfWidth = (contentRef.current?.offsetWidth ?? 0) / 2
+        style.left = Math.max(TOOLTIP_OFFSET + halfWidth, Math.min(
+          Number(style.left), window.innerWidth - TOOLTIP_OFFSET - halfWidth
+        ))
+      }
+      setTooltipStyle(style)
     }
 
     updateTooltipPosition()
@@ -146,7 +153,7 @@ export function Tooltip({
       window.removeEventListener('resize', updateTooltipPosition)
       window.removeEventListener('scroll', updateTooltipPosition, true)
     }
-  }, [open, position])
+  }, [open, position, multiline])
 
   return (
     <>

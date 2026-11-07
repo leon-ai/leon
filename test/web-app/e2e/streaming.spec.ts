@@ -8,6 +8,106 @@ import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFinit
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 
+test('replaces fallback artwork after favicon loading and shows complete URL tooltips within the viewport', async ({ page, ui }) => {
+  const url = `https://example.com/guide?note=${'slow-craft-'.repeat(24)}`
+  ui.history.get(SESSION_ID)!.at(-1)!.message = `A little guidance from [a warm guide](${url}) and [another page](https://missing.example/page).`
+  const ready = Promise.withResolvers<void>()
+  await page.route('**/api/v1/favicons?**', async (route) => {
+    const origin = new URL(route.request().url()).searchParams.get('origin')
+    if (origin === 'https://example.com') {
+      await ready.promise
+      await route.fulfill({ status: 200, contentType: 'image/png', path: 'apps/web/public/img/favicon.png' })
+    } else {
+      await route.fulfill({ status: 404, body: '' })
+    }
+  })
+  try {
+    await page.goto(SESSION_URL)
+    const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+    const link = answer.getByRole('link', { name: 'a warm guide' })
+    await expect(link.locator('[data-icon="global"]')).toHaveCount(1)
+    await expect(link.locator('img')).toHaveCSS('opacity', '0')
+    ready.resolve()
+    await expect(link.locator('img')).toHaveAttribute('data-loaded', 'true')
+    await expect(link.locator('[data-icon="global"]')).toHaveCount(0)
+    await expect(answer.getByRole('link', { name: 'another page' }).locator('[data-icon="global"]')).toHaveCount(1)
+    await expect(answer.locator('p')).toHaveCSS('line-height', '30px')
+    for (const width of [1_512, 390]) {
+      await page.setViewportSize({ width, height: 982 })
+      await link.hover()
+      const tooltip = page.getByRole('tooltip').filter({ hasText: url })
+      await expect(tooltip).toHaveText(url)
+      await expect(tooltip).toBeVisible()
+      const bounds = (await tooltip.boundingBox())!
+      expect(bounds.x).toBeGreaterThanOrEqual(0)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width)
+      await page.mouse.move(0, 0)
+      await link.focus()
+      await expect(tooltip).toHaveText(url)
+      await link.blur()
+    }
+  } finally {
+    ready.resolve()
+  }
+})
+
+test('preserves original navigation and tooltip URLs without fetching page previews', async ({ page, ui }) => {
+  const original = 'https://example.com/guide#read'
+  const signedURL = 'https://example.com/guide?signature=keep-me#read'
+  const campaignURL = 'https://example.com/guide?utm_source=newsletter&utm_medium=email#read'
+  ui.history.get(SESSION_ID)!.at(-1)!.message = `[A warm guide](${original}) and [another guide](${signedURL}) and [an existing referral](${campaignURL}) and [a download](https://example.com/archive.zip) and [a resource](https://example.com/archive%2Ezip) and [an API](https://example.com/data.json) and [email](mailto:hello@example.com).`
+  const previewRequests: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('/link-preview')) {
+      previewRequests.push(request.url())
+    }
+  })
+  await page.route('**/api/v1/favicons?**', (route) => route.fulfill({
+    status: 200, contentType: 'image/png', path: 'apps/web/public/img/favicon.png'
+  }))
+  await page.goto(SESSION_URL)
+  const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  const link = answer.getByRole('link', { name: 'A warm guide' })
+  await expect(link).toHaveAttribute('href', original)
+  await link.hover()
+  await expect(page.locator('[role="tooltip"].tooltip-content-open')).toHaveText(original)
+  await page.mouse.move(0, 0)
+  await link.focus()
+  await expect(page.locator('[role="tooltip"].tooltip-content-open')).toHaveText(original)
+  for (const [name, url] of [
+    ['another guide', signedURL], ['an existing referral', campaignURL], ['a download', 'https://example.com/archive.zip'],
+    ['a resource', 'https://example.com/archive%2Ezip'], ['an API', 'https://example.com/data.json'],
+    ['email', 'mailto:hello@example.com']
+  ] as const) {
+    await expect(answer.getByRole('link', { name, exact: true })).toHaveAttribute('href', url)
+  }
+  expect(previewRequests).toEqual([])
+})
+
+test('keeps failed favicons quiet and retries only after the cooldown on intent', async ({ page, ui }) => {
+  const url = 'https://example.com/guide'
+  ui.history.get(SESSION_ID)!.at(-1)!.message = `[A warm guide](${url})`
+  let icons = 0
+  await page.route('**/api/v1/favicons?**', async (route) => {
+    icons++
+    await route.fulfill(icons === 1 ? { status: 404, body: '' }
+      : { status: 200, contentType: 'image/png', path: 'apps/web/public/img/favicon.png' })
+  })
+  await page.goto(SESSION_URL)
+  const link = page.getByRole('link', { name: 'A warm guide' })
+  await expect(link.locator('[data-icon="global"]')).toHaveCount(1)
+  await link.focus()
+  await expect(page.getByRole('tooltip')).toHaveText(url)
+  expect(icons).toBe(1)
+  await expect(page.locator('.toast')).toHaveCount(0)
+  await expect(link).toHaveAttribute('href', url)
+  await link.evaluate((element) => (element as HTMLElement).blur())
+  await page.clock.setFixedTime(new Date(Date.now() + 31_000))
+  await link.focus()
+  await expect(link.locator('img')).toHaveAttribute('data-loaded', 'true')
+  expect(icons).toBe(2)
+})
+
 for (const legacy of [false, true]) {
   test(`renders search Markdown live and saved without replacing it with progress or metadata (legacy: ${legacy})`, async ({ page, ui }, testInfo) => {
     const text = '## A useful guide\n\nKeep **one good idea** close.\n\n| Topic | Note |\n| --- | --- |\n| Craft | Take your time |'
@@ -78,7 +178,6 @@ for (const legacy of [false, true]) {
   })
 }
 
-
 test('bounds page Markdown previews and virtualizes oversized complete documents', async ({ page, ui }) => {
   const text = `# More to read\n\n${'A **small idea** worth keeping.\n\n'.repeat(3_000)}`
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
@@ -105,6 +204,81 @@ test('bounds page Markdown previews and virtualizes oversized complete documents
   expect((await dialog.boundingBox())!.y + (await dialog.boundingBox())!.height).toBeLessThan(982)
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`renders safe streaming Markdown with Leon's character motion and restores its formatting (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    const faviconRequests: string[] = []
+    await page.route('**/api/v1/favicons?**', async (route) => {
+      faviconRequests.push(new URL(route.request().url()).searchParams.get('origin')!)
+      await route.fulfill({ status: 404, body: '' })
+    })
+    await page.goto(SESSION_URL)
+    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+    const responseId = 'markdown-answer'
+    const createdAt = Date.now()
+    let sequence = 0
+    const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: 'markdown-turn', response_id: responseId, created_at: createdAt + sequence
+    }])
+    await emit('owner_message', { message: { who: 'owner', messageId: 'markdown-owner', message: 'Explain **Markdown** literally.', sentAt: createdAt, isAddedToHistory: true } })
+    await emit('turn_status', { status: 'accepted' })
+    await emit('text_stream', { kind: 'answer', generationId: 'markdown-generation', token: '## A little guide\n\nA **warm' })
+    const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+    await expect(answer.getByRole('heading', { name: 'A little guide' })).toBeVisible()
+    await expect(answer.locator('strong')).toHaveText('warm')
+    const character = answer.locator('strong .streaming-text-character-new').last()
+    if (reducedMotion === 'no-preference') {
+      await expect(character).toHaveCSS('animation-name', 'streaming-text-character-enter')
+      await expect(character).toHaveCSS('animation-duration', '0.42s')
+    } else {
+      await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
+    }
+    await expect(answer.locator('[data-sd-animate]')).toHaveCount(0)
+    const settledHeading = await answer.getByRole('heading').elementHandle()
+    await emit('text_stream', { kind: 'answer', generationId: 'markdown-generation', token: '** welcome with [a useful source](https://example.com/guide) and `inline code`.\n\n- Read slowly\n- Try one thing\n\n> Keep some room for ideas.\n\n| Item | Value |\n| --- | --- |\n| Pace | Gentle |\n\n```json\n{"cozy": true, "count": 2}' })
+    await expect(answer.getByRole('link', { name: 'a useful source' })).toHaveAttribute('href', 'https://example.com/guide')
+    await expect(answer.getByRole('listitem')).toHaveCount(2)
+    await expect(answer.getByRole('table')).toContainText('Gentle')
+    await expect(answer.getByRole('region', { name: 'Code block', exact: true })).toContainText('"cozy": true')
+    expect(await settledHeading!.evaluate((element) => element.isConnected)).toBe(true)
+    await expect.poll(() => faviconRequests).toEqual(['https://example.com'])
+
+    const source = '## A little guide\n\nA **warm** welcome with [a useful source](https://example.com/guide) and `inline code`.\n\n- Read slowly\n- Try one thing\n\n> Keep some room for ideas.\n\n| Item | Value |\n| --- | --- |\n| Pace | Gentle |\n\n```json\n{"cozy": true, "count": 2}\n```'
+    await emit('text_stream', { kind: 'answer', generationId: 'markdown-generation', token: '\n```' })
+    const code = answer.getByRole('region', { name: 'Code block', exact: true })
+    await expect(code.locator('span[style*="color"]').first()).toBeVisible()
+    await emit('final_answer', { content: source, artifacts: [] })
+    await emit('turn_status', { status: 'completed' })
+    ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: responseId, message: source, sentAt: createdAt, isAddedToHistory: true })
+    await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
+    const owner = page.locator('.owner-message').filter({ hasText: 'Explain **Markdown** literally.' })
+    await expect(owner).toBeVisible()
+    await expect(owner.locator('strong')).toHaveCount(0)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    await answer.locator('p').first().hover()
+    await page.getByRole('button', { name: 'Copy message', exact: true }).last().click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(source)
+    await page.reload()
+    await expect(answer.getByRole('heading', { name: 'A little guide' })).toBeVisible()
+    await expect(answer.locator('strong')).toHaveText('warm')
+    await expect(answer.locator('.streaming-text-character-new')).toHaveCount(0)
+    await expect(answer.getByRole('region', { name: 'Code block', exact: true })).toBeVisible()
+
+    for (const theme of ['light', 'dark']) {
+      await page.setViewportSize({ width: 1_512, height: 982 })
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await page.setViewportSize({ width: theme === 'light' ? 390 : 1_512, height: 982 })
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+      await page.screenshot({ path: testInfo.outputPath(`markdown-${theme}.png`) })
+    }
+    expect(errors).toEqual([])
+  })
+}
 
 test('reuses completed Markdown parses across session remounts without sharing IDs or caching live prefixes', async ({ page, ui }, testInfo) => {
   // Observe serialized parser snapshots without a production diagnostics API.
@@ -168,7 +342,6 @@ test('reuses completed Markdown parses across session remounts without sharing I
   expect(await page.evaluate(() => Reflect.get(window, 'markdownCacheReads').live as number)).toBe(0)
 })
 
-
 test('shares lazy file artwork across languages, themes and session navigation', async ({ page, ui }) => {
   const resources: string[] = []
   page.on('request', (request) => resources.push(request.url()))
@@ -210,6 +383,260 @@ test('shares lazy file artwork across languages, themes and session navigation',
   expect(new Set(ids).size).toBe(ids.length)
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`renders rich Markdown with bounded local visuals and reading panes (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    const source = [
+      'A quiet note[^craft], with [a quiet guide](https://example.com/guide).',
+      '- [x] Keep room for ideas\n- [ ] Take a small step',
+      '> [!TIP]\n> Make something with care.',
+      '> [!NOTE]\n> Keep a little space.',
+      '> [!IMPORTANT]\n> Save your work.',
+      '> [!WARNING]\n> Check before you continue.',
+      '> [!CAUTION]\n> This action cannot be undone.',
+      '<details>\n<summary>A little more</summary>\n\nA **warm** detail.\n\n</details>',
+      '| Craft | Pace |\n| --- | --- |\n| Wood | Gentle |',
+      'A right triangle: $a^2 + b^2 = c^2$.',
+      '$$\nE = mc^2\n$$',
+      '```typescript\nconst craft: string = "care";\n```',
+      '```json\n{"craft": "care"}\n```',
+      '```python\nprint("Craft")\n```',
+      '```html\n<main>Craft</main>\n```',
+      '```css\nmain { display: block; }\n```',
+      '```bash\npwd\n```',
+      '```javascript\n' + Array.from({ length: 60 }, (_, index) => `const idea${index} = "${'A quiet thought. '.repeat(15)}";`).join('\n') + '\n```',
+      '[^craft]: A little practice goes a long way.'
+    ].join('\n\n')
+    ui.history.get(SESSION_ID)!.at(-1)!.message = source
+    ui.history.get(SESSION_ID)!.at(-3)!.message = 'Another quiet note[^craft].\n\n[^craft]: A separate footnote.'
+    await page.goto(SESSION_URL)
+    const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+    await expect(answer.locator('.katex')).toHaveCount(2)
+    await expect(answer.locator('math')).toHaveCount(2)
+    await expect(answer.locator('.markdown-task-item')).toHaveCount(2)
+    await expect(answer.getByRole('checkbox').first()).toBeChecked()
+    await expect(answer.getByRole('checkbox').first()).toBeDisabled()
+    await expect(answer.locator('ul.contains-task-list')).toHaveCSS('padding-left', '0px')
+    await expect(answer.locator('.markdown-task-item').first()).toHaveCSS('display', 'list-item')
+    await expect(answer.locator('.markdown-alert-tip')).toContainText('Make something with care.')
+    await expect(answer.locator('.markdown-alert-tip .markdown-alert-title')).toHaveText('Tip')
+    const details = answer.locator('details')
+    await expect(details).not.toHaveAttribute('open')
+    await details.locator('summary').click()
+    await expect(details.locator('strong')).toHaveText('warm')
+    await expect(answer.locator('.markdown-table')).toHaveCSS('border-radius', '12px')
+    await expect(answer.getByRole('img', { name: 'TypeScript', exact: true })).toBeVisible()
+    await expect(answer.getByRole('img', { name: 'JavaScript', exact: true })).toBeVisible()
+    for (const label of ['JavaScript', 'TypeScript', 'Python', 'JSON', 'HTML', 'CSS', 'Shell']) {
+      const icon = answer.getByRole('img', { name: label, exact: true })
+      await icon.scrollIntoViewIfNeeded()
+      await expect(icon).toHaveClass(/pierre-file-icon/)
+      expect(await icon.locator('use').getAttribute('href')).toContain('#file-tree-builtin-')
+      expect(await icon.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0)
+    }
+    await expect(answer.getByRole('region', { name: 'Code block', exact: true }).first()).toHaveCSS('overscroll-behavior-y', 'auto')
+    const footnote = answer.getByRole('link', { name: '1', exact: true })
+    await footnote.click()
+    const href = (await footnote.getAttribute('href'))!
+    expect(await answer.locator('[id]').evaluateAll((elements, fragment) => elements.some((element) => element.id === fragment.slice(1)), href)).toBe(true)
+    const ids = await page.locator('.markdown-content [id]').evaluateAll((elements) => elements.map((element) => element.id))
+    expect(new Set(ids).size).toBe(ids.length)
+    const code = answer.getByRole('region', { name: 'Code block', exact: true }).last()
+    await code.scrollIntoViewIfNeeded()
+    await expect.poll(() => code.locator('span[style*="color"]').count()).toBeGreaterThan(0)
+    expect(await code.locator('.code-view-line').count()).toBeLessThan(30)
+    await expect(code).toHaveCSS('overscroll-behavior-y', 'auto')
+
+    for (const theme of ['light', 'dark']) {
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await expect(code.locator('..')).toHaveCSS('background-color', theme === 'light' ? 'rgb(245, 245, 247)' : 'rgb(10, 10, 10)')
+      const visuals = await answer.evaluate((element) => {
+        function resolveColor(token: string): string {
+          const probe = document.createElement('span')
+          probe.style.color = `var(${token})`
+          element.append(probe)
+          const color = getComputedStyle(probe).color
+          probe.remove()
+
+          return color
+        }
+        const input = element.querySelector<HTMLInputElement>('.markdown-task-checkbox input')!
+        const mark = element.querySelector<SVGElement>('.markdown-task-checkbox svg')!
+        const inputBox = input.getBoundingClientRect()
+        const markBox = mark.getBoundingClientRect()
+
+        return {
+          markColor: getComputedStyle(mark).color, contrastColor: resolveColor('--color-accent-contrast'),
+          checkboxColor: getComputedStyle(input).backgroundColor, accent: resolveColor('--color-accent'),
+          centerX: Math.abs(inputBox.x + inputBox.width / 2 - markBox.x - markBox.width / 2),
+          centerY: Math.abs(inputBox.y + inputBox.height / 2 - markBox.y - markBox.height / 2),
+          header: getComputedStyle(element.querySelector('th')!).backgroundColor, headerToken: resolveColor('--color-surface'),
+          codeBlocks: Array.from(element.querySelectorAll<HTMLElement>('.markdown-code')).map((block) => {
+            const header = block.querySelector('.markdown-code-header')!
+            const body = block.querySelector('.code-view')!
+            const logo = header.querySelector('.app-icon')!
+
+            return { background: getComputedStyle(block).backgroundColor, body: getComputedStyle(body).backgroundColor,
+              header: getComputedStyle(header).backgroundColor, border: getComputedStyle(block).borderWidth,
+              separator: getComputedStyle(header).borderBottomWidth,
+              logoSize: logo.getBoundingClientRect().width, fontSize: Number.parseFloat(getComputedStyle(header).fontSize),
+              logoRadius: getComputedStyle(logo).borderRadius }
+          }),
+          alerts: Array.from(element.querySelectorAll<HTMLElement>('.markdown-alert')).map((alert) => {
+            const kind = Array.from(alert.classList).find((name) => name.startsWith('markdown-alert-'))!.slice('markdown-alert-'.length)
+            const title = alert.querySelector('.markdown-alert-title')!
+            const icon = title.querySelector<HTMLElement>('.app-icon')!
+
+            return { kind, color: getComputedStyle(title).color, token: resolveColor(`--color-markdown-alert-${kind}`),
+              background: getComputedStyle(alert).backgroundColor, radius: getComputedStyle(alert).borderRadius,
+              icon: icon.dataset['icon'], mask: getComputedStyle(icon).maskImage }
+          })
+        }
+      })
+      expect(visuals.markColor).toBe(visuals.contrastColor)
+      expect(visuals.checkboxColor).toBe(visuals.accent)
+      expect(visuals.centerX).toBeLessThanOrEqual(.5)
+      expect(visuals.centerY).toBeLessThanOrEqual(.5)
+      expect(visuals.header).toBe(visuals.headerToken)
+      for (const block of visuals.codeBlocks) {
+        expect(block.background).toBe(block.body)
+        expect(block.header).toBe('rgba(0, 0, 0, 0)')
+        expect(block.border).toBe('0px')
+        expect(block.separator).toBe('0px')
+        expect(block.logoSize).toBe(block.fontSize)
+        expect(block.logoRadius).toBe('4px')
+      }
+      expect(visuals.alerts).toHaveLength(5)
+      for (const alert of visuals.alerts) {
+        expect(alert.color).toBe(alert.token)
+        expect(alert.background).toBe('rgba(0, 0, 0, 0)')
+        expect(alert.radius).toBe('0px')
+        expect(alert.icon).toBe(`github-${alert.kind}`)
+        expect(alert.mask).toContain(`/img/alerts/${alert.kind}.svg`)
+      }
+      const guide = answer.getByRole('link', { name: 'a quiet guide', exact: true })
+      await guide.hover()
+      await expect(guide).toHaveCSS('color', visuals.contrastColor)
+      await page.screenshot({ path: testInfo.outputPath(`rich-markdown-${theme}.png`) })
+      await answer.locator('ul.contains-task-list').screenshot({ path: testInfo.outputPath(`task-list-${theme}.png`) })
+      await answer.locator('.markdown-alert-tip').screenshot({ path: testInfo.outputPath(`alert-${theme}.png`) })
+      await answer.locator('.markdown-code').first().screenshot({ path: testInfo.outputPath(`language-logo-${theme}.png`) })
+    }
+    expect(errors).toEqual([])
+  })
+
+  test(`waits for completed diagrams and enlarges trusted visuals with keyboard access (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.emulateMedia({ reducedMotion })
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    const resources: string[] = []
+    page.on('request', (request) => resources.push(request.url()))
+    await page.goto(SESSION_URL)
+    const createdAt = Date.now()
+    let sequence = 0
+    const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: 'diagram-turn', response_id: 'diagram-answer', created_at: createdAt + sequence
+    }])
+    await emit('turn_status', { status: 'accepted' })
+    await emit('text_stream', { kind: 'answer', generationId: 'diagram-generation', token: '```mermaid\nflowchart LR\n  A[Ideas] --> B[Craft]\n' })
+    await expect(page.getByRole('status').filter({ hasText: 'Drawing diagram…' })).toBeVisible()
+    expect(resources.some((url) => url.includes('markdown-mermaid'))).toBe(false)
+    const block = page.locator('.markdown-code').filter({ has: page.getByRole('img', { name: 'Mermaid', exact: true }) })
+    await block.getByRole('button', { name: 'View diagram code', exact: true }).click()
+    await expect(block.getByRole('region', { name: 'Code block', exact: true })).toContainText('flowchart LR')
+    await emit('text_stream', { kind: 'answer', generationId: 'diagram-generation', token: '```' })
+    expect(resources.some((url) => url.includes('markdown-mermaid'))).toBe(false)
+    await page.getByRole('button', { name: 'View diagram', exact: true }).click()
+    const preview = page.getByRole('button', { name: 'Enlarge diagram', exact: true })
+    await expect(preview.locator('svg')).toBeVisible()
+    expect(resources.some((url) => url.includes('markdown-math-engine'))).toBe(false)
+    await expect(preview).toHaveCSS('cursor', 'zoom-in')
+    const drawing = await preview.locator('svg').elementHandle()
+    await page.getByRole('button', { name: 'View diagram code', exact: true }).click()
+    await expect(preview).not.toBeVisible()
+    await expect(page.getByRole('region', { name: 'Code block', exact: true })).toContainText('A[Ideas] --> B[Craft]')
+    await page.getByRole('button', { name: 'View diagram', exact: true }).click()
+    await expect(preview).toBeVisible()
+    expect(await drawing!.evaluate((element) => element.isConnected)).toBe(true)
+    await preview.focus()
+    await page.keyboard.press('Enter')
+    const viewer = page.getByRole('dialog', { name: 'Diagram', exact: true })
+    const enlarged = viewer.getByRole('img', { name: 'Diagram', exact: true })
+    await expect(enlarged).toBeVisible()
+    const svgUrl = (await enlarged.getAttribute('src'))!
+    expect(svgUrl.startsWith('blob:')).toBe(true)
+    await finishFiniteAnimations(page.locator('.dialog-overlay').last())
+    await page.screenshot({ path: testInfo.outputPath('diagram-viewer.png') })
+    await page.keyboard.press('Escape')
+    await expect(viewer).toHaveCount(0)
+    await expect(preview).toBeFocused()
+    expect(await page.evaluate(async (url) => {
+      try {
+        await fetch(url)
+        return true
+      } catch {
+        return false
+      }
+    }, svgUrl)).toBe(false)
+    for (const theme of ['light', 'dark']) {
+      await page.setViewportSize({ width: 1_512, height: 982 })
+      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+      await expect(preview.locator('svg')).toBeVisible()
+      const toggle = block.getByRole('button', { name: 'View diagram code', exact: true })
+      const copy = block.getByRole('button', { name: 'Copy code', exact: true })
+      await expect(block).toHaveCSS('background-color', theme === 'light' ? 'rgb(245, 245, 247)' : 'rgb(10, 10, 10)')
+      await page.mouse.move(0, 0)
+      await finishFiniteAnimations(block.locator('.markdown-code-actions'))
+      await expect(toggle).toHaveCSS('color', await copy.evaluate((element) => getComputedStyle(element).color))
+      await toggle.hover()
+      await finishFiniteAnimations(toggle)
+      const hoverColor = await toggle.evaluate((element) => getComputedStyle(element).color)
+      await copy.hover()
+      await expect(copy).toHaveCSS('color', hoverColor)
+      for (const width of [1_512, 390]) {
+        await page.setViewportSize({ width, height: 982 })
+        await expect(preview).toBeInViewport()
+        await expect.poll(() => preview.evaluate((element) => {
+          const svg = element.querySelector('svg')
+          const block = element.closest('.markdown-diagram-block')
+          if (!svg || !block) {
+            return null
+          }
+          const width = block.getBoundingClientRect().width
+
+          return { fullWidth: width > 0 && Math.abs(svg.getBoundingClientRect().width - width) <= 1,
+            framed: Boolean(element.closest('.markdown-code')), background: getComputedStyle(block).backgroundColor }
+        })).toEqual({ fullWidth: true, framed: true, background: 'rgba(0, 0, 0, 0)' })
+        await page.screenshot({ path: testInfo.outputPath(`diagram-${theme}-${width}.png`) })
+      }
+    }
+    await page.setViewportSize({ width: 1_512, height: 982 })
+    const imageUrl = `/api/v1/artifacts/${SESSION_ID}/sketch`
+    await page.route(`**${imageUrl}`, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'image/png', path: 'apps/web/public/img/favicon.png' })
+    })
+    const artifact = { id: 'sketch', session_id: SESSION_ID, filename: 'sketch.png', mime_type: 'image/png',
+      size_bytes: 1_024, created_at: createdAt, source: 'tool', url: imageUrl }
+    await emit('final_answer', { content: '```mermaid\nflowchart LR\n  A[Ideas] --> B[Craft]\n```',
+      artifacts: [artifact, { ...artifact, id: 'unsafe', filename: 'unsafe.png', url: 'https://untrusted.example/image.png' }] })
+    await emit('turn_status', { status: 'completed' })
+    const image = page.getByRole('button', { name: 'Enlarge sketch.png', exact: true })
+    await expect(image.getByRole('img')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Enlarge unsafe.png', exact: true })).toHaveCount(0)
+    await image.click()
+    const imageViewer = page.getByRole('dialog', { name: 'sketch.png', exact: true })
+    await expect(imageViewer.getByRole('img')).toHaveAttribute('src', imageUrl)
+    await page.keyboard.press('Escape')
+    await expect(imageViewer).toHaveCount(0)
+    await expect(image).toBeFocused()
+    expect(errors).toEqual([])
+  })
+}
 
 test('does not execute Markdown HTML, unsafe links, or remote images', async ({ page, ui }) => {
   const outbound: string[] = []
@@ -234,7 +661,6 @@ test('does not execute Markdown HTML, unsafe links, or remote images', async ({ 
   expect(await page.evaluate(() => Reflect.get(window, 'markdownExecuted'))).toBeUndefined()
   expect(outbound).toEqual([])
 })
-
 
 test('renders independently loaded diagram families and safe mathematical labels', async ({ page, ui }) => {
   const errors: string[] = []
@@ -264,7 +690,6 @@ test('renders independently loaded diagram families and safe mathematical labels
   expect(errors).toEqual([])
 })
 
-
 test('keeps diagram directives from enabling scripts or remote image requests', async ({ page, ui }) => {
   const outbound: string[] = []
   await page.route('https://**', async (route) => {
@@ -290,7 +715,6 @@ test('keeps diagram directives from enabling scripts or remote image requests', 
   expect(outbound).toEqual([])
 })
 
-
 test('preserves prose and source copying when the optional diagram download fails', async ({ page, ui }) => {
   await page.route('**/assets/markdown-mermaid-*.js', (route) => route.abort())
   ui.history.get(SESSION_ID)!.at(-1)!.message = 'A quiet idea.\n\n```mermaid\nflowchart LR\n A --> B\n```\n\nThere is still room to create.'
@@ -304,7 +728,6 @@ test('preserves prose and source copying when the optional diagram download fail
   await answer.getByRole('button', { name: 'Copy code', exact: true }).click()
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('A --> B')
 })
-
 
 test('enlarges diagrams from tool inspectors without closing their parent dialog', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
@@ -333,6 +756,31 @@ test('enlarges diagrams from tool inspectors without closing their parent dialog
   await expect(inspector).toHaveCount(0)
 })
 
+test('waits for complete streamed destinations before enabling links or fetching favicons', async ({ page, ui }) => {
+  const requests: string[] = []
+  await page.route('**/api/v1/favicons?**', async (route) => {
+    requests.push(route.request().url())
+    await route.fulfill({ status: 404, body: '' })
+  })
+  await page.goto(SESSION_URL)
+  let sequence = 0
+  const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID, turn_id: 'link-turn',
+    response_id: 'link-answer', created_at: Date.now()
+  }])
+  await emit('turn_status', { status: 'accepted' })
+  await emit('text_stream', { kind: 'answer', generationId: 'link-generation', token: 'Read https://exa' })
+  const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  await expect(answer).toContainText('Read https://exa')
+  await expect(answer.getByRole('link')).toHaveCount(0)
+  expect(requests).toEqual([])
+  await emit('text_stream', { kind: 'answer', generationId: 'link-generation', token: 'mple.com/guide for a little context.' })
+  await expect(answer.getByRole('link')).toHaveAttribute('href', 'https://example.com/guide')
+  await expect.poll(() => requests.length).toBe(1)
+  await emit('text_stream', { kind: 'answer', generationId: 'link-generation', token: ' More to follow.' })
+  await expect(answer).toContainText('More to follow.')
+  expect(requests).toHaveLength(1)
+})
 
 test('bounds large Markdown reveals and code rows while keeping settled selections stable', async ({ page, ui }, testInfo) => {
   await page.goto(SESSION_URL)
@@ -374,7 +822,6 @@ test('bounds large Markdown reveals and code rows while keeping settled selectio
     contentType: 'application/json'
   })
 })
-
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`adds a delayed FYI without reopening the completed turn (${reducedMotion})`, async ({ page, ui }, testInfo) => {
@@ -423,7 +870,6 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
-
 test('keeps brief replies footer-free for saved history and late background events', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.message = 'Hey there. What is on your mind?'
@@ -442,7 +888,6 @@ test('keeps brief replies footer-free for saved history and late background even
   await expect(finalAnswer).toHaveText(answer.message)
   await expect(footer).toHaveCount(0)
 })
-
 
 for (const kind of ['skill', 'experience'] as const) {
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -609,7 +1054,6 @@ for (const kind of ['skill', 'experience'] as const) {
   }
 }
 
-
 for (const withPlan of [false, true]) {
   test(`updates post-answer compaction independently of turn and plan state (plan: ${withPlan})`, async ({ page, ui }, testInfo) => {
     await page.emulateMedia({ reducedMotion: withPlan ? 'reduce' : 'no-preference' })
@@ -675,7 +1119,6 @@ for (const withPlan of [false, true]) {
   })
 }
 
-
 test('updates and restores legacy compaction from its checkbox without inventing duration', async ({ page, ui }) => {
   const label = 'Compacting history...'
   const widget: NonNullable<ConversationRecord['widget']> = { widget: 'PlanWidget', fallbackText: label, componentTree: {
@@ -704,7 +1147,6 @@ test('updates and restores legacy compaction from its checkbox without inventing
   await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
   await expect(page.locator('.leon-message').filter({ has: status }).locator('.final-answer')).toHaveCount(0)
 })
-
 
 test('replaces send with a danger stop action without submitting or losing the draft', async ({ page, ui }) => {
   const stopPath = `/api/v1/sessions/${SESSION_ID}/stop`
@@ -749,7 +1191,6 @@ test('replaces send with a danger stop action without submitting or losing the d
   await expect(send.locator('[data-icon="send-ins"]')).toBeVisible()
   await expect(composer).toHaveValue('Draft for later')
 })
-
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   for (const withPlan of [false, true]) {
@@ -1487,7 +1928,6 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
-
 test('settles hidden and reduced-motion arrivals while preserving selected text', async ({ page, ui }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto(SESSION_URL)
@@ -1545,7 +1985,6 @@ test('settles hidden and reduced-motion arrivals while preserving selected text'
   await emit('text_stream', { kind: 'answer', generationId: 'motion-answer', token: visibleToken })
   await expect.poll(() => characters.allTextContents()).toEqual(Array.from(visibleToken))
 })
-
 
 for (const recordedTimestamps of [true, false]) {
   test(`preserves tool and thinking chronology while streaming and after reload (recorded timestamps: ${recordedTimestamps})`, async ({ page, ui }) => {
@@ -1643,7 +2082,6 @@ for (const recordedTimestamps of [true, false]) {
     await assertOrder(work.locator('.leon-message-activities').first())
   })
 }
-
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   for (const followBottom of [true, false]) {
@@ -1767,7 +2205,6 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     })
   }
 }
-
 
 test('replaces one standalone processing row in place and retains completed request history', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
