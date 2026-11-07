@@ -11,7 +11,7 @@ import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/componen
 import { ActivityDetails } from '@/components/activity-details/activity-details'
 import { getToolOutputFormat, toToolContent, toToolDisplayContent, toToolInput } from '@/utils/tool-content'
 import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
-import { ToolChanges, ToolOutput } from './tool-output'
+import { prefetchToolDiff, ToolChanges, ToolOutput } from './tool-output'
 import { useOpenToolDetails } from '@/components/activity-details/activity-details-provider'
 
 import './tool-call.sass'
@@ -95,7 +95,12 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
           aria-expanded={isExpanded}
           aria-controls={detailsId}
           aria-description={toolCall.status === 'error' ? 'Tool call failed' : undefined}
-          onClick={() => setIsExpanded((isOpen) => !isOpen)}
+          onClick={() => {
+            if (!isExpanded && changesAvailable) {
+              prefetchToolDiff()
+            }
+            setIsExpanded((isOpen) => !isOpen)
+          }}
         >
           <span className="tool-call-label">
             <ActivityWave

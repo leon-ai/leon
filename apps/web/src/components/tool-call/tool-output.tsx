@@ -5,6 +5,7 @@ import { MarkdownContent } from '@/components/markdown-content'
 import { ScrollContainer } from '@/components/scroll-container'
 import { CodeView } from '@/components/code-view'
 import { CODE_PREVIEW_LINES } from '@/components/code-view/code-highlight-types'
+import { prefetchModule } from '@/utils/prefetch'
 import type { ToolChange } from '@/utils/tool-changes'
 import type { ToolContentPart } from '../../../../../server/src/core/session-manager/tool-content-contract'
 
@@ -14,6 +15,13 @@ const ToolDiff = lazy(async () => {
   return { default: module.ToolDiff }
 })
 const MAXIMUM_RENDERED_MARKDOWN_CHARACTERS = 65_536
+
+/**
+ * Starts an optional diff download while a real change disclosure opens.
+ */
+export function prefetchToolDiff(): void {
+  prefetchModule(() => import('./tool-diff'))
+}
 
 class ToolContentBoundary extends Component<{ children: ReactNode, fallback: ReactNode }, { failed: boolean }> {
   public override state = { failed: false }

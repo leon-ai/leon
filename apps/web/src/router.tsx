@@ -9,7 +9,7 @@ import { AppLayout } from '@/layout/app-layout'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { queryClient } from '@/query-client'
 import { PROFILE_AUTH_QUERY_KEY } from '@/data/profile'
-import { prepareConversationForNavigation } from '@/data/conversation-queries'
+import { prefetchConversation, prepareConversationForNavigation } from '@/data/conversation-queries'
 import {
   parseVibesPreviewSearch,
   VIBES_PREVIEW_PATH
@@ -33,11 +33,12 @@ const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/session/$sessionId',
   beforeLoad: ({ params, preload }) => {
-    if (preload) {
-      return
-    }
     const auth = queryClient.getQueryData<{ profile_name: string | null }>(PROFILE_AUTH_QUERY_KEY)
     if (auth?.profile_name) {
+      if (preload) {
+        void prefetchConversation(auth.profile_name, params.sessionId)
+        return
+      }
       prepareConversationForNavigation(auth.profile_name, params.sessionId)
     }
   },
@@ -65,6 +66,7 @@ const routeTree = rootRoute.addChildren([
 
 export const router = createRouter({
   routeTree,
+  defaultPreloadDelay: 100,
   basepath: import.meta.env.BASE_URL
 })
 

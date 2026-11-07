@@ -4,6 +4,7 @@ import { infiniteQueryOptions, useInfiniteQuery, useMutation, type InfiniteData,
 
 import { queryClient } from '@/query-client'
 import { useToast } from '@/components/toast'
+import { canPrefetch, prefetchModule } from '@/utils/prefetch'
 import { requestAPI } from './api'
 import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
 import { applyConversationEvent } from './conversation-events'
@@ -17,6 +18,7 @@ import { queryHistoryKey } from './query-history'
 import { recordSessionCompletion } from './session-read-state'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
+const MAXIMUM_CONCURRENT_CONVERSATION_PREFETCHES = 2
 const MAXIMUM_HISTORY_PAGES = 10
 const METADATA_REFRESH_DELAY_MS = 100
 const DISCLOSURE_REFRESH_DELAY_MS = 600
@@ -89,6 +91,36 @@ export function conversationQueryOptions(profile: string, sessionId: string): Us
     maxPages: MAXIMUM_HISTORY_PAGES,
     refetchOnWindowFocus: false
   })
+}
+
+/**
+ * Fetches only an uncached session's latest page. Hover must never trim an
+ * existing history window, consume unread state, or replace live conversation data.
+ */
+export async function prefetchConversation(profile: string, sessionId: string): Promise<void> {
+  const auth = queryClient.getQueryData<{ profile_name: string | null }>(PROFILE_AUTH_QUERY_KEY)
+  const options = conversationQueryOptions(profile, sessionId)
+  if (!canPrefetch() || !profile || auth?.profile_name !== profile || queryClient.getQueryState(options.queryKey)) {
+    return
+  }
+  const pending = queryClient.getQueryCache().findAll({
+    queryKey: ['conversation'], type: 'inactive', fetchStatus: 'fetching'
+  })
+  if (pending.length >= MAXIMUM_CONCURRENT_CONVERSATION_PREFETCHES) {
+    return
+  }
+  pruneConversationCaches(options.queryKey)
+
+  try {
+    await queryClient.prefetchInfiniteQuery({
+      ...options,
+      pages: 1,
+      retry: false,
+      meta: { ...options.meta, errorToast: false }
+    })
+  } finally {
+    pruneConversationCaches(options.queryKey)
+  }
 }
 
 /**
@@ -188,6 +220,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
       method: 'POST', body: JSON.stringify(input)
     }),
     onMutate: async (input) => {
+      prefetchModule(() => import('@/components/markdown-content'))
       await queryClient.cancelQueries({ queryKey: key, exact: true })
       const current = queryClient.getQueryData<CachedConversation>(key)?.pages[0]
       if (current?.newer_cursor) {
