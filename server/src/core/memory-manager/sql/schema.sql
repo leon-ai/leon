@@ -47,6 +47,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_memory_items_scope_dedupe
   ON memory_items(scope, dedupe_hash)
   WHERE dedupe_hash IS NOT NULL AND is_deleted = 0;
 
+CREATE TABLE IF NOT EXISTS temporary_location_backfill (
+  item_id TEXT PRIMARY KEY REFERENCES memory_items(id) ON DELETE CASCADE,
+  expected_updated_at INTEGER NOT NULL,
+  retry_after INTEGER NOT NULL DEFAULT 0,
+  completed_at INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS memory_chunks (
   id TEXT PRIMARY KEY,
   item_id TEXT NOT NULL,
