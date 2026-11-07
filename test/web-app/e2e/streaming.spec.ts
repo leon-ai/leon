@@ -1488,6 +1488,65 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 }
 
 
+test('settles hidden and reduced-motion arrivals while preserving selected text', async ({ page, ui }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto(SESSION_URL)
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  let sequence = 0
+  const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID,
+    turn_id: 'motion-turn', response_id: 'motion-response', created_at: Date.now()
+  }])
+  const setHidden = (hidden: boolean): Promise<void> => page.evaluate((value) => {
+    // Simulate tab visibility without opening a desktop window or changing OS preferences.
+    if (value) {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    } else {
+      Reflect.deleteProperty(document, 'hidden')
+      Reflect.deleteProperty(document, 'visibilityState')
+    }
+    document.dispatchEvent(new Event('visibilitychange'))
+  }, hidden)
+
+  await emit('turn_status', { status: 'accepted' })
+  await emit('text_stream', { kind: 'answer', generationId: 'motion-answer', token: 'Selected text' })
+  const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  const characters = answer.locator('.streaming-text-character-new')
+  await expect(characters).not.toHaveCount(0)
+  await answer.locator('.streaming-text-characters').evaluate((element) => {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+  })
+  const selectedCharacters = await characters.count()
+  await setHidden(true)
+  await emit('text_stream', { kind: 'answer', generationId: 'motion-answer', token: ' received in background.' })
+  await expect(answer).toContainText('Selected text received in background.')
+  expect(await page.evaluate(() => window.getSelection()!.toString())).toBe('Selected text')
+  await expect(characters).toHaveCount(selectedCharacters)
+
+  await page.evaluate(() => window.getSelection()!.removeAllRanges())
+  await emit('text_stream', { kind: 'answer', generationId: 'motion-answer', token: ' More background text.' })
+  await expect(answer).toContainText('More background text.')
+  await expect(characters).toHaveCount(0)
+  await setHidden(false)
+  await expect(characters).toHaveCount(0)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await emit('text_stream', { kind: 'answer', generationId: 'motion-answer', token: ' Reduced motion.' })
+  await expect(answer).toContainText('Reduced motion.')
+  await expect(characters).toHaveCount(0)
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await expect(characters).toHaveCount(0)
+  // Browser media-query change events settle at the next rendering opportunity.
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  const visibleToken = ' New visible text.'
+  await emit('text_stream', { kind: 'answer', generationId: 'motion-answer', token: visibleToken })
+  await expect.poll(() => characters.allTextContents()).toEqual(Array.from(visibleToken))
+})
+
+
 for (const recordedTimestamps of [true, false]) {
   test(`preserves tool and thinking chronology while streaming and after reload (recorded timestamps: ${recordedTimestamps})`, async ({ page, ui }) => {
     await page.goto(SESSION_URL)

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 
 import { BorderWave, type BorderWaveBounds } from '@/components/border-wave'
+import { useAnimationVisibility } from '@/hooks/use-animation-visibility'
 
 import './session-work-indicator.sass'
 
@@ -9,7 +10,6 @@ const PARTICLE_COUNT = 8
 const STROKE_WIDTH_PX = 1
 const WAVE_SPEED_PX_PER_SECOND = 60
 const WAVE_REPEAT_PAUSE_MS = 0
-const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 /**
  * Highlights a working session with tapered perimeter waves and interior particles.
@@ -17,10 +17,7 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 export function SessionWorkIndicator() {
   const indicatorRef = useRef<HTMLSpanElement>(null)
   const [bounds, setBounds] = useState<BorderWaveBounds | null>(null)
-  const [isAnimating, setIsAnimating] = useState(() =>
-    !document.hidden &&
-    !window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
-  )
+  const isAnimating = useAnimationVisibility()
 
   useEffect(() => {
     const indicator = indicatorRef.current
@@ -30,7 +27,6 @@ export function SessionWorkIndicator() {
     }
 
     const observedIndicator = indicator
-    const motionPreference = window.matchMedia(REDUCED_MOTION_MEDIA_QUERY)
 
     function measure(): void {
       const { width, height } = observedIndicator.getBoundingClientRect()
@@ -52,22 +48,13 @@ export function SessionWorkIndicator() {
       })
     }
 
-    function updateVisibility(): void {
-      setIsAnimating(!document.hidden && !motionPreference.matches)
-    }
-
     const observer = new ResizeObserver(measure)
 
     observer.observe(observedIndicator)
-    document.addEventListener('visibilitychange', updateVisibility)
-    motionPreference.addEventListener('change', updateVisibility)
     measure()
-    updateVisibility()
 
     return () => {
       observer.disconnect()
-      document.removeEventListener('visibilitychange', updateVisibility)
-      motionPreference.removeEventListener('change', updateVisibility)
     }
   }, [])
 

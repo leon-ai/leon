@@ -9,6 +9,7 @@ import {
   type ReactNode
 } from 'react'
 
+import { useAnimationVisibility } from '@/hooks/use-animation-visibility'
 
 import './streaming-text.sass'
 
@@ -121,7 +122,7 @@ export function StreamingText({
   compact = false
 }: StreamingTextProps) {
   const registry = useContext(FeedAnimationContext)
-  const canAnimate = true
+  const canAnimate = useAnimationVisibility()
   const containerRef = useRef<HTMLSpanElement>(null)
   const isHistorical = registry?.historicalIds.some((id) => animationId.startsWith(id)) ?? false
   const stateRef = useRef<StreamingTextState>({
