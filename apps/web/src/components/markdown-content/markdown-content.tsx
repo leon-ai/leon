@@ -17,6 +17,7 @@ import { animateMarkdown } from './animate-markdown'
 import { MarkdownBlockContext } from './markdown-context'
 import MarkdownCode from './markdown-code'
 import { MARKDOWN_REHYPE_PLUGINS, MARKDOWN_REMARK_PLUGINS, scopeMarkdown } from './markdown-plugins'
+import { cacheMarkdownParse, MarkdownCacheKind, readCompletedMarkdown } from './markdown-cache'
 
 import '@fontsource/jetbrains-mono/latin-400.css'
 import './markdown-content.sass'
@@ -47,7 +48,7 @@ interface MarkdownContentProps {
 
 const MarkdownBlock = memo(function MarkdownBlock(props: BlockProps) {
   const block = useMemo(() => ({ index: props.index, content: props.content }), [props.index, props.content])
-  const { animationId, revealWindow, scopeId } = useContext(MarkdownAnimationContext)
+  const { animationId, revealWindow, scopeId, profile, completed, math } = useContext(MarkdownAnimationContext)
   // Large initial/final bursts reveal only their tail. Freeze this starting
   // boundary so a growing block cannot remove characters that are still fading.
   const initialTailStart = props.index < revealWindow.firstBlock
@@ -63,10 +64,14 @@ const MarkdownBlock = memo(function MarkdownBlock(props: BlockProps) {
       [animateMarkdown, { tailStart: tailStart.current.offset }]],
     [animationId, props.rehypePlugins, scopeId]
   )
+  const remarkPlugins = useMemo<NonNullable<BlockProps['remarkPlugins']>>(
+    () => [...(props.remarkPlugins ?? MARKDOWN_REMARK_PLUGINS), [cacheMarkdownParse, { profile, completed, math }]],
+    [props.remarkPlugins, profile, completed, math]
+  )
 
   return (
     <MarkdownBlockContext.Provider value={block}>
-      <Block {...props} rehypePlugins={plugins} />
+      <Block {...props} rehypePlugins={plugins} remarkPlugins={remarkPlugins} />
     </MarkdownBlockContext.Provider>
   )
 })
@@ -157,7 +162,7 @@ export function MarkdownContent({ animationId, text, active = false, startDelay 
     revealWindow: { firstBlock: 0, offset: 0 }
   }), [animationId, startDelay, scopeId, profile, active, math])
   const parseBlocks = useCallback((markdown: string): string[] => {
-    const blocks = parseMarkdownIntoBlocks(markdown)
+    const blocks = readCompletedMarkdown(profile, MarkdownCacheKind.Blocks, markdown, !active, () => parseMarkdownIntoBlocks(markdown))
     let remaining = MAXIMUM_ANIMATED_SOURCE_CHARACTERS
     let firstBlock = blocks.length
     while (firstBlock > 0 && remaining > 0) {

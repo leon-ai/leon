@@ -106,6 +106,69 @@ test('bounds page Markdown previews and virtualizes oversized complete documents
 })
 
 
+test('reuses completed Markdown parses across session remounts without sharing IDs or caching live prefixes', async ({ page, ui }, testInfo) => {
+  // Observe serialized parser snapshots without a production diagnostics API.
+  await page.addInitScript(() => {
+    const parse = JSON.parse
+    const reads = { completed: 0, live: 0 }
+    Reflect.set(window, 'markdownCacheReads', reads)
+    JSON.parse = function (...args: Parameters<typeof parse>): ReturnType<typeof parse> {
+      const value = parse(...args)
+      if (value?.type === 'root' && Array.isArray(value.children)) {
+        if (args[0].includes('Cacheable idea')) {
+          reads.completed++
+        }
+        if (args[0].includes('Live cache probe')) {
+          reads.live++
+        }
+      }
+      return value
+    }
+  })
+  const source = '## Cacheable idea\n\nA **warm** note[^craft] with $x^2$.\n\n[^craft]: Keep creating.'
+  ui.history.get(SESSION_ID)!.at(-1)!.message = source
+  ui.history.get(SESSION_ID)!.at(-3)!.message = source
+  await page.goto(SESSION_URL)
+  const answers = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).filter({ hasText: 'Cacheable idea' })
+  await expect(answers.locator('.katex')).toHaveCount(2)
+  const initialReads = await page.evaluate(() => Reflect.get(window, 'markdownCacheReads').completed as number)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+    await expect(answers).toHaveCount(0)
+    await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+    await expect(answers.locator('.katex')).toHaveCount(2)
+    await expect(answers.locator('strong')).toHaveText(['warm', 'warm'])
+    await expect(answers.locator('.streaming-text-character-new')).toHaveCount(0)
+    for (const answer of await answers.all()) {
+      const href = (await answer.getByRole('link', { name: '1', exact: true }).getAttribute('href'))!
+      expect(await answer.evaluate((element, id) => element.contains(document.getElementById(id)), href.slice(1))).toBe(true)
+    }
+    expect(await answers.evaluateAll((elements) => {
+      const ids = elements.flatMap((element) => Array.from(element.querySelectorAll('[id]'), (node) => node.id))
+      return new Set(ids).size === ids.length
+    })).toBe(true)
+  }
+  const completedReads = await page.evaluate(() => Reflect.get(window, 'markdownCacheReads').completed as number)
+  expect(completedReads).toBeGreaterThan(initialReads)
+  await testInfo.attach('markdown-cache-reuse', {
+    body: JSON.stringify({ initialReads, completedReads, sessionRoundTrips: 3 }), contentType: 'application/json'
+  })
+
+  let sequence = 0
+  const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID,
+    turn_id: 'cache-stream', response_id: 'cache-stream-answer', created_at: Date.now()
+  }])
+  await emit('turn_status', { status: 'accepted' })
+  await emit('text_stream', { kind: 'answer', generationId: 'cache-generation', token: 'Live cache probe **one' })
+  const live = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  await expect(live).toContainText('Live cache probe one')
+  await emit('text_stream', { kind: 'answer', generationId: 'cache-generation', token: '**, then **two**.' })
+  await expect(live.locator('strong')).toHaveText(['one', 'two'])
+  expect(await page.evaluate(() => Reflect.get(window, 'markdownCacheReads').live as number)).toBe(0)
+})
+
+
 test('shares lazy file artwork across languages, themes and session navigation', async ({ page, ui }) => {
   const resources: string[] = []
   page.on('request', (request) => resources.push(request.url()))
