@@ -45,6 +45,14 @@ function updatePart(part, source, animate) {
     }
   }
 
+  if (source.nodeType === Node.ELEMENT_NODE) {
+    // Markdown structure can arrive before its contents. Reconcile descendants
+    // instead of flattening emphasis, lists, and code into plain text.
+    renderStreamedMessage(part.element, source.innerHTML, animate)
+    part.text = source.textContent
+    return
+  }
+
   const text = source.textContent
   if (text.startsWith(part.text)) {
     appendText(part.element, text.slice(part.text.length), animate)

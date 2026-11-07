@@ -116,6 +116,9 @@ importers:
       dayjs:
         specifier: 1.11.20
         version: 1.11.20
+      dompurify:
+        specifier: 3.4.17
+        version: 3.4.17
       dotenv:
         specifier: 16.4.5
         version: 16.4.5
@@ -1558,6 +1561,9 @@ packages:
   '@types/react@19.2.15':
     resolution: { integrity: sha512-eRwcGNHve+E8qtEQSSRl6urh+rFop4v8gm6O8rGv25CodbvFdLjA1vVQ1KkiFE0w0UPOnb8tDiFKL5lp0rtY5Q== }
 
+  '@types/trusted-types@2.0.7':
+    resolution: { integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw== }
+
   '@types/unist@2.0.11':
     resolution: { integrity: sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA== }
 
@@ -2530,6 +2536,9 @@ packages:
   diff@9.0.0:
     resolution: { integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw== }
     engines: { node: '>=0.3.1' }
+
+  dompurify@3.4.17:
+    resolution: { integrity: sha512-B/pSlYVHQ58kqISD/yDjuJ1yfzI34m1gF4lAod2bwSRhiN4K5Cl3H8Af7hqB2PmTL911tdEudnnXn5FnhRoz0w== }
 
   dotenv@16.4.5:
     resolution: { integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg== }
@@ -5762,6 +5771,9 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
+  '@types/trusted-types@2.0.7':
+    optional: true
+
   '@types/unist@2.0.11': {}
 
   '@types/unist@3.0.3': {}
@@ -6918,6 +6930,10 @@ snapshots:
       dequal: 2.0.3
 
   diff@9.0.0: {}
+
+  dompurify@3.4.17:
+    optionalDependencies:
+      '@types/trusted-types': 2.0.7
 
   dotenv@16.4.5: {}
 

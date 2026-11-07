@@ -8,6 +8,7 @@ import renderAuroraComponent from './render-aurora-component'
 import ToolUIHandler from './tool-ui-handler'
 import { expandConversationTimeline } from './conversation-timeline'
 import { renderStreamedMessage } from './streamed-message.js'
+import { formatMarkdown } from './markdown.js'
 
 const WIDGETS_TO_FETCH = []
 const WIDGETS_FETCH_CACHE = new Map()
@@ -566,7 +567,7 @@ export default class Chatbot {
       beforeElement = null
     } = params
     const container = document.createElement('div')
-    const bubble = document.createElement('p')
+    const bubble = document.createElement('div')
 
     if (!this.noBubbleMessage.classList.contains('hide')) {
       this.noBubbleMessage.classList.add('hide')
@@ -582,7 +583,7 @@ export default class Chatbot {
     // Store original string before formatting
     const originalString = string
     const widgetPayload = this.getWidgetPayload(string)
-    const formattedString = widgetPayload ? '' : this.formatMessage(string)
+    const formattedString = widgetPayload ? '' : this.formatMessage(string, who === 'leon')
     const autoPlanInsertionPoint = this.getPlanWidgetInsertionPoint(widgetPayload)
     const resolvedBeforeElement = beforeElement || autoPlanInsertionPoint
 
@@ -825,17 +826,21 @@ export default class Chatbot {
     this.scrollDown()
   }
 
-  formatMessage(message) {
+  formatMessage(message, markdown = true) {
     const isWidget = this.getWidgetPayload(message)
 
     if (typeof message === 'string' && !isWidget) {
-      message = escapeHTML(message)
-      message = message.replace(/\n/g, '<br />')
+      if (markdown) {
+        message = formatMarkdown(message)
+      } else {
+        message = escapeHTML(message)
+        message = message.replace(/\n/g, '<br />')
 
-      // Handle HTTP/HTTPS URLs with simple regex
-      message = message.replace(/https?:\/\/[^\s<>"{}|\\^`[\]]+/gi, (match) => {
-        return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="clickable-url" title="Open URL in browser">${match}</a>`
-      })
+        // Handle HTTP/HTTPS URLs with simple regex
+        message = message.replace(/https?:\/\/[^\s<>"{}|\\^`[\]]+/gi, (match) => {
+          return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="clickable-url" title="Open URL in browser">${match}</a>`
+        })
+      }
 
       // Handle file paths with delimiters for exact matching
       message = message.replace(

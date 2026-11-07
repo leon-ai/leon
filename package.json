@@ -116,6 +116,7 @@
     "consola": "3.4.2",
     "cross-env": "7.0.3",
     "dayjs": "1.11.20",
+    "dompurify": "3.4.17",
     "dotenv": "16.4.5",
     "execa": "10.2.0",
     "fastify": "5.12.7",
