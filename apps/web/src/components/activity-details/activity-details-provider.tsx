@@ -94,7 +94,6 @@ export function ActivityDetailsProvider({ entries, sessionId, children }: {
       {selection?.kind === ActivityDetailsKind.Text && (
         <ActivityDetailsDialog open={isOpen} title={selection.title} path={selection.path}
           content={selection.content} contentName={selection.contentName} downloadFilename={selection.path.split('/').at(-1)!}
-          toolbar={<span className="activity-details-title">{selection.path.split('/').at(-1)}</span>}
           onClose={() => setIsOpen(false)} onAfterClose={handleAfterClose}>
           <div className="activity-details-reading-pane">
             <CodeView text={selection.content} language={selection.language} label={selection.contentName} />

@@ -45,6 +45,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await outcome.getByRole('button', { name: 'Saved 2 memories in 32ms', exact: true }).click()
     await outcome.getByRole('button', { name: 'View details', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Saved 2 memories', exact: true })
+    await expect(dialog.getByText('memory.json', { exact: true })).toHaveCount(1)
     await expect(dialog).toContainText('Caldera contact is Nora.')
     await expect(dialog).toContainText('Borealis invoices are paid every Friday.')
     await expect(dialog).toContainText('session:owner:turn:one')
@@ -57,6 +58,19 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await expect(dialog).toHaveCount(0)
       await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
       await outcome.getByRole('button', { name: 'View details', exact: true }).click()
+      await expect(dialog.getByText('memory.json', { exact: true })).toHaveCount(1)
+      const layout = await dialog.locator('.activity-details-toolbar-document').evaluate((element) => {
+        const path = element.querySelector('.activity-details-path')!.getBoundingClientRect()
+        const copy = element.querySelector('button')!.getBoundingClientRect()
+        const toolbar = element.getBoundingClientRect()
+
+        return {
+          centerOffset: Math.abs(path.y + path.height / 2 - copy.y - copy.height / 2),
+          rightOffset: Math.abs(toolbar.right - Number.parseFloat(getComputedStyle(element).paddingRight) - copy.right)
+        }
+      })
+      expect(layout.centerOffset).toBeLessThanOrEqual(1)
+      expect(layout.rightOffset).toBeLessThanOrEqual(1)
       await copy.click()
       const copied = dialog.getByRole('button', { name: 'Copied', exact: true })
       await expect(copied).toBeEnabled()
@@ -252,6 +266,14 @@ for (const durationMs of [0, 0.125]) {
     await tools.getByRole('button', { name: 'Used 1 tool for 12ms', exact: true }).click()
     await expect(tools.getByRole('button', { name: /Read current temporary context/ })).toBeVisible()
     await expect(tools.locator('[data-icon="brain-2"]')).toBeVisible()
+    await reply.getByRole('button', { name: 'Loaded temporary context in <1ms', exact: true }).click()
+    await reply.getByRole('region', { name: 'Leon’s activity', exact: true })
+      .getByRole('button', { name: 'View details', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Loaded temporary context', exact: true })
+    await expect(dialog.getByText('memory.json', { exact: true })).toHaveCount(1)
+    await expect(dialog.locator('.activity-details-toolbar-document .activity-details-path')).toHaveText('memory.json')
+    await expect(dialog.getByRole('button', { name: 'Copy memory', exact: true })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Download memory', exact: true })).toBeVisible()
   })
 
 }
