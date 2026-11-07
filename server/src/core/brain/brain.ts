@@ -289,6 +289,12 @@ export default class Brain {
         }
 
         if (HAS_TTS) {
+          if (responseRoute !== 'controlled') {
+            // Rich visual answers must not make speech read formatting aloud.
+            const { markdownToText } = await import('@/helpers/markdown-helper')
+            speechAnswer = markdownToText(speechAnswer)
+          }
+
           // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
           const speech = speechAnswer.replace(/<(?:.|\n)*?>/gm, ' ')
 
