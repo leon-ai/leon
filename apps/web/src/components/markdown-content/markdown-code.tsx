@@ -7,6 +7,7 @@ import { Button } from '@/components/button'
 import { Icon } from '@/components/icon'
 import { Tooltip } from '@/components/tooltip'
 import { CODE_THEME_STYLE } from '@/components/code-view/code-theme'
+import { LanguageIcon } from './language-icon'
 
 const Mermaid = lazy(() => import('./markdown-mermaid').catch(() => ({
   // Optional visualization downloads must never replace the answer with an error page.
@@ -44,7 +45,7 @@ export default function MarkdownCode({ text, language }: MarkdownCodeProps) {
   return (
     <div className="markdown-code" style={CODE_THEME_STYLE}>
       <div className="markdown-code-header">
-        <span>{language}</span>
+        <LanguageIcon language={language} />
         <div className="markdown-code-actions">
           {diagram && <Tooltip message={toggleLabel} position="top" blurOnClick={false}>
             <Button size="sm" ariaLabel={toggleLabel}

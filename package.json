@@ -100,6 +100,7 @@
     "@openrouter/ai-sdk-provider": "3.1.0",
     "@pierre/diffs": "1.6.2",
     "@pierre/highlights": "0.3.0",
+    "@pierre/trees": "1.0.0-beta.6",
     "@segment/ajv-human-errors": "2.16.0",
     "@sinclair/typebox": "0.31.23",
     "@streamdown/math": "1.0.3",

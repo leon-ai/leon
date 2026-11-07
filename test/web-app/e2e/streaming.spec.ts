@@ -106,6 +106,48 @@ test('bounds page Markdown previews and virtualizes oversized complete documents
 })
 
 
+test('shares lazy file artwork across languages, themes and session navigation', async ({ page, ui }) => {
+  const resources: string[] = []
+  page.on('request', (request) => resources.push(request.url()))
+  const languages = [
+    ['js', 'JavaScript', 'javascript'], ['typescript', 'TypeScript', 'typescript'],
+    ['tsx', 'TSX', 'react'], ['python', 'Python', 'python'],
+    ['json', 'JSON', 'json'], ['yaml', 'YAML', 'yml'],
+    ['rust', 'Rust', 'rust'], ['dockerfile', 'Dockerfile', 'docker']
+  ] as const
+  ui.history.get(SESSION_ID)!.at(-1)!.message = languages.map(([language]) =>
+    `\`\`\`${language}\nA little code.\n\`\`\``).join('\n\n') + '\n\n```unknown-language\nSome text.\n```'
+  await page.goto('./')
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+  expect(resources.some((url) => url.includes('pierre-file-icon-'))).toBe(false)
+  await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+  const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  for (const [, label, token] of languages) {
+    const icon = answer.getByRole('img', { name: label, exact: true })
+    await expect(icon).toHaveAttribute('data-file-icon', token)
+    expect(await icon.locator('use').getAttribute('href')).toBe(`#file-tree-builtin-${token}`)
+    expect(await icon.evaluate((element) => (element as SVGSVGElement).getBBox().width)).toBeGreaterThan(0)
+  }
+  await expect(answer.locator('.markdown-language-icon').last()).toHaveText('unknown-language')
+  expect(resources.filter((url) => /pierre-file-icon-.*\.js$/.test(url))).toHaveLength(1)
+  const python = answer.getByRole('img', { name: 'Python', exact: true })
+  const colors: string[] = []
+  for (const theme of ['light', 'dark']) {
+    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
+    colors.push(await python.evaluate((element) => getComputedStyle(element).color))
+  }
+  expect(colors[0]).not.toBe(colors[1])
+  await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+  await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+  await expect(answer.getByRole('img', { name: 'Python', exact: true })).toHaveAttribute('data-file-icon', 'python')
+  await expect(page.locator('#leon-pierre-file-icons')).toHaveCount(1)
+  const ids = await page.locator('#leon-pierre-file-icons symbol').evaluateAll((elements) => elements.map((element) => element.id))
+  expect(new Set(ids).size).toBe(ids.length)
+})
+
+
 test('does not execute Markdown HTML, unsafe links, or remote images', async ({ page, ui }) => {
   const outbound: string[] = []
   await page.route('https://**', async (route) => {
