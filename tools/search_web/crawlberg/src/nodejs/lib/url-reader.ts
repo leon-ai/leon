@@ -7,6 +7,8 @@ const MAX_CACHE_ENTRIES = 16
 const CACHE_LIFETIME_MS = 5 * 60_000
 const FETCH_TIMEOUT_MS = 45_000
 const MAX_BODY_BYTES = 50 * 1_024 * 1_024
+// Identify automated reads without owner identifiers or changes to source URLs.
+const USER_AGENT = 'LeonAI (+https://getleon.ai)'
 const BROWSER_FALLBACK_KINDS: ThrownCrawlError['kind'][] = [
   'WafBlocked', 'Unauthorized', 'Forbidden', 'ConversionFailed'
 ]
@@ -156,6 +158,7 @@ export class UrlReader {
 
     const { createEngine, scrape, BrowserMode, DocumentContentEncoding } = await import('@xberg-io/crawlberg')
     const engine = createEngine({
+      userAgent: USER_AGENT,
       maxPages: 1,
       maxDepth: 0,
       requestTimeout: FETCH_TIMEOUT_MS,
