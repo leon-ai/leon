@@ -1,4 +1,5 @@
 import type { Artifact } from '../../../../../server/src/core/artifacts/artifact-types'
+import { VisualPreview } from '@/components/visual-preview/visual-preview'
 
 /**
  * Displays the same portable artifact contract consumed by external clients.
@@ -30,12 +31,13 @@ export function ArtifactAttachments({ artifacts }: { artifacts: Artifact[] }) {
         return (
           <figure key={artifact.id}>
             {image && (
+              <VisualPreview title={artifact.filename}>
               <img
                 src={artifact.url}
                 alt={artifact.filename}
                 loading="lazy"
-                style={{ maxWidth: '100%', maxHeight: 480 }}
               />
+              </VisualPreview>
             )}
             {video && (
               <video

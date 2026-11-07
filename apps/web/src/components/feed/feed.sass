@@ -11,6 +11,11 @@
   font-size: var(--font-size-lg)
   line-height: var(--line-height-lg)
 
+  // Reading panes hand scrolling back to the feed at either edge. Portaled
+  // dialogs and dropdowns keep their own scroll containment.
+  .scroll-container-viewport
+    overscroll-behavior-y: auto
+
 .feed-with-history
   --feed-history-clearance: calc(var(--space-xl) + var(--space-lg) * 2)
 

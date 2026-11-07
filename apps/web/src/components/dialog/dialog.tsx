@@ -84,6 +84,12 @@ export function Dialog({
     })
 
     function handleKeyDown(event: KeyboardEvent): void {
+      // Nested viewers must not close or move focus in the dialog behind them.
+      const overlays = document.querySelectorAll('.dialog-overlay-open')
+      if (overlays.item(overlays.length - 1) !== overlayRef.current) {
+        return
+      }
+
       if (event.key === 'Escape') {
         onClose()
       } else if (event.key === 'Tab') {

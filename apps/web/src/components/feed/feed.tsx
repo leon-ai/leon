@@ -19,6 +19,7 @@ import { OwnerMessage } from '@/components/owner-message'
 import { FeedAnimationProvider } from '@/components/streaming-text'
 import { ConversationDetailsProvider } from '@/data/conversation-details'
 import { ActivityDetailsProvider } from '@/components/activity-details/activity-details-provider'
+import { VisualPreviewProvider } from '@/components/visual-preview/visual-preview'
 import { Button } from '@/components/button'
 import { Loader } from '@/components/loader'
 import { createFastScrollDriver } from './fast-scroll'
@@ -468,80 +469,82 @@ export function Feed({
 
   return (
     <FeedAnimationProvider live={Boolean(sessionId)} {...(historicalIds ? { historicalIds } : {})}>
-      <ActivityDetailsProvider entries={entries} sessionId={sessionId}>
-        <section ref={feedRef} className={clsx('feed', {
-          'feed-with-history': history?.canLoad || requestedHistoryRef.current
-        })} aria-label="Session messages" onClickCapture={handleDisclosureClick}>
-          <div
-            ref={scrimRef}
-            className="feed-scrim"
-            hidden={entries.length === 0}
-            aria-hidden="true"
-          />
-          {(history?.canLoad || requestedHistoryRef.current) && (
-            <div className="feed-history">
-              {history?.isLoading ? <Loader size="sm" label="Loading earlier messages…" /> : history?.isError ? (
-                <>
-                  <span>I couldn’t load earlier messages.</span>
-                  <Button size="sm" ariaLabel="Retry loading earlier messages" onClick={history.onRetry}>Retry</Button>
-                </>
-              ) : null}
+      <VisualPreviewProvider key={sessionId}>
+        <ActivityDetailsProvider entries={entries} sessionId={sessionId}>
+          <section ref={feedRef} className={clsx('feed', {
+            'feed-with-history': history?.canLoad || requestedHistoryRef.current
+          })} aria-label="Session messages" onClickCapture={handleDisclosureClick}>
+            <div
+              ref={scrimRef}
+              className="feed-scrim"
+              hidden={entries.length === 0}
+              aria-hidden="true"
+            />
+            {(history?.canLoad || requestedHistoryRef.current) && (
+              <div className="feed-history">
+                {history?.isLoading ? <Loader size="sm" label="Loading earlier messages…" /> : history?.isError ? (
+                  <>
+                    <span>I couldn’t load earlier messages.</span>
+                    <Button size="sm" ariaLabel="Retry loading earlier messages" onClick={history.onRetry}>Retry</Button>
+                  </>
+                ) : null}
+              </div>
+            )}
+            <div
+              className="feed-virtual-content"
+              style={{ height: `${totalSize}px` }}
+            >
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const turn = turns[virtualItem.index]
+
+                if (turn === undefined) {
+                  return null
+                }
+
+                const isLatestTurn = virtualItem.index === turnCount - 1
+
+                return (
+                  <div
+                    key={turn.id}
+                    ref={virtualizer.measureElement}
+                    className={clsx('feed-turn', {
+                      'feed-turn-latest': isLatestTurn
+                    })}
+                    data-index={virtualItem.index}
+                    style={{ transform: `translateY(${virtualItem.start}px)` }}
+                  >
+                    {turn.entries.map((entry) => (
+                      <div key={entry.id} className="feed-entry">
+                        <Message role={entry.role}>
+                          {entry.role === 'owner' ? (
+                            <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}>
+                              {entry.content}
+                            </OwnerMessage>
+                          ) : (
+                            <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id}>
+                              <LeonMessage entry={entry} />
+                            </ConversationDetailsProvider>
+                          )}
+                        </Message>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
             </div>
-          )}
-          <div
-            className="feed-virtual-content"
-            style={{ height: `${totalSize}px` }}
-          >
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const turn = turns[virtualItem.index]
-
-              if (turn === undefined) {
-                return null
-              }
-
-              const isLatestTurn = virtualItem.index === turnCount - 1
-
-              return (
-                <div
-                  key={turn.id}
-                  ref={virtualizer.measureElement}
-                  className={clsx('feed-turn', {
-                    'feed-turn-latest': isLatestTurn
-                  })}
-                  data-index={virtualItem.index}
-                  style={{ transform: `translateY(${virtualItem.start}px)` }}
-                >
-                  {turn.entries.map((entry) => (
-                    <div key={entry.id} className="feed-entry">
-                      <Message role={entry.role}>
-                        {entry.role === 'owner' ? (
-                          <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}>
-                            {entry.content}
-                          </OwnerMessage>
-                        ) : (
-                          <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id}>
-                            <LeonMessage entry={entry} />
-                          </ConversationDetailsProvider>
-                        )}
-                      </Message>
-                    </div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-          <div
-            ref={topMaskRef}
-            className="feed-mask feed-mask-top"
-            aria-hidden="true"
-          />
-          <div
-            ref={bottomMaskRef}
-            className="feed-mask feed-mask-bottom"
-            aria-hidden="true"
-          />
-        </section>
-      </ActivityDetailsProvider>
+            <div
+              ref={topMaskRef}
+              className="feed-mask feed-mask-top"
+              aria-hidden="true"
+            />
+            <div
+              ref={bottomMaskRef}
+              className="feed-mask feed-mask-bottom"
+              aria-hidden="true"
+            />
+          </section>
+        </ActivityDetailsProvider>
+      </VisualPreviewProvider>
     </FeedAnimationProvider>
   )
 }
