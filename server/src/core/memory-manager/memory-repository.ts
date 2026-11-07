@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 
 import SQLite from 'better-sqlite3'
-import { normalizeTemporaryLocation, TEMPORARY_LOCATION_QUERY } from '@@/bridges/runtime/nodejs/temporary-memory'
+import { normalizeTemporaryLocation, TEMPORARY_LOCATION_QUERY, type TemporaryLocation } from '@@/bridges/runtime/nodejs/temporary-memory'
 import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
 import type {
   Database as SQLiteDatabase,
@@ -153,6 +153,98 @@ export default class MemoryRepository {
     const row = this.temporaryLocationQuery.get(Date.now())
 
     return row ? mapMemoryRow(row) : null
+  }
+
+  /**
+   * Report eligible queued work without loading facts or initializing a model.
+   */
+  public hasTemporaryLocationBackfill(now = Date.now()): boolean {
+    return Boolean(this.ensureDb().prepare(`SELECT 1 FROM temporary_location_backfill
+      WHERE completed_at IS NULL AND retry_after <= ?
+        AND NOT EXISTS (SELECT 1 FROM temporary_location_backfill AS busy
+          WHERE busy.completed_at IS NULL AND busy.retry_after > ?)
+      LIMIT 1`).get(now, now))
+  }
+
+  /**
+   * Lease a newest-first batch across processes, retiring stale queue entries.
+   */
+  public claimTemporaryLocationBackfill(limit: number, retryDelayMs: number): MemoryRecord[] {
+    const db = this.ensureDb()
+    const now = Date.now()
+
+    return db.transaction(() => {
+      db.prepare(`UPDATE temporary_location_backfill SET completed_at = ?
+        WHERE completed_at IS NULL AND NOT EXISTS (
+          SELECT 1 FROM active_memory_items AS item
+          WHERE item.id = item_id AND item.scope = 'temporary'
+            AND item.updated_at = expected_updated_at AND item.expires_at > ?
+            AND CASE WHEN json_valid(item.metadata_json) THEN
+              coalesce(json_type(item.metadata_json, '$.currentLocation'), 'null') = 'null'
+            ELSE 0 END
+        )`).run(now, now)
+      if (db.prepare(`SELECT 1 FROM temporary_location_backfill
+        WHERE completed_at IS NULL AND retry_after > ? LIMIT 1`).get(now)) {
+        return []
+      }
+
+      const rows = db.prepare(`SELECT item.* FROM active_memory_items AS item
+        JOIN temporary_location_backfill AS job ON job.item_id = item.id
+        WHERE job.completed_at IS NULL AND job.retry_after <= ?
+        ORDER BY item.updated_at DESC, item.id DESC LIMIT ?`).all(now, limit)
+      const lease = db.prepare('UPDATE temporary_location_backfill SET retry_after = ? WHERE item_id = ?')
+      for (const row of rows) {
+        lease.run(now + retryDelayMs, row['id'])
+      }
+      return rows.map(mapMemoryRow)
+    }).immediate()
+  }
+
+  /**
+   * Enrich unchanged evidence only. A selected home/ended state blocks older
+   * queued stays without rewriting facts, timestamps, expiry or supersession.
+   */
+  public completeTemporaryLocationBackfill(
+    records: MemoryRecord[],
+    selected: MemoryRecord | null,
+    location: TemporaryLocation | null
+  ): boolean {
+    const db = this.ensureDb()
+    const now = Date.now()
+
+    return db.transaction(() => {
+      let applied = false
+      if (selected) {
+        const current = this.getActiveMemoryItem(selected.id)
+        const known = this.getTemporaryLocationItem()
+        const unchanged = current && current.updatedAt === selected.updatedAt &&
+          current.content === selected.content && current.expiresAt === selected.expiresAt &&
+          current.sourceRef === selected.sourceRef &&
+          JSON.stringify(current.metadata) === JSON.stringify(selected.metadata)
+        const evidenceAt = Number(selected.metadata['evidenceAt'] ?? selected.updatedAt)
+        // Native structured state wins over compatibility work, whose original
+        // owner-message timestamp may not be available in older records.
+        const hasKnownLocation = known && known.id !== selected.id
+        if (unchanged && !hasKnownLocation) {
+          if (location) {
+            db.prepare('UPDATE memory_items SET metadata_json = ? WHERE id = ?').run(JSON.stringify({
+              ...selected.metadata, currentLocation: location, evidenceAt
+            }), selected.id)
+          }
+          applied = true
+        }
+        // Do not derive a new current location from older evidence after a more
+        // recent location (including a return home) has already been resolved.
+        db.prepare(`UPDATE temporary_location_backfill SET completed_at = ?
+          WHERE completed_at IS NULL AND expected_updated_at <= ?`).run(now, selected.updatedAt)
+      }
+      const finish = db.prepare(`UPDATE temporary_location_backfill SET completed_at = ?
+        WHERE item_id = ? AND expected_updated_at = ?`)
+      for (const record of records) {
+        finish.run(now, record.id, record.updatedAt)
+      }
+      return applied
+    }).immediate()
   }
 
   private ensureDb(): SQLiteDatabase {
