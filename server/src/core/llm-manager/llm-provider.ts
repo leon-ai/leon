@@ -82,6 +82,15 @@ export default class LLMProvider {
     return provider.modelName || 'unknown'
   }
 
+  /**
+   * Resolves native admission for the active session before preparing its context.
+   */
+  public async getAgentNativeContextWindowTokens(): Promise<number | undefined> {
+    const provider = await this.resolveProviderForDuty(LLMDuties.ReAct)
+
+    return provider?.nativeContextWindowTokens
+  }
+
   public get workflowLLMName(): string {
     const provider = this.getProviderForDuty(null)
     if (!provider) {

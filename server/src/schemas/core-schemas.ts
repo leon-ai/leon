@@ -93,7 +93,11 @@ export const configSchemaObject = strictObject({
     agent: optionalString,
     model_settings: Type.Record(Type.String({ minLength: 1 }), llmModelSetting),
     providers: strictObject({
-      llamacpp: llmProviderWithBaseURL,
+      llamacpp: strictObject({
+        ...llmProviderWithBaseURL.properties,
+        context_size: Type.Optional(Type.Integer({ minimum: 1 })),
+        memory_reserve_mib: Type.Optional(Type.Integer({ minimum: 1 }))
+      }),
       sglang: llmProviderWithBaseURL,
       openrouter: llmProvider,
       zai: llmProvider,

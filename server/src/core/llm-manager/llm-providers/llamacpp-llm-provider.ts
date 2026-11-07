@@ -14,10 +14,9 @@ import type {
   CompletionParams,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
-import { CODEBASE_PATH, LLAMACPP_SOURCE_MANIFEST_PATH, LLAMACPP_SOURCE_PATH, LLAMACPP_BUILD_MANIFEST_PATH, LLAMACPP_BUILD_PATH, LLAMACPP_ROOT_MANIFEST_PATH, LLAMACPP_PATH, LLAMACPP_SOURCE_BUILD_PATH  } from '@/constants'
+import { CODEBASE_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
-import { SystemHelper } from '@/helpers/system-helper'
-import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
+import { getLlamaCPPServerBinaryPath, getLlamaCPPModelArguments, resolveLlamaCPPContextPlan } from './llamacpp-context'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -104,72 +103,6 @@ async function isPortAvailable(host: string, port: number): Promise<boolean> {
   })
 }
 
-function readLlamaCPPManifest(): Record<string, unknown> | null {
-  const manifestEntries = [
-    {
-      manifestPath: LLAMACPP_SOURCE_MANIFEST_PATH,
-      runtimeBasePath: LLAMACPP_SOURCE_PATH
-    },
-    {
-      manifestPath: LLAMACPP_BUILD_MANIFEST_PATH,
-      runtimeBasePath: LLAMACPP_BUILD_PATH
-    },
-    {
-      manifestPath: LLAMACPP_ROOT_MANIFEST_PATH,
-      runtimeBasePath: LLAMACPP_PATH
-    }
-  ]
-
-  for (const manifestEntry of manifestEntries) {
-    if (!fs.existsSync(manifestEntry.manifestPath)) {
-      continue
-    }
-
-    try {
-      const manifest = JSON.parse(
-        fs.readFileSync(manifestEntry.manifestPath, 'utf8')
-      )
-
-      return {
-        ...manifest,
-        runtimeDirectoryPath:
-          typeof manifest.runtimePath === 'string' && manifest.runtimePath
-            ? path.join(manifestEntry.runtimeBasePath, manifest.runtimePath)
-            : null
-      }
-    } catch {
-      return null
-    }
-  }
-
-  return null
-}
-
-function getLlamaServerBinaryDirectoryPath(): string {
-  const binaryName = SystemHelper.isWindows() ? 'llama-server.exe' : 'llama-server'
-  const manifest = readLlamaCPPManifest()
-
-  if (
-    typeof manifest?.['runtimeDirectoryPath'] === 'string' &&
-    manifest['runtimeDirectoryPath']
-  ) {
-    return manifest['runtimeDirectoryPath']
-  }
-
-  if (fs.existsSync(path.join(LLAMACPP_SOURCE_BUILD_PATH, binaryName))) {
-    return LLAMACPP_SOURCE_BUILD_PATH
-  }
-
-  return LLAMACPP_BUILD_PATH
-}
-
-function getLlamaServerBinaryPath(): string {
-  return path.join(
-    getLlamaServerBinaryDirectoryPath(),
-    SystemHelper.isWindows() ? 'llama-server.exe' : 'llama-server'
-  )
-}
-
 function resolveModelPath(modelPath: string): string {
   const normalizedModelPath = modelPath.trim()
 
@@ -220,9 +153,12 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   private static isUsingExternalServer = false
   private static serverReadyPromise: Promise<void> | null = null
   private static instanceCount = 0
+  private static contextWindowTokens: number | undefined
 
   private readonly modelPath: string
   private readonly configuredBaseURL: string
+  private readonly contextSize: number | undefined
+  private readonly memoryReserveMiB: number | undefined
 
   constructor(target: ResolvedLLMTarget) {
     const baseURL = CONFIG_MANAGER.getProviderBaseURL('llamacpp') || DEFAULT_LLAMACPP_BASE_URL
@@ -256,11 +192,23 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
     this.modelPath = resolveModelPath(this.model)
     this.configuredBaseURL = baseURL
+    this.contextSize = CONFIG_MANAGER.getConfig().llm.providers?.llamacpp?.context_size
+    this.memoryReserveMiB = CONFIG_MANAGER.getConfig().llm.providers?.llamacpp?.memory_reserve_mib
     LlamaCPPLLMProvider.instanceCount += 1
   }
 
   public override get modelName(): string {
     return this.modelPath
+  }
+
+  /**
+   * Exposes only capacity verified together with native request token counting.
+   */
+  public get nativeContextWindowTokens(): number | undefined {
+    return LlamaCPPLLMProvider.activeModelPath === this.modelPath &&
+      LlamaCPPLLMProvider.configuredBaseURL === this.configuredBaseURL
+      ? LlamaCPPLLMProvider.contextWindowTokens
+      : undefined
   }
 
   public async boot(): Promise<void> {
@@ -742,7 +690,9 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
     const startupPromise = LlamaCPPLLMProvider.startSharedServer(
       this.modelPath,
-      this.configuredBaseURL
+      this.configuredBaseURL,
+      this.contextSize,
+      this.memoryReserveMiB
     )
     LlamaCPPLLMProvider.serverReadyPromise = startupPromise
 
@@ -758,8 +708,11 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
   private static async startSharedServer(
     modelPath: string,
-    baseURL: string
+    baseURL: string,
+    contextSize: number | undefined,
+    memoryReserveMiB: number | undefined
   ): Promise<void> {
+    this.contextWindowTokens = undefined
     this.configuredBaseURL = baseURL
     const existingServerProbe = await this.probeServerReady(
       baseURL,
@@ -784,7 +737,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       return
     }
 
-    const binaryPath = getLlamaServerBinaryPath()
+    const binaryPath = getLlamaCPPServerBinaryPath()
 
     if (!fs.existsSync(binaryPath)) {
       throw new Error(
@@ -804,10 +757,19 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     this.writeServerLogLine(
       `Starting llama-server with model "${modelPath}".`
     )
-    const modelArguments = ['--model', modelPath, '--flash-attn', 'on',
-      '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0']
-    const contextArguments = ['--ctx-size', String(LOCAL_LLM_CONTEXT_WINDOW_TOKENS)]
+    const modelArguments = getLlamaCPPModelArguments(modelPath)
+    const contextPlan = contextSize === undefined
+      ? await resolveLlamaCPPContextPlan(binaryPath, modelArguments, memoryReserveMiB)
+      : undefined
+    const contextArguments = contextPlan?.arguments ?? ['--ctx-size', String(contextSize)]
+    if (contextPlan) {
+      const message = `Automatic llama.cpp context | tokens=${contextPlan.contextTokens} | estimated_mib=${contextPlan.estimatedMiB} | host_budget_mib=${contextPlan.hostBudgetMiB} | cache_mib=${contextPlan.cacheMiB}`
+      LogHelper.info(message)
+      this.writeServerLogLine(message)
+    }
 
+    // Check the port after memory inspection so fitting does not widen the
+    // interval between checking availability and starting the native listener.
     const runtimeBaseURL = await this.resolveRuntimeBaseURL(baseURL)
     const runtimeServerURL = new URL(runtimeBaseURL)
     const serverProcess = spawn(
@@ -844,7 +806,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       this.serverProcess = null
       this.activeModelPath = null
       this.serverReady = false
-        this.isUsingExternalServer = false
+      this.contextWindowTokens = undefined
+      this.isUsingExternalServer = false
       this.serverReadyPromise = null
 
       LogHelper.title('llama.cpp LLM Provider')
@@ -869,6 +832,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     try {
       await this.waitForServerReady(serverProcess)
       this.serverReady = true
+      this.writeServerLogLine(`Allocated context capacity: ${this.contextWindowTokens ?? 'unverified'} tokens.`)
 
       LogHelper.title('llama.cpp LLM Provider')
       LogHelper.success('llama-server is ready')
@@ -947,6 +911,24 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
           return { ready: false, errorMessage: 'The running llama.cpp server has a different model.' }
         }
 
+        const capacity: unknown = props.default_generation_settings?.n_ctx
+        this.contextWindowTokens = undefined
+        if (typeof capacity === 'number' && Number.isSafeInteger(capacity) && capacity > 0) {
+          // Independently hosted servers may predate the counting endpoint.
+          // Only bypass estimates after verifying the complete native contract.
+          try {
+            const { data } = await axios.post(`${toChatCompletionsURL(baseURL)}/input_tokens`, {
+              model: modelPath,
+              messages: [{ role: 'user', content: '' }]
+            }, { timeout: LLAMACPP_METADATA_TIMEOUT_MS, headers })
+            this.contextWindowTokens = typeof data?.input_tokens === 'number' &&
+              Number.isSafeInteger(data.input_tokens) && data.input_tokens >= 0
+              ? capacity
+              : undefined
+          } catch {
+            this.contextWindowTokens = undefined
+          }
+        }
       }
 
       return {
@@ -970,6 +952,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     this.serverReady = false
     this.isUsingExternalServer = false
     this.serverReadyPromise = null
+    this.contextWindowTokens = undefined
 
     if (!serverProcess?.pid) {
       this.closeServerLogStream()

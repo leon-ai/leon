@@ -73,6 +73,7 @@ export interface PromptAbortError extends Error {
  */
 export interface Provider {
   modelName?: string
+  nativeContextWindowTokens?: number | undefined
   transport?: CompletionAttemptTiming['transport']
   compactionBinding?: string
   runChatCompletion: (
