@@ -34,6 +34,7 @@ const LLAMA_SERVER_LOG_RESET_INTERVAL_MS = 12 * 60 * 60 * 1_000
 const LLAMACPP_MAX_PORT_CHECKS = 10
 const LLAMACPP_METADATA_TIMEOUT_MS = 5_000
 const LLAMACPP_CONTEXT_RESERVE_TOKENS = 64
+const LLAMACPP_SPECULATION_TYPE = 'ngram-map-k'
 const LLAMA_SERVER_LOG_FILENAME = 'llama-server.log'
 const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
   enable_thinking: false
@@ -879,7 +880,10 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         ...contextArguments,
         '--jinja',
         '--parallel',
-        '1'
+        '1',
+        // Reuse token patterns without loading a separate draft model.
+        '--spec-type',
+        LLAMACPP_SPECULATION_TYPE
       ],
       {
         cwd: process.cwd(),
