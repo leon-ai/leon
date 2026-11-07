@@ -4,7 +4,7 @@ import { ActivityDetailsDialog } from '@/components/activity-details/activity-de
 import { Button } from '@/components/button'
 import { useToolCallContents } from '@/data/conversation-details'
 import type { FeedToolCall } from '@/data/feed'
-import { toToolContent, toToolInput } from '@/utils/tool-content'
+import { getToolOutputFormat, toToolContent, toToolDisplayContent, toToolInput } from '@/utils/tool-content'
 import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
 import { ToolChanges, ToolOutput } from './tool-output'
 import { getListNavigationIndex } from '@/utils/list-navigation'
@@ -32,11 +32,13 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
   const [selectedTab, setSelectedTab] = useState<ToolDetailsTab | null>(null)
   const liveInput = useMemo(() => toToolInput(toolCall.input === null ? undefined : toolCall.input, true), [toolCall.input])
   const liveOutput = useMemo(() => toToolContent(toolCall.output, true), [toolCall.output])
-  const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, true), [toolCall.commandOutput])
+  const format = getToolOutputFormat(toolCall.output)
+  const liveCommand = useMemo(() => toToolContent(toolCall.commandOutput, true, false, format), [toolCall.commandOutput, format])
+  const display = useMemo(() => toToolDisplayContent(toolCall.output, true), [toolCall.output])
   const input = liveInput ?? contents.data?.input
   const result = liveOutput ?? contents.data?.output
-  const command = liveCommand ?? contents.data?.commandOutput ?? contents.data?.displayOutput
-  const output = command ?? result
+  const command = liveCommand ?? contents.data?.commandOutput
+  const output = display ?? contents.data?.displayOutput ?? command ?? result
   const active = toolCall.status === 'preparing' || toolCall.status === 'running'
   const changesAvailable = toolCall.status === 'success' && (hasToolChanges(toolCall.output) || contents.data?.hasChanges === true)
   const changes = useMemo(() => getToolChanges(input, changesAvailable), [input, changesAvailable])
@@ -45,6 +47,8 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
     ? ToolDetailsTab.Output : selectedTab ?? (changes.length ? ToolDetailsTab.Changes : ToolDetailsTab.Output)
   const content = tab === ToolDetailsTab.Input ? input : output
   const contentName = tab === ToolDetailsTab.Input ? 'input' : 'output'
+  // Reading a document must not discard the original evidence envelope.
+  const actionContent = tab === ToolDetailsTab.Output && output?.language === 'markdown' ? result : content
 
   function handleTabsKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     const next = getListNavigationIndex(event, {
@@ -59,7 +63,8 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
 
   return (
     <ActivityDetailsDialog open={open} title={toolCall.toolCallTitle || 'Tool details'} path={technicalTitle}
-      content={content?.text} contentName={contentName} downloadFilename={`tool-${contentName}.txt`}
+      content={actionContent?.text}
+      contentName={contentName} downloadFilename={`tool-${contentName}.txt`}
       canCopy={tab !== ToolDetailsTab.Changes} onClose={onClose} onAfterClose={onAfterClose}
       notice={contents.fetchStatus === 'paused' && (
         <p className="tool-diff-notice" role="status">Check your network connection to load complete tool details.</p>
@@ -78,7 +83,9 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
           <ToolChanges changes={changes} truncated={contents.data?.diffTruncated ?? false}
             fallback={<ToolOutput content={output} label="Tool output" />} />
         ) : (
-          <ToolOutput key={tab} content={content} label={tab === ToolDetailsTab.Input ? 'Input JSON' : 'Output JSON'}
+          <ToolOutput key={tab} content={content}
+            label={tab === ToolDetailsTab.Input ? 'Input JSON' : content?.language === 'markdown' ? 'Output' : 'Output JSON'}
+            animationId={`${toolCall.id}:${tab}:details`}
             active={active} loading={contents.isFetching} />
         )}
       </div>

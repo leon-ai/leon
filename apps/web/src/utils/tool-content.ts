@@ -24,6 +24,33 @@ export function getToolResultData(value: unknown): Record<string, unknown> | und
 }
 
 /**
+ * Rich text is declared by the producer, not guessed from shell/code contents.
+ * Older search results identify their prose through the source-bearing envelope.
+ */
+export function getToolOutputFormat(value: unknown): 'markdown' | 'text' {
+  const result = getToolResultData(value)
+
+  return result?.['format'] === 'markdown' ||
+    (Array.isArray(result?.['sources']) && typeof result?.['content'] === 'string')
+    ? 'markdown' : 'text'
+}
+
+/**
+ * Extracts a bounded readable document while preserving the original result for
+ * raw details. Native file reads keep their existing source-code presentation.
+ */
+export function toToolDisplayContent(value: unknown, complete = false): ToolContentPart | undefined {
+  const result = getToolResultData(value)
+  if (getToolOutputFormat(value) !== 'markdown' || !result ||
+    (typeof result['path'] === 'string' && typeof result['contentHash'] === 'string')) {
+    return undefined
+  }
+  const text = typeof result['content'] === 'string' ? result['content'] : result['text']
+
+  return typeof text === 'string' && text.trim() ? toToolContent(text, complete, false, 'markdown') : undefined
+}
+
+/**
  * Native invocations retain serialized JSON arguments, while live preparation
  * can contain unfinished JSON. Format only complete, reasonably sized values.
  */
@@ -46,7 +73,7 @@ export function toToolInput(value: JsonValue | undefined, complete = false): Too
  * Gives live and mock values the same bounded text contract as saved tool bodies.
  * Terminal previews retain the tail so incoming lines do not disappear at the cap.
  */
-export function toToolContent(value: JsonValue | undefined, complete = false, tail = false): ToolContentPart | undefined {
+export function toToolContent(value: JsonValue | undefined, complete = false, tail = false, format?: string): ToolContentPart | undefined {
   if (value === undefined) {
     return undefined
   }
@@ -57,6 +84,6 @@ export function toToolContent(value: JsonValue | undefined, complete = false, ta
     text: truncated ? (tail ? text.slice(-TOOL_CONTENT_PREVIEW_CHARACTERS) : text.slice(0, TOOL_CONTENT_PREVIEW_CHARACTERS)) : text,
     totalCharacters: text.length,
     truncated,
-    language: typeof value === 'string' ? 'text' : 'json'
+    language: format ?? (typeof value === 'string' ? 'text' : 'json')
   }
 }

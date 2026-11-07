@@ -815,6 +815,10 @@ export class ConversationRepository {
         WHEN json_type(body, '$.output') = 'object' THEN json_extract(body, '$.output')
         ELSE '{}' END AS result
       FROM invocation
+    ), formatted_results AS (
+      SELECT body, result, CASE WHEN json_extract(result, '$.format') = 'markdown'
+        OR (json_type(result, '$.sources') = 'array' AND json_type(result, '$.content') = 'text')
+        THEN 'markdown' ELSE 'text' END AS document_format FROM results
     ), contents AS (
       SELECT
         CASE WHEN json_type(body, '$.input') = 'text' THEN
@@ -832,22 +836,32 @@ export class ConversationRepository {
         (json_extract(result, '$.changed') = 1 AND json_type(result, '$.diff') = 'text') AS has_changes,
         coalesce(json_extract(result, '$.diffTruncated'), 0) AS diff_truncated,
         CASE WHEN json_type(result, '$.path') = 'text' AND json_type(result, '$.content') = 'text'
-          AND json_type(result, '$.contentHash') = 'text' THEN json_extract(result, '$.content') END AS file_content,
-        json_extract(result, '$.path') AS source_path,
+          AND json_type(result, '$.contentHash') = 'text' THEN json_extract(result, '$.content')
+          WHEN document_format = 'markdown' THEN CASE
+            WHEN json_type(result, '$.content') = 'text' AND length(trim(json_extract(result, '$.content'))) > 0
+              THEN json_extract(result, '$.content')
+            WHEN json_type(result, '$.text') = 'text' AND length(trim(json_extract(result, '$.text'))) > 0
+              THEN json_extract(result, '$.text') END
+          END AS display_content,
+        CASE WHEN json_type(result, '$.contentHash') = 'text'
+          THEN json_extract(result, '$.path') END AS source_path,
+        document_format,
         CASE WHEN json_type(body, '$.input') = 'text' AND NOT json_valid(json_extract(body, '$.input'))
           THEN 'text' ELSE 'json' END AS input_language,
         CASE WHEN json_type(body, '$.output') IS NOT NULL AND json_type(body, '$.output') != 'text'
           THEN 'json' ELSE 'text' END AS output_language
-      FROM results
+      FROM formatted_results
     ) SELECT CASE WHEN @complete THEN input ELSE substr(input, 1, @limit) END AS input,
       length(input) AS input_length, input_language,
       has_changes, diff_truncated,
       CASE WHEN @complete THEN output ELSE substr(output, 1, @limit) END AS output,
       length(output) AS output_length, output_language,
-      CASE WHEN @complete THEN command_output ELSE substr(command_output, -@limit) END AS command_output,
-      length(command_output) AS command_length,
-      CASE WHEN @complete THEN file_content ELSE substr(file_content, 1, @limit) END AS file_content,
-      length(file_content) AS file_length, source_path
+      CASE WHEN @complete THEN command_output
+        WHEN document_format = 'markdown' THEN substr(command_output, 1, @limit)
+        ELSE substr(command_output, -@limit) END AS command_output,
+      length(command_output) AS command_length, document_format,
+      CASE WHEN @complete THEN display_content ELSE substr(display_content, 1, @limit) END AS display_content,
+      length(display_content) AS display_length, source_path
       FROM contents`).get({ sessionId, messageId, toolId,
       limit: TOOL_CONTENT_PREVIEW_CHARACTERS, complete: Number(complete) })
 
@@ -868,10 +882,11 @@ export class ConversationRepository {
       input: part('input', 'input_length', row['input_language'] as ToolContentPart['language']),
       output: part('output', 'output_length', row['output_language'] as ToolContentPart['language']),
       ...(row['command_output'] === null ? {} : {
-        commandOutput: part('command_output', 'command_length', 'text')
+        commandOutput: part('command_output', 'command_length', row['document_format'] as string)
       }),
-      ...(row['file_content'] === null ? {} : {
-        displayOutput: part('file_content', 'file_length', path.extname(String(row['source_path'])).slice(1).toLocaleLowerCase() || 'text')
+      ...(row['display_content'] === null ? {} : {
+        displayOutput: part('display_content', 'display_length', row['source_path']
+          ? path.extname(String(row['source_path'])).slice(1).toLocaleLowerCase() || 'text' : 'markdown')
       })
     }
   }

@@ -1,6 +1,8 @@
-import { Component, lazy, Suspense, type CSSProperties, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useId, type CSSProperties, type ReactNode } from 'react'
 
 import { Loader } from '@/components/loader'
+import { MarkdownContent } from '@/components/markdown-content'
+import { ScrollContainer } from '@/components/scroll-container'
 import { CodeView } from '@/components/code-view'
 import { CODE_PREVIEW_LINES } from '@/components/code-view/code-highlight-types'
 import type { ToolChange } from '@/utils/tool-changes'
@@ -11,6 +13,7 @@ const ToolDiff = lazy(async () => {
 
   return { default: module.ToolDiff }
 })
+const MAXIMUM_RENDERED_MARKDOWN_CHARACTERS = 65_536
 
 class ToolContentBoundary extends Component<{ children: ReactNode, fallback: ReactNode }, { failed: boolean }> {
   public override state = { failed: false }
@@ -56,23 +59,42 @@ interface ToolOutputProps {
   loading?: boolean
   preview?: boolean
   previewTail?: boolean
+  animationId?: string
 }
 
 /**
- * Shares the bounded code viewer between inline previews and inspectors.
+ * Keeps prose readable and bounded while terminal/code results remain literal.
  */
-export function ToolOutput({ content, label, active = false, loading = false, preview = false, previewTail = false }: ToolOutputProps) {
+export function ToolOutput({ content, label, active = false, loading = false, preview = false, previewTail = false, animationId }: ToolOutputProps) {
+  const localId = useId()
+  const markdown = content?.language === 'markdown'
+  const rich = markdown && content.text.length <= MAXIMUM_RENDERED_MARKDOWN_CHARACTERS
+
   return (
-    <div className="tool-output">
-      <CodeView
-        text={content?.text ?? ''}
-        label={label}
-        language={content?.language ?? 'text'}
-        active={active}
-        preview={preview}
-        previewTail={previewTail}
-        truncated={content?.truncated ?? false}
-      />
+    <div className={`tool-output${markdown && !rich ? ' tool-output-document-source' : ''}`}>
+      {rich ? (
+        <ScrollContainer
+          className={`tool-output-markdown${preview ? ' tool-output-markdown-preview' : ''}`}
+          viewportClassName="tool-output-markdown-viewport"
+          role="region" aria-label={label} tabIndex={0}
+          style={{ '--code-preview-lines': CODE_PREVIEW_LINES } as CSSProperties}>
+          <MarkdownContent animationId={animationId ?? localId} text={content.text} active={active} />
+          {content.truncated && <p className="tool-output-ellipsis" aria-label="More content omitted">…</p>}
+        </ScrollContainer>
+      ) : (
+        <>
+          {markdown && <p className="tool-diff-notice">Large output is shown as text to keep scrolling smooth.</p>}
+          <CodeView
+            text={content?.text ?? ''}
+            label={label}
+            language={content?.language ?? 'text'}
+            active={active}
+            preview={preview}
+            previewTail={previewTail}
+            truncated={content?.truncated ?? false}
+          />
+        </>
+      )}
       {loading && !content && <span className="tool-output-loading"><Loader size="sm" label="Loading output…" /></span>}
     </div>
   )

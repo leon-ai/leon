@@ -5,7 +5,9 @@ import { MemoryActivityAction } from '@/core/llm-manager/memory-activity-contrac
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 import type { ConversationSession } from '@/core/session-manager'
 import type { MessageLog } from '@/types'
@@ -28,12 +30,9 @@ function session(id: string, timestamp = 1): ConversationSession {
   }
 }
 
-
 describe('profile conversation archive', () => {
   let directory = ''
-
   const repositories = new Set<ConversationRepository>()
-
 
   function open(profile = 'owner'): ConversationRepository {
     const repository = new ConversationRepository(path.join(directory, profile, 'sessions'))
@@ -41,17 +40,14 @@ describe('profile conversation archive', () => {
     return repository
   }
 
-
   function close(repository: ConversationRepository): void {
     repository.close()
     repositories.delete(repository)
   }
 
-
   beforeEach(async () => {
     directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-conversation-archive-'))
   })
-
 
   afterEach(async () => {
     for (const repository of repositories) {
@@ -60,7 +56,6 @@ describe('profile conversation archive', () => {
     repositories.clear()
     await fs.rm(directory, { recursive: true, force: true })
   })
-
 
   it('rotates mindset lines atomically across sessions and connections, surviving reopen without repeats', () => {
     let repository = open()
@@ -91,7 +86,6 @@ describe('profile conversation archive', () => {
     expect(texts[FYI_VISIONS.length]).not.toBe(texts[FYI_VISIONS.length - 1])
   })
 
-
   it('rejects stale or deleted FYI targets and keeps accepted footers out of model context', () => {
     const repository = open()
     repository.saveSession(session('chat'))
@@ -108,7 +102,6 @@ describe('profile conversation archive', () => {
     repository.deleteSession('chat')
     expect(repository.saveFyi('chat', 'answer', 'Edited.', footer)).toBeNull()
   })
-
 
   it('reads bounded invocation previews and complete bodies independently within their session and profile', () => {
     const repository = open()
@@ -148,6 +141,40 @@ describe('profile conversation archive', () => {
     expect(open('another-profile').readToolContents('chat', 'trace', 'one')).toBeNull()
   })
 
+  it('projects readable Markdown separately from raw results and preserves bounded live document heads', () => {
+    const repository = open()
+    repository.saveSession(session('documents'))
+    const text = `# A useful guide\n\n${'An idea worth keeping.\n\n'.repeat(1_200)}End of document.`
+    const sources = [{ url: 'https://example.com/guide', title: 'A guide' }]
+    repository.upsertMessage('documents', {
+      who: 'leon', message: 'Ready.', messageId: 'documents-answer', isAddedToHistory: true,
+      agentResponseTrace: { id: 'documents-trace', planSteps: [], toolCalls: [
+        { id: 'search', name: 'test.search', status: 'success',
+          output: { result: { content: text, sources } }, commandOutput: 'Old progress and source listings.' },
+        { id: 'page', name: 'test.page', status: 'success',
+          output: { result: { data: { text, format: 'markdown', path: 'document.md' } } } },
+        { id: 'live', name: 'test.document', status: 'running',
+          output: { output: 'Latest chunk.', format: 'markdown' }, commandOutput: text }
+      ] }
+    })
+
+    for (const id of ['search', 'page']) {
+      const preview = repository.readToolContents('documents', 'documents-answer', id)!
+      expect(preview.displayOutput).toMatchObject({ language: 'markdown', truncated: true })
+      expect(preview.displayOutput?.text).toBe(text.slice(0, TOOL_CONTENT_PREVIEW_CHARACTERS))
+      const full = repository.readToolContents('documents', 'documents-answer', id, true)!
+      expect(full.displayOutput).toMatchObject({ text, language: 'markdown', truncated: false })
+      expect(full.output.language).toBe('json')
+      if (id === 'search') {
+        expect(JSON.parse(full.output.text)).toEqual({ result: { content: text, sources } })
+      }
+    }
+
+    const live = repository.readToolContents('documents', 'documents-answer', 'live')!
+    expect(live.commandOutput).toMatchObject({ language: 'markdown', truncated: true,
+      text: text.slice(0, TOOL_CONTENT_PREVIEW_CHARACTERS) })
+    expect(live.displayOutput).toBeUndefined()
+  })
 
   it('pages complete visible source text without gaps, disclosures or cross-session access', async () => {
     const repository = open()
@@ -192,7 +219,6 @@ describe('profile conversation archive', () => {
     expect(() => repository.readMessageText('report', 'source', { limit: 0 })).toThrow('limits')
     expect(() => repository.readMessageText('report', 'source', { offset: text.length + 1 })).toThrow('beyond')
   })
-
 
   it('reads ordered source fragments across messages with bounded text and stable continuation', () => {
     const repository = open()
@@ -240,7 +266,6 @@ describe('profile conversation archive', () => {
     expect(() => repository.readSessionText('book', { limit: 0 })).toThrow('limit')
   })
 
-
   it('imports legacy sessions once, preserves their files, and survives reopening', async () => {
     const root = path.join(directory, 'owner', 'sessions')
     await fs.mkdir(path.join(root, 'legacy'), { recursive: true })
@@ -263,7 +288,6 @@ describe('profile conversation archive', () => {
     expect(reopened.listSessions({ query: 'camera' }).items[0]?.id).toBe('legacy')
   })
 
-
   it('rolls back incomplete migration and retries without duplicating earlier sessions', async () => {
     const root = path.join(directory, 'owner', 'sessions')
     await fs.mkdir(path.join(root, 'broken'), { recursive: true })
@@ -277,7 +301,6 @@ describe('profile conversation archive', () => {
     expect(open().readIndex()?.sessions.map((entry) => entry.id).sort())
       .toEqual(['broken', 'good'])
   })
-
 
   it('isolates profiles, retains history beyond model limits, and pages without duplicates', () => {
     const first = open('first')
@@ -306,7 +329,6 @@ describe('profile conversation archive', () => {
     expect(newer.previousCursor).toBeNull()
   })
 
-
   it('uses indexed session cursors with pinned sessions first and rejects invalid cursors', () => {
     const repository = open()
     repository.saveSession(session('old', 1))
@@ -320,7 +342,6 @@ describe('profile conversation archive', () => {
     expect(() => repository.listSessions({ cursor: 'invalid' })).toThrow()
     expect(() => repository.readMessages('new', { before: 'NaN' })).toThrow()
   })
-
 
   it('ranks normalized title matches before content and preserves relevance through cursor pages', () => {
     const repository = open()
@@ -375,7 +396,6 @@ describe('profile conversation archive', () => {
     expect(() => repository.listSessions({ query: 'sharing-context', cursor: compact.nextCursor! })).toThrow('cursor')
   })
 
-
   it('prefers phrases and stronger passages over newer mentions while paging each session once', () => {
     const repository = open()
     repository.saveSession({ ...session('title', 1), title: 'Sharing - context' })
@@ -421,7 +441,6 @@ describe('profile conversation archive', () => {
     })).toThrow('cursor')
   })
 
-
   it('continues content ranking when unrelated sessions change the full-text statistics', () => {
     const repository = open()
     for (const [id, message] of [
@@ -447,7 +466,6 @@ describe('profile conversation archive', () => {
     expect(rest.items.map((item) => item.id)).toEqual(['medium', 'long'])
   })
 
-
   it('preserves repeated query words when prioritizing phrases', () => {
     const repository = open()
     repository.saveSession(session('phrase', 1))
@@ -462,7 +480,6 @@ describe('profile conversation archive', () => {
     expect(repository.listSessions({ query: 'red red' }).items.map((item) => item.id)).toEqual(['phrase', 'single'])
   })
 
-
   it('centers bounded excerpts on indexed matches even beside very long tokens', () => {
     const repository = open()
     repository.saveSession(session('notes'))
@@ -476,7 +493,6 @@ describe('profile conversation archive', () => {
     expect(Array.from(excerpt!).length).toBeLessThanOrEqual(MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS)
   })
 
-
   it('folds title accents, Unicode forms and separators without interpreting full-text operators', () => {
     const repository = open()
     repository.saveSession({ ...session('unicode'), title: 'Café / ＧＰＴ-６.１ notes' })
@@ -486,7 +502,6 @@ describe('profile conversation archive', () => {
     expect(repository.listSessions({ query: 'gpt62' }).items).toEqual([])
     expect(repository.listSessions({ query: '" OR NOT *' }).items).toEqual([])
   })
-
 
   it('recalls complete visible owner queries in durable sequence order with bounded text pages', () => {
     const repository = open()
@@ -524,7 +539,6 @@ describe('profile conversation archive', () => {
     expect(open('isolated').readQueryHistory('chat').items).toEqual([])
   })
 
-
   it('keeps completed answers authoritative over delayed trace snapshots and loads details on demand', () => {
     const repository = open()
     repository.saveSession(session('chat'))
@@ -559,7 +573,6 @@ describe('profile conversation archive', () => {
     expect(() => repository.upsertMessage('chat', record)).toThrow()
   })
 
-
   it('replays stable session-filtered event cursors after the database is reopened', () => {
     const repository = open()
     const first = repository.appendEvent({ session_id: 'first', type: 'progress' })
@@ -573,7 +586,6 @@ describe('profile conversation archive', () => {
       .toEqual([{ session_id: 'first', type: 'completed', sequence: next.sequence }])
   })
 
-
   it('includes profile-wide state in session replay without leaking another profile or session', () => {
     const owner = open()
     const other = open('other')
@@ -583,7 +595,6 @@ describe('profile conversation archive', () => {
     const selected = owner.appendEvent({ session_id: 'selected', type: 'progress' })
     expect(owner.readEvents(0, 'selected').items).toEqual([mood, selected])
   })
-
 
   it('recovers accepted commands as interrupted without repeating their owner messages', () => {
     const repository = open()
@@ -599,7 +610,6 @@ describe('profile conversation archive', () => {
     expect(recovered.readAllMessages('chat')).toHaveLength(1)
   })
 
-
   it('bounds durable replay by payload bytes while preserving its monotonic frontier', () => {
     const repository = open()
     const event = repository.appendEvent({ session_id: 'chat', body: 'x'.repeat(17 * 1_024 * 1_024) })
@@ -608,7 +618,6 @@ describe('profile conversation archive', () => {
     const next = repository.appendEvent({ session_id: 'chat', body: 'Done' })
     expect(next.sequence).toBeGreaterThan(event.sequence)
   })
-
   it('upserts late memory details without changing the answer, metrics or session ordering', () => {
     const repository = open()
     repository.saveSession(session('source'))
@@ -630,4 +639,5 @@ describe('profile conversation archive', () => {
     expect(repository.upsertMemoryActivity('source', 'deleted-answer', activity)).toBe(false)
     expect(open('other').upsertMemoryActivity('source', 'answer', activity)).toBe(false)
   })
+
 })

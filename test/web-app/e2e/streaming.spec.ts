@@ -8,6 +8,104 @@ import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFinit
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 
+for (const legacy of [false, true]) {
+  test(`renders search Markdown live and saved without replacing it with progress or metadata (legacy: ${legacy})`, async ({ page, ui }, testInfo) => {
+    const text = '## A useful guide\n\nKeep **one good idea** close.\n\n| Topic | Note |\n| --- | --- |\n| Craft | Take your time |'
+    const sources = [{ url: 'https://example.com/guide', title: 'A useful guide' }]
+    const responseId = 'rich-search-response'
+    const tool = { id: 'rich-search', name: 'search_web.hosted.searchWeb', toolCallTitle: 'Read useful guidance',
+      status: 'running' as const, input: { query: 'Useful guidance' },
+      output: { output: text, format: 'markdown' }, commandOutput: text }
+    const saved: ConversationRecord = {
+      who: 'leon', messageId: responseId, message: '', sentAt: Date.now(), isAddedToHistory: false,
+      agentResponseTrace: { id: responseId, planSteps: [], toolCalls: [tool], metrics: { durationMs: 1_000 } }
+    }
+    await page.goto(SESSION_URL)
+    ui.history.get(SESSION_ID)!.push(saved)
+    let sequence = 0
+    const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+      type, data, sequence: ++sequence, session_id: SESSION_ID,
+      turn_id: 'rich-search-turn', response_id: responseId, created_at: Date.now()
+    }])
+    await emit('turn_status', { status: 'accepted' })
+    await emit('tool_call', { tool_call: { ...tool, tool_call_title: tool.toolCallTitle, command_output: text } })
+    const call = page.locator('.tool-call').filter({ hasText: 'Read useful guidance' })
+    const revealTool = async (): Promise<void> => {
+      const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true }).last()
+      const group = tools.getByRole('button').first()
+      if (await group.getAttribute('aria-expanded') === 'false') {
+        await group.click()
+      }
+      const toggle = call.getByRole('button', { name: /Read useful guidance/ })
+      if (await toggle.getAttribute('aria-expanded') === 'false') {
+        await toggle.click()
+      }
+    }
+    await revealTool()
+    const preview = call.getByRole('region', { name: 'Tool output', exact: true })
+    await expect(preview.getByRole('heading', { name: 'A useful guide' })).toBeVisible()
+    await expect(preview.getByRole('table')).toContainText('Take your time')
+    await expect(preview.locator('.code-view')).toHaveCount(0)
+    const finished = { ...tool, status: 'success' as const, output: {
+      result: { content: text, sources, ...(legacy ? {} : { format: 'markdown' }) }
+    }, commandOutput: `Searching the web...\nSource: https://example.com/guide\n${text}` }
+    saved.agentResponseTrace!.toolCalls = [finished]
+    await emit('tool_call', { tool_call: { ...finished, tool_call_title: tool.toolCallTitle, command_output: finished.commandOutput } })
+    await revealTool()
+    await expect(preview.getByRole('heading')).toHaveText('A useful guide')
+    await expect(preview).not.toContainText('Source:')
+    await expect(preview).not.toContainText('Searching the web...')
+    await call.getByRole('button', { name: 'View details', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: tool.toolCallTitle, exact: true })
+    await expect(dialog.getByRole('region', { name: 'Output', exact: true }).getByRole('table')).toContainText('Take your time')
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    await dialog.getByRole('button', { name: 'Copy output', exact: true }).click()
+    await expect.poll(async () => JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))).toEqual(finished.output)
+    await page.keyboard.press('Escape')
+    saved.message = 'The useful points are ready.'
+    saved.isAddedToHistory = true
+    await emit('final_answer', { content: saved.message, response_trace: saved.agentResponseTrace })
+    await emit('turn_status', { status: 'completed' })
+    await page.reload()
+    const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
+    await work.getByRole('button').first().click()
+    await revealTool()
+    await expect(preview.getByRole('table')).toContainText('Take your time')
+    await expect(preview.getByRole('table')).toBeVisible()
+    await expect(preview).not.toContainText('Source:')
+    await finishFiniteAnimations(call)
+    await page.screenshot({ path: testInfo.outputPath('search-markdown.png') })
+  })
+}
+
+
+test('bounds page Markdown previews and virtualizes oversized complete documents', async ({ page, ui }) => {
+  const text = `# More to read\n\n${'A **small idea** worth keeping.\n\n'.repeat(3_000)}`
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [{
+    id: 'long-page', name: 'search_web.crawlberg.fetchUrl', toolCallTitle: 'Read a longer page',
+    status: 'success', output: { result: { data: { text, format: 'markdown', content_kind: 'extracted_text' } } }
+  }] }
+  await page.goto(SESSION_URL)
+  await page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last().getByRole('button').first().click()
+  await page.getByRole('region', { name: 'Leon’s tool usage', exact: true }).last().getByRole('button').first().click()
+  const call = page.locator('.tool-call').filter({ hasText: 'Read a longer page' })
+  await call.getByRole('button', { name: /Read a longer page/ }).click()
+  const preview = call.getByRole('region', { name: 'Tool output', exact: true })
+  await expect(preview.getByRole('heading')).toHaveText('More to read')
+  expect((await preview.boundingBox())!.height).toBeLessThanOrEqual(CODE_PREVIEW_LINES * 22 + 25)
+  expect(await preview.locator('p').count()).toBeLessThan(600)
+  await expect(preview).toHaveCSS('overflow-y', 'hidden')
+  await call.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Read a longer page', exact: true })
+  await expect(dialog).toContainText('Large output is shown as text to keep scrolling smooth.')
+  const full = dialog.getByRole('region', { name: 'Output', exact: true })
+  await expect(full).toContainText('# More to read')
+  expect(await full.locator('.code-view-line').count()).toBeLessThan(60)
+  expect((await dialog.boundingBox())!.y + (await dialog.boundingBox())!.height).toBeLessThan(982)
+})
+
+
 test('does not execute Markdown HTML, unsafe links, or remote images', async ({ page, ui }) => {
   const outbound: string[] = []
   await page.route('https://**', async (route) => {

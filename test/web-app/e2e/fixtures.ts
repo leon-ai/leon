@@ -1,7 +1,7 @@
 import { test as base, expect, type Locator, type Response, type Route } from '@playwright/test'
 
 import type { ConversationPage, ConversationRecord, ConversationTool, ModelCatalog, ConversationNotification } from '../../../apps/web/src/data/conversation'
-import { getToolResultData, toToolContent, toToolInput } from '../../../apps/web/src/utils/tool-content'
+import { getToolOutputFormat, getToolResultData, toToolContent, toToolDisplayContent, toToolInput } from '../../../apps/web/src/utils/tool-content'
 import path from 'node:path'
 import { hasToolChanges } from '../../../apps/web/src/utils/tool-changes'
 import type { ToolCallContents } from '../../../server/src/core/session-manager/tool-content-contract'
@@ -35,16 +35,18 @@ export async function finishFiniteAnimations(target: Locator): Promise<void> {
 export function toolContentsFixture(tool: ConversationTool, complete = false): ToolCallContents {
   const output = tool.output ?? tool.commandOutput ?? tool.errorMessage ?? ''
   const result = getToolResultData(tool.output)
+  const format = getToolOutputFormat(tool.output)
+  const document = toToolDisplayContent(tool.output, complete)
   const fileContent = result && typeof result['path'] === 'string' && typeof result['content'] === 'string' && typeof result['contentHash'] === 'string'
     ? { ...toToolContent(result['content'], complete)!, language: path.extname(result['path']).slice(1) || 'text' } : undefined
 
   return {
     input: toToolInput(tool.input ?? null, complete)!,
     output: toToolContent(output, complete)!,
-    ...(tool.commandOutput === undefined ? {} : { commandOutput: toToolContent(tool.commandOutput, complete, true)! }),
+    ...(tool.commandOutput === undefined ? {} : { commandOutput: toToolContent(tool.commandOutput, complete, format !== 'markdown', format)! }),
     hasChanges: hasToolChanges(tool.output),
     diffTruncated: Boolean(result?.['diffTruncated']),
-    ...(fileContent ? { displayOutput: fileContent } : {})
+    ...(fileContent || document ? { displayOutput: fileContent ?? document! } : {})
   }
 }
 
