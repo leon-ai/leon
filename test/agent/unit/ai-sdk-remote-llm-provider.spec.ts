@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
+import axios from 'axios'
 
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
@@ -17,6 +19,7 @@ import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-p
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
+import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
 import { ProviderPromptCache } from '@/core/llm-manager/llm-providers/prompt-cache'
 import { AGENT_PROMPT_CACHE_KEY } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
@@ -91,14 +94,19 @@ vi.mock('@openrouter/ai-sdk-provider', () => ({
   createOpenRouter: openRouterMocks.createOpenRouter
 }))
 
-vi.mock('@/config', () => ({
-  CONFIG_MANAGER: {
+vi.mock('@/config', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { parse } = await import('yaml')
+  const config = parse(readFileSync(new URL('../../../config.sample.yml', import.meta.url), 'utf8'))
+
+  return { CONFIG_MANAGER: {
     getProviderAPIKeyEnv: vi.fn(() => null),
     getProviderAPIKey: vi.fn(() => 'test-openrouter-key'),
     getProviderBaseURL: vi.fn(() => null),
-    getConfig: vi.fn(() => ({ llm: { model_settings: {} } }))
-  }
-}))
+    resolveSecretReference: vi.fn(() => ''),
+    getConfig: vi.fn(() => config)
+  } }
+})
 
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: {
@@ -191,6 +199,52 @@ const CHAT_RESPONSE = {
 describe('AISDKRemoteLLMProvider', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it.each([false, true])('preserves llama.cpp schemas and explicit thinking controls (stream=%s)', async (shouldStream) => {
+    const model = path.resolve('local-model')
+    const log = vi.spyOn(LlamaCPPLLMProvider as unknown as {
+      writeServerLogLine(line: string): void
+    }, 'writeServerLogLine').mockImplementation(() => undefined)
+    const get = vi.spyOn(axios, 'get').mockImplementation(async (url) => ({
+      data: String(url).endsWith('/props')
+        ? { model_path: model, default_generation_settings: { n_ctx: 1_024 } }
+        : { data: [{ id: model }] }
+    }))
+    const fetch = vi.fn().mockResolvedValue(shouldStream
+      ? new Response('data: {"choices":[{"index":0,"delta":{"content":"{\\"safe\\":true}"}}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', {
+          headers: { 'content-type': 'text/event-stream' }
+        })
+      : Response.json({
+          ...CHAT_RESPONSE,
+          choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: '{"safe":true}' } }]
+        }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new LlamaCPPLLMProvider({
+      ...TARGET, provider: LLMProviders.LlamaCPP, model
+    })
+
+    try {
+      await provider.boot()
+      await provider.runChatCompletion('Verify.', {
+        ...createCompletionParams({
+          type: 'object', properties: { safe: { type: 'boolean' } },
+          required: ['safe'], additionalProperties: false
+        }),
+        shouldStream, disableThinking: true, maxTokens: 2_048
+      })
+
+      const body = JSON.parse(fetch.mock.calls[0]![1].body)
+      expect(body.response_format).toMatchObject({
+        type: 'json_schema', json_schema: { schema: { required: ['safe'], additionalProperties: false } }
+      })
+      expect(body.chat_template_kwargs.enable_thinking).toBe(false)
+      expect(body).not.toHaveProperty('reasoning_format')
+    } finally {
+      provider.dispose()
+      get.mockRestore()
+      log.mockRestore()
+    }
   })
 
   it.each([
@@ -2240,3 +2294,4 @@ describe('AISDKRemoteLLMProvider', () => {
   })
 
 })
+

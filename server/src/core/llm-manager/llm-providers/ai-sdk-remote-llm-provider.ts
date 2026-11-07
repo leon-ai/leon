@@ -97,6 +97,7 @@ interface AISDKRemoteProviderConfig {
   requiresApiKey?: boolean
   sendApiKeyAsBearer?: boolean
   supportsToolResultFiles?: boolean
+  supportsStructuredOutputs?: boolean
   headers?: (apiKey: string) => Record<string, string>
   transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown>
   buildProviderOptions?: (
@@ -390,6 +391,9 @@ export default class AISDKRemoteLLMProvider {
         name: this.config.providerName,
         baseURL: this.config.baseURL,
         includeUsage: true,
+        ...(this.config.supportsStructuredOutputs === undefined
+          ? {}
+          : { supportsStructuredOutputs: this.config.supportsStructuredOutputs }),
         ...(this.config.transformRequestBody
           ? { transformRequestBody: this.config.transformRequestBody }
           : {}),

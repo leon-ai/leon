@@ -44,7 +44,6 @@ const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
 const LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
   enable_thinking: true
 }
-const LLAMACPP_DISABLE_THINKING_REASONING_FORMAT = 'none'
 
 function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
@@ -188,12 +187,11 @@ function resolveModelPath(modelPath: string): string {
     : path.resolve(CODEBASE_PATH, normalizedModelPath)
 }
 
-function disableThinkingForStructuredRequest(
+function configureStructuredRequestThinking(
   args: Record<string, unknown>
 ): Record<string, unknown> {
   const hasTools = Array.isArray(args['tools'])
   const hasResponseFormat = Boolean(args['response_format'])
-  const shouldStream = args['stream'] === true
 
   if (!hasTools && !hasResponseFormat) {
     return args
@@ -206,23 +204,14 @@ function disableThinkingForStructuredRequest(
       ? (args['chat_template_kwargs'] as Record<string, unknown>)
       : {}
 
-  if (shouldStream) {
-    return {
-      ...args,
-      chat_template_kwargs: {
-        ...existingChatTemplateKwargs,
-        ...LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS
-      }
-    }
-  }
-
   return {
     ...args,
     chat_template_kwargs: {
-      ...existingChatTemplateKwargs,
-      ...LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS
-    },
-    reasoning_format: LLAMACPP_DISABLE_THINKING_REASONING_FORMAT
+      ...(args['stream'] === true
+        ? LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS
+        : LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS),
+      ...existingChatTemplateKwargs
+    }
   }
 }
 
@@ -252,7 +241,15 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         baseURL: LlamaCPPLLMProvider.runtimeBaseURL,
         flavor: 'openai-compatible',
         requiresApiKey: false,
-        transformRequestBody: disableThinkingForStructuredRequest
+        supportsStructuredOutputs: true,
+        transformRequestBody: configureStructuredRequestThinking,
+        buildProviderOptions: ({ completionParams, reasoningMode }) => ({
+          llamacpp: {
+            ...(completionParams.disableThinking || reasoningMode === 'off'
+              ? { chat_template_kwargs: LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS }
+              : {})
+          }
+        })
       }
     )
 
@@ -384,7 +381,6 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       payload['chat_template_kwargs'] = {
         ...LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS
       }
-      payload['reasoning_format'] = LLAMACPP_DISABLE_THINKING_REASONING_FORMAT
     }
 
     return payload
