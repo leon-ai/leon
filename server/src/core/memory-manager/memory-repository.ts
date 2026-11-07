@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 
 import SQLite from 'better-sqlite3'
+import { normalizeTemporaryLocation, TEMPORARY_LOCATION_QUERY } from '@@/bridges/runtime/nodejs/temporary-memory'
 import { upgradeMemoryScope } from '@@/scripts/setup/migrations/2026102907370753-add-temporary-memory-scope.js'
 import type {
   Database as SQLiteDatabase,
@@ -92,6 +93,7 @@ export default class MemoryRepository {
   private db: SQLiteDatabase | null = null
   private loading: Promise<void> | null = null
   private temporaryQuery: Statement | null = null
+  private temporaryLocationQuery: Statement | null = null
 
   public get isReady(): boolean {
     return this.db !== null
@@ -143,6 +145,16 @@ export default class MemoryRepository {
     return this.temporaryQuery.all(Date.now(), limit).map(mapMemoryRow)
   }
 
+  /**
+   * Read the latest active location independently of prompt priorities and limits.
+   */
+  public getTemporaryLocationItem(): MemoryRecord | null {
+    this.temporaryLocationQuery ??= this.ensureDb().prepare(TEMPORARY_LOCATION_QUERY)
+    const row = this.temporaryLocationQuery.get(Date.now())
+
+    return row ? mapMemoryRow(row) : null
+  }
+
   private ensureDb(): SQLiteDatabase {
     if (!this.db) {
       throw new Error('Memory repository is not initialized')
@@ -171,6 +183,22 @@ export default class MemoryRepository {
     idFactory: () => string
   ): MemoryRecord {
     const db = this.ensureDb()
+
+    if (input.scope === 'temporary' && normalizeTemporaryLocation(input.metadata?.['currentLocation'])) {
+      const current = this.getTemporaryLocationItem()
+      if (current && Number(current.metadata['evidenceAt'] ?? current.updatedAt) > Number(input.metadata?.['evidenceAt'] ?? nowTs)) {
+        throw new Error('Newer current-location evidence is already saved.')
+      }
+      if (current && input.supersedesItemId && input.supersedesItemId !== current.id) {
+        throw new Error('Current-location corrections must replace the current location record.')
+      }
+      // One current-location fact replaces the former one atomically, so expiry
+      // or forgetting cannot revive an older stay with a longer lifetime.
+      if (current && !input.supersedesItemId &&
+        (current.sourceRef !== input.sourceRef || current.content !== input.content)) {
+        input = { ...input, supersedesItemId: current.id }
+      }
+    }
 
     if (input.supersedesItemId) {
       const previous = this.getActiveMemoryItem(input.supersedesItemId)

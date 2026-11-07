@@ -4,7 +4,7 @@ import AmbientConditionsManager, { AmbientWeatherCondition, type AmbientWeatherS
 
 const fixture = vi.hoisted(() => ({
   cache: null as { locationQuery: string | null, weather: AmbientWeatherSnapshot | null } | null,
-  settings: {} as Record<string, unknown>,
+  location: null as { city: string, country?: string, expiresAt: number } | null,
   city: 'Test town' as string | null,
   weather: {
     success: true,
@@ -23,12 +23,13 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('@/core', () => ({
   TOOLKIT_REGISTRY: { isLoaded: true },
-  TOOL_EXECUTOR: { executeTool: fixture.execute }
+  TOOL_EXECUTOR: { executeTool: fixture.execute },
+  MEMORY_MANAGER: {
+    getTemporaryLocation: async (): Promise<object | null> =>
+      fixture.location && fixture.location.expiresAt > Date.now() ? fixture.location : null
+  }
 }))
 vi.mock('@/config', () => ({ CONFIG_MANAGER: { getConfig: (): object => ({ time_zone: 'UTC' }) } }))
-vi.mock('@/core/tool-manager/tool-settings', () => ({
-  ToolSettings: { loadToolSettings: (): object => fixture.settings }
-}))
 vi.mock('@/core/context-manager/owner-profile', () => ({
   readOwnerProfileSync: (): object => ({ owner_current_city: fixture.city })
 }))
@@ -51,7 +52,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-30T12:00:00Z'))
   fixture.cache = null
-  fixture.settings = {}
+  fixture.location = null
   fixture.city = 'Test town'
   fixture.execute.mockClear()
   fixture.weather.data.timezone = 'Europe/Paris'
@@ -118,13 +119,11 @@ it.each(['missing', 'polar', 'invalid-zone', 'invalid-time', 'reversed', 'wrong-
   }
 )
 
-it('refreshes Vibes for an explicit city and returns home when the override expires or is cleared', async () => {
+it('refreshes Vibes for current temporary context and returns home when it expires or is ended', async () => {
   const manager = new AmbientConditionsManager()
   await manager.getSnapshot()
 
-  fixture.settings = {
-    vibesLocation: { location: ' Lyon, France ', expiresAt: Date.now() + 60_000 }
-  }
+  fixture.location = { city: 'Lyon', country: 'France', expiresAt: Date.now() + 60_000 }
   await manager.getSnapshot()
   expect(fixture.cache?.locationQuery).toBe('Lyon, France')
   expect(fixture.execute.mock.calls[1]?.[0].parsedInput.location).toBe('Lyon, France')
@@ -133,28 +132,14 @@ it('refreshes Vibes for an explicit city and returns home when the override expi
   await manager.getSnapshot()
   expect(fixture.cache?.locationQuery).toBe('Test town')
 
-  fixture.settings = {
-    vibesLocation: { location: 'Nantes, France', expiresAt: Date.now() + 60_000 }
-  }
+  fixture.location = { city: 'Nantes', country: 'France', expiresAt: Date.now() + 60_000 }
   await manager.getSnapshot()
   expect(fixture.cache?.locationQuery).toBe('Nantes, France')
 
-  fixture.settings = { vibesLocation: null }
+  fixture.location = null
   await manager.getSnapshot()
   expect(fixture.cache?.locationQuery).toBe('Test town')
   expect(fixture.execute).toHaveBeenCalledTimes(5)
-})
-
-it.each([
-  { location: 'Lyon' },
-  { location: ' ', expiresAt: Number.MAX_SAFE_INTEGER },
-  { location: 'Lyon', expiresAt: 'tomorrow' },
-  { location: 'Lyon', expiresAt: Number.NaN }
-])('falls back home for an invalid Vibes override %j', async (vibesLocation) => {
-  fixture.settings = { vibesLocation }
-
-  await new AmbientConditionsManager().getSnapshot()
-  expect(fixture.cache?.locationQuery).toBe('Test town')
 })
 
 it('leaves weather unavailable without a selected or home city', async () => {
@@ -164,11 +149,9 @@ it('leaves weather unavailable without a selected or home city', async () => {
   expect(fixture.execute).not.toHaveBeenCalled()
 })
 
-it('discards weather when the Vibes override changes during the request', async () => {
+it('discards weather when current-location evidence changes during the request', async () => {
   fixture.execute.mockImplementationOnce(async (): Promise<object> => {
-    fixture.settings = {
-      vibesLocation: { location: 'Lyon, France', expiresAt: Date.now() + 60_000 }
-    }
+    fixture.location = { city: 'Lyon', country: 'France', expiresAt: Date.now() + 60_000 }
 
     return { status: 'success', data: { output: { result: fixture.weather } } }
   })

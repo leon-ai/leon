@@ -38,6 +38,9 @@ CREATE INDEX IF NOT EXISTS idx_memory_items_supersedes
 CREATE INDEX IF NOT EXISTS idx_memory_items_temporary_priority
   ON memory_items((source_type = 'explicit_user') DESC, importance DESC, updated_at DESC, id)
   WHERE scope = 'temporary' AND is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_memory_items_temporary_recent
+  ON memory_items(updated_at DESC, id DESC)
+  WHERE scope = 'temporary' AND is_deleted = 0;
 DROP INDEX IF EXISTS idx_memory_items_temporary;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_memory_items_scope_dedupe

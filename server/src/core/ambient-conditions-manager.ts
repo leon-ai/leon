@@ -1,10 +1,10 @@
 import {
   TOOLKIT_REGISTRY,
-  TOOL_EXECUTOR
+  TOOL_EXECUTOR,
+  MEMORY_MANAGER
 } from '@/core'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
-import { ToolSettings } from '@/core/tool-manager/tool-settings'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { ToolExecutionOrigin } from '@/types'
@@ -182,22 +182,10 @@ export default class AmbientConditionsManager {
     }
   }
 
-  private getOwnerLocationQuery(): string {
-    // Vibes follows an explicit weather preference; travel memories stay independent.
-    const settings = ToolSettings.loadToolSettings('weather', 'openmeteo', {}, true)
-    const override = settings['vibesLocation'] as {
-      location?: unknown
-      expiresAt?: unknown
-    } | null | undefined
-
-    if (
-      typeof override?.location === 'string' &&
-      override.location.trim() &&
-      typeof override.expiresAt === 'number' &&
-      Number.isFinite(override.expiresAt) &&
-      override.expiresAt > Date.now()
-    ) {
-      return override.location.trim()
+  private async getOwnerLocationQuery(): Promise<string> {
+    const location = await MEMORY_MANAGER.getTemporaryLocation()
+    if (location) {
+      return [location.city, location.country].filter(Boolean).join(', ')
     }
 
     const ownerProfile = readOwnerProfileSync()
@@ -217,7 +205,7 @@ export default class AmbientConditionsManager {
   }
 
   private async refreshWeatherIfNeeded(): Promise<void> {
-    const locationQuery = this.getOwnerLocationQuery()
+    const locationQuery = await this.getOwnerLocationQuery()
 
     if (!locationQuery) {
       this.locationQuery = null
@@ -288,7 +276,7 @@ export default class AmbientConditionsManager {
       }
 
       // A location change during the request must not publish stale-city data.
-      if (this.getOwnerLocationQuery() !== locationQuery) {
+      if (await this.getOwnerLocationQuery() !== locationQuery) {
         return
       }
 

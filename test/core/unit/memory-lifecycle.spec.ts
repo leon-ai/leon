@@ -1,10 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-
 import SQLite, { type Database } from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
 import MemoryManager from '@/core/memory-manager/memory-manager'
 import MemoryRepository from '@/core/memory-manager/memory-repository'
 import type { MemoryRecord, MemoryWriteInput } from '@/core/memory-manager/types'
@@ -18,15 +16,19 @@ const state = vi.hoisted(() => ({
   prompt: vi.fn()
 }))
 
+
 vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd(), MEMORY_EXTRACTION_MAX_BATCH_TURNS: 3 }))
+
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: { title: vi.fn(), info: vi.fn(), success: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
+
 vi.mock('@/core/profile-runtime/profile-paths', () => ({
   getProfilePaths: (): { name: string, memory: string, context: string } => ({
     name: 'memory-test', memory: state.root, context: `${state.root}/context`
   })
 }))
+
 vi.mock('@/core/config-states/config-state', () => ({
   CONFIG_STATE: {
     getModelState: (): { getWorkflowProvider: () => string } => ({
@@ -34,10 +36,13 @@ vi.mock('@/core/config-states/config-state', () => ({
     })
   }
 }))
-vi.mock('@/core', () => ({ LLM_PROVIDER: { prompt: state.prompt } }))
+
+vi.mock('@/core', () => ({ LLM_PROVIDER: { prompt: state.prompt, isLLMProviderReady: false } }))
+
 vi.mock('@/core/tool-manager/tool-settings', () => ({
   ToolSettings: { loadToolSettings: (): Record<string, unknown> => state.settings }
 }))
+
 vi.mock('@/core/memory-manager/qmd/qmd-store', () => ({
   QMDWriteLockTimeoutError: class extends Error {},
   getQMDStore: vi.fn(async () => ({})),
@@ -48,6 +53,7 @@ vi.mock('@/core/memory-manager/qmd/qmd-store', () => ({
     state.rows.filter((row) => collectionNames.includes(String(row['collection'])))
   )
 }))
+
 
 describe('memory lifecycle', () => {
   let manager: MemoryManager

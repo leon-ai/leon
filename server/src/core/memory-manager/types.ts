@@ -1,4 +1,5 @@
 import type { MemoryChange } from '@/core/llm-manager/memory-activity-contract'
+import type { TemporaryLocation } from '@@/bridges/runtime/nodejs/temporary-memory'
 
 export type MemoryScope = 'persistent' | 'daily' | 'discussion' | 'temporary'
 
@@ -69,6 +70,7 @@ export interface TemporaryContextEntry {
   source: string | null
   sourceType: MemorySourceType
   expiresAt: string
+  currentLocation?: TemporaryLocation
 }
 
 export interface RecallQuery {

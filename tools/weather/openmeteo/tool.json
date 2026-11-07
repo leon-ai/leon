@@ -42,25 +42,6 @@
         "additionalProperties": false
       },
       "completion_review": "optional"
-    },
-    "configureVibesLocation": {
-      "description": "Set a temporary weather city for Vibes, or clear it to use my home city.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "location": {
-            "type": ["string", "null"],
-            "description": "City and country selected by the owner for Vibes. Null clears the override."
-          },
-          "expiresAt": {
-            "type": "number",
-            "description": "Required when setting a city: owner-selected expiry in Unix milliseconds."
-          }
-        },
-        "required": ["location"],
-        "additionalProperties": false
-      },
-      "progressive_guidance": "Use only when the owner asks to change the weather location used by Vibes. Set an expiry agreed with the owner; ask if the duration is unclear. Pass location null to clear it. Ordinary weather lookups and travel memories must not change this preference. The override expires automatically and falls back to the home city without changing residence or memory."
     }
   }
 }

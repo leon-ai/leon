@@ -48,7 +48,11 @@ const scenario: RealAgentScenario = {
         parsed_input: input.parsedInput || null,
         output: { result: { success: true, data: {
           location: input.parsedInput?.['location'],
-          current: { temperature_2m: 18, weather: 'clear', wind_speed_10m: 7 },
+          current: {
+            temperature_2m: 18, weather: 'clear', wind_speed_10m: 7,
+            temperatureC: '18', feelsLikeC: '18', weatherCode: 0,
+            observationTime: new Date().toISOString()
+          },
           units: { temperature_2m: '°C', wind_speed_10m: 'km/h' }
         } } }
       }
@@ -72,8 +76,16 @@ const scenario: RealAgentScenario = {
       assert.ok(Number(location['expires_at']) > Date.now())
       assert.ok(Number(location['expires_at']) - Number(location['created_at']) <= MAXIMUM_LIFETIME_MS)
       assert.ok(String(location['source_ref']).includes(first.sessionId))
-      const metadata = JSON.parse(String(location['metadata_json'])) as { evidence?: string }
+      const metadata = JSON.parse(String(location['metadata_json'])) as {
+        evidence?: string
+        currentLocation?: { city: string, country?: string }
+      }
       assert.ok(metadata.evidence && OWNER_STATEMENT.includes(metadata.evidence))
+      assert.equal(metadata.currentLocation?.city.toLowerCase(), TEMPORARY_CITY.toLowerCase())
+      const { AMBIENT_CONDITIONS_MANAGER } = await import('@/core')
+      const ambient = await AMBIENT_CONDITIONS_MANAGER.getSnapshot()
+      assert.ok(ambient.weather?.location.toLowerCase().includes(TEMPORARY_CITY.toLowerCase()),
+        'Vibes must use the same saved current-location fact.')
 
       // A current stay must survive newer inferred facts even when the owner
       // chooses a small budget and there are more candidates than item slots.
