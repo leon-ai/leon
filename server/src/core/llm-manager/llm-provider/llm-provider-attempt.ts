@@ -120,6 +120,7 @@ export async function runCompletionAttempt(
   let promptCache: PromptCacheObservation | undefined
   let isReasoning = false
   let isAwaitingReasoningContinuation = false
+  let hasNonReasoningOutput = false
   let isCompacting = false
   let isAwaitingContinuation = false
   const pendingHostedTools = new Set<string>()
@@ -295,6 +296,7 @@ export async function runCompletionAttempt(
     }
 
     if (chunk.length > 0) {
+      hasNonReasoningOutput = true
       isAwaitingReasoningContinuation = false
       firstTokenAt ??= Date.now()
       activity.outputStarted()
@@ -446,6 +448,7 @@ export async function runCompletionAttempt(
     } else if (STREAM_OUTPUT_EVENTS.has(event.type)) {
       isAwaitingContinuation = false
       isAwaitingReasoningContinuation = false
+      hasNonReasoningOutput = true
       activity.outputStarted()
       lastOutputAt = Date.now()
       markStreamStarted()
@@ -462,6 +465,7 @@ export async function runCompletionAttempt(
     onStreamEvent,
     onToolCall: (call: OpenAIToolCall): void => {
       if (!abortController.signal.aborted) {
+        hasNonReasoningOutput = true
         completionParams.onToolCall?.(call)
       }
     },
@@ -565,6 +569,15 @@ export async function runCompletionAttempt(
     clearStreamStallTimeout()
   } catch (e) {
     attachProviderFailureDiagnostics(e, activity.snapshot(), callerAbortSignal?.aborted)
+    if (e instanceof Error && e.name === STREAM_IDLE_TIMEOUT_ERROR_NAME) {
+      // Reasoning summaries do not commit an answer or execute a tool. Keep
+      // this distinction with the failure so retry policy can use real evidence.
+      Object.assign(e, {
+        reasoningOnly: !hasNonReasoningOutput && (
+          firstReasoningTokenAt !== undefined || isReasoning || isAwaitingReasoningContinuation
+        )
+      })
+    }
     const recovery = prepareCompletionRetry(e, {
       ...completionParams,
       retryInterruptedResponse: completionParams.retryInterruptedResponse === true &&
