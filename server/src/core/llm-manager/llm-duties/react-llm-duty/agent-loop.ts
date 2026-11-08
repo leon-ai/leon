@@ -44,7 +44,7 @@ import {
   buildComputerUseConvergenceHint,
   getComputerUseRetryBlocker
 } from './computer-use-convergence'
-import { createAgentTextPreview } from './agent-context-budget'
+import { createAgentTextPreview, retainRecentToolImages } from './agent-context-budget'
 import {
   completeAgentImageBatch,
   prepareAgentImageBatch,
@@ -2384,7 +2384,7 @@ async function executeAgentToolCall(
   }
   // State changes expire read observations. Side-effect deduplication keeps
   // the full history so intervening operations cannot authorize a repeat.
-  const duplicate =
+  let duplicate =
     callable.functionConfig.deduplicate_calls === false
       ? null
       : findDuplicateToolInputMatch(
@@ -2398,6 +2398,19 @@ async function executeAgentToolCall(
                 ?.functionConfig.read_only === true
             : undefined
         )
+  if (duplicate && callable.functionConfig.read_only === true) {
+    const previous = executionHistory[duplicate.stepNumber - 1]!
+    const observation = retainRecentToolImages(params.transcript).find(
+      (message) => message.role === 'tool' && message.toolCallId === previous.toolCallId
+    )
+
+    // An earlier read cannot supply evidence removed from the model's view.
+    // Older checkpoints without call attribution also need a fresh observation.
+    if (!observation || observation.role !== 'tool' ||
+      (observation.files?.length ?? 0) < (previous.modelFileCount ?? 0)) {
+      duplicate = null
+    }
+  }
   if (duplicate) {
     return {
       content: `Duplicate call blocked: ${callable.qualifiedName} already ran with the same or an overlapping input in step ${duplicate.stepNumber}. Reuse its result from the transcript or request only the unread range.`,
@@ -2437,8 +2450,11 @@ async function executeAgentToolCall(
       }
     }
 
+    modelFiles = result.modelFiles
     execution = {
       ...result.execution,
+      toolCallId: toolCall.id,
+      modelFileCount: modelFiles?.length ?? 0,
       startedAt: executionStartedAt,
       completedAt: executionCompletedAt,
       durationMs: executionCompletedAt - executionStartedAt,
@@ -2446,7 +2462,6 @@ async function executeAgentToolCall(
         ? { toolCallTitle: toolCallInput.title }
         : {})
     }
-    modelFiles = result.modelFiles
     handoffSignal = result.handoffSignal
   } catch (error) {
     params.signal?.throwIfAborted()
@@ -2455,6 +2470,7 @@ async function executeAgentToolCall(
     const executionCompletedAt = Date.now()
     execution = {
       function: callable.qualifiedName,
+      toolCallId: toolCall.id,
       status: 'error',
       observation: `Tool execution failed: ${String(error)}`,
       startedAt: executionStartedAt,
