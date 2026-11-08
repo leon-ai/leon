@@ -110,7 +110,9 @@ describe('SatelliteRegistry', () => {
       profileName: PROFILE_NAME, deviceId: DEVICE_ID,
       toolInput: TOOL_INPUT, signal: controller.signal
     })
-    const rejection = expect(execution).rejects.toThrow()
+    const rejection = expect(execution).rejects.toThrow(
+      cause === 'disconnect' ? `Satellite "${DEVICE_ID}" disconnected.` : undefined
+    )
     const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
     if (cause === 'abort') controller.abort()
     else if (cause === 'timeout') await vi.advanceTimersByTimeAsync(15 * 60 * 1_000)
@@ -223,31 +225,6 @@ describe('SatelliteRegistry', () => {
 
     expect(observedProfiles).toEqual([PROFILE_NAME])
     await expect(executionPromise).resolves.toEqual(TOOL_RESULT)
-  })
-
-  it('rejects pending work when the device disconnects', async () => {
-    SATELLITE_REGISTRY.register({
-      profileName: PROFILE_NAME,
-      device: {
-        id: DEVICE_ID,
-        name: 'Test Satellite',
-        platform: 'linux'
-      },
-      toolkits: [],
-      transport: { emit: vi.fn() }
-    })
-
-    const executionPromise = SATELLITE_REGISTRY.invokeTool({
-      profileName: PROFILE_NAME,
-      deviceId: DEVICE_ID,
-      toolInput: TOOL_INPUT
-    })
-
-    SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
-
-    await expect(executionPromise).rejects.toThrow(
-      `Satellite "${DEVICE_ID}" disconnected.`
-    )
   })
 
   it('keeps a replacement connection when the old transport disconnects', async () => {
