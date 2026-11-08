@@ -1282,6 +1282,46 @@ describe('LLMProvider', () => {
     }
   })
 
+  it('allows an answer to arrive during the reasoning continuation allowance', async () => {
+    vi.useFakeTimers()
+
+    try {
+      let params!: CompletionParams
+      let complete!: (value: unknown) => void
+      const runChatCompletion = vi.fn((_prompt, options: CompletionParams) => {
+        params = options
+        params.onStreamEvent?.({ type: 'reasoning-start' })
+        params.onReasoningToken?.('Checking the evidence.')
+        params.onStreamEvent?.({ type: 'reasoning-end' })
+
+        return new Promise((resolve) => {
+          complete = resolve
+        })
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Complete the task.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 180_000, retryInterruptedResponse: true
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(params.signal?.aborted).toBe(false)
+      params.onStreamEvent?.({ type: 'text-start' })
+      params.onToken?.('Verified answer.')
+      params.onStreamEvent?.({ type: 'finish' })
+      complete({ data: { choices: [{ message: { content: 'Verified answer.' } }] } })
+
+      expect((await pending)?.output).toBe('Verified answer.')
+      expect(runChatCompletion).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['compaction', 'commentary'])('bounds silent %s even when transport heartbeats continue', async (phase) => {
     vi.useFakeTimers()
 
