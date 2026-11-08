@@ -38,7 +38,6 @@ export interface ProviderConnection {
   baseURL: string
   apiKey: string
   accountId?: string
-  chatModel?: string
 }
 
 /**
@@ -83,8 +82,7 @@ export async function resolveProviderConnection(
         ? String(credentials['base_url'] || defaultBaseURL || config.baseURL)
         : defaultBaseURL || CONFIG_MANAGER.getProviderBaseURL(provider) || config.baseURL),
     ...(subscription ? {
-      accountId: String(credentials['account_id']),
-      ...(typeof credentials['model'] === 'string' ? { chatModel: credentials['model'] } : {})
+      accountId: String(credentials['account_id'])
     } : {})
   }
 }

@@ -18,7 +18,6 @@ import {
   providerRequest
 } from './media-generation-transport'
 import { generateHostedDocument } from './media-generation-hosted-documents'
-import { resolveMediaGenerationAgentTarget } from './media-generation-selection'
 import { createMediaProviderError } from './media-generation-provider-error'
 
 interface ProviderResult {
@@ -114,25 +113,8 @@ export async function generateWithProvider(
   const subscriptionImage = provider === LLMProviders.OpenAI &&
     Boolean(imageConnection.accountId)
 
-  if (provider === LLMProviders.OpenAI && (subscriptionImage || options['mode'] === 'hosted')) {
+  if (provider === LLMProviders.OpenAI && options['mode'] === 'hosted') {
     const { image_model, ...imageOptions } = options
-    let responseModel = model
-    let imageModel = image_model
-
-    if (subscriptionImage && options['mode'] !== 'hosted') {
-      const target = resolveMediaGenerationAgentTarget(input.session_id)
-
-      // The mainline model hosts the image tool; it must not replace the owner's
-      // selected image model or inherit another conversation's model override.
-      responseModel = target.provider === provider
-        ? target.model
-        : imageConnection.chatModel || ''
-      imageModel = model
-
-      if (!responseModel) {
-        throw new Error('The selected OpenAI account needs a chat model to host image generation.')
-      }
-    }
     if (subscriptionImage) {
       if (imageOptions['n'] !== undefined && imageOptions['n'] !== 1) {
         throw new Error('Subscription image generation requires one image per call.')
@@ -146,7 +128,7 @@ export async function generateWithProvider(
       provider,
       '/responses',
       {
-        model: responseModel,
+        model,
         // Keep accounting on the bounded terminal event rather than a JSON body
         // containing the complete base64 image.
         ...(subscriptionImage ? { stream: true } : {}),
@@ -167,7 +149,7 @@ export async function generateWithProvider(
           {
             type: 'image_generation',
             ...imageOptions,
-            ...(imageModel ? { model: imageModel } : {})
+            ...(image_model ? { model: image_model } : {})
           }
         ]
       },
@@ -276,7 +258,19 @@ export async function generateWithProvider(
       ? '/image_generation'
       : '/images/generations'
 
-  if (references.length) {
+  if (references.length && subscriptionImage) {
+    // The subscription image endpoint accepts references in JSON, keeping the
+    // requested image model independent of any mainline model's tool defaults.
+    imageBody = {
+      ...options,
+      model,
+      prompt,
+      images: references.map((file) => ({
+        image_url: `data:${file.artifact.mime_type};base64,${file.data.toString('base64')}`
+      }))
+    }
+    imageEndpoint = '/images/edits'
+  } else if (references.length) {
     const form = new FormData()
 
     form.set('model', model)
