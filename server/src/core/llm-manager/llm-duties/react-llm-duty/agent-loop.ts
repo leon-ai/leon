@@ -44,7 +44,7 @@ import {
   buildComputerUseConvergenceHint,
   getComputerUseRetryBlocker
 } from './computer-use-convergence'
-import { createAgentTextPreview } from './agent-context-budget'
+import { createAgentTextPreview, retainRecentToolImages } from './agent-context-budget'
 import {
   completeAgentImageBatch,
   prepareAgentImageBatch,
@@ -409,6 +409,10 @@ export interface AgentLoopParams {
   onAgentSkillLoaded?: (context: AgentSkillContext) => void | Promise<void>
   onPlanUpdated?: (steps: TrackedPlanStep[]) => void
   onProgressMessage?: (message: string) => Promise<void> | void
+  /**
+   * Settles previews with the result of a call handled without tool dispatch.
+   */
+  onToolCallSkipped?: (toolCallId: string, reason: string) => void
   onInspectionCheckpoint?: (
     state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>
   ) => Promise<void> | void
@@ -1289,11 +1293,14 @@ export async function runAgentLoop(
     for (let callIndex = 0; callIndex < toolCalls.length;) {
       if (params.runBudget?.isExpired) {
         for (const call of toolCalls.slice(callIndex)) {
+          const content = 'Tool call skipped because the task reached its run deadline.'
+
+          params.onToolCallSkipped?.(call.id, content)
           transcript.push({
             role: 'tool',
             toolCallId: call.id,
             toolName: call.function.name,
-            content: 'Tool call skipped because the task reached its run deadline.'
+            content
           })
         }
 
@@ -1315,13 +1322,16 @@ export async function runAgentLoop(
       if (terminalSignal) {
         // Providers require one result for every emitted tool call. Complete
         // the protocol without running work after a terminal handoff.
+        const content = toolCall.id === cancellationCall?.id
+          ? 'Task canceled by the owner.'
+          : 'Tool call skipped because an earlier call ended this agent run.'
+
+        params.onToolCallSkipped?.(toolCall.id, content)
         transcript.push({
           role: 'tool',
           toolCallId: toolCall.id,
           toolName: toolCall.function.name,
-          content: toolCall.id === cancellationCall?.id
-            ? 'Task canceled by the owner.'
-            : 'Tool call skipped because an earlier call ended this agent run.'
+          content
         })
         callIndex += 1
         continue
@@ -1462,11 +1472,14 @@ async function appendPendingOwnerMessages(
   }
 
   for (const call of unstartedCalls) {
+    const content = 'Tool call skipped because new owner instructions require reassessment.'
+
+    params.onToolCallSkipped?.(call.id, content)
     transcript.push({
       role: 'tool',
       toolCallId: call.id,
       toolName: call.function.name,
-      content: 'Tool call skipped because new owner instructions require reassessment.'
+      content
     })
   }
 
@@ -2120,6 +2133,11 @@ async function executeAgentToolBatch(
       throw outcome.reason
     }
 
+    const { call, result, records } = outcome.value
+    if (records.length === 0) {
+      params.onToolCallSkipped?.(call.id, result.content)
+    }
+
     results.push(outcome.value)
   }
 
@@ -2366,7 +2384,7 @@ async function executeAgentToolCall(
   }
   // State changes expire read observations. Side-effect deduplication keeps
   // the full history so intervening operations cannot authorize a repeat.
-  const duplicate =
+  let duplicate =
     callable.functionConfig.deduplicate_calls === false
       ? null
       : findDuplicateToolInputMatch(
@@ -2380,6 +2398,19 @@ async function executeAgentToolCall(
                 ?.functionConfig.read_only === true
             : undefined
         )
+  if (duplicate && callable.functionConfig.read_only === true) {
+    const previous = executionHistory[duplicate.stepNumber - 1]!
+    const observation = retainRecentToolImages(params.transcript).find(
+      (message) => message.role === 'tool' && message.toolCallId === previous.toolCallId
+    )
+
+    // An earlier read cannot supply evidence removed from the model's view.
+    // Older checkpoints without call attribution also need a fresh observation.
+    if (!observation || observation.role !== 'tool' ||
+      (observation.files?.length ?? 0) < (previous.modelFileCount ?? 0)) {
+      duplicate = null
+    }
+  }
   if (duplicate) {
     return {
       content: `Duplicate call blocked: ${callable.qualifiedName} already ran with the same or an overlapping input in step ${duplicate.stepNumber}. Reuse its result from the transcript or request only the unread range.`,
@@ -2419,8 +2450,11 @@ async function executeAgentToolCall(
       }
     }
 
+    modelFiles = result.modelFiles
     execution = {
       ...result.execution,
+      toolCallId: toolCall.id,
+      modelFileCount: modelFiles?.length ?? 0,
       startedAt: executionStartedAt,
       completedAt: executionCompletedAt,
       durationMs: executionCompletedAt - executionStartedAt,
@@ -2428,7 +2462,6 @@ async function executeAgentToolCall(
         ? { toolCallTitle: toolCallInput.title }
         : {})
     }
-    modelFiles = result.modelFiles
     handoffSignal = result.handoffSignal
   } catch (error) {
     params.signal?.throwIfAborted()
@@ -2437,6 +2470,7 @@ async function executeAgentToolCall(
     const executionCompletedAt = Date.now()
     execution = {
       function: callable.qualifiedName,
+      toolCallId: toolCall.id,
       status: 'error',
       observation: `Tool execution failed: ${String(error)}`,
       startedAt: executionStartedAt,

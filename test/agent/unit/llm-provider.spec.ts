@@ -1282,6 +1282,182 @@ describe('LLMProvider', () => {
     }
   })
 
+  it('allows an answer to arrive during the reasoning continuation allowance', async () => {
+    vi.useFakeTimers()
+
+    try {
+      let params!: CompletionParams
+      let complete!: (value: unknown) => void
+      const runChatCompletion = vi.fn((_prompt, options: CompletionParams) => {
+        params = options
+        params.onStreamEvent?.({ type: 'reasoning-start' })
+        params.onReasoningToken?.('Checking the evidence.')
+        params.onStreamEvent?.({ type: 'reasoning-end' })
+
+        return new Promise((resolve) => {
+          complete = resolve
+        })
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Complete the task.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 180_000, retryInterruptedResponse: true
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(params.signal?.aborted).toBe(false)
+      params.onStreamEvent?.({ type: 'text-start' })
+      params.onToken?.('Verified answer.')
+      params.onStreamEvent?.({ type: 'finish' })
+      complete({ data: { choices: [{ message: { content: 'Verified answer.' } }] } })
+
+      expect((await pending)?.output).toBe('Verified answer.')
+      expect(runChatCompletion).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    { recovers: true, summaries: true },
+    { recovers: false, summaries: true },
+    { recovers: true, summaries: false }
+  ])('retries a reasoning-only stall once with a fresh request (recovers: $recovers, summaries: $summaries)', async ({ recovers, summaries }) => {
+    vi.useFakeTimers()
+
+    try {
+      const attempts: CompletionParams[] = []
+      const onAttempt = vi.fn()
+      const onToken = vi.fn()
+      const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+        attempts.push(params)
+        params.onStreamEvent?.({ type: 'reasoning-start' })
+        if (summaries) {
+          params.onReasoningToken?.('Inspecting the evidence.')
+        }
+        params.onStreamEvent?.({ type: 'reasoning-end' })
+        if (attempts.length === 2 && recovers) {
+          params.onToken?.('Recovered answer.')
+          params.onStreamEvent?.({ type: 'finish' })
+
+          return Promise.resolve({ data: { choices: [{ message: { content: 'Recovered answer.' } }] } })
+        }
+
+        return new Promise((_resolve, reject) => {
+          params.signal?.addEventListener('abort', () => reject(params.signal?.reason), { once: true })
+        })
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Finish the original task.', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 180_000, maxRetries: 3, remoteProviderErrorRetries: 3,
+        retryInterruptedResponse: true, onAttempt, onToken
+      })
+
+      await vi.advanceTimersByTimeAsync(89_999)
+      expect(attempts).toHaveLength(1)
+      expect(attempts[0]!.signal?.aborted).toBe(false)
+      attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
+      attempts[0]!.onStreamEvent?.({ type: 'transport-heartbeat' })
+      await vi.advanceTimersByTimeAsync(1)
+      expect(attempts).toHaveLength(2)
+      expect(attempts[0]!.signal?.aborted).toBe(true)
+      expect(attempts[1]!.signal).not.toBe(attempts[0]!.signal)
+      attempts[0]!.onToken?.('Late discarded output.')
+      if (!recovers) {
+        await vi.advanceTimersByTimeAsync(90_000)
+      }
+      const result = await pending
+
+      expect(result?.output ?? null).toBe(recovers ? 'Recovered answer.' : null)
+      expect(runChatCompletion).toHaveBeenCalledTimes(2)
+      expect(runChatCompletion.mock.calls.every(([prompt]) => prompt === 'Finish the original task.')).toBe(true)
+      expect(onToken).not.toHaveBeenCalledWith('Late discarded output.')
+      expect(onAttempt.mock.calls[1]![0]).toMatchObject({
+        outcome: 'LLMStreamIdleTimeout', elapsedMs: 90_000,
+        retryDecision: 'retry', retryReason: 'reasoning_only_timeout'
+      })
+      if (!recovers) {
+        expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+          retryDecision: 'stop', retryReason: 'retry_budget_exhausted'
+        })
+      }
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['text', 'tool arguments', 'tool callback', 'file', 'source', 'hosted tool', 'completed', 'caller opt-out', 'owner cancellation', 'deadline', 'retry budget'])(
+    'does not replay a reasoning timeout blocked by %s', async (blocker) => {
+      vi.useFakeTimers()
+
+      try {
+        const onAttempt = vi.fn()
+        const owner = new AbortController()
+        const cancellation = new Error('Owner canceled')
+        const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+          params.onStreamEvent?.({ type: 'reasoning-start' })
+          params.onReasoningToken?.('Inspecting the evidence.')
+          params.onStreamEvent?.({ type: 'reasoning-end' })
+          if (blocker === 'text') {
+            params.onToken?.('Partial answer.')
+          } else if (blocker === 'tool arguments') {
+            params.onStreamEvent?.({ type: 'tool-input-delta' })
+          } else if (blocker === 'tool callback') {
+            params.onToolCall?.({
+              id: 'unfinished', type: 'function', function: { name: 'inspect', arguments: '{' }
+            })
+          } else if (blocker === 'file' || blocker === 'source') {
+            params.onStreamEvent?.({ type: blocker })
+          } else if (blocker === 'hosted tool') {
+            params.onStreamEvent?.({ type: 'tool-call', toolCallId: 'hosted', providerExecuted: true })
+            params.onStreamEvent?.({ type: 'tool-result', toolCallId: 'hosted' })
+          } else if (blocker === 'completed') {
+            params.onStreamEvent?.({ type: 'provider-event', providerCompleted: true })
+          }
+
+          return new Promise((_resolve, reject) => {
+            params.signal?.addEventListener('abort', () => reject(params.signal?.reason), { once: true })
+          })
+        })
+        const manager = new LLMProvider()
+        const state = manager as unknown as LLMProviderTestState
+        state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+        state.agentLLMProviderTargetLabel = celerisTarget.label
+        const pending = manager.prompt('Finish the task.', {
+          dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+          timeout: 180_000, maxRetries: blocker === 'retry budget' ? 0 : 3,
+          remoteProviderErrorRetries: 3, retryInterruptedResponse: blocker !== 'caller opt-out', onAttempt,
+          cancellationSignal: owner.signal,
+          ...(blocker === 'deadline' ? { getRetryTimeout: (): number => 0 } : {})
+        })
+
+        if (blocker === 'owner cancellation') {
+          const canceled = expect(pending).rejects.toBe(cancellation)
+          await vi.advanceTimersByTimeAsync(10_000)
+          owner.abort(cancellation)
+          await canceled
+        } else {
+          await vi.advanceTimersByTimeAsync(180_001)
+          expect(await pending).toBeNull()
+        }
+        expect(runChatCompletion).toHaveBeenCalledOnce()
+        expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({ retryDecision: 'stop' })
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it.each(['compaction', 'commentary'])('bounds silent %s even when transport heartbeats continue', async (phase) => {
     vi.useFakeTimers()
 

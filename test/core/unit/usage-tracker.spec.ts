@@ -400,4 +400,47 @@ describe('inference usage', () => {
       { inputTokens: 30, outputTokens: 5 }
     ])
   })
+
+  it.each([
+    { chunkSize: 1, outcome: 'completed' },
+    { chunkSize: 1_023, outcome: 'completed' },
+    { chunkSize: 16_384, outcome: 'completed' },
+    { chunkSize: 1_023, outcome: 'failed' }
+  ])('records $outcome usage after long escaped JSON strings across $chunkSize-byte chunks without changing content', async ({ chunkSize, outcome }) => {
+    const inference = createInferenceMetadata({
+      ...TARGET, authMode: InferenceAuthMode.ChatGPTOAuth,
+      credentialSource: InferenceCredentialSource.AccountBinding,
+      endpoint: 'https://provider.example/images/edits'
+    })
+    const json = {
+      data: [{ b64_json: 'private "image" \\ 世界\n {"usage":{"input_tokens":999}}'.repeat(100) }],
+      description: 'A quoted "image" with a trailing backslash \\',
+      ...(outcome === 'failed' ? { error: 'private error'.repeat(100) } : {}),
+      usage: { input_tokens: 90, output_tokens: 10 }
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(json))
+    let offset = 0
+    const response = await trackProviderResponseUsage(inference, async () => new Response(
+      new ReadableStream<Uint8Array>({
+        pull(controller): void {
+          if (offset === bytes.length) {
+            controller.close()
+            return
+          }
+
+          controller.enqueue(bytes.subarray(offset, offset + chunkSize))
+          offset = Math.min(offset + chunkSize, bytes.length)
+        }
+      }), { headers: { 'content-type': 'application/json' } }
+    ))
+
+    expect(await response.json()).toEqual(json)
+    const saved = await records()
+
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({
+      outcome, usage: { inputTokens: 90, outputTokens: 10 }
+    })
+    expect(JSON.stringify(saved)).not.toContain('private')
+  })
 })

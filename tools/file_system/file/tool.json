@@ -96,6 +96,7 @@
       }
     },
     "readImage": {
+      "read_only": true,
       "description": "Read image text with local multilingual OCR, including for text-only models. Models are downloaded on first use and reused. Optionally attach a bounded image for a vision model.",
       "progressive_guidance": "OCR returns text, not chart data or semantic formatting. Request layout for text regions and confidence; coordinates refer to the returned image dimensions. Follow nextLayoutOffset using layoutOffset. For visual interpretation use ocr=false, render=true with the selected vision-capable model; otherwise state the limitation.",
       "parameters": {

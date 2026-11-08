@@ -234,6 +234,7 @@ export enum ProviderRetryDecision {
 
 export enum ProviderRetryReason {
   Connection = 'connection_failure',
+  ReasoningTimeout = 'reasoning_only_timeout',
   Accepted = 'accepted_request_outcome_unknown',
   Transient = 'quick_transient_failure',
   Compatibility = 'provider_compatibility',
@@ -399,7 +400,7 @@ export interface CompletionParams {
   connectionErrorRetries?: number
   connectionRetryAttempt?: number
   /**
-   * Allows connection recovery after acceptance or provisional output when the
+   * Allows safe recovery after acceptance or provisional output when the
    * caller discards interrupted drafts and executes only completed local calls.
    * Requests that execute provider-owned tools cannot use this recovery.
    */

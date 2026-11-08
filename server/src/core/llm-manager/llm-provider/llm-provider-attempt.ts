@@ -72,6 +72,7 @@ const STREAM_OUTPUT_EVENTS = new Set([
 ])
 
 const REMOTE_STREAM_IDLE_TIMEOUT_MS = 30_000
+const REMOTE_REASONING_CONTINUATION_TIMEOUT_MS = 90_000
 const REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS = 12_000
 const PROVIDER_CANCELLATION_CLEANUP_TIMEOUT_MS = 1_000
 
@@ -118,6 +119,8 @@ export async function runCompletionAttempt(
   )
   let promptCache: PromptCacheObservation | undefined
   let isReasoning = false
+  let isAwaitingReasoningContinuation = false
+  let hasNonReasoningOutput = false
   let isCompacting = false
   let isAwaitingContinuation = false
   const pendingHostedTools = new Set<string>()
@@ -130,6 +133,11 @@ export async function runCompletionAttempt(
       ? Math.min(REMOTE_STREAM_IDLE_TIMEOUT_MS, completionParams.timeout)
       : completionParams.timeout
   )
+  const reasoningContinuationTimeout = isRemoteProvider
+    ? completionParams.streamIdleTimeout ?? Math.min(
+        REMOTE_REASONING_CONTINUATION_TIMEOUT_MS, completionParams.timeout
+      )
+    : idleTimeout
   const logAttempt = (outcome: string, error?: unknown): void => {
     if (outcome !== 'started') {
       recordInferenceUsageOutcome(outcome)
@@ -233,9 +241,11 @@ export async function runCompletionAttempt(
     }
   }
   const resetStreamStallTimeout = (
-    delay = isReasoning || isCompacting || isAwaitingContinuation || pendingHostedTools.size > 0
+    delay = isReasoning || isCompacting || pendingHostedTools.size > 0
       ? completionParams.timeout
-      : idleTimeout,
+      : isAwaitingReasoningContinuation
+        ? reasoningContinuationTimeout
+        : isAwaitingContinuation ? completionParams.timeout : idleTimeout,
     errorName = STREAM_IDLE_TIMEOUT_ERROR_NAME
   ): void => {
     if (!shouldStreamOutput || !completionParams.timeout) {
@@ -286,6 +296,8 @@ export async function runCompletionAttempt(
     }
 
     if (chunk.length > 0) {
+      hasNonReasoningOutput = true
+      isAwaitingReasoningContinuation = false
       firstTokenAt ??= Date.now()
       activity.outputStarted()
       recordActivity('text-delta')
@@ -302,6 +314,7 @@ export async function runCompletionAttempt(
     }
 
     if (reasoningChunk.length > 0) {
+      isAwaitingReasoningContinuation = false
       firstReasoningTokenAt ??= Date.now()
       activity.outputStarted()
       recordActivity('reasoning-delta')
@@ -409,6 +422,7 @@ export async function runCompletionAttempt(
       // A progress update may be followed by silent planning before tools or
       // the final answer. It retains the bounded reasoning allowance.
       isAwaitingContinuation = event.preliminary === true
+      isAwaitingReasoningContinuation = false
       if (hasStartedStreaming) {
         resetStreamStallTimeout()
       }
@@ -422,13 +436,19 @@ export async function runCompletionAttempt(
       resetStreamStallTimeout()
     } else if (event.type === 'reasoning-start') {
       isReasoning = true
+      isAwaitingReasoningContinuation = false
       markStreamStarted()
       resetStreamStallTimeout()
     } else if (event.type === 'reasoning-end') {
       isReasoning = false
+      // Finishing a reasoning item does not mean the answer or tool arguments
+      // are ready. Give that transition its own bounded silence allowance.
+      isAwaitingReasoningContinuation = true
       resetStreamStallTimeout()
     } else if (STREAM_OUTPUT_EVENTS.has(event.type)) {
       isAwaitingContinuation = false
+      isAwaitingReasoningContinuation = false
+      hasNonReasoningOutput = true
       activity.outputStarted()
       lastOutputAt = Date.now()
       markStreamStarted()
@@ -445,6 +465,7 @@ export async function runCompletionAttempt(
     onStreamEvent,
     onToolCall: (call: OpenAIToolCall): void => {
       if (!abortController.signal.aborted) {
+        hasNonReasoningOutput = true
         completionParams.onToolCall?.(call)
       }
     },
@@ -548,6 +569,15 @@ export async function runCompletionAttempt(
     clearStreamStallTimeout()
   } catch (e) {
     attachProviderFailureDiagnostics(e, activity.snapshot(), callerAbortSignal?.aborted)
+    if (e instanceof Error && e.name === STREAM_IDLE_TIMEOUT_ERROR_NAME) {
+      // Reasoning summaries do not commit an answer or execute a tool. Keep
+      // this distinction with the failure so retry policy can use real evidence.
+      Object.assign(e, {
+        reasoningOnly: !hasNonReasoningOutput && (
+          firstReasoningTokenAt !== undefined || isReasoning || isAwaitingReasoningContinuation
+        )
+      })
+    }
     const recovery = prepareCompletionRetry(e, {
       ...completionParams,
       retryInterruptedResponse: completionParams.retryInterruptedResponse === true &&

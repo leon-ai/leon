@@ -59,7 +59,8 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import {
   buildBoundedToolObservation,
-  prepareAgentModelContext
+  prepareAgentModelContext,
+  retainRecentToolImages
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
@@ -1379,6 +1380,7 @@ describe('continuous agent loop', () => {
     ]
     const catalog = createCatalog()
     const call = toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })
+    const unusedCall = toolCall('unused', CALLABLE_TOOL_NAME, { query: 'forecast' })
     coreMocks.prompt
       .mockImplementationOnce(async (_messages, params) => {
         params.onAttempt({
@@ -1390,8 +1392,9 @@ describe('continuous agent loop', () => {
         params.onReasoningToken('Checking ')
         params.onReasoningToken('the weather.')
         params.onToolCall(call)
+        params.onToolCall(unusedCall)
 
-        return { output: '', toolCalls: [call] }
+        return { output: '', toolCalls: [call, unusedCall] }
       })
       .mockImplementationOnce(async (_messages, params) => {
         params.onReasoningToken('Reading ')
@@ -1425,10 +1428,19 @@ describe('continuous agent loop', () => {
         streamOpenMs: 50, firstToolInputMs: 300
       })
     ])
+    const rejection = 'Duplicate call blocked: reuse the existing weather observation.'
+    duty['closeStreamedToolCall'](call.id, rejection)
     duty['closeStreamedToolCalls']()
     expect(duty['responseTraceCollector'].snapshot({}).toolCalls[0]).toMatchObject({
       ...displayNames,
-      status: 'error'
+      status: 'error', errorMessage: rejection
+    })
+    expect(duty['responseTraceCollector'].snapshot({}).toolCalls[1]).toMatchObject({
+      status: 'error', errorMessage: 'This proposed tool call was not executed.'
+    })
+    expect(onProgressEvent).toHaveBeenCalledWith({
+      type: 'tool_call',
+      toolCall: expect.objectContaining({ status: 'error', errorMessage: rejection })
     })
 
     now.mockReturnValue(2_000)
@@ -3170,6 +3182,7 @@ describe('continuous agent loop', () => {
   })
 
   it('blocks an identical tool call and reuses its prior observation', async () => {
+    const onToolCallSkipped = vi.fn()
     const executeFunction = vi.fn().mockResolvedValue({
       execution: {
         function: callable.qualifiedName,
@@ -3202,12 +3215,105 @@ describe('continuous agent loop', () => {
         return { textContent: 'I reused the first result.' }
       },
       executeFunction,
+      onToolCallSkipped,
       loadAgentSkill: async () => null
     })
 
     expect(executeFunction).toHaveBeenCalledOnce()
+    expect(onToolCallSkipped).toHaveBeenCalledWith(
+      'lookup-2', expect.stringContaining('Duplicate call blocked')
+    )
     expect(result.answer).toBe('I reused the first result.')
   })
+
+  it.each([
+    { readOnly: true, executions: 5, skipped: 1 },
+    { readOnly: false, executions: 4, skipped: 2 }
+  ])('reloads evicted visual evidence only for read-only calls (read-only: $readOnly)', async ({ readOnly, executions, skipped }) => {
+    const catalog = createCatalog()
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable, functionConfig: { ...callable.functionConfig, read_only: readOnly }
+    })
+    const sources = ['first', 'second', 'third', 'fourth', 'first', 'first']
+    const onToolCallSkipped = vi.fn()
+    const executeFunction = vi.fn(async (_callable, input: string) => ({
+      execution: {
+        function: callable.qualifiedName, status: 'success',
+        observation: 'Visual source loaded.', requestedToolInput: input
+      },
+      modelFiles: [{ dataBase64: 'aW1hZ2U=', mediaType: 'image/png' }]
+    }))
+    let turn = 0
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Compare the visual sources.' }],
+      catalog,
+      callModel: async (messages) => {
+        if (turn === 4) {
+          const original = retainRecentToolImages(messages).find((message) =>
+            message.role === 'tool' && message.toolCallId === 'source-1'
+          )
+          expect(original).not.toHaveProperty('files')
+        }
+
+        const source = sources[turn]
+        turn += 1
+        return source
+          ? { toolCalls: [toolCall(`source-${turn}`, CALLABLE_TOOL_NAME, { query: source })] }
+          : { textContent: 'The visual comparison is complete.' }
+      },
+      executeFunction, onToolCallSkipped, loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction).toHaveBeenCalledTimes(executions)
+    expect(onToolCallSkipped).toHaveBeenCalledTimes(skipped)
+    expect(onToolCallSkipped).toHaveBeenLastCalledWith(
+      'source-6', expect.stringContaining('Duplicate call blocked')
+    )
+    expect(result.transcript.find((message) =>
+      message.role === 'tool' && message.toolCallId === 'source-5'
+    )).toMatchObject(readOnly
+      ? { files: [{ mediaType: 'image/png' }] }
+      : { content: expect.stringContaining('Duplicate call blocked') })
+    expect(result.intent).toBe('answer')
+  })
+
+  it.each(['compacted result', 'missing attachments', 'legacy checkpoint'])(
+    'reloads read-only evidence after a %s', async (state) => {
+      const catalog = createCatalog()
+      catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+        ...callable, functionConfig: { ...callable.functionConfig, read_only: true }
+      })
+      const input = { query: 'original' }
+      const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Inspect the source again.' }]
+      if (state !== 'compacted result') {
+        transcript.push(
+          { role: 'assistant', content: '', toolCalls: [toolCall('original', CALLABLE_TOOL_NAME, input)] },
+          { role: 'tool', toolCallId: 'original', toolName: CALLABLE_TOOL_NAME, content: 'Source metadata.' }
+        )
+      }
+      const executeFunction = vi.fn(async () => ({
+        execution: {
+          function: callable.qualifiedName, status: 'success',
+          observation: 'Source inspected.', requestedToolInput: JSON.stringify(input)
+        }
+      }))
+
+      await runAgentLoop({
+        transcript, catalog,
+        initialExecutionHistory: [{
+          function: callable.qualifiedName, status: 'success',
+          observation: 'Source metadata.', requestedToolInput: JSON.stringify(input),
+          ...(state === 'legacy checkpoint' ? {} : { toolCallId: 'original', modelFileCount: 1 })
+        }],
+        callModel: vi.fn()
+          .mockResolvedValueOnce({ toolCalls: [toolCall('reload', CALLABLE_TOOL_NAME, input)] })
+          .mockResolvedValueOnce({ textContent: 'Source verified.' }),
+        executeFunction, loadAgentSkill: async () => null
+      })
+
+      expect(executeFunction).toHaveBeenCalledOnce()
+    }
+  )
 
   it('allows repeated successful calls when deduplication is disabled', async () => {
     const repeatableCallable: AgentCallableFunction = {

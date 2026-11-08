@@ -19,6 +19,7 @@ import {
 } from '@/core/llm-manager/types'
 import { StringHelper } from '@/helpers/string-helper'
 import { getConnectionErrorCode } from './provider-request-activity'
+import { STREAM_IDLE_TIMEOUT_ERROR_NAME } from './llm-provider-constants'
 
 export { getConnectionErrorCode, attachProviderFailureDiagnostics } from './provider-request-activity'
 
@@ -31,7 +32,7 @@ const ERROR_DIAGNOSTIC_FIELDS = [
   'requestId', 'responseId', 'providerRequestId', 'elapsedMs', 'requestAcceptedMs',
   'firstProviderEventMs', 'lastProviderEvent', 'lastProviderEventMs',
   'providerIdleMs', 'providerEventCount', 'providerCompleted', 'failureSummary',
-  'firstOutputMs', 'outputPreliminary', 'retryDecision', 'retryReason',
+  'firstOutputMs', 'outputPreliminary', 'reasoningOnly', 'retryDecision', 'retryReason',
   'pingCount', 'pongCount', 'lastPingAgeMs', 'lastPongAgeMs', 'lastPongRttMs'
 ] as const
 const ERROR_CAUSE_FIELDS = ['cause', 'error', 'data', 'response'] as const
@@ -521,7 +522,11 @@ export function prepareCompletionRetry(
   const canRetryInterruptedResponse = Boolean(
     connectionCode && completionParams.retryInterruptedResponse
   )
-  if (typeof details['firstOutputMs'] === 'number' && !canRetryInterruptedResponse) {
+  const canRetryReasoningTimeout = isRemoteProvider && !connectionCode &&
+    completionParams.retryInterruptedResponse === true &&
+    details['name'] === STREAM_IDLE_TIMEOUT_ERROR_NAME && details['reasoningOnly'] === true
+  if (typeof details['firstOutputMs'] === 'number' &&
+    !canRetryInterruptedResponse && !canRetryReasoningTimeout) {
     return stop(ProviderRetryReason.Output)
   }
   if (connectionCode) {
@@ -554,6 +559,24 @@ export function prepareCompletionRetry(
       `Provider connection failed (${connectionCode}); retry ${attempt}/${attempt + remaining - 1} after ${delayMs}ms`,
       delayMs,
       ProviderRetryReason.Connection
+    )
+  }
+  if (canRetryReasoningTimeout) {
+    if (remainingRetries <= 0 || remainingProviderRetries <= 0) {
+      return stop(ProviderRetryReason.Exhausted)
+    }
+
+    // A watchdog expires well after the quick transient-error window. Permit
+    // one fresh attempt without weakening replay checks for actual output.
+    return retry(
+      {
+        ...completionParams,
+        maxRetries: remainingRetries - 1,
+        remoteProviderErrorRetries: 0
+      },
+      'The model stalled after reasoning; retrying once within the remaining inference budget.',
+      0,
+      ProviderRetryReason.ReasoningTimeout
     )
   }
   if (typeof details['elapsedMs'] === 'number' &&

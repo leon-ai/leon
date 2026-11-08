@@ -74,6 +74,9 @@ export interface FunctionConfig {
 
 export interface ExecutionRecord {
   function: string
+  toolCallId?: string
+  // Attachment counts survive compaction without retaining media in execution history.
+  modelFileCount?: number
   toolkitName?: string
   toolName?: string
   status: string

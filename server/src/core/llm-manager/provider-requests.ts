@@ -24,7 +24,10 @@ import {
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 600_000
 const PROVIDER_CAPABILITY_HEADERS = ['anthropic-beta', 'anthropic-version']
-const MODEL_USAGE_ENDPOINTS = new Set(['/responses', '/chat/completions', '/messages'])
+const MODEL_USAGE_ENDPOINTS = new Set([
+  '/responses', '/chat/completions', '/messages',
+  '/images/generations', '/images/edits'
+])
 const CHATGPT_API_ENDPOINTS = new Set([
   '/responses',
   '/images/generations',
@@ -35,7 +38,6 @@ export interface ProviderConnection {
   baseURL: string
   apiKey: string
   accountId?: string
-  chatModel?: string
 }
 
 /**
@@ -80,8 +82,7 @@ export async function resolveProviderConnection(
         ? String(credentials['base_url'] || defaultBaseURL || config.baseURL)
         : defaultBaseURL || CONFIG_MANAGER.getProviderBaseURL(provider) || config.baseURL),
     ...(subscription ? {
-      accountId: String(credentials['account_id']),
-      ...(typeof credentials['model'] === 'string' ? { chatModel: credentials['model'] } : {})
+      accountId: String(credentials['account_id'])
     } : {})
   }
 }
@@ -405,9 +406,11 @@ export async function requestProvider(
     : connection.accountId
       ? await requestChatGPTAccount(connection.accountId, dispatch)
       : await dispatch()
-  const model = body && typeof body === 'object' && !(body instanceof FormData)
-    ? (body as Record<string, unknown>)['model']
-    : undefined
+  const model = body instanceof FormData
+    ? body.get('model')
+    : body && typeof body === 'object'
+      ? (body as Record<string, unknown>)['model']
+      : undefined
   const account = CONFIG_MANAGER.getProviderConfig(provider)?.account
   const response = MODEL_USAGE_ENDPOINTS.has(endpoint) && typeof model === 'string'
     ? await trackProviderResponseUsage(createInferenceMetadata({

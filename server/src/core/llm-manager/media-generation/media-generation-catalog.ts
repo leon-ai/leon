@@ -23,7 +23,7 @@ export const MEDIA_PROVIDERS: Partial<
     base_url: getRequiredLLMProviderAccountConfig(LLMProviders.OpenAI).baseURL,
     kinds: [MediaKind.Image, MediaKind.Document],
     models: {
-      image: ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'],
+      image: ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst'],
       document: ['gpt-6-astra']
     }
   },
@@ -125,7 +125,7 @@ export async function listMediaCapabilities(): Promise<Array<Record<string, unkn
         ? {
             hosted_image: {
               model: 'gpt-6-astra',
-              options: { mode: 'hosted', image_model: 'gpt-image-2.5-flare' }
+              options: { mode: 'hosted', image_model: 'gpt-image-2.6-flare' }
             }
           }
         : {}),

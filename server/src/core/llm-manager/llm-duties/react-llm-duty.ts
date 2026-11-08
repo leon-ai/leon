@@ -800,6 +800,9 @@ export class ReActLLMDuty extends LLMDuty {
           }
           return toolResult
         },
+        onToolCallSkipped: (toolCallId, reason) => {
+          this.closeStreamedToolCall(toolCallId, reason)
+        },
         loadToolkitContext: (toolkitId) =>
           buildToolkitContextSection(caller, toolkitId),
         searchExperiences: (query) => EXPERIENCE_MANAGER.search(query),
@@ -978,28 +981,41 @@ export class ReActLLMDuty extends LLMDuty {
    * Closes previews that were canceled, rejected, or never selected for execution.
    */
   private closeStreamedToolCalls(): void {
-    for (const { callable, groupId, input } of this.streamedToolCalls.values()) {
-      const message = 'This proposed tool call was not executed.'
-      this.reportProgressEvent({
-        type: 'tool_call',
-        toolCall: {
-          id: groupId,
-          name: callable.qualifiedName,
-          status: 'error',
-          input,
-          errorMessage: message
-        }
-      })
-      emitToolExecutionOutputToWebApp({
-        ...callable,
-        toolGroupId: groupId,
-        output: {},
-        status: 'error',
-        message
-      })
+    for (const toolCallId of this.streamedToolCalls.keys()) {
+      this.closeStreamedToolCall(toolCallId, 'This proposed tool call was not executed.')
+    }
+  }
+
+  /**
+   * Settles an unstarted preview with the loop's rejection reason before another
+   * model response can replace it with generic cleanup diagnostics.
+   */
+  private closeStreamedToolCall(toolCallId: string, message: string): void {
+    const preview = this.streamedToolCalls.get(toolCallId)
+    if (!preview) {
+      return
     }
 
-    this.streamedToolCalls.clear()
+    this.streamedToolCalls.delete(toolCallId)
+    const { callable, groupId, input } = preview
+
+    this.reportProgressEvent({
+      type: 'tool_call',
+      toolCall: {
+        id: groupId,
+        name: callable.qualifiedName,
+        status: 'error',
+        input,
+        errorMessage: message
+      }
+    })
+    emitToolExecutionOutputToWebApp({
+      ...callable,
+      toolGroupId: groupId,
+      output: {},
+      status: 'error',
+      message
+    })
   }
 
   private scheduleTraceSave(): void {
