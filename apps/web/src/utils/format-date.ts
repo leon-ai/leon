@@ -1,6 +1,15 @@
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
+const YEAR_MS = 365.25 * DAY_MS
+const COMPACT_DATE_UNITS = [
+  { duration: YEAR_MS, suffix: 'y' },
+  { duration: YEAR_MS / 12, suffix: 'mo' },
+  { duration: 7 * DAY_MS, suffix: 'w' },
+  { duration: DAY_MS, suffix: 'd' },
+  { duration: HOUR_MS, suffix: 'h' },
+  { duration: MINUTE_MS, suffix: 'm' }
+]
 const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit', minute: '2-digit', hour12: false
 })
@@ -17,9 +26,24 @@ function startOfDay(date: Date): number {
 /**
  * Formats session recency consistently across the web app.
  */
-export function formatRelativeDate(timestamp: number, now = Date.now()): string {
+export function formatRelativeDate(
+  timestamp: number,
+  now = Date.now(),
+  format: 'relative' | 'compact' = 'relative'
+): string {
   const elapsedMs = Math.max(0, now - timestamp)
   const date = new Date(timestamp)
+
+  if (!Number.isFinite(timestamp) || Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  if (format === 'compact') {
+    const unit = COMPACT_DATE_UNITS.find(({ duration }) => elapsedMs >= duration)
+
+    return unit ? `${Math.floor(elapsedMs / unit.duration)}${unit.suffix}` : 'now'
+  }
+
   const today = new Date(now)
 
   if (timestamp >= startOfDay(today)) {

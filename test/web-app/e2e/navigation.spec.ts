@@ -1050,6 +1050,61 @@ test('opens and navigates session action menus with arrows, boundaries and nativ
   await expect(menu).toBeHidden()
 })
 
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`shows compact session ages and refreshes them without changing title animations (${colorScheme})`, async ({ page, ui }, testInfo) => {
+    const now = new Date('2026-11-08T10:00:00+08:00')
+    const minute = 60_000
+    const day = 24 * 60 * minute
+    const recencies = [
+      { elapsed: 0, label: 'now' },
+      { elapsed: 7 * minute, label: '7m' },
+      { elapsed: 7 * 60 * minute, label: '7h' },
+      { elapsed: 2 * day, label: '2d' },
+      { elapsed: 14 * day, label: '2w' },
+      { elapsed: 95 * day, label: '3mo' },
+      { elapsed: 800 * day, label: '2y' },
+      { elapsed: 23 * 60 * minute, label: '23h', empty: true }
+    ]
+    const template = ui.sessions[0]!
+    ui.sessions.splice(0, ui.sessions.length, ...recencies.map(({ elapsed, empty }, index) => ({
+      ...template,
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      title: `Test session ${index}`,
+      createdAt: now.getTime() - elapsed,
+      updatedAt: now.getTime(),
+      lastMessageAt: empty ? null : now.getTime() - elapsed
+    })))
+    await page.clock.install({ time: now })
+    await page.addInitScript((theme) => {
+      window.localStorage.setItem('leon.web-app.theme', theme)
+    }, colorScheme)
+    await page.setViewportSize({ width: colorScheme === 'light' ? 1_280 : 1_512, height: 982 })
+    await page.goto('./')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme)
+    const list = page.getByRole('navigation', { name: 'Recents', exact: true })
+    for (const [index, { label, elapsed }] of recencies.entries()) {
+      const link = list.getByRole('link', { name: `Test session ${index}`, exact: true })
+      const time = link.locator('time')
+      await expect(time).toHaveText(label)
+      await expect(time).toHaveAttribute('datetime', new Date(now.getTime() - elapsed).toISOString())
+      const timeBounds = (await time.boundingBox())!
+      const titleBounds = (await link.locator('.session-list-item-title').boundingBox())!
+      expect(titleBounds.x + titleBounds.width).toBeLessThan(timeBounds.x)
+      const rowBounds = (await link.boundingBox())!
+      expect(timeBounds.x + timeBounds.width).toBeLessThan(rowBounds.x + rowBounds.width)
+    }
+    const title = list.getByRole('link', { name: 'Test session 1', exact: true })
+      .locator('.session-list-item-title-resting')
+    const initialTitle = await title.elementHandle()
+    await page.clock.fastForward(minute)
+    await expect(list.getByRole('link', { name: 'Test session 0', exact: true }).locator('time')).toHaveText('1m')
+    await expect(list.getByRole('link', { name: 'Test session 1', exact: true }).locator('time')).toHaveText('8m')
+    expect(await title.evaluate((element, initial) => element === initial, initialTitle)).toBe(true)
+    await expect(title.locator('.streaming-text-character-new')).toHaveCount(0)
+    await list.screenshot({ path: testInfo.outputPath(`session-recency-${colorScheme}.png`) })
+  })
+}
+
 test('reveals active session options on hover or keyboard focus rather than selection', async ({ page, ui }) => {
   void ui
   await page.goto(SESSION_URL)
@@ -1057,20 +1112,25 @@ test('reveals active session options on hover or keyboard focus rather than sele
   const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Test session 0', exact: true }) })
   const link = row.getByRole('link')
   const actions = row.locator('.session-list-item-actions')
+  const time = row.locator('time')
   await composer.focus()
   await composer.hover()
   await expect(link).toHaveClass(/session-list-item-active/)
   await expect(actions).toHaveCSS('opacity', '0')
+  await expect(time).toBeVisible()
   await row.hover()
   await expect(actions).toHaveCSS('opacity', '1')
+  await expect(time).toBeHidden()
   await link.click()
   await composer.hover()
   await expect(actions).toHaveCSS('opacity', '0')
+  await expect(time).toBeVisible()
   await link.focus()
   await page.keyboard.press('Tab')
   const options = row.getByRole('button', { name: 'Session options', exact: true })
   await expect(options).toBeFocused()
   await expect(actions).toHaveCSS('opacity', '1')
+  await expect(time).toBeHidden()
   await options.press('Enter')
   await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeVisible()
 })
@@ -1098,21 +1158,27 @@ for (const pinned of [false, true]) {
     await expect(options).toHaveCSS('opacity', '1')
     await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '0')
     const dotBounds = (await dot.boundingBox())!
+    const timeBounds = (await row.locator('time').boundingBox())!
+    expect(timeBounds.x + timeBounds.width).toBeLessThan(dotBounds.x)
     const optionsBounds = (await options.boundingBox())!
     expect(Math.abs(dotBounds.x + dotBounds.width / 2 - optionsBounds.x - optionsBounds.width / 2)).toBeLessThanOrEqual(1)
     expect(Math.abs(dotBounds.y + dotBounds.height / 2 - optionsBounds.y - optionsBounds.height / 2)).toBeLessThanOrEqual(1)
     if (pinned) {
       const pinBounds = (await row.locator('.session-list-item-pinned-icon').boundingBox())!
       expect(pinBounds.x + pinBounds.width).toBeLessThan(dotBounds.x)
+      expect(timeBounds.x + timeBounds.width).toBeLessThan(pinBounds.x)
     }
     expect(ui.historyRequests.some((url) => url.pathname.endsWith(OTHER_SESSION_ID))).toBe(false)
     await row.hover()
     await expect(dot).not.toBeVisible()
+    await expect(row.locator('time')).toBeHidden()
     await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
     await composer.hover()
     await expect(dot).toBeVisible()
+    await expect(row.locator('time')).toBeVisible()
     await otherLink.focus()
     await expect(dot).not.toBeVisible()
+    await expect(row.locator('time')).toBeHidden()
     await page.keyboard.press('Tab')
     await expect(options).toBeFocused()
     await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
@@ -2176,6 +2242,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 }
 
 test('confirms session management actions once and only after the server accepts them', async ({ page, ui }) => {
+  const now = new Date('2026-11-08T10:00:00+08:00')
+  await page.clock.setFixedTime(now)
+  ui.sessions[0]!.lastMessageAt = now.getTime() - 7 * 60_000
   let pending = Promise.withResolvers<Route>()
   await page.route(`**/api/v1/sessions/${SESSION_ID}?*`, async (route) => {
     if (route.request().method() === 'GET') {
@@ -2218,6 +2287,7 @@ test('confirms session management actions once and only after the server accepts
       await route.fulfill({ json: { success: true } })
     } else {
       expect(route.request().method()).toBe('PATCH')
+      session.updatedAt = now.getTime()
       const changes = route.request().postDataJSON() as { title?: string, is_pinned?: boolean }
       if (changes.title !== undefined) {
         session.title = changes.title
@@ -2234,6 +2304,7 @@ test('confirms session management actions once and only after the server accepts
       await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0)
     } else {
       await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible()
+      await expect(page.getByRole('link', { name: title, exact: true }).locator('time')).toHaveText('7m')
     }
     await page.getByRole('button', { name: 'Close notification', exact: true }).click()
     await expect(page.locator('.toast')).toHaveCount(0)

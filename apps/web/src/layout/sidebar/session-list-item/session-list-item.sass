@@ -84,7 +84,8 @@
       opacity: 1
       pointer-events: auto
 
-    .session-list-item-unread-dot
+    .session-list-item-unread-dot,
+    .session-list-item-time
       display: none
 
     .session-list-item-pinned-icon
@@ -139,6 +140,15 @@
     display: block
     overflow: hidden
     text-overflow: ellipsis
+
+  .session-list-item-time
+    position: relative
+    flex-shrink: 0
+    margin-left: var(--space-sm)
+    color: var(--color-text-tertiary)
+    font-size: var(--font-size-xs)
+    line-height: var(--line-height-xs)
+    font-variant-numeric: tabular-nums
 
   .session-list-item-title .streaming-text-characters
     white-space: nowrap
