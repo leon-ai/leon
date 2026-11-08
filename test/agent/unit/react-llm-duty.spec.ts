@@ -1379,6 +1379,7 @@ describe('continuous agent loop', () => {
     ]
     const catalog = createCatalog()
     const call = toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })
+    const unusedCall = toolCall('unused', CALLABLE_TOOL_NAME, { query: 'forecast' })
     coreMocks.prompt
       .mockImplementationOnce(async (_messages, params) => {
         params.onAttempt({
@@ -1390,8 +1391,9 @@ describe('continuous agent loop', () => {
         params.onReasoningToken('Checking ')
         params.onReasoningToken('the weather.')
         params.onToolCall(call)
+        params.onToolCall(unusedCall)
 
-        return { output: '', toolCalls: [call] }
+        return { output: '', toolCalls: [call, unusedCall] }
       })
       .mockImplementationOnce(async (_messages, params) => {
         params.onReasoningToken('Reading ')
@@ -1425,10 +1427,19 @@ describe('continuous agent loop', () => {
         streamOpenMs: 50, firstToolInputMs: 300
       })
     ])
+    const rejection = 'Duplicate call blocked: reuse the existing weather observation.'
+    duty['closeStreamedToolCall'](call.id, rejection)
     duty['closeStreamedToolCalls']()
     expect(duty['responseTraceCollector'].snapshot({}).toolCalls[0]).toMatchObject({
       ...displayNames,
-      status: 'error'
+      status: 'error', errorMessage: rejection
+    })
+    expect(duty['responseTraceCollector'].snapshot({}).toolCalls[1]).toMatchObject({
+      status: 'error', errorMessage: 'This proposed tool call was not executed.'
+    })
+    expect(onProgressEvent).toHaveBeenCalledWith({
+      type: 'tool_call',
+      toolCall: expect.objectContaining({ status: 'error', errorMessage: rejection })
     })
 
     now.mockReturnValue(2_000)
@@ -3170,6 +3181,7 @@ describe('continuous agent loop', () => {
   })
 
   it('blocks an identical tool call and reuses its prior observation', async () => {
+    const onToolCallSkipped = vi.fn()
     const executeFunction = vi.fn().mockResolvedValue({
       execution: {
         function: callable.qualifiedName,
@@ -3202,10 +3214,14 @@ describe('continuous agent loop', () => {
         return { textContent: 'I reused the first result.' }
       },
       executeFunction,
+      onToolCallSkipped,
       loadAgentSkill: async () => null
     })
 
     expect(executeFunction).toHaveBeenCalledOnce()
+    expect(onToolCallSkipped).toHaveBeenCalledWith(
+      'lookup-2', expect.stringContaining('Duplicate call blocked')
+    )
     expect(result.answer).toBe('I reused the first result.')
   })
 

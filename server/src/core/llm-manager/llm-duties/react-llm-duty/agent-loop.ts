@@ -409,6 +409,10 @@ export interface AgentLoopParams {
   onAgentSkillLoaded?: (context: AgentSkillContext) => void | Promise<void>
   onPlanUpdated?: (steps: TrackedPlanStep[]) => void
   onProgressMessage?: (message: string) => Promise<void> | void
+  /**
+   * Settles previews with the result of a call handled without tool dispatch.
+   */
+  onToolCallSkipped?: (toolCallId: string, reason: string) => void
   onInspectionCheckpoint?: (
     state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>
   ) => Promise<void> | void
@@ -1289,11 +1293,14 @@ export async function runAgentLoop(
     for (let callIndex = 0; callIndex < toolCalls.length;) {
       if (params.runBudget?.isExpired) {
         for (const call of toolCalls.slice(callIndex)) {
+          const content = 'Tool call skipped because the task reached its run deadline.'
+
+          params.onToolCallSkipped?.(call.id, content)
           transcript.push({
             role: 'tool',
             toolCallId: call.id,
             toolName: call.function.name,
-            content: 'Tool call skipped because the task reached its run deadline.'
+            content
           })
         }
 
@@ -1315,13 +1322,16 @@ export async function runAgentLoop(
       if (terminalSignal) {
         // Providers require one result for every emitted tool call. Complete
         // the protocol without running work after a terminal handoff.
+        const content = toolCall.id === cancellationCall?.id
+          ? 'Task canceled by the owner.'
+          : 'Tool call skipped because an earlier call ended this agent run.'
+
+        params.onToolCallSkipped?.(toolCall.id, content)
         transcript.push({
           role: 'tool',
           toolCallId: toolCall.id,
           toolName: toolCall.function.name,
-          content: toolCall.id === cancellationCall?.id
-            ? 'Task canceled by the owner.'
-            : 'Tool call skipped because an earlier call ended this agent run.'
+          content
         })
         callIndex += 1
         continue
@@ -1462,11 +1472,14 @@ async function appendPendingOwnerMessages(
   }
 
   for (const call of unstartedCalls) {
+    const content = 'Tool call skipped because new owner instructions require reassessment.'
+
+    params.onToolCallSkipped?.(call.id, content)
     transcript.push({
       role: 'tool',
       toolCallId: call.id,
       toolName: call.function.name,
-      content: 'Tool call skipped because new owner instructions require reassessment.'
+      content
     })
   }
 
@@ -2118,6 +2131,11 @@ async function executeAgentToolBatch(
   for (const outcome of outcomes) {
     if (outcome.status === 'rejected') {
       throw outcome.reason
+    }
+
+    const { call, result, records } = outcome.value
+    if (records.length === 0) {
+      params.onToolCallSkipped?.(call.id, result.content)
     }
 
     results.push(outcome.value)
