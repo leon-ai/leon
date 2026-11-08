@@ -12,27 +12,6 @@ describe('DownloadCommand', () => {
     vi.restoreAllMocks()
   })
 
-  it('uses resumable parallel ranges for model downloads', async () => {
-    const downloadSpy = vi
-      .spyOn(FileHelper, 'downloadFile')
-      .mockResolvedValue(undefined)
-    const modelURL = 'https://example.com/model.gguf'
-    const command = new DownloadCommand()
-
-    const result = await command.execute({
-      args: ['model', modelURL]
-    } as BuiltInCommandExecutionContext)
-
-    expect(result.status).toBe('completed')
-    expect(downloadSpy).toHaveBeenCalledWith(
-      modelURL,
-      expect.stringMatching(/model\.gguf$/),
-      {
-        parallelStreams: 3
-      }
-    )
-  })
-
   it('downloads the model inside the llm models folder', async () => {
     const downloadSpy = vi
       .spyOn(FileHelper, 'downloadFile')

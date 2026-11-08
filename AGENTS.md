@@ -19,15 +19,20 @@ These are community expectations and guidance for agents, not additional license
 - Use `pnpm`, never npm. Keep changes minimal. Before implementing anything, search for existing functions, methods, utilities, types, components and installed facilities, especially `server/src/helpers/` and SDK utilities; inspect their implementations and call sites. Reuse them directly or extend them compatibly instead of duplicating, rewriting or wrapping equivalent behavior. Add new code only for a demonstrated gap, respect runtime boundaries, and remove superseded implementations rather than keeping parallel paths.
 - Keep registry dependencies at least 36 hours old through root pnpm/uv policy, including standalone installs. Exceptions require explicit owner approval, exact version pins and package-scoped overrides; never disable the global cooldown.
 - Preserve unrelated working-tree changes and profile isolation. Use existing profile/path/runtime utilities instead of hardcoded owner paths, runtime versions, or global mutable owner state.
-- Run `pnpm lint`, fix warnings/errors, and run checks relevant to the change.
-- Test current behavior with minimal coverage; extend existing suites. Trivial changes need no new tests.
+- When extending TypeBox schemas, compose raw property definitions before `Type.Strict` strips optional markers, and verify that omitted optional fields remain valid.
+- Suggest a commit message matching `scripts/commit-msg.js`; do not commit unless asked.
+
+## Testing
+
+- Before adding a test, identify a distinct observable contract and a real coverage gap; express that contract in its name, fixtures and assertions without change history or incidental version details. Extend broad behavior or invariant coverage for the failure class instead of incident-specific reproductions, copied configuration assertions, private-wiring checks or mock passthrough smoke tests. Trivial changes need no new tests.
 - Do not create test files or add test cases for SDKs, tools or skills unless the owner explicitly requests them, regardless of where the tests would live. Run existing affected tests and adjust them for compatibility when necessary.
 - Review affected tests as part of each change and remove obsolete, redundant or superseded tests and fixtures. Do not retain tests merely because they were added previously; preserve every distinct, still-relevant behavioral contract regardless of bug-fix origin. Do not expand cleanup into unrelated suites.
+- When introducing a new Core concept or mechanism, add real scenarios under `test/agent/scenarios/<suite>-scenarios/<mechanism>-scenarios/`, named for their observable behavior and using isolated fixtures. Keep these separate from the provider matrix.
+- Run `pnpm lint`, fix warnings/errors, and run checks relevant to the change.
 - Use `pnpm test:unit` for fast feedback and `pnpm test:integration` for real worker, download, capture, and rendering changes; `pnpm test` includes both.
-- When introducing a new Core concept or mechanism, add real scenarios under `test/agent/scenarios/<suite>-scenarios/<mechanism>-scenarios/`, named for their observable behavior and using isolated fixtures. Keep these separate from the provider matrix. For SDKs, tools and skills, obtain the explicit test authorization required above.
 - Run all real scenarios with `pnpm test:agent:scenario`, select a category, mechanism or individual case with `pnpm test:agent:scenario -- <selection>`, or list the selection with `--list`. They use the latest-used profile’s active model; `LEON_PROFILE` selects a specific profile. Short mechanism names must be unambiguous.
 - Agent e2e tests must use `pnpm test:agent:e2e -- -t openai` unless the owner explicitly requests other providers.
-- Suggest a commit message matching `scripts/commit-msg.js`; do not commit unless asked.
+- For bridge boundary changes, verify built import graphs and isolated Core startup without bridge-only dependencies available; source tests alone are insufficient.
 
 ## Setup migrations
 
@@ -55,7 +60,7 @@ These are community expectations and guidance for agents, not additional license
 - Put shared contracts in `bridges/runtime/contracts/` and Node.js capabilities in `bridges/runtime/nodejs/`: small standard-library leaves without Core/SDK/toolkit imports. Reuse persistence/transport through thin adapters; keep paths/context, logging and authentication host-owned.
 - Keep SDK helpers in `sdk/utils/`, preserve public imports and equivalent, idiomatic Node.js/Python behavior. Add helpers only for shared infrastructure that avoids repeated dependencies or meaningful duplication; keep application behavior in tools and host transport outside the public SDK.
 - Declare SDK dependencies in their bridge manifest, never Core's `node_modules`. Prefer standard-library equivalents; compatible versions may share pnpm's store, not runtime ownership.
-- Use narrow imports: platform/path/settings must not load archives/downloaders/integrations. Lazy loading only defers optional work. Verify boundary changes with built import graphs and isolated startup without bridge-only dependencies available to Core; source tests alone are insufficient.
+- Use narrow imports: platform/path/settings must not load archives/downloaders/integrations. Lazy loading only defers optional work.
 
 ## Skills
 
@@ -67,13 +72,12 @@ These are community expectations and guidance for agents, not additional license
 - Maintain generated context through `server/src/core/context-manager/context-files/`. Update the relevant generator and regenerate through the context manager; do not maintain a separate hand-edited generated copy.
 - Keep `LEON.md` and `ARCHITECTURE.md` limited to major behavioral/architectural facts. Tool usage details belong in tool guidance; task workflows belong in skills.
 
-## Comments, documentation and tests
+## Comments and documentation
 
 - Write user-facing messages spoken by Leon in first person (“I”, “me”, “my”), not third person; preserve branding, technical identifiers, and neutral descriptive/accessibility labels.
 - Explain Leon's lasting requirements: what behavior is needed, why the code or configuration exists, and how it serves Leon. Write for a contributor who has never seen the task, conversation, bug report or PR.
-- Do not use comments, documentation or tests as a record of the current change. Avoid upgrade narratives, incidental version details, temporary debugging context, and explanations centered on the specific incident that prompted the work. Keep change history in commit messages, PR descriptions or dedicated migration notes.
-- Tests must express a lasting, observable contract through their names, fixtures and assertions. A bug can reveal a missing contract, but reproducing an incident alone is not a reason to add or keep a test. Preserve distinct contracts; remove redundant or obsolete cases.
-- Before adding or editing any comment, documentation or test, check: would this still explain a necessary behavior to someone who knows nothing about the introducing change? If not, rewrite it around the general requirement or omit it.
+- Do not use comments or documentation as a record of the current change. Avoid upgrade narratives, incidental version details, temporary debugging context, and explanations centered on the specific incident that prompted the work. Keep change history in commit messages, PR descriptions or dedicated migration notes.
+- Before adding or editing any comment or documentation, check: would this still explain a necessary behavior to someone who knows nothing about the introducing change? If not, rewrite it around the general requirement or omit it.
 
 ## Code style
 

@@ -57,6 +57,7 @@ import ContextManager from '@/core/context-manager/context-manager'
 import { LeonRuntimeContextFile } from '@/core/context-manager/context-files/leon-runtime-context-file'
 import { ContextProbeHelper, type CommandProbe } from '@/core/context-manager/context-probe-helper'
 import { SystemHelper } from '@/helpers/system-helper'
+import { resolveToolBinaryPath } from '@@/bridges/runtime/nodejs/tool-binary'
 
 beforeEach(() => {
   state.context = fs.mkdtempSync(path.join(os.tmpdir(), 'leon-discovery-'))
@@ -114,14 +115,13 @@ it('keeps local generation when no device binding exists and omits disabled devi
 it('grounds runtime context in the server process and exact host tool installations', () => {
   const toolkitPath = path.join(state.context, 'tools', 'documents')
   const manifestPath = path.join(toolkitPath, 'search', 'tool.json')
-  const executable = path.join(
-    state.context, 'toolkits', 'documents', 'assets',
-    process.platform === 'win32' ? 'search-2.0.exe' : 'search-2.0'
-  )
   const platform = SystemHelper.getBinariesFolderName()
   const manifest = {
     binaries: { [platform]: 'https://user:secret@example.com/search-2.0.tar.gz?token=private' }
   }
+  const executable = resolveToolBinaryPath(
+    path.join(state.context, 'toolkits'), 'documents', manifest.binaries[platform]!
+  )
 
   fs.mkdirSync(path.dirname(manifestPath), { recursive: true })
   fs.mkdirSync(path.dirname(executable), { recursive: true })

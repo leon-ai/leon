@@ -43,12 +43,14 @@ const llmProvider = strictObject({
   generation_base_url: Type.Optional(Type.String({ format: 'uri' })),
   api_key: secretReference
 })
-const llmProviderWithBaseURL = strictObject({
+// Keep optional markers until each provider's complete object is constructed.
+const llmProviderWithBaseURLProperties = {
   account: Type.Optional(Type.String({ minLength: 1 })),
   generation_base_url: Type.Optional(Type.String({ format: 'uri' })),
   base_url: Type.String({ minLength: 1 }),
   api_key: secretReference
-})
+}
+const llmProviderWithBaseURL = strictObject(llmProviderWithBaseURLProperties)
 const llmModelSetting = strictObject({
   instructions_cache_ttl: Type.Optional(
     Type.Union([Type.Literal('30m'), Type.Literal('12h')])
@@ -94,7 +96,7 @@ export const configSchemaObject = strictObject({
     model_settings: Type.Record(Type.String({ minLength: 1 }), llmModelSetting),
     providers: strictObject({
       llamacpp: strictObject({
-        ...llmProviderWithBaseURL.properties,
+        ...llmProviderWithBaseURLProperties,
         context_size: Type.Optional(Type.Integer({ minimum: 1 })),
         memory_reserve_mib: Type.Optional(Type.Integer({ minimum: 1 }))
       }),
