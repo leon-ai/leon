@@ -5,6 +5,9 @@ import path from 'node:path'
 import YAML from 'yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ajv } from '@/ajv'
+import { configSchemaObject } from '@/schemas/core-schemas'
+
 const syncedEnvKeys = [
   'LEON_LANG',
   'LEON_HOST',
@@ -80,6 +83,16 @@ describe('ConfigManager', () => {
       recursive: true,
       force: true
     })
+  })
+
+  it('keeps runtime defaults and the setup sample compatible with the startup schema', async () => {
+    const manager = await loadConfigManager()
+    const validate = ajv.compile(configSchemaObject)
+
+    expect(validate(manager.getConfig()), JSON.stringify(validate.errors)).toBe(true)
+
+    fs.writeFileSync(profilePaths.configPath, fs.readFileSync('config.sample.yml', 'utf8'))
+    expect(validate(manager.reload()), JSON.stringify(validate.errors)).toBe(true)
   })
 
   it('removes optional entries without replacing unrelated configuration', async () => {
@@ -318,6 +331,8 @@ describe('ConfigManager', () => {
 
     const configManager = await loadConfigManager()
 
+    const validate = ajv.compile(configSchemaObject)
+    expect(validate(configManager.getConfig()), JSON.stringify(validate.errors)).toBe(true)
     expect(configManager.getConfig()).toEqual(profileConfig)
     expect(process.env['LEON_LANG']).toBe('fr-FR')
     expect(process.env['LEON_HOST']).toBe('http://127.0.0.1')
