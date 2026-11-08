@@ -11,6 +11,9 @@ import { getTurnTimingContext } from '../turn-timing'
 import { ProviderRequestActivity, attachProviderFailureDiagnostics, getConnectionErrorCode } from '../llm-provider/provider-request-activity'
 
 const MAXIMUM_USAGE_EVENT_CHARS = 1_048_576
+const MAXIMUM_USAGE_STRING_CHARS = 1_024
+// Keep omitted error strings truthy so accounting still recognizes failures.
+const OMITTED_USAGE_STRING = '"[omitted]"'
 const ACCEPTANCE_EVENTS = new Set(['response.in_progress', 'message_start'])
 const MAX_DIAGNOSTIC_FIELD_CHARS = 256
 const TRANSPORT_COUNTER_FIELDS = ['closeCode', 'pingCount', 'pongCount', 'lastPongRttMs'] as const
@@ -98,6 +101,46 @@ export async function trackProviderResponseUsage(
   let pending = ''
   let data = ''
   let oversized = false
+  let jsonString: string | null = null
+  let oversizedString = false
+  let escaped = false
+
+  const compactJSONStrings = (text: string): string => {
+    let preview = ''
+
+    // Image responses contain base64 strings before their usage counters. Omit
+    // long strings only from accounting, carrying quote/escape state across chunks.
+    for (const character of text) {
+      if (jsonString === null) {
+        if (character === '"') {
+          jsonString = character
+        } else {
+          preview += character
+        }
+        continue
+      }
+
+      if (!oversizedString) {
+        jsonString += character
+        if (jsonString.length > MAXIMUM_USAGE_STRING_CHARS) {
+          oversizedString = true
+          jsonString = ''
+        }
+      }
+
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\') {
+        escaped = true
+      } else if (character === '"') {
+        preview += oversizedString ? OMITTED_USAGE_STRING : jsonString
+        jsonString = null
+        oversizedString = false
+      }
+    }
+
+    return preview
+  }
   const observe = (text: string): void => {
     if (text.trim() === '[DONE]') {
       outcome = response.ok && !terminalFailure ? 'completed' : 'failed'
@@ -139,7 +182,7 @@ export async function trackProviderResponseUsage(
     }
   }
   const consume = (text: string): void => {
-    const parts = text.split('\n')
+    const parts = (streaming ? text : compactJSONStrings(text)).split('\n')
 
     for (let index = 0; index < parts.length; index += 1) {
       const part = parts[index]!
