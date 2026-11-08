@@ -39,6 +39,8 @@ interface SessionListItemProps {
   onRename: (sessionId: string, title: string) => void
   onPin: (sessionId: string) => void
   title: string
+  timestamp: number
+  relativeTime: string
   style?: CSSProperties
 }
 
@@ -51,6 +53,8 @@ export function SessionListItem({
   onRename,
   onPin,
   title,
+  timestamp,
+  relativeTime,
   style
 }: SessionListItemProps) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -353,6 +357,14 @@ export function SessionListItem({
               aria-hidden="true"
             />
           </span>
+          {relativeTime && (
+            <time
+              className="session-list-item-time"
+              dateTime={new Date(timestamp).toISOString()}
+            >
+              {relativeTime}
+            </time>
+          )}
         </Link>
       )}
       {isPinned && (

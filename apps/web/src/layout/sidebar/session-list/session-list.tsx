@@ -15,12 +15,14 @@ import { useSessionReadState } from '@/data/session-read-state'
 import { SessionListItem } from '@/layout/sidebar/session-list-item'
 import { Loader } from '@/components/loader'
 import { getListNavigationIndex } from '@/utils/list-navigation'
+import { formatRelativeDate } from '@/utils/format-date'
 
 import './session-list.sass'
 
 const SESSION_ITEM_ESTIMATED_HEIGHT = 41
 const SESSION_LIST_OVERSCAN = 5
 const SCROLL_MASK_FADE_DISTANCE_PX = 54
+const RECENCY_REFRESH_INTERVAL_MS = 60_000
 
 interface SessionListProps {
   collapsed?: boolean
@@ -41,7 +43,38 @@ export function SessionList({
   const virtualListRef = useRef<HTMLUListElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null)
+  const [now, setNow] = useState(Date.now)
   const sessions = query.sessions
+  const hasSessions = sessions.length > 0
+
+  useEffect(() => {
+    if (collapsed || !hasSessions) {
+      return
+    }
+
+    let intervalId: number | undefined
+
+    // One visible-list clock keeps recency fresh without a timer for every row.
+    function updateVisibility(): void {
+      window.clearInterval(intervalId)
+
+      if (!document.hidden) {
+        setNow(Date.now())
+        intervalId = window.setInterval(() => {
+          setNow(Date.now())
+        }, RECENCY_REFRESH_INTERVAL_MS)
+      }
+    }
+
+    updateVisibility()
+    document.addEventListener('visibilitychange', updateVisibility)
+
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', updateVisibility)
+    }
+  }, [collapsed, hasSessions])
+
   const rowVirtualizer = useVirtualizer({
     count: sessions.length,
     getItemKey: (index) => sessions[index]?.id ?? index,
@@ -215,6 +248,8 @@ export function SessionList({
               isUnread={session.id !== viewedSessionId && Object.hasOwn(readState.unread, session.id)}
               status={session.status}
               title={session.title}
+              timestamp={session.lastMessageAt ?? session.createdAt}
+              relativeTime={formatRelativeDate(session.lastMessageAt ?? session.createdAt, now, 'compact')}
               onDelete={deleteSession}
               onRename={renameSession}
               onPin={(id) => mutation.mutate({ id, changes: { is_pinned: !session.isPinned } })}
