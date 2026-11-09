@@ -94,6 +94,7 @@
     "@ai-sdk/provider": "4.0.29",
     "@ai-sdk/zai": "3.0.33",
     "@ark-ui/react": "5.36.0",
+    "@eslint/css-tree": "4.0.4",
     "@fastify/static": "10.1.5",
     "@ffprobe-installer/ffprobe": "2.1.2",
     "@fontsource/jetbrains-mono": "5.3.0",

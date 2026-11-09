@@ -7,6 +7,7 @@ import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/l
 import { captureContextUsage, type ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
 import { resolveModelContextWindowTokens } from '@/core/llm-manager/model-context-windows'
 import { randomUUID } from 'node:crypto'
+import { presentAurora, finishAuroraAnswer } from '@/core/aurora/answer-presentation'
 import { AsyncResource } from 'node:async_hooks'
 import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'
 import type { AgentSkillSnapshot } from '@/core/llm-manager/agent-progress-contract'
@@ -413,6 +414,7 @@ export class ReActLLMDuty extends LLMDuty {
         continuation?.trackedSteps.map((step) => ({ ...step })) || []
       let hasPlanningWidget = trackedSteps.length > 0
       const executionHistory: ExecutionRecord[] = []
+      let hasAurora = false
       const caller = this.createLLMCaller()
       if (continuation?.activeSkillId) {
         const skill = continuation.activeSkillId.startsWith(EXPERIENCE_PREFIX)
@@ -444,6 +446,9 @@ export class ReActLLMDuty extends LLMDuty {
         answer: string,
         intent: FinalResponseSignal['intent']
       ): LLMDutyResult => {
+        if (hasAurora) {
+          finishAuroraAnswer(sessionId, traceId, answer, intent === 'answer' || intent === 'clarification')
+        }
         this.hasFinalizedAnswer = true
         this.finalResponseIntent = intent
         this.lastExecutionHistory = executionHistory.map((item) => ({
@@ -477,7 +482,8 @@ export class ReActLLMDuty extends LLMDuty {
         loadedState?.toolOrder
           ? {
               toolOrder: loadedState.toolOrder,
-              planTracking: loadedState.planTracking ?? false
+              planTracking: loadedState.planTracking ?? false,
+              ...(loadedState.auroraMode ? { auroraMode: loadedState.auroraMode } : {})
             }
           : undefined
       ))
@@ -630,11 +636,17 @@ export class ReActLLMDuty extends LLMDuty {
           loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
           toolOrder: catalog.tools.map((tool) => tool.function.name),
           planTracking: catalog.planTracking === true,
+          ...(catalog.auroraMode ? { auroraMode: catalog.auroraMode } : {}),
           activeSkillId: caller.agentSkillContext?.id ?? null
         }))
       }
 
       const result = await runAgentLoop({
+        onPresentUI: async (spec, purpose, surfaceId) => {
+          const surface = await presentAurora(sessionId, traceId, spec, purpose, surfaceId)
+          hasAurora = true
+          return surface.id
+        },
         ...(agentTurn ? {
           drainOwnerMessages: agentTurn.drainOwnerMessages,
           getOwnerMessageSignal: agentTurn.getOwnerMessageSignal
@@ -884,7 +896,8 @@ export class ReActLLMDuty extends LLMDuty {
               (fn) => fn.qualifiedName
             ),
             toolOrder: catalog.tools.map((tool) => tool.function.name),
-            planTracking: catalog.planTracking === true
+            planTracking: catalog.planTracking === true,
+            ...(catalog.auroraMode ? { auroraMode: catalog.auroraMode } : {})
           },
           StringHelper.normalizeUserFacingText(result.answer)
         )

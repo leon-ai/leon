@@ -1,4 +1,5 @@
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
+import { isAuroraMode, type AuroraMode } from '@/core/aurora/agent-ui-contract'
 
 import type { ExecutionRecord, TrackedPlanStep } from './agent-types'
 import {
@@ -31,6 +32,7 @@ export interface AgentLoopContinuationState {
   loadedToolNames?: string[]
   toolOrder?: string[]
   planTracking?: boolean
+  auroraMode?: AuroraMode
   transcript: AgentToolTranscriptMessage[]
   activeSkillId: string | null
 }
@@ -278,6 +280,7 @@ export function createAgentLoopContinuationState(
     planWidgetId: string
     toolOrder?: string[]
     planTracking?: boolean
+    auroraMode?: AuroraMode
   }
 ): AgentLoopContinuationState {
   const loadedToolkitIds = [...params.loadedToolkitIds]
@@ -294,6 +297,7 @@ export function createAgentLoopContinuationState(
     ...(params.planTracking !== undefined
       ? { planTracking: params.planTracking }
       : {}),
+    ...(params.auroraMode ? { auroraMode: params.auroraMode } : {}),
     ...(params.loadedToolNames ? { loadedToolNames: [...params.loadedToolNames] } : {}),
     ...(params.loadedFunctionNames
       ? { loadedFunctionNames: [...params.loadedFunctionNames] }
@@ -324,6 +328,7 @@ export function isAgentLoopContinuationStateValid(
       (Array.isArray(state.toolOrder) &&
         state.toolOrder.every((name) => typeof name === 'string'))) &&
     (state.planTracking === undefined || typeof state.planTracking === 'boolean') &&
+    (state.auroraMode === undefined || isAuroraMode(state.auroraMode)) &&
     (state.loadedToolNames === undefined ||
       (Array.isArray(state.loadedToolNames) &&
         state.loadedToolNames.every((name) => typeof name === 'string'))) &&
