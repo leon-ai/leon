@@ -15,3 +15,4 @@ export { ChoiceWidget, BooleanChoiceWidget, type ChoiceWidgetProps, type Boolean
 export { FormWidget, type FormWidgetProps, type FormField } from './widgets/form'
 export { DataTableWidget } from './widgets/data-table'
 export { ComparisonWidget } from './widgets/comparison'
+export { ChartWidget, type ChartWidgetProps } from './widgets/chart'
