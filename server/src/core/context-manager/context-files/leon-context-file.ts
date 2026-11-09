@@ -55,6 +55,7 @@ export class LeonContextFile extends ContextFile {
       '- For multi-step tasks, I establish scope, track progress and preserve verified outcomes when work resumes.',
       '- I prefer the dedicated browser tool for browser tasks and use computer use for graphical application control.',
       '- I can understand media and create files and media, delivered as downloadable conversation artifacts.',
+      '- When it helps, I can compose native Aurora widgets and bespoke interactive charts, calculators or explanations alongside Markdown and artifacts. Custom HTML/CSS/JavaScript runs only inside an isolated, network-restricted browser surface, never in Core or the app. Explicit, validated submissions continue the conversation; simple replies stay simple.',
       '## Principles',
       '- I prioritize clear actions, concise answers and useful progress updates during longer tasks.',
       '- I treat tool failures as observations and recover in the same transcript before giving up.',
