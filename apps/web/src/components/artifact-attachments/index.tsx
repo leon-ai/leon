@@ -1,71 +1,31 @@
 import type { Artifact } from '../../../../../server/src/core/artifacts/artifact-types'
+import { ArtifactWidget } from '../../../../../aurora/src/v2/widgets/artifacts'
 import { VisualPreview } from '@/components/visual-preview/visual-preview'
+import { FileIcon } from '@/components/icon'
+
+const PREVIEW_MIME_TYPES = new Set([
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'video/mp4', 'video/webm', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'
+])
 
 /**
  * Displays the same portable artifact contract consumed by external clients.
  */
-export function ArtifactAttachments({ artifacts }: { artifacts: Artifact[] }) {
-  return (
-    <div className="artifact-attachments">
-      {artifacts.map((artifact) => {
-        const expected = `/api/v1/artifacts/${encodeURIComponent(artifact.session_id)}/${encodeURIComponent(artifact.id)}`
+export function ArtifactAttachments({ artifacts, title = 'Files' }: { artifacts: Artifact[], title?: string }) {
+  const items = artifacts.filter((artifact) => artifact.url ===
+    `/api/v1/artifacts/${encodeURIComponent(artifact.session_id)}/${encodeURIComponent(artifact.id)}`).map((artifact) => ({
+    id: artifact.id, filename: artifact.filename,
+    // Unrecognized formats stay downloadable, never embedded as active content.
+    mimeType: PREVIEW_MIME_TYPES.has(artifact.mime_type) ? artifact.mime_type : 'application/octet-stream',
+    url: artifact.url, downloadUrl: `${artifact.url}?download=true`,
+    sizeLabel: `${Math.ceil(artifact.size_bytes / 1_024)} KB`
+  }))
 
-        if (artifact.url !== expected) {
-          return null
-        }
+  if (!items.length) {
+    return null
+  }
 
-        const image = [
-          'image/png',
-          'image/jpeg',
-          'image/webp',
-          'image/gif'
-        ].includes(artifact.mime_type)
-        const video = ['video/mp4', 'video/webm'].includes(artifact.mime_type)
-        const audio = [
-          'audio/mpeg',
-          'audio/wav',
-          'audio/ogg',
-          'audio/mp4'
-        ].includes(artifact.mime_type)
-
-        return (
-          <figure key={artifact.id}>
-            {image && (
-              <VisualPreview title={artifact.filename}>
-              <img
-                src={artifact.url}
-                alt={artifact.filename}
-                loading="lazy"
-              />
-              </VisualPreview>
-            )}
-            {video && (
-              <video
-                src={artifact.url}
-                controls
-                preload="metadata"
-                style={{ maxWidth: '100%', maxHeight: 480 }}
-              />
-            )}
-            {audio && <audio src={artifact.url} controls preload="metadata" />}
-            <figcaption>
-              <a
-                href={`${artifact.url}?download=true`}
-                download={artifact.filename}
-              >
-                {artifact.filename} · {Math.ceil(artifact.size_bytes / 1_024)}{' '}
-                KB · Download
-              </a>
-              {artifact.mime_type === 'application/pdf' && (
-                <a href={artifact.url} target="_blank" rel="noreferrer">
-                  {' '}
-                  Open PDF
-                </a>
-              )}
-            </figcaption>
-          </figure>
-        )
-      })}
-    </div>
-  )
+  return <ArtifactWidget title={title} items={items}
+    renderFileIcon={(filename) => <FileIcon fileName={filename} />}
+    renderImagePreview={(item, image) => <VisualPreview title={item.filename}>{image}</VisualPreview>} />
 }
