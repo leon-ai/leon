@@ -158,7 +158,7 @@ function renderActivity(activity: LeonFeedActivity) {
           key={activity.id}
           phaseId={activity.id}
           label={currentRequest.activeLabel ?? 'Processing...'}
-          iconName={currentRequest.iconName}
+          {...(currentRequest.isGeneric ? {} : { iconName: currentRequest.iconName })}
           startedAt={currentRequest.startedAt}
         />
       )

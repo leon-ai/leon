@@ -519,7 +519,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       }
       const guide = answer.getByRole('link', { name: 'a quiet guide', exact: true })
       await guide.hover()
-      await expect(guide).toHaveCSS('color', visuals.contrastColor)
+      await expect(guide).toHaveCSS('color', visuals.accent)
       await page.screenshot({ path: testInfo.outputPath(`rich-markdown-${theme}.png`) })
       await answer.locator('ul.contains-task-list').screenshot({ path: testInfo.outputPath(`task-list-${theme}.png`) })
       await answer.locator('.markdown-alert-tip').screenshot({ path: testInfo.outputPath(`alert-${theme}.png`) })
@@ -660,6 +660,56 @@ test('does not execute Markdown HTML, unsafe links, or remote images', async ({ 
   await expect(answer).toContainText('No automatic image')
   expect(await page.evaluate(() => Reflect.get(window, 'markdownExecuted'))).toBeUndefined()
   expect(outbound).toEqual([])
+})
+
+test('reserves completed diagram geometry while loading and across session revisits', async ({ page, ui }) => {
+  ui.history.get(SESSION_ID)!.at(-1)!.message = 'A few ideas, with room to explore.\n\n```mermaid\nflowchart TB\n A[An idea] --> B[Explore]\n B --> C[Make something]\n C --> D[Share]\n```\n\nA calm place to continue.'
+  const blocked = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  await page.route('**/markdown-mermaid-*.js', async (route) => {
+    blocked.resolve()
+    await release.promise
+    await route.continue()
+  })
+  await page.goto(SESSION_URL)
+  await blocked.promise
+  const layout = page.locator('.markdown-diagram-block > .visual-layout')
+  await expect(layout).toHaveAttribute('aria-busy', 'true')
+  expect((await layout.boundingBox())!.height).toBeGreaterThanOrEqual(240)
+  release.resolve()
+  await expect(layout).toHaveAttribute('aria-busy', 'false')
+  await expect(page.getByRole('button', { name: 'Enlarge diagram', exact: true }).locator('svg')).toBeVisible()
+  const settled = (await layout.boundingBox())!.height
+  await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+  await expect(layout).toHaveCount(0)
+  await page.evaluate(() => {
+    const heights: number[] = []
+    let frame = 0
+    function sample(): void {
+      const height = document.querySelector('.markdown-diagram-block > .visual-layout')?.getBoundingClientRect().height
+      if (height) {
+        heights.push(height)
+      }
+      frame = requestAnimationFrame(sample)
+    }
+    frame = requestAnimationFrame(sample)
+    const host = window as typeof window & { finishVisualProbe: () => number[] }
+    host.finishVisualProbe = (): number[] => {
+      cancelAnimationFrame(frame)
+
+      return heights
+    }
+  })
+  await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+  await expect(layout).toHaveAttribute('aria-busy', 'false')
+  const heights = await page.evaluate(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const host = window as typeof window & { finishVisualProbe: () => number[] }
+
+    return host.finishVisualProbe()
+  })
+  expect(heights.length).toBeGreaterThan(0)
+  expect(Math.max(...heights.map((height) => Math.abs(height - settled)))).toBeLessThan(2)
 })
 
 test('renders independently loaded diagram families and safe mathematical labels', async ({ page, ui }) => {
@@ -1788,7 +1838,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
     await emit('turn_status', { status: 'accepted' })
     await emit('inference_activity', { activity: request })
-    await expect(inference).toBeVisible()
+    await expect(waiting).toBeVisible()
+    await expect(waiting.locator('.process-group-indicator, svg')).toHaveCount(0)
     await emit('tool_call', { tool_call: { ...tool, status: 'preparing' } })
     const execution = page.locator('.leon-message-execution').last()
     await expect(execution.getByRole('button', { name: 'Preparing tool calls...', exact: true })).toBeVisible()
@@ -1806,8 +1857,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
     const next = { ...request, id: 'dd', startedAt: startedAt + sequence + 1 }
     await emit('inference_activity', { activity: next })
-    await expect(inference).toBeVisible()
-    await expect(waiting).toHaveCount(0)
+    await expect(waiting).toBeVisible()
+    await expect(inference).toHaveCount(0)
     await emit('text_stream', {
       kind: 'reasoning', generationId: 'handoff-thinking', phase: 'agent', token: 'Checking the result.'
     })
@@ -2215,8 +2266,15 @@ test('replaces one standalone processing row in place and retains completed requ
     turn_id: 'phase-owner', response_id: 'phase-response', created_at: startedAt + sequence
   }])
   await emit('turn_status', { status: 'accepted' })
+  await emit('inference_activity', { activity: {
+    id: 'ddd', goal: TurnPhase.Request, startedAt, durationMs: 0, outcome: 'started'
+  } })
+  const initialWorkingLabel = await page.getByRole('region', { name: 'Leon’s work', exact: true })
+    .locator('.process-group-title').innerText()
   const phases = [
-    [TurnPhase.Request, 'Processing...', 'cpu-line'],
+    [TurnPhase.Request, initialWorkingLabel, undefined],
+    [TurnPhase.Request, initialWorkingLabel, undefined],
+    ['unclassified-purpose', initialWorkingLabel, undefined],
     [TurnPhase.ToolSchemas, 'Loading tools...', 'stack-line'],
     [TurnPhase.Tools, 'Choosing tools...', 'wrench-line'],
     [TurnPhase.ToolRequest, 'Preparing tool calls...', 'wrench-line'],
@@ -2225,6 +2283,9 @@ test('replaces one standalone processing row in place and retains completed requ
     [TurnPhase.Clarification, 'Preparing a question...', 'question-mark'],
     [TurnPhase.Cancellation, 'Preparing to stop...', 'close-circle-line'],
     [TurnPhase.Connection, 'Preparing connection setup...', 'plug-line'],
+    [TurnPhase.VisualSetup, 'Preparing visual guidance...', 'layout-4-line'],
+    [TurnPhase.Visual, 'Creating a visual...', 'layout-4-line'],
+    [TurnPhase.VisualPresentation, 'Preparing visual presentation...', 'layout-4-line'],
     [TurnPhase.Answer, 'Generating an answer...', 'pencil-ai-line'],
     [TurnPhase.Inspection, 'Inspecting images...', 'eye-2-line'],
     [TurnPhase.Compaction, 'Compacting context...', 'file-reduce-line'],
@@ -2268,6 +2329,7 @@ test('replaces one standalone processing row in place and retains completed requ
     await emit('inference_activity', { activity: timings[index]! })
     const waiting = page.getByRole('region', { name: 'Leon’s work', exact: true })
     await expect(waiting).toBeVisible()
+    await expect(waiting.locator('.process-group-title')).toHaveText(initialWorkingLabel)
     await expect(waiting.locator('.process-group-indicator, i, svg')).toHaveCount(0)
     expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
     expect(Math.abs((await waiting.boundingBox())!.y - position!.y)).toBeLessThan(2)

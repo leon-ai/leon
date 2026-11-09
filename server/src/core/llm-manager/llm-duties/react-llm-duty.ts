@@ -140,6 +140,7 @@ import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/ag
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
 import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnInferences } from '../turn-timing'
+import { AURORA_LOADER_NAME, AURORA_PREVIEW_NAME, AURORA_PRESENT_NAME } from '@/core/aurora/agent-ui-contract'
 import {
   type AccumulatedLLMMetricsState,
   type FinalAnswerMetricsSnapshot,
@@ -171,7 +172,10 @@ const TOOL_REQUEST_GOALS: ReadonlyMap<string, TurnPhase> = new Map([
   [AGENT_PLAN_TOOL_NAME, TurnPhase.Plan],
   [AGENT_CLARIFICATION_TOOL_NAME, TurnPhase.Clarification],
   [AGENT_CANCELLATION_TOOL_NAME, TurnPhase.Cancellation],
-  [CONNECTION_SETUP_TOOL_NAME, TurnPhase.Connection]
+  [CONNECTION_SETUP_TOOL_NAME, TurnPhase.Connection],
+  [AURORA_LOADER_NAME, TurnPhase.VisualSetup],
+  [AURORA_PREVIEW_NAME, TurnPhase.Visual],
+  [AURORA_PRESENT_NAME, TurnPhase.VisualPresentation]
 ])
 
 enum SkillActivityStatus {
@@ -390,7 +394,7 @@ export class ReActLLMDuty extends LLMDuty {
     }, { sessionId, activity: true })
     this.reportProgressEvent({
       type: 'reasoning_summary',
-      summary: 'Understanding your request'
+      summary: 'Working'
     })
 
     // Background duties without a bound conversation must not consume messages

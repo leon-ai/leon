@@ -122,7 +122,7 @@ export async function runAgent(
     >()
     const toolStartedAt = new Map<string, number>()
     let actionExecutionMs = 0
-    let reasoningSummary = 'Understanding your request'
+    let reasoningSummary = 'Working'
     const requestId = input.request_id || null
     const messageId = `${turnId}:leon`
     let turnArtifacts: Artifact[] = []

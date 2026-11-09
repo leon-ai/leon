@@ -96,7 +96,7 @@ function toProcessingActivity(trace: ConversationTrace, active: boolean): FeedMo
       startedAt: timing.startedAt,
       planStepId: timing.planStepId,
       isActive: active && timing.outcome === 'started',
-      activeLabel: getProcessingLabel(timing.goal, timing.id)
+      activeLabel: getProcessingLabel(timing.goal, timing.id, `${trace.id}:waiting`)
     }
   })
   return {

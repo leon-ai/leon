@@ -4,11 +4,13 @@ import { InferencePurpose, LLMDuties } from '../../../../server/src/core/llm-man
 interface ProcessingCategory {
   label: string
   iconName: string
+  isGeneric?: boolean
 }
 
 const DEFAULT_CATEGORY: ProcessingCategory = {
   label: 'Processed request for',
-  iconName: 'cpu-line'
+  iconName: 'cpu-line',
+  isGeneric: true
 }
 
 const CATEGORIES: Readonly<Partial<Record<string, ProcessingCategory>>> = {
@@ -21,6 +23,9 @@ const CATEGORIES: Readonly<Partial<Record<string, ProcessingCategory>>> = {
   [TurnPhase.Clarification]: { label: 'Requested clarification in', iconName: 'question-mark' },
   [TurnPhase.Cancellation]: { label: 'Acknowledged cancellation in', iconName: 'close-circle-line' },
   [TurnPhase.Connection]: { label: 'Requested connection setup in', iconName: 'plug-line' },
+  [TurnPhase.VisualSetup]: { label: 'Prepared visual guidance in', iconName: 'layout-4-line' },
+  [TurnPhase.Visual]: { label: 'Prepared visual source in', iconName: 'layout-4-line' },
+  [TurnPhase.VisualPresentation]: { label: 'Prepared visual presentation in', iconName: 'layout-4-line' },
   [TurnPhase.Answer]: { label: 'Generated answer in', iconName: 'pencil-ai-line' },
   [TurnPhase.Review]: { label: 'Reviewed for', iconName: 'search-eye-line' },
   [TurnPhase.Inspection]: { label: 'Inspected images in', iconName: 'eye-2-line' },
