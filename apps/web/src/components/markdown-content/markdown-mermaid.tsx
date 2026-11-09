@@ -5,6 +5,7 @@ import { detectType, load, render } from 'pele/lazy'
 import { Loader } from '@/components/loader'
 import { VisualPreview } from '@/components/visual-preview/visual-preview'
 import { useTheme } from '@/hooks/use-theme'
+import { ExportableVisual } from '@/components/visual-export/visual-export'
 
 const MAXIMUM_DIAGRAM_CHARACTERS = 16_384
 const MAXIMUM_CACHED_DIAGRAMS = 8
@@ -138,7 +139,7 @@ export default function MarkdownMermaid({ text, incomplete, active }: { text: st
     return <div className="markdown-diagram-loading"><Loader size="sm" label="Drawing diagram…" /></div>
   }
 
-  return <VisualPreview title="Diagram" label="Enlarge diagram" svg={result.svg} fullWidth>
+  return <ExportableVisual><VisualPreview title="Diagram" label="Enlarge diagram" svg={result.svg} fullWidth>
     {drawing}
-  </VisualPreview>
+  </VisualPreview></ExportableVisual>
 }

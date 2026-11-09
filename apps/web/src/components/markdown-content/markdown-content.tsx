@@ -10,6 +10,8 @@ import {
 } from 'streamdown'
 
 import { StreamingText } from '@/components/streaming-text'
+import { ExportableVisual } from '@/components/visual-export/visual-export'
+import { VisualLayout } from '@/components/visual-layout/visual-layout'
 import { Icon } from '@/components/icon'
 import { useProfile } from '@/data/profile'
 import { MarkdownLink } from './markdown-link'
@@ -107,7 +109,11 @@ const COMPONENTS: Components = {
     {checked && <Icon name="check-fill" />}
   </span>,
   strong: 'strong', em: 'em', del: 'del',
-  table: ({ children }) => <div className="markdown-table"><table>{children}</table></div>,
+  table: function MarkdownTable({ children }) {
+    const { completed } = useContext(MarkdownAnimationContext)
+
+    return <ExportableVisual disabled={!completed} contentSelector="table"><div className="markdown-table"><table>{children}</table></div></ExportableVisual>
+  },
   thead: 'thead', tbody: 'tbody', tr: 'tr', th: 'th', td: 'td',
   // External images can leak conversation data through model-authored URLs.
   img: ({ alt }) => alt ? <span className="markdown-image-alt">{alt}</span> : null,

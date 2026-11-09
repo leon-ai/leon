@@ -6,6 +6,8 @@ import { GENERATED_BRIDGE_VERSION, GeneratedMessage, isGeneratedState,
 import runtime from 'virtual:aurora-sandbox'
 import styles from './frame-styles.sass?inline'
 import { VISUAL_FONT_CSS } from '../../visual-export/visual-fonts'
+import { VisualExportActions } from '../../visual-export/visual-export'
+import { IMAGE_EXPORT_TIMEOUT_MS, isBoundedPNG } from '../../visual-export/image-contract'
 import { Button } from '@/components/button'
 import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'
@@ -149,6 +151,30 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
         setStopped(true)
       }, FRAME_RENDER_TIMEOUT_MS)
       channel = new MessageChannel()
+      requestImage.current = () => new Promise<Blob>((resolve, reject) => {
+        if (imageRequest) {
+          reject(new Error('An image is already being prepared.'))
+          return
+        }
+        const id = crypto.randomUUID()
+        const timeout = setTimeout(() => {
+          imageRequest = undefined
+          reject(new Error('Image export took too long.'))
+        }, IMAGE_EXPORT_TIMEOUT_MS)
+        imageRequest = { id, resolve, reject, timeout }
+        void import('virtual:aurora-export').then(async ({ default: source }) => {
+          const files = await source.load()
+          if (live && imageRequest?.id === id) {
+            channel?.port1.postMessage({ type: GeneratedMessage.Export, id, entry: source.entry, files })
+          }
+        }).catch(() => {
+          if (imageRequest?.id === id) {
+            clearTimeout(timeout)
+            imageRequest = undefined
+            reject(new Error('I couldn’t load image export.'))
+          }
+        })
+      })
       channel.port1.onmessage = (message: MessageEvent) => {
         if (!live || !message.data || typeof message.data !== 'object') {
           return
@@ -158,6 +184,28 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
           windowStart = performance.now()
         }
         count += 1
+        if (message.data.type === GeneratedMessage.Export) {
+          // Binary results have a separate budget, but only a pending owner
+          // request may receive one. Never decode unbounded frame payloads.
+          const request = imageRequest
+          if (count > MAXIMUM_MESSAGES_PER_SECOND) {
+            setError('I paused this interface because it sent too much data.')
+            setStopped(true)
+            return
+          }
+          if (!request || message.data.id !== request.id) {
+            return
+          }
+          clearTimeout(request.timeout)
+          imageRequest = undefined
+          const bytes: unknown = message.data.bytes
+          if (bytes instanceof ArrayBuffer && isBoundedPNG(new Uint8Array(bytes))) {
+            request.resolve(new Blob([bytes], { type: 'image/png' }))
+          } else {
+            request.reject(new Error('I couldn’t create an image of this visual.'))
+          }
+          return
+        }
         let length = MAXIMUM_FRAME_MESSAGE_CHARACTERS + 1
         try {
           length = JSON.stringify(message.data).length
@@ -231,6 +279,8 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
     <header className="generated-toolbar">
       <span>{node.props.title}</span>
       <div className="aurora-actions">
+        <VisualExportActions disabled={stopped || !exportReady} capture={() =>
+          requestImage.current?.() ?? Promise.reject(new Error('This visual is no longer open.'))} />
         <Button iconName="code-s-slash" tooltipMessage="View source" tone="muted" onClick={() => setSourceOpen(true)} />
         {document.fullscreenEnabled && <Button
           icon={<Icon name="expand-diagonal" state={expanded ? 'expanded' : 'idle'} />}
