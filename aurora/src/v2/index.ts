@@ -12,3 +12,4 @@ export { SearchSelect, type SearchSelectProps } from './components/search-select
 export { ScrollContainer } from './components/scroll-container'
 export { Progress, type ProgressProps } from './components/progress'
 export { ChoiceWidget, BooleanChoiceWidget, type ChoiceWidgetProps, type BooleanChoiceWidgetProps, type ChoiceOption } from './widgets/choice'
+export { FormWidget, type FormWidgetProps, type FormField } from './widgets/form'
