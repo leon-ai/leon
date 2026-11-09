@@ -150,6 +150,82 @@ describe('web conversation runtime', () => {
     return id
   }
 
+  it.each([
+    { kind: 'native', spec: AURORA_CHOICE_SPEC, nodeId: 'choice', values: ['creative'], text: 'Something creative' },
+    { kind: 'generated', spec: AURORA_GENERATED_SPEC, nodeId: 'reading', values: { minutes: '45' }, text: 'Daily reading goal (minutes): 45' }
+  ])('dispatches accepted $kind UI submissions through the ordinary session runtime and deduplicates retries', async (example) => {
+    const sessionId = await create()
+    await runWithProfileContext({ profileName: profile }, async () => {
+      CONVERSATION_REPOSITORY.upsertMessage(sessionId, { who: 'owner', messageId: 'owner', message: 'Help me choose.', isAddedToHistory: true })
+      CONVERSATION_REPOSITORY.upsertMessage(sessionId, { who: 'leon', messageId: 'question', message: 'How would you like to start?',
+        answerParts: auroraParts('owner', example.spec), isAddedToHistory: true })
+    })
+    const body = { id: randomUUID(), surfaceId: 'surface-one', nodeId: example.nodeId, revision: 1, values: example.values }
+    const endpoint = `/api/v1/sessions/${sessionId}/messages/question/ui`
+    const first = await request('POST', endpoint, body)
+    expect(first.statusCode).toBe(202)
+    expect(first.json().command.query).toContain(example.text)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    const second = await request('POST', endpoint, body)
+    expect(second.statusCode).toBe(202)
+    expect(second.json().command.id).toBe(body.id)
+    expect(fixture.executions).toHaveLength(1)
+    expect((await request('POST', endpoint, { ...body, id: randomUUID() })).statusCode).toBe(409)
+    const page = await request('GET', `/api/v1/sessions/${sessionId}?limit=40`)
+    const question = page.json().messages.find((record: { messageId: string }) => record.messageId === 'question')
+    expect(question.answerParts[0].surface.receipts[example.nodeId].commandId).toBe(body.id)
+    expect(page.json().messages.filter((record: { messageId: string }) => record.messageId === body.id)).toHaveLength(1)
+    fixture.executions[0]!.release()
+    await expect.poll(() => runWithProfileContext({ profileName: profile }, () => WEB_SESSION_RUNTIME.isRunning(sessionId))).toBe(false)
+    expect((await request('POST', endpoint, body)).statusCode).toBe(202)
+    expect(fixture.executions).toHaveLength(1)
+  })
+
+  it('does not present an unavailable retained preparation as live after recovery', async () => {
+    const sessionId = await create()
+    await runWithProfileContext({ profileName: profile }, () => {
+      CONVERSATION_REPOSITORY.upsertMessage(sessionId, { who: 'leon', messageId: 'answer', message: 'Saved answer.', isAddedToHistory: true,
+        agentResponseTrace: { id: 'answer', planSteps: [], toolCalls: [{ id: 'download', name: 'speech.asr.transcribe', status: 'running',
+          preparation: { status: PreparationStatus.Downloading, executionId: 'missing-retained-work', detail: 'Downloading.', completed: 40, total: 100 } }] } })
+    })
+    const page = await request('GET', `/api/v1/sessions/${sessionId}?limit=40`)
+    const preparation = page.json().messages[0].agentResponseTrace.toolCalls[0].preparation
+    expect(preparation.status).toBe('failed')
+    expect(preparation.detail).toContain('no longer active')
+    const details = await request('GET', `/api/v1/sessions/${sessionId}/messages/answer`)
+    expect(details.json().message.agentResponseTrace.toolCalls[0].preparation).toEqual(preparation)
+    await runWithProfileContext({ profileName: profile }, () => {
+      expect(CONVERSATION_REPOSITORY.readMessage(sessionId, 'answer')!.agentResponseTrace!.toolCalls[0]!.preparation!.status).toBe('downloading')
+    })
+    expect(fixture.executions).toHaveLength(0)
+  })
+
+  it('keeps interrupted visual answers inactive and preserves their explanation in saved history', async () => {
+    const sessionId = await create()
+    const id = randomUUID()
+    expect((await request('POST', `/api/v1/sessions/${sessionId}/messages`, { id, query: 'Help me choose.' })).statusCode).toBe(202)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    await runWithProfileContext({ profileName: profile }, async () => {
+      const parts = auroraParts(id)
+      const part = parts[0]!
+      if (part.kind === 'ui') {
+        part.surface.status = 'draft'
+      }
+      CONVERSATION_REPOSITORY.updateAnswerParts(sessionId, `${id}:leon`, () => parts)
+      await WEB_SESSION_RUNTIME.stop(sessionId)
+    })
+    const page = await request('GET', `/api/v1/sessions/${sessionId}?limit=40`)
+    const answer = page.json().messages.find((record: { messageId: string }) => record.messageId === `${id}:leon`)
+    expect(answer.message).toBe('Stopped by you.')
+    expect(answer.answerParts).toEqual([
+      expect.objectContaining({ kind: 'ui', surface: expect.objectContaining({ status: 'draft' }) }),
+      { id: `${id}:leon:text`, kind: 'text', text: 'Stopped by you.' }
+    ])
+    expect((await request('POST', `/api/v1/sessions/${sessionId}/messages/${id}:leon/ui`, {
+      id: randomUUID(), surfaceId: 'surface-one', nodeId: 'choice', revision: 1, values: ['quiet']
+    })).statusCode).toBe(409)
+  })
+
   it('pages metadata and history without starting a model, and preserves CRUD changes', async () => {
     const first = await create()
     const second = await create()

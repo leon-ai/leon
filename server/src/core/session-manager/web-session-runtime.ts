@@ -4,6 +4,8 @@ import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { LogHelper } from '@/helpers/log-helper'
+import { finishAuroraAnswer, publishAnswerParts } from '@/core/aurora/answer-presentation'
+import type { AnswerPart } from '@@/aurora/src/v2/contracts/answer'
 
 import { CONVERSATION_SESSION_MANAGER } from './index'
 import { CONVERSATION_REPOSITORY } from './conversation-repository'
@@ -30,9 +32,32 @@ export class WebSessionRuntime {
    */
   public submit(sessionId: string, id: string, query: string): ConversationCommand {
     const accepted = CONVERSATION_REPOSITORY.acceptCommand(sessionId, id, query)
+    this.dispatchAccepted(accepted)
+
+    return accepted.command
+  }
+
+  /**
+   * Feeds an atomically accepted widget response into the same owner-message lifecycle.
+   */
+  public submitUI(
+    sessionId: string,
+    messageId: string,
+    input: { id: string, surfaceId: string, nodeId: string, revision: number, values: unknown }
+  ): { command: ConversationCommand, answerParts: AnswerPart[] } {
+    const accepted = CONVERSATION_REPOSITORY.acceptAuroraSubmission(sessionId, messageId, input, !this.isRunning(sessionId))
+    publishAnswerParts(sessionId, messageId, accepted.answerParts)
+    this.dispatchAccepted(accepted)
+
+    return { command: accepted.command, answerParts: accepted.answerParts }
+  }
+
+  private dispatchAccepted(accepted: { command: ConversationCommand, created: boolean }): void {
     if (!accepted.created) {
-      return accepted.command
+      return
     }
+
+    const { session_id: sessionId, id, query } = accepted.command
 
     CONVERSATION_SESSION_MANAGER.updateSessionFromStoredMessages(sessionId)
     CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(sessionId, query)
@@ -60,7 +85,6 @@ export class WebSessionRuntime {
       LogHelper.error(`Could not finalize browser turn: ${error}`)
     })
 
-    return accepted.command
   }
 
   private async execute(sessionId: string, id: string, query: string, controller: AbortController): Promise<void> {
@@ -91,13 +115,15 @@ export class WebSessionRuntime {
     } catch (error) {
       status = controller.signal.aborted ? 'stopped' : 'error'
       const message = status === 'stopped' ? 'Stopped by you.' : String(error)
+      const answerParts = finishAuroraAnswer(sessionId, `${id}:leon`, message, false)
       // A failed/interrupted command remains visible after reload, not just in a toast.
       await CONVERSATION_LOGGER.upsert({
-        who: 'leon', message, messageId: `${id}:leon`, isAddedToHistory: true
+        who: 'leon', message, messageId: `${id}:leon`, isAddedToHistory: true,
+        ...(answerParts.length ? { answerParts } : {})
       }, { sessionId })
       publishAgentEvent(profileId, {
         session_id: sessionId, turn_id: id, response_id: `${id}:leon`, type: 'error',
-        data: { message }
+        data: { message, answer_parts: answerParts }
       })
     } finally {
       CONVERSATION_REPOSITORY.finishCommand(id, status)

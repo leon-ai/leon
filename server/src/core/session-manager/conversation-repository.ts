@@ -35,6 +35,11 @@ import { normalizeSearchText, prepareSearchQuery, rankSearchFields, SearchRank }
 import type { SearchQuery } from '@/helpers/search-helper'
 import { MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS } from './session-search-contract'
 import type { SessionSearchMatch } from './session-search-contract'
+import type { Artifact } from '@/core/artifacts/artifact-types'
+import {
+  auroraSubmissionText, isAuroraSubmission, normalizeAuroraSubmission,
+  type AnswerPart, type AuroraValues
+} from '@@/aurora/src/v2/contracts/answer'
 
 const DEFAULT_PAGE_SIZE = 40
 const MAXIMUM_PAGE_SIZE = 100
@@ -624,6 +629,97 @@ export class ConversationRepository {
       .get(sessionId, messageId, messageId)
 
     return row ? JSON.parse(String(row['payload'])) as MessageLog : null
+  }
+
+  /**
+   * Captures the owner-message frontier accepted by a completed visual answer.
+   */
+  public getLatestOwnerMessageId(sessionId: string): string | undefined {
+    const row = this.db.prepare(`SELECT id FROM conversation_messages
+      WHERE session_id = ? AND role = 'owner' AND visible = 1 ORDER BY sequence DESC LIMIT 1`).get(sessionId)
+
+    return row ? String(row['id']) : undefined
+  }
+
+  /**
+   * Updates answer presentation without changing its timestamp or sidebar activity.
+   */
+  public updateAnswerParts(
+    sessionId: string,
+    messageId: string,
+    update: (parts: AnswerPart[]) => AnswerPart[],
+    artifacts?: Artifact[]
+  ): AnswerPart[] {
+    return this.db.transaction(() => {
+      let record = this.readMessage(sessionId, messageId)
+      if (!record) {
+        this.upsertMessage(sessionId, { who: 'leon', messageId, message: '', isAddedToHistory: false })
+        record = this.readMessage(sessionId, messageId)!
+      }
+      if (record.who !== 'leon') {
+        throw new Error('This message cannot contain an interactive answer.')
+      }
+
+      const parts = update(record.answerParts ?? [])
+      const value = { ...record, answerParts: parts,
+        ...(artifacts ? { artifacts: [...new Map([...(record.artifacts ?? []), ...artifacts].map((artifact) => [artifact.id, artifact])).values()] } : {}) }
+      this.db.prepare(`UPDATE conversation_messages SET payload = ?, summary = ?
+        WHERE session_id = ? AND id = ?`)
+        .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, record.messageId)
+
+      return parts
+    })()
+  }
+
+  /**
+   * Accepts a widget receipt and its ordinary owner command in one transaction.
+   * Reloads/retries never repeat work, and obsolete questions cannot steer a newer task.
+   */
+  public acceptAuroraSubmission(
+    sessionId: string,
+    messageId: string,
+    input: { id: string, surfaceId: string, nodeId: string, revision: number, values: unknown },
+    allowNewSubmission: boolean
+  ): { command: ConversationCommand, created: boolean, answerParts: AnswerPart[] } {
+    return this.db.transaction(() => {
+      const record = this.readMessage(sessionId, messageId)
+      const part = record?.answerParts?.find((item) => item.kind === 'ui' && item.surface.id === input.surfaceId)
+      if (!record?.isAddedToHistory || part?.kind !== 'ui' || !Object.hasOwn(part.surface.spec.elements, input.nodeId)) {
+        throw new Error('This question is no longer available. Please ask me again.')
+      }
+      const node = part.surface.spec.elements[input.nodeId]!
+      if (!isAuroraSubmission(node, input.values)) {
+        throw new Error('Please check your answers and try again.')
+      }
+      const values = normalizeAuroraSubmission(node, input.values as AuroraValues)
+      const receipt = part.surface.receipts[input.nodeId]
+      const query = auroraSubmissionText(node, values)
+      if (receipt) {
+        if (receipt.commandId !== input.id || receipt.revision !== input.revision || JSON.stringify(receipt.values) !== JSON.stringify(values)) {
+          throw new Error('This question has already been answered.')
+        }
+
+        return { ...this.acceptCommand(sessionId, input.id, query), answerParts: record.answerParts! }
+      }
+      const latestReply = this.db.prepare(`SELECT id FROM conversation_messages
+        WHERE session_id = ? AND role = 'leon' AND visible = 1 AND (
+          trace_id IS NOT NULL OR json_array_length(payload, '$.answerParts') > 0
+        ) ORDER BY sent_at DESC, sequence DESC LIMIT 1`).get(sessionId)
+      if (!allowNewSubmission || this.getLatestOwnerMessageId(sessionId) !== part.surface.ownerMessageId ||
+        latestReply?.['id'] !== record.messageId || part.surface.status !== 'ready' || part.surface.revision !== input.revision) {
+        throw new Error('This question is no longer active. Please use the latest reply.')
+      }
+
+      const accepted = this.acceptCommand(sessionId, input.id, query)
+      const answerParts = this.updateAnswerParts(sessionId, messageId, (parts) => parts.map((item) =>
+        item.kind === 'ui' && item.id === part.id ? { ...item, surface: {
+          ...item.surface, receipts: { ...item.surface.receipts, [input.nodeId]: {
+            commandId: input.id, revision: input.revision, values, submittedAt: Date.now()
+          } }
+        } } : item))
+
+      return { ...accepted, answerParts }
+    })()
   }
 
   /**
