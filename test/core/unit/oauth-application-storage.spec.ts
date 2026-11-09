@@ -68,6 +68,7 @@ import { getConnectionCatalog, getOAuthClientSettings } from '@/core/connections
 import { saveConnection } from '@/core/connections/connection-service'
 import { setupConnection } from '@/core/connections/connection-tool'
 import { OAUTH_MANAGER } from '@/core/connections/oauth-manager'
+import { renderOAuthCompletion } from '@/core/connections/oauth-completion'
 
 beforeEach(async () => {
   fixture.directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-oauth-storage-'))
@@ -130,4 +131,15 @@ it('saves new OAuth credentials encrypted and refreshes with the stored applicat
     expect(refreshed['client_secret']).toBeUndefined()
     expect(JSON.stringify(fetch.mock.calls)).toContain(Buffer.from('new-client:new-secret').toString('base64'))
   })
+})
+
+it('keeps browser completion signals content-free and inert outside their intended script', () => {
+  expect(renderOAuthCompletion({})).toBeUndefined()
+  expect(renderOAuthCompletion({ popup_id: 'attempt', provider: 'example.account', connection_result: 'unverified' })).toBeUndefined()
+  const completion = renderOAuthCompletion({ popup_id: '</script><img src=x>', provider: 'example.account', connection_result: 'connected' })!
+  expect(completion.html).not.toContain('</script><img')
+  expect(completion.html.match(/<script /g)).toHaveLength(1)
+  expect(completion.html).toContain('\\u003c/script>')
+  expect(completion.contentSecurityPolicy).toContain('default-src \'none\'')
+  expect(completion.html).not.toContain('access_token')
 })

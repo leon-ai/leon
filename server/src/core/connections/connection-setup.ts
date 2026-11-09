@@ -76,10 +76,18 @@ export async function handleConnectionSetup(
       throw new Error('This tool is no longer available.')
     }
 
-    const methodId = input.method || input.state?.method
+    let connection = (await CONNECTION_STORE.list()).find(
+      (entry) => entry.provider === input.provider
+    )
+    const connected = (): boolean =>
+      connection?.status === ConnectionStatus.Connected
+    // Keep explicit saved workflows and existing accounts intact. Only new
+    // setups use the recommendation; failures never downgrade authorization.
+    const methodId = input.method || input.state?.method ||
+      (connected() ? connection?.auth_type : undefined)
     const method = methodId
       ? tool.methods.find((entry) => entry.id === methodId)
-      : tool.methods[0]
+      : getPreferredConnectionMethod(tool.methods)
 
     if (!method) {
       throw new Error('Unknown connection method.')
@@ -88,13 +96,19 @@ export async function handleConnectionSetup(
     let step = Object.values(SetupStep).includes(input.state?.step as SetupStep)
       ? (input.state!.step as SetupStep)
       : SetupStep.Choice
-    let connection = (await CONNECTION_STORE.list()).find(
-      (entry) => entry.provider === input.provider
-    )
-    const connected = (): boolean =>
-      connection?.status === ConnectionStatus.Connected
     const needsApplication =
       method.id === 'oauth' && Object.keys(method.settings).length > 0
+    // Assisted setup can finish in another tab or an agent tool call. Refresh
+    // should then offer provider authorization, not another application setup.
+    if (
+      input.action === SetupAction.Refresh &&
+      method.id === 'oauth' &&
+      !needsApplication &&
+      [SetupStep.Application, SetupStep.Assisted].includes(step)
+    ) {
+      step = SetupStep.Choice
+    }
+
     let event: ConnectionSetupResult['event']
     let authorizationURL: string | undefined
     const ownerMessage = (
@@ -233,31 +247,29 @@ export async function handleConnectionSetup(
         view.actions.push(action(SetupAction.Continue, 'Continue'))
       }
     } else {
-      if (tool.methods.length > 1) {
-        view.actions.push(
-          ...tool.methods.map((entry) => ({
-            ...action(
-              SetupAction.SelectMethod,
-              entry.name,
-              entry.id !== method.id
-            ),
-            method: entry.id
-          }))
-        )
-      }
-
       if (step === SetupStep.Choice || step === SetupStep.Assisted) {
         view.description =
           step === SetupStep.Assisted
             ? 'You can follow setup progress in this conversation.'
-            : 'I’ll complete setup in your browser.'
+            : needsApplication
+              ? 'A one-time application setup is needed before you can authorize access. Enter its credentials to get started.'
+              : method.id === 'oauth'
+                ? 'Authorize access on the provider’s website. You stay in control of your permissions.'
+                : 'Enter your account token to connect securely.'
         if (step === SetupStep.Choice) {
           view.actions.push(
-            action(SetupAction.StartSetup, 'Set it up for me')
+            action(
+              method.id === 'oauth' && !needsApplication
+                ? SetupAction.Connect
+                : SetupAction.Credentials,
+              `Connect ${tool.name}`
+            )
           )
         }
 
-        view.actions.push(action(SetupAction.Manual, 'Set up manually', true))
+        if (step === SetupStep.Assisted) {
+          view.actions.push(action(SetupAction.Manual, 'Set up manually', true))
+        }
       } else {
         view.description =
           step === SetupStep.Application
@@ -311,9 +323,11 @@ export async function handleConnectionSetup(
           }
         }
 
-        view.actions.push(
-          action(SetupAction.StartSetup, 'Set it up for me', true)
-        )
+        if (needsApplication) {
+          view.actions.push(
+            action(SetupAction.StartSetup, 'Set it up for me', true)
+          )
+        }
       }
     }
 
