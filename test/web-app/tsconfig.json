@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["node", "vite/client"]
   },
-  "include": ["./**/*.ts", "./**/*.tsx"],
-  "exclude": ["./results", "./report", "../../node_modules"]
+  "include": ["./**/*.ts", "./**/*.tsx", "../../apps/web/src/**/*.d.ts"],
+  "exclude": ["./results", "./report", "./aurora/results", "./aurora/report", "./previews/dist", "../../node_modules"]
 }

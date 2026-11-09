@@ -18,3 +18,4 @@ export { ArtifactWidget, type ArtifactWidgetProps, type ArtifactItem } from './w
 export { DataTableWidget } from './widgets/data-table'
 export { ComparisonWidget } from './widgets/comparison'
 export { ChartWidget, type ChartWidgetProps } from './widgets/chart'
+export { AURORA_CATALOG } from './catalog'

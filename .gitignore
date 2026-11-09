@@ -12,6 +12,9 @@ skills/**/reports/*
 test/coverage/
 test/web-app/results/
 test/web-app/report/
+test/web-app/aurora/results/
+test/web-app/aurora/report/
+test/web-app/benchmarks/results/
 **/tmp/*
 core/config/**/*.json
 scripts/out/*.md
