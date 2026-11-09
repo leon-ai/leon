@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { auroraSandbox } from '../../../apps/web/vite/aurora-sandbox.ts'
 
 // Design studies use real app components, without profile configuration or API access.
 export default defineConfig({
@@ -32,5 +33,5 @@ export default defineConfig({
       }
     }
   },
-  plugins: [react()]
+  plugins: [auroraSandbox(), react()]
 })

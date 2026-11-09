@@ -1,0 +1,79 @@
+@use '../../../../../../aurora/src/v2/styles/tokens'
+@use '../../../../../../aurora/src/v2/components/button/button'
+@use '../../../../../../aurora/src/v2/components/input/input'
+@use '../../../../../../aurora/src/v2/components/input/input-effects'
+@use '../../../../../../aurora/src/v2/components/loader/loader'
+@use '../../../../../../aurora/src/v2/components/progress'
+@use '../../../../../../aurora/src/v2/components/surface'
+@use '../../../../../../aurora/src/v2/components/range'
+@use '../../../../../../aurora/src/v2/components/selection-control'
+@use '../../../../../../aurora/src/v2/components/controls'
+@use '../../../../../../aurora/src/v2/components/scroll-container'
+@use '../../../../../../aurora/src/v2/widgets/presentation'
+
+*, *::before, *::after
+  box-sizing: border-box
+
+html, body
+  margin: 0
+  padding: 0
+  height: auto
+  min-height: 0
+  background: transparent
+  color: var(--color-text)
+  font-family: var(--font-family)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+
+body
+  padding: 2px
+
+button, input, select, textarea
+  font: inherit
+
+input[type='range']
+  accent-color: var(--color-accent)
+
+img, svg, canvas
+  max-width: 100%
+
+pre, code
+  font-family: var(--font-family-code)
+
+// Content has theme-aware defaults, but authored layouts can still choose
+// another existing token without overriding the unlayered control foundation.
+@layer aurora-content
+  h1, h2, h3, h4, h5, h6
+    margin: 0 0 var(--space-md)
+    font-weight: var(--font-weight-semi-bold)
+    line-height: var(--line-height-xl)
+
+  h1
+    font-size: var(--font-size-3xl)
+
+  h2
+    font-size: var(--font-size-2xl)
+
+  h3
+    font-size: var(--font-size-xl)
+
+  h4, h5, h6
+    font-size: var(--font-size-md)
+
+  p
+    margin: 0 0 var(--space-md)
+
+  small
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+    line-height: var(--line-height-sm)
+
+:focus-visible
+  outline: 2px solid var(--color-accent)
+  outline-offset: 2px
+
+@media (prefers-reduced-motion: reduce)
+  *, *::before, *::after
+    animation: none !important
+    transition: none !important
+    scroll-behavior: auto !important

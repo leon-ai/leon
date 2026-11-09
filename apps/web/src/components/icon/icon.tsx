@@ -8,6 +8,8 @@ import { BRAND_ICONS, RARE_BRAND_NAMES } from './brand-icons'
 import { ASSET_ICONS } from './asset-icons'
 import { ICON_MORPHS, type MorphFrames } from './icon-morphs'
 import { MorphPaths } from './morph-paths'
+import { IconPaths } from './icon-paths'
+export { IconPaths } from './icon-paths'
 
 import './icon.sass'
 
@@ -59,17 +61,6 @@ function loadToolArtwork(): Promise<void> {
 
 function getArtwork(catalog: Readonly<Record<string, IconDefinition>> | undefined, name: string): IconDefinition | undefined {
   return catalog && Object.hasOwn(catalog, name) ? catalog[name] : undefined
-}
-
-/**
- * Shares path painting between application icons and trusted local design studies.
- */
-export function IconPaths({ definition }: { definition: IconDefinition }) {
-  return definition.map((part, index) => (
-    <path key={index} d={part.d} className={part.part ? `icon-part-${part.part}` : undefined}
-      fill={part.fill ? 'currentColor' : 'none'} fillOpacity={part.fillOpacity}
-      stroke={part.fill ? 'none' : 'currentColor'} />
-  ))
 }
 
 /**

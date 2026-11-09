@@ -37,6 +37,124 @@ test('replays active data widgets and retired results without sending owner comm
   expect(commands).toEqual([])
 })
 
+test('loads optional composite controls inside the isolated runtime and preserves their native targets', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  const spec = structuredClone(AURORA_CALCULATOR_SPEC)
+  const node = spec.elements['savings']!
+  if (node.type !== 'Generated') {
+    throw new Error('The generated fixture must declare an isolated surface.')
+  }
+  node.props.title = 'A few shared controls'
+  node.props.html = '<label><input id="kept" type="checkbox">Keep this idea</label><output id="changes">0</output>'
+  node.props.css = ''
+  node.props.javascript = `const input = document.getElementById('kept');
+let changes = 0;
+input.addEventListener('change', () => { document.getElementById('changes').textContent = String(++changes); });
+const h = Aurora.h;
+Aurora.render(h('div', {className:'aurora-fields'},
+  h(Aurora.Tabs, {label:'Views',items:[
+    {value:'first',label:'First',content:'A little room to explore.'},
+    {value:'second',label:'Second',content:'A few notes.'}
+  ]}),
+  h(Aurora.SearchSelect,{label:'Choose a pace',options:[{value:'gentle',label:'Gentle'},{value:'focused',label:'Focused'}]}),
+  h(Aurora.Segmented,{label:'Choose a view',defaultValue:'day',options:[{value:'day',label:'Day'},{value:'week',label:'Week'}]}),
+  h(Aurora.Switch,{label:'Play music',defaultChecked:true})
+));`
+  history.at(-1)!.answerParts = auroraParts(history.at(-2)!.messageId, spec)
+  await page.goto(SESSION_URL)
+  const frame = page.frameLocator('iframe[title="A few shared controls"]')
+  await expect(frame.getByRole('tab', { name: 'First', exact: true })).toBeVisible()
+  await frame.getByRole('tab', { name: 'First', exact: true }).focus()
+  await frame.getByRole('tab', { name: 'First', exact: true }).press('ArrowRight')
+  await expect(frame.getByRole('tab', { name: 'Second', exact: true })).toHaveAttribute('aria-selected', 'true')
+  const search = frame.getByRole('combobox', { name: 'Choose a pace' })
+  await search.fill('Focused')
+  await search.press('ArrowDown')
+  await search.press('Enter')
+  await expect(search).toHaveValue('Focused')
+  await frame.getByRole('checkbox', { name: 'Keep this idea' }).check()
+  await expect(frame.locator('#changes')).toHaveText('1')
+  await frame.getByRole('radio', { name: 'Week', exact: true }).check()
+  await expect(frame.getByRole('radio', { name: 'Week', exact: true })).toBeChecked()
+  await frame.getByRole('switch', { name: 'Play music' }).uncheck()
+  await expect(frame.getByRole('switch', { name: 'Play music' })).not.toBeChecked()
+})
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`keeps native, dynamic and React controls on the same Aurora foundation (${theme})`, async ({ page, ui }, testInfo) => {
+    const history = ui.history.get(SESSION_ID)!
+    const spec = structuredClone(AURORA_CALCULATOR_SPEC)
+    const node = spec.elements['savings']!
+    if (node.type !== 'Generated') {
+      throw new Error('The control fixture requires a generated surface.')
+    }
+    node.props.title = 'Shared control foundation'
+    node.props.html = `<div class="controls">
+      <button id="raw-primary" data-variant="primary" style="padding:1px;background:magenta">Native action</button>
+      <label>Native text<input id="raw-text" aria-label="Native text" placeholder="A small idea"></label>
+      <label>Native range<input type="range" aria-label="Native range" min="0" max="100" value="40"></label>
+      <label><input type="checkbox" aria-label="Keep room">Keep room</label>
+      <label>Native select<select aria-label="Native select"><option>A gentle pace</option></select></label>
+      <output id="clicked">0</output><div id="later"></div></div>`
+    // Saved documents may predate source checks. Their ordinary control rules
+    // still cannot override the trusted, unlayered Aurora foundation.
+    node.props.css = '#raw-primary{background:magenta;color:yellow;padding:1px;border-radius:0;font-size:11px}.controls{display:grid;gap:var(--space-md)}'
+    node.props.javascript = `const h = Aurora.h;
+let clicks = 0;
+const clicked = () => { document.getElementById('clicked').textContent = String(++clicks); };
+document.getElementById('raw-primary').addEventListener('click', clicked);
+Aurora.render(h('div', {className:'aurora-fields'},
+  h(Aurora.Button, {variant:'primary', onClick:clicked}, 'Shared action'),
+  h(Aurora.Input, {ariaLabel:'Shared text',placeholder:'A small idea'}),
+  h(Aurora.Range, {'aria-label':'Shared range',min:0,max:100,defaultValue:40}),
+  h(Aurora.Button, {variant:'secondary',onClick:()=>{
+    const button = document.createElement('button');
+    button.dataset.variant = 'danger';
+    button.textContent = 'Later action';
+    button.style.backgroundColor = 'magenta';
+    button.addEventListener('click', clicked);
+    document.getElementById('later').append(button);
+  }}, 'Add a control')));`
+    history.at(-1)!.answerParts = auroraParts(history.at(-2)!.messageId, spec)
+    await page.addInitScript((value) => {
+      window.localStorage.setItem('leon.web-app.theme', value)
+    }, theme)
+    await page.goto(SESSION_URL)
+    const frame = page.frameLocator('iframe[title="Shared control foundation"]')
+    const raw = frame.getByRole('button', { name: 'Native action', exact: true })
+    await expect(frame.getByRole('button', { name: 'Shared action', exact: true })).toBeVisible()
+    await expect(frame.locator('html')).toHaveAttribute('data-theme', theme)
+    await page.mouse.move(0, 0)
+    const appearances = await frame.locator('body').evaluate((body) => {
+      const properties = ['background-image', 'color', 'border-radius', 'font-family', 'font-size', 'font-weight', 'padding-left', 'padding-right', 'height']
+      const appearance = (element: Element): string[] => {
+        const style = getComputedStyle(element)
+        return properties.map((property) => style.getPropertyValue(property))
+      }
+      return { native: appearance(body.querySelector('#raw-primary')!),
+        shared: appearance([...body.querySelectorAll('button')].find((element) => element.textContent === 'Shared action')!),
+        nativeInput: appearance(body.querySelector('#raw-text')!),
+        sharedInput: appearance(body.querySelector('input[aria-label="Shared text"]')!),
+        nativeThumb: getComputedStyle(body.querySelector('input[aria-label="Native range"]')!, '::-webkit-slider-thumb').backgroundColor,
+        sharedThumb: getComputedStyle(body.querySelector('input[aria-label="Shared range"]')!, '::-webkit-slider-thumb').backgroundColor }
+    })
+    expect(appearances.native).toEqual(appearances.shared)
+    expect(appearances.nativeInput).toEqual(appearances.sharedInput)
+    expect(appearances.nativeThumb).toEqual(appearances.sharedThumb)
+    await raw.click()
+    await expect(frame.locator('#clicked')).toHaveText('1')
+    await frame.getByRole('textbox', { name: 'Native text', exact: true }).fill('Keep this draft')
+    await frame.getByRole('checkbox', { name: 'Keep room', exact: true }).check()
+    await frame.getByRole('button', { name: 'Add a control', exact: true }).click()
+    const later = frame.getByRole('button', { name: 'Later action', exact: true })
+    await expect(later).toHaveCSS('border-radius', appearances.shared[2]!)
+    await later.click()
+    await expect(frame.locator('#clicked')).toHaveText('2')
+    await expect(frame.getByRole('textbox', { name: 'Native text', exact: true })).toHaveValue('Keep this draft')
+    await page.locator('iframe').screenshot({ path: testInfo.outputPath(`generated-controls-${theme}.png`) })
+  })
+}
+
 test('runs a bespoke chart, retains local state and confirms declared submissions outside the sandbox', async ({ page, ui }) => {
   const history = ui.history.get(SESSION_ID)!
   const answer = history.at(-1)!
@@ -73,6 +191,93 @@ test('runs a bespoke chart, retains local state and confirms declared submission
   await page.reload()
   await expect(send).toBeDisabled()
   expect(requests).toHaveLength(1)
+})
+
+test('keeps non-chart interactions local and preserves their frame through theme changes and source viewing', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  history.at(-1)!.answerParts = auroraParts(history.at(-2)!.messageId, AURORA_CALCULATOR_SPEC)
+  const charts: string[] = []
+  const commands: string[] = []
+  page.on('request', (request) => {
+    if (/\/(charts|chart-series|_virtual_aurora-charts)-/.test(request.url())) {
+      charts.push(request.url())
+    }
+    if (request.method() === 'POST') {
+      commands.push(request.url())
+    }
+  })
+  await page.goto(SESSION_URL)
+  const frame = page.frameLocator('iframe[title="A small saving habit"]')
+  await frame.getByRole('slider', { name: 'Monthly saving' }).fill('900')
+  await expect(frame.locator('#yearly')).toHaveText('¥10800')
+  const original = await page.locator('iframe').elementHandle()
+  await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+  await expect(frame.locator('html')).toHaveAttribute('data-theme', 'light')
+  expect(await page.locator('iframe').evaluate((element, previous) => element === previous, original)).toBe(true)
+  await expect(frame.locator('#yearly')).toHaveText('¥10800')
+  await page.getByRole('button', { name: 'View source', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Interface source' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Copy source' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Close dialog' }).click()
+  await expect(frame.locator('#yearly')).toHaveText('¥10800')
+  await page.getByText('Text summary', { exact: true }).click()
+  const calculator = AURORA_CALCULATOR_SPEC.elements['savings']!
+  if (calculator.type !== 'Generated') {
+    throw new Error('The calculator fixture requires a generated surface.')
+  }
+  await expect(page.getByText(calculator.props.fallback, { exact: true })).toBeVisible()
+  expect(charts).toEqual([])
+  expect(commands).toEqual([])
+})
+
+test('blocks app access, network requests and automatic commands from generated code', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  const spec = structuredClone(AURORA_GENERATED_SPEC)
+  const node = spec.elements['reading']!
+  if (node.type !== 'Generated') {
+    throw new Error('The sandbox fixture requires a generated surface.')
+  }
+  node.props.html = '<output id="boundaries"></output>'
+  node.props.javascript = 'let parentBlocked=false;let cookieBlocked=false;try{parent.document.body.dataset.leaked=\'yes\'}catch{parentBlocked=true}try{document.cookie}catch{cookieBlocked=true}document.getElementById(\'boundaries\').textContent=String(parentBlocked&&cookieBlocked);fetch(\'https://leak.invalid/fetch\').catch(()=>{});const image=new Image();image.src=\'https://leak.invalid/image\';document.body.append(image);Aurora.submit({minutes:\'45\'});parent.postMessage({type:\'submit\',values:{minutes:\'60\'}},\'*\');'
+  history.at(-1)!.answerParts = auroraParts(history.at(-2)!.messageId, spec)
+  const escaped: string[] = []
+  const commands: string[] = []
+  await page.route('https://leak.invalid/**', async (route) => {
+    escaped.push(route.request().url())
+    await route.abort()
+  })
+  page.on('request', (request) => {
+    if (request.method() === 'POST') {
+      commands.push(request.url())
+    }
+  })
+  await page.goto(SESSION_URL)
+  const frame = page.frameLocator('iframe[title="A little room for reading"]')
+  await expect(frame.locator('#boundaries')).toHaveText('true')
+  await expect(page.getByRole('button', { name: 'Send selection', exact: true })).toBeVisible()
+  const child = page.frames().find((item) => item.url().startsWith('blob:'))!
+  await child.evaluate(() => { window.location.href = 'https://leak.invalid/navigation' })
+  await expect(page.locator('body')).not.toHaveAttribute('data-leaked', 'yes')
+  expect(escaped).toEqual([])
+  expect(commands).toEqual([])
+})
+
+test('unloads failed generated code while keeping its summary and the conversation usable', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  const spec = structuredClone(AURORA_CALCULATOR_SPEC)
+  const node = spec.elements['savings']!
+  if (node.type !== 'Generated') {
+    throw new Error('The failure fixture requires a generated surface.')
+  }
+  node.props.javascript = 'throw new Error("The interface could not initialize.")'
+  history.at(-1)!.answerParts = auroraParts(history.at(-2)!.messageId, spec)
+  await page.goto(SESSION_URL)
+  await expect(page.getByText('I couldn’t run this interface. You can still read the summary below.', { exact: true })).toBeVisible()
+  await expect(page.locator('iframe')).toHaveCount(0)
+  await expect(page.getByText(node.props.fallback, { exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Message Leon' }).fill('Show this another way')
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toHaveValue('Show this another way')
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -232,6 +437,15 @@ test('leaves draft and obsolete controls inactive while keeping legacy text answ
   const drafting = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
   await expect(drafting.getByRole('radio').first()).toBeDisabled()
   await expect(drafting.getByText('Getting this ready…')).toBeVisible()
+})
+
+test('does not load native or generated rendering engines for ordinary Markdown answers', async ({ page, ui }) => {
+  void ui
+  const requests: string[] = []
+  page.on('request', (request) => requests.push(request.url()))
+  await page.goto(SESSION_URL)
+  await expect(page.getByText('Saved answer 239', { exact: true })).toBeVisible()
+  expect(requests.some((url) => /(?:aurora-surface|generated-frame|charts|chart-engine|chart-series|controls)-/.test(url))).toBe(false)
 })
 
 test('streams Markdown beside native surfaces without waiting for the final response', async ({ page, ui }) => {

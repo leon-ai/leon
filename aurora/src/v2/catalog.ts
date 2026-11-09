@@ -23,4 +23,8 @@ export const AURORA_CATALOG = [
   { id: 'data-table', kind: 'widget', title: 'Data table', description: 'Searchable, sortable data with small pages and horizontal scrolling.' },
   { id: 'comparison', kind: 'widget', title: 'Comparison', description: 'Compare the same criteria and focus on differences.' },
   { id: 'chart', kind: 'widget', title: 'Chart', description: 'Interactive bar, line and pie charts with a readable data view.' },
+  { id: 'reading-dashboard', kind: 'generated', title: 'Reading dashboard', description: 'A bespoke chart, goal slider and optional conversation action.' },
+  { id: 'savings-calculator', kind: 'generated', title: 'Savings calculator', description: 'A custom local calculation without loading a chart engine.' },
+  { id: 'light-explorer', kind: 'generated', title: 'Light explorer', description: 'An interactive SVG explanation with a distance control.' },
+  { id: 'memory-map', kind: 'generated', title: 'Memory map', description: 'A connected overview with meaningful source selection and readable detail.' }
 ] as const

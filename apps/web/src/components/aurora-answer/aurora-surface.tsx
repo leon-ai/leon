@@ -13,6 +13,7 @@ import { AuroraFallback, RetiredResults, type AuroraViewProps } from './aurora-f
 import { isGeneratedState } from '../../../../../aurora/src/v2/contracts/generated'
 import { VisualLayout } from '@/components/visual-layout/visual-layout'
 
+const GeneratedFrame = lazy(() => import('./generated/generated-frame'))
 const ChartWidget = lazy(() => import('./chart-widget'))
 
 const SurfaceContext = createContext<{ surface: AuroraSurface, artifacts: Artifact[], active: boolean } | null>(null)
@@ -86,7 +87,7 @@ function NativeNode({ element, children }: ComponentRenderProps) {
     return <ChartNodeView nodeId={nodeId} />
   }
   if (node.type === 'Generated') {
-    return <AuroraFallback {...context} />
+    return <GeneratedNodeView key={context.surface.revision} nodeId={nodeId} />
   }
 
   const receipt = Object.hasOwn(context.surface.receipts, nodeId) ? context.surface.receipts[nodeId] : undefined
@@ -108,6 +109,38 @@ function ChartNodeView({ nodeId }: { nodeId: string }) {
   return <VisualLayout identity={`${owner?.sessionId}:${owner?.messageId}:${surface.id}:${surface.revision}:${nodeId}`}
     estimatedHeight="440px" label="Drawing the chart…" ready={ready}>
     <Suspense fallback={null}><ChartWidget {...node.props} onReady={() => setReady(true)} /></Suspense>
+  </VisualLayout>
+}
+
+function GeneratedNodeView({ nodeId }: { nodeId: string }) {
+  const { surface } = useContext(SurfaceContext)!
+  const owner = useContext(ConversationDetailsContext)
+  const node = surface.spec.elements[nodeId]!
+  const [draft, setDraft] = useTabDraft('generated-state', [owner?.sessionId, owner?.messageId, surface.id, nodeId, surface.revision])
+  const request = useAuroraSubmission(owner?.sessionId ?? '', owner?.messageId ?? '', surface.id, nodeId, surface.revision)
+  const receipt = surface.receipts[nodeId]
+  const [ready, setReady] = useState(false)
+  let state: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = draft ? JSON.parse(draft) : {}
+    if (isGeneratedState(parsed)) {
+      state = parsed
+    }
+  } catch {
+    // A damaged tab-local snapshot must not prevent reading the saved answer.
+  }
+
+  if (node.type !== 'Generated') {
+    return null
+  }
+
+  return <VisualLayout identity={`${owner?.sessionId}:${owner?.messageId}:${surface.id}:${surface.revision}:${nodeId}`}
+    estimatedHeight={`calc(${node.props.height ?? 360}px + var(--button-md-icon-only-size) + var(--space-sm) * 2 + var(--line-height-sm))`}
+    ready={ready}>
+    <Suspense fallback={null}><GeneratedFrame node={node}  initialValues={receipt?.values} onReady={setReady}
+    readOnly={!owner || surface.status !== 'ready' || owner.latestOwnerMessageId !== surface.ownerMessageId}
+    submitted={Boolean(receipt)} 
+     /></Suspense>
   </VisualLayout>
 }
 

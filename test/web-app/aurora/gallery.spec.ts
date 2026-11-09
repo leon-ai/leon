@@ -4,6 +4,30 @@ import { AURORA_QUERY_EXAMPLES } from '../../fixtures/aurora'
 for (const theme of ['light', 'dark'] as const) {
 }
 
+test('previews actual generated charts, calculations and SVG explanations with local-only submissions', async ({ page }, testInfo) => {
+  await page.goto('/aurora.html')
+  await page.getByRole('button', { name: 'Generated UI', exact: true }).click()
+  const dashboard = page.frameLocator('iframe[title="A little room for reading"]')
+  await expect(dashboard.locator('canvas')).toBeVisible()
+  await dashboard.getByRole('slider', { name: 'Daily reading goal' }).fill('40')
+  await expect(dashboard.locator('#week-total')).toContainText('280 minutes')
+  await dashboard.getByRole('button', { name: 'Plan around this goal' }).click()
+  await page.getByRole('button', { name: 'Send selection', exact: true }).click()
+  await expect(page.getByLabel('Submitted values')).toContainText('40')
+  const calculator = page.frameLocator('iframe[title="A small saving habit"]')
+  await calculator.getByRole('slider', { name: 'Monthly saving' }).fill('1000')
+  await expect(calculator.locator('#yearly')).toHaveText('¥12000')
+  await page.screenshot({ path: testInfo.outputPath('generated-ui-light.png'), fullPage: true })
+  const light = page.frameLocator('iframe[title="A little light, a little distance"]')
+  await light.getByRole('slider', { name: 'Distance in metres' }).fill('2')
+  await expect(light.locator('#brightness')).toContainText('25.0%')
+  await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+  await expect(calculator.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(calculator.locator('#yearly')).toHaveText('¥12000')
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
 for (const theme of ['dark', 'light'] as const) {
   test(`keeps a connected memory overview readable while exploring sources (${theme})`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })

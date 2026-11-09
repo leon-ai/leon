@@ -29,6 +29,7 @@ type GalleryKind = 'component' | 'widget' | 'generated' | 'answer'
 type DemoOutcome = 'success' | 'failure' | 'pending'
 
 const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, entry.description])
+const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
 const CHOICES = [
   { value: 'quiet', label: 'A quiet morning', description: 'A little room to think.' },
@@ -213,6 +214,13 @@ function Example({ id }: { id: string }) {
     return <ChartDemo {...presentation.props} />
   }
   const generated = spec?.elements[spec.root]
+  if (generated?.type === 'Generated') {
+    return <><Suspense fallback={<Loader size="sm" />}>
+      <GeneratedFrame node={generated} initialState={state} onStateChange={setState} submitted={receipt !== undefined}
+        onSubmit={async (values) => { setReceipt(values) }} />
+    </Suspense>
+    {receipt !== undefined && <output aria-label="Submitted values">{JSON.stringify(receipt)}</output>}</>
+  }
   switch (id) {
     case 'button':
       return <ButtonDemo />
