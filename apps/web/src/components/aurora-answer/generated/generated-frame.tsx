@@ -181,7 +181,7 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
           callbacks.current.onStateChange?.(data.value)
         } else if (data.type === GeneratedMessage.Submit && !callbacks.current.readOnly && !callbacks.current.submitted && !callbacks.current.pending &&
           isAuroraSubmission(callbacks.current.node, data.values)) {
-          // Host-confirmed submissions are not enabled for this surface.
+          setProposal(data.values)
         } else if (data.type === GeneratedMessage.Error) {
           setError('I couldn’t run this interface. You can still read the summary below.')
           setStopped(true)
@@ -245,6 +245,18 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
       <summary>Text summary</summary><p>{node.props.fallback}</p>
     </details>
     {readOnly && node.props.fields && !submitted && <p className="aurora-feedback">You can send a selection from the latest completed reply.</p>}
+    {proposal && node.props.fields && <div className="generated-confirmation">
+      <dl>{node.props.fields.map((field) => <div key={field.name}><dt>{field.label}</dt>
+        <dd>{(proposal as Record<string, string>)[field.name]}</dd></div>)}</dl>
+      <Button variant="secondary" disabled={readOnly || submitted || pending || !onSubmit} loading={pending}
+        onClick={() => {
+          setPending(true)
+          setSubmitError(false)
+          void onSubmit?.(proposal).catch(() => setSubmitError(true)).finally(() => setPending(false))
+        }}>Send selection</Button>
+      {submitError && <p role="alert" className="aurora-feedback">I couldn’t send this. Your selection is still here; please try again.</p>}
+      {submitted && <p role="status" className="aurora-feedback">Sent. Thank you.</p>}
+    </div>}
     <Dialog title="Interface source" open={sourceOpen} onClose={() => setSourceOpen(false)} centered size="wide"
       footer={<CopyButton text={source} label="Copy source" />}>
       <Suspense fallback={<Loader size="sm" />}><CodeView text={source} label="Interface source" language="html" /></Suspense>

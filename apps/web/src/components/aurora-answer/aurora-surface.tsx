@@ -140,7 +140,7 @@ function GeneratedNodeView({ nodeId }: { nodeId: string }) {
     <Suspense fallback={null}><GeneratedFrame node={node} initialState={state} initialValues={receipt?.values} onReady={setReady}
     readOnly={!owner || surface.status !== 'ready' || owner.latestOwnerMessageId !== surface.ownerMessageId}
     submitted={Boolean(receipt)} onStateChange={(value) => setDraft(JSON.stringify(value))}
-     /></Suspense>
+    onSubmit={async (values) => { await request.mutateAsync(values) }} /></Suspense>
   </VisualLayout>
 }
 
