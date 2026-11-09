@@ -6,17 +6,18 @@ import type { ConversationRecord } from './conversation'
 import { useProfile } from './profile'
 import type { ToolCallContents } from '../../../../server/src/core/session-manager/tool-content-contract'
 
-export const ConversationDetailsContext = createContext<{ sessionId: string, messageId: string } | null>(null)
+export const ConversationDetailsContext = createContext<{ sessionId: string, messageId: string, latestOwnerMessageId?: string | undefined } | null>(null)
 
 /**
  * Gives nested disclosures one shared, lazily fetched response payload.
  */
-export function ConversationDetailsProvider({ sessionId, messageId, children }: {
+export function ConversationDetailsProvider({ sessionId, messageId, latestOwnerMessageId, children }: {
   sessionId: string | undefined
   messageId: string
+  latestOwnerMessageId?: string | undefined
   children: ReactNode
 }) {
-  const context = useMemo(() => sessionId ? { sessionId, messageId } : null, [sessionId, messageId])
+  const context = useMemo(() => sessionId ? { sessionId, messageId, latestOwnerMessageId } : null, [sessionId, messageId, latestOwnerMessageId])
 
   return (
     <ConversationDetailsContext value={context}>

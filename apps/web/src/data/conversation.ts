@@ -69,6 +69,7 @@ export interface ConversationTrace {
 }
 
 export interface ConversationRecord {
+  answerParts?: import('../../../../aurora/src/v2/contracts/answer').AnswerPart[]
   fyi?: import('../../../../server/src/core/fyi/fyi-contract').Fyi
   who: 'owner' | 'leon'
   messageId: string

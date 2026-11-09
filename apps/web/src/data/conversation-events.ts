@@ -1,5 +1,38 @@
 import type { ConversationEvent, ConversationRecord, ConversationTrace, ConversationTool } from './conversation'
 import type { InferenceActivity } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import type { AnswerPart } from '../../../../aurora/src/v2/contracts/answer'
+
+/**
+ * Keeps accepted receipts and native element identity stable when HTTP responses
+ * and durable events deliver overlapping snapshots in a different order.
+ */
+export function mergeAnswerParts(previous: AnswerPart[] | undefined, incoming: AnswerPart[]): AnswerPart[] {
+  const saved = new Map(previous?.map((part) => [part.id, part]))
+
+  return incoming.map((part) => {
+    const existing = saved.get(part.id)
+    if (part.kind !== 'ui' || existing?.kind !== 'ui') {
+      return part
+    }
+    if (existing.surface.revision > part.surface.revision) {
+      return existing
+    }
+    if (existing.surface.revision !== part.surface.revision) {
+      return part
+    }
+
+    return { ...part, surface: { ...part.surface, spec: existing.surface.spec,
+      status: existing.surface.status === 'ready' ? 'ready' : part.surface.status,
+      receipts: { ...part.surface.receipts, ...existing.surface.receipts } } }
+  })
+}
+
+function withAnswerText(parts: AnswerPart[], messageId: string, text: string): AnswerPart[] {
+  const id = `${messageId}:text`
+  const visuals = parts.filter((part) => part.id !== id)
+
+  return text ? [...visuals, { id, kind: 'text', text }] : visuals
+}
 
 /**
  * Converts the shared HTTP event schema to the persisted trace field names.

@@ -59,6 +59,12 @@ importers:
       '@huggingface/inference':
         specifier: 4.13.30
         version: 4.13.30
+      '@json-render/core':
+        specifier: 0.22.0
+        version: 0.22.0(zod@4.2.1)
+      '@json-render/react':
+        specifier: 0.22.0
+        version: 0.22.0(react@19.2.6)(zod@4.2.1)
       '@openrouter/ai-sdk-provider':
         specifier: 3.1.0
         version: 3.1.0(ai@7.0.143(zod@4.2.1))(zod@4.2.1)
@@ -900,6 +906,16 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@json-render/core@0.22.0':
+    resolution: {integrity: sha512-BIfJ2V3bLYETetBu2KWoxxRPU5cSAf77dDTBgqaV54kEAfyHta1psPJgNk0fDcB3FCrnCZ5KO/X41VDkrNSYgw==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@json-render/react@0.22.0':
+    resolution: {integrity: sha512-dUBSPn/OZGJGwYiVUVv6qk14AGvfIutKgw7EKJejof14Ft/UPKsoV7/SkF5xIbGIWcM/vk3U4UnNm3NgPnOSSQ==}
+    peerDependencies:
+      react: ^19.2.3
 
   '@kwsites/file-exists@1.1.1':
     resolution: {integrity: sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw==}
@@ -5386,6 +5402,17 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@json-render/core@0.22.0(zod@4.2.1)':
+    dependencies:
+      zod: 4.2.1
+
+  '@json-render/react@0.22.0(react@19.2.6)(zod@4.2.1)':
+    dependencies:
+      '@json-render/core': 0.22.0(zod@4.2.1)
+      react: 19.2.6
+    transitivePeerDependencies:
+      - zod
 
   '@kwsites/file-exists@1.1.1(supports-color@5.5.0)':
     dependencies:

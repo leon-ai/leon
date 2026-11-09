@@ -219,6 +219,7 @@ export interface AgentResponseTrace {
 }
 
 export interface MessageLog {
+  answerParts?: import('@@/aurora/src/v2/contracts/answer').AnswerPart[]
   fyi?: import('@/core/fyi/fyi-contract').Fyi
   inference?: TurnInference
   artifacts?: Artifact[]
