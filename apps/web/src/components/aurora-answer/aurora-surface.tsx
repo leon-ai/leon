@@ -6,6 +6,7 @@ import { isAuroraSpec, isAuroraSubmission, type AuroraNode, type AuroraSurface, 
 import type { Artifact } from '../../../../../server/src/core/artifacts/artifact-types'
 import { ConversationDetailsContext } from '@/data/conversation-details'
 import { useAuroraSubmission } from '@/data/aurora'
+import { useTabDraft } from '@/data/tab-draft'
 import { ArtifactAttachments } from '@/components/artifact-attachments'
 import { MarkdownContent } from '@/components/markdown-content'
 import { AuroraFallback, RetiredResults, type AuroraViewProps } from './aurora-fallback'
@@ -22,7 +23,7 @@ function InteractiveNode({ nodeId }: { nodeId: string }) {
   const { surface } = context
   const node = surface.spec.elements[nodeId]!
   const receipt = Object.hasOwn(surface.receipts, nodeId) ? surface.receipts[nodeId] : undefined
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useTabDraft('aurora-draft', [owner?.sessionId, owner?.messageId, surface.id, nodeId, surface.revision])
   const request = useAuroraSubmission(owner?.sessionId ?? '', owner?.messageId ?? '', surface.id, nodeId, surface.revision)
   let initial: AuroraValues | undefined = receipt?.values
   if (initial === undefined && draft) {

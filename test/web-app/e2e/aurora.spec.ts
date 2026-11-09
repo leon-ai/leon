@@ -75,6 +75,138 @@ test('runs a bespoke chart, retains local state and confirms declared submission
   expect(requests).toHaveLength(1)
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`keeps streamed native forms stable, restores partial drafts and saves accepted values (${reducedMotion})`, async ({ page, ui }) => {
+    const history = ui.history.get(SESSION_ID)!
+    const owner = history.at(-2)!
+    const answer = history.at(-1)!
+    answer.answerParts = auroraParts(owner.messageId, AURORA_FORM_SPEC)
+    const requests: { id: string, values: Record<string, string> }[] = []
+    const pending = Promise.withResolvers<Route>()
+    await page.route(`**/api/v1/sessions/${SESSION_ID}/messages/${answer.messageId}/ui`, async (route) => {
+      requests.push(route.request().postDataJSON())
+      pending.resolve(route)
+    })
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const form = page.getByRole('region', { name: 'A little project', exact: true })
+    const name = form.getByRole('textbox', { name: 'Project name', exact: true })
+    await name.fill('A little garden')
+    await page.reload()
+    await expect(name).toHaveValue('A little garden')
+    await expect(form.getByRole('combobox', { name: 'Pace', exact: true })).toHaveValue('')
+    await form.getByRole('combobox', { name: 'Pace', exact: true }).selectOption('gentle')
+    await form.getByRole('textbox', { name: 'Notes', exact: true }).fill('Leave time to explore.')
+    const original = await name.elementHandle()
+    await name.focus()
+    await ui.emit([{ type: 'answer_parts', sequence: 1, session_id: SESSION_ID, turn_id: null,
+      response_id: answer.messageId, created_at: Date.now(), data: { answer_parts: structuredClone(answer.answerParts) } }])
+    await expect(name).toBeFocused()
+    expect(await name.evaluate((element, previous) => element === previous, original)).toBe(true)
+    await expect(name).toHaveValue('A little garden')
+    const save = form.getByRole('button', { name: 'Save', exact: true })
+    await save.click()
+    const route = await pending.promise
+    await expect(save).toBeDisabled()
+    await expect(save).toHaveAttribute('aria-busy', 'true')
+    const receipt = { commandId: requests[0]!.id, revision: 1, values: requests[0]!.values, submittedAt: Date.now() }
+    const part = answer.answerParts![0]!
+    if (part.kind === 'ui') {
+      part.surface.receipts['project'] = receipt
+    }
+    await route.fulfill({ json: { answerParts: answer.answerParts } })
+    await expect(form.getByRole('status')).toHaveText('Saved. Thank you.')
+    await page.reload()
+    await expect(name).toHaveValue('A little garden')
+    await expect(name).toBeDisabled()
+    await expect(form.getByRole('textbox', { name: 'Notes', exact: true })).toHaveValue('Leave time to explore.')
+    await expect(save).toBeDisabled()
+    expect(requests).toHaveLength(1)
+  })
+}
+
+test('restores browsed single-choice drafts without submitting and locks an activated answer while saving', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  const answer = history.at(-1)!
+  answer.answerParts = auroraParts(history.at(-2)!.messageId)
+  let finish: (() => void) | undefined
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  const requests: unknown[] = []
+  await page.route(`**/api/v1/sessions/${SESSION_ID}/messages/${answer.messageId}/ui`, async (route) => {
+    const body = route.request().postDataJSON()
+    requests.push(body)
+    await pending
+    const part = answer.answerParts![0]!
+    if (part.kind === 'ui') {
+      part.surface.receipts['choice'] = { commandId: body.id, revision: 1, values: body.values, submittedAt: Date.now() }
+    }
+    await route.fulfill({ json: { answerParts: answer.answerParts } })
+  })
+
+  try {
+    await page.goto(SESSION_URL)
+    const choice = page.getByRole('region', { name: 'How would you like to start?', exact: true })
+    await choice.getByRole('radio').first().focus()
+    await choice.getByRole('radio').first().press('ArrowDown')
+    const selected = choice.getByRole('radio', { name: 'Something creative', exact: true })
+    await expect(selected).toBeChecked()
+    expect(requests).toHaveLength(0)
+    await page.reload()
+    await expect(selected).toBeChecked()
+    expect(requests).toHaveLength(0)
+    await selected.click()
+    await expect(choice.getByRole('group')).toHaveAttribute('aria-busy', 'true')
+    await expect(selected).toBeDisabled()
+    expect(requests).toHaveLength(1)
+    finish?.()
+    await expect(choice.getByRole('status')).toHaveText('Saved. Thank you.')
+    expect(requests).toHaveLength(1)
+  } finally {
+    finish?.()
+  }
+})
+
+test('retains choices through uncertain delivery and reuses the command ID on explicit retry', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  const answer = history.at(-1)!
+  answer.answerParts = auroraParts(history.at(-2)!.messageId)
+  const unanswered = structuredClone(answer.answerParts)
+  const commands: string[] = []
+  await page.route(`**/api/v1/sessions/${SESSION_ID}/messages/${answer.messageId}/ui`, async (route) => {
+    const body = route.request().postDataJSON() as { id: string, values: string[] }
+    commands.push(body.id)
+    if (commands.length === 1) {
+      await route.fulfill({ status: 503, json: { message: 'I could not confirm delivery. Please try again.' } })
+      return
+    }
+    const part = answer.answerParts![0]!
+    if (part.kind === 'ui') {
+      part.surface.receipts['choice'] = { commandId: body.id, revision: 1, values: body.values, submittedAt: Date.now() }
+    }
+    await route.fulfill({ json: { answerParts: answer.answerParts } })
+  })
+  await page.goto(SESSION_URL)
+  const choice = page.getByRole('region', { name: 'How would you like to start?', exact: true })
+  const radio = choice.getByRole('radio', { name: 'A quiet morning', exact: true })
+  await expect(choice.getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0)
+  await radio.check()
+  await expect(choice.getByRole('alert')).toContainText('try again')
+  await expect(page.locator('.toast-error')).toHaveCount(1)
+  await expect(radio).toBeChecked()
+  await expect(choice.getByRole('radio').last()).toBeDisabled()
+  expect(commands).toHaveLength(1)
+  await choice.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect(choice.getByRole('status')).toHaveText('Saved. Thank you.')
+  await ui.emit([{ type: 'answer_parts', sequence: 1, session_id: SESSION_ID, turn_id: null,
+    response_id: answer.messageId, created_at: Date.now(), data: { answer_parts: unanswered } }])
+  await expect(choice.getByRole('status')).toHaveText('Saved. Thank you.')
+  await expect(radio).toBeDisabled()
+  expect(commands).toHaveLength(2)
+  expect(new Set(commands).size).toBe(1)
+})
+
 test('leaves draft and obsolete controls inactive while keeping legacy text answers readable', async ({ page, ui }) => {
   const history = ui.history.get(SESSION_ID)!
   const original = history.at(-1)!
