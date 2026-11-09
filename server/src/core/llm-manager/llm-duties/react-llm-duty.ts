@@ -57,7 +57,7 @@ import { getConnectionRequirements } from '@/core/connections/connection-catalog
 import { CONNECTION_SETUP_TOOL_NAME } from '@/core/connections/connection-tool'
 import { CONFIG_MANAGER } from '@/config'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
-import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { getActiveConversationSessionId, runWithConversationResponse } from '@/core/session-manager/session-context'
 import { LLAMACPP_MAX_OUTPUT_TOKENS } from '@/constants'
 
 const TRACE_SAVE_INTERVAL_MS = 1_000
@@ -327,18 +327,20 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   public async execute(): Promise<LLMDutyResult | null> {
-    return observeTurnInferences((activity) => {
+    const responseId = this.responseId || randomUUID()
+
+    return runWithConversationResponse(responseId, () => observeTurnInferences((activity) => {
       this.reportProgressEvent({ type: 'inference_activity', activity })
     }, async () => {
       try {
-        return await this.executeTurn()
+        return await this.executeTurn(responseId)
       } finally {
         EXPERIENCE_MANAGER.releaseTask(this.experienceTaskId)
       }
-    })
+    }))
   }
 
-  private async executeTurn(): Promise<LLMDutyResult | null> {
+  private async executeTurn(traceId: string): Promise<LLMDutyResult | null> {
     this.signal?.throwIfAborted()
     LogHelper.title(this.name)
     LogHelper.info('Executing...')
@@ -375,7 +377,6 @@ export class ReActLLMDuty extends LLMDuty {
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
-    const traceId = this.responseId || randomUUID()
     this.responseTraceCollector.reset(traceId)
     // Capture the session and profile-bound writer before any deferred saves.
     const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()

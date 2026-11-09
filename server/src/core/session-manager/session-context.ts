@@ -17,6 +17,7 @@ interface ConversationSessionContext {
 interface StoredConversationSessionContext extends ConversationSessionContext {
   profileName: string
   inferences: InferenceMetadata[]
+  responseId?: string
 }
 
 const conversationSessionStorage =
@@ -43,6 +44,29 @@ export function getActiveConversationSessionId(): string | null {
   return context?.profileName === getActiveProfileName()
     ? context.sessionId
     : null
+}
+
+/**
+ * Attributes trusted answer widgets to the response that requested them.
+ */
+export function getActiveConversationResponseId(): string | undefined {
+  const context = conversationSessionStorage.getStore()
+
+  return context?.profileName === getActiveProfileName()
+    ? context.responseId
+    : undefined
+}
+
+/**
+ * Shares response ownership without changing the session's captured settings.
+ */
+export function runWithConversationResponse<T>(responseId: string, execute: () => T): T {
+  const context = conversationSessionStorage.getStore()
+  if (!context || context.profileName !== getActiveProfileName()) {
+    return execute()
+  }
+
+  return conversationSessionStorage.run({ ...context, responseId }, execute)
 }
 
 export function getActiveConversationSessionModelTarget(): string | null {
@@ -113,10 +137,11 @@ export function runWithConversationSession<T>(
 ): T {
   const parent = conversationSessionStorage.getStore()
   const profileName = getActiveProfileName()
-  const inferences = parent?.sessionId === context.sessionId &&
-    parent.profileName === profileName
+  const sameSession = parent?.sessionId === context.sessionId && parent.profileName === profileName
+  const inferences = sameSession
     ? parent.inferences
     : []
 
-  return conversationSessionStorage.run({ ...context, profileName, inferences }, callback)
+  return conversationSessionStorage.run({ ...context, profileName, inferences,
+    ...(sameSession && parent.responseId ? { responseId: parent.responseId } : {}) }, callback)
 }
