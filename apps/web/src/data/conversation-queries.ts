@@ -16,6 +16,7 @@ import type { FeedEntry } from './feed'
 import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
 import { queryHistoryKey } from './query-history'
 import { recordSessionCompletion } from './session-read-state'
+import { prefetchAnswerRendering } from '@/components/aurora-answer/preload'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
 const MAXIMUM_CONCURRENT_CONVERSATION_PREFETCHES = 2
@@ -42,6 +43,9 @@ async function fetchConversationPage(profile: string, sessionId: string, cursor:
   const params = new URLSearchParams({ limit: String(SESSION_PAGE_SIZE), ...cursor })
   const page = await requestAPI<ConversationPage>(`sessions/${encodeURIComponent(sessionId)}?${params}`,
     signal ? { signal } : {})
+  if (!cursor.before && !cursor.after) {
+    prefetchAnswerRendering(page.messages.findLast((message) => message.who === 'leon'))
+  }
   const cached = queryClient.getQueryData<CachedConversation>(['conversation', profile, sessionId])
   const liveRecords = new Map(cached?.pages.flatMap((item) => item.messages.filter((record) => !record.historical).map((record) => [record.messageId, record] as const)))
 
