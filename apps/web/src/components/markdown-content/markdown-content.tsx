@@ -13,6 +13,8 @@ import { StreamingText } from '@/components/streaming-text'
 import { Icon } from '@/components/icon'
 import { useProfile } from '@/data/profile'
 import { MarkdownLink } from './markdown-link'
+import { FilePath } from '@/components/file-path/file-path'
+import { FILE_PATH_ELEMENT, renderFilePaths } from './file-paths'
 import { animateMarkdown } from './animate-markdown'
 import { MarkdownBlockContext } from './markdown-context'
 import MarkdownCode from './markdown-code'
@@ -61,8 +63,9 @@ const MarkdownBlock = memo(function MarkdownBlock(props: BlockProps) {
 
   const plugins = useMemo<NonNullable<BlockProps['rehypePlugins']>>(
     () => [...(props.rehypePlugins ?? MARKDOWN_REHYPE_PLUGINS), [scopeMarkdown, { prefix: scopeId }],
+      [renderFilePaths, { active: !completed }],
       [animateMarkdown, { tailStart: tailStart.current.offset }]],
-    [animationId, props.rehypePlugins, scopeId]
+    [animationId, props.rehypePlugins, scopeId, completed]
   )
   const remarkPlugins = useMemo<NonNullable<BlockProps['remarkPlugins']>>(
     () => [...(props.remarkPlugins ?? MARKDOWN_REMARK_PLUGINS), [cacheMarkdownParse, { profile, completed, math }]],
@@ -77,6 +80,14 @@ const MarkdownBlock = memo(function MarkdownBlock(props: BlockProps) {
 })
 
 const COMPONENTS: Components = {
+  [FILE_PATH_ELEMENT]: function MarkdownFilePath({ node }) {
+    const { animationId } = useContext(MarkdownAnimationContext)
+    const { index } = useContext(MarkdownBlockContext)
+    const path = node?.properties['path']
+
+    return typeof path === 'string' ? <FilePath path={path} complete={node?.properties['complete'] === true}
+      animationId={`${animationId}:block:${index}:path:${node?.position?.start.offset}`} /> : null
+  },
   a: MarkdownLink,
   h1: 'h1', h2: 'h2', h3: 'h3', h4: 'h4', h5: 'h5', h6: 'h6',
   p: ({ node, children, className }) => {
