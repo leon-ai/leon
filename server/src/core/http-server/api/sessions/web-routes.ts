@@ -34,6 +34,15 @@ const streamQuery = Type.Object({
   session_id: Type.Optional(Type.String()),
   after: Type.Optional(Type.Integer({ minimum: 0 }))
 })
+const uiParams = Type.Object({ session_id: Type.String(), message_id: Type.String() })
+const uiBody = Type.Object({
+  id: Type.String({ format: 'uuid' }),
+  surfaceId: Type.String({ minLength: 1, maxLength: 80 }),
+  nodeId: Type.String({ minLength: 1, maxLength: 80 }),
+  revision: Type.Integer({ minimum: 1 }),
+  values: Type.Union([Type.Boolean(), Type.Array(Type.String({ maxLength: 80 }), { maxItems: 24 }),
+    Type.Record(Type.String(), Type.String({ maxLength: 4_096 }), { maxProperties: 24 })])
+}, { additionalProperties: false })
 
 /**
  * Resolves the same session/profile/catalog precedence used at turn dispatch.
@@ -70,6 +79,23 @@ export function getSessionSelection(session?: ConversationSession, targetValue?:
  */
 export const webSessionRoutes: FastifyPluginAsync<APIOptions> = async (fastify, options) => {
   const base = `/api/${options.apiVersion}/sessions`
+
+  fastify.post<{ Params: Static<typeof uiParams>, Body: Static<typeof uiBody> }>(
+    `${base}/:session_id/messages/:message_id/ui`, { schema: { params: uiParams, body: uiBody } },
+    async (request, reply) => {
+      if (!CONVERSATION_REPOSITORY.readSession(request.params.session_id)) {
+        return reply.code(404).send({ message: 'Session not found.' })
+      }
+
+      try {
+        return reply.code(202).send(WEB_SESSION_RUNTIME.submitUI(
+          request.params.session_id, request.params.message_id, request.body
+        ))
+      } catch (error) {
+        return reply.code(409).send({ message: error instanceof Error ? error.message : 'I could not save this answer. Please try again.' })
+      }
+    }
+  )
 
   fastify.get(`${base}/models`, async () => {
     const providers = getPublicModelCatalog(await listInstalledLLMModels(LLM_DIR_PATH))

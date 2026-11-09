@@ -1,0 +1,25 @@
+.file-path-reference
+  display: inline-flex
+  align-items: center
+  max-width: 100%
+  vertical-align: middle
+  border-radius: var(--border-radius-sm)
+  background: var(--color-surface)
+
+  > .tooltip:first-child
+    flex: 0 1 auto
+    min-width: 0
+
+  > .tooltip:last-child
+    flex: 0 0 auto
+
+  .file-path-open
+    min-width: 0
+    max-width: 100%
+    font-family: var(--font-family-code)
+    font-weight: var(--font-weight-regular)
+    color: var(--color-text)
+
+.file-path-pending
+  font-family: var(--font-family-code)
+  overflow-wrap: anywhere

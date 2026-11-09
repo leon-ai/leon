@@ -1,4 +1,5 @@
 import { CONVERSATION_LOGGER, LLM_PROVIDER } from '@/core'
+import { isAuroraMode } from '@/core/aurora/agent-ui-contract'
 import { createHash } from 'node:crypto'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
@@ -126,6 +127,7 @@ export class AgentHistoryManager {
         values.every((value) => typeof value === 'string')
       ) ||
       typeof state.planTracking !== 'boolean' ||
+      (state.auroraMode !== undefined && !isAuroraMode(state.auroraMode)) ||
       state.historyHash !== hashHistory(history.slice(0, state.historyLength))
     ) {
       store?.save(null)

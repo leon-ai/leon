@@ -116,6 +116,7 @@ export type FinalPhaseIntent =
 export interface FinalResponseSignal {
   intent: FinalPhaseIntent
   draft: string
+  ui?: import('@@/aurora/src/v2/contracts/answer').AuroraSpec
 }
 
 export interface ToolExecutionResult {

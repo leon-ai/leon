@@ -52,6 +52,8 @@
 - Decide label typography, icon size, geometry, and hit area separately; align
   controls and balance visual weight. Main icons, brand marks, and secondary
   indicators need not match label size; verify rendered optical corrections.
+  Icon-only buttons must be fully circular. Feed action toolbars share the
+  message-metadata controls' hit area and glyph size through the shared button.
 - Use local SVGs through the shared icon component. Keep original artwork by
   default; use rounded redraws only for explicitly approved icons. Rounding must
   preserve the original silhouette, details, orientation, and meaning, not redesign
@@ -79,6 +81,18 @@
   hit areas.
   Check narrow layouts, long labels, both themes, and keyboard focus without
   inconsistently shrinking controls.
+- Keep answer-selection policy in Leon's runtime guidance, not contributor
+  instructions. Aurora authoring must use shared components and supported tokens;
+  enforce design constraints in validation and keep authored CSS below shared
+  controls. Preserve generated-code isolation, CSP/ancestor navigation restrictions,
+  the bounded bridge, local assets and explicit host-side submission confirmation.
+  Do not relax isolation for CDNs or mistake source validation for browser rendering.
+  Verify readable, responsive compositions at feed width in both themes.
+- Account setup uses the trusted, server-driven connection widget, not generated
+  UI or ordinary Aurora forms. Keep credentials out of chat, drafts, browser
+  persistence, query data and mutation variables; clear fields after every attempt.
+  Preserve the server-owned connection recommendation and setup lifecycle;
+  cancellation or transport errors must not silently switch authentication methods.
 
 References: [Fluent layout](https://fluent2.microsoft.design/layout),
 [GOV.UK modifications](https://design-system.service.gov.uk/get-started/extending-and-modifying-components/),

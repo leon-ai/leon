@@ -1,7 +1,8 @@
 import { Icon } from '@/components/icon'
 import { MemoryDetails } from '@/components/activity-details/memory-details'
 import { clsx } from 'clsx'
-import { memo } from 'react'
+import { lazy, memo, Suspense } from 'react'
+import { Loader } from '@/components/loader'
 
 import type {
   FeedPlanActivity,
@@ -12,7 +13,6 @@ import type {
 } from '@/data/feed'
 import { FeedTurnStatus, isToolCallVisible } from '@/data/feed'
 import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
-import { ArtifactAttachments } from '@/components/artifact-attachments'
 import { BonusResponse } from '@/components/bonus-response'
 import { FinalAnswer } from '@/components/final-answer'
 import { SkillDetails } from '@/components/activity-details/skill-details'
@@ -26,6 +26,8 @@ import { WorkingMessage } from '@/components/working-message'
 import { ActivityTimestamp } from '@/components/activity-timestamp'
 
 import './leon-message.sass'
+
+const ConnectionSetupCard = lazy(() => import('@/components/connection-setup/connection-setup'))
 
 interface LeonMessageProps {
   entry: LeonFeedEntry
@@ -156,7 +158,7 @@ function renderActivity(activity: LeonFeedActivity) {
           key={activity.id}
           phaseId={activity.id}
           label={currentRequest.activeLabel ?? 'Processing...'}
-          iconName={currentRequest.iconName}
+          {...(currentRequest.isGeneric ? {} : { iconName: currentRequest.iconName })}
           startedAt={currentRequest.startedAt}
         />
       )
@@ -303,6 +305,11 @@ function renderActivity(activity: LeonFeedActivity) {
 }
 
 export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps) {
+  if (entry.connection) {
+    return <Suspense fallback={<Loader size="sm" label="Getting connection setup ready…" />}>
+      <ConnectionSetupCard connection={entry.connection} />
+    </Suspense>
+  }
   const bonusResponse = entry.bonusResponse
   const activities = entry.activities.map(renderActivity)
   const duration = formatToolDuration(entry.durationMs, DurationFormat.Compact)
@@ -320,12 +327,12 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
           {activities.length > 0 ? <div className="leon-message-activities">{activities}</div> : undefined}
         </ProcessGroup>
       ) : activities}
-      {entry.artifacts !== undefined && entry.artifacts.length > 0 && (
-        <ArtifactAttachments artifacts={entry.artifacts} />
-      )}
-      {entry.finalAnswer.trim().length > 0 && (
+      {(entry.finalAnswer.trim().length > 0 || entry.answerParts?.length || entry.artifacts?.length || entry.connections?.length) ? (
         <FinalAnswer animationId={`${entry.id}:${entry.answerGenerationId ?? 'accepted'}:final-answer`}
           active={entry.status !== FeedTurnStatus.Completed}
+          parts={entry.answerParts}
+          artifacts={entry.artifacts}
+          connections={entry.connections}
           timestamp={entry.sentAt} metrics={entry.metrics}
           footer={bonusResponse !== undefined && bonusResponse.trim().length > 0 ? (
             <BonusResponse animationId={`${entry.id}:bonus-response`}>
@@ -334,7 +341,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
           ) : undefined}>
           {entry.finalAnswer}
         </FinalAnswer>
-      )}
+      ) : null}
     </div>
   )
 })

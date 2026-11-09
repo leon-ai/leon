@@ -1,0 +1,107 @@
+.aurora-surface
+  display: grid
+  gap: var(--space-lg)
+  min-width: 0
+  padding: var(--space-lg)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-lg)
+  background-color: var(--color-surface-elevated)
+  color: var(--color-text)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+
+.aurora-surface-header
+  display: grid
+  gap: var(--space-xs)
+
+  h3
+    font-weight: var(--font-weight-semi-bold)
+
+  p
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+    line-height: var(--line-height-sm)
+
+.aurora-actions
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  gap: var(--space-sm)
+
+.aurora-feedback
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+  &[role='alert']
+    color: var(--color-danger)
+
+.aurora-fields
+  display: grid
+  gap: var(--space-md)
+  min-width: 0
+  margin: 0
+  padding: 0
+  border: 0
+
+.aurora-field
+  display: grid
+  gap: var(--space-sm)
+  min-width: 0
+
+  .input-field
+    background-color: var(--color-background)
+
+.aurora-field textarea.input-field,
+.aurora-native-textarea
+  min-height: 96px
+  padding-block: var(--space-sm)
+  resize: vertical
+
+.aurora-field select,
+.aurora-native-select
+  box-sizing: border-box
+  width: 100%
+  min-height: 40px
+  padding: var(--space-sm) var(--space-md)
+  border: 1px solid var(--color-input-border)
+  border-radius: var(--border-radius-md)
+  background-color: var(--color-background)
+  color: var(--color-text)
+  font-family: var(--font-family)
+  font-size: var(--font-size-md)
+
+.aurora-choice
+  display: flex
+  align-items: center
+  gap: var(--space-md)
+  min-height: 44px
+  padding: var(--space-sm) var(--space-md)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-md)
+  cursor: pointer
+
+  &:hover
+    background-color: var(--color-surface-hover)
+
+  &:has(input:checked)
+    border-color: var(--color-accent)
+    background-color: var(--color-accent-soft)
+
+  &:has(input:focus-visible)
+    outline: 2px solid var(--color-accent)
+    outline-offset: 2px
+
+  &:has(input:disabled)
+    cursor: default
+    opacity: .5
+
+  span
+    min-width: 0
+    overflow-wrap: anywhere
+
+  small
+    display: block
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+    line-height: var(--line-height-sm)

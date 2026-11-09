@@ -1,0 +1,116 @@
+.aurora-selection-control
+  position: relative
+  display: inline-flex
+  flex: 0 0 auto
+  width: 18px
+  height: 18px
+  vertical-align: middle
+  color: var(--color-accent-contrast)
+
+  > input
+    position: absolute
+    box-sizing: border-box
+    inset: 0
+    appearance: none
+    width: 100%
+    height: 100%
+    margin: 0
+    border: 1px solid var(--color-border-strong)
+    border-radius: var(--border-radius-sm)
+    background: var(--color-background)
+    cursor: pointer
+    transition: background-color var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main)
+
+    &:checked
+      border-color: var(--color-accent)
+      background: var(--color-accent)
+
+    &:focus-visible
+      outline: 2px solid var(--color-accent)
+      outline-offset: 3px
+
+    &:disabled
+      cursor: default
+
+    &[type='radio']
+      border-radius: var(--border-radius-pill)
+
+  > svg
+    position: absolute
+    inset: 1px
+    width: 16px
+    height: 16px
+    fill: currentColor
+    pointer-events: none
+
+  .aurora-selection-check
+    opacity: 0
+    transform: scale(.75)
+    transform-box: fill-box
+    transform-origin: center
+    transition: opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
+
+  > input[type='checkbox']:checked + svg .aurora-selection-check
+    opacity: 1
+    transform: scale(1)
+
+  &:has(> input[type='radio'])::after
+    position: absolute
+    inset: 5px
+    border-radius: var(--border-radius-pill)
+    background: currentColor
+    content: ''
+    pointer-events: none
+    opacity: 0
+    transform: scale(.5)
+    transition: opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
+
+  &:has(> input[type='radio']:checked)::after
+    opacity: 1
+    transform: scale(1)
+
+  &:has(> input[role='switch'])
+    width: 34px
+    height: 20px
+
+    > input
+      border-radius: var(--border-radius-pill)
+      background: var(--color-surface-active)
+
+      &:checked
+        background: var(--color-accent)
+
+    > svg
+      display: none
+
+    &::after
+      position: absolute
+      top: 3px
+      left: 3px
+      width: 14px
+      height: 14px
+      border-radius: var(--border-radius-pill)
+      background: var(--color-text-secondary)
+      content: ''
+      pointer-events: none
+      transition: transform var(--transition-duration-main) var(--transition-timing-main)
+
+    &:has(> input:checked)::after
+      transform: translateX(14px)
+      background: var(--color-accent-contrast)
+
+@media (forced-colors: active)
+  .aurora-selection-control
+    color: HighlightText
+
+    > input:checked
+      forced-color-adjust: none
+      border-color: Highlight
+      background: Highlight
+
+@media (prefers-reduced-motion: reduce)
+  .aurora-selection-control
+    &::after,
+    > input,
+    .aurora-selection-check
+      transition: none

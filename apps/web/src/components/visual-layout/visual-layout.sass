@@ -1,0 +1,23 @@
+.visual-layout
+  position: relative
+  min-width: 0
+
+.visual-layout-content
+  display: flow-root
+  min-width: 0
+
+.visual-layout[data-visual-pending] > .visual-layout-content
+  position: absolute
+  top: 0
+  left: 0
+  width: 100%
+  opacity: 0
+  pointer-events: none
+
+.visual-layout-placeholder
+  position: absolute
+  inset: 0
+  display: flex
+  align-items: center
+  justify-content: center
+  color: var(--color-text-secondary)

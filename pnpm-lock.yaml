@@ -44,6 +44,9 @@ importers:
       '@ark-ui/react':
         specifier: 5.36.0
         version: 5.36.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@eslint/css-tree':
+        specifier: 4.0.4
+        version: 4.0.4
       '@fastify/static':
         specifier: 10.1.5
         version: 10.1.5
@@ -59,6 +62,12 @@ importers:
       '@huggingface/inference':
         specifier: 4.13.30
         version: 4.13.30
+      '@json-render/core':
+        specifier: 0.22.0
+        version: 0.22.0(zod@4.2.1)
+      '@json-render/react':
+        specifier: 0.22.0
+        version: 0.22.0(react@19.2.6)(zod@4.2.1)
       '@openrouter/ai-sdk-provider':
         specifier: 3.1.0
         version: 3.1.0(ai@7.0.143(zod@4.2.1))(zod@4.2.1)
@@ -128,6 +137,9 @@ importers:
       dotenv:
         specifier: 16.4.5
         version: 16.4.5
+      echarts:
+        specifier: 6.1.0
+        version: 6.1.0
       execa:
         specifier: 10.2.0
         version: 10.2.0
@@ -140,6 +152,9 @@ importers:
       getos:
         specifier: 3.2.1
         version: 3.2.1
+      html-to-image:
+        specifier: 1.11.13
+        version: 1.11.13
       jose:
         specifier: 6.2.12
         version: 6.2.12
@@ -897,6 +912,16 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@json-render/core@0.22.0':
+    resolution: {integrity: sha512-BIfJ2V3bLYETetBu2KWoxxRPU5cSAf77dDTBgqaV54kEAfyHta1psPJgNk0fDcB3FCrnCZ5KO/X41VDkrNSYgw==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@json-render/react@0.22.0':
+    resolution: {integrity: sha512-dUBSPn/OZGJGwYiVUVv6qk14AGvfIutKgw7EKJejof14Ft/UPKsoV7/SkF5xIbGIWcM/vk3U4UnNm3NgPnOSSQ==}
+    peerDependencies:
+      react: ^19.2.3
 
   '@kwsites/file-exists@1.1.1':
     resolution: {integrity: sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw==}
@@ -2628,6 +2653,9 @@ packages:
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
 
+  echarts@6.1.0:
+    resolution: {integrity: sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==}
+
   electron-to-chromium@1.5.393:
     resolution: {integrity: sha512-kiDJdIUawuEIcp9XoICKp1iTYDEbgguIPq526N1Q7jIQDeQ3CqoMx71025PI/7E48Ddtw2HuWsVjY7afEgNxmg==}
 
@@ -3090,6 +3118,9 @@ packages:
 
   hastscript@9.0.3:
     resolution: {integrity: sha512-1ALZXSmCGmW3h8AMz4R4+QKSKFi7sNgXLVwmwB8FYVtl1CwQ3WDkSAEY/d5tp1g/vbQgq2s1WlHgfO3jbw1TsA==}
+
+  html-to-image@1.11.13:
+    resolution: {integrity: sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg==}
 
   html-url-attributes@3.0.1:
     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}
@@ -4520,6 +4551,9 @@ packages:
     peerDependencies:
       typescript: '>=4.8.4'
 
+  tslib@2.3.0:
+    resolution: {integrity: sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==}
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -4862,6 +4896,9 @@ packages:
 
   zod@4.2.1:
     resolution: {integrity: sha512-0wZ1IRqGGhMP76gLqz8EyfBXKk0J2qo2+H3fi4mcUP/KtTocoX08nmIAHl1Z2kJIZbZee8KOpBCSNPRgauucjw==}
+
+  zrender@6.1.0:
+    resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -5228,7 +5265,7 @@ snapshots:
   '@eslint/css-tree@4.0.4':
     dependencies:
       mdn-data: 2.28.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   '@eslint/js@10.0.1(eslint@10.7.0(supports-color@5.5.0))':
     optionalDependencies:
@@ -5374,6 +5411,17 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@json-render/core@0.22.0(zod@4.2.1)':
+    dependencies:
+      zod: 4.2.1
+
+  '@json-render/react@0.22.0(react@19.2.6)(zod@4.2.1)':
+    dependencies:
+      '@json-render/core': 0.22.0(zod@4.2.1)
+      react: 19.2.6
+    transitivePeerDependencies:
+      - zod
 
   '@kwsites/file-exists@1.1.1(supports-color@5.5.0)':
     dependencies:
@@ -7102,6 +7150,11 @@ snapshots:
 
   eastasianwidth@0.2.0: {}
 
+  echarts@6.1.0:
+    dependencies:
+      tslib: 2.3.0
+      zrender: 6.1.0
+
   electron-to-chromium@1.5.393: {}
 
   emoji-regex@10.4.0: {}
@@ -7795,6 +7848,8 @@ snapshots:
       hast-util-parse-selector: 4.0.0
       property-information: 7.2.0
       space-separated-tokens: 2.0.2
+
+  html-to-image@1.11.13: {}
 
   html-url-attributes@3.0.1: {}
 
@@ -9472,6 +9527,8 @@ snapshots:
     dependencies:
       typescript: '@typescript/typescript6@6.0.2'
 
+  tslib@2.3.0: {}
+
   tslib@2.8.1: {}
 
   tsx@4.20.5:
@@ -9746,5 +9803,9 @@ snapshots:
   yoctocolors@2.2.0: {}
 
   zod@4.2.1: {}
+
+  zrender@6.1.0:
+    dependencies:
+      tslib: 2.3.0
 
   zwitch@2.0.4: {}

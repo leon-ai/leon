@@ -13,6 +13,7 @@ const globs = [
   'aurora/src/**/*.{ts,tsx,js,jsx}',
   'apps/web/src/**/*.{ts,tsx}',
   'apps/web/vite.config.ts',
+  'apps/web/vite/**/*.ts',
   // TODO: deal with it once handling new hotword
   // '"hotword/index.{ts,js}"',
   'skills/**/*.{ts,js}',

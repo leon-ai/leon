@@ -22,6 +22,16 @@ import {
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import type { MessageLog } from '@/types'
+import {
+  AGENT_CLARIFICATION_TOOL_NAME, AURORA_PRESENT_NAME, AuroraMode
+} from '@/core/aurora/agent-ui-contract'
+import {
+  createClarificationTool, createAuroraLoaderTool, enableAuroraTools,
+  executeAuroraToolCall, resolveAuroraClarification,
+  type AgentUICatalog, type PresentAgentUI
+} from '@/core/aurora/agent-ui-tools'
+
+export { AGENT_CLARIFICATION_TOOL_NAME } from '@/core/aurora/agent-ui-contract'
 
 import type {
   AgentSkillContext,
@@ -55,7 +65,6 @@ import { parseToolCallArguments, validateToolInput } from './agent-utils'
 import { AgentRunDeadlineError, type AgentRunBudget } from './agent-run-budget'
 
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
-export const AGENT_CLARIFICATION_TOOL_NAME = 'request_clarification'
 export const AGENT_CANCELLATION_TOOL_NAME = 'cancel_task'
 export const AGENT_SKILL_TOOL_NAME = 'load_agent_skill'
 export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
@@ -83,7 +92,7 @@ export function buildAgentConnectionGuidance(
 
   return needsSetup
     ? `<connection_setup>
-- A connection_required tool observation means the connection setup card has already been displayed. Explain the needed step briefly in the owner's language, using the supplied tool-owned setup facts; do not repeat the entire wizard.
+- A connection_required tool observation means the connection setup card has already been displayed. Explain the needed step briefly in the owner's language, using the supplied tool-owned setup facts; do not repeat the entire wizard. Never collect tokens, passwords or client secrets through ordinary chat, Aurora Form or Generated UI; use the trusted connection card.
 - Answer setup questions using those facts. Offer to complete setup through the owner's browser or let them use the card manually. Keep the original task pending unless the owner cancels or changes it. For manual setup, use request_clarification to pause and ask the owner to select Continue after connecting.
 - When the owner asks you to handle setup, use browser tools and submit the declared credentials through setup_connection, not shell commands or settings files. The application name supplied in the owner's setup request takes precedence over tool defaults. OAuth application setup still requires provider authorization through the connection card.
 - Never quote secrets in chat, plans, or summaries, retrieve unrelated credentials from files or browser storage, or bypass the connection layer. Refer to the exact callback URL displayed in the card; do not invent it.
@@ -193,6 +202,8 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - During extended work, accompany tool calls with brief owner-facing progress at meaningful milestones, changed approaches after obstacles, or otherwise prolonged waits. State verified findings and the next action. Do not narrate every click, expose private reasoning, claim unverified progress, or stop to announce future work. Progress is intermediate only alongside tool calls.
 - Keep the final answer concise and proportionate to the request; avoid recapping execution details unless asked.
 - Use Markdown naturally when it improves readability: short paragraphs, emphasis, lists, descriptive links, and fenced code with a language. Use headings and tables only when useful; do not over-format brief answers or emit raw HTML.
+- Proactively use charts for numerical trends/comparisons, diagrams for relationships, and custom visuals when interaction or layout improves understanding. Keep simple numbers, prose and small static tables in Markdown. Load the needed UI mode without asking display permission; do not create dashboards or extra questions merely to use UI.
+- Required yes/no decisions, explicit choices and related missing fields use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
 - When citing sources, use descriptive inline links rather than a separate sources list unless the owner requests one.
 - Refer to yourself in the first person.
 - Wrap every file path as [FILE_PATH]/path[/FILE_PATH].
@@ -287,8 +298,7 @@ export interface AgentCallableFunction {
   functionConfig: FunctionConfig
 }
 
-export interface AgentToolCatalog {
-  tools: OpenAITool[]
+export interface AgentToolCatalog extends AgentUICatalog {
   functionsByToolName: Map<string, AgentCallableFunction>
   availableToolkitsById: Map<string, AgentToolkitSummary>
   loadedToolkitIds: Set<string>
@@ -387,6 +397,7 @@ interface AgentModelCallOptions {
 type AgentFunctionExecutionResult = ToolExecutionResult
 
 export interface AgentLoopParams {
+  onPresentUI?: PresentAgentUI
   signal?: AbortSignal
   runBudget?: AgentRunBudget
   transcript: AgentToolTranscriptMessage[]
@@ -450,7 +461,7 @@ export function buildAgentToolCatalog(
   progressiveToolkitLoading = true,
   initiallyLoadedFunctionNames?: Iterable<string>,
   initiallyLoadedToolNames?: Iterable<string>,
-  previous?: { toolOrder: string[], planTracking: boolean }
+  previous?: { toolOrder: string[], planTracking: boolean, auroraMode?: AuroraMode }
 ): AgentToolCatalog {
   const tools: OpenAITool[] = []
   const functionsByToolName = new Map<string, AgentCallableFunction>()
@@ -482,7 +493,10 @@ export function buildAgentToolCatalog(
       forcedTool.toolkitId,
       forcedTool.toolId
     )
-    tools.push(createClarificationTool(), createCancellationTool())
+    tools.push(createAuroraLoaderTool(), createClarificationTool(), createCancellationTool())
+    if (previous?.auroraMode) {
+      enableAuroraTools(catalog, previous.auroraMode)
+    }
     return catalog
   }
 
@@ -513,6 +527,7 @@ export function buildAgentToolCatalog(
     tools.unshift(createToolkitLoaderTool(availableToolkitsById))
   }
   tools.push(
+    createAuroraLoaderTool(),
     createAgentPlanTool(AGENT_PLAN_TOOL_NAME),
     createClarificationTool(),
     createCancellationTool(),
@@ -520,6 +535,13 @@ export function buildAgentToolCatalog(
   )
 
   if (previous) {
+    // Older saved visual workflows have no capability marker and used the
+    // complete catalog. Restore those compatibly without enlarging fresh turns.
+    const mode = previous.auroraMode ??
+      (previous.toolOrder.includes(AURORA_PRESENT_NAME) ? AuroraMode.Generated : undefined)
+    if (mode) {
+      enableAuroraTools(catalog, mode)
+    }
     const order = new Map(previous.toolOrder.map((name, index) => [name, index]))
 
     // Rebuild callable contracts from the current registry while retaining their
@@ -1433,6 +1455,15 @@ export async function runAgentLoop(
         }
       }
 
+      if (terminalSignal.ui && params.onPresentUI) {
+        try {
+          await params.onPresentUI(terminalSignal.ui, 'clarification')
+        } catch (error) {
+          transcript.push({ role: 'user', content: `The visual question could not be displayed: ${String(error)}. Correct its references or ask the question without UI.` })
+          continue
+        }
+      }
+
       return {
         answer: terminalSignal.draft,
         intent: terminalSignal.intent,
@@ -2155,6 +2186,10 @@ async function executeAgentToolCall(
   trackedSteps: TrackedPlanStep[]
   signal?: FinalResponseSignal
 }> {
+  const visual = await executeAuroraToolCall(toolCall, params.catalog, params.onPresentUI)
+  if (visual) {
+    return { ...visual, trackedSteps }
+  }
   if (toolCall.function.name === AGENT_CANCELLATION_TOOL_NAME) {
     const signal = getCancellationSignal(toolCall)
     if (!signal) {
@@ -2274,10 +2309,17 @@ async function executeAgentToolCall(
       }
     }
 
+    const visual = resolveAuroraClarification(
+      parseToolCallArguments(toolCall.function.arguments), params.catalog, Boolean(params.onPresentUI)
+    )
+    if (visual.error) {
+      return { content: visual.error, trackedSteps }
+    }
+
     return {
       content: 'Clarification requested. Wait for the owner response.',
       trackedSteps,
-      signal
+      signal: { ...signal, ...(visual.ui ? { ui: visual.ui } : {}) }
     }
   }
 
@@ -2593,39 +2635,6 @@ function createCancellationTool(): OpenAITool {
           }
         },
         required: ['acknowledgment'],
-        additionalProperties: false
-      }
-    }
-  }
-}
-
-function createClarificationTool(): OpenAITool {
-  return {
-    type: 'function',
-    function: {
-      name: AGENT_CLARIFICATION_TOOL_NAME,
-      description:
-        'Pause the current agent run and ask the owner one concrete question about required information, authorization, or owner action that available tools cannot resolve. Call this alone, after inspecting available tool results; never alongside other calls or for draft text. The owner reply resumes the same work with its current plan, evidence, and artifacts.',
-      parameters: {
-        type: 'object',
-        properties: {
-          question: {
-            type: 'string',
-            description: 'One concise question that unblocks the current task.'
-          },
-          explanation: {
-            type: 'string',
-            description:
-              'Optional concise explanation of what remains incomplete and why.'
-          },
-          alternatives: {
-            type: 'array',
-            items: { type: 'string' },
-            description:
-              'Optional practical alternatives available to the owner.'
-          }
-        },
-        required: ['question'],
         additionalProperties: false
       }
     }

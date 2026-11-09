@@ -4,64 +4,71 @@ import { Button } from '@/components/button'
 import { useToast } from '@/components/toast'
 import { Tooltip } from '@/components/tooltip'
 import { Icon } from '@/components/icon'
-
-const COPIED_DURATION_MS = 1_500
+import { useActionConfirmation } from '@/hooks/use-action-confirmation'
 
 interface CopyButtonProps extends Pick<ComponentProps<typeof Button>, 'className' | 'size' | 'tone' | 'variant' | 'tooltipPosition'> {
-  text: string | undefined
+  text?: string | undefined
+  onCopy?: () => Promise<void>
+  errorTitle?: string
+  errorDescription?: string
   label?: string
   disabled?: boolean
+  busy?: boolean
+  iconName?: 'file-copy' | 'multi-image'
 }
 
 /**
  * Confirms successful clipboard writes inline and reports actionable failures once.
  */
-export function CopyButton({ text, label = 'Copy', disabled = false, tooltipPosition = 'bottom', ...buttonProps }: CopyButtonProps) {
+export function CopyButton({ text, onCopy, errorTitle = 'I couldn’t copy this text',
+  errorDescription = 'Your browser did not allow clipboard access. Select the text and copy it manually instead.',
+  label = 'Copy', disabled = false, busy = false, iconName = 'file-copy', tooltipPosition = 'bottom', ...buttonProps }: CopyButtonProps) {
   const { showToast } = useToast()
-  const [copied, setCopied] = useState(false)
+  const { confirmed: copied, confirm, reset } = useActionConfirmation()
   const [pending, setPending] = useState(false)
   const operation = useRef(0)
   const copying = useRef(false)
-  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
-    setCopied(false)
+    reset()
     setPending(false)
     copying.current = false
 
     return () => {
       // A late clipboard result must not update another inspector tab or a closed dialog.
       operation.current += 1
-      clearTimeout(resetTimer.current)
     }
-  }, [text, disabled])
+  }, [text, disabled, reset])
 
   async function copy(): Promise<void> {
-    if (disabled || text === undefined || copying.current) {
+    if (disabled || (text === undefined && !onCopy) || copying.current) {
       return
     }
 
     const currentOperation = ++operation.current
     copying.current = true
-    clearTimeout(resetTimer.current)
+    reset()
     setPending(true)
 
     try {
-      await navigator.clipboard.writeText(text)
+      if (onCopy) {
+        await onCopy()
+      } else {
+        await navigator.clipboard.writeText(text!)
+      }
 
       if (operation.current !== currentOperation) {
         return
       }
 
-      setCopied(true)
-      resetTimer.current = setTimeout(() => setCopied(false), COPIED_DURATION_MS)
+      confirm()
     } catch {
       if (operation.current === currentOperation) {
-        setCopied(false)
+        reset()
         showToast({
           type: 'error',
-          title: 'I couldn’t copy this text',
-          description: 'Your browser did not allow clipboard access. Select the text and copy it manually instead.'
+          title: errorTitle,
+          description: errorDescription
         })
       }
     } finally {
@@ -75,9 +82,9 @@ export function CopyButton({ text, label = 'Copy', disabled = false, tooltipPosi
   return (
     <Tooltip message={copied ? 'Copied' : label} position={tooltipPosition}
       closeOnClick={false} blurOnClick={false}>
-      <Button {...buttonProps} icon={<Icon name="file-copy" state={copied ? 'copied' : 'idle'} />}
+      <Button {...buttonProps} icon={<Icon name={iconName} state={copied ? 'copied' : 'idle'} />}
         ariaLabel={copied ? 'Copied' : label} ariaBusy={pending}
-        disabled={disabled || text === undefined} onClick={() => void copy()} />
+        disabled={disabled || busy || (text === undefined && !onCopy)} onClick={() => void copy()} />
     </Tooltip>
   )
 }

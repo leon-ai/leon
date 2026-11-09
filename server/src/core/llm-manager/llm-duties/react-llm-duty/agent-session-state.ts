@@ -5,6 +5,7 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import type { MessageLog } from '@/types'
+import type { AuroraMode } from '@/core/aurora/agent-ui-contract'
 
 import type { AgentLoopContinuationState } from './agent-loop-continuation'
 
@@ -25,6 +26,7 @@ export interface AgentConversationState {
   loadedToolNames: string[]
   toolOrder: string[]
   planTracking: boolean
+  auroraMode?: AuroraMode
 }
 
 export type AgentHistoryCompactionScope = 'local' | 'remote'

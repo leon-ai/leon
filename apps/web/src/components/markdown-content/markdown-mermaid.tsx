@@ -1,10 +1,11 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useId, useMemo, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { detectType, load, render } from 'pele/lazy'
 
 import { Loader } from '@/components/loader'
 import { VisualPreview } from '@/components/visual-preview/visual-preview'
 import { useTheme } from '@/hooks/use-theme'
+import { ExportableVisual } from '@/components/visual-export/visual-export'
 
 const MAXIMUM_DIAGRAM_CHARACTERS = 16_384
 const MAXIMUM_CACHED_DIAGRAMS = 8
@@ -35,12 +36,20 @@ let cacheCharacters = 0
 /**
  * Loads only completed diagrams' parsers, retaining bounded, sanitized SVGs.
  */
-export default function MarkdownMermaid({ text, incomplete, active }: { text: string, incomplete: boolean, active: boolean }) {
+export default function MarkdownMermaid({ text, incomplete, active, onReady }: {
+  text: string
+  incomplete: boolean
+  active: boolean
+  onReady?: (ready: boolean) => void
+}) {
   const theme = useTheme()
   const id = useId().replaceAll(':', '')
   const [result, setResult] = useState({ key: '', svg: '', failed: false })
   const key = `${id}:${theme}:${text}`
   const oversized = text.length > MAXIMUM_DIAGRAM_CHARACTERS
+  useLayoutEffect(() => {
+    onReady?.(oversized || !incomplete && result.key === key)
+  }, [onReady, oversized, incomplete, result.key, key])
   useEffect(() => {
     if (!active || incomplete || oversized) {
       return
@@ -138,7 +147,7 @@ export default function MarkdownMermaid({ text, incomplete, active }: { text: st
     return <div className="markdown-diagram-loading"><Loader size="sm" label="Drawing diagram…" /></div>
   }
 
-  return <VisualPreview title="Diagram" label="Enlarge diagram" svg={result.svg} fullWidth>
+  return <ExportableVisual><VisualPreview title="Diagram" label="Enlarge diagram" svg={result.svg} fullWidth>
     {drawing}
-  </VisualPreview>
+  </VisualPreview></ExportableVisual>
 }

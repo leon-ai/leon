@@ -1,7 +1,7 @@
 import { CONNECTION_SETUP_MESSAGES } from './connection-setup'
 
 import { SOCKET_SERVER, TOOLKIT_REGISTRY } from '@/core'
-import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { getActiveConversationSessionId, getActiveConversationResponseId } from '@/core/session-manager/session-context'
 
 /**
  * Displays setup only for a tool requested in this profile's current conversation.
@@ -9,12 +9,19 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 export function emitConnectionWidget(provider: string): void {
   const tool = TOOLKIT_REGISTRY.getConnectionTool(provider)
   const sessionId = getActiveConversationSessionId()
-  const id = `connection-${sessionId || 'current'}-${provider}`
+  const responseId = getActiveConversationResponseId()
+  const id = `connection-${responseId || sessionId || 'current'}-${provider}`
 
   SOCKET_SERVER.emitAnswerToChatClients({
     id,
     replaceMessageId: id,
     widget: 'ConnectionWidget',
+    ...(responseId ? { responseId } : {}),
+    connection: {
+      provider,
+      name: tool.name,
+      ...(tool.icon_name ? { iconName: tool.icon_name } : {})
+    },
     historyMode: 'system_widget',
     fallbackText: `Connect ${tool.name} to continue. You can use guided setup in your browser or connect manually below.`,
     supportedEvents: [],

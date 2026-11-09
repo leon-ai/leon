@@ -359,6 +359,12 @@ import {
   subscribeAgentEvents
 } from '@/core/http-server/http-plugins/leon-services'
 import { getConnectionCatalog } from '@/core/connections/connection-catalog'
+import { handleConnectionSetup } from '@/core/connections/connection-setup'
+import { CONNECTION_STORE, OAUTH_APPLICATION_STORE, ConnectionStatus } from '@/core/connections/connection-store'
+import * as connectionService from '@/core/connections/connection-service'
+import { ToolSettings } from '@/core/tool-manager/tool-settings'
+import { CONNECTION_PREVIEWS } from '../../fixtures/connections'
+import { ConnectionSetupActionId as SetupAction, ConnectionSetupStep as SetupStep } from '../../../aurora/src/contracts/connection-setup'
 import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
 
 it('overrides only declared setup display values without mutating tool defaults', async () => {
@@ -382,6 +388,103 @@ it('overrides only declared setup display values without mutating tool defaults'
 })
 
 describe('HTTP plugin Leon services', () => {
+  it.each([
+    { name: 'new OAuth application', oauth: true, configured: false, expected: 'oauth', action: SetupAction.Credentials },
+    { name: 'configured OAuth application', oauth: true, configured: true, expected: 'oauth', action: SetupAction.Connect },
+    { name: 'token-only tool', oauth: false, configured: false, expected: 'api_key', action: SetupAction.Credentials }
+  ])('offers one recommended path for a $name', async ({ oauth, configured, expected, action }) => {
+    const preview = CONNECTION_PREVIEWS['connection-notion']!
+    const tool = {
+      toolkit_id: 'productivity_collaboration', tool_id: 'notion', name: preview.name,
+      connection: { methods: oauth ? preview.methods : { api_key: preview.methods['api_key']! } }
+    }
+    mocks.connectionRegistry.getConnectionTools.mockReturnValue([tool])
+    mocks.connectionRegistry.getConnectionTool.mockReturnValue(tool)
+    mocks.sessions.set('setup-owner', new Set(['setup-session']))
+    vi.spyOn(ToolSettings, 'loadToolSettings').mockReturnValue({})
+    const application = vi.spyOn(OAUTH_APPLICATION_STORE, 'getCredentials').mockResolvedValue(
+      configured ? { client_id: 'configured-app', client_secret: 'configured-secret' } : {}
+    )
+    vi.spyOn(CONNECTION_STORE, 'list').mockResolvedValue([])
+    const authorize = vi.spyOn(connectionService, 'startConnectionOAuth').mockResolvedValue({
+      authorization_url: 'https://example.com/authorize', redirect_uri: 'http://127.0.0.1/callback', scopes: []
+    })
+    const save = vi.spyOn(connectionService, 'saveConnection')
+    const input = {
+      provider: preview.provider, profile_id: 'setup-owner', session_id: 'setup-session',
+      callback_origin: 'http://127.0.0.1:1337', api_version: 'v1', action: SetupAction.Refresh
+    }
+    const { view } = await handleConnectionSetup(input)
+    expect(view.state).toEqual({ method: expected, step: SetupStep.Choice })
+    expect(view.actions.filter((entry) => !entry.secondary)).toEqual([
+      { id: action, label: 'Connect Notion', secondary: false }
+    ])
+    expect(view.actions.some((entry) => entry.id === SetupAction.SelectMethod)).toBe(false)
+    expect(view.fields).toEqual([])
+    expect(authorize).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    expect(JSON.stringify(view)).not.toContain('configured-secret')
+
+    if (oauth && !configured) {
+      expect(view.description).toContain('one-time application setup')
+      const started = await handleConnectionSetup({ ...input, state: view.state, action })
+      expect(started.view.state.step).toBe(SetupStep.Credentials)
+      expect(started.view.fields.map((field) => field.name)).toEqual(['client_id', 'client_secret'])
+      expect(started.event).toBeUndefined()
+      const manual = await handleConnectionSetup({ ...input, state: view.state, action: SetupAction.Manual })
+      expect(manual.view.state).toEqual({ method: 'oauth', step: SetupStep.Application })
+      const assisted = await handleConnectionSetup({ ...input, state: view.state, action: SetupAction.StartSetup })
+      expect(assisted.view.state.step).toBe(SetupStep.Assisted)
+      expect(assisted.event?.methodParams.utterance).toContain('Keep credentials out of chat')
+      application.mockResolvedValue({ client_id: 'configured-app', client_secret: 'configured-secret' })
+      const refreshed = await handleConnectionSetup({ ...input, state: assisted.view.state })
+      expect(refreshed.view.actions).toEqual([
+        { id: SetupAction.Connect, label: 'Connect Notion', secondary: false }
+      ])
+    }
+    if (configured) {
+      const connected = await handleConnectionSetup({ ...input, state: view.state, action })
+      expect(connected.authorization_url).toBe('https://example.com/authorize')
+      expect(authorize).toHaveBeenCalledOnce()
+      expect(authorize.mock.calls[0]![0]).not.toHaveProperty('clientSecret')
+      authorize.mockRejectedValueOnce(new Error('Network unavailable'))
+      await expect(handleConnectionSetup({ ...input, state: view.state, action })).rejects.toThrow('Network unavailable')
+      const cancelled = await handleConnectionSetup({ ...input, state: view.state, authorization_failed: true })
+      expect(cancelled.view.state.method).toBe('oauth')
+      expect(cancelled.view.notice).toBeTruthy()
+      expect(cancelled.view.actions.some((entry) => entry.method === 'api_key')).toBe(false)
+      expect(save).not.toHaveBeenCalled()
+    }
+  })
+
+  it('reuses connected accounts and preserves explicit setup methods', async () => {
+    const preview = CONNECTION_PREVIEWS['connection-notion']!
+    const tool = {
+      toolkit_id: 'productivity_collaboration', tool_id: 'notion', name: preview.name,
+      connection: { methods: preview.methods }
+    }
+    mocks.connectionRegistry.getConnectionTools.mockReturnValue([tool])
+    mocks.connectionRegistry.getConnectionTool.mockReturnValue(tool)
+    mocks.sessions.set('setup-owner', new Set(['setup-session']))
+    vi.spyOn(ToolSettings, 'loadToolSettings').mockReturnValue({})
+    vi.spyOn(OAUTH_APPLICATION_STORE, 'getCredentials').mockResolvedValue({})
+    const list = vi.spyOn(CONNECTION_STORE, 'list').mockResolvedValue([{
+      provider: preview.provider, auth_type: 'api_key', status: ConnectionStatus.Connected,
+      connected_at: new Date().toISOString()
+    }])
+    const input = {
+      provider: preview.provider, profile_id: 'setup-owner', session_id: 'setup-session',
+      callback_origin: 'http://127.0.0.1:1337', api_version: 'v1', action: SetupAction.Refresh
+    }
+    const connected = await handleConnectionSetup(input)
+    expect(connected.view.state).toEqual({ method: 'api_key', step: SetupStep.Connected })
+    expect(connected.view.actions.map((entry) => entry.id)).toEqual([SetupAction.Continue])
+    list.mockResolvedValue([])
+    const resumed = await handleConnectionSetup({ ...input, state: { method: 'api_key', step: SetupStep.Credentials } })
+    expect(resumed.view.state).toEqual({ method: 'api_key', step: SetupStep.Credentials })
+    expect(resumed.view.fields.map((field) => field.name)).toEqual(['access_token'])
+  })
+
   it('delivers profile-wide mood changes to a session-scoped subscriber', async () => {
     const events: unknown[] = []
     const unsubscribe = await subscribeAgentEvents(

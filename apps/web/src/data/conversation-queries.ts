@@ -7,7 +7,7 @@ import { useToast } from '@/components/toast'
 import { canPrefetch, prefetchModule } from '@/utils/prefetch'
 import { requestAPI } from './api'
 import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
-import { applyConversationEvent } from './conversation-events'
+import { applyConversationEvent, mergeAnswerParts } from './conversation-events'
 import { toFeedEntries } from './conversation-feed'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
 import { ConnectionError, requestErrors } from './request-errors'
@@ -16,6 +16,7 @@ import type { FeedEntry } from './feed'
 import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
 import { queryHistoryKey } from './query-history'
 import { recordSessionCompletion } from './session-read-state'
+import { prefetchAnswerRendering } from '@/components/aurora-answer/preload'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
 const MAXIMUM_CONCURRENT_CONVERSATION_PREFETCHES = 2
@@ -42,6 +43,9 @@ async function fetchConversationPage(profile: string, sessionId: string, cursor:
   const params = new URLSearchParams({ limit: String(SESSION_PAGE_SIZE), ...cursor })
   const page = await requestAPI<ConversationPage>(`sessions/${encodeURIComponent(sessionId)}?${params}`,
     signal ? { signal } : {})
+  if (!cursor.before && !cursor.after) {
+    prefetchAnswerRendering(page.messages.findLast((message) => message.who === 'leon'))
+  }
   const cached = queryClient.getQueryData<CachedConversation>(['conversation', profile, sessionId])
   const liveRecords = new Map(cached?.pages.flatMap((item) => item.messages.filter((record) => !record.historical).map((record) => [record.messageId, record] as const)))
 
@@ -50,6 +54,7 @@ async function fetchConversationPage(profile: string, sessionId: string, cursor:
     messages: page.messages.map((record) => {
       const live = liveRecords.get(record.messageId)
       return { ...record, historical: record.isAddedToHistory && !live,
+        ...(record.answerParts ? { answerParts: mergeAnswerParts(live?.answerParts, record.answerParts) } : {}),
         ...(live?.draftGeneration ? { draftGeneration: live.draftGeneration } : {}) }
     })
   }
@@ -385,7 +390,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
           return { ...previous, pages: [{
             ...page, appliedCursor: event.sequence, is_running: running,
             messages: page.newer_cursor ? page.messages : applyConversationEvent(page.messages, event)
-          }, ...previous.pages.slice(1).map((older) => event.type === 'progress_message' &&
+          }, ...previous.pages.slice(1).map((older) => (event.type === 'progress_message' || event.type === 'tool_call') &&
             event.data['background'] === true && older.messages.some((record) => record.messageId === event.response_id)
             ? { ...older, messages: applyConversationEvent(older.messages, event) } : older)] }
         })

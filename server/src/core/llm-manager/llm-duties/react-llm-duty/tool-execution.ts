@@ -17,6 +17,8 @@ import { getConnectionRequirements } from '@/core/connections/connection-catalog
 import { LEON_HOME_PATH } from '@/leon-roots'
 import { ToolExecutionOrigin } from '@/types'
 import type { ToolRuntimeProgress } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import { ToolRuntimePhase } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import { PreparationStatus, type ToolPreparationSnapshot } from '@@/aurora/src/v2/contracts/preparation'
 import type { ToolExecutionInput } from '@/core/tool-manager/tool-executor'
 
 import { DUTY_NAME } from './agent-constants'
@@ -458,6 +460,14 @@ export async function runToolExecution(
   let progressStream: ToolRuntimeProgress['stream']
   let completedStreamProgress: ToolRuntimeProgress | undefined
   let lastPreparationProgress: ToolRuntimeProgress | undefined
+  let preparation: ToolPreparationSnapshot | undefined
+
+  function finishPreparation(success: boolean, detail: string, canceled = false): void {
+    if (preparation && preparation.status !== PreparationStatus.Ready) {
+      preparation = { ...preparation, detail, status: success ? PreparationStatus.Ready
+        : canceled ? PreparationStatus.Cancelled : PreparationStatus.Failed }
+    }
+  }
 
   toolExecutionInput.onProgress = (progress): void => {
     // Explicit streams belong to retained work; ordinary reports still end
@@ -466,9 +476,28 @@ export async function runToolExecution(
       return
     }
 
+    const preparationReport = progress.phase === ToolRuntimePhase.Preparation || Boolean(progress.key && (
+      TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key) || TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key) ||
+      preparation && TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key)
+    ))
+    if (progress.preparationComplete) {
+      finishPreparation(true, progress.message)
+    } else if (preparationReport && progress.phase !== ToolRuntimePhase.Execution) {
+      const percentage = typeof progress.data?.['percentage'] === 'number' ? progress.data['percentage'] : undefined
+      const measured = percentage !== undefined && Number.isFinite(percentage) && percentage >= 0 && percentage <= 100
+      preparation = {
+        status: progress.key && TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key) ? PreparationStatus.Failed
+          : measured ? PreparationStatus.Downloading : PreparationStatus.Preparing,
+        detail: progress.message,
+        ...(progress.stream?.id || preparation?.executionId ? { executionId: progress.stream?.id ?? preparation!.executionId! } : {}),
+        ...(measured ? { completed: percentage, total: 100 } : {})
+      }
+    }
+
     if (progress.stream) {
       progressStream = progress.stream
       if (progress.stream.state !== 'running') {
+        finishPreparation(progress.stream.state === 'completed', progress.message, progress.stream.canceled)
         completedStreamProgress = progress
         const status = progress.stream.state === 'completed' ? 'success' : 'error'
         const output = progress.data || {}
@@ -496,6 +525,7 @@ export async function runToolExecution(
           durationMs,
           commandOutput,
           progressMessage: progress.message,
+          ...(preparation ? { preparation } : {}),
           ...(toolCallTitle ? { toolCallTitle } : {}),
           ...(stepLabel ? { stepLabel } : {})
         })
@@ -536,6 +566,7 @@ export async function runToolExecution(
         : {}),
       input: requestedToolInput,
       output: progress.data || progress.message,
+      ...(preparation ? { preparation } : {}),
       ...(outputDelta
         ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving tool output...' }
         : { progressMessage: progress.message }),
@@ -665,6 +696,7 @@ export async function runToolExecution(
     didFinishToolCall = true
     const durationMs = Math.max(0, performance.now() - executionStartedAt)
     const reason = error instanceof Error ? error.message : String(error)
+    finishPreparation(false, reason, (retainedSignal ?? signal)?.aborted)
     const message = lastPreparationProgress
       ? `${reason}\nLast preparation report (not proof of ongoing work): ${lastPreparationProgress.message}`
       : reason
@@ -691,6 +723,7 @@ export async function runToolExecution(
       durationMs,
       input: requestedToolInput,
       errorMessage: message,
+      ...(preparation ? { preparation } : {}),
       ...(stepLabel ? { stepLabel } : {})
     })
 
@@ -777,6 +810,11 @@ export async function runToolExecution(
     ? lastPreparationProgress?.message || 'The tool is running. Progress will appear as it arrives.'
     : completedStreamProgress?.message || effectiveMessage
 
+  if (!isStreamRunning) {
+    finishPreparation(displayedStatus !== 'error', displayedStatus === 'error' ? displayedMessage : 'The required files are ready.',
+      progressStream?.canceled)
+  }
+
   emitToolExecutionOutputToWebApp({
     toolkitId,
     toolId,
@@ -805,6 +843,7 @@ export async function runToolExecution(
       : {}),
     input: requestedToolInput,
     output: displayedOutput,
+    ...(preparation ? { preparation } : {}),
     ...(stepLabel ? { stepLabel } : {}),
     ...(effectiveStatus === 'error'
       ? { errorMessage: effectiveMessage }

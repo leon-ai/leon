@@ -13,17 +13,22 @@ const WORKING_LABELS = [
   'Helping with this...'
 ] as const
 
-const PROCESSING_LABELS = [
-  'Processing...',
-  'Processing your request...',
-  'Considering your request...',
-  'Reading your request...',
-  'Reading the context...',
-  'Considering the context...',
-  'Understanding your request...',
-  'Exploring your request...',
-  'Interpreting your request...',
-  'Checking your request...'
+const VISUAL_SETUP_LABELS = [
+  'Preparing visual guidance...',
+  'Getting visuals ready...',
+  'Preparing visual tools...'
+] as const
+
+const VISUAL_LABELS = [
+  'Creating a visual...',
+  'Building a visual...',
+  'Composing a visual...'
+] as const
+
+const VISUAL_PRESENTATION_LABELS = [
+  'Preparing visual presentation...',
+  'Preparing the display...',
+  'Preparing visual display...'
 ] as const
 
 const TOOL_SCHEMA_LABELS = [
@@ -183,7 +188,6 @@ const COMPACTION_LABELS = [
 ] as const
 
 const PHASE_LABELS: Readonly<Partial<Record<TurnPhase, readonly string[]>>> = {
-  [TurnPhase.Request]: PROCESSING_LABELS,
   [TurnPhase.Tools]: TOOL_SELECTION_LABELS,
   [TurnPhase.ToolSchemas]: TOOL_SCHEMA_LABELS,
   [TurnPhase.ToolRequest]: TOOL_REQUEST_LABELS,
@@ -192,6 +196,9 @@ const PHASE_LABELS: Readonly<Partial<Record<TurnPhase, readonly string[]>>> = {
   [TurnPhase.Clarification]: CLARIFICATION_LABELS,
   [TurnPhase.Cancellation]: CANCELLATION_LABELS,
   [TurnPhase.Connection]: CONNECTION_LABELS,
+  [TurnPhase.VisualSetup]: VISUAL_SETUP_LABELS,
+  [TurnPhase.Visual]: VISUAL_LABELS,
+  [TurnPhase.VisualPresentation]: VISUAL_PRESENTATION_LABELS,
   [TurnPhase.Answer]: ANSWER_LABELS,
   [TurnPhase.Review]: REVIEW_LABELS,
   [TurnPhase.Inspection]: INSPECTION_LABELS,
@@ -211,10 +218,11 @@ export function getActivityLabel(id: string, labels: readonly string[] = WORKING
 }
 
 /**
- * Names only the recorded inference goal; unknown purposes keep neutral copy.
+ * Names known goals; unknown purposes share the turn's stable waiting copy,
+ * rather than suggesting that each model call starts understanding over again.
  */
-export function getProcessingLabel(goal: string, id: string): string {
-  const labels = Object.hasOwn(PHASE_LABELS, goal) ? PHASE_LABELS[goal as TurnPhase]! : PROCESSING_LABELS
+export function getProcessingLabel(goal: string, id: string, workingId = id): string {
+  const labels = Object.hasOwn(PHASE_LABELS, goal) ? PHASE_LABELS[goal as TurnPhase] : undefined
 
-  return getActivityLabel(id, labels)
+  return labels ? getActivityLabel(id, labels) : getActivityLabel(workingId)
 }

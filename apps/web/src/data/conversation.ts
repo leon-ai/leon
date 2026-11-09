@@ -8,6 +8,7 @@ import type { ConversationSession } from './sessions'
 import type { ModelSettings, ModelProvider } from './model-catalog'
 
 export interface ConversationTool {
+  preparation?: import('../../../../aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   planStepId?: string | null
   id: string
   name: string
@@ -68,6 +69,7 @@ export interface ConversationTrace {
 }
 
 export interface ConversationRecord {
+  answerParts?: import('../../../../aurora/src/v2/contracts/answer').AnswerPart[]
   fyi?: import('../../../../server/src/core/fyi/fyi-contract').Fyi
   who: 'owner' | 'leon'
   messageId: string
@@ -79,6 +81,8 @@ export interface ConversationRecord {
   artifacts?: Artifact[]
   widget?: {
     widget: string
+    responseId?: string
+    connection?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor
     componentTree?: Record<string, unknown>
     fallbackText?: string
     activity?: InferenceActivity

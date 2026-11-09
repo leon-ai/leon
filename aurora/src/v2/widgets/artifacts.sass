@@ -1,0 +1,57 @@
+.aurora-artifacts
+  display: grid
+  gap: var(--space-md)
+  min-width: 0
+
+.aurora-artifact
+  min-width: 0
+  overflow: hidden
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-md)
+  background-color: var(--color-background)
+
+  img,
+  video
+    display: block
+    width: 100%
+    max-height: 360px
+    object-fit: contain
+
+  audio
+    display: block
+    width: 100%
+
+  figcaption
+    display: flex
+    flex-wrap: wrap
+    align-items: center
+    gap: var(--space-sm)
+    padding: var(--space-md)
+    font-size: var(--font-size-sm)
+    line-height: var(--line-height-sm)
+
+    a
+      padding: var(--space-xs)
+      color: var(--color-text-secondary)
+      text-decoration: none
+
+      &:hover
+        color: var(--color-text)
+
+.aurora-artifact-image
+  display: block
+  cursor: zoom-in
+
+.aurora-artifact-icon
+  flex: 0 0 auto
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-lg)
+
+.aurora-artifact-name
+  flex: 1 1 140px
+  min-width: 0
+  overflow-wrap: anywhere
+
+  small
+    display: block
+    color: var(--color-text-secondary)

@@ -33,6 +33,7 @@ const MENU = [
   { name: 'book-open', label: 'Docs' }
 ]
 const MORPH_LABELS: Readonly<Record<string, string>> = {
+  'image-copy': 'Image copy confirmation', 'image-download': 'Image download confirmation', expand: 'Expand and collapse',
   copy: 'Copy confirmation', theme: 'Theme', sound: 'Sounds', sidebar: 'Sidebar',
   composer: 'Send and stop', pin: 'Pinning', 'list-selection': 'Inline view',
   'column-selection': 'Split view'

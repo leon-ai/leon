@@ -1,0 +1,161 @@
+*
+  box-sizing: border-box
+
+body
+  overflow: auto
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+
+.aurora-gallery
+  max-width: 1200px
+  margin: auto
+  padding: 48px var(--space-xl)
+
+.aurora-gallery-header
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-xl)
+  margin-bottom: 40px
+
+  h1
+    margin: var(--space-md) 0
+    font-size: var(--font-size-3xl)
+    font-weight: var(--font-weight-semi-bold)
+    line-height: 1.3
+
+    span
+      color: var(--color-accent)
+
+.gallery-intro
+  max-width: 420px
+  color: var(--color-feed-text)
+
+.gallery-eyebrow,
+.gallery-notice
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+.gallery-toolbar
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-lg)
+  padding-block: var(--space-lg)
+  border-block: 1px solid var(--color-border)
+
+  > .input
+    flex: 1 1 240px
+    max-width: 320px
+
+.gallery-notice
+  margin-block: var(--space-lg)
+
+.gallery-grid
+  display: grid
+  grid-template-columns: repeat(2, minmax(0, 1fr))
+  align-items: start
+  gap: var(--space-xl)
+  padding-top: var(--space-md)
+
+.gallery-example
+  display: grid
+  gap: var(--space-lg)
+  min-width: 0
+  padding: var(--space-xl)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-lg)
+
+  > header
+    display: grid
+    gap: var(--space-xs)
+
+    h2
+      font-weight: var(--font-weight-semi-bold)
+
+    p
+      color: var(--color-text-secondary)
+      font-size: var(--font-size-sm)
+
+.demo-stack
+  display: grid
+  gap: var(--space-lg)
+  min-width: 0
+
+.gallery-query
+  display: grid
+  gap: var(--space-sm)
+  padding-top: var(--space-md)
+  border-top: 1px solid var(--color-border)
+
+  > div
+    display: flex
+    align-items: center
+    justify-content: space-between
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+  > p
+    overflow-wrap: anywhere
+
+.demo-controls
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  gap: var(--space-sm)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+
+  label
+    display: flex
+    flex-wrap: wrap
+    align-items: center
+    gap: var(--space-sm)
+
+  select
+    min-height: 32px
+    padding: var(--space-xs) var(--space-sm)
+    border: 1px solid var(--color-border)
+    border-radius: var(--border-radius-sm)
+    background-color: var(--color-surface-elevated)
+    color: var(--color-text)
+
+  input[type='range']
+    max-width: 160px
+    accent-color: var(--color-accent)
+
+.demo-receipt
+  overflow-wrap: anywhere
+  padding: var(--space-md)
+  border-radius: var(--border-radius-md)
+  background: var(--color-surface-elevated)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  white-space: pre-wrap
+
+.answer-example
+  display: grid
+  gap: var(--space-xl)
+  max-width: var(--content-width)
+  margin: 40px auto
+
+.gallery-narrow
+  grid-template-columns: minmax(0, 1fr)
+  max-width: 390px
+  margin-inline: auto
+
+@media (max-width: 700px)
+  .aurora-gallery
+    padding: var(--space-xl) var(--space-md)
+
+  .gallery-grid
+    grid-template-columns: minmax(0, 1fr)
+
+  .gallery-example
+    padding: var(--space-lg)
+
+  .gallery-toolbar > .input
+    max-width: none

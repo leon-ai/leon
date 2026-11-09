@@ -15,7 +15,9 @@ import type { LLMAnswerMetrics, MessageLog } from '@/types'
 import {
   getActiveTurnInference,
   getActiveConversationSessionId,
+  getActiveConversationResponseId,
   recordTurnInference,
+  runWithConversationResponse,
   runWithConversationSession
 } from '@/core/session-manager/session-context'
 import {
@@ -222,6 +224,20 @@ describe('conversation trace persistence', () => {
 
     await logger.upsert(message, { sessionId: 'first' })
     await runWithConversationSession({ sessionId: 'first' }, async () => {
+      await runWithConversationResponse('first-reply', async () => {
+        await Promise.resolve()
+        expect(getActiveConversationResponseId()).toBe('first-reply')
+        await runWithConversationSession({ sessionId: 'first' }, async () => {
+          expect(getActiveConversationResponseId()).toBe('first-reply')
+        })
+        await runWithConversationSession({ sessionId: 'second' }, async () => {
+          expect(getActiveConversationResponseId()).toBeUndefined()
+        })
+        await runWithProfileContext({ profileName: 'another-profile' }, async () => {
+          expect(getActiveConversationResponseId()).toBeUndefined()
+        })
+      })
+      expect(getActiveConversationResponseId()).toBeUndefined()
       await logger.upsert(message, { sessionId: 'first' })
       recordTurnInference(account)
       recordTurnInference(account)
@@ -280,6 +296,7 @@ describe('conversation trace persistence', () => {
     })
     const widget = {
       id: 'connection-session-spotify',
+      responseId: 'first-reply',
       widget: 'ConnectionWidget',
       actionName: '',
       onFetch: null,
@@ -302,6 +319,7 @@ describe('conversation trace persistence', () => {
     const logs = await logger.loadAll({ sessionId: 'first' })
 
     expect(logs).toHaveLength(1)
+    expect(logs[0]?.widget?.responseId).toBe('first-reply')
     expect(
       logs.filter(ConversationHistoryHelper.isAddedToHistory)
     ).toHaveLength(0)

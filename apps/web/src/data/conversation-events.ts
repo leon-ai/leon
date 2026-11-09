@@ -1,5 +1,38 @@
 import type { ConversationEvent, ConversationRecord, ConversationTrace, ConversationTool } from './conversation'
 import type { InferenceActivity } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import type { AnswerPart } from '../../../../aurora/src/v2/contracts/answer'
+
+/**
+ * Keeps accepted receipts and native element identity stable when HTTP responses
+ * and durable events deliver overlapping snapshots in a different order.
+ */
+export function mergeAnswerParts(previous: AnswerPart[] | undefined, incoming: AnswerPart[]): AnswerPart[] {
+  const saved = new Map(previous?.map((part) => [part.id, part]))
+
+  return incoming.map((part) => {
+    const existing = saved.get(part.id)
+    if (part.kind !== 'ui' || existing?.kind !== 'ui') {
+      return part
+    }
+    if (existing.surface.revision > part.surface.revision) {
+      return existing
+    }
+    if (existing.surface.revision !== part.surface.revision) {
+      return part
+    }
+
+    return { ...part, surface: { ...part.surface, spec: existing.surface.spec,
+      status: existing.surface.status === 'ready' ? 'ready' : part.surface.status,
+      receipts: { ...part.surface.receipts, ...existing.surface.receipts } } }
+  })
+}
+
+function withAnswerText(parts: AnswerPart[], messageId: string, text: string): AnswerPart[] {
+  const id = `${messageId}:text`
+  const visuals = parts.filter((part) => part.id !== id)
+
+  return text ? [...visuals, { id, kind: 'text', text }] : visuals
+}
 
 /**
  * Converts the shared HTTP event schema to the persisted trace field names.
@@ -8,6 +41,7 @@ export function readEventTool(value: Record<string, unknown>): ConversationTool 
   return {
     id: String(value['id'] ?? value['name']),
     name: String(value['name']),
+    ...(value['preparation'] ? { preparation: value['preparation'] as NonNullable<ConversationTool['preparation']> } : {}),
     ...(value['plan_step_id'] !== undefined ? { planStepId: value['plan_step_id'] as string | null } : {}),
     status: value['status'] as ConversationTool['status'],
     ...(value['tool_call_title'] ? { toolCallTitle: String(value['tool_call_title']) } : {}),
@@ -57,7 +91,7 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     (event.data['message'] as { memory?: unknown } | undefined)?.memory
   )
   // A late outcome for unloaded history will arrive through its saved projection.
-  if (index < 0 && memoryProgress && event.data['background'] === true) {
+  if (index < 0 && event.data['background'] === true && (memoryProgress || event.type === 'tool_call')) {
     return messages
   }
   const previous = messages[index] ?? {
@@ -72,7 +106,34 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     }
     return messages.map((record, position) => position === index ? { ...record, fyi } : record)
   }
+  if (event.type === 'answer_parts') {
+    const answerParts = event.data['answer_parts'] as ConversationRecord['answerParts']
+    if (!Array.isArray(answerParts)) {
+      return messages
+    }
+    const merged = mergeAnswerParts(previous.answerParts, answerParts)
+    const record = { ...previous, answerParts: !previous.isAddedToHistory && previous.message
+      ? withAnswerText(merged, id, previous.message) : merged,
+      ...(Array.isArray(event.data['artifacts']) ? { artifacts: [...new Map([
+        ...(previous.artifacts ?? []), ...(event.data['artifacts'] as NonNullable<ConversationRecord['artifacts']>)
+      ].map((artifact) => [artifact.id, artifact])).values()] } : {}) }
+
+    return index < 0 ? [...messages, record] : messages.map((item, position) => position === index ? record : item)
+  }
   // Accepted final content is authoritative over delayed draft and retry events.
+  if (previous.isAddedToHistory && event.type === 'tool_call') {
+    const call = readEventTool(event.data['tool_call'] as Record<string, unknown>)
+    const saved = previous.agentResponseTrace?.toolCalls.find((item) => item.id === call.id)
+    if (!saved?.preparation?.executionId || saved.preparation.executionId !== call.preparation?.executionId) {
+      return messages
+    }
+    const record = { ...previous, agentResponseTrace: { ...previous.agentResponseTrace!,
+      toolCalls: previous.agentResponseTrace!.toolCalls.map((item) => item === saved
+        ? { ...item, status: call.status, preparation: call.preparation!,
+          ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }) } : item) } }
+
+    return messages.map((item, position) => position === index ? record : item)
+  }
   if (previous.isAddedToHistory && event.type !== 'final_answer' && event.type !== 'artifacts' && !memoryProgress) {
     return messages
   }
@@ -114,6 +175,9 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
       record.message = data['reset'] ? '' :
         `${record.draftGeneration === generationId ? record.message : ''}${token}`
       record.draftGeneration = generationId
+      if (record.answerParts?.length) {
+        record.answerParts = withAnswerText(record.answerParts, id, record.message)
+      }
     } else {
       const blocks = [...(trace.reasoning ?? [])]
       const blockIndex = blocks.findIndex((block) => block.id === generationId)
@@ -189,11 +253,17 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
 
     record = {
       ...record, message: String(data['content'] ?? ''), isAddedToHistory: true, sentAt: event.created_at,
-      artifacts: data['artifacts'] as NonNullable<ConversationRecord['artifacts']>
+      artifacts: data['artifacts'] as NonNullable<ConversationRecord['artifacts']>,
+      ...(Array.isArray(data['answer_parts']) ? { answerParts: mergeAnswerParts(record.answerParts,
+        data['answer_parts'] as NonNullable<ConversationRecord['answerParts']>) } : {})
     }
   } else if (event.type === 'error') {
     record.message = String(data['message'] ?? 'The turn could not finish.')
     record.isAddedToHistory = true
+    if (record.answerParts?.length) {
+      record.answerParts = withAnswerText(record.answerParts.map((part) => part.kind === 'ui'
+        ? { ...part, surface: { ...part.surface, status: 'draft' } } : part), id, record.message)
+    }
   } else {
     return messages
   }

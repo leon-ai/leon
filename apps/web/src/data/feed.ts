@@ -30,6 +30,7 @@ interface FeedActivityTime {
 }
 
 export interface FeedToolCall extends FeedActivityTime {
+  preparation?: import('../../../../aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   preparationStartedAt?: number | undefined
   id: string
   toolCallTitle: string
@@ -136,6 +137,7 @@ export interface FeedModelProcessingActivity extends FeedActivityTime {
     durationMs: number
     isActive?: boolean
     activeLabel?: string
+    isGeneric?: boolean
     startedAt?: number | undefined
     planStepId?: string | null | undefined
   }[]
@@ -171,6 +173,9 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  connections?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor[]
+  connection?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor
+  answerParts?: import('../../../../aurora/src/v2/contracts/answer').AnswerPart[]
   sentAt?: number | undefined
   metrics?: ConversationMetrics | undefined
   isMaintenance?: boolean

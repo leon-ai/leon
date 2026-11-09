@@ -111,6 +111,7 @@ export type ConversationWidgetHistoryMode = 'persisted' | 'system_widget'
 export type ConversationItemSource = 'conversation_history' | 'system_widget'
 
 export interface ConversationWidgetData {
+  responseId?: string
   activity?: InferenceActivity
   actionName: string
   widget: string
@@ -171,6 +172,7 @@ export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
 }
 
 export interface AgentResponseToolCall {
+  preparation?: import('@@/aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   planStepId?: string | null
   id: string
   preparationStartedAt?: number
@@ -218,6 +220,7 @@ export interface AgentResponseTrace {
 }
 
 export interface MessageLog {
+  answerParts?: import('@@/aurora/src/v2/contracts/answer').AnswerPart[]
   fyi?: import('@/core/fyi/fyi-contract').Fyi
   inference?: TurnInference
   artifacts?: Artifact[]

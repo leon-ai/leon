@@ -1,0 +1,37 @@
+.aurora-progress
+  display: grid
+  gap: var(--space-sm)
+
+.aurora-progress-label
+  display: flex
+  justify-content: space-between
+  align-items: center
+  gap: var(--space-md)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+  > :last-child
+    color: var(--color-text-secondary)
+    font-variant-numeric: tabular-nums
+
+.aurora-progress progress
+  display: block
+  width: 100%
+  height: 6px
+  overflow: hidden
+  border: 0
+  border-radius: var(--border-radius-pill)
+  background: var(--color-border)
+  accent-color: var(--color-accent)
+
+  &::-webkit-progress-bar
+    border-radius: inherit
+    background: var(--color-border)
+
+  &::-webkit-progress-value
+    border-radius: inherit
+    background: var(--color-accent)
+
+  &::-moz-progress-bar
+    border-radius: inherit
+    background: var(--color-accent)

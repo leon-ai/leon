@@ -3,6 +3,7 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import type { APIOptions } from '@/core/http-server/http-server'
 import { CONNECTION_STORE } from '@/core/connections/connection-store'
 import { OAUTH_MANAGER } from '@/core/connections/oauth-manager'
+import { renderOAuthCompletion } from '@/core/connections/oauth-completion'
 import { getConnectionCatalog } from '@/core/connections/connection-catalog'
 import {
   saveConnection,
@@ -41,7 +42,15 @@ export const connectionsPlugin: FastifyPluginAsync<APIOptions> = async (
 
   // Desktop hosts have no browser session to redirect into after OAuth.
   // This public landing page exposes no account state or credentials.
-  fastify.get(`${route}/complete`, async (_request, reply) => {
+  fastify.get<{ Querystring: { popup_id?: string, provider?: string, connection_result?: string } }>(`${route}/complete`, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    reply.header('Referrer-Policy', 'no-referrer')
+    const completion = renderOAuthCompletion(request.query)
+    if (completion) {
+      return reply.header('Content-Security-Policy', completion.contentSecurityPolicy)
+        .type('text/html; charset=utf-8').send(completion.html)
+    }
+
     return reply.type('text/plain; charset=utf-8').send(
       'Return to your conversation and refresh the connection status. If authorization was canceled or failed, start it again from the connection card.'
     )

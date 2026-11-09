@@ -5,6 +5,7 @@ import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-c
 import { isFyiEligible } from '../../../../server/src/core/fyi/fyi-contract'
 import { getProcessingCategory } from './processing-categories'
 import { getActivityLabel, getProcessingLabel } from './activity-labels'
+import { getConnectionSetupDescriptor } from './connection-setup-contract'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
@@ -95,7 +96,7 @@ function toProcessingActivity(trace: ConversationTrace, active: boolean): FeedMo
       startedAt: timing.startedAt,
       planStepId: timing.planStepId,
       isActive: active && timing.outcome === 'started',
-      activeLabel: getProcessingLabel(timing.goal, timing.id)
+      activeLabel: getProcessingLabel(timing.goal, timing.id, `${trace.id}:waiting`)
     }
   })
   return {
@@ -150,9 +151,10 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     functionName: parts.at(-1) ?? call.name,
     toolIconName: call.toolIconName ?? 'tools-line',
     ...(call.toolkitIconName ? { toolkitIconName: call.toolkitIconName } : {}),
-    status: !active && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
+    status: !active && !call.preparation?.executionId && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
     startedAt: call.startedAt,
     preparationStartedAt: call.preparationStartedAt,
+    ...(call.preparation ? { preparation: call.preparation } : {}),
     ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }),
     input: call.input ?? null,
     ...(call.commandOutput === undefined ? {} : { commandOutput: call.commandOutput }),
@@ -474,6 +476,16 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
   if (cached && (cached.active === active || cached.entry.role === 'leon' && cached.entry.isMaintenance)) {
     return cached.entry
   }
+  const connection = getConnectionSetupDescriptor(record.widget)
+  if (connection) {
+    const entry: LeonFeedEntry = {
+      id: record.messageId, role: 'leon', connection, isMaintenance: true,
+      status: FeedTurnStatus.Completed, durationMs: 0, activities: [], finalAnswer: ''
+    }
+    entryCache.set(record, { active, entry })
+
+    return entry
+  }
   const compaction = toCompactionActivity(record)
   if (compaction) {
     const entry: LeonFeedEntry = {
@@ -500,6 +512,7 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
       id: record.messageId, planSteps: [], toolCalls: []
     }, active, record.sentAt, metrics, Boolean(record.message.trim())),
     finalAnswer: record.message,
+    ...(record.answerParts ? { answerParts: record.answerParts } : {}),
     ...(record.fyi && isFyiEligible(record.message) ? { bonusResponse: record.fyi.text } : {}),
     answerStartedAt: record.agentResponseTrace?.timings?.findLast((timing) =>
       timing.kind === 'inference' && timing.goal === TurnPhase.Answer)?.startedAt ??
@@ -602,7 +615,7 @@ function splitResponse(entry: LeonFeedEntry, owners: readonly ConversationRecord
     return { ...entry, id: index === 0 ? entry.id : `${entry.id}:after:${owners[index]!.messageId}`,
       responseId: entry.id, continues: !last, hasTurnWork: entry.activities.length > 0, activities,
       finalAnswer: last ? entry.finalAnswer : '',
-      ...(last ? {} : { artifacts: [], bonusResponse: '' }) }
+      ...(last ? {} : { artifacts: [], answerParts: [], connections: [], bonusResponse: '' }) }
   })
 }
 
@@ -612,6 +625,7 @@ function splitResponse(entry: LeonFeedEntry, owners: readonly ConversationRecord
  * Stored records and other widget messages remain untouched.
  */
 export function toFeedEntries(records: readonly ConversationRecord[], running: boolean): FeedEntry[] {
+  const embeddedArtifacts = new Set(records.flatMap((record) => record.answerParts?.length ? record.artifacts?.map((artifact) => artifact.id) ?? [] : []))
   const owners = records.filter((record) => record.who === 'owner')
   // Browser responses use the same command-derived ID as optimistic delivery.
   // Historical non-browser IDs retain their original adjacent-message grouping.
@@ -619,13 +633,43 @@ export function toFeedEntries(records: readonly ConversationRecord[], running: b
   const responses = new Set(records.filter((record) => record.who === 'leon').map((record) => record.messageId))
   const groups = new Map(owners.map((owner) => [owner.messageId, [toFeedEntry(owner, running)]]))
   const structuredPlanTurns = new Set<string | undefined>()
+  const answerIds = new Set<string>()
+  const answersByOwner = new Map<string | undefined, string>()
   let turnId: string | undefined
   for (const record of records) {
     if (record.who === 'owner') {
       turnId = record.messageId
-    } else if (record.agentResponseTrace?.planSteps.length) {
-      structuredPlanTurns.add(turnId)
+    } else {
+      if (record.agentResponseTrace?.planSteps.length) {
+        structuredPlanTurns.add(turnId)
+      }
+      if (!record.widget && !record.messageId.startsWith('artifacts:')) {
+        const ownerIndex = responseOwners.get(record.messageId)
+        answersByOwner.set(ownerIndex === undefined ? turnId : owners[ownerIndex]!.messageId, record.messageId)
+        answerIds.add(record.messageId)
+      }
     }
+  }
+
+  // New cards have durable response ownership. Legacy cards use their adjacent
+  // owner turn only; an unloaded explicit target must never attach elsewhere.
+  const attachedConnections = new Set<string>()
+  const answerConnections = new Map<string, Map<string, NonNullable<LeonFeedEntry['connection']>>>()
+  turnId = undefined
+  for (const record of records) {
+    if (record.who === 'owner') {
+      turnId = record.messageId
+      continue
+    }
+    const connection = getConnectionSetupDescriptor(record.widget)
+    const responseId = record.widget?.responseId ?? answersByOwner.get(turnId)
+    if (!connection || !responseId || !answerIds.has(responseId)) {
+      continue
+    }
+    const connections = answerConnections.get(responseId) ?? new Map()
+    connections.set(connection.provider, connection)
+    answerConnections.set(responseId, connections)
+    attachedConnections.add(record.messageId)
   }
 
   turnId = undefined
@@ -635,7 +679,17 @@ export function toFeedEntries(records: readonly ConversationRecord[], running: b
       turnId = record.messageId
       continue
     }
-    const entry = toFeedEntry(record, running)
+    if (attachedConnections.has(record.messageId)) {
+      continue
+    }
+    const baseEntry = toFeedEntry(record, running)
+    const connections = answerConnections.get(record.messageId)
+    const entry = baseEntry.role === 'leon' && connections
+      ? { ...baseEntry, connections: [...connections.values()] } : baseEntry
+    if (record.messageId.startsWith('artifacts:') && record.artifacts?.length &&
+      record.artifacts.every((artifact) => embeddedArtifacts.has(artifact.id))) {
+      continue
+    }
     if (!record.isAddedToHistory && record.widget?.widget === LEGACY_PLAN_WIDGET && structuredPlanTurns.has(turnId) &&
       !(entry.role === 'leon' && entry.isMaintenance)) {
       continue
@@ -656,7 +710,7 @@ export function toFeedEntries(records: readonly ConversationRecord[], running: b
     }
     if (entry.role === 'leon' && turnOwners.length > 1) {
       for (const [index, segment] of splitResponse(entry, turnOwners).entries()) {
-        if (segment.activities.length || segment.finalAnswer || segment.artifacts?.length) {
+        if (segment.activities.length || segment.finalAnswer || segment.artifacts?.length || segment.answerParts?.length || segment.connections?.length) {
           groups.get(turnOwners[index]!.messageId)!.push(segment)
         }
       }

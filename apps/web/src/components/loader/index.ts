@@ -1,1 +1,1 @@
-export { Loader } from './loader'
+export { Loader } from '../../../../../aurora/src/v2/components/loader/loader'

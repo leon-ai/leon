@@ -12,7 +12,7 @@ import {
 } from '@@/scripts/setup/migrations/2026103008000293-add-conversation-archive.js'
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import type { MessageLog } from '@/types'
+import type { AgentResponseToolCall, MessageLog } from '@/types'
 import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import { FyiKind, type Fyi } from '@/core/fyi/fyi-contract'
 import { FYI_VISIONS } from '@/core/fyi/visions'
@@ -35,6 +35,11 @@ import { normalizeSearchText, prepareSearchQuery, rankSearchFields, SearchRank }
 import type { SearchQuery } from '@/helpers/search-helper'
 import { MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS } from './session-search-contract'
 import type { SessionSearchMatch } from './session-search-contract'
+import type { Artifact } from '@/core/artifacts/artifact-types'
+import {
+  auroraSubmissionText, isAuroraSubmission, normalizeAuroraSubmission,
+  type AnswerPart, type AuroraValues
+} from '@@/aurora/src/v2/contracts/answer'
 
 const DEFAULT_PAGE_SIZE = 40
 const MAXIMUM_PAGE_SIZE = 100
@@ -47,7 +52,8 @@ const FYI_VISION_ROTATION_KEY = 'fyi_vision_rotation'
 const UI_MESSAGE_FILTER = `(visible = 1 OR trace_id IS NOT NULL
   OR json_type(summary, '$.agentResponseTrace') = 'object'
   OR json_array_length(summary, '$.artifacts') > 0
-  OR json_type(summary, '$.widget') = 'object')`
+  OR json_type(summary, '$.widget') = 'object'
+  OR json_array_length(summary, '$.answerParts') > 0)`
 
 enum ContentMatchRank {
   Phrase,
@@ -447,6 +453,9 @@ export class ConversationRepository {
 
       if (existing && existing.message !== value.message && !record.fyi) {
         delete value.fyi
+        if (existing.isAddedToHistory && record.answerParts === undefined) {
+          delete value.answerParts
+        }
       }
 
       if (previous && previous['id'] !== value.messageId) {
@@ -623,6 +632,97 @@ export class ConversationRepository {
   }
 
   /**
+   * Captures the owner-message frontier accepted by a completed visual answer.
+   */
+  public getLatestOwnerMessageId(sessionId: string): string | undefined {
+    const row = this.db.prepare(`SELECT id FROM conversation_messages
+      WHERE session_id = ? AND role = 'owner' AND visible = 1 ORDER BY sequence DESC LIMIT 1`).get(sessionId)
+
+    return row ? String(row['id']) : undefined
+  }
+
+  /**
+   * Updates answer presentation without changing its timestamp or sidebar activity.
+   */
+  public updateAnswerParts(
+    sessionId: string,
+    messageId: string,
+    update: (parts: AnswerPart[]) => AnswerPart[],
+    artifacts?: Artifact[]
+  ): AnswerPart[] {
+    return this.db.transaction(() => {
+      let record = this.readMessage(sessionId, messageId)
+      if (!record) {
+        this.upsertMessage(sessionId, { who: 'leon', messageId, message: '', isAddedToHistory: false })
+        record = this.readMessage(sessionId, messageId)!
+      }
+      if (record.who !== 'leon') {
+        throw new Error('This message cannot contain an interactive answer.')
+      }
+
+      const parts = update(record.answerParts ?? [])
+      const value = { ...record, answerParts: parts,
+        ...(artifacts ? { artifacts: [...new Map([...(record.artifacts ?? []), ...artifacts].map((artifact) => [artifact.id, artifact])).values()] } : {}) }
+      this.db.prepare(`UPDATE conversation_messages SET payload = ?, summary = ?
+        WHERE session_id = ? AND id = ?`)
+        .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, record.messageId)
+
+      return parts
+    })()
+  }
+
+  /**
+   * Accepts a widget receipt and its ordinary owner command in one transaction.
+   * Reloads/retries never repeat work, and obsolete questions cannot steer a newer task.
+   */
+  public acceptAuroraSubmission(
+    sessionId: string,
+    messageId: string,
+    input: { id: string, surfaceId: string, nodeId: string, revision: number, values: unknown },
+    allowNewSubmission: boolean
+  ): { command: ConversationCommand, created: boolean, answerParts: AnswerPart[] } {
+    return this.db.transaction(() => {
+      const record = this.readMessage(sessionId, messageId)
+      const part = record?.answerParts?.find((item) => item.kind === 'ui' && item.surface.id === input.surfaceId)
+      if (!record?.isAddedToHistory || part?.kind !== 'ui' || !Object.hasOwn(part.surface.spec.elements, input.nodeId)) {
+        throw new Error('This question is no longer available. Please ask me again.')
+      }
+      const node = part.surface.spec.elements[input.nodeId]!
+      if (!isAuroraSubmission(node, input.values)) {
+        throw new Error('Please check your answers and try again.')
+      }
+      const values = normalizeAuroraSubmission(node, input.values as AuroraValues)
+      const receipt = part.surface.receipts[input.nodeId]
+      const query = auroraSubmissionText(node, values)
+      if (receipt) {
+        if (receipt.commandId !== input.id || receipt.revision !== input.revision || JSON.stringify(receipt.values) !== JSON.stringify(values)) {
+          throw new Error('This question has already been answered.')
+        }
+
+        return { ...this.acceptCommand(sessionId, input.id, query), answerParts: record.answerParts! }
+      }
+      const latestReply = this.db.prepare(`SELECT id FROM conversation_messages
+        WHERE session_id = ? AND role = 'leon' AND visible = 1 AND (
+          trace_id IS NOT NULL OR json_array_length(payload, '$.answerParts') > 0
+        ) ORDER BY sent_at DESC, sequence DESC LIMIT 1`).get(sessionId)
+      if (!allowNewSubmission || this.getLatestOwnerMessageId(sessionId) !== part.surface.ownerMessageId ||
+        latestReply?.['id'] !== record.messageId || part.surface.status !== 'ready' || part.surface.revision !== input.revision) {
+        throw new Error('This question is no longer active. Please use the latest reply.')
+      }
+
+      const accepted = this.acceptCommand(sessionId, input.id, query)
+      const answerParts = this.updateAnswerParts(sessionId, messageId, (parts) => parts.map((item) =>
+        item.kind === 'ui' && item.id === part.id ? { ...item, surface: {
+          ...item.surface, receipts: { ...item.surface.receipts, [input.nodeId]: {
+            commandId: input.id, revision: input.revision, values, submittedAt: Date.now()
+          } }
+        } } : item))
+
+      return { ...accepted, answerParts }
+    })()
+  }
+
+  /**
    * Adds completed memory outcomes without rewriting an answer, its clock, or
    * the session's activity ordering. Deleted turns must never be recreated.
    */
@@ -642,6 +742,27 @@ export class ConversationRepository {
         WHERE session_id = ? AND (id = ? OR trace_id = ?)`)
         .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, messageId, messageId)
       return true
+    })()
+  }
+
+  /**
+   * Retained preparation can settle after the answer. Update only its original
+   * call, preserving accepted text, metrics, message time and sidebar ordering.
+   */
+  public updateToolPreparation(sessionId: string, messageId: string, call: AgentResponseToolCall): void {
+    this.db.transaction(() => {
+      const record = this.readMessage(sessionId, messageId)
+      const existing = record?.agentResponseTrace?.toolCalls.find((item) => item.id === call.id)
+      if (!record?.isAddedToHistory || !existing?.preparation?.executionId ||
+        existing.preparation.executionId !== call.preparation?.executionId) {
+        return
+      }
+      const value = { ...record, agentResponseTrace: { ...record.agentResponseTrace!,
+        toolCalls: record.agentResponseTrace!.toolCalls.map((item) => item === existing
+          ? { ...item, preparation: call.preparation, status: call.status,
+            ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }) } : item) } }
+      this.db.prepare('UPDATE conversation_messages SET payload = ?, summary = ? WHERE session_id = ? AND id = ?')
+        .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, record.messageId)
     })()
   }
 

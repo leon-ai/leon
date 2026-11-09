@@ -107,6 +107,7 @@ export function Feed({
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
   const fastScroll = useMemo(createFastScrollDriver, [])
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
+  const latestOwnerMessageId = entries.findLast((entry) => entry.role === 'owner')?.id
   const turnCount = turns.length
   const historyRef = useRef(history)
   const resumeFollowing = useCallback((): void => {
@@ -521,7 +522,7 @@ export function Feed({
                               {entry.content}
                             </OwnerMessage>
                           ) : (
-                            <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id}>
+                            <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id} latestOwnerMessageId={latestOwnerMessageId}>
                               <LeonMessage entry={entry} />
                             </ConversationDetailsProvider>
                           )}

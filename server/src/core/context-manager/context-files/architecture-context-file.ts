@@ -21,6 +21,7 @@ export class ArchitectureContextFile extends ContextFile {
       '## Client Interfaces',
       '- Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.',
       '- Browser conversations use profile-scoped HTTP commands and durable SSE replay; Socket.IO remains available for other clients. Browser and legacy owner-agent entry points share turn orchestration.',
+      '- Aurora visual answers combine bounded native widgets and versioned generated HTML/CSS/JavaScript surfaces in durable answer parts. Generated code runs only in opaque-origin browser frames with restricted resources and an ancestor navigation policy; locally bundled Aurora/chart runtimes load on demand. Only declared values confirmed outside the frame can become profile/session-bound owner commands. Receipts commit atomically, replay never submits actions, and required questions reuse the clarification lifecycle.',
       '- External HTTP plugins can extend Leon\'s HTTP contract without patching the core API for each integration.',
       '- Custom clients can read profile-owned extension JSON files through a generic redacted HTTP endpoint, covering skill memory, skill settings, and tool settings without exposing secrets.',
       '- The LLM layer supports media understanding and generation; generated files are conversation artifacts with authenticated downloads and inline media playback.',

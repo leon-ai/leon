@@ -9,6 +9,7 @@ import YAML from 'yaml'
 
 import { PROFILE_CONFIG_PATH } from '../../server/src/leon-roots.ts'
 import type { ModelProvider } from './src/data/model-catalog.ts'
+import { auroraSandbox } from './vite/aurora-sandbox.ts'
 
 const WEB_APP_DEV_SERVER_PORT = 5_173
 const HIGHLIGHTS_WASM_MODULE_ID = '\0leon:highlights-wasm'
@@ -185,6 +186,6 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
       }
     } : {}),
     worker: { format: 'es' as const, plugins: (): Plugin[] => [nativeHighlightsWasm()] },
-    plugins: [nativeHighlightsWasm(), react()]
+    plugins: [nativeHighlightsWasm(), auroraSandbox(), react()]
   }
 })

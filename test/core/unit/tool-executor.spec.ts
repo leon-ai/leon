@@ -117,7 +117,7 @@ it.each([
     expect(retained.execution.state).toBe(cancel ? 'canceled' : 'completed')
     expect(retained.result).toEqual(completed)
     expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
-      stream: { id: execution.id, state: cancel ? 'failed' : 'completed' }, data: completed.data.output
+      stream: { id: execution.id, state: cancel ? 'failed' : 'completed', ...(cancel ? { canceled: true } : {}) }, data: completed.data.output
     }))
     expect(execute).toHaveBeenCalledTimes(1)
     expect(execute.mock.calls[0]?.[0].retainExecution).toBe(false)
