@@ -1,0 +1,46 @@
+.aurora-range
+  appearance: none
+  display: block
+  width: 100%
+  height: 32px
+  margin: 0
+  padding: 0
+  border: 0
+  border-radius: var(--border-radius-pill)
+  background: transparent
+  accent-color: var(--color-accent)
+  cursor: pointer
+
+  &::-webkit-slider-runnable-track
+    height: 4px
+    border-radius: var(--border-radius-pill)
+    background-color: var(--color-surface-active)
+
+  &::-webkit-slider-thumb
+    appearance: none
+    width: 16px
+    height: 16px
+    margin-top: -6px
+    border: 0
+    border-radius: var(--border-radius-pill)
+    background-color: var(--color-accent)
+
+  &::-moz-range-track
+    height: 4px
+    border-radius: var(--border-radius-pill)
+    background-color: var(--color-surface-active)
+
+  &::-moz-range-thumb
+    width: 16px
+    height: 16px
+    border: 0
+    border-radius: var(--border-radius-pill)
+    background-color: var(--color-accent)
+
+  &:disabled
+    opacity: .5
+    cursor: default
+
+  &:focus-visible
+    outline: 2px solid var(--color-accent)
+    outline-offset: 2px
