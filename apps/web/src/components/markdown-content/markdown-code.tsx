@@ -48,11 +48,11 @@ export default function MarkdownCode({ text, language }: MarkdownCodeProps) {
         <LanguageIcon language={language} />
         <div className="markdown-code-actions">
           {diagram && <Tooltip message={toggleLabel} position="top" blurOnClick={false}>
-            <Button size="sm" ariaLabel={toggleLabel}
+            <Button size="sm" tone="muted" ariaLabel={toggleLabel}
               icon={<Icon name="code-s-slash" state={source ? 'diagram' : 'source'} />}
               onClick={() => setView(source ? DiagramView.Diagram : DiagramView.Source)} />
           </Tooltip>}
-          <CopyButton text={text} label="Copy code" size="sm" />
+          <CopyButton text={text} label="Copy code" size="sm" tone="muted" />
         </div>
       </div>
       {source && <CodeView text={text} language={language} label="Code block" active={incomplete} fitContent />}

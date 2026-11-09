@@ -2,6 +2,8 @@ import { circle, COMMON_ICONS, paths, type IconDefinition } from '@/components/i
 
 // Design studies stay preview-only; the application ships only approved redraws.
 export const SOFT_COMMON_ICONS = {
+  'image-download': COMMON_ICONS['image-download'],
+  'multi-image': COMMON_ICONS['multi-image'],
   search: paths({ d: `${circle(10.5, 10.5, 7)}M16 16l4.5 4.5`, part: 'magnifier' }),
   'edit-box': paths('M11.5 4H7a4 4 0 0 0-4 4v9a4 4 0 0 0 4 4h9a4 4 0 0 0 4-4v-4.5',
     { d: 'm10.5 13.5 1.1-4.3L18 2.8a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8l-6.4 6.4ZM17 4l3 3', part: 'pencil' },

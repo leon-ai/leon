@@ -50,6 +50,8 @@ export const SOFT_ICON_NAMES: ReadonlySet<string> = new Set([
   'home-wifi',
   'image',
   'image-edit',
+  'image-download',
+  'multi-image',
   'layout-4',
   'layout-column',
   'list-check',
@@ -69,6 +71,11 @@ export const SOFT_ICON_NAMES: ReadonlySet<string> = new Set([
 
 // Original paths come from the installed Remix Icon SVGs; see THIRD_PARTY_NOTICES.txt.
 export const COMMON_ICONS = {
+  'multi-image': paths('M4 8h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z',
+    'M7 8V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3',
+    'm3 18 8.5-5 5.5 5', circle(7, 12, 1)),
+  'image-download': paths('M14 20H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v7',
+    'm3 19 11-9 3 3', circle(8, 9, 1), { d: 'M20 16v6m-3-3 3 3 3-3', part: 'download' }),
   'database': paths({ d: 'M11 19V9H4V19H11ZM11 7V4C11 3.44772 11.4477 3 12 3H21C21.5523 3 22 3.44772 22 4V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V8C2 7.44772 2.44772 7 3 7H11ZM13 5V19H20V5H13ZM5 16H10V18H5V16ZM14 16H19V18H14V16ZM14 13H19V15H14V13ZM14 10H19V12H14V10ZM5 13H10V15H5V13Z', fill: true }),
   'search': paths({ d: 'M18.031 16.6168L22.3137 20.8995L20.8995 22.3137L16.6168 18.031C15.0769 19.263 13.124 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2C15.968 2 20 6.032 20 11C20 13.124 19.263 15.0769 18.031 16.6168ZM16.0247 15.8748C17.2475 14.6146 18 12.8956 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18C12.8956 18 14.6146 17.2475 15.8748 16.0247L16.0247 15.8748Z', fill: true, part: 'magnifier' }),
   'edit-box': paths('M11.5 4H7a4 4 0 0 0-4 4v9a4 4 0 0 0 4 4h9a4 4 0 0 0 4-4v-4.5',

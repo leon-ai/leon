@@ -1,4 +1,6 @@
 // Only the preview imports these exact upstream SVGs; the app does not load this comparison catalog.
+import imageDownload from 'remixicon/icons/Media/image-download-line.svg?url'
+import multiImage from 'remixicon/icons/Media/multi-image-line.svg?url'
 import artwork0 from 'remixicon/icons/System/add-large-line.svg?url'
 import artwork1 from 'remixicon/icons/System/alert-line.svg?url'
 import artwork2 from 'remixicon/icons/Arrows/arrow-down-line.svg?url'
@@ -125,6 +127,8 @@ export interface OriginalArtwork {
 }
 
 export const ORIGINAL_ARTWORK: Readonly<Record<string, OriginalArtwork>> = {
+  'image-download': { url: imageDownload, filename: 'image-download-line.svg' },
+  'multi-image': { url: multiImage, filename: 'multi-image-line.svg' },
   'add-large': { url: artwork0, filename: 'add-large-line.svg' },
   'alert': { url: artwork1, filename: 'alert-line.svg' },
   'arrow-down': { url: artwork2, filename: 'arrow-down-line.svg' },

@@ -1,4 +1,5 @@
 import { SIDEBAR_PANE_FILL_OPACITY } from './icon-definitions'
+import { IMAGE_COPY_MORPH, IMAGE_DOWNLOAD_MORPH, EXPAND_MORPH } from './image-morphs'
 
 // Compatible contours are authored ahead of time; interaction never parses or
 // normalizes SVGs. Filled original endpoints retain their exact source geometry.
@@ -26,6 +27,9 @@ const SIDEBAR_DIVIDER: MorphPose = {
 const SIDEBAR_PANE_POINTS = [6,3,6,3,9,3,9,3,9,3,9,21,9,21,9,21,6,21,6,21,4.34315,21,3,19.65685,3,18,3,18,3,6,3,6,3,4.34315,4.34315,3,6,3]
 
 export const ICON_MORPHS: Readonly<Record<string, MorphFrames>> = {
+  'image-copy': IMAGE_COPY_MORPH,
+  'image-download': IMAGE_DOWNLOAD_MORPH,
+  'expand': EXPAND_MORPH,
   'copy': {
     'idle': [
       {

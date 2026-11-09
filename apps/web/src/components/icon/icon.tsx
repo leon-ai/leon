@@ -138,10 +138,13 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
   const selectionFamily = selected !== undefined
     ? resolved === 'list-check' ? 'list-selection' : resolved === 'layout-column' ? 'column-selection' : undefined
     : undefined
-  const morph = diagramToggle ? ['diagram-view', state] as const : resolved === 'file-copy' && state !== undefined
+  const imageMorph = state !== undefined && (resolved === 'multi-image' || resolved === 'image-download' || resolved === 'expand-diagonal')
+    ? [resolved === 'multi-image' ? 'image-copy' : resolved === 'image-download' ? 'image-download' : 'expand', state] as const
+    : undefined
+  const morph = imageMorph ?? (diagramToggle ? ['diagram-view', state] as const : resolved === 'file-copy' && state !== undefined
     ? ['copy', state] as const
     : selectionFamily ? [selectionFamily, selected ? 'selected' : 'idle'] as const
-      : morphEnabled && !explicit && Object.hasOwn(MORPH_TARGETS, resolved) ? MORPH_TARGETS[resolved] : undefined
+      : morphEnabled && !explicit && Object.hasOwn(MORPH_TARGETS, resolved) ? MORPH_TARGETS[resolved] : undefined)
   const frames = morph ? ICON_MORPHS[morph[0]] ?? rareMorphs?.[morph[0]] : undefined
 
   return (

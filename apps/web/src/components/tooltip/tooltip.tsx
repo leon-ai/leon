@@ -190,7 +190,8 @@ export function Tooltip({
             <span className="tooltip-hint">{typeof hint === 'function' ? content.hint : hint}</span>
           )}
         </span>,
-        document.body
+        // Fullscreen excludes body-level overlays outside the active element.
+        document.fullscreenElement ?? document.body
       )}
     </>
   )
