@@ -187,7 +187,7 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
           setStopped(true)
         } else if ((data.type === GeneratedMessage.Charts || data.type === GeneratedMessage.Controls) && !enginesRequested.has(data.type)) {
           enginesRequested.add(data.type)
-          const load = import('virtual:aurora-controls')
+          const load = data.type === GeneratedMessage.Charts ? import('virtual:aurora-charts') : import('virtual:aurora-controls')
           void load.then(async ({ default: chartSource }) => {
             const files = await chartSource.load()
             if (live) {
