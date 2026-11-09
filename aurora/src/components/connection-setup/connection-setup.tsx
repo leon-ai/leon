@@ -3,44 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Link, Loader, Status, Text } from '../..'
 
 import './connection-setup.sass'
+import type { ConnectionSetupAction, ConnectionSetupView } from '../../contracts/connection-setup'
 
-export interface ConnectionSetupAction {
-  id: string
-  label: string
-  method?: string
-  secondary?: boolean
-  submit?: boolean
-}
-
-export interface ConnectionSetupView {
-  state: { method: string, step: string }
-  title: string
-  description: string
-  status?: string
-  notice?: string
-  fields: Array<{
-    name: string
-    label: string
-    type: 'text' | 'password'
-    required: boolean
-    value: string
-    maxLength: number
-  }>
-  links: Array<{ label: string, href: string }>
-  details?: {
-    label: string
-    instructions: string[]
-    values: Array<{ label: string, value: string, copyLabel: string }>
-  }
-  actions: ConnectionSetupAction[]
-  messages: {
-    loadError: string
-    actionError: string
-    retry: string
-    copied: string
-    copyFailed: string
-  }
-}
+export type { ConnectionSetupAction, ConnectionSetupView } from '../../contracts/connection-setup'
 
 export interface ConnectionSetupProps {
   provider: string

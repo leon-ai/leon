@@ -111,6 +111,7 @@ export type ConversationWidgetHistoryMode = 'persisted' | 'system_widget'
 export type ConversationItemSource = 'conversation_history' | 'system_widget'
 
 export interface ConversationWidgetData {
+  responseId?: string
   activity?: InferenceActivity
   actionName: string
   widget: string

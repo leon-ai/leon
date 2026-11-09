@@ -81,6 +81,8 @@ export interface ConversationRecord {
   artifacts?: Artifact[]
   widget?: {
     widget: string
+    responseId?: string
+    connection?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor
     componentTree?: Record<string, unknown>
     fallbackText?: string
     activity?: InferenceActivity

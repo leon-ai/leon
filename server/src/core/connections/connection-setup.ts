@@ -1,4 +1,14 @@
-import type { ConnectionSetupAction, ConnectionSetupView } from '@aurora'
+import {
+  ConnectionSetupActionId as SetupAction,
+  ConnectionSetupStep as SetupStep,
+  CONNECTION_SETUP_MESSAGES,
+  getPreferredConnectionMethod,
+  type ConnectionSetupAction,
+  type ConnectionSetupView,
+  type ConnectionSetupResult
+} from '@@/aurora/src/contracts/connection-setup'
+
+export { CONNECTION_SETUP_MESSAGES, type ConnectionSetupResult } from '@@/aurora/src/contracts/connection-setup'
 
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
@@ -13,34 +23,6 @@ import { saveConnection, startConnectionOAuth } from './connection-service'
 
 const MAXIMUM_CREDENTIAL_LENGTH = 4_096
 
-export const CONNECTION_SETUP_MESSAGES = {
-  loadError: 'Unable to load connection setup. Please try again.',
-  actionError:
-    'Unable to complete this step. Check the setup fields and account permissions, then try again.',
-  retry: 'Retry',
-  copied: 'Copied',
-  copyFailed: 'Select and copy the text above.'
-}
-
-enum SetupAction {
-  Refresh = 'refresh',
-  SelectMethod = 'select_method',
-  Manual = 'manual',
-  Credentials = 'credentials',
-  StartSetup = 'start_setup',
-  Connect = 'connect',
-  Continue = 'continue'
-}
-
-enum SetupStep {
-  Choice = 'choice',
-  Application = 'application',
-  Credentials = 'credentials',
-  Assisted = 'assisted',
-  Connected = 'connected',
-  Continued = 'continued'
-}
-
 export interface ConnectionSetupInput {
   provider: string
   profile_id?: string
@@ -54,17 +36,6 @@ export interface ConnectionSetupInput {
   credentials?: Record<string, string>
   authorization_failed?: boolean
   setup_values?: Record<string, string>
-}
-
-export interface ConnectionSetupResult {
-  view: ConnectionSetupView
-  // The host dispatches this through its normal owner-message path, preserving history.
-  event?: {
-    methodName: 'send_utterance'
-    methodParams: { from: 'owner', utterance: string }
-    session_id: string
-  }
-  authorization_url?: string
 }
 
 /**

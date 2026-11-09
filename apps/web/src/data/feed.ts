@@ -172,6 +172,9 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  connections?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor[]
+  connection?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor
+  answerParts?: import('../../../../aurora/src/v2/contracts/answer').AnswerPart[]
   sentAt?: number | undefined
   metrics?: ConversationMetrics | undefined
   isMaintenance?: boolean
