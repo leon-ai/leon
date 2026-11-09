@@ -30,6 +30,7 @@ interface FeedActivityTime {
 }
 
 export interface FeedToolCall extends FeedActivityTime {
+  preparation?: import('../../../../aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   preparationStartedAt?: number | undefined
   id: string
   toolCallTitle: string

@@ -15,6 +15,8 @@ import { MAXIMUM_ARCHIVE_PAGE_CHARACTERS, type ArchiveMessagePage } from '@@/bri
 import { searchConversationSessions } from '@/core/session-manager/session-search'
 import { TOOL_CONTENT_PREVIEW_CHARACTERS } from '@/core/session-manager/tool-content-contract'
 import { MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS } from '@/core/session-manager/session-search-contract'
+import { auroraParts } from '../../fixtures/aurora'
+import { PreparationStatus } from '../../../aurora/src/v2/contracts/preparation'
 
 function session(id: string, timestamp = 1): ConversationSession {
   return {
@@ -47,6 +49,76 @@ describe('profile conversation archive', () => {
 
   beforeEach(async () => {
     directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-conversation-archive-'))
+  })
+
+  it('persists late preparation outcomes only on the originating accepted call without changing answer metadata', () => {
+    const repository = open()
+    repository.saveSession(session('chat'))
+    const preparation = { status: PreparationStatus.Downloading, detail: 'Downloading.', executionId: 'download', completed: 40, total: 100 }
+    const call = { id: 'tool', name: 'speech.asr.transcribe', status: 'running' as const, preparation }
+    repository.upsertMessage('chat', { who: 'leon', messageId: 'answer', message: 'We can keep talking.', isAddedToHistory: true,
+      agentResponseTrace: { id: 'answer', planSteps: [], toolCalls: [call], metrics: { durationMs: 7_000 } } })
+    const original = repository.readMessage('chat', 'answer')!
+    const metadata = repository.readSession('chat')
+    repository.updateToolPreparation('chat', 'answer', { ...call, status: 'success', durationMs: 30_000,
+      preparation: { ...preparation, status: PreparationStatus.Ready, detail: 'Files ready.' } })
+    const saved = repository.readMessage('chat', 'answer')!
+    expect(saved.message).toBe(original.message)
+    expect(saved.sentAt).toBe(original.sentAt)
+    expect(saved.agentResponseTrace!.metrics).toEqual(original.agentResponseTrace!.metrics)
+    expect(saved.agentResponseTrace!.toolCalls[0]!.preparation!.status).toBe('ready')
+    expect(repository.readSession('chat')).toEqual(metadata)
+    repository.updateToolPreparation('chat', 'answer', { ...call, preparation: { ...preparation, executionId: 'other' } })
+    expect(repository.readMessage('chat', 'answer')).toEqual(saved)
+    expect(open().readMessages('chat', { summary: true }).items[0]!.agentResponseTrace!.toolCalls[0]!.preparation!.status).toBe('ready')
+    repository.deleteSession('chat')
+    repository.updateToolPreparation('chat', 'answer', call)
+    expect(repository.readMessage('chat', 'answer')).toBeNull()
+  })
+
+  it('accepts a visual answer once with durable receipts, ordinary owner context and profile isolation', () => {
+    let repository = open()
+    repository.saveSession(session('chat'))
+    repository.upsertMessage('chat', { who: 'owner', messageId: 'owner', message: 'Help me choose.', isAddedToHistory: true })
+    repository.upsertMessage('chat', { who: 'leon', messageId: 'answer', message: 'How would you like to start?',
+      answerParts: auroraParts('owner'), isAddedToHistory: true }, { sentAt: Date.now() })
+    const input = { id: crypto.randomUUID(), surfaceId: 'surface-one', nodeId: 'choice', revision: 1, values: ['quiet'] }
+    const first = repository.acceptAuroraSubmission('chat', 'answer', input, true)
+    expect(first.created).toBe(true)
+    expect(first.command.query).toBe('How would you like to start?\nA quiet morning')
+    const other = open()
+    expect(other.acceptAuroraSubmission('chat', 'answer', input, false).created).toBe(false)
+    expect(other.readContextMessages('chat', 10).at(-1)?.message).toBe(first.command.query)
+    expect(other.readContextMessages('chat', 10).every((record) => !record.answerParts)).toBe(true)
+    expect(() => other.acceptAuroraSubmission('chat', 'answer', { ...input, id: crypto.randomUUID() }, true)).toThrow('already been answered')
+    expect(() => other.acceptAuroraSubmission('chat', 'answer', { ...input, values: ['creative'] }, true)).toThrow('already been answered')
+    close(repository)
+    repository = open()
+    const saved = repository.readMessages('chat', { summary: true }).items.find((record) => record.messageId === 'answer')!
+    expect(saved.answerParts).toEqual(first.answerParts)
+    expect(repository.acceptAuroraSubmission('chat', 'answer', input, true).created).toBe(false)
+    const foreign = open('other-owner')
+    expect(() => foreign.acceptAuroraSubmission('chat', 'answer', input, true)).toThrow('no longer available')
+    expect(foreign.readSession('chat')).toBeNull()
+  })
+
+  it('rejects stale, unfinished, invalid or deleted visual controls without creating owner commands', () => {
+    const repository = open()
+    repository.saveSession(session('chat'))
+    repository.upsertMessage('chat', { who: 'owner', messageId: 'owner', message: 'Choose.', isAddedToHistory: true })
+    const parts = auroraParts('owner')
+    repository.upsertMessage('chat', { who: 'leon', messageId: 'answer', message: 'Choose.', answerParts: parts, isAddedToHistory: true })
+    const input = { id: crypto.randomUUID(), surfaceId: 'surface-one', nodeId: 'choice', revision: 1, values: ['quiet'] }
+    const before = repository.readMessages('chat').items.length
+    expect(() => repository.acceptAuroraSubmission('chat', 'answer', { ...input, revision: 2 }, true)).toThrow('no longer active')
+    expect(() => repository.acceptAuroraSubmission('chat', 'answer', { ...input, values: ['unknown'] }, true)).toThrow('check your answers')
+    expect(() => repository.acceptAuroraSubmission('chat', 'answer', input, false)).toThrow('no longer active')
+    expect(repository.readMessages('chat').items).toHaveLength(before)
+    repository.upsertMessage('chat', { who: 'owner', messageId: 'next', message: 'Something else.', isAddedToHistory: true })
+    expect(() => repository.acceptAuroraSubmission('chat', 'answer', input, true)).toThrow('no longer active')
+    repository.upsertMessage('chat', { who: 'leon', messageId: 'answer', message: 'Edited answer.', isAddedToHistory: true })
+    expect(repository.readMessage('chat', 'answer')?.answerParts).toBeUndefined()
+    expect(() => repository.acceptAuroraSubmission('chat', 'answer', input, true)).toThrow('no longer available')
   })
 
   afterEach(async () => {

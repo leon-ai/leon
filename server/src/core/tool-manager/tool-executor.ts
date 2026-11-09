@@ -307,7 +307,8 @@ export default class ToolExecutor {
               input.onProgress?.({
                 source: 'report', message: signal.aborted ? String(signal.reason) : result.message,
                 data: result.data.output,
-                stream: { id, state: result.status === 'success' && !signal.aborted ? 'completed' : 'failed' }
+                stream: { id, state: result.status === 'success' && !signal.aborted ? 'completed' : 'failed',
+                  ...(signal.aborted ? { canceled: true } : {}) }
               })
             }
 
@@ -316,7 +317,8 @@ export default class ToolExecutor {
             failure = error
             if (background || didPrepare) {
               input.onProgress?.({
-                source: 'report', message: String(error), stream: { id, state: 'failed' }
+                source: 'report', message: String(error), stream: { id, state: 'failed',
+                  ...(signal.aborted ? { canceled: true } : {}) }
               })
             }
             throw error

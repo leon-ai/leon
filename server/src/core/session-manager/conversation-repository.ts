@@ -12,7 +12,7 @@ import {
 } from '@@/scripts/setup/migrations/2026103008000293-add-conversation-archive.js'
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import type { MessageLog } from '@/types'
+import type { AgentResponseToolCall, MessageLog } from '@/types'
 import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import { FyiKind, type Fyi } from '@/core/fyi/fyi-contract'
 import { FYI_VISIONS } from '@/core/fyi/visions'
@@ -642,6 +642,27 @@ export class ConversationRepository {
         WHERE session_id = ? AND (id = ? OR trace_id = ?)`)
         .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, messageId, messageId)
       return true
+    })()
+  }
+
+  /**
+   * Retained preparation can settle after the answer. Update only its original
+   * call, preserving accepted text, metrics, message time and sidebar ordering.
+   */
+  public updateToolPreparation(sessionId: string, messageId: string, call: AgentResponseToolCall): void {
+    this.db.transaction(() => {
+      const record = this.readMessage(sessionId, messageId)
+      const existing = record?.agentResponseTrace?.toolCalls.find((item) => item.id === call.id)
+      if (!record?.isAddedToHistory || !existing?.preparation?.executionId ||
+        existing.preparation.executionId !== call.preparation?.executionId) {
+        return
+      }
+      const value = { ...record, agentResponseTrace: { ...record.agentResponseTrace!,
+        toolCalls: record.agentResponseTrace!.toolCalls.map((item) => item === existing
+          ? { ...item, preparation: call.preparation, status: call.status,
+            ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }) } : item) } }
+      this.db.prepare('UPDATE conversation_messages SET payload = ?, summary = ? WHERE session_id = ? AND id = ?')
+        .run(JSON.stringify(value), JSON.stringify(summarizeConversationRecord(value)), sessionId, record.messageId)
     })()
   }
 

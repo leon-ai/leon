@@ -43,9 +43,13 @@ export interface ToolRuntimeProgress {
   activity?: boolean
   phase?: ToolRuntimePhase
   /**
+   * All current asset-preparation scopes finished successfully.
+   */
+  preparationComplete?: boolean
+  /**
    * Keeps progress attached to its originating call until retained work ends.
    */
-  stream?: { id: string, state: 'running' | 'completed' | 'failed' }
+  stream?: { id: string, state: 'running' | 'completed' | 'failed', canceled?: boolean }
 }
 
 /**

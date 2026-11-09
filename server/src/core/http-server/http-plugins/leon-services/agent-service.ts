@@ -14,6 +14,7 @@ import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runt
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
 import type { LeonClientInterfaceTokenPayload } from '@/core/leon-interface/types'
 
 import type {
@@ -113,6 +114,7 @@ export async function runAgent(
       HTTPPluginAgentTrace['plan_transitions']
     > = []
     const toolCalls = new Map<string, HTTPPluginToolCall>()
+    let responseAccepted = false
     const progressMessages = new Map<
       string,
       NonNullable<HTTPPluginAgentTrace['progress_messages']>[number]
@@ -236,7 +238,11 @@ export async function runAgent(
               }
             }
             toolCalls.set(event.toolCall.id, toolCall)
-            emit('tool_call', { tool_call: toolCall })
+            if (responseAccepted && event.toolCall.preparation) {
+              CONVERSATION_REPOSITORY.updateToolPreparation(sessionId, messageId!, event.toolCall)
+            }
+            emit('tool_call', { tool_call: toolCall,
+              ...(responseAccepted && event.toolCall.preparation ? { background: true } : {}) })
           }
         })
 
@@ -314,6 +320,13 @@ export async function runAgent(
             },
             { sessionId }
           ))
+          responseAccepted = true
+          for (const call of toolCalls.values()) {
+            if (call.preparation) {
+              const saved = deserializeAgentTrace({ plan_steps: [], tool_calls: [call] }).toolCalls[0]!
+              CONVERSATION_REPOSITORY.updateToolPreparation(sessionId, messageId!, saved)
+            }
+          }
           emit('metrics', { metrics })
           emit('final_answer', {
             message_id: messageId || '',

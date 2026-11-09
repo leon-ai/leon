@@ -8,6 +8,7 @@ export function readEventTool(value: Record<string, unknown>): ConversationTool 
   return {
     id: String(value['id'] ?? value['name']),
     name: String(value['name']),
+    ...(value['preparation'] ? { preparation: value['preparation'] as NonNullable<ConversationTool['preparation']> } : {}),
     ...(value['plan_step_id'] !== undefined ? { planStepId: value['plan_step_id'] as string | null } : {}),
     status: value['status'] as ConversationTool['status'],
     ...(value['tool_call_title'] ? { toolCallTitle: String(value['tool_call_title']) } : {}),
@@ -57,7 +58,7 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     (event.data['message'] as { memory?: unknown } | undefined)?.memory
   )
   // A late outcome for unloaded history will arrive through its saved projection.
-  if (index < 0 && memoryProgress && event.data['background'] === true) {
+  if (index < 0 && event.data['background'] === true && (memoryProgress || event.type === 'tool_call')) {
     return messages
   }
   const previous = messages[index] ?? {
@@ -73,6 +74,19 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     return messages.map((record, position) => position === index ? { ...record, fyi } : record)
   }
   // Accepted final content is authoritative over delayed draft and retry events.
+  if (previous.isAddedToHistory && event.type === 'tool_call') {
+    const call = readEventTool(event.data['tool_call'] as Record<string, unknown>)
+    const saved = previous.agentResponseTrace?.toolCalls.find((item) => item.id === call.id)
+    if (!saved?.preparation?.executionId || saved.preparation.executionId !== call.preparation?.executionId) {
+      return messages
+    }
+    const record = { ...previous, agentResponseTrace: { ...previous.agentResponseTrace!,
+      toolCalls: previous.agentResponseTrace!.toolCalls.map((item) => item === saved
+        ? { ...item, status: call.status, preparation: call.preparation!,
+          ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }) } : item) } }
+
+    return messages.map((item, position) => position === index ? record : item)
+  }
   if (previous.isAddedToHistory && event.type !== 'final_answer' && event.type !== 'artifacts' && !memoryProgress) {
     return messages
   }

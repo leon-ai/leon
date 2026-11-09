@@ -63,6 +63,7 @@ export interface HTTPPluginToolCall {
   command_output?: string
   last_output_at?: number
   progress_message?: string
+  preparation?: import('@@/aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   error_message?: string
   skill_id?: string
   native_skill_path?: string

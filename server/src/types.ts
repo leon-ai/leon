@@ -171,6 +171,7 @@ export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
 }
 
 export interface AgentResponseToolCall {
+  preparation?: import('@@/aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   planStepId?: string | null
   id: string
   preparationStartedAt?: number

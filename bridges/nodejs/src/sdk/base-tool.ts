@@ -75,6 +75,7 @@ export class ConnectionRequiredError extends Error {}
 export abstract class Tool {
   protected executionContext: ToolExecutionContext | null = null
   private readonly preparations = new Set<Promise<unknown>>()
+  private preparationFailed = false
   /**
    * Declares emitted text as rich prose only when the producer opts in.
    */
@@ -104,13 +105,16 @@ export abstract class Tool {
     const context = this.executionContext
     context?.signal?.throwIfAborted()
     if (this.preparations.size === 0) {
+      this.preparationFailed = false
       context?.onProgress?.({
         source: 'report', message: 'Preparing tool assets.', phase: ToolRuntimePhase.Preparation
       })
     }
 
+    let assetsReady = false
     const pending = Promise.resolve().then(async () => {
       const result = await prepare()
+      assetsReady = true
       context?.signal?.throwIfAborted()
       await context?.onPreparationComplete?.()
       context?.signal?.throwIfAborted()
@@ -121,10 +125,14 @@ export abstract class Tool {
     try {
       return await pending
     } finally {
+      // Parallel resources share one preparation phase. A successful sibling
+      // or a rejected action acknowledgement cannot establish the others' outcome.
+      this.preparationFailed ||= !assetsReady
       this.preparations.delete(pending)
       if (this.preparations.size === 0) {
         context?.onProgress?.({
-          source: 'report', message: 'Tool asset preparation finished.', phase: ToolRuntimePhase.Execution
+          source: 'report', message: 'Tool asset preparation finished.', phase: ToolRuntimePhase.Execution,
+          preparationComplete: !this.preparationFailed
         })
       }
     }

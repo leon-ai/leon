@@ -8,6 +8,7 @@ import type { ConversationSession } from './sessions'
 import type { ModelSettings, ModelProvider } from './model-catalog'
 
 export interface ConversationTool {
+  preparation?: import('../../../../aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   planStepId?: string | null
   id: string
   name: string
