@@ -501,6 +501,7 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
       id: record.messageId, planSteps: [], toolCalls: []
     }, active, record.sentAt, metrics, Boolean(record.message.trim())),
     finalAnswer: record.message,
+    ...(record.answerParts ? { answerParts: record.answerParts } : {}),
     ...(record.fyi && isFyiEligible(record.message) ? { bonusResponse: record.fyi.text } : {}),
     answerStartedAt: record.agentResponseTrace?.timings?.findLast((timing) =>
       timing.kind === 'inference' && timing.goal === TurnPhase.Answer)?.startedAt ??

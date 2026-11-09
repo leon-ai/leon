@@ -7,7 +7,7 @@ import { useToast } from '@/components/toast'
 import { canPrefetch, prefetchModule } from '@/utils/prefetch'
 import { requestAPI } from './api'
 import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
-import { applyConversationEvent } from './conversation-events'
+import { applyConversationEvent, mergeAnswerParts } from './conversation-events'
 import { toFeedEntries } from './conversation-feed'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
 import { ConnectionError, requestErrors } from './request-errors'
@@ -50,6 +50,7 @@ async function fetchConversationPage(profile: string, sessionId: string, cursor:
     messages: page.messages.map((record) => {
       const live = liveRecords.get(record.messageId)
       return { ...record, historical: record.isAddedToHistory && !live,
+        ...(record.answerParts ? { answerParts: mergeAnswerParts(live?.answerParts, record.answerParts) } : {}),
         ...(live?.draftGeneration ? { draftGeneration: live.draftGeneration } : {}) }
     })
   }

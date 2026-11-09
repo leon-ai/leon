@@ -20,6 +20,8 @@ import { applyConversationEvent } from '../../../apps/web/src/data/conversation-
 import { toFeedEntry } from '../../../apps/web/src/data/conversation-feed'
 import type { ConversationRecord, ConversationEvent } from '../../../apps/web/src/data/conversation'
 import { FyiKind } from '@/core/fyi/fyi-contract'
+import { auroraParts, AURORA_CHOICE_SPEC, AURORA_GENERATED_SPEC } from '../../fixtures/aurora'
+import { PreparationStatus } from '../../../aurora/src/v2/contracts/preparation'
 
 const fixture = vi.hoisted(() => ({
   root: '',

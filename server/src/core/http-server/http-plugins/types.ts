@@ -255,6 +255,7 @@ export interface HTTPPluginConversationSessionMutationResult {
 }
 
 export type HTTPPluginAgentEventType =
+  | 'answer_parts'
   | 'fyi'
   | 'inference_activity'
   | 'text_stream'

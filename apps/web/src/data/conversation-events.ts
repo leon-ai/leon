@@ -106,6 +106,20 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     }
     return messages.map((record, position) => position === index ? { ...record, fyi } : record)
   }
+  if (event.type === 'answer_parts') {
+    const answerParts = event.data['answer_parts'] as ConversationRecord['answerParts']
+    if (!Array.isArray(answerParts)) {
+      return messages
+    }
+    const merged = mergeAnswerParts(previous.answerParts, answerParts)
+    const record = { ...previous, answerParts: !previous.isAddedToHistory && previous.message
+      ? withAnswerText(merged, id, previous.message) : merged,
+      ...(Array.isArray(event.data['artifacts']) ? { artifacts: [...new Map([
+        ...(previous.artifacts ?? []), ...(event.data['artifacts'] as NonNullable<ConversationRecord['artifacts']>)
+      ].map((artifact) => [artifact.id, artifact])).values()] } : {}) }
+
+    return index < 0 ? [...messages, record] : messages.map((item, position) => position === index ? record : item)
+  }
   // Accepted final content is authoritative over delayed draft and retry events.
   if (previous.isAddedToHistory && event.type === 'tool_call') {
     const call = readEventTool(event.data['tool_call'] as Record<string, unknown>)
@@ -161,6 +175,9 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
       record.message = data['reset'] ? '' :
         `${record.draftGeneration === generationId ? record.message : ''}${token}`
       record.draftGeneration = generationId
+      if (record.answerParts?.length) {
+        record.answerParts = withAnswerText(record.answerParts, id, record.message)
+      }
     } else {
       const blocks = [...(trace.reasoning ?? [])]
       const blockIndex = blocks.findIndex((block) => block.id === generationId)
@@ -236,11 +253,17 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
 
     record = {
       ...record, message: String(data['content'] ?? ''), isAddedToHistory: true, sentAt: event.created_at,
-      artifacts: data['artifacts'] as NonNullable<ConversationRecord['artifacts']>
+      artifacts: data['artifacts'] as NonNullable<ConversationRecord['artifacts']>,
+      ...(Array.isArray(data['answer_parts']) ? { answerParts: mergeAnswerParts(record.answerParts,
+        data['answer_parts'] as NonNullable<ConversationRecord['answerParts']>) } : {})
     }
   } else if (event.type === 'error') {
     record.message = String(data['message'] ?? 'The turn could not finish.')
     record.isAddedToHistory = true
+    if (record.answerParts?.length) {
+      record.answerParts = withAnswerText(record.answerParts.map((part) => part.kind === 'ui'
+        ? { ...part, surface: { ...part.surface, status: 'draft' } } : part), id, record.message)
+    }
   } else {
     return messages
   }

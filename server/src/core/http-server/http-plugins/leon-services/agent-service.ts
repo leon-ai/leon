@@ -1,4 +1,5 @@
 import { collectArtifacts } from '@/core/artifacts/artifact-context'
+import { finishAuroraAnswer } from '@/core/aurora/answer-presentation'
 import type { Artifact } from '@/core/artifacts/artifact-types'
 import { performance } from 'node:perf_hooks'
 import { randomUUID } from 'node:crypto'
@@ -305,12 +306,17 @@ export async function runAgent(
         finalTrace = trace
 
         if (typeof output === 'string' && output.trim()) {
+          const answerParts = finishAuroraAnswer(
+            sessionId, messageId, output,
+            data['finalIntent'] === 'answer' || data['finalIntent'] === 'clarification', turnArtifacts
+          )
           await runTurnPhase(TurnPhase.Persistence, () => CONVERSATION_LOGGER.upsert(
             {
               who: 'leon',
               message: output,
               isAddedToHistory: true,
               artifacts: turnArtifacts,
+              ...(answerParts.length ? { answerParts } : {}),
               ...(messageId ? { messageId } : {}),
               agentResponseTrace: {
                 ...((data['agentResponseTrace'] as AgentResponseTrace | undefined) || deserializeAgentTrace(trace)),
@@ -332,7 +338,8 @@ export async function runAgent(
             message_id: messageId || '',
             content: output,
             response_trace: trace,
-            artifacts: turnArtifacts
+            artifacts: turnArtifacts,
+            answer_parts: answerParts
           })
         }
 

@@ -47,7 +47,8 @@ const FYI_VISION_ROTATION_KEY = 'fyi_vision_rotation'
 const UI_MESSAGE_FILTER = `(visible = 1 OR trace_id IS NOT NULL
   OR json_type(summary, '$.agentResponseTrace') = 'object'
   OR json_array_length(summary, '$.artifacts') > 0
-  OR json_type(summary, '$.widget') = 'object')`
+  OR json_type(summary, '$.widget') = 'object'
+  OR json_array_length(summary, '$.answerParts') > 0)`
 
 enum ContentMatchRank {
   Phrase,
@@ -447,6 +448,9 @@ export class ConversationRepository {
 
       if (existing && existing.message !== value.message && !record.fyi) {
         delete value.fyi
+        if (existing.isAddedToHistory && record.answerParts === undefined) {
+          delete value.answerParts
+        }
       }
 
       if (previous && previous['id'] !== value.messageId) {

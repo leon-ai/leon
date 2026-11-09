@@ -12,8 +12,45 @@ import { getSessionSelection } from './web-routes'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { searchConversationSessions } from '@/core/session-manager/session-search'
 import { MAXIMUM_ARCHIVE_PAGE_CHARACTERS } from '@@/bridges/runtime/contracts/conversation-archive'
+import type { MessageLog } from '@/types'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { TOOL_EXECUTION_MANAGER, ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
+import { PreparationStatus } from '@@/aurora/src/v2/contracts/preparation'
 
 const SESSION_ID_PARAM_NAME = 'session_id'
+
+/**
+ * An archived running label is not proof that a retained worker still exists.
+ * Check only displayed preparations in memory, never initialize a model or poll.
+ */
+function projectPreparations(sessionId: string, record: MessageLog): MessageLog {
+  if (!record.agentResponseTrace?.toolCalls.some((call) => call.preparation?.executionId && call.status === 'running')) {
+    return record
+  }
+
+  return { ...record, agentResponseTrace: { ...record.agentResponseTrace,
+    toolCalls: record.agentResponseTrace.toolCalls.map((call) => {
+      if (!call.preparation?.executionId || call.status !== 'running') {
+        return call
+      }
+      let state: ToolExecutionState | undefined
+      try {
+        state = TOOL_EXECUTION_MANAGER.read(getActiveProfileName(), sessionId, call.preparation.executionId).execution.state
+      } catch {
+        // Missing handles include interrupted hosts and expired retained work.
+      }
+      if (state === ToolExecutionState.Running) {
+        return call
+      }
+      const ready = call.preparation.status === PreparationStatus.Ready || state === ToolExecutionState.Completed
+
+      return { ...call, status: state === ToolExecutionState.Completed ? 'success' as const : 'error' as const,
+        preparation: { ...call.preparation, status: ready ? PreparationStatus.Ready
+          : state === ToolExecutionState.Canceled ? PreparationStatus.Cancelled : PreparationStatus.Failed,
+        detail: ready ? 'The required files are ready.' : state === ToolExecutionState.Canceled
+          ? 'The preparation was cancelled.' : 'This preparation is no longer active. You can ask me to try again.' } }
+    }) } }
+}
 
 const sessionParamsSchema = Type.Object({
   [SESSION_ID_PARAM_NAME]: Type.String()
@@ -201,7 +238,7 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
       return reply.send({
         success: true,
         session,
-        messages: snapshot.messages.items,
+        messages: snapshot.messages.items.map((record) => projectPreparations(sessionId, record)),
         next_cursor: snapshot.messages.nextCursor,
         newer_cursor: snapshot.messages.previousCursor ?? null,
         is_running: WEB_SESSION_RUNTIME.isRunning(sessionId),
@@ -246,7 +283,7 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
       const message = CONVERSATION_REPOSITORY.readMessage(sessionId, request.params.message_id)
 
       return message
-        ? reply.send({ success: true, message })
+        ? reply.send({ success: true, message: projectPreparations(sessionId, message) })
         : reply.code(404).send({ success: false, message: 'Message not found.' })
     }
   )
