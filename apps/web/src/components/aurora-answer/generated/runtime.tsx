@@ -21,6 +21,7 @@ import { GENERATED_BRIDGE_VERSION, GeneratedMessage, isGeneratedState } from '..
 import { COMMON_ICONS, ICON_VARIANT_ARTWORK, type IconDefinition } from '../../icon/icon-definitions'
 import { IconPaths } from '../../icon/icon-paths'
 import { resolveIconName, getIconVariant } from '../../icon/icon-name'
+import { observeNativeControls } from './native-controls'
 
 const MAXIMUM_ERROR_CHARACTERS = 512
 let port: MessagePort | undefined
@@ -303,6 +304,7 @@ function initialize(event: MessageEvent): void {
   // and content styling remain free within their own lower-priority layer.
   style.textContent = `@layer generated { ${initial.source.css ?? ''} }`
   document.head.append(style)
+  const releaseControls = observeNativeControls(document.body)
   window.Aurora = api
   window.React = React
   window.auroraReactDOM = ReactDOM
@@ -313,6 +315,7 @@ function initialize(event: MessageEvent): void {
   window.addEventListener('unhandledrejection', (error) => reportError(error.reason))
   window.addEventListener('pagehide', () => {
     disposed = true
+    releaseControls()
     observer.disconnect()
     cancelAnimationFrame(measureFrame)
     root?.unmount()
