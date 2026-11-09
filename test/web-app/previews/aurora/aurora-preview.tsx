@@ -24,6 +24,7 @@ import imageURL from '../../../../aurora/preview/public/pancakes.jpeg?url'
 import documentURL from '../../../fixtures/documents/attention-is-all-you-need.pdf?url'
 
 import './aurora-preview.sass'
+import { ConnectionPreview } from './connection-preview'
 
 type GalleryKind = 'component' | 'widget' | 'generated' | 'answer'
 type DemoOutcome = 'success' | 'failure' | 'pending'
@@ -204,6 +205,9 @@ function Example({ id }: { id: string }) {
   const [receipt, setReceipt] = useState<unknown>()
   const [selected, setSelected] = useState<string[]>([])
   const presentation = AURORA_PRESENTATION_SPEC.elements[id]
+  if (id === 'connection-notion' || id === 'connection-spotify' || id === 'connection-ticktick') {
+    return <ConnectionPreview id={id} />
+  }
   if (presentation?.type === 'DataTable') {
     return <DataTableWidget {...presentation.props} />
   }

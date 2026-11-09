@@ -2,6 +2,65 @@ import { test, expect } from '@playwright/test'
 import { AURORA_QUERY_EXAMPLES } from '../../fixtures/aurora'
 
 for (const theme of ['light', 'dark'] as const) {
+  test(`previews Notion, Spotify and TickTick connection states without external requests (${theme})`, async ({ page }, testInfo) => {
+    const external: string[] = []
+    const origin = new URL(testInfo.project.use.baseURL!).origin
+    page.on('request', (request) => {
+      if (!request.url().startsWith('data:') && new URL(request.url()).origin !== origin) {
+        external.push(request.url())
+      }
+    })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/aurora.html')
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    await page.getByRole('button', { name: 'Widgets', exact: true }).click()
+    for (const name of ['Notion', 'TickTick']) {
+      const card = page.getByRole('region', { name: `${name} connection`, exact: true })
+      await expect(card.getByRole('button', { name: 'OAuth', exact: true })).toHaveCount(0)
+      await expect(card.getByRole('button', { name: `Connect ${name}`, exact: true })).toBeVisible()
+      await expect(card.getByText('A one-time application setup', { exact: false })).toBeVisible()
+      await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
+      await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
+      await expect(card.getByLabel('client secret', { exact: true })).toHaveAttribute('type', 'password')
+      await card.getByRole('combobox', { name: 'Preview state' }).selectOption('cancelled')
+      await expect(card.getByRole('status')).toContainText('Authorization was cancelled')
+      await expect(card.getByLabel('access token', { exact: true })).toHaveCount(0)
+      await card.getByRole('combobox', { name: 'Preview configuration' }).selectOption('fallback')
+      await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
+      const token = card.getByLabel('access token', { exact: true })
+      await expect(token).toHaveAttribute('type', 'password')
+      await token.fill('preview-only-token')
+      await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
+      await expect(card.getByRole('status')).toContainText('Connected — preview only')
+    }
+    const spotify = page.getByRole('region', { name: 'Spotify connection', exact: true })
+    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
+    await spotify.getByText('Show setup instructions', { exact: true }).click()
+    await expect(spotify.getByText('Redirect URI', { exact: true })).toBeVisible()
+    await expect(spotify.locator('input[type="password"]')).toHaveCount(0)
+    await spotify.getByLabel('Client ID', { exact: true }).fill('sample-client')
+    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
+    await expect(spotify.getByRole('status')).toContainText('Working on the connection')
+    await spotify.getByRole('button', { name: 'Finish authorization', exact: true }).click()
+    await expect(spotify.getByRole('status')).toContainText('Connected — preview only')
+    await spotify.getByRole('combobox', { name: 'Preview configuration' }).selectOption('ready')
+    await expect(spotify.locator('input')).toHaveCount(0)
+    await expect(spotify.getByRole('button', { name: 'Set up manually', exact: true })).toHaveCount(0)
+    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
+    await expect(spotify.getByRole('status')).toContainText('Working on the connection')
+    await spotify.getByRole('button', { name: 'Cancel authorization', exact: true }).click()
+    await expect(spotify.getByRole('status')).toContainText('Authorization was cancelled')
+    await spotify.getByRole('combobox', { name: 'Preview state' }).selectOption('failed')
+    await expect(spotify.getByRole('alert')).toContainText('I couldn’t complete this step')
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`connections-${theme}.png`), fullPage: true })
+    await spotify.screenshot({ path: testInfo.outputPath(`spotify-${theme}.png`) })
+    expect(external).toEqual([])
+    expect(await page.evaluate(() => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]))).not.toContain('preview-only-token')
+  })
 }
 
 test('previews actual generated charts, calculations and SVG explanations with local-only submissions', async ({ page }, testInfo) => {
