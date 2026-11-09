@@ -178,7 +178,7 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
         } else if (data.type === GeneratedMessage.Resize && rendered && Number.isFinite(data.height)) {
           setHeight(Math.min(MAXIMUM_GENERATED_HEIGHT, Math.max(MINIMUM_GENERATED_HEIGHT, data.height)))
         } else if (data.type === GeneratedMessage.State && isGeneratedState(data.value)) {
-          // State remains local to the current frame.
+          callbacks.current.onStateChange?.(data.value)
         } else if (data.type === GeneratedMessage.Submit && !callbacks.current.readOnly && !callbacks.current.submitted && !callbacks.current.pending &&
           isAuroraSubmission(callbacks.current.node, data.values)) {
           // Host-confirmed submissions are not enabled for this surface.

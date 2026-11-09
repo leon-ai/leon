@@ -137,9 +137,9 @@ function GeneratedNodeView({ nodeId }: { nodeId: string }) {
   return <VisualLayout identity={`${owner?.sessionId}:${owner?.messageId}:${surface.id}:${surface.revision}:${nodeId}`}
     estimatedHeight={`calc(${node.props.height ?? 360}px + var(--button-md-icon-only-size) + var(--space-sm) * 2 + var(--line-height-sm))`}
     ready={ready}>
-    <Suspense fallback={null}><GeneratedFrame node={node}  initialValues={receipt?.values} onReady={setReady}
+    <Suspense fallback={null}><GeneratedFrame node={node} initialState={state} initialValues={receipt?.values} onReady={setReady}
     readOnly={!owner || surface.status !== 'ready' || owner.latestOwnerMessageId !== surface.ownerMessageId}
-    submitted={Boolean(receipt)} 
+    submitted={Boolean(receipt)} onStateChange={(value) => setDraft(JSON.stringify(value))}
      /></Suspense>
   </VisualLayout>
 }
