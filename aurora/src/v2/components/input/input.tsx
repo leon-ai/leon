@@ -1,0 +1,112 @@
+import type {
+  InputHTMLAttributes,
+  ReactNode,
+  Ref,
+  TextareaHTMLAttributes
+} from 'react'
+import { useCallback, useId, useRef } from 'react'
+import { clsx } from 'clsx'
+
+import { InputEffects, type TextField } from './input-effects'
+
+import './input.sass'
+
+type InputSize = 'medium' | 'large'
+type InputVariant = 'default' | 'embedded'
+
+interface InputSharedProps {
+  ariaLabel: string
+  className?: string
+  fieldRef?: Ref<HTMLInputElement | HTMLTextAreaElement>
+  icon?: ReactNode
+  size?: InputSize
+  variant?: InputVariant
+}
+
+type NativeInputProps = InputSharedProps &
+  Omit<InputHTMLAttributes<HTMLInputElement>, 'aria-label' | 'className' | 'size'> & {
+    multiline?: false
+  }
+
+type NativeTextareaProps = InputSharedProps &
+  Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'aria-label' | 'className'> & {
+    multiline: true
+  }
+
+export type InputProps = NativeInputProps | NativeTextareaProps
+
+/**
+ * Shares native fields, selection and typing motion across application and widget forms.
+ */
+export function Input({
+  ariaLabel,
+  className,
+  fieldRef,
+  icon,
+  multiline = false,
+  size = 'medium',
+  variant = 'default',
+  ...fieldProps
+}: InputProps) {
+  const generatedId = useId()
+  const nativeFieldRef = useRef<TextField | null>(null)
+  const setFieldRef = useCallback((field: TextField | null) => {
+    nativeFieldRef.current = field
+
+    if (typeof fieldRef === 'function') {
+      const cleanup = fieldRef(field)
+
+      return () => {
+        nativeFieldRef.current = null
+
+        if (typeof cleanup === 'function') {
+          cleanup()
+        } else {
+          fieldRef(null)
+        }
+      }
+    }
+
+    if (fieldRef !== undefined && fieldRef !== null) {
+      fieldRef.current = field
+    }
+
+    return undefined
+  }, [fieldRef])
+  const inputId = fieldProps.id ?? generatedId
+  const inputClassName = clsx(
+    'input',
+    `input-${size}`,
+    `input-${variant}`,
+    className,
+    {
+    'input-with-icon': icon !== undefined
+    }
+  )
+
+  return (
+    <span className={inputClassName}>
+      {icon !== undefined && (
+        <span className="input-icon" aria-hidden="true">{icon}</span>
+      )}
+      {multiline ? (
+        <textarea
+          {...(fieldProps as TextareaHTMLAttributes<HTMLTextAreaElement>)}
+          id={inputId}
+          className="input-field"
+          aria-label={ariaLabel}
+          ref={setFieldRef}
+        />
+      ) : (
+        <input
+          {...(fieldProps as InputHTMLAttributes<HTMLInputElement>)}
+          id={inputId}
+          className="input-field"
+          aria-label={ariaLabel}
+          ref={setFieldRef}
+        />
+      )}
+      <InputEffects key={multiline ? 'textarea' : 'input'} fieldRef={nativeFieldRef} />
+    </span>
+  )
+}

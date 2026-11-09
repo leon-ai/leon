@@ -1,112 +1,14 @@
+import { Input as AuroraInput, type InputProps as AuroraInputProps } from '../../../../../aurora/src/v2/components/input/input'
 import { Icon } from '@/components/icon'
-import type {
-  InputHTMLAttributes,
-  Ref,
-  TextareaHTMLAttributes
-} from 'react'
-import { useCallback, useId, useRef } from 'react'
-import { clsx } from 'clsx'
 
-import { InputEffects, type TextField } from './input-effects'
-
-import './input.sass'
-
-type InputIconType = 'line' | 'fill'
-type InputSize = 'medium' | 'large'
-type InputVariant = 'default' | 'embedded'
-
-interface InputSharedProps {
-  ariaLabel: string
-  className?: string
-  fieldRef?: Ref<HTMLInputElement | HTMLTextAreaElement>
+type InputProps = AuroraInputProps & {
   iconName?: string
-  iconType?: InputIconType
-  size?: InputSize
-  variant?: InputVariant
+  iconType?: 'line' | 'fill'
 }
 
-type NativeInputProps = InputSharedProps &
-  Omit<InputHTMLAttributes<HTMLInputElement>, 'aria-label' | 'className' | 'size'> & {
-    multiline?: false
-  }
-
-type NativeTextareaProps = InputSharedProps &
-  Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'aria-label' | 'className'> & {
-    multiline: true
-  }
-
-type InputProps = NativeInputProps | NativeTextareaProps
-
-export function Input({
-  ariaLabel,
-  className,
-  fieldRef,
-  iconName,
-  iconType = 'line',
-  multiline = false,
-  size = 'medium',
-  variant = 'default',
-  ...fieldProps
-}: InputProps) {
-  const generatedId = useId()
-  const nativeFieldRef = useRef<TextField | null>(null)
-  const setFieldRef = useCallback((field: TextField | null) => {
-    nativeFieldRef.current = field
-
-    if (typeof fieldRef === 'function') {
-      const cleanup = fieldRef(field)
-
-      return () => {
-        nativeFieldRef.current = null
-
-        if (typeof cleanup === 'function') {
-          cleanup()
-        } else {
-          fieldRef(null)
-        }
-      }
-    }
-
-    if (fieldRef !== undefined && fieldRef !== null) {
-      fieldRef.current = field
-    }
-
-    return undefined
-  }, [fieldRef])
-  const inputId = fieldProps.id ?? generatedId
-  const inputClassName = clsx(
-    'input',
-    `input-${size}`,
-    `input-${variant}`,
-    className,
-    {
-    'input-with-icon': iconName !== undefined
-    }
-  )
-
-  return (
-    <span className={inputClassName}>
-      {iconName !== undefined && (
-        <Icon name={`${iconName}-${iconType}`} className="input-icon" />
-      )}
-      {multiline ? (
-        <textarea
-          {...(fieldProps as TextareaHTMLAttributes<HTMLTextAreaElement>)}
-          id={inputId}
-          className="input-field"
-          aria-label={ariaLabel}
-          ref={setFieldRef}
-        />
-      ) : (
-        <input
-          {...(fieldProps as InputHTMLAttributes<HTMLInputElement>)}
-          id={inputId}
-          className="input-field"
-          aria-label={ariaLabel}
-          ref={setFieldRef}
-        />
-      )}
-      <InputEffects key={multiline ? 'textarea' : 'input'} fieldRef={nativeFieldRef} />
-    </span>
-  )
+/**
+ * Supplies the web app's local icon registry to Aurora's shared native field.
+ */
+export function Input({ iconName, iconType = 'line', ...props }: InputProps) {
+  return <AuroraInput {...props} icon={iconName === undefined ? props.icon : <Icon name={`${iconName}-${iconType}`} />} />
 }

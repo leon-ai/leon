@@ -1,187 +1,44 @@
-import type { AriaAttributes, CSSProperties, MouseEvent, ReactNode } from 'react'
-import { Icon } from '@/components/icon'
+import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { clsx } from 'clsx'
 
-import { Tooltip } from '@/components/tooltip'
-import type { TooltipPosition } from '@/components/tooltip'
+import { Button as AuroraButton, type ButtonProps as AuroraButtonProps } from '../../../../../aurora/src/v2/components/button/button'
+import { Icon } from '@/components/icon'
+import { Tooltip, type TooltipPosition } from '@/components/tooltip'
 
-import './button.sass'
+export type { ButtonVariant } from '../../../../../aurora/src/v2/components/button/button'
 
-type AppRouteTo = '/'
-type ButtonIconType = 'line' | 'fill' | null
-type ButtonIconPosition = 'left' | 'right'
-type ButtonSize = 'sm' | 'md'
-type ButtonTone = 'default' | 'muted'
-export type ButtonVariant = 'ghost' | 'secondary' | 'primary' | 'danger'
-
-interface ButtonBaseProps {
-  children?: ReactNode
-  className?: string
-  icon?: ReactNode
+type ButtonBaseProps = Omit<AuroraButtonProps, 'renderLink' | 'href' | 'target' | 'rel' | 'type'> & {
   iconName?: string
-  iconType?: ButtonIconType
-  iconPosition?: ButtonIconPosition
+  iconType?: 'line' | 'fill' | null
   tooltipMessage?: string
   tooltipPosition?: TooltipPosition
-  ariaLabel?: string
-  ariaPressed?: boolean
-  ariaBusy?: boolean
-  ariaExpanded?: boolean
-  ariaControls?: string | undefined
-  ariaHasPopup?: AriaAttributes['aria-haspopup']
-  tone?: ButtonTone
-  variant?: ButtonVariant
-  size?: ButtonSize
-  cursorStyle?: CSSProperties['cursor']
-  disabled?: boolean
-  loading?: boolean
-  onClick?: () => void
 }
 
 type ButtonProps = ButtonBaseProps & (
-  | {
-    to?: undefined
-    href?: undefined
-    type?: 'button' | 'submit'
-    target?: never
-    rel?: never
-  }
-  | {
-    to: AppRouteTo
-    href?: never
-    type?: never
-    target?: never
-    rel?: never
-  }
-  | {
-    to?: never
-    href: string
-    type?: never
-    target?: string
-    rel?: string
-  }
+  | { to?: undefined, href?: undefined, type?: 'button' | 'submit', target?: never, rel?: never }
+  | { to: '/', href?: never, type?: never, target?: never, rel?: never }
+  | { to?: never, href: string, type?: never, target?: string, rel?: string }
 )
 
+/**
+ * Keeps application routing, tooltips and icon resolution outside the shared control.
+ */
 export function Button({
-  children,
-  className,
-  type = 'button',
-  to,
-  href,
-  target,
-  rel,
-  icon,
-  iconName,
-  iconType = 'line',
-  iconPosition = 'left',
-  tooltipMessage,
-  tooltipPosition = 'bottom',
-  ariaLabel,
-  ariaPressed,
-  ariaBusy,
-  ariaExpanded,
-  ariaControls,
-  ariaHasPopup,
-  tone = 'default',
-  variant = 'ghost',
-  size = 'md',
-  cursorStyle = 'pointer',
-  disabled = false,
-  loading = false,
-  onClick
+  to, icon, iconName, iconType = 'line', tooltipMessage,
+  tooltipPosition = 'bottom', ariaLabel, ...props
 }: ButtonProps) {
-  const isDisabled = disabled || loading
-  const isIconOnly = children === undefined
-  const accessibleLabel = ariaLabel ?? tooltipMessage
-  const buttonClassName = clsx('button', `button-${variant}`, `button-${size}`, `button-tone-${tone}`, className, {
-    'button-icon-only': isIconOnly
-  })
-  const iconContent = icon !== undefined ? (
-    <span className="button-icon" aria-hidden="true">{icon}</span>
-  ) : iconName ? (
-    <Icon className="button-icon" name={iconType === null ? iconName : `${iconName}-${iconType}`} selected={ariaPressed} morph />
-  ) : null
-  const content = (
-    <>
-      {iconPosition === 'left' && iconContent}
-      {children && <span className="button-label">{children}</span>}
-      {iconPosition === 'right' && iconContent}
-    </>
-  )
-  const button = to !== undefined ? (
-    <Link
-      to={to}
-      className={buttonClassName}
-      aria-label={isIconOnly ? accessibleLabel : ariaLabel}
-      aria-pressed={ariaPressed}
-      aria-busy={ariaBusy ?? loading}
-      aria-expanded={ariaExpanded}
-      aria-controls={ariaControls}
-      aria-haspopup={ariaHasPopup}
-      aria-disabled={isDisabled}
-      style={{ cursor: loading ? 'wait' : cursorStyle }}
-      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-        if (isDisabled) {
-          event.preventDefault()
-          return
-        }
+  const iconContent: ReactNode = icon !== undefined ? icon : (iconName ? (
+    <Icon name={iconType === null ? iconName : `${iconName}-${iconType}`} selected={props.ariaPressed} morph />
+  ) : undefined)
+  const button = <AuroraButton
+    {...props}
+    icon={iconContent}
+    {...(ariaLabel !== undefined || props.children === undefined && tooltipMessage !== undefined
+      ? { ariaLabel: ariaLabel ?? tooltipMessage! } : {})}
+    {...(to === undefined ? {} : { renderLink: (linkProps) => <Link {...linkProps} to={to} /> })}
+  />
 
-        onClick?.()
-      }}
-    >
-      {content}
-    </Link>
-  ) : href === undefined ? (
-    <button
-      type={type}
-      className={buttonClassName}
-      aria-label={isIconOnly ? accessibleLabel : ariaLabel}
-      aria-pressed={ariaPressed}
-      aria-busy={ariaBusy ?? loading}
-      aria-expanded={ariaExpanded}
-      aria-controls={ariaControls}
-      aria-haspopup={ariaHasPopup}
-      disabled={isDisabled}
-      style={{ cursor: loading ? 'wait' : cursorStyle }}
-      onClick={onClick}
-    >
-      {content}
-    </button>
-  ) : (
-    <a
-      href={href}
-      className={buttonClassName}
-      aria-label={isIconOnly ? accessibleLabel : ariaLabel}
-      aria-pressed={ariaPressed}
-      aria-busy={ariaBusy ?? loading}
-      aria-expanded={ariaExpanded}
-      aria-controls={ariaControls}
-      aria-haspopup={ariaHasPopup}
-      aria-disabled={isDisabled}
-      target={target}
-      rel={rel}
-      style={{ cursor: loading ? 'wait' : cursorStyle }}
-      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-        if (isDisabled) {
-          event.preventDefault()
-          return
-        }
-
-        onClick?.()
-      }}
-    >
-      {content}
-    </a>
-  )
-
-  if (tooltipMessage === undefined) {
-    return button
-  }
-
-  return (
-    <Tooltip message={tooltipMessage} position={tooltipPosition}>
-      {button}
-    </Tooltip>
+  return tooltipMessage === undefined ? button : (
+    <Tooltip message={tooltipMessage} position={tooltipPosition}>{button}</Tooltip>
   )
 }

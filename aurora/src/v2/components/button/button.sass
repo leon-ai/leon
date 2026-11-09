@@ -27,6 +27,7 @@
   color: var(--color-text-secondary)
   font-weight: var(--font-weight-semi-bold)
   text-decoration: none
+  cursor: pointer
   transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), box-shadow var(--transition-duration-main) var(--transition-timing-main)
 
   &:active:not(:disabled):not([aria-disabled='true'])
@@ -53,6 +54,24 @@
     overflow: hidden
     text-overflow: ellipsis
     white-space: nowrap
+
+  &.button-icon-only
+    border-radius: var(--border-radius-pill)
+
+  &.button-sm
+    min-height: 28px
+    padding: 0 8px
+    font-size: var(--font-size-sm)
+    line-height: var(--line-height-sm)
+
+    &.button-icon-only
+      flex: 0 0 auto
+      width: var(--button-md-icon-only-size)
+      height: var(--button-md-icon-only-size)
+      min-height: 0
+      padding: 8px
+      font-size: var(--font-size-md)
+      line-height: var(--line-height-md)
 
   &.button-md
     min-height: 34px
