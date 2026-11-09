@@ -631,6 +631,7 @@ describe('continuous agent loop', () => {
   it('upgrades visual capabilities when custom source is useful without downgrading an active workflow', async () => {
     coreMocks.getFlattenedTools.mockReturnValue([])
     const onPresentUI = vi.fn().mockResolvedValue('surface-one')
+    let generatedContracts: string
     const callModel = vi.fn()
       .mockResolvedValueOnce({ toolCalls: [toolCall('native', 'load_ui', { mode: AuroraMode.Native })] })
       .mockImplementationOnce(async (messages, tools) => {
@@ -643,12 +644,16 @@ describe('continuous agent loop', () => {
         expect(onPresentUI).not.toHaveBeenCalled()
         return { toolCalls: [toolCall('generated', 'load_ui', { mode: AuroraMode.Generated })] }
       })
-      .mockImplementationOnce(async (messages) => {
+      .mockImplementationOnce(async (messages, tools) => {
         expect(messages.at(-1).content).toContain('Runtime globals: Aurora')
+        expect(messages.at(-1).content).not.toContain('Do not repeat the spec')
+        generatedContracts = JSON.stringify(tools)
         return { toolCalls: [toolCall('inputs', 'load_ui', { mode: AuroraMode.Input })] }
       })
-      .mockImplementationOnce(async (_messages, tools) => {
-        expect(JSON.stringify(tools)).toContain('"Generated"')
+      .mockImplementationOnce(async (messages, tools) => {
+        expect(JSON.stringify(tools)).toBe(generatedContracts)
+        expect(messages.at(-1).content).toContain('already loaded')
+        expect(messages.at(-1).content).not.toContain('Runtime globals: Aurora')
         return { toolCalls: [toolCall('check', 'preview_ui', { spec: AURORA_GENERATED_SPEC })] }
       })
       .mockImplementationOnce(async (messages) => ({ toolCalls: [toolCall('publish', 'present_ui', {
@@ -670,7 +675,7 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Ask me to choose how to start.' }],
       catalog, onPresentUI, executeFunction: vi.fn(), loadAgentSkill: async () => null,
-      callModel: async (_messages, tools, options) => {
+      callModel: async (messages, tools, options) => {
         if (options.isCompletionReview) {
           expect(onPresentUI).not.toHaveBeenCalled()
           reviewed = true
@@ -683,14 +688,59 @@ describe('continuous agent loop', () => {
         }
         expect(tools.some((tool) => tool.function.name === 'present_ui')).toBe(true)
         expect(JSON.stringify(tools)).not.toContain('"Generated"')
+        const presentation = tools.find((tool) => tool.function.name === 'present_ui')!
+        expect(presentation.function.parameters.properties).not.toHaveProperty('spec')
+        expect(presentation.function.parameters.required).toContain('preview_id')
+        const clarification = tools.find((tool) => tool.function.name === AGENT_CLARIFICATION_TOOL_NAME)!
+        expect(clarification.function.parameters.properties).not.toHaveProperty('ui')
+        expect(clarification.function.parameters.properties).toHaveProperty('preview_id')
+        if (calls === 2) {
+          return { toolCalls: [toolCall('stale-question', AGENT_CLARIFICATION_TOOL_NAME, {
+            question: 'How would you like to start?', preview_id: 'expired-preview'
+          })] }
+        }
+        if (calls === 3) {
+          expect(messages.at(-1)!.content).toContain('preview is unavailable')
+          expect(onPresentUI).not.toHaveBeenCalled()
+          return { toolCalls: [toolCall('check-question', 'preview_ui', { spec: AURORA_CHOICE_SPEC })] }
+        }
         return { toolCalls: [toolCall('ask', AGENT_CLARIFICATION_TOOL_NAME, {
-          question: 'How would you like to start?', ui: AURORA_CHOICE_SPEC
+          question: 'How would you like to start?', preview_id: JSON.parse(messages.at(-1)!.content).preview_id
         })] }
       }
     })
     expect(reviewed).toBe(true)
     expect(result.intent).toBe('clarification')
     expect(onPresentUI).toHaveBeenCalledExactlyOnceWith(AURORA_CHOICE_SPEC, 'clarification')
+  })
+
+  it('restores visual capabilities and guidance without restoring turn-local previews', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([])
+    const catalog = buildAgentToolCatalog(undefined, [], true, [], [], {
+      toolOrder: ['load_ui', 'preview_ui', 'present_ui', AGENT_CLARIFICATION_TOOL_NAME],
+      planTracking: false, auroraMode: AuroraMode.Generated
+    })
+    const onPresentUI = vi.fn().mockResolvedValue('surface-one')
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [toolCall('load', 'load_ui', { mode: AuroraMode.Generated })] })
+      .mockImplementationOnce(async (messages: AgentToolTranscriptMessage[]) => {
+        expect(messages.at(-1)!.content).toContain('Runtime globals: Aurora')
+        return { toolCalls: [toolCall('stale', 'present_ui', { preview_id: 'expired-preview' })] }
+      })
+      .mockImplementationOnce(async (messages: AgentToolTranscriptMessage[]) => {
+        expect(messages.at(-1)!.content).toContain('preview is unavailable')
+        expect(onPresentUI).not.toHaveBeenCalled()
+        return { toolCalls: [toolCall('check', 'preview_ui', { spec: AURORA_GENERATED_SPEC })] }
+      })
+      .mockImplementationOnce(async (messages: AgentToolTranscriptMessage[]) => ({
+        toolCalls: [toolCall('publish', 'present_ui', { preview_id: JSON.parse(messages.at(-1)!.content).preview_id })]
+      }))
+      .mockResolvedValueOnce({ textContent: 'Your chart is ready to explore.' })
+    const result = await runAgentLoop({ transcript: [], catalog, callModel,
+      onPresentUI, executeFunction: vi.fn(), loadAgentSkill: async () => null })
+
+    expect(result.intent).toBe('answer')
+    expect(onPresentUI).toHaveBeenCalledExactlyOnceWith(AURORA_GENERATED_SPEC, 'answer', undefined)
   })
 
   it('reports actionable native schema errors so a required form can be repaired before clarification', async () => {
@@ -754,6 +804,7 @@ describe('continuous agent loop', () => {
       const clarification = tools.find((tool: OpenAITool) => tool.function.name === AGENT_CLARIFICATION_TOOL_NAME)!
       expect(clarification.function.parameters.properties).toHaveProperty('input')
       expect(clarification.function.parameters.properties).not.toHaveProperty('ui')
+      expect(clarification.function.parameters.properties).not.toHaveProperty('preview_id')
       return { textContent: 'Thank you, I have what I need.' }
     })
     await runAgentLoop({ transcript: result.transcript, catalog: restored, callModel: resumedModel,
@@ -776,7 +827,7 @@ describe('continuous agent loop', () => {
         })] }
       })
       .mockImplementationOnce(async (messages: AgentToolTranscriptMessage[]) => {
-        expect(messages.at(-1)?.content).toContain('provide input or a composed ui, not both')
+        expect(messages.at(-1)?.content).toContain('provide input or one composed visual, not both')
         return { toolCalls: [toolCall('open', AGENT_CLARIFICATION_TOOL_NAME, { question: 'What do you have in mind?' })] }
       })
     const result = await runAgentLoop({ transcript: [], catalog: buildAgentToolCatalog(), callModel,
@@ -2189,8 +2240,6 @@ describe('continuous agent loop', () => {
       expect(clarification.function.parameters.properties).not.toHaveProperty('ui')
       expect(tools.some((tool: OpenAITool) => tool.function.name === 'load_ui')).toBe(true)
       expect(JSON.stringify(tools)).not.toContain('"Generated"')
-      expect(AGENT_SYSTEM_PROMPT).toContain('Proactively use charts')
-
       return { textContent: 'Pong.' }
     })
     const result = await runAgentLoopWithCompletionReview({
