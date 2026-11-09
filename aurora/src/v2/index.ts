@@ -2,5 +2,6 @@ export { Button, type ButtonProps, type ButtonVariant } from './components/butto
 export { Input, type InputProps } from './components/input/input'
 export { Loader } from './components/loader/loader'
 export { Surface, type SurfaceProps } from './components/surface'
+export { Selection, type SelectionProps } from './components/selection'
 export { ScrollContainer } from './components/scroll-container'
 export { Progress, type ProgressProps } from './components/progress'
