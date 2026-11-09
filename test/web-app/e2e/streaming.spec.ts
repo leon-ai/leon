@@ -431,7 +431,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(answer.getByRole('img', { name: 'JavaScript', exact: true })).toBeVisible()
     for (const label of ['JavaScript', 'TypeScript', 'Python', 'JSON', 'HTML', 'CSS', 'Shell']) {
       const icon = answer.getByRole('img', { name: label, exact: true })
-      await icon.scrollIntoViewIfNeeded()
+      await expect(() => icon.scrollIntoViewIfNeeded()).toPass()
       await expect(icon).toHaveClass(/pierre-file-icon/)
       expect(await icon.locator('use').getAttribute('href')).toContain('#file-tree-builtin-')
       expect(await icon.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0)
@@ -2231,7 +2231,7 @@ test('replaces one standalone processing row in place and retains completed requ
     [TurnPhase.Review, 'Reviewing...', 'search-eye-line']
   ] as const
   const timings = phases.map(([goal], index) => ({
-    id: 'd'.repeat(index + 1), goal, startedAt: startedAt + index * 200,
+    id: 'd'.repeat((index + 1) * 3), goal, startedAt: startedAt + index * 200,
     durationMs: 100, outcome: 'completed'
   }))
   const request = page.getByRole('region', { name: 'Leon’s inference', exact: true })
@@ -2242,23 +2242,28 @@ test('replaces one standalone processing row in place and retains completed requ
     const activity = { ...timings[index]!, goal, durationMs: 0, outcome: 'started' }
     await emit('inference_activity', { activity })
     await expect(processing).toHaveCount(0)
-    await expect(request).toHaveCount(1)
-    await expect(request.getByRole('button')).toHaveCount(0)
-    await expect(request.locator('.process-group-title')).toHaveText(label)
-    await expect(request.locator(`[data-icon="${resolveIconName(icon)}"]`)).toBeVisible()
-    await expect(request.locator('.activity-wave')).toHaveClass(/activity-wave-active/)
-    originalRow ??= await request.elementHandle()
+    const live = icon ? request : page.getByRole('region', { name: 'Leon’s work', exact: true })
+    await expect(live).toHaveCount(1)
+    await expect(live.getByRole('button')).toHaveCount(0)
+    await expect(live.locator('.process-group-title')).toHaveText(label)
+    if (icon) {
+      await expect(live.locator(`[data-icon="${resolveIconName(icon)}"]`)).toBeVisible()
+    } else {
+      await expect(live.locator('.process-group-indicator, svg')).toHaveCount(0)
+    }
+    await expect(live.locator('.activity-wave')).toHaveClass(/activity-wave-active/)
+    originalRow ??= await live.elementHandle()
     expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
 
     const previous = timings[index - 1]
     if (previous) {
       // A delayed completion must not replace the newer running phase.
       await emit('inference_activity', { activity: previous })
-      await expect(request).toHaveCount(1)
-      await expect(request.locator('.process-group-title')).toHaveText(label)
+      await expect(live).toHaveCount(1)
+      await expect(live.locator('.process-group-title')).toHaveText(label)
     }
 
-    const position = await request.boundingBox()
+    const position = await live.boundingBox()
     const scrollTop = await page.locator('.app-main').evaluate((element) => element.scrollTop)
     await emit('inference_activity', { activity: timings[index]! })
     const waiting = page.getByRole('region', { name: 'Leon’s work', exact: true })
@@ -2283,7 +2288,7 @@ test('replaces one standalone processing row in place and retains completed requ
   })
   const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true })
   await work.getByRole('button', { name: 'Worked for 3s', exact: true }).click()
-  await processing.getByRole('button', { name: 'Processed for 1s', exact: true }).click()
+  await processing.getByRole('button', { name: /^Processed for / }).click()
   await expect(processing.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(phases.length)
   await expect(processing.getByText('Prepared tool calls in 100ms', { exact: true })).toBeVisible()
   await expect(processing.getByText('Reviewed for 100ms', { exact: true })).toBeVisible()

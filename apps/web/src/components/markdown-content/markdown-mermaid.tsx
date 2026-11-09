@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useId, useMemo, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { detectType, load, render } from 'pele/lazy'
 
@@ -36,12 +36,20 @@ let cacheCharacters = 0
 /**
  * Loads only completed diagrams' parsers, retaining bounded, sanitized SVGs.
  */
-export default function MarkdownMermaid({ text, incomplete, active }: { text: string, incomplete: boolean, active: boolean }) {
+export default function MarkdownMermaid({ text, incomplete, active, onReady }: {
+  text: string
+  incomplete: boolean
+  active: boolean
+  onReady?: (ready: boolean) => void
+}) {
   const theme = useTheme()
   const id = useId().replaceAll(':', '')
   const [result, setResult] = useState({ key: '', svg: '', failed: false })
   const key = `${id}:${theme}:${text}`
   const oversized = text.length > MAXIMUM_DIAGRAM_CHARACTERS
+  useLayoutEffect(() => {
+    onReady?.(oversized || !incomplete && result.key === key)
+  }, [onReady, oversized, incomplete, result.key, key])
   useEffect(() => {
     if (!active || incomplete || oversized) {
       return

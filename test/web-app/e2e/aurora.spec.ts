@@ -37,6 +37,92 @@ test('replays active data widgets and retired results without sending owner comm
   expect(commands).toEqual([])
 })
 
+test('reserves generated geometry across cold preparation and session remounts', async ({ page, ui }) => {
+  const spec = structuredClone(AURORA_CALCULATOR_SPEC)
+  const node = spec.elements['savings']!
+  if (node.type !== 'Generated') {
+    throw new Error('The fixture requires a generated surface.')
+  }
+  node.props.height = 520
+  node.props.html = '<div id="scene">Preparing a little space.</div>'
+  node.props.css = '#scene { min-height:520px }'
+  node.props.javascript = `await new Promise(resolve => window.addEventListener('fixture:finish', resolve, {once:true}));
+document.getElementById('scene').innerHTML = '<h3>A little room to create.</h3><p>The first render is ready.</p>';`
+  const history = ui.history.get(SESSION_ID)!
+  const answer = history.at(-1)!
+  answer.answerParts = [...auroraParts(history.at(-2)!.messageId, spec),
+    { kind: 'text', id: 'reading-anchor', text: 'Keep this line in place.' }]
+  const blocked = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  await page.route('**/generated-frame-*.js', async (route) => {
+    blocked.resolve()
+    await release.promise
+    await route.continue()
+  })
+  await page.goto(SESSION_URL)
+  await blocked.promise
+  const response = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  const layout = response.locator('.visual-layout').last()
+  await expect(layout).toHaveAttribute('aria-busy', 'true')
+  const initial = (await layout.boundingBox())!.height
+  expect(initial).toBeGreaterThan(520)
+  release.resolve()
+  const frame = page.frameLocator('iframe[title="A small saving habit"]')
+  await expect(frame.locator('#scene')).toHaveText('Preparing a little space.')
+  await expect(layout).toHaveAttribute('aria-busy', 'true')
+  expect(Math.abs((await layout.boundingBox())!.height - initial)).toBeLessThan(2)
+  await frame.locator('body').evaluate(() => window.dispatchEvent(new Event('fixture:finish')))
+  await expect(layout).toHaveAttribute('aria-busy', 'false')
+  await expect(frame.getByRole('heading', { name: 'A little room to create.' })).toBeVisible()
+  const settled = (await layout.boundingBox())!.height
+  await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+  await expect(page.locator('iframe')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+  await expect(frame.locator('#scene')).toHaveText('Preparing a little space.')
+  await expect(layout).toHaveAttribute('aria-busy', 'true')
+  expect(Math.abs((await layout.boundingBox())!.height - settled)).toBeLessThan(2)
+  const anchor = response.getByText('Keep this line in place.', { exact: true })
+  await expect(anchor).toBeVisible()
+  const before = (await anchor.boundingBox())!.y
+  await frame.locator('body').evaluate(() => window.dispatchEvent(new Event('fixture:finish')))
+  await expect(layout).toHaveAttribute('aria-busy', 'false')
+  expect(Math.abs((await anchor.boundingBox())!.y - before)).toBeLessThan(2)
+})
+
+test('keeps the reading anchor when an overscanned visual finishes above the viewport', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  const spec = structuredClone(AURORA_CALCULATOR_SPEC)
+  const node = spec.elements['savings']!
+  if (node.type !== 'Generated') {
+    throw new Error('The fixture requires a generated surface.')
+  }
+  node.props.height = 180
+  node.props.html = '<div id="scene">Preparing a little space.</div>'
+  node.props.css = '#scene { min-height:180px }'
+  node.props.javascript = `await new Promise(resolve => window.addEventListener('fixture:finish', resolve, {once:true}));
+document.getElementById('scene').style.minHeight = '900px';`
+  history.at(-3)!.answerParts = auroraParts(history.at(-4)!.messageId, spec)
+  history.at(-1)!.message = Array.from({ length: 42 }, (_, index) => `Reading line ${index}.`).join('\n\n')
+  await page.goto(SESSION_URL)
+  const frame = page.frameLocator('iframe[title="A small saving habit"]')
+  await expect(frame.locator('#scene')).toHaveText('Preparing a little space.')
+  const scroller = page.locator('.app-main')
+  const originalOffset = await scroller.evaluate((element) => element.scrollTop)
+  await scroller.evaluate((element) => { element.scrollTop -= 120 })
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(originalOffset - 100)
+  const anchor = page.getByText('Reading line 30.', { exact: true })
+  await expect(anchor).toBeInViewport()
+  const frameElement = page.locator('iframe[title="A small saving habit"]')
+  const offscreen = (await frameElement.boundingBox())!
+  expect(offscreen.y + offscreen.height).toBeLessThan(0)
+  const before = (await anchor.boundingBox())!.y
+  await frame.locator('body').evaluate(() => window.dispatchEvent(new Event('fixture:finish')))
+  await expect(page.getByRole('region', { name: 'A small saving habit', exact: true })
+    .getByRole('button', { name: 'Copy image', exact: true })).toBeEnabled()
+  await expect.poll(() => frameElement.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(900)
+  expect(Math.abs((await anchor.boundingBox())!.y - before)).toBeLessThan(2)
+})
+
 test('loads optional composite controls inside the isolated runtime and preserves their native targets', async ({ page, ui }) => {
   const history = ui.history.get(SESSION_ID)!
   const spec = structuredClone(AURORA_CALCULATOR_SPEC)

@@ -41,6 +41,7 @@ const ALERT_ICONS: Record<string, string> = {
   NOTE: 'github-note', TIP: 'github-tip', IMPORTANT: 'github-important', WARNING: 'github-warning', CAUTION: 'github-caution'
 }
 let mathRequest: Promise<typeof import('./markdown-math')> | undefined
+let cachedMath: PluginConfig['math']
 
 interface MarkdownContentProps {
   animationId: string
@@ -51,8 +52,9 @@ interface MarkdownContentProps {
 }
 
 const MarkdownBlock = memo(function MarkdownBlock(props: BlockProps) {
-  const block = useMemo(() => ({ index: props.index, content: props.content }), [props.index, props.content])
   const { animationId, revealWindow, scopeId, profile, completed, math } = useContext(MarkdownAnimationContext)
+  const block = useMemo(() => ({ index: props.index, content: props.content, identity: `${animationId}:${props.index}` }),
+    [animationId, props.index, props.content])
   // Large initial/final bursts reveal only their tail. Freeze this starting
   // boundary so a growing block cannot remove characters that are still fading.
   const initialTailStart = props.index < revealWindow.firstBlock
@@ -147,14 +149,19 @@ const COMPONENTS: Components = {
 export function MarkdownContent({ animationId, text, active = false, startDelay = 0, className }: MarkdownContentProps) {
   const scopeId = useId()
   const profile = useProfile()
-  const [math, setMath] = useState<PluginConfig['math']>()
+  const [math, setMath] = useState<PluginConfig['math']>(cachedMath)
+  const [mathFailed, setMathFailed] = useState(false)
   const hasMath = text.includes('$')
   useEffect(() => {
     if (!hasMath || math) {
       return
     }
     let cancelled = false
-    mathRequest ??= import('./markdown-math').catch((error: unknown) => {
+    mathRequest ??= import('./markdown-math').then((module) => {
+      cachedMath = module.math
+
+      return module
+    }).catch((error: unknown) => {
       mathRequest = undefined
       throw error
     })
@@ -162,7 +169,11 @@ export function MarkdownContent({ animationId, text, active = false, startDelay 
       if (!cancelled) {
         setMath(module.math)
       }
-    }).catch(() => undefined)
+    }).catch(() => {
+      if (!cancelled) {
+        setMathFailed(true)
+      }
+    })
 
     return () => {
       cancelled = true
@@ -192,7 +203,7 @@ export function MarkdownContent({ animationId, text, active = false, startDelay 
     return blocks
   }, [animation, profile, active])
 
-  return (
+  const content = (
     <MarkdownAnimationContext.Provider value={animation}>
       <Streamdown className={clsx('markdown-content', className)}
         components={COMPONENTS} BlockComponent={MarkdownBlock}
@@ -204,4 +215,7 @@ export function MarkdownContent({ animationId, text, active = false, startDelay 
       </Streamdown>
     </MarkdownAnimationContext.Provider>
   )
+
+  return hasMath ? <VisualLayout identity={`${animationId}:math`} ready={Boolean(active || math || mathFailed)}
+    estimatedHeight="160px" label="Preparing formulas…">{content}</VisualLayout> : content
 }
