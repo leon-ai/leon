@@ -204,6 +204,7 @@ export default class HTTPServer {
         !requestPath.startsWith(`/api/${API_VERSION}/`) ||
         requestPath === authPath ||
         requestPath === connectionCompletePath ||
+        requestPath === `/api/${API_VERSION}/tools/oauth/callback` ||
         requestPath === connectionOAuthCallbackPath
       ) {
         return
@@ -213,10 +214,13 @@ export default class HTTPServer {
       const isConversationMetadata = requestPath === sessionsPath ||
         requestPath.startsWith(`${sessionsPath}/`) ||
         requestPath === `/api/${API_VERSION}/conversation-history`
+      const isToolManagement = ['tools', 'connections', 'skills'].some((resource) =>
+        requestPath === `/api/${API_VERSION}/${resource}` || requestPath.startsWith(`/api/${API_VERSION}/${resource}/`))
 
       // Session browsing must remain usable while a model is booting or offline.
       await authenticateProfileHTTPRequest(request, reply, {
-        initializeRuntime: !isConversationMetadata && requestPath !== `/api/${API_VERSION}/favicons`
+        initializeRuntime: !isConversationMetadata && requestPath !== `/api/${API_VERSION}/favicons` &&
+          !isToolManagement
       })
     })
 
