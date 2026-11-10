@@ -17,6 +17,10 @@ import type {
   SatelliteToolkitDefinition,
   SatelliteToolDefinition
 } from '@/core/satellite/types'
+import type { MCPSource, MCPManifest, MCPFunction } from './tool-source'
+import { readMCPCache } from './mcp/installations'
+import { isCatalogInstalled } from '@/core/catalog/activation'
+import type { CatalogDistribution } from '@/schemas/catalog-metadata-schemas'
 
 const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
 const HOSTED_SEARCH_TOOL_ID = 'hosted'
@@ -30,6 +34,9 @@ const HOSTED_SEARCH_PROVIDERS = new Set<LLMProviders>([
 ])
 
 interface ToolkitToolDefinition {
+  logo?: string
+  distribution?: CatalogDistribution
+  source?: MCPSource
   tool_id: string
   toolkit_id: string
   name: string
@@ -44,6 +51,7 @@ interface ToolkitToolDefinition {
     string,
     {
       description: string
+      remote_name?: string
       concurrency?: ToolConcurrency
       progressive_guidance?: string
       parameters: Record<string, unknown>
@@ -159,7 +167,7 @@ export default class ToolkitRegistry {
           options.includeConnectionSetup &&
           !this.getToolSatelliteDevice(toolkit.id, toolId) &&
           availability.missingSettings.length === 0 &&
-          this.needsToolConnection(toolkit.id, toolId)
+          (this.needsToolConnection(toolkit.id, toolId) || tool.source?.type === 'mcp')
 
         if (!availability.available && !canConnect) {
           continue
@@ -386,6 +394,50 @@ export default class ToolkitRegistry {
   }
 
   /**
+   * Resolves transport metadata without interpreting a native implementation path.
+   */
+  public getToolSource(toolkitId: string, toolId: string): MCPSource | undefined {
+    return this._localToolkits.find((toolkit) => toolkit.id === toolkitId)?.tools?.[toolId]?.source
+  }
+
+  /**
+   * Resolves connection-card branding from host metadata without filesystem reads.
+   * Missing logo files fall back through the shared renderer.
+   */
+  public getToolLogoUrl(toolkitId: string, toolId: string): string | undefined {
+    const tool = this._localToolkits.find((entry) => entry.id === toolkitId)?.tools?.[toolId]
+
+    return tool?.logo === 'logo.svg' ? `tools/${encodeURIComponent(`${toolkitId}.${toolId}`)}/assets/logo.svg` : undefined
+  }
+
+  /**
+   * Accepts refreshed remote definitions only while their installation is unchanged.
+   */
+  public updateMCPFunctions(toolkitId: string, toolId: string, source: MCPSource, functions: Record<string, MCPFunction>): void {
+    const tool = this._localToolkits.find((toolkit) => toolkit.id === toolkitId)?.tools?.[toolId]
+    if (tool && JSON.stringify(tool.source) === JSON.stringify(source)) {
+      tool.functions = functions
+      this.refreshCombinedToolkits()
+    }
+  }
+
+  /**
+   * Refreshes only selected remote catalogs. Startup and ordinary model requests
+   * keep their local snapshots and never wait for third-party servers.
+   */
+  public async prepareToolkit(toolkitId: string, toolId?: string): Promise<void> {
+    const toolkit = this._localToolkits.find((entry) => entry.id === toolkitId)
+    for (const [id, tool] of Object.entries(toolkit?.tools ?? {})) {
+      if (tool.source?.type !== 'mcp' || toolId && id !== toolId) {
+        continue
+      }
+      const { MCP_MANAGER } = await import('./mcp/manager')
+      tool.functions = await MCP_MANAGER.discover({ ...tool, toolkit_id: toolkitId, tool_id: id } as MCPManifest)
+    }
+    this.refreshCombinedToolkits()
+  }
+
+  /**
    * Function overrides allow finite calls and retained sessions in the same tool.
    */
   public getToolConcurrency(
@@ -421,7 +473,7 @@ export default class ToolkitRegistry {
       ...(toolkit.contextFiles ? { context_files: [...toolkit.contextFiles] } : {}),
       tools: Object.fromEntries(
         Object.entries(toolkit.tools || {})
-          .filter(([toolId]) => this.isToolAvailable(toolkit.id, toolId))
+          .filter(([toolId, tool]) => !tool.source && this.isToolAvailable(toolkit.id, toolId))
           .map(([toolId, tool]) => [toolId, { ...tool }])
       )
     }))
@@ -744,7 +796,8 @@ export default class ToolkitRegistry {
             await this.loadToolConfig(
               toolkit,
               toolId,
-              path.join(resolveToolDirectory(toolsPath, toolkitId, toolId), 'tool.json')
+              path.join(resolveToolDirectory(toolsPath, toolkitId, toolId), 'tool.json'),
+              toolsPath === TOOLS_PATH
             )
           }
 
@@ -782,7 +835,8 @@ export default class ToolkitRegistry {
   private async loadToolConfig(
     toolkit: ToolkitDefinition,
     toolId: string,
-    toolConfigPath: string
+    toolConfigPath: string,
+    bundled = false
   ): Promise<void> {
     if (!fs.existsSync(toolConfigPath)) {
       return
@@ -791,6 +845,15 @@ export default class ToolkitRegistry {
     try {
       const toolConfigRaw = await fs.promises.readFile(toolConfigPath, 'utf-8')
       const toolConfig = JSON.parse(toolConfigRaw) as ToolkitToolDefinition
+      if (bundled && (toolConfig.source || !isCatalogInstalled(toolConfig.distribution,
+        path.join(this.profilePaths.tools, toolkit.id, toolId)))) {
+        return
+      }
+      if (toolConfig.source?.type === 'mcp') {
+        // Source changes invalidate cached schemas; remote definitions remain
+        // separate from the owner's editable manifest.
+        toolConfig.functions = readMCPCache(path.dirname(toolConfigPath), toolConfig.source)?.functions ?? {}
+      }
       toolkit.tools = {
         ...(toolkit.tools || {}),
         [toolId]: toolConfig

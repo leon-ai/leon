@@ -527,6 +527,7 @@ export function buildAgentToolCatalog(
     tools.unshift(createToolkitLoaderTool(availableToolkitsById))
   }
   tools.push(
+    createCatalogSearchTool(),
     createAuroraLoaderTool(),
     createAgentPlanTool(AGENT_PLAN_TOOL_NAME),
     createClarificationTool(),
@@ -2241,6 +2242,20 @@ async function executeAgentToolCall(
       }
     }
     const selectedTools = toolkit.tools.filter((tool) => !toolId || tool.id === toolId)
+    try {
+      await TOOLKIT_REGISTRY.prepareToolkit?.(toolkitId, typeof toolId === 'string' ? toolId : undefined)
+    } catch (error) {
+      const { MCPAuthenticationRequired } = await import('@/core/tool-manager/mcp/auth')
+      if (error instanceof MCPAuthenticationRequired) {
+        const { emitConnectionWidget } = await import('@/core/connections/connection-widget')
+        for (const tool of selectedTools) {
+          if (TOOLKIT_REGISTRY.getToolSource(toolkitId, tool.id)) {
+            emitConnectionWidget(`${toolkitId}.${tool.id}`)
+          }
+        }
+      }
+      return { content: 'I could not load this MCP server’s functions. Check its connection in Settings → Tools and connections, then retry.', trackedSteps }
+    }
     const availableFunctions = new Set(selectedTools.flatMap((tool) =>
       Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkitId, tool.id) || {})
         .map((name) => `${tool.id}.${name}`)
