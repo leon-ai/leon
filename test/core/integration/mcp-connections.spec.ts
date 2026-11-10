@@ -55,6 +55,79 @@ afterAll(async () => {
   }
 })
 
+it('finds native catalog connections without activation and requires separate owner Add, Enable and Connect actions', async () => {
+  await owner('mcp-owner-a', async () => {
+    const { searchAgentCatalog } = await import('@/core/tool-manager/catalog/agent-catalog')
+    const { handleConnectionSetup } = await import('@/core/connections/connection-setup')
+    const { ConnectionSetupActionId: Action, ConnectionSetupStep: Step } = await import('../../../aurora/src/contracts/connection-setup')
+    const { ProfileHelper } = await import('@/helpers/profile-helper')
+    const id = 'productivity_collaboration.ticktick'
+    const widget = vi.spyOn(core.SOCKET_SERVER, 'emitAnswerToChatClients').mockImplementation(() => undefined)
+    const input = { provider: id, session_id: '', callback_origin: 'http://127.0.0.1:1337', api_version: 'v1', action: Action.Refresh }
+    try {
+      const { buildAgentToolCatalog, runAgentLoop } = await import('@/core/llm-manager/llm-duties/react-llm-duty/agent-loop')
+      const { CATALOG_SEARCH_TOOL_NAME } = await import('@/core/tool-manager/catalog/agent-catalog')
+      const tools = buildAgentToolCatalog()
+      const loop = await runAgentLoop({
+        catalog: tools, transcript: [{ role: 'user', content: 'Are you connected to my TickTick?' }],
+        callModel: vi.fn().mockResolvedValueOnce({ toolCalls: [{ id: 'catalog-lookup', type: 'function', function: {
+          name: CATALOG_SEARCH_TOOL_NAME, arguments: JSON.stringify({ query: 'tick tick' })
+        } }] }).mockResolvedValueOnce({ textContent: 'TickTick is in my catalog. You can add it using the card.' }),
+        executeFunction: async () => {
+          throw new Error('Catalog lookup must not dispatch native or remote functions.')
+        },
+        loadAgentSkill: async () => null, maxIterations: 2
+      })
+      expect(loop.intent).toBe('answer')
+      const found = JSON.parse(loop.transcript.find((message) => message.role === 'tool' && message.toolName === CATALOG_SEARCH_TOOL_NAME)!.content)
+      expect(found.tools[0]).toMatchObject({ id, state: 'not_added', restricted: false })
+      expect(found.setup_card).toBe(id)
+      expect(widget).toHaveBeenCalledWith(expect.objectContaining({ widget: 'ConnectionWidget',
+        connection: expect.objectContaining({ provider: id, name: 'TickTick', logoUrl: `tools/${id}/assets/logo.svg` }) }))
+      expect(core.TOOLKIT_REGISTRY.resolveToolById('ticktick', 'productivity_collaboration')).toBeNull()
+      expect((await handleConnectionSetup(input)).view.state.step).toBe(Step.Installation)
+      expect((await catalog.TOOL_CATALOG.list()).find((tool) => tool.id === id)?.installed).toBe(false)
+      await expect(handleConnectionSetup({ ...input, action: Action.Connect })).rejects.toThrow('Add and enable')
+      const added = await handleConnectionSetup({ ...input, action: Action.Install })
+      expect(added.view.state.step).toBe(Step.Choice)
+      expect(added.authorization_url).toBeUndefined()
+      expect(added.event).toBeUndefined()
+      expect((JSON.parse(await searchAgentCatalog({ query: id }))).tools[0].state).toBe('needs_connection')
+      expect((await handleConnectionSetup({ ...input, action: Action.Install })).view.state.step).toBe(Step.Choice)
+      expect((await handleConnectionSetup({ ...input, state: { method: 'catalog', step: Step.Installation } })).view.state.step).toBe(Step.Choice)
+      await catalog.TOOL_CATALOG.act(id, 'disable')
+      expect((JSON.parse(await searchAgentCatalog({ query: 'TickTick' }))).tools[0].state).toBe('disabled')
+      expect((await handleConnectionSetup(input)).view.state.step).toBe(Step.Disabled)
+      const restricted = vi.spyOn(ProfileHelper, 'hasToolAllowlist').mockReturnValue(true)
+      try {
+        const permitted = vi.spyOn(ProfileHelper, 'isToolDisabled').mockReturnValue(true)
+        try {
+          expect((await handleConnectionSetup(input)).view.actions).toEqual([])
+          await expect(handleConnectionSetup({ ...input, action: Action.Enable })).rejects.toThrow('allow-only')
+          widget.mockClear()
+          expect((JSON.parse(await searchAgentCatalog({ query: 'TickTick' }))).tools[0].restricted).toBe(true)
+          expect(widget).not.toHaveBeenCalled()
+        } finally {
+          permitted.mockRestore()
+        }
+      } finally {
+        restricted.mockRestore()
+      }
+      const enabled = await handleConnectionSetup({ ...input, action: Action.Enable })
+      expect(enabled.view.state.step).toBe(Step.Choice)
+      expect(enabled.authorization_url).toBeUndefined()
+      expect(enabled.event).toBeUndefined()
+      expect((await owner('mcp-owner-b', () => catalog.TOOL_CATALOG.list())).find((tool) => tool.id === id)?.installed).toBe(false)
+    } finally {
+      widget.mockRestore()
+      const entry = (await catalog.TOOL_CATALOG.list()).find((tool) => tool.id === id)
+      if (entry?.installed) {
+        await catalog.TOOL_CATALOG.act(id, 'remove')
+      }
+    }
+  })
+})
+
 it('cancels one concurrent call without closing another call or replaying a write', async () => {
   const server = await startMCPFixture()
   servers.push(server)

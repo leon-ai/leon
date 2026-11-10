@@ -213,6 +213,10 @@ export function useConnectionSetup(sessionId: string, provider: string, initialA
         queryClient.setQueryData<ConnectionSetupSnapshot>(key, {
           view: result.view, authorizationFailed: authorization.current.failed
         })
+        if (action.id === ConnectionSetupActionId.Install || action.id === ConnectionSetupActionId.Enable) {
+          void queryClient.invalidateQueries({ queryKey: ['tool-catalog', profile], exact: true })
+          showToast({ type: 'success', title: action.id === ConnectionSetupActionId.Install ? 'Tool added' : 'Tool enabled', description: '' })
+        }
         if (action.id === ConnectionSetupActionId.Connect && result.view.state.step === ConnectionSetupStep.Connected) {
           void queryClient.invalidateQueries({ queryKey: ['tool-catalog', profile], exact: true })
           showToast({ type: 'success', title: 'Account connected', description: sessionId ? 'You can continue your request.' : 'Your connection is ready to use.' })

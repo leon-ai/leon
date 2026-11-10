@@ -68,6 +68,20 @@ export async function handleConnectionSetup(
     if (!Object.values(SetupAction).includes(input.action as SetupAction)) {
       throw new Error('Unknown connection setup action.')
     }
+    const { prepareCatalogConnection } = await import('./catalog-setup')
+    const activation = await prepareCatalogConnection(input)
+    if (activation) {
+      return activation
+    }
+    // Activation is not authorization. After Add/Enable, show the existing
+    // account setup screen without initiating OAuth or accepting credentials.
+    if ([SetupAction.Install, SetupAction.Enable].includes(input.action as SetupAction) ||
+      input.action === SetupAction.Refresh && input.state?.method === 'catalog') {
+      input = { ...input, action: SetupAction.Refresh }
+      delete input.state
+      delete input.credentials
+      delete input.method
+    }
     const { setupMCPConnection } = await import('@/core/tool-manager/mcp/setup')
     const remote = await setupMCPConnection(input)
     if (remote) {

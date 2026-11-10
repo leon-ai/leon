@@ -503,7 +503,7 @@ export default class ToolExecutor {
           CONNECTION_STORE.markNeedsAttention(provider)
         )
       )
-      requiredConnections.forEach(emitConnectionWidget)
+      requiredConnections.forEach((provider) => emitConnectionWidget(provider))
 
       return this.buildResult({
 
@@ -742,7 +742,7 @@ export default class ToolExecutor {
           CONNECTION_STORE.markNeedsAttention(provider)
         )
       )
-      declaredConnections.forEach(emitConnectionWidget)
+      declaredConnections.forEach((provider) => emitConnectionWidget(provider))
 
       return this.buildResult({
 
@@ -819,7 +819,7 @@ export default class ToolExecutor {
             CONNECTION_STORE.markNeedsAttention(provider)
           )
         )
-        declaredConnections.forEach(emitConnectionWidget)
+        declaredConnections.forEach((provider) => emitConnectionWidget(provider))
         runtimeResult.output['required_connections'] = declaredConnections
       }
     }
