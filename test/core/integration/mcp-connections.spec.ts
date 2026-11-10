@@ -182,3 +182,28 @@ it.each([
   await fs.writeFile(filename, JSON.stringify(other))
   expect(await loader.list()).toHaveLength(2)
 })
+
+it('requires explicit profile activation for native extensions without changing disablement or saved settings', async () => {
+  const id = 'communication.gmail'
+  await owner('mcp-owner-a', async () => {
+    await core.TOOLKIT_REGISTRY.reload()
+    expect(core.TOOLKIT_REGISTRY.resolveToolById('gmail', 'communication')).toBeNull()
+    expect((await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)).toMatchObject({
+      installed: false, distribution: 'extension', maintenance: 'official'
+    })
+    await catalog.TOOL_CATALOG.install({ catalogId: id })
+    expect(core.TOOLKIT_REGISTRY.resolveToolById('gmail', 'communication')).not.toBeNull()
+    await owner('mcp-owner-b', async () => {
+      await core.TOOLKIT_REGISTRY.reload()
+      expect(core.TOOLKIT_REGISTRY.resolveToolById('gmail', 'communication')).toBeNull()
+    })
+    await catalog.TOOL_CATALOG.act(id, 'disable')
+    expect(core.TOOLKIT_REGISTRY.resolveToolById('gmail', 'communication')).toBeNull()
+    await catalog.TOOL_CATALOG.act(id, 'remove')
+    const settings = path.join(home, 'profiles', 'mcp-owner-a', 'tools', 'communication', 'gmail', 'settings.json')
+    await expect(fs.access(settings)).resolves.toBeUndefined()
+    await catalog.TOOL_CATALOG.install({ catalogId: id })
+    expect((await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)).toMatchObject({ installed: true, enabled: false })
+    await catalog.TOOL_CATALOG.act(id, 'remove')
+  })
+})

@@ -206,9 +206,15 @@ export class ToolCatalog {
       }
       let id: string
       if (entry && !entry.manifest.source) {
-        throw new Error('Choose an MCP server from this catalog.');
+        id = input.catalogId!
+        const { prepareNativeSource } = await import('@/core/catalog/prepare-native')
+        const { ToolSettings } = await import('../tool-settings')
+        await prepareNativeSource(entry.directory)
+        ToolSettings.loadToolSettings(entry.manifest.toolkit_id, entry.manifest.tool_id, {}, true)
+        await setCatalogInstalled(path.join(getProfilePaths().tools, entry.manifest.toolkit_id, entry.manifest.tool_id), true)
+      } else {
+        id = await installMCP(input)
       }
-      id = await installMCP(input)
       await TOOLKIT_REGISTRY.reload()
 
       return id

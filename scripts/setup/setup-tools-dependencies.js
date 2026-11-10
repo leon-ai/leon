@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { PROFILE_TOOLS_PATH, TOOLS_PATH } from '@/constants'
+import { isCatalogInstalled } from '@/core/catalog/activation'
 
 import { createSetupStatus } from './setup-status'
 import { SetupUI } from './setup-ui'
@@ -43,6 +44,11 @@ const getToolPaths = async (toolsPath) => {
         continue
       }
 
+      const manifest = JSON.parse(await fs.promises.readFile(path.join(toolPath, 'tool.json'), 'utf8'))
+      if (manifest.source || toolsPath === TOOLS_PATH && !isCatalogInstalled(manifest.distribution,
+        path.join(PROFILE_TOOLS_PATH, toolkitEntry.name, toolEntry.name))) {
+        continue
+      }
       toolPaths.push(toolPath)
     }
   }

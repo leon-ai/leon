@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { PROFILE_TOOLS_PATH, TOOLS_PATH } from '@/constants'
 import { resolveToolDirectory } from '@/leon-roots'
+import { isCatalogInstalled } from '@/core/catalog/activation'
 
 import { createSetupStatus } from './setup-status'
 import { mergeMissingSettings } from './settings-merge'
@@ -79,6 +80,10 @@ export default async function setupToolsSettings() {
           continue
         }
 
+        const manifest = readJSONFile(path.join(toolPath, 'tool.json'))
+        if (manifest.source || !isCatalogInstalled(manifest.distribution, path.join(PROFILE_TOOLS_PATH, toolkitId, toolId))) {
+          continue
+        }
         await syncToolSettings(toolkitId, toolId, toolPath)
       }
     }
