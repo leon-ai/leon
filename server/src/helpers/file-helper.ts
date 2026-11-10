@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import url from 'node:url'
+import { randomUUID } from 'node:crypto'
 import { execFile, execFileSync } from 'node:child_process'
 
 import {
@@ -132,6 +133,29 @@ const FILE_EXTENSION_REMIX_ICON_NAMES = new Map<string, string>([
 ])
 
 export class FileHelper {
+  /**
+   * Publishes complete profile state atomically, optionally without replacing a
+   * file created concurrently. Partial writes never become visible to readers.
+   */
+  public static async writeAtomicJSON(
+    filename: string,
+    value: unknown,
+    options: { exclusive?: boolean } = {}
+  ): Promise<void> {
+    const temporary = `${filename}.${randomUUID()}.tmp`
+    await fs.promises.mkdir(path.dirname(filename), { recursive: true, mode: 0o700 })
+    try {
+      await fs.promises.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
+      if (options.exclusive) {
+        await fs.promises.link(temporary, filename)
+      } else {
+        await fs.promises.rename(temporary, filename)
+      }
+    } finally {
+      await fs.promises.unlink(temporary).catch(() => undefined)
+    }
+  }
+
   /**
    * Page UTF-8 text with JavaScript character offsets without loading the file.
    */
