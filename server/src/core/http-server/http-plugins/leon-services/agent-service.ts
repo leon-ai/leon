@@ -10,6 +10,7 @@ import { prepareAgentTurn } from '@/core/turn-lifecycle/pre-turn'
 import { runTurnLifecycle } from '@/core/turn-lifecycle'
 import { runWithTurnTiming, runTurnPhase, TurnPhase, setTurnTimingSession, getTurnTimings } from '@/core/llm-manager/turn-timing'
 import { measureOtherProcessingDuration } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-metrics'
+import { isToolPreparationPhase } from '@/core/llm-manager/turn-timing-contract'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
@@ -264,7 +265,7 @@ export async function runAgent(
         const durationMs = elapsedMilliseconds(totalStartedAt)
         const otherDuration = startedAt === undefined ? undefined : measureOtherProcessingDuration(
           startedAt, durationMs,
-          timings.filter((timing) => timing.kind === 'inference' || timing.goal === TurnPhase.Tool)
+          timings.filter((timing) => timing.kind === 'inference' || timing.goal === TurnPhase.Tool || isToolPreparationPhase(timing.goal))
         )
         const metrics = {
           ...(llmMetrics || {}),

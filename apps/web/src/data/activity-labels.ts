@@ -221,7 +221,16 @@ export function getActivityLabel(id: string, labels: readonly string[] = WORKING
  * Names known goals; unknown purposes share the turn's stable waiting copy,
  * rather than suggesting that each model call starts understanding over again.
  */
-export function getProcessingLabel(goal: string, id: string, workingId = id): string {
+export function getProcessingLabel(goal: string, id: string, workingId = id, subject = 'MCP server'): string {
+  if (goal === TurnPhase.MCPConnection) {
+    return `Connecting to ${subject}...`
+  }
+  if (goal === TurnPhase.MCPDiscovery) {
+    return `Loading ${subject} tools...`
+  }
+  if (goal === TurnPhase.CatalogSearch) {
+    return 'Checking tool catalog...'
+  }
   const labels = Object.hasOwn(PHASE_LABELS, goal) ? PHASE_LABELS[goal as TurnPhase] : undefined
 
   return labels ? getActivityLabel(id, labels) : getActivityLabel(workingId)

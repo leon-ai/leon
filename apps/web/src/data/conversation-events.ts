@@ -162,7 +162,7 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
 
   if (event.type === 'inference_activity') {
     const activity = data['activity'] as InferenceActivity
-    const timing = { ...activity, kind: 'inference' as const }
+    const timing = { ...activity, kind: activity.kind ?? 'inference' as const }
     const found = trace.timings?.some((item) => item.id === timing.id)
     trace.timings = found ? trace.timings!.map((item) => item.id === timing.id ? timing : item)
       : [...(trace.timings ?? []), timing]

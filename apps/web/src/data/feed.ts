@@ -139,6 +139,7 @@ export interface FeedModelProcessingActivity extends FeedActivityTime {
     isActive?: boolean
     activeLabel?: string
     isGeneric?: boolean
+    isRuntime?: boolean
     startedAt?: number | undefined
     planStepId?: string | null | undefined
   }[]

@@ -11,6 +11,7 @@ import { createMCPFetch, getMCPURL } from './http'
 import { saveMCPCache } from './installations'
 import PACKAGE from '@@/package.json' with { type: 'json' }
 import { getConnectionCallbackURL } from '@/core/connections/connection-catalog'
+import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
 
 const DISCOVERY_TIMEOUT_MS = 30_000
 const CALL_IDLE_TIMEOUT_MS = 60_000
@@ -190,7 +191,10 @@ export class MCPManager {
         signal.removeEventListener('abort', cancel)
       }
     }) : pending
-    const connection = await wait()
+    // Each turn owns its wait interval, but cancellation must not abort another
+    // turn's shared handshake. Reusing a ready client creates no connection row.
+    const connection = await (entry.connected ? wait()
+      : runTurnPhase(TurnPhase.MCPConnection, wait, { subject: manifest.name }))
     signal?.throwIfAborted()
     if (connection.closed) {
       throw new Error('This MCP connection was closed. Please try again.')
@@ -211,14 +215,14 @@ export class MCPManager {
    * Refreshes bounded schemas on explicit selection, never on application startup.
    */
   public async discover(manifest: MCPManifest): Promise<Record<string, MCPFunction>> {
-    return this.use(manifest, async ({ client }) => {
+    return this.use(manifest, ({ client }) => runTurnPhase(TurnPhase.MCPDiscovery, async () => {
       const { tools } = await client.listTools(undefined, { timeout: DISCOVERY_TIMEOUT_MS, cacheMode: 'refresh' })
       const functions = functionsFor(tools)
       const credentials = await MCP_CONNECTIONS.getCredentials(`${manifest.toolkit_id}.${manifest.tool_id}`, this.profile, false, false)
       await saveMCPCache(manifest, functions, Boolean((credentials?.['oauth'] as { tokens?: unknown } | undefined)?.tokens))
 
       return functions
-    })
+    }, { subject: manifest.name }))
   }
 
   /**

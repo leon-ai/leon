@@ -139,7 +139,8 @@ import {
 import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/agent-loop'
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
-import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnInferences } from '../turn-timing'
+import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings } from '../turn-timing'
+import { isToolPreparationPhase } from '../turn-timing-contract'
 import { CATALOG_SEARCH_TOOL_NAME } from '@/core/tool-manager/catalog/agent-catalog'
 import { AURORA_LOADER_NAME, AURORA_PREVIEW_NAME, AURORA_PRESENT_NAME } from '@/core/aurora/agent-ui-contract'
 import {
@@ -335,7 +336,7 @@ export class ReActLLMDuty extends LLMDuty {
   public async execute(): Promise<LLMDutyResult | null> {
     const responseId = this.responseId || randomUUID()
 
-    return runWithConversationResponse(responseId, () => observeTurnInferences((activity) => {
+    return runWithConversationResponse(responseId, () => observeTurnActivities((activity) => {
       this.reportProgressEvent({ type: 'inference_activity', activity })
     }, async () => {
       try {
@@ -2450,7 +2451,8 @@ export class ReActLLMDuty extends LLMDuty {
     const otherProcessingDurationMs = measureOtherProcessingDuration(
       this.executionStartedAt,
       generationMetrics.durationMs,
-      [...this.measuredModelIntervals, ...this.lastExecutionHistory]
+      [...this.measuredModelIntervals, ...this.lastExecutionHistory,
+        ...getTurnTimings().filter((timing) => timing.kind === 'phase' && isToolPreparationPhase(timing.goal))]
     )
     const llmMetrics = {
       ...generationMetrics,

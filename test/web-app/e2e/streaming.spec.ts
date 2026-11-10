@@ -2264,6 +2264,49 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   }
 }
 
+test('shows remote connection and discovery as runtime activities and replays their measured durations', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const startedAt = Date.now()
+  let sequence = 0
+  const responseId = 'mcp-runtime-response'
+  const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID,
+    turn_id: 'mcp-runtime-owner', response_id: responseId, created_at: startedAt + sequence
+  }])
+  const connection = { id: 'mcp-connect', kind: 'phase' as const, goal: TurnPhase.MCPConnection,
+    subject: 'Notion', startedAt, durationMs: 0, outcome: 'started' }
+  const discovery = { ...connection, id: 'mcp-discover', goal: TurnPhase.MCPDiscovery, startedAt: startedAt + 1_000 }
+  const runtime = page.getByRole('region', { name: 'Leon’s tool preparation', exact: true })
+  const processing = page.getByRole('region', { name: 'Leon’s processing', exact: true })
+  await emit('turn_status', { status: 'accepted' })
+  await emit('inference_activity', { activity: connection })
+  await expect(runtime.locator('.process-group-title')).toHaveText('Connecting to Notion...')
+  await expect(runtime.locator('[data-icon="plug"]')).toBeVisible()
+  await expect(processing).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(0)
+  const completedConnection = { ...connection, outcome: 'completed', durationMs: 1_000 }
+  await emit('inference_activity', { activity: completedConnection })
+  await emit('inference_activity', { activity: discovery })
+  await expect(runtime.locator('.process-group-title')).toHaveText('Loading Notion tools...')
+  await expect(runtime.locator('[data-icon="stack"]')).toBeVisible()
+  const completedDiscovery = { ...discovery, outcome: 'completed', durationMs: 600 }
+  await emit('inference_activity', { activity: completedDiscovery })
+  const timings = [completedConnection, completedDiscovery]
+  const trace = { id: responseId, planSteps: [], toolCalls: [], timings }
+  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: responseId, message: 'Your workspace is ready.',
+    sentAt: startedAt, isAddedToHistory: true, llmMetrics: { durationMs: 2_000 }, agentResponseTrace: trace })
+  await emit('final_answer', { content: 'Your workspace is ready.', response_trace: {
+    id: responseId, plan_steps: [], tool_calls: [], timings, metrics: { durationMs: 2_000 }
+  } })
+  const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
+  await page.reload()
+  await work.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+  await processing.getByRole('button', { name: /^Processed for / }).click()
+  await expect(runtime.locator('.process-group-title')).toHaveText(['Connected to Notion in 1s', 'Loaded Notion tools in 600ms'])
+  await expect(processing.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(0)
+  await expect(runtime.locator('.activity-wave-active')).toHaveCount(0)
+})
+
 test('replaces one standalone processing row in place and retains completed request history', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   let sequence = 0

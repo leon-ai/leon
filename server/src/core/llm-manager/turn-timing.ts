@@ -9,7 +9,7 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LogHelper } from '@/helpers/log-helper'
 import type { CompletionAttemptTiming } from './types'
-import { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext, type InferenceActivity } from './turn-timing-contract'
+import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type TurnTimingContext, type InferenceActivity } from './turn-timing-contract'
 import type { InferenceUsage } from './llm-usage/usage-context'
 
 export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
@@ -26,7 +26,7 @@ export interface MaintenanceTaskResult {
 interface TurnTimingScope extends TurnTimingContext {
   profile: string
   parentId?: string
-  onInference?: (activity: InferenceActivity) => void
+  onActivity?: (activity: InferenceActivity) => void
   state: { sessionId: string | null, timings: Map<string, TurnTiming>, closed: boolean, omitted: number }
 }
 
@@ -37,8 +37,8 @@ const pendingWrites = new Map<string, Promise<void>>()
  * Observes only this foreground execution. Fresh background timing scopes do not
  * inherit the listener, and detached work cannot emit after execution finishes.
  */
-export async function observeTurnInferences<T>(
-  onInference: (activity: InferenceActivity) => void,
+export async function observeTurnActivities<T>(
+  onActivity: (activity: InferenceActivity) => void,
   execute: () => Promise<T>
 ): Promise<T> {
   const scope = storage.getStore()
@@ -50,9 +50,9 @@ export async function observeTurnInferences<T>(
   try {
     return await storage.run({
       ...scope,
-      onInference: (activity): void => {
+      onActivity: (activity): void => {
         if (active) {
-          onInference(activity)
+          onActivity(activity)
         }
       }
     }, execute)
@@ -61,22 +61,24 @@ export async function observeTurnInferences<T>(
   }
 }
 
-function notifyInference(scope: TurnTimingScope, timing: TurnTiming): void {
-  if (!scope.onInference || scope.state.closed) {
+function notifyActivity(scope: TurnTimingScope, timing: TurnTiming): void {
+  if (!scope.onActivity || scope.state.closed) {
     return
   }
 
   try {
-    scope.onInference({
+    scope.onActivity({
       id: timing.id,
       goal: timing.goal,
+      kind: timing.kind,
+      ...(timing.subject ? { subject: timing.subject } : {}),
       startedAt: timing.startedAt,
       durationMs: timing.durationMs,
       outcome: timing.outcome
     })
   } catch {
     // A disconnected progress consumer must never fail the model request.
-    LogHelper.warning('Could not publish inference activity.')
+    LogHelper.warning('Could not publish turn activity.')
   }
 }
 
@@ -113,7 +115,7 @@ export function setTurnTimingSession(sessionId: string): void {
 /**
  * Captures one measured phase without changing synchronous or async call semantics.
  */
-export function runTurnPhase<T>(goal: TurnPhase, execute: () => T): T {
+export function runTurnPhase<T>(goal: TurnPhase, execute: () => T, details?: { subject: string }): T {
   const scope = storage.getStore()
   if (!scope || scope.state.closed) {
     return execute()
@@ -122,16 +124,26 @@ export function runTurnPhase<T>(goal: TurnPhase, execute: () => T): T {
   const timing: TurnTiming = {
     stage: goal === TurnPhase.Execution ? TurnStage.AgentLoop : scope.stage,
     id, ...(scope.parentId ? { parentId: scope.parentId } : {}),
-    kind: 'phase', goal, startedAt: Date.now(), durationMs: 0, outcome: 'started'
+    kind: 'phase', goal, ...details, startedAt: Date.now(), durationMs: 0, outcome: 'started'
   }
   if (scope.state.timings.size >= MAXIMUM_TURN_TIMINGS) {
     scope.state.omitted++
     return execute()
   }
   scope.state.timings.set(id, timing)
+  const visible = isToolPreparationPhase(goal)
+  if (visible) {
+    notifyActivity(scope, timing)
+  }
   const finish = (outcome: string): void => {
+    if (scope.state.closed) {
+      return
+    }
     timing.durationMs = Math.max(0, Date.now() - timing.startedAt)
     timing.outcome = outcome
+    if (visible) {
+      notifyActivity(scope, timing)
+    }
   }
 
   try {
@@ -171,7 +183,7 @@ export function setTurnPhaseGoal(goal: TurnPhase): void {
     for (const child of scope.state.timings.values()) {
       if (child.parentId === timing.id && child.kind === 'inference') {
         child.goal = goal
-        notifyInference(scope, child)
+        notifyActivity(scope, child)
       }
     }
   }
@@ -203,7 +215,7 @@ export function recordTurnInference(timing: CompletionAttemptTiming): void {
     provider: timing.provider, ...(timing.model ? { model: timing.model } : {}),
     ...(outputTimes.length ? { firstOutputMs: Math.min(...outputTimes) } : {})
   })
-  notifyInference(scope, scope.state.timings.get(timing.attemptId)!)
+  notifyActivity(scope, scope.state.timings.get(timing.attemptId)!)
   if (timing.outcome !== 'started' && outputTimes.length && scope.state.timings.size < MAXIMUM_TURN_TIMINGS - 2) {
     const waitMs = Math.max(0, Math.min(timing.elapsedMs, ...outputTimes))
     for (const [suffix, goal, offset, durationMs] of [

@@ -55,6 +55,59 @@ afterAll(async () => {
   }
 })
 
+it('keeps suggestions offline and profile installations distinct from enablement and discovery', async () => {
+  const server = await startMCPFixture()
+  servers.push(server)
+  await owner('mcp-owner-a', async () => {
+    const before = await catalog.TOOL_CATALOG.list()
+    expect(before.find((entry) => entry.catalogId === 'productivity_collaboration.notion')).toMatchObject({ installed: false, connected: false })
+    const id = await catalog.TOOL_CATALOG.install({ name: 'Workspace', url: server.url })
+    expect(server.requests).toBe(0)
+    expect((await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)).toMatchObject({
+      installed: true, enabled: true, connected: false
+    })
+    expect((await owner('mcp-owner-b', () => catalog.TOOL_CATALOG.list())).some((entry) => entry.id === id)).toBe(false)
+    await catalog.TOOL_CATALOG.act(id, 'disable')
+    expect((await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)?.enabled).toBe(false)
+    const [toolkitId, toolId] = id.split('.') as [string, string]
+    expect(core.TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)).toBeNull()
+    await catalog.TOOL_CATALOG.act(id, 'enable')
+    const timing = await import('@/core/llm-manager/turn-timing')
+    const updates: import('@/core/llm-manager/turn-timing-contract').InferenceActivity[] = []
+    await timing.runWithTurnTiming('mcp-discovery', 'fixture-session', () =>
+      timing.observeTurnActivities((activity) => updates.push(activity), () => core.TOOLKIT_REGISTRY.prepareToolkit(toolkitId, toolId)))
+    expect(updates.map(({ goal, outcome }) => [goal, outcome])).toEqual([
+      [timing.TurnPhase.MCPConnection, 'started'], [timing.TurnPhase.MCPConnection, 'completed'],
+      [timing.TurnPhase.MCPDiscovery, 'started'], [timing.TurnPhase.MCPDiscovery, 'completed']
+    ])
+    expect(updates.every((activity) => activity.kind === 'phase' && activity.subject === 'Workspace')).toBe(true)
+    const functions = core.TOOLKIT_REGISTRY.getToolFunctions(toolkitId, toolId)!
+    expect(Object.values(functions)[0]!.remote_name).toBe('workspace.echo')
+    await core.TOOLKIT_REGISTRY.reload()
+    expect(core.TOOLKIT_REGISTRY.getToolFunctions(toolkitId, toolId)).toEqual(functions)
+    expect(server.calls.filter((call) => call.method === 'tools/list')).toHaveLength(1)
+    updates.length = 0
+    await timing.runWithTurnTiming('mcp-reuse', 'fixture-session', () =>
+      timing.observeTurnActivities((activity) => updates.push(activity), () => core.TOOLKIT_REGISTRY.prepareToolkit(toolkitId, toolId)))
+    expect(updates.map(({ goal }) => goal)).toEqual([timing.TurnPhase.MCPDiscovery, timing.TurnPhase.MCPDiscovery])
+    const { default: ToolExecutor } = await import('@/core/tool-manager/tool-executor')
+    const executor = new ToolExecutor()
+    const functionName = Object.keys(functions)[0]!
+    const result = await executor.executeTool({ toolkitId, toolId, functionName, parsedInput: { value: 'Workspace ready' } })
+    expect(result.status).toBe('success')
+    expect(result.data.output).toMatchObject({ result: { structuredContent: { value: 'Workspace ready' } } })
+    const missing = await executor.executeTool({ toolkitId, toolId, functionName, parsedInput: {} })
+    expect(missing.status).toBe('invalid_input')
+    const failed = await executor.executeTool({ toolkitId, toolId, functionName, parsedInput: { value: 'failure' } })
+    expect(failed.status).toBe('error')
+    const directory = path.join(home, 'profiles', 'mcp-owner-a', 'tools', toolkitId, toolId)
+    await fs.writeFile(path.join(directory, 'owner-notes.txt'), 'Preserve owner files')
+    await catalog.TOOL_CATALOG.act(id, 'remove')
+    expect(await fs.readFile(path.join(directory, 'owner-notes.txt'), 'utf8')).toBe('Preserve owner files')
+    expect(await catalog.getInstalledMCP(id)).toBeUndefined()
+  })
+})
+
 it('finds native catalog connections without activation and requires separate owner Add, Enable and Connect actions', async () => {
   await owner('mcp-owner-a', async () => {
     const { searchAgentCatalog } = await import('@/core/tool-manager/catalog/agent-catalog')
