@@ -4,6 +4,8 @@ import { Type } from '@sinclair/typebox'
 import { REMIX_ICON_NAME_PATTERN } from '@/constants'
 import { SkillBridges } from '@/core/brain/types'
 import { NLPAction } from '@/core/nlp/types'
+import { catalogMetadataProperties } from './catalog-metadata-schemas'
+import { SkillFormat } from '@/types'
 
 const SKILL_ACTION_ANSWERS_DESCRIPTION =
   'Answers are the responses that Leon can give to the owners. They can be simple strings or objects with speech and text properties to differentiate between spoken and written responses.'
@@ -216,6 +218,7 @@ export const skillLocaleConfigObject = Type.Strict(
 )
 export const skillSchemaObject = Type.Strict(
   Type.Object({
+    format: Type.Optional(Type.Literal(SkillFormat.LeonNative)),
     name: Type.String({ minLength: 1, description: 'The name of the skill.' }),
     icon_name: Type.String({
       minLength: 1,
@@ -232,32 +235,7 @@ export const skillSchemaObject = Type.Strict(
       minLength: 1,
       description: 'This helps people understand what your skill does.'
     }),
-    author: Type.Object(
-      {
-        name: Type.String({ minLength: 1, description: 'Name of the author.' }),
-        email: Type.Optional(
-          Type.String({
-            minLength: 1,
-            maxLength: 254,
-            format: 'email',
-            description: 'Email address of the author.'
-          })
-        ),
-        url: Type.Optional(
-          Type.String({
-            minLength: 1,
-            maxLength: 255,
-            format: 'uri',
-            description: 'Website of the author.'
-          })
-        )
-      },
-      {
-        additionalProperties: false,
-        description:
-          'A person who has been involved in creating or maintaining this skill.'
-      }
-    ),
+    ...catalogMetadataProperties,
     workflow: Type.Optional(
       Type.Array(Type.String(), {
         description:

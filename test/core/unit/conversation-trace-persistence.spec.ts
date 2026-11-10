@@ -27,6 +27,7 @@ import {
 } from '@/core/llm-manager/inference-metadata'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
+import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
 const sessions = vi.hoisted(() => ({
   root: '', selectedSession: 'pulse-session', repository: null as ConversationRepository | null
@@ -460,6 +461,8 @@ describe('conversation trace persistence', () => {
           toolCallTitle: 'Look up the requested value',
           toolkitName: 'Test Toolkit',
           toolName: 'Official Lookup',
+          toolkitIconName: 'tools-line',
+          toolIconName: 'mail-line',
           durationMs: 138
         }],
         progressMessages: [{
@@ -481,6 +484,12 @@ describe('conversation trace persistence', () => {
     expect(reloaded.filter(ConversationHistoryHelper.isAddedToHistory)).toEqual([])
     expect(ConversationHistoryHelper.toHistoryItems(reloaded, { supportsWidgets: true })[0]?.agentResponseTrace)
       .toEqual(draft.agentResponseTrace)
+    const logo = { url: 'tools/test.lookup/assets/logo.svg', mode: LogoMaskMode.Alpha }
+    const projected = ConversationHistoryHelper.toHistoryItems(reloaded, {
+      supportsWidgets: true, resolveToolIconNames: () => ({ toolLogo: logo })
+    })
+    expect(projected[0]?.agentResponseTrace?.toolCalls[0]?.toolLogo).toEqual(logo)
+    expect(reloaded[0]?.agentResponseTrace?.toolCalls[0]).not.toHaveProperty('toolLogo')
 
     const activity = {
       ...draft,

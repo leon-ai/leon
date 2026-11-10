@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentResponseTraceCollector } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-response-trace-collector'
 import { deserializeAgentTrace, serializeAgentTrace } from '@/core/http-server/http-plugins/leon-services/agent-trace-serializer'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
+import * as turnTiming from '@/core/llm-manager/turn-timing'
 
 describe('AgentResponseTraceCollector', () => {
   it('retains the current answer start through streaming and replay without retaining discarded drafts', () => {
@@ -23,7 +25,8 @@ describe('AgentResponseTraceCollector', () => {
   it('separates argument preparation from dispatch and preserves both timestamps through replay', () => {
     const collector = new AgentResponseTraceCollector()
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
-    const toolCall = { id: 'tool', name: 'test.lookup' }
+    const toolCall = { id: 'tool', name: 'test.lookup',
+      toolLogo: { url: 'tools/test.lookup/assets/logo.svg', mode: LogoMaskMode.Alpha } }
 
     const preparingEvent = collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'preparing' } })
     const preparing = collector.snapshot({})
@@ -198,6 +201,8 @@ describe('AgentResponseTraceCollector', () => {
     collector.record({ type: 'plan_step', step: { id: 'second', label: 'Second step', status: 'pending' } })
     const thought = collector.recordReasoning('thought', 'Checking ', 'agent')
     const started = collector.record({ type: 'inference_activity', activity: inference })
+    const preparation = { ...inference, id: 'runtime', kind: 'phase' as const, goal: 'mcp-connection', subject: 'Workspace' }
+    collector.record({ type: 'inference_activity', activity: preparation })
     const progress = { id: 'progress', content: 'Checking the result.', createdAt: 1_000 }
     collector.record({ type: 'progress_message', message: progress })
     collector.record({ type: 'tool_call', toolCall: { id: 'tool', name: 'test.lookup', status: 'preparing' } })
@@ -211,6 +216,9 @@ describe('AgentResponseTraceCollector', () => {
     const completed = collector.record({ type: 'inference_activity', activity: {
       ...inference, outcome: 'completed', durationMs: 500
     } })
+    expect(collector.record({ type: 'inference_activity', activity: { ...preparation, outcome: 'completed', durationMs: 500 } }))
+      .toMatchObject({ activity: { planStepId: 'first', kind: 'phase', subject: 'Workspace' } })
+    vi.spyOn(turnTiming, 'getTurnTimings').mockReturnValue([{ ...preparation, durationMs: 500, outcome: 'completed' }])
     collector.record({ type: 'tool_call', toolCall: { id: 'tool', name: 'test.lookup', status: 'success' } })
     collector.record({ type: 'progress_message', message: { ...progress, createdAt: 2_000, content: 'Checked the result.' } })
     expect(unowned).toMatchObject({ activity: { planStepId: null } })
@@ -224,6 +232,7 @@ describe('AgentResponseTraceCollector', () => {
     expect(snapshot.toolCalls).toMatchObject([{ planStepId: 'first' }, { planStepId: 'second' }])
     expect(snapshot.progressMessages).toMatchObject([{ planStepId: 'first', createdAt: 1_000 }])
     const replayed = deserializeAgentTrace(serializeAgentTrace(snapshot, false))
+    expect(replayed.timings).toEqual([{ ...preparation, durationMs: 500, outcome: 'completed', planStepId: 'first' }])
     expect(replayed.toolCalls).toEqual(snapshot.toolCalls)
     expect(replayed.progressMessages).toEqual(snapshot.progressMessages)
     collector.reset()

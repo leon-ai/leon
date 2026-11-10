@@ -2,13 +2,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import url from 'node:url'
+import { randomUUID } from 'node:crypto'
 import { execFile, execFileSync } from 'node:child_process'
 
-import {
-  NetworkHelper,
-  type DownloadFileOptions
-} from '@/helpers/network-helper'
-import { SystemHelper } from '@/helpers/system-helper'
+import type { DownloadFileOptions } from '@/helpers/network-helper'
 
 const DEFAULT_FILE_ICON_NAME = 'file-line'
 const FOLDER_ICON_NAME = 'folder-3-line'
@@ -133,6 +130,29 @@ const FILE_EXTENSION_REMIX_ICON_NAMES = new Map<string, string>([
 
 export class FileHelper {
   /**
+   * Publishes complete profile state atomically, optionally without replacing a
+   * file created concurrently. Partial writes never become visible to readers.
+   */
+  public static async writeAtomicJSON(
+    filename: string,
+    value: unknown,
+    options: { exclusive?: boolean } = {}
+  ): Promise<void> {
+    const temporary = `${filename}.${randomUUID()}.tmp`
+    await fs.promises.mkdir(path.dirname(filename), { recursive: true, mode: 0o700 })
+    try {
+      await fs.promises.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
+      if (options.exclusive) {
+        await fs.promises.link(temporary, filename)
+      } else {
+        await fs.promises.rename(temporary, filename)
+      }
+    } finally {
+      await fs.promises.unlink(temporary).catch(() => undefined)
+    }
+  }
+
+  /**
    * Page UTF-8 text with JavaScript character offsets without loading the file.
    */
   public static async readTextFilePage(
@@ -217,6 +237,7 @@ export class FileHelper {
    * @returns The resolved path that was opened
    */
   public static async openPath(targetPath: string): Promise<string> {
+    const { SystemHelper } = await import('@/helpers/system-helper')
     const expandedPath = FileHelper.expandHomeAlias(targetPath)
     const resolvedPath = path.resolve(expandedPath)
 
@@ -299,6 +320,7 @@ export class FileHelper {
     destinationPath: string,
     options?: DownloadFileOptions
   ): Promise<void> {
+    const { NetworkHelper } = await import('@/helpers/network-helper')
     await NetworkHelper.downloadFile(fileURL, destinationPath, options)
   }
 
@@ -341,6 +363,7 @@ export class FileHelper {
       stripComponents?: number
     }
   ): Promise<void> {
+    const { SystemHelper } = await import('@/helpers/system-helper')
     const stripComponents = options?.stripComponents ?? 0
 
     await fs.promises.mkdir(targetPath, { recursive: true })

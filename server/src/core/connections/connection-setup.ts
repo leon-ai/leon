@@ -11,6 +11,7 @@ import {
 export { CONNECTION_SETUP_MESSAGES, type ConnectionSetupResult } from '@@/aurora/src/contracts/connection-setup'
 
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { TOOLKIT_REGISTRY } from '@/core'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import {
   getActiveProfileName,
@@ -52,16 +53,39 @@ export async function handleConnectionSetup(
   }
 
   return runWithProfileContext({ profileName }, async () => {
-    await ensureActiveProfileRuntime()
-    if (
-      !input.session_id ||
-      !CONVERSATION_SESSION_MANAGER.getSession(input.session_id)
-    ) {
+    if (input.session_id) {
+      await ensureActiveProfileRuntime()
+    } else {
+      // Settings needs tool metadata, not model initialization.
+      await TOOLKIT_REGISTRY.load()
+    }
+    if (input.session_id && !CONVERSATION_SESSION_MANAGER.getSession(input.session_id)) {
       throw new Error('A conversation in this profile is required.')
     }
-
+    if (!input.session_id && [SetupAction.StartSetup, SetupAction.Continue].includes(input.action as SetupAction)) {
+      throw new Error('Open a conversation for assisted setup or continuing a request.')
+    }
     if (!Object.values(SetupAction).includes(input.action as SetupAction)) {
       throw new Error('Unknown connection setup action.')
+    }
+    const { prepareCatalogConnection } = await import('./catalog-setup')
+    const activation = await prepareCatalogConnection(input)
+    if (activation) {
+      return activation
+    }
+    // Activation is not authorization. After Add/Enable, show the existing
+    // account setup screen without initiating OAuth or accepting credentials.
+    if ([SetupAction.Install, SetupAction.Enable].includes(input.action as SetupAction) ||
+      input.action === SetupAction.Refresh && input.state?.method === 'catalog') {
+      input = { ...input, action: SetupAction.Refresh }
+      delete input.state
+      delete input.credentials
+      delete input.method
+    }
+    const { setupMCPConnection } = await import('@/core/tool-manager/mcp/setup')
+    const remote = await setupMCPConnection(input)
+    if (remote) {
+      return remote
     }
 
     const tool = (await getConnectionCatalog({
@@ -329,6 +353,10 @@ export async function handleConnectionSetup(
           )
         }
       }
+    }
+
+    if (!input.session_id) {
+      view.actions = view.actions.filter((action) => ![SetupAction.StartSetup, SetupAction.Continue].includes(action.id as SetupAction))
     }
 
     return {

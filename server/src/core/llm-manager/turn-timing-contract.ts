@@ -29,6 +29,9 @@ export enum TurnPhase {
   Clarification = 'clarification',
   Cancellation = 'cancellation',
   Connection = 'connection-setup',
+  MCPConnection = 'mcp-connection',
+  MCPDiscovery = 'mcp-discovery',
+  CatalogSearch = 'catalog-search',
   VisualSetup = 'visual-setup',
   Visual = 'visual-generation',
   VisualPresentation = 'visual-presentation',
@@ -66,6 +69,7 @@ export interface TurnTiming {
   parentId?: string
   kind: 'phase' | 'inference'
   goal: string
+  subject?: string
   startedAt: number
   durationMs: number
   outcome: string
@@ -78,4 +82,15 @@ export interface TurnTiming {
   usage?: import('./llm-usage/usage-accounting').InferenceUsage
 }
 
-export type InferenceActivity = Pick<TurnTiming, 'id' | 'goal' | 'startedAt' | 'durationMs' | 'outcome' | 'planStepId'>
+// The event name remains compatible with saved clients; kind distinguishes
+// measured preparation from provider inference and token accounting.
+export type InferenceActivity = Pick<TurnTiming, 'id' | 'goal' | 'subject' | 'startedAt' | 'durationMs' | 'outcome' | 'planStepId'> & {
+  kind?: TurnTiming['kind']
+}
+
+/**
+ * Selects runtime preparation that deserves a visible, measured activity.
+ */
+export function isToolPreparationPhase(goal: string): boolean {
+  return goal === TurnPhase.MCPConnection || goal === TurnPhase.MCPDiscovery
+}

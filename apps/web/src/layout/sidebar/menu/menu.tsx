@@ -89,7 +89,7 @@ export function Menu({
   )
   const scrollableItems = (
     <>
-      <MenuItem iconName="settings" label="Settings" shortcutKeys={['/']} collapsed={collapsed} />
+      <MenuItem iconName="settings" label="Settings" to="/settings" shortcutKeys={['/']} collapsed={collapsed} />
       <MenuItem iconName="download-cloud-2" label="Update" badge={NewBadge} collapsed={collapsed} />
       <MenuItem iconName="book-open" label="Docs" disabled badge={SoonBadge} collapsed={collapsed} />
     </>

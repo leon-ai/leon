@@ -1,5 +1,7 @@
 export enum ConnectionSetupActionId {
   Refresh = 'refresh',
+  Install = 'install',
+  Enable = 'enable',
   SelectMethod = 'select_method',
   Manual = 'manual',
   Credentials = 'credentials',
@@ -10,6 +12,8 @@ export enum ConnectionSetupActionId {
 
 export enum ConnectionSetupStep {
   Choice = 'choice',
+  Installation = 'installation',
+  Disabled = 'disabled',
   Application = 'application',
   Credentials = 'credentials',
   Assisted = 'assisted',
@@ -81,6 +85,7 @@ export interface ConnectionSetupDescriptor {
   provider: string
   name?: string
   iconName?: string
+  logoUrl?: string
 }
 
 export interface ConnectionSetupResult {

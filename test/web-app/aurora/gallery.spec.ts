@@ -16,10 +16,24 @@ for (const theme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
     }
     await page.getByRole('button', { name: 'Widgets', exact: true }).click()
+    for (const name of ['Notion', 'Spotify', 'TickTick']) {
+      const card = page.getByRole('region', { name: `${name} connection`, exact: true })
+      const logo = card.locator('.aurora-connection-icon img.package-icon')
+      await logo.scrollIntoViewIfNeeded()
+      await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+    }
     for (const name of ['Notion', 'TickTick']) {
       const card = page.getByRole('region', { name: `${name} connection`, exact: true })
       await expect(card.getByRole('button', { name: 'OAuth', exact: true })).toHaveCount(0)
       await expect(card.getByRole('button', { name: `Connect ${name}`, exact: true })).toBeVisible()
+      if (name === 'Notion') {
+        await expect(card.locator('input')).toHaveCount(0)
+        await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
+        await expect(card.getByRole('status')).toContainText('Working on the connection')
+        await card.getByRole('button', { name: 'Finish authorization', exact: true }).click()
+        await expect(card.getByRole('status')).toContainText('Connected — preview only')
+        continue
+      }
       await expect(card.getByText('A one-time application setup', { exact: false })).toBeVisible()
       await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
       await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()

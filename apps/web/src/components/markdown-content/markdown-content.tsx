@@ -34,6 +34,7 @@ const MarkdownAnimationContext = createContext({
   profile: '',
   completed: false,
   math: false,
+  imagePrefix: '',
   revealWindow: { firstBlock: 0, offset: 0 }
 })
 const LINK_SAFETY = { enabled: false }
@@ -49,6 +50,7 @@ interface MarkdownContentProps {
   active?: boolean | undefined
   startDelay?: number
   className?: string
+  imagePrefix?: string
 }
 
 const MarkdownBlock = memo(function MarkdownBlock(props: BlockProps) {
@@ -118,7 +120,14 @@ const COMPONENTS: Components = {
   },
   thead: 'thead', tbody: 'tbody', tr: 'tr', th: 'th', td: 'td',
   // External images can leak conversation data through model-authored URLs.
-  img: ({ alt }) => alt ? <span className="markdown-image-alt">{alt}</span> : null,
+  img: function MarkdownImage({ alt, src }) {
+    const { imagePrefix } = useContext(MarkdownAnimationContext)
+    if (imagePrefix && typeof src === 'string' && src.startsWith(imagePrefix)) {
+      return <img src={src} alt={alt ?? ''} loading="lazy" decoding="async" />
+    }
+
+    return alt ? <span className="markdown-image-alt">{alt}</span> : null
+  },
   pre: ({ node, children }) => {
     const code = node?.children.find((child) => child.type === 'element' && child.tagName === 'code')
     if (code?.type !== 'element') {
@@ -146,7 +155,7 @@ const COMPONENTS: Components = {
  * Uses the same safe Markdown pipeline for live and saved prose. Streamdown owns
  * parsing and block memoization; Leon's renderer alone owns character motion.
  */
-export function MarkdownContent({ animationId, text, active = false, startDelay = 0, className }: MarkdownContentProps) {
+export function MarkdownContent({ animationId, text, active = false, startDelay = 0, className, imagePrefix = '' }: MarkdownContentProps) {
   const scopeId = useId()
   const profile = useProfile()
   const [math, setMath] = useState<PluginConfig['math']>(cachedMath)
@@ -187,8 +196,9 @@ export function MarkdownContent({ animationId, text, active = false, startDelay 
     profile,
     completed: !active,
     math: Boolean(math),
+    imagePrefix,
     revealWindow: { firstBlock: 0, offset: 0 }
-  }), [animationId, startDelay, scopeId, profile, active, math])
+  }), [animationId, startDelay, scopeId, profile, active, math, imagePrefix])
   const parseBlocks = useCallback((markdown: string): string[] => {
     const blocks = readCompletedMarkdown(profile, MarkdownCacheKind.Blocks, markdown, !active, () => parseMarkdownIntoBlocks(markdown))
     let remaining = MAXIMUM_ANIMATED_SOURCE_CHARACTERS

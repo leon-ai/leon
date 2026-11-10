@@ -5,10 +5,30 @@
   "name": "TickTick",
   "description": "Read TickTick projects and tasks, create or update tasks, and mark tasks complete.",
   "icon_name": "checkbox-circle-line",
+  "logo": "logo.svg",
+  "logo_mask": "alpha",
+  "distribution": "extension",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "connection": {
     "required_settings": [

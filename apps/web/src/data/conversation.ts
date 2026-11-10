@@ -17,6 +17,7 @@ export interface ConversationTool {
   toolkitName?: string
   toolName?: string
   toolIconName?: string
+  toolLogo?: import('../../../../aurora/src/contracts/package-logo').MaskedPackageLogo
   toolkitIconName?: string
   startedAt?: number
   preparationStartedAt?: number

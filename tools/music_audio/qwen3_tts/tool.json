@@ -5,10 +5,28 @@
   "name": "Qwen3-TTS",
   "description": "A tool for text-to-speech, voice cloning, and voice design using Qwen3-TTS models.",
   "icon_name": "qwen-ai-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "binaries": {
     "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/qwen3_tts-v1.0.1/qwen3_tts_1.0.1-linux-x86_64",

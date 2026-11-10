@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-11-08T15:40:11+08:00
+- Generated at: 2026-11-10T23:05:31+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -9,6 +9,9 @@
 - Progressive grounding: Leon prefers context and memory tools first, then shell only when no dedicated tool can satisfy the request.
 - Auditable steps: Leon keeps plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
 - Tools own dependencies, settings, connections and device behavior. Core/bridge hosts own execution, transport and authentication. `bridges/runtime/` holds dependency-free shared contracts/Node.js capabilities; Core and SDK implementations stay independent with equivalent Node.js/Python SDK behavior.
+- Native tools keep their SDK workers. Owner-installed HTTP MCP servers have profile-local tool manifests and bounded discovered schemas; Core owns their lazy transports, encrypted OAuth and cancellation, routing results through the ordinary execution/logging lifecycle. Bundled MCP catalog entries alone are not installed or callable, and remote writes are never automatically replayed.
+- Tool catalogs derive from canonical tools/<toolkit>/<tool>/tool.json definitions for native and MCP sources. Native skills use skill.json; Agent Skills retain SKILL.md discovery with optional format-specific skill.json package metadata. Built-in distribution, optional extension installation, profile availability and maintenance provenance are independent; owner-facing documentation and local assets load only on demand and never enter model prompts. Previous tool IDs retain installed identity and authorization without rewriting history.
+- The agent searches bounded local catalog metadata on demand before declaring a service unavailable. Catalog discovery is read-only; trusted setup cards require explicit owner actions to add, enable and authorize tools while respecting profile policy.
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
 - Browser conversations use profile-scoped HTTP commands and durable SSE replay; Socket.IO remains available for other clients. Browser and legacy owner-agent entry points share turn orchestration.
@@ -48,6 +51,7 @@
 - Plans track scope, collection coverage and verified outcomes; their worklists persist through checkpointing and continuation.
 - The agent can share progress updates alongside tool calls during longer tasks.
 - Foreground inference lifecycle metadata streams to browser clients and survives replay; private review content and auxiliary background inferences stay out of live feed activity.
+- MCP connection waits and schema discovery emit measured runtime activities only when performed. Shared ready transports do not repeat connection labels; intervals are distinct from model/token usage and excluded from unmeasured turn time without double-counting overlap.
 - Memory and experience outcomes persist in the originating reply’s activity timeline; background results leave completed turns completed.
 - FYI footers run independently after final-answer delivery with separate usage accounting. Profile-local conversation storage persists each footer and atomically rotates mindset lines; durable events update the originating answer without reopening the turn or adding footer text to model context.
 - Clarification pauses preserve the transcript, plan and execution state so the owner reply can resume the same task.

@@ -6,12 +6,19 @@ import { ConnectionSetupActionId as Action, ConnectionSetupStep as Step, CONNECT
 import { CONNECTION_PREVIEWS, CONNECTION_PREVIEW_STATES, connectionPreviewView } from '../../../fixtures/connections'
 import { CopyButton } from '@/components/copy-button'
 import { Icon } from '@/components/icon'
+import { PackageIcon } from '@/components/package-icon/package-icon'
+
+const PACKAGE_LOGOS = import.meta.glob<string>('../../../../tools/*/*/logo.svg', {
+  eager: true, query: '?url&no-inline', import: 'default'
+})
 
 /**
  * Exercises trusted connection screens without contacting a provider or saving credentials.
  */
 export function ConnectionPreview({ id }: { id: string }) {
   const preview = CONNECTION_PREVIEWS[id]!
+  const logo = preview.logo
+    ? PACKAGE_LOGOS[`../../../../tools/${preview.provider.replace('.', '/')}/${preview.logo}`] : undefined
   const [configuration, setConfiguration] = useState('application')
   const [step, setStep] = useState<string>(Step.Choice)
   const methods = Object.keys(preview.methods)
@@ -53,7 +60,7 @@ export function ConnectionPreview({ id }: { id: string }) {
     <ConnectionSetupWidget title={`Set up ${preview.name}`} view={step === 'loading' ? undefined : connectionPreviewView(preview, method, step, configuration === 'ready')}
       loading={step === 'loading'} busy={step === 'authorizing'}
       error={step === 'failed' ? CONNECTION_SETUP_MESSAGES.actionError : undefined}
-      icon={<Icon name={preview.iconName} />} statusIcon={<Icon name="check-fill" />}
+      icon={<PackageIcon assetSrc={logo} iconName={preview.iconName} />} statusIcon={<Icon name="check-fill" />}
       onRefresh={() => setStep(step === 'loading' || step === 'failed' ? Step.Choice : step)}
       onAction={act} renderCopyButton={(item) => <CopyButton text={item.value} label={item.copyLabel} size="sm" />} />
     {step === 'authorizing' && <div className="aurora-actions">

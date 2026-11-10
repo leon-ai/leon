@@ -37,6 +37,7 @@ export interface FeedToolCall extends FeedActivityTime {
   toolkitName: string
   toolName: string
   toolIconName: string
+  toolLogo?: import('../../../../aurora/src/contracts/package-logo').MaskedPackageLogo
   toolkitIconName?: string
   functionName: string
   status: FeedToolCallStatus
@@ -138,6 +139,7 @@ export interface FeedModelProcessingActivity extends FeedActivityTime {
     isActive?: boolean
     activeLabel?: string
     isGeneric?: boolean
+    isRuntime?: boolean
     startedAt?: number | undefined
     planStepId?: string | null | undefined
   }[]

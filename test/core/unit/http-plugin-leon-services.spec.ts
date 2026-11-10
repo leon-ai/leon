@@ -366,6 +366,15 @@ import { ToolSettings } from '@/core/tool-manager/tool-settings'
 import { CONNECTION_PREVIEWS } from '../../fixtures/connections'
 import { ConnectionSetupActionId as SetupAction, ConnectionSetupStep as SetupStep } from '../../../aurora/src/contracts/connection-setup'
 import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
+import { ToolCatalog } from '@/core/tool-manager/catalog/catalog'
+
+function installConnectionFixture(): void {
+  vi.spyOn(ToolCatalog.prototype, 'list').mockResolvedValue([{
+    id: 'productivity_collaboration.ticktick', name: 'TickTick', description: 'Manage tasks.',
+    iconName: 'checkbox-circle-line', kind: 'native', installed: true, enabled: true,
+    connected: false, canConnect: true
+  }])
+}
 
 it('overrides only declared setup display values without mutating tool defaults', async () => {
   const tool = {
@@ -393,9 +402,10 @@ describe('HTTP plugin Leon services', () => {
     { name: 'configured OAuth application', oauth: true, configured: true, expected: 'oauth', action: SetupAction.Connect },
     { name: 'token-only tool', oauth: false, configured: false, expected: 'api_key', action: SetupAction.Credentials }
   ])('offers one recommended path for a $name', async ({ oauth, configured, expected, action }) => {
-    const preview = CONNECTION_PREVIEWS['connection-notion']!
+    installConnectionFixture()
+    const preview = CONNECTION_PREVIEWS['connection-ticktick']!
     const tool = {
-      toolkit_id: 'productivity_collaboration', tool_id: 'notion', name: preview.name,
+      toolkit_id: 'productivity_collaboration', tool_id: 'ticktick', name: preview.name,
       connection: { methods: oauth ? preview.methods : { api_key: preview.methods['api_key']! } }
     }
     mocks.connectionRegistry.getConnectionTools.mockReturnValue([tool])
@@ -417,7 +427,7 @@ describe('HTTP plugin Leon services', () => {
     const { view } = await handleConnectionSetup(input)
     expect(view.state).toEqual({ method: expected, step: SetupStep.Choice })
     expect(view.actions.filter((entry) => !entry.secondary)).toEqual([
-      { id: action, label: 'Connect Notion', secondary: false }
+      { id: action, label: 'Connect TickTick', secondary: false }
     ])
     expect(view.actions.some((entry) => entry.id === SetupAction.SelectMethod)).toBe(false)
     expect(view.fields).toEqual([])
@@ -439,7 +449,7 @@ describe('HTTP plugin Leon services', () => {
       application.mockResolvedValue({ client_id: 'configured-app', client_secret: 'configured-secret' })
       const refreshed = await handleConnectionSetup({ ...input, state: assisted.view.state })
       expect(refreshed.view.actions).toEqual([
-        { id: SetupAction.Connect, label: 'Connect Notion', secondary: false }
+        { id: SetupAction.Connect, label: 'Connect TickTick', secondary: false }
       ])
     }
     if (configured) {
@@ -458,9 +468,10 @@ describe('HTTP plugin Leon services', () => {
   })
 
   it('reuses connected accounts and preserves explicit setup methods', async () => {
-    const preview = CONNECTION_PREVIEWS['connection-notion']!
+    installConnectionFixture()
+    const preview = CONNECTION_PREVIEWS['connection-ticktick']!
     const tool = {
-      toolkit_id: 'productivity_collaboration', tool_id: 'notion', name: preview.name,
+      toolkit_id: 'productivity_collaboration', tool_id: 'ticktick', name: preview.name,
       connection: { methods: preview.methods }
     }
     mocks.connectionRegistry.getConnectionTools.mockReturnValue([tool])

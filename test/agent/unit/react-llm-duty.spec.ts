@@ -151,7 +151,8 @@ vi.mock('@/core', () => ({
     getFlattenedTools: coreMocks.getFlattenedTools,
     getToolFunctions: coreMocks.getToolFunctions,
     getToolConcurrency: (): ToolConcurrency => ToolConcurrency.Parallel,
-    resolveToolById: coreMocks.resolveToolById
+    resolveToolById: coreMocks.resolveToolById,
+    getToolIconLogo: (): undefined => undefined
   }
 }))
 

@@ -5,10 +5,28 @@
   "bridge": "python",
   "version": "1.0.0",
   "description": "Rock paper scissors game.",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://github.com/louistiti"
+    "url": "https://github.com/louistiti",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "workflow": ["set_up", "play", "rematch"],
   "actions": {

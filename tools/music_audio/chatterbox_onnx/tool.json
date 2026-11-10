@@ -5,10 +5,28 @@
   "name": "Chatterbox ONNX",
   "description": "A tool for text-to-speech synthesis and voice cloning using the Chatterbox ONNX model.",
   "icon_name": "chat-voice-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "binaries": {
     "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-linux-x86_64",

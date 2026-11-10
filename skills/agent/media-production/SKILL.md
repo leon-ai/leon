@@ -1,9 +1,6 @@
 ---
 name: media-production
 description: Generate and edit images, vector artwork, photos, audio and video; inspect results and deliver finished artifacts.
-metadata:
-  author: "Louis Grenard <louis@getleon.ai>"
-  version: "1.0.0"
 ---
 
 # Media Production

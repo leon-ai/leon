@@ -5,10 +5,28 @@
   "name": "Apache ECharts",
   "description": "Render styled Apache ECharts data charts locally as separate downloadable SVG and PNG artifacts, ready for PDF or Word documents.",
   "icon_name": "pie-chart-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "progressive_guidance": "Create charts with native ECharts JSON options and grounded data. Use one charts entry per requested chart. No provider, browser or account is required. Default styling provides readable light/dark charts; override titles, axes, series and labels through ECharts options. Rendered files are static image artifacts, not interactive session components. Use returned charts paths to embed SVG/PNG assets with typst image/figure or document.create sections.images. Use SVG for sharp PDF figures and PNG for broadly compatible image downloads.",
   "functions": {

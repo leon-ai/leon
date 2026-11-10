@@ -3,6 +3,7 @@ import type { Locator, Page, Route } from '@playwright/test'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
+import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
 import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
@@ -11,7 +12,7 @@ test('warms session intent and search code without navigating, consuming state, 
   page.on('request', (request) => resources.push(request.url()))
   await page.goto('./')
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
-  expect(resources.some((url) => /search-sessions-dialog-|rare-icon-morphs-|rare-brand-icons-|weather-layer-/.test(url))).toBe(false)
+  expect(resources.some((url) => /search-sessions-dialog-|rare-icon-morphs-|weather-layer-/.test(url))).toBe(false)
   await page.getByRole('button', { name: 'Search sessions', exact: true }).hover()
   await expect.poll(() => resources.some((url) => url.includes('search-sessions-dialog-'))).toBe(true)
   await expect(page.getByRole('dialog', { name: 'Search sessions', exact: true })).toHaveCount(0)
@@ -215,16 +216,41 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
-test('resolves dynamic SVG artwork locally and highlights running tools with safe fallbacks', async ({ page, ui }) => {
+test('resolves dynamic SVG artwork locally and highlights running tools with safe fallbacks', async ({ page, ui }, testInfo) => {
+  const logos = [
+    { name: 'Gmail logo', id: 'communication.gmail', icon: 'mail-line', mode: LogoMaskMode.Alpha },
+    { name: 'Spotify logo', id: 'music_audio.spotify', icon: 'spotify-line', mode: LogoMaskMode.Alpha },
+    { name: 'TickTick logo', id: 'productivity_collaboration.ticktick', icon: 'checkbox-circle-line', mode: LogoMaskMode.Alpha },
+    { name: 'Notion logo', id: 'productivity_collaboration.notion', icon: 'notion-line', mode: LogoMaskMode.InverseLuminance }
+  ]
+  const external: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('untrusted.example')) {
+      external.push(request.url())
+    }
+  })
+  await page.route('**/api/v1/tools/*/assets/logo.svg', (route) => {
+    const id = new URL(route.request().url()).pathname.split('/')[4]!
+
+    return route.fulfill(id === 'test.missing' ? { status: 404, body: '' }
+      : { contentType: 'image/svg+xml', path: `tools/${id.replace('.', '/')}/logo.svg` })
+  })
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.message = ''
   answer.isAddedToHistory = false
   answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [
-    ['terminal-line', 'Shell'], ['football-line', 'Sport'], ['spotify-line', 'Music'],
+    ['terminal-line', 'Shell'], ['football-line', 'Sport'], ['spotify-line', 'Music'], ['notion-line', 'Notion'],
     ['cursor-line', 'Cursor'], ['file-text-line', 'File'], ['file-list-3-line', 'File list'],
     ['constructor', 'Unknown'], ['<svg onload="alert(1)">', 'Untrusted']
-  ].map(([icon, label], index) => ({ id: `icon-${index}`, name: 'test.tools.run', toolCallTitle: label!,
+  ].map(([icon, label], index): ConversationTool => ({ id: `icon-${index}`, name: 'test.tools.run', toolCallTitle: label!,
     toolIconName: icon!, toolkitIconName: label === 'Unknown' ? 'global-line' : 'tools-line', status: 'running', input: {}, output: '' })) }
+  answer.agentResponseTrace.toolCalls.push(...logos.map((logo): ConversationTool => ({
+    id: logo.id, name: `${logo.id}.run`, toolCallTitle: logo.name, toolIconName: logo.icon,
+    toolLogo: { url: `tools/${logo.id}/assets/logo.svg`, mode: logo.mode }, status: 'running'
+  })), { id: 'missing-logo', name: 'test.missing.run', toolCallTitle: 'Broken logo', toolIconName: 'mail-line',
+    toolLogo: { url: 'tools/test.missing/assets/logo.svg', mode: LogoMaskMode.Alpha }, status: 'running' },
+  { id: 'external-logo', name: 'test.external.run', toolCallTitle: 'External logo', toolIconName: 'mail-line',
+    toolLogo: { url: 'https://untrusted.example/assets/logo.svg', mode: LogoMaskMode.Alpha }, status: 'running' })
   ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
   await page.goto(SESSION_URL)
   await expect(page.getByRole('button', { name: 'Sport', exact: true }).locator('[data-icon="football"]')).not.toHaveAttribute('data-icon-fallback')
@@ -235,13 +261,19 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
     await expect(page.getByRole('button', { name: label!, exact: true }).locator(`[data-icon="${name}"]`))
       .toHaveAttribute('data-icon-artwork', artwork!)
   }
-  for (const label of ['Shell', 'Sport', 'Music', 'Unknown', 'Untrusted']) {
+  for (const label of ['Shell', 'Sport', 'Music', 'Notion', 'Unknown', 'Untrusted']) {
     const icon = page.getByRole('button', { name: label, exact: true }).locator('.tool-call-tool-icon')
     await expect(icon).toBeVisible()
-    expect(await icon.locator('path').count()).toBeGreaterThan(0)
+    if (label === 'Music' || label === 'Notion') {
+      const name = label === 'Music' ? 'spotify' : 'notion'
+      await expect(icon).toHaveCSS('mask-image', new RegExp(`/img/icons/${name}\\.svg`))
+      await expect(icon).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+      continue
+    }
     if (label === 'Unknown' || label === 'Untrusted') {
       await expect(icon).toHaveAttribute('data-icon-fallback', label === 'Unknown' ? 'global' : 'tools')
     }
+    expect(await icon.locator('path').count()).toBeGreaterThan(0)
     if (label !== 'Sport') {
       await expect.poll(() => icon.locator('path').first().evaluate((element) => {
         const style = getComputedStyle(element)
@@ -251,8 +283,46 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
     }
   }
   expect(await page.locator('[onload]').count()).toBe(0)
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await expect(page.locator('.tool-call-tool-icon defs')).toHaveCount(0)
+  for (const label of ['Broken logo', 'External logo']) {
+    const fallback = page.getByRole('button', { name: label, exact: true }).locator('.tool-call-tool-icon')
+    await expect(fallback).toHaveAttribute('data-icon', 'mail')
+    await expect(fallback).not.toHaveAttribute('data-icon-fallback')
+    await expect(fallback.locator('path').first()).toHaveCSS('fill', 'none')
+    await expect.poll(() => fallback.locator('path').first().evaluate((element) => {
+      const style = getComputedStyle(element)
+
+      return style.fill.startsWith('url(') || style.stroke.startsWith('url(')
+    })).toBe(true)
+  }
+  for (const theme of ['dark', 'light']) {
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+      await page.emulateMedia({ reducedMotion })
+      for (const logo of logos) {
+        const mask = page.getByRole('button', { name: logo.name, exact: true }).locator('.package-icon-mask')
+        await expect(mask).toHaveAttribute('data-logo-mask', logo.mode)
+        await expect.poll(() => mask.locator('img').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+        await expect(mask).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+        const paints = await mask.evaluate((element) => {
+          const icon = getComputedStyle(element)
+          const heading = getComputedStyle(element.closest('.activity-wave')!)
+
+          return { icon: icon.backgroundPosition, heading: heading.backgroundPosition, image: icon.backgroundImage }
+        })
+        if (reducedMotion === 'no-preference') {
+          expect(paints.icon).toBe(paints.heading)
+        }
+        expect(paints.image === 'none').toBe(reducedMotion === 'reduce')
+      }
+      await page.screenshot({ path: testInfo.outputPath(`tool-logos-${theme}-${reducedMotion}.png`) })
+      if (reducedMotion === 'reduce') {
+        await expect(page.locator('.tool-call-tool-icon defs')).toHaveCount(0)
+      }
+    }
+  }
+  expect(external).toEqual([])
 })
 
 async function expectBottom(page: Page): Promise<void> {

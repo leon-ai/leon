@@ -14,6 +14,7 @@ const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
 interface ToolIconNames {
   toolkitIconName?: string
   toolIconName?: string
+  toolLogo?: import('@@/aurora/src/contracts/package-logo').MaskedPackageLogo
 }
 
 export class ConversationHistoryHelper {
@@ -278,7 +279,11 @@ export class ConversationHistoryHelper {
     })
   }
 
-  private static resolveAgentTraceToolIcons(
+  /**
+   * Fills missing display metadata in a response without rewriting stored history
+   * or coupling conversation persistence to the execution registry.
+   */
+  public static resolveAgentTraceToolIcons(
     trace: AgentResponseTrace,
     resolveToolIconNames?: (qualifiedName: string) => ToolIconNames | null
   ): AgentResponseTrace {
@@ -289,7 +294,7 @@ export class ConversationHistoryHelper {
     return {
       ...trace,
       toolCalls: trace.toolCalls.map((toolCall) => {
-        if (toolCall.toolIconName && toolCall.toolkitIconName) {
+        if (toolCall.toolIconName && toolCall.toolkitIconName && toolCall.toolLogo) {
           return toolCall
         }
 

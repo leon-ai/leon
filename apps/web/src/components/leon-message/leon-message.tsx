@@ -158,6 +158,7 @@ function renderActivity(activity: LeonFeedActivity) {
           key={activity.id}
           phaseId={activity.id}
           label={currentRequest.activeLabel ?? 'Processing...'}
+          {...(currentRequest.isRuntime ? { ariaLabel: 'Leon’s tool preparation' } : {})}
           {...(currentRequest.isGeneric ? {} : { iconName: currentRequest.iconName })}
           startedAt={currentRequest.startedAt}
         />
@@ -171,7 +172,7 @@ function renderActivity(activity: LeonFeedActivity) {
           key={activity.id}
           active={false}
           activeLabel="Processing..."
-          ariaLabel="Leon’s inference"
+          ariaLabel={request.isRuntime ? 'Leon’s tool preparation' : 'Leon’s inference'}
           completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
           indicator={<Icon name={`${request.iconName}`} />}
           startedAt={request.startedAt}
@@ -196,7 +197,7 @@ function renderActivity(activity: LeonFeedActivity) {
                 key={request.id}
                 active={false}
                 activeLabel="Processing..."
-                ariaLabel="Leon’s inference"
+                ariaLabel={request.isRuntime ? 'Leon’s tool preparation' : 'Leon’s inference'}
                 completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
                 indicator={<Icon name={`${request.iconName}`} />}
                 startedAt={request.startedAt}

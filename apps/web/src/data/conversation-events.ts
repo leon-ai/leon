@@ -1,6 +1,7 @@
 import type { ConversationEvent, ConversationRecord, ConversationTrace, ConversationTool } from './conversation'
 import type { InferenceActivity } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import type { AnswerPart } from '../../../../aurora/src/v2/contracts/answer'
+import { readMaskedPackageLogo } from '../../../../aurora/src/contracts/package-logo'
 
 /**
  * Keeps accepted receipts and native element identity stable when HTTP responses
@@ -38,6 +39,8 @@ function withAnswerText(parts: AnswerPart[], messageId: string, text: string): A
  * Converts the shared HTTP event schema to the persisted trace field names.
  */
 export function readEventTool(value: Record<string, unknown>): ConversationTool {
+  const toolLogo = readMaskedPackageLogo(value['tool_logo'])
+
   return {
     id: String(value['id'] ?? value['name']),
     name: String(value['name']),
@@ -48,6 +51,7 @@ export function readEventTool(value: Record<string, unknown>): ConversationTool 
     ...(value['toolkit_name'] ? { toolkitName: String(value['toolkit_name']) } : {}),
     ...(value['tool_name'] ? { toolName: String(value['tool_name']) } : {}),
     ...(value['tool_icon_name'] ? { toolIconName: String(value['tool_icon_name']) } : {}),
+    ...(toolLogo ? { toolLogo } : {}),
     ...(value['toolkit_icon_name'] ? { toolkitIconName: String(value['toolkit_icon_name']) } : {}),
     ...(typeof value['started_at'] === 'number' ? { startedAt: value['started_at'] } : {}),
     ...(typeof value['preparation_started_at'] === 'number' ? { preparationStartedAt: value['preparation_started_at'] } : {}),
@@ -158,7 +162,7 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
 
   if (event.type === 'inference_activity') {
     const activity = data['activity'] as InferenceActivity
-    const timing = { ...activity, kind: 'inference' as const }
+    const timing = { ...activity, kind: activity.kind ?? 'inference' as const }
     const found = trace.timings?.some((item) => item.id === timing.id)
     trace.timings = found ? trace.timings!.map((item) => item.id === timing.id ? timing : item)
       : [...(trace.timings ?? []), timing]

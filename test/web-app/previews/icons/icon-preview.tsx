@@ -10,7 +10,7 @@ import { CopyButton } from '@/components/copy-button'
 import { Icon } from '@/components/icon'
 import { ICON_ALIASES, SOFT_ICON_NAMES } from '@/components/icon/icon-definitions'
 import { IconPaths } from '@/components/icon/icon'
-import { BRAND_ICONS } from '@/components/icon/brand-icons'
+import { ASSET_ICONS } from '@/components/icon/asset-icons'
 import { ICON_MORPHS, type MorphFrames } from '@/components/icon/icon-morphs'
 import { MorphPaths } from '@/components/icon/morph-paths'
 import { LLMProviderIcon } from '@/components/llm-provider-icon'
@@ -42,6 +42,10 @@ const MORPH_LABELS: Readonly<Record<string, string>> = {
 const PROVIDERS = Object.keys(import.meta.glob('../../../../apps/web/public/img/providers/*.svg', {
   query: '?url', import: 'default'
 })).map((file) => file.split('/').at(-1)!.slice(0, -'.svg'.length)).sort()
+const PACKAGE_LOGOS = Object.entries(import.meta.glob<string>('../../../../tools/*/*/logo.svg', {
+  eager: true, query: '?url&no-inline', import: 'default'
+})).map(([file, src]) => ({ name: file.split('/').slice(-3, -1).join('/'), src }))
+  .sort((left, right) => left.name.localeCompare(right.name))
 const CATALOGS = [
   { id: 'interface', title: 'Interface and activity', icons: Object.keys(SOFT_COMMON_ICONS).sort() },
   { id: 'tools', title: 'Tools and categories', icons: Object.keys(SOFT_TOOL_ICONS).sort() },
@@ -211,7 +215,8 @@ function IconPreview() {
       </div>
       <nav className="gallery-navigation" aria-label="Gallery sections">
         {CATALOGS.map((catalog) => <a key={catalog.id} href={`#${catalog.id}`}>{catalog.title}</a>)}
-        <a href="#brands">Brand marks</a>
+        <a href="#services">Service icons</a>
+        <a href="#package-logos">Catalog logos</a>
         <a href="#providers">Providers</a><a href="#custom">Custom artwork</a>
         <a href="#gestures">Gestures</a><a href="#morphs">State morphs</a>
       </nav>
@@ -226,10 +231,18 @@ function IconPreview() {
           </ul>
         </GallerySection>
       ))}
-      <GallerySection id="brands" title="Brand marks" count={Object.keys(BRAND_ICONS).length}
-        description="Original artwork stays unchanged; brand marks are not redraw candidates.">
+      <GallerySection id="services" title="Service icons" count={Object.values(ASSET_ICONS).filter((entry) => entry.service).length}
+        description="Monochrome interface glyphs follow the text color; catalog logos are separate assets.">
         <ul className="icon-grid">
-          {Object.keys(BRAND_ICONS).sort().map((name) => <IconTile key={name} name={name}><Icon name={name} /></IconTile>)}
+          {Object.keys(ASSET_ICONS).filter((name) => ASSET_ICONS[name]!.service).sort().map((name) => <IconTile key={name} name={name}><Icon name={name} /></IconTile>)}
+        </ul>
+      </GallerySection>
+      <GallerySection id="package-logos" title="Catalog logos" count={PACKAGE_LOGOS.length}
+        description="Package-local symbols retain their original colors; these are not tool-call glyphs.">
+        <ul className="icon-grid">
+          {PACKAGE_LOGOS.map(({ name, src }) => <IconTile key={name} name={name}>
+            <img src={src} alt={`${name} logo`} loading="lazy" decoding="async" />
+          </IconTile>)}
         </ul>
       </GallerySection>
       <GallerySection id="providers" title="LLM provider logos" count={PROVIDERS.length}

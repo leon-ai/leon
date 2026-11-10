@@ -7,6 +7,7 @@ import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
+import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
 test('replaces fallback artwork after favicon loading and shows complete URL tooltips within the viewport', async ({ page, ui }) => {
   const url = `https://example.com/guide?note=${'slow-craft-'.repeat(24)}`
@@ -113,7 +114,12 @@ for (const legacy of [false, true]) {
     const text = '## A useful guide\n\nKeep **one good idea** close.\n\n| Topic | Note |\n| --- | --- |\n| Craft | Take your time |'
     const sources = [{ url: 'https://example.com/guide', title: 'A useful guide' }]
     const responseId = 'rich-search-response'
+    const logo = { url: 'tools/communication.gmail/assets/logo.svg', mode: LogoMaskMode.Alpha }
+    await page.route('**/api/v1/tools/communication.gmail/assets/logo.svg', (route) => route.fulfill({
+      contentType: 'image/svg+xml', path: 'tools/communication/gmail/logo.svg'
+    }))
     const tool = { id: 'rich-search', name: 'search_web.hosted.searchWeb', toolCallTitle: 'Read useful guidance',
+      toolLogo: logo,
       status: 'running' as const, input: { query: 'Useful guidance' },
       output: { output: text, format: 'markdown' }, commandOutput: text }
     const saved: ConversationRecord = {
@@ -128,7 +134,7 @@ for (const legacy of [false, true]) {
       turn_id: 'rich-search-turn', response_id: responseId, created_at: Date.now()
     }])
     await emit('turn_status', { status: 'accepted' })
-    await emit('tool_call', { tool_call: { ...tool, tool_call_title: tool.toolCallTitle, command_output: text } })
+    await emit('tool_call', { tool_call: { ...tool, tool_logo: logo, tool_call_title: tool.toolCallTitle, command_output: text } })
     const call = page.locator('.tool-call').filter({ hasText: 'Read useful guidance' })
     const revealTool = async (): Promise<void> => {
       const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true }).last()
@@ -140,6 +146,7 @@ for (const legacy of [false, true]) {
       if (await toggle.getAttribute('aria-expanded') === 'false') {
         await toggle.click()
       }
+      await expect(call.locator('.package-icon-mask')).toHaveAttribute('data-logo-mask', LogoMaskMode.Alpha)
     }
     await revealTool()
     const preview = call.getByRole('region', { name: 'Tool output', exact: true })
@@ -2256,6 +2263,49 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     })
   }
 }
+
+test('shows remote connection and discovery as runtime activities and replays their measured durations', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const startedAt = Date.now()
+  let sequence = 0
+  const responseId = 'mcp-runtime-response'
+  const emit = (type: string, data: Record<string, unknown>): Promise<void> => ui.emit([{
+    type, data, sequence: ++sequence, session_id: SESSION_ID,
+    turn_id: 'mcp-runtime-owner', response_id: responseId, created_at: startedAt + sequence
+  }])
+  const connection = { id: 'mcp-connect', kind: 'phase' as const, goal: TurnPhase.MCPConnection,
+    subject: 'Notion', startedAt, durationMs: 0, outcome: 'started' }
+  const discovery = { ...connection, id: 'mcp-discover', goal: TurnPhase.MCPDiscovery, startedAt: startedAt + 1_000 }
+  const runtime = page.getByRole('region', { name: 'Leon’s tool preparation', exact: true })
+  const processing = page.getByRole('region', { name: 'Leon’s processing', exact: true })
+  await emit('turn_status', { status: 'accepted' })
+  await emit('inference_activity', { activity: connection })
+  await expect(runtime.locator('.process-group-title')).toHaveText('Connecting to Notion...')
+  await expect(runtime.locator('[data-icon="plug"]')).toBeVisible()
+  await expect(processing).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(0)
+  const completedConnection = { ...connection, outcome: 'completed', durationMs: 1_000 }
+  await emit('inference_activity', { activity: completedConnection })
+  await emit('inference_activity', { activity: discovery })
+  await expect(runtime.locator('.process-group-title')).toHaveText('Loading Notion tools...')
+  await expect(runtime.locator('[data-icon="stack"]')).toBeVisible()
+  const completedDiscovery = { ...discovery, outcome: 'completed', durationMs: 600 }
+  await emit('inference_activity', { activity: completedDiscovery })
+  const timings = [completedConnection, completedDiscovery]
+  const trace = { id: responseId, planSteps: [], toolCalls: [], timings }
+  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: responseId, message: 'Your workspace is ready.',
+    sentAt: startedAt, isAddedToHistory: true, llmMetrics: { durationMs: 2_000 }, agentResponseTrace: trace })
+  await emit('final_answer', { content: 'Your workspace is ready.', response_trace: {
+    id: responseId, plan_steps: [], tool_calls: [], timings, metrics: { durationMs: 2_000 }
+  } })
+  const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).last()
+  await page.reload()
+  await work.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
+  await processing.getByRole('button', { name: /^Processed for / }).click()
+  await expect(runtime.locator('.process-group-title')).toHaveText(['Connected to Notion in 1s', 'Loaded Notion tools in 600ms'])
+  await expect(processing.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(0)
+  await expect(runtime.locator('.activity-wave-active')).toHaveCount(0)
+})
 
 test('replaces one standalone processing row in place and retains completed request history', async ({ page, ui }) => {
   await page.goto(SESSION_URL)

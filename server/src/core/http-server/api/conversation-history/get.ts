@@ -75,8 +75,10 @@ export const getConversationHistory: FastifyPluginAsync<APIOptions> = async (
                 toolId,
                 toolkitId
               )
+              const toolLogo = TOOLKIT_REGISTRY.getToolIconLogo(toolkitId, toolId)
               return resolvedTool
                 ? {
+                    ...(toolLogo ? { toolLogo } : {}),
                     toolkitIconName: resolvedTool.toolkitIconName,
                     toolIconName: resolvedTool.toolIconName
                   }

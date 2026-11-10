@@ -79,7 +79,7 @@ export const connectionsPlugin: FastifyPluginAsync<APIOptions> = async (
           properties: {
             action: { type: 'string' },
             method: { type: 'string' },
-            session_id: { type: 'string', minLength: 1 },
+            session_id: { type: 'string', maxLength: 256 },
             return_url: { type: 'string', format: 'uri' },
             authorization_failed: { type: 'boolean' },
             state: {

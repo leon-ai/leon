@@ -7,7 +7,7 @@ import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { LogHelper } from '@/helpers/log-helper'
 import { LLMProviders, LLMDuties, type CompletionAttemptTiming } from '@/core/llm-manager/types'
 import { getTurnTimings, recordTurnInference, runOutsideTurnTiming, runTurnPhase,
-  runWithTurnTiming, setTurnPhaseGoal, setTurnTimingSession, TurnPhase, observeTurnInferences } from '@/core/llm-manager/turn-timing'
+  runWithTurnTiming, setTurnPhaseGoal, setTurnTimingSession, TurnPhase, observeTurnActivities } from '@/core/llm-manager/turn-timing'
 import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
 
 const fixture = vi.hoisted(() => ({ root: '' }))
@@ -120,7 +120,7 @@ it('observes content-free request transitions, isolates background scopes and de
     }
     const gate = Promise.withResolvers<void>()
     let detached: Promise<void> | undefined
-    await observeTurnInferences((activity) => updates.push(activity), async () => {
+    await observeTurnActivities((activity) => updates.push(activity), async () => {
       await runTurnPhase(TurnPhase.Request, async () => {
         recordTurnInference(timing)
         setTurnPhaseGoal(TurnPhase.Review)
@@ -129,6 +129,8 @@ it('observes content-free request transitions, isolates background scopes and de
       await runWithTurnTiming('background', 'session', async () => {
         recordTurnInference({ ...timing, attemptId: 'private-background' })
       })
+      await runTurnPhase(TurnPhase.MCPConnection, async () => Promise.resolve(), { subject: 'Workspace' })
+      await runTurnPhase(TurnPhase.MCPDiscovery, async () => Promise.resolve(), { subject: 'Workspace' })
       detached = gate.promise.then(() => recordTurnInference({ ...timing, attemptId: 'late' }))
     })
     gate.resolve()
@@ -136,17 +138,22 @@ it('observes content-free request transitions, isolates background scopes and de
     expect(updates.map(({ goal, outcome }) => ({ goal, outcome }))).toEqual([
       { goal: TurnPhase.Request, outcome: 'started' },
       { goal: TurnPhase.Review, outcome: 'started' },
-      { goal: TurnPhase.Review, outcome: 'completed' }
+      { goal: TurnPhase.Review, outcome: 'completed' },
+      { goal: TurnPhase.MCPConnection, outcome: 'started' },
+      { goal: TurnPhase.MCPConnection, outcome: 'completed' },
+      { goal: TurnPhase.MCPDiscovery, outcome: 'started' },
+      { goal: TurnPhase.MCPDiscovery, outcome: 'completed' }
     ])
-    expect(updates.every((activity) => activity.id === 'request')).toBe(true)
-    expect(Object.keys(updates[0]!).sort()).toEqual(['durationMs', 'goal', 'id', 'outcome', 'startedAt'])
+    expect(updates.slice(0, 3).every((activity) => activity.id === 'request' && activity.kind === 'inference')).toBe(true)
+    expect(updates.slice(3).every((activity) => activity.kind === 'phase' && activity.subject === 'Workspace')).toBe(true)
+    expect(Object.keys(updates[0]!).sort()).toEqual(['durationMs', 'goal', 'id', 'kind', 'outcome', 'startedAt'])
   }))
 })
 
 it('keeps progress-consumer failures from changing model execution', async () => {
   const warning = vi.spyOn(LogHelper, 'warning').mockImplementation(() => undefined)
   await runWithProfileContext({ profileName: 'owner' }, () => runWithTurnTiming('live', 'session', () =>
-    observeTurnInferences(() => {
+    observeTurnActivities(() => {
       throw new Error('Private consumer details')
     }, async () => {
       recordTurnInference({
@@ -158,7 +165,7 @@ it('keeps progress-consumer failures from changing model execution', async () =>
       return 'answer'
     })
   )).then((answer) => expect(answer).toBe('answer'))
-  expect(warning).toHaveBeenCalledWith('Could not publish inference activity.')
+  expect(warning).toHaveBeenCalledWith('Could not publish turn activity.')
   expect(JSON.stringify(warning.mock.calls)).not.toContain('Private consumer details')
 })
 

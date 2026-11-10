@@ -30,6 +30,7 @@ const fixture = vi.hoisted(() => ({
 }))
 
 vi.mock('@/core', () => ({
+  TOOLKIT_REGISTRY: { getToolIconLogo: (): undefined => undefined },
   LLM_PROVIDER: { runForegroundTurn: <T>(execute: () => Promise<T>): Promise<T> => execute() },
   CONVERSATION_LOGGER: {
     upsert: (...args: Parameters<ConversationLogger['upsert']>): Promise<void> => fixture.logger!.upsert(...args)

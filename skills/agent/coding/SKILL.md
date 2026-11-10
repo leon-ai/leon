@@ -1,9 +1,6 @@
 ---
 name: coding
 description: Investigate, implement and verify code changes directly in a repository using Leon's file, search and shell tools.
-metadata:
-  author: "Louis Grenard <louis@getleon.ai>"
-  version: "1.0.0"
 ---
 
 # Coding

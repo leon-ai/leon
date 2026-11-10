@@ -185,6 +185,7 @@ export interface AgentResponseToolCall {
   status: 'preparing' | 'running' | 'success' | 'error'
   toolkitIconName?: string
   toolIconName?: string
+  toolLogo?: import('@@/aurora/src/contracts/package-logo').MaskedPackageLogo
   input?: unknown
   output?: unknown
   commandOutput?: string

@@ -7,7 +7,7 @@ import { Tooltip } from '@/components/tooltip'
 
 import './menu-item.sass'
 
-type AppRouteTo = '/'
+type AppRouteTo = '/' | '/settings'
 type MenuItemShortcutKey = string | {
   iconName: string
   label: string

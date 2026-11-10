@@ -1,11 +1,12 @@
 import { FeedTurnStatus } from './feed'
 import type { FeedEntry, FeedToolCall, LeonFeedActivity, LeonFeedEntry, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep, FeedCompactionActivity } from './feed'
 import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
-import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import { TurnPhase, isToolPreparationPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
 import { isFyiEligible } from '../../../../server/src/core/fyi/fyi-contract'
 import { getProcessingCategory } from './processing-categories'
 import { getActivityLabel, getProcessingLabel } from './activity-labels'
 import { getConnectionSetupDescriptor } from './connection-setup-contract'
+import { readMaskedPackageLogo } from '../../../../aurora/src/contracts/package-logo'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
@@ -71,17 +72,19 @@ function getProcessingDuration(requests: readonly { startedAt?: number | undefin
 
 /**
  * Uses recorded request goals, with a neutral duty label for older unclassified
- * traces. Provider time is interval coverage, never gaps between requests.
+ * traces. Model and remote-preparation time use interval coverage, never gaps
+ * between requests; runtime phases do not become inference/token records.
  */
 function toProcessingActivity(trace: ConversationTrace, active: boolean): FeedModelProcessingActivity | undefined {
-  const recorded = trace.timings?.filter((timing) => timing.kind === 'inference' && (active || timing.outcome !== 'started'))
+  const recorded = trace.timings?.filter((timing) =>
+    (timing.kind === 'inference' || isToolPreparationPhase(timing.goal)) && (active || timing.outcome !== 'started'))
   const timings = recorded?.length ? recorded : (trace.inferences ?? [])
     .filter((attempt) => active || attempt.outcome !== 'started').map((attempt, index) => ({
     id: attempt.attemptId ?? `${trace.id}:inference:${index}`,
     goal: attempt.usagePurpose ?? (attempt.phase === 'review' ? TurnPhase.Review
       : attempt.phase === 'final_answer' ? TurnPhase.Answer : attempt.duty ?? TurnPhase.Request),
     startedAt: attempt.startedAt, durationMs: attempt.elapsedMs, outcome: attempt.outcome ?? 'completed',
-    planStepId: undefined
+    planStepId: undefined, subject: undefined, kind: 'inference' as const
   }))
   const valid = timings.filter((timing) => Number.isFinite(timing.startedAt) && Number.isFinite(timing.durationMs) && timing.durationMs >= 0)
     .sort((left, right) => left.startedAt - right.startedAt)
@@ -91,12 +94,13 @@ function toProcessingActivity(trace: ConversationTrace, active: boolean): FeedMo
   const requests = valid.map((timing) => {
     return {
       id: timing.id,
-      ...getProcessingCategory(timing.goal),
+      ...getProcessingCategory(timing.goal, timing.subject, timing.outcome),
+      isRuntime: timing.kind === 'phase',
       durationMs: timing.durationMs,
       startedAt: timing.startedAt,
       planStepId: timing.planStepId,
       isActive: active && timing.outcome === 'started',
-      activeLabel: getProcessingLabel(timing.goal, timing.id, `${trace.id}:waiting`)
+      activeLabel: getProcessingLabel(timing.goal, timing.id, `${trace.id}:waiting`, timing.subject)
     }
   })
   return {
@@ -142,6 +146,7 @@ function getRetryCount(trace: ConversationTrace, metrics: ConversationMetrics): 
 export function toFeedTool(call: ConversationTool, active = true): FeedToolCall {
   const parts = call.name.split('.')
   const title = call.toolCallTitle?.trim()
+  const toolLogo = readMaskedPackageLogo(call.toolLogo)
 
   return {
     id: call.id,
@@ -150,6 +155,7 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     toolName: call.toolName ?? parts[1] ?? '',
     functionName: parts.at(-1) ?? call.name,
     toolIconName: call.toolIconName ?? 'tools-line',
+    ...(toolLogo ? { toolLogo } : {}),
     ...(call.toolkitIconName ? { toolkitIconName: call.toolkitIconName } : {}),
     status: !active && !call.preparation?.executionId && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
     startedAt: call.startedAt,

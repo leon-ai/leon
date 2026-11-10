@@ -8,11 +8,11 @@ import { mergeMissingSettings } from '../settings-merge'
 /**
  * Set up skills settings
  */
-export default async function (skillFriendlyName, currentSkill) {
+export default async function (skillFriendlyName, currentSkill, profileNativeSkillsPath = PROFILE_NATIVE_SKILLS_PATH) {
   const skillName = path.basename(currentSkill.path)
   const skillSrcPath = path.join(currentSkill.path, 'src')
   const settingsPath = path.join(
-    PROFILE_NATIVE_SKILLS_PATH,
+    profileNativeSkillsPath,
     skillName,
     'settings.json'
   )

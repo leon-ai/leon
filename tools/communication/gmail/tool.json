@@ -5,10 +5,30 @@
   "name": "Gmail",
   "description": "Search and read Gmail messages and inspect mailbox labels with read-only access.",
   "icon_name": "mail-line",
+  "logo": "logo.svg",
+  "logo_mask": "alpha",
+  "distribution": "extension",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "connection": {
     "required_settings": [

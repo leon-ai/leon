@@ -52,6 +52,7 @@ export interface HTTPPluginToolCall {
   status: 'preparing' | 'running' | 'success' | 'error'
   toolkit_icon_name?: string
   tool_icon_name?: string
+  tool_logo?: import('@@/aurora/src/contracts/package-logo').MaskedPackageLogo
   observation?: string
   started_at?: number
   preparation_started_at?: number

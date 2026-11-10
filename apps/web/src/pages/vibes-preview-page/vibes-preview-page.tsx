@@ -51,7 +51,7 @@ export function VibesPreviewPage() {
     void navigate({
       replace: true,
       to: VIBES_PREVIEW_PATH,
-      search: (previous) => ({
+      search: (previous: Record<string, unknown>) => ({
         ...parseVibesPreviewSearch(previous),
         [key]: value
       })

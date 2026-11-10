@@ -51,6 +51,10 @@ const sessionRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   sessionRoute,
+  createRoute({ getParentRoute: () => rootRoute, path: '/settings',
+    component: lazyRouteComponent(() => import('@/pages/settings-page/settings-page'), 'SettingsPage') }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/settings/$section',
+    component: lazyRouteComponent(() => import('@/pages/settings-page/settings-page'), 'SettingsPage') }),
   ...(import.meta.env.DEV
     ? [createRoute({
         getParentRoute: () => rootRoute,

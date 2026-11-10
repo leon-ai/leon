@@ -3,6 +3,7 @@ import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
 import { EXPERIENCE_SEARCH_TOOL_NAME } from '@/core/experience-manager'
+import { CATALOG_SEARCH_TOOL_NAME, createCatalogSearchTool } from '@/core/tool-manager/catalog/agent-catalog'
 import type { ExperienceCard } from '@/core/experience-manager'
 import {
   CONNECTION_SETUP_TOOL_NAME,
@@ -160,6 +161,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 
 <tool_policy>
 - Use only the provided tools.
+- When current service availability or account status is unknown, use ${CATALOG_SEARCH_TOOL_NAME} if available before claiming support or access. Distinguish not added, disabled, needs connection and ready; offer the trusted setup card, never install or enable catalog entries yourself.
 - For every executable toolkit call, set ${AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME} to a very short, action-specific title that explains the immediate goal and includes the key target when useful.
 - Select the small set of functions needed for the expected workflow, including output and verification, together in the first load for each relevant toolkit. Batch independent toolkit and skill loads. Expand discovery when new evidence requires another capability; do not load unrelated functions. Prefer a dedicated toolkit over a general operating-system toolkit when both could perform the task.
 - Prefer dedicated/API tools, then direct browser inspection and browser actions for web interfaces, then semantic OS tools. Use screenshots for visual questions, unsupported controls or a concrete inspection limitation. Use bounded shell commands for non-visual work without a dedicated tool, and computer use for graphical interaction. Observe before acting. Accept low-risk tool success unless the effect is unverified, failure is reported, or consequences require verification; follow the toolkit's verification rules.
@@ -527,6 +529,7 @@ export function buildAgentToolCatalog(
     tools.unshift(createToolkitLoaderTool(availableToolkitsById))
   }
   tools.push(
+    createCatalogSearchTool(),
     createAuroraLoaderTool(),
     createAgentPlanTool(AGENT_PLAN_TOOL_NAME),
     createClarificationTool(),
@@ -2211,6 +2214,18 @@ async function executeAgentToolCall(
     }
   }
 
+  if (
+    toolCall.function.name === CATALOG_SEARCH_TOOL_NAME &&
+    params.catalog.tools.some((tool) => tool.function.name === CATALOG_SEARCH_TOOL_NAME)
+  ) {
+    const { searchAgentCatalog } = await import('@/core/tool-manager/catalog/agent-catalog')
+
+    return {
+      content: await searchAgentCatalog(parseToolCallArguments(toolCall.function.arguments) || {}),
+      trackedSteps
+    }
+  }
+
   if (toolCall.function.name === AGENT_TOOLKIT_LOADER_NAME) {
     const toolkitId = parseStringArgument(
       toolCall.function.arguments,
@@ -2241,6 +2256,20 @@ async function executeAgentToolCall(
       }
     }
     const selectedTools = toolkit.tools.filter((tool) => !toolId || tool.id === toolId)
+    try {
+      await TOOLKIT_REGISTRY.prepareToolkit?.(toolkitId, typeof toolId === 'string' ? toolId : undefined)
+    } catch (error) {
+      const { MCPAuthenticationRequired } = await import('@/core/tool-manager/mcp/auth')
+      if (error instanceof MCPAuthenticationRequired) {
+        const { emitConnectionWidget } = await import('@/core/connections/connection-widget')
+        for (const tool of selectedTools) {
+          if (TOOLKIT_REGISTRY.getToolSource(toolkitId, tool.id)) {
+            emitConnectionWidget(`${toolkitId}.${tool.id}`)
+          }
+        }
+      }
+      return { content: 'I could not load this MCP server’s functions. Check its connection in Settings → Tools and connections, then retry.', trackedSteps }
+    }
     const availableFunctions = new Set(selectedTools.flatMap((tool) =>
       Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkitId, tool.id) || {})
         .map((name) => `${tool.id}.${name}`)

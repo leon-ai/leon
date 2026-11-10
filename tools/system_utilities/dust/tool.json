@@ -5,10 +5,28 @@
   "name": "Dust",
   "description": "Inspect disk usage and the largest files or directories without modifying them.",
   "icon_name": "hard-drive-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "progressive_guidance": "Read STORAGE.md for general disk capacity first. Scan explicit directories only. Disk usage includes hidden entries, stays on each input filesystem and does not dereference symlinks. A bounded tree is a ranked preview, not a full inventory. Errors invalidate completeness; this tool never deletes files.",
   "functions": {

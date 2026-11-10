@@ -4,9 +4,56 @@ import { ConnectionSetupActionId as Action, ConnectionSetupStep as Step } from '
 import { renderOAuthCompletion } from '../../../server/src/core/connections/oauth-completion'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 
+test('adds a catalog tool only after an owner click and keeps activation separate from account access', async ({ page, context, ui }) => {
+  const preview = CONNECTION_PREVIEWS['connection-ticktick']!
+  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: 'catalog-ticktick', message: 'TickTick is available to add.',
+    sentAt: Date.now(), isAddedToHistory: false, widget: { widget: 'ConnectionWidget', connection: preview } })
+  const actions: string[] = []
+  let installed = false
+  let reject = true
+  await page.route(`**/api/v1/connections/${preview.provider}/setup`, async (route) => {
+    const body = route.request().postDataJSON()
+    expect(body.session_id).toBe(SESSION_ID)
+    actions.push(body.action)
+    if (body.action === Action.Install) {
+      if (reject) {
+        reject = false
+        await route.fulfill({ status: 503, json: { message: 'Please try again.' } })
+        return
+      }
+      installed = true
+    }
+    await route.fulfill({ json: { view: installed ? connectionPreviewView(preview, 'api_key', Step.Choice) : {
+      title: 'TickTick', state: { method: 'catalog', step: Step.Installation },
+      description: 'TickTick is in my catalog, but hasn’t been added to this profile.',
+      fields: [], links: [], actions: [{ id: Action.Install, label: 'Add TickTick' }],
+      messages: connectionPreviewView(preview, 'api_key', Step.Choice).messages
+    } } })
+  })
+  await page.goto(SESSION_URL)
+  const card = page.getByRole('region', { name: /^(Set up )?TickTick$/ })
+  await expect(card.getByRole('button', { name: 'Add TickTick', exact: true })).toBeVisible()
+  expect(actions.every((action) => action === Action.Refresh)).toBe(true)
+  expect(installed).toBe(false)
+  await card.getByRole('button', { name: 'Add TickTick', exact: true }).click()
+  await expect(card.getByRole('alert')).toBeVisible()
+  expect(installed).toBe(false)
+  await expect(page.locator('.toast-error')).toHaveCount(1)
+  await card.getByRole('button', { name: 'Add TickTick', exact: true }).click()
+  await expect(card.getByRole('button', { name: 'Connect TickTick', exact: true })).toBeVisible()
+  await expect(page.getByText('Tool added', { exact: true })).toBeVisible()
+  expect(actions.filter((action) => action === Action.Install)).toHaveLength(2)
+  expect(actions).not.toContain(Action.Connect)
+  expect(context.pages()).toHaveLength(1)
+  await page.reload()
+  await expect(card.getByRole('button', { name: 'Connect TickTick', exact: true })).toBeVisible()
+  expect(actions.filter((action) => action === Action.Install)).toHaveLength(2)
+  expect(actions).not.toContain(Action.Connect)
+})
+
 test('keeps connection credentials inside explicit setup requests and clears failed fields', async ({ page, ui }) => {
-  const preview = CONNECTION_PREVIEWS['connection-notion']!
-  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: 'connection-notion', message: 'Connect Notion to continue.',
+  const preview = CONNECTION_PREVIEWS['connection-ticktick']!
+  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: 'connection-ticktick', message: 'Connect TickTick to continue.',
     sentAt: Date.now(), isAddedToHistory: false, widget: { widget: 'ConnectionWidget',
       componentTree: { component: 'WidgetWrapper', props: { children: [
         { component: 'ConnectionSetup', props: { provider: preview.provider, sessionId: OTHER_SESSION_ID } }
@@ -36,11 +83,11 @@ test('keeps connection credentials inside explicit setup requests and clears fai
     await route.fulfill({ json: { view } })
   })
   await page.goto(SESSION_URL)
-  const card = page.getByRole('region', { name: 'Set up Notion', exact: true })
-  await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
+  const card = page.getByRole('region', { name: 'Set up TickTick', exact: true })
+  await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
   const token = card.getByLabel('access token', { exact: true })
   await expect(token).toHaveAttribute('type', 'password')
-  await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
+  await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
   expect(attempts).toHaveLength(0)
   await token.fill('sample-token-one')
   await token.press('Enter')
@@ -51,12 +98,12 @@ test('keeps connection credentials inside explicit setup requests and clears fai
   expect(await page.locator('body').textContent()).not.toContain('sample-token-one')
   expect(await page.evaluate(() => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]))).not.toContain('sample-token-one')
   await token.fill('sample-token-two')
-  await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
-  await expect(page.getByRole('region', { name: 'Notion', exact: true }).getByRole('status')).toContainText('Connected')
+  await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'TickTick', exact: true }).getByRole('status')).toContainText('Connected')
   expect(attempts).toHaveLength(2)
   expect(otherBodies.join(' ')).not.toContain('sample-token')
   await page.reload()
-  await expect(page.getByRole('region', { name: 'Notion', exact: true }).getByRole('status')).toContainText('Connected')
+  await expect(page.getByRole('region', { name: 'TickTick', exact: true }).getByRole('status')).toContainText('Connected')
   expect(attempts).toHaveLength(2)
 })
 
