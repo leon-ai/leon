@@ -21,6 +21,7 @@ import type { MCPSource, MCPManifest, MCPFunction } from './tool-source'
 import { readMCPCache } from './mcp/installations'
 import { isCatalogInstalled } from '@/core/catalog/activation'
 import type { CatalogDistribution } from '@/schemas/catalog-metadata-schemas'
+import type { LogoMaskMode, MaskedPackageLogo } from '@@/aurora/src/contracts/package-logo'
 
 const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
 const HOSTED_SEARCH_TOOL_ID = 'hosted'
@@ -35,6 +36,7 @@ const HOSTED_SEARCH_PROVIDERS = new Set<LLMProviders>([
 
 interface ToolkitToolDefinition {
   logo?: string
+  logo_mask?: LogoMaskMode
   distribution?: CatalogDistribution
   source?: MCPSource
   tool_id: string
@@ -408,6 +410,17 @@ export default class ToolkitRegistry {
     const tool = this._localToolkits.find((entry) => entry.id === toolkitId)?.tools?.[toolId]
 
     return tool?.logo === 'logo.svg' ? `tools/${encodeURIComponent(`${toolkitId}.${toolId}`)}/assets/logo.svg` : undefined
+  }
+
+  /**
+   * Reuses declared package artwork only when its author selected a monochrome
+   * mask mode. Tools without that declaration retain their ordinary activity icon.
+   */
+  public getToolIconLogo(toolkitId: string, toolId: string): MaskedPackageLogo | undefined {
+    const tool = this._localToolkits.find((entry) => entry.id === toolkitId)?.tools?.[toolId]
+    const url = this.getToolLogoUrl(toolkitId, toolId)
+
+    return url && tool?.logo_mask ? { url, mode: tool.logo_mask } : undefined
   }
 
   /**

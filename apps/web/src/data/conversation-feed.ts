@@ -6,6 +6,7 @@ import { isFyiEligible } from '../../../../server/src/core/fyi/fyi-contract'
 import { getProcessingCategory } from './processing-categories'
 import { getActivityLabel, getProcessingLabel } from './activity-labels'
 import { getConnectionSetupDescriptor } from './connection-setup-contract'
+import { readMaskedPackageLogo } from '../../../../aurora/src/contracts/package-logo'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
@@ -142,6 +143,7 @@ function getRetryCount(trace: ConversationTrace, metrics: ConversationMetrics): 
 export function toFeedTool(call: ConversationTool, active = true): FeedToolCall {
   const parts = call.name.split('.')
   const title = call.toolCallTitle?.trim()
+  const toolLogo = readMaskedPackageLogo(call.toolLogo)
 
   return {
     id: call.id,
@@ -150,6 +152,7 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     toolName: call.toolName ?? parts[1] ?? '',
     functionName: parts.at(-1) ?? call.name,
     toolIconName: call.toolIconName ?? 'tools-line',
+    ...(toolLogo ? { toolLogo } : {}),
     ...(call.toolkitIconName ? { toolkitIconName: call.toolkitIconName } : {}),
     status: !active && !call.preparation?.executionId && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
     startedAt: call.startedAt,

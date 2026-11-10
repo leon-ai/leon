@@ -29,6 +29,7 @@
   "distribution": "extension",
   "maintenance": "official",
   "logo": "logo.svg",
+  "logo_mask": "inverse-luminance",
   "source": { "type": "mcp", "transport": "http", "url": "https://mcp.notion.com/mcp" },
   "functions": {}
 }

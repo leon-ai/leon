@@ -16,14 +16,26 @@ import type { MessageLog } from '@/types'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { TOOL_EXECUTION_MANAGER, ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 import { PreparationStatus } from '@@/aurora/src/v2/contracts/preparation'
+import { TOOLKIT_REGISTRY } from '@/core'
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 
 const SESSION_ID_PARAM_NAME = 'session_id'
 
 /**
- * An archived running label is not proof that a retained worker still exists.
- * Check only displayed preparations in memory, never initialize a model or poll.
+ * Projects current display metadata and retained worker state without modifying
+ * stored history. Reads only in-memory services, never starts a model or polls.
  */
-function projectPreparations(sessionId: string, record: MessageLog): MessageLog {
+function projectSessionMessage(sessionId: string, record: MessageLog): MessageLog {
+  if (record.agentResponseTrace) {
+    record = { ...record, agentResponseTrace: ConversationHistoryHelper.resolveAgentTraceToolIcons(
+      record.agentResponseTrace, (name) => {
+        const [toolkitId, toolId] = name.split('.')
+        const toolLogo = toolkitId && toolId ? TOOLKIT_REGISTRY.getToolIconLogo(toolkitId, toolId) : undefined
+
+        return toolLogo ? { toolLogo } : null
+      }
+    ) }
+  }
   if (!record.agentResponseTrace?.toolCalls.some((call) => call.preparation?.executionId && call.status === 'running')) {
     return record
   }
@@ -238,7 +250,7 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
       return reply.send({
         success: true,
         session,
-        messages: snapshot.messages.items.map((record) => projectPreparations(sessionId, record)),
+        messages: snapshot.messages.items.map((record) => projectSessionMessage(sessionId, record)),
         next_cursor: snapshot.messages.nextCursor,
         newer_cursor: snapshot.messages.previousCursor ?? null,
         is_running: WEB_SESSION_RUNTIME.isRunning(sessionId),
@@ -283,7 +295,7 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
       const message = CONVERSATION_REPOSITORY.readMessage(sessionId, request.params.message_id)
 
       return message
-        ? reply.send({ success: true, message: projectPreparations(sessionId, message) })
+        ? reply.send({ success: true, message: projectSessionMessage(sessionId, message) })
         : reply.code(404).send({ success: false, message: 'Message not found.' })
     }
   )

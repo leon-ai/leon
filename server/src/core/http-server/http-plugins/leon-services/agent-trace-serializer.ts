@@ -56,6 +56,7 @@ export function serializeAgentTrace(
       ...(toolCall.toolIconName
         ? { tool_icon_name: toolCall.toolIconName }
         : {}),
+      ...(toolCall.toolLogo ? { tool_logo: toolCall.toolLogo } : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
       ...(toolCall.commandOutput !== undefined ? { command_output: toolCall.commandOutput } : {}),
@@ -133,6 +134,7 @@ export function deserializeAgentTrace(
       ...(toolCall.tool_icon_name
         ? { toolIconName: toolCall.tool_icon_name }
         : {}),
+      ...(toolCall.tool_logo ? { toolLogo: toolCall.tool_logo } : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
       ...(toolCall.command_output !== undefined ? { commandOutput: toolCall.command_output } : {}),

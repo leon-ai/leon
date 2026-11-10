@@ -7,6 +7,7 @@ import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
+import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
 test('replaces fallback artwork after favicon loading and shows complete URL tooltips within the viewport', async ({ page, ui }) => {
   const url = `https://example.com/guide?note=${'slow-craft-'.repeat(24)}`
@@ -113,7 +114,12 @@ for (const legacy of [false, true]) {
     const text = '## A useful guide\n\nKeep **one good idea** close.\n\n| Topic | Note |\n| --- | --- |\n| Craft | Take your time |'
     const sources = [{ url: 'https://example.com/guide', title: 'A useful guide' }]
     const responseId = 'rich-search-response'
+    const logo = { url: 'tools/communication.gmail/assets/logo.svg', mode: LogoMaskMode.Alpha }
+    await page.route('**/api/v1/tools/communication.gmail/assets/logo.svg', (route) => route.fulfill({
+      contentType: 'image/svg+xml', path: 'tools/communication/gmail/logo.svg'
+    }))
     const tool = { id: 'rich-search', name: 'search_web.hosted.searchWeb', toolCallTitle: 'Read useful guidance',
+      toolLogo: logo,
       status: 'running' as const, input: { query: 'Useful guidance' },
       output: { output: text, format: 'markdown' }, commandOutput: text }
     const saved: ConversationRecord = {
@@ -128,7 +134,7 @@ for (const legacy of [false, true]) {
       turn_id: 'rich-search-turn', response_id: responseId, created_at: Date.now()
     }])
     await emit('turn_status', { status: 'accepted' })
-    await emit('tool_call', { tool_call: { ...tool, tool_call_title: tool.toolCallTitle, command_output: text } })
+    await emit('tool_call', { tool_call: { ...tool, tool_logo: logo, tool_call_title: tool.toolCallTitle, command_output: text } })
     const call = page.locator('.tool-call').filter({ hasText: 'Read useful guidance' })
     const revealTool = async (): Promise<void> => {
       const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true }).last()
@@ -140,6 +146,7 @@ for (const legacy of [false, true]) {
       if (await toggle.getAttribute('aria-expanded') === 'false') {
         await toggle.click()
       }
+      await expect(call.locator('.package-icon-mask')).toHaveAttribute('data-logo-mask', LogoMaskMode.Alpha)
     }
     await revealTool()
     const preview = call.getByRole('region', { name: 'Tool output', exact: true })

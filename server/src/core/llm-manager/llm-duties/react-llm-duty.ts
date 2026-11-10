@@ -982,6 +982,9 @@ export class ReActLLMDuty extends LLMDuty {
         event = {
           ...event,
           toolCall: {
+            ...(display.toolkitIconName ? { toolkitIconName: display.toolkitIconName } : {}),
+            ...(display.toolIconName ? { toolIconName: display.toolIconName } : {}),
+            ...(display.toolLogo ? { toolLogo: display.toolLogo } : {}),
             ...event.toolCall,
             toolkitName: event.toolCall.toolkitName || display.toolkitName,
             toolName: event.toolCall.toolName || display.toolName

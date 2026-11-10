@@ -116,13 +116,16 @@ export function getToolDisplayContext(
   toolName: string
   toolkitIconName?: string
   toolIconName?: string
+  toolLogo?: import('@@/aurora/src/contracts/package-logo').MaskedPackageLogo
   key: string
 } {
   const resolvedTool = TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)
+  const toolLogo = TOOLKIT_REGISTRY.getToolIconLogo(toolkitId, toolId)
 
   return {
     toolkitName: resolvedTool?.toolkitName || toolkitId,
     toolName: resolvedTool?.toolName || toolId,
+    ...(toolLogo ? { toolLogo } : {}),
     ...(resolvedTool?.toolkitIconName
       ? { toolkitIconName: resolvedTool.toolkitIconName }
       : {}),
@@ -438,6 +441,7 @@ export async function runToolExecution(
     ...(toolDisplayContext.toolIconName
       ? { toolIconName: toolDisplayContext.toolIconName }
       : {}),
+    ...(toolDisplayContext.toolLogo ? { toolLogo: toolDisplayContext.toolLogo } : {}),
     input: requestedToolInput,
     ...(stepLabel ? { stepLabel } : {})
   })
@@ -564,6 +568,7 @@ export async function runToolExecution(
       ...(toolDisplayContext.toolIconName
         ? { toolIconName: toolDisplayContext.toolIconName }
         : {}),
+      ...(toolDisplayContext.toolLogo ? { toolLogo: toolDisplayContext.toolLogo } : {}),
       input: requestedToolInput,
       output: progress.data || progress.message,
       ...(preparation ? { preparation } : {}),
@@ -841,6 +846,7 @@ export async function runToolExecution(
     ...(toolDisplayContext.toolIconName
       ? { toolIconName: toolDisplayContext.toolIconName }
       : {}),
+    ...(toolDisplayContext.toolLogo ? { toolLogo: toolDisplayContext.toolLogo } : {}),
     input: requestedToolInput,
     output: displayedOutput,
     ...(preparation ? { preparation } : {}),
