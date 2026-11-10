@@ -1,0 +1,91 @@
+.settings-page
+  padding: var(--space-xl) 0
+  min-width: 0
+
+  h1, h2, p
+    margin: 0
+
+  h1
+    font-size: var(--font-size-3xl)
+
+  h2
+    font-size: var(--font-size-xl)
+
+.settings-heading
+  display: flex
+  justify-content: space-between
+  align-items: center
+  gap: var(--space-md)
+  margin-bottom: var(--space-xl)
+
+.settings-layout
+  display: grid
+  grid-template-columns: 184px minmax(0, 1fr)
+  gap: var(--space-xl)
+  align-items: start
+
+.settings-navigation
+  position: sticky
+  top: var(--space-xl)
+  max-height: calc(100dvh - 120px)
+
+  nav
+    display: grid
+    gap: var(--space-xs)
+    padding-block: var(--space-sm)
+
+.settings-navigation-item
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  padding: var(--space-sm)
+  border-radius: var(--border-radius-sm)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  text-decoration: none
+
+  &:hover, &:focus-visible
+    background: var(--color-surface-hover)
+    color: var(--color-text)
+
+  &:active
+    box-shadow: var(--shadow-control-pressed)
+
+  .icon
+    flex: 0 0 auto
+    width: var(--font-size-md)
+    height: var(--font-size-md)
+
+.settings-navigation-active
+  background: var(--color-sidebar-background-active)
+  color: var(--color-text)
+
+.settings-content
+  min-width: 0
+
+  > header
+    display: grid
+    gap: var(--space-sm)
+    margin-bottom: var(--space-xl)
+
+    p
+      color: var(--color-text-secondary)
+
+.settings-placeholder
+  color: var(--color-text-secondary)
+  padding-block: var(--space-xl)
+
+.settings-theme
+  display: flex
+  gap: var(--space-sm)
+
+@media (max-width: 680px)
+  .settings-layout
+    grid-template-columns: minmax(0, 1fr)
+
+  .settings-navigation
+    position: static
+    max-height: 190px
+
+    nav
+      grid-template-columns: repeat(2, minmax(0, 1fr))
