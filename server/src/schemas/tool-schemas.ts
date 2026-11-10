@@ -2,37 +2,12 @@ import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
 import { ToolCompletionReview, ToolConcurrency } from '@/types'
 import { MAX_TOOL_TIMEOUT_MS } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import { catalogMetadataProperties } from './catalog-metadata-schemas'
 
 import {
   PROGRESSIVE_GUIDANCE_MAX_LENGTH,
   REMIX_ICON_NAME_PATTERN
 } from '@/constants'
-
-const toolAuthorSchemaObject = Type.Strict(
-  Type.Object(
-    {
-      name: Type.String({
-        minLength: 1,
-        description: 'Display name of the tool author.'
-      }),
-      email: Type.Optional(
-        Type.String({
-          minLength: 3,
-          description: 'Contact email address for the tool author.'
-        })
-      ),
-      url: Type.Optional(
-        Type.String({
-          minLength: 3,
-          description: 'Public profile or website for the tool author.'
-        })
-      )
-    },
-    {
-      description: 'Author metadata for the tool manifest.'
-    }
-  )
-)
 
 const toolFunctionSchemaObject = Type.Strict(
   Type.Object(
@@ -192,107 +167,124 @@ export type ToolConnectionSchema = Static<typeof toolConnectionSchemaObject>
 
 export type ToolOAuthSchema = Static<typeof toolOAuthSchemaObject>
 
-export const toolManifestSchemaObject = Type.Strict(
-  Type.Object(
-    {
-      $schema: Type.String({
-        minLength: 1,
+const toolManifestObject = Type.Object(
+  {
+    $schema: Type.String({
+      minLength: 1,
+      description:
+        'Path or URL to the JSON schema used to validate this manifest.'
+    }),
+    tool_id: Type.String({
+      minLength: 1,
+      description: 'Stable internal identifier for the tool.'
+    }),
+    previous_tool_ids: Type.Optional(Type.Array(
+      Type.String({ minLength: 1, maxLength: 128, pattern: '^[a-z0-9][a-z0-9_-]*$' }),
+      { maxItems: 32, uniqueItems: true }
+    )),
+    toolkit_id: Type.String({
+      minLength: 1,
+      description: 'Identifier of the toolkit that owns this tool.'
+    }),
+    name: Type.String({
+      minLength: 1,
+      description: 'Human-readable tool name shown in interfaces.'
+    }),
+    concurrency: Type.Optional(
+      Type.Enum(ToolConcurrency, {
         description:
-          'Path or URL to the JSON schema used to validate this manifest.'
-      }),
-      tool_id: Type.String({
-        minLength: 1,
-        description: 'Stable internal identifier for the tool.'
-      }),
-      toolkit_id: Type.String({
-        minLength: 1,
-        description: 'Identifier of the toolkit that owns this tool.'
-      }),
-      name: Type.String({
-        minLength: 1,
-        description: 'Human-readable tool name shown in interfaces.'
-      }),
-      concurrency: Type.Optional(
-        Type.Enum(ToolConcurrency, {
-          description:
-            'Default parallel: independent calls use isolated workers. Use serial for tools owning a shared session, device or persistent instance state.'
-        })
-      ),
-      description: Type.String({
+          'Default parallel: independent calls use isolated workers. Use serial for tools owning a shared session, device or persistent instance state.'
+      })
+    ),
+    description: Type.String({
+      minLength: 8,
+      maxLength: 272,
+      description: 'Short summary explaining what the tool is for.'
+    }),
+    progressive_guidance: Type.Optional(
+      Type.String({
         minLength: 8,
-        maxLength: 272,
-        description: 'Short summary explaining what the tool is for.'
-      }),
-      progressive_guidance: Type.Optional(
-        Type.String({
-          minLength: 8,
-          maxLength: PROGRESSIVE_GUIDANCE_MAX_LENGTH,
-          description:
-            'Operational guidance shown to the agent only after this tool is loaded.'
-        })
-      ),
-      icon_name: Type.Optional(
-        Type.String({
-          minLength: 1,
-          pattern: REMIX_ICON_NAME_PATTERN,
-          description:
-            'Icon name from https://remixicon.com. Filled icons ending with "-fill" are not allowed.'
-        })
-      ),
-      author: Type.Composite([toolAuthorSchemaObject], {
-        description: 'Author information for this tool.'
-      }),
-      binaries: Type.Optional(
-        Type.Record(
-          Type.String({
-            minLength: 1,
-            description: 'Platform identifier for a downloadable binary.'
-          }),
-          Type.String({
-            minLength: 1,
-            description: 'Download URL for the platform-specific binary.'
-          }),
-          {
-            description: 'Map of platform identifiers to binary download URLs.'
-          }
-        )
-      ),
-      resources: Type.Optional(
-        Type.Record(
-          Type.String({
-            minLength: 1,
-            description: 'Logical resource group name.'
-          }),
-          Type.Array(
-            Type.String({
-              minLength: 1,
-              description: 'Download URL for a required resource file.'
-            }),
-            {
-              description: 'List of resource URLs for the given resource group.'
-            }
-          ),
-          {
-            description: 'Map of resource groups to resource download URLs.'
-          }
-        )
-      ),
-      connection: Type.Optional(toolConnectionSchemaObject),
-      functions: Type.Record(
+        maxLength: PROGRESSIVE_GUIDANCE_MAX_LENGTH,
+        description:
+          'Operational guidance shown to the agent only after this tool is loaded.'
+      })
+    ),
+    icon_name: Type.Optional(
+      Type.String({
+        minLength: 1,
+        pattern: REMIX_ICON_NAME_PATTERN,
+        description:
+          'Icon name from https://remixicon.com. Filled icons ending with "-fill" are not allowed.'
+      })
+    ),
+    ...catalogMetadataProperties,
+    binaries: Type.Optional(
+      Type.Record(
         Type.String({
           minLength: 1,
-          description: 'Function name exposed by the tool runtime.'
+          description: 'Platform identifier for a downloadable binary.'
         }),
-        toolFunctionSchemaObject,
+        Type.String({
+          minLength: 1,
+          description: 'Download URL for the platform-specific binary.'
+        }),
         {
-          description: 'Map of callable function names to their definitions.'
+          description: 'Map of platform identifiers to binary download URLs.'
         }
       )
-    },
-    {
-      description: 'Schema for a Leon tool manifest.'
-    }
-  )
+    ),
+    resources: Type.Optional(
+      Type.Record(
+        Type.String({
+          minLength: 1,
+          description: 'Logical resource group name.'
+        }),
+        Type.Array(
+          Type.String({
+            minLength: 1,
+            description: 'Download URL for a required resource file.'
+          }),
+          {
+            description: 'List of resource URLs for the given resource group.'
+          }
+        ),
+        {
+          description: 'Map of resource groups to resource download URLs.'
+        }
+      )
+    ),
+    connection: Type.Optional(toolConnectionSchemaObject),
+    source: Type.Optional(Type.Object({
+      type: Type.Literal('mcp'),
+      transport: Type.Literal('http'),
+      url: Type.String({ format: 'uri' }),
+      clientId: Type.Optional(Type.String({ minLength: 1 })),
+      clientMetadataUrl: Type.Optional(Type.String({ format: 'uri' }))
+    }, { additionalProperties: false })),
+    functions: Type.Record(
+      Type.String({
+        minLength: 1,
+        description: 'Function name exposed by the tool runtime.'
+      }),
+      toolFunctionSchemaObject,
+      {
+        description: 'Map of callable function names to their definitions.'
+      }
+    )
+  },
+  {
+    description: 'Schema for a Leon tool manifest.',
+    additionalProperties: false
+  }
 )
+
+export const toolManifestSchemaObject = Type.Strict(toolManifestObject)
+
+// Catalog discovery validates presentation and identity without interpreting
+// function schemas or loading executable guidance into the browsing layer.
+export const toolCatalogSchemaObject = Type.Strict(Type.Pick(toolManifestObject, [
+  '$schema', 'tool_id', 'previous_tool_ids', 'toolkit_id', 'name', 'description', 'icon_name',
+  'author', 'maintainers', 'distribution', 'maintenance', 'logo', 'logo_mask', 'source'
+], { additionalProperties: true }))
 
 export type ToolManifestSchema = Static<typeof toolManifestSchemaObject>
