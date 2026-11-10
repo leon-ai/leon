@@ -76,6 +76,56 @@ test('keeps catalog navigation virtualized and applies only accepted management 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 })
 
+test('starts trusted OAuth from settings without requiring a chat session', async ({ page, context, ui }) => {
+  void ui
+  let connected = false
+  let callback = ''
+  const preview = CONNECTION_PREVIEWS['connection-notion']!
+  const logoUrl = `tools/${notion.id}/assets/logo.svg`
+  await page.route('**/assets/logo.svg', (route) => route.fulfill({
+    contentType: 'image/svg+xml', path: 'tools/productivity_collaboration/notion/logo.svg'
+  }))
+  await page.route('**/api/v1/tools/catalog', (route) => route.fulfill({ json: {
+    tools: [{ ...notion, logoUrl, installed: true, enabled: true, connected, connectionMethod: 'oauth' }]
+  } }))
+  await page.route(`**/api/v1/connections/${notion.id}/setup`, async (route) => {
+    const body = route.request().postDataJSON()
+    expect(body.session_id).toBe('')
+    if (body.action === Action.Connect) {
+      const destination = new URL(body.return_url)
+      destination.searchParams.set('provider', notion.id)
+      destination.searchParams.set('connection_result', 'connected')
+      callback = destination.toString()
+    }
+    const view = connectionPreviewView(preview, 'oauth', connected ? Step.Connected : Step.Choice, true)
+    view.actions = connected ? [] : [{ id: Action.Connect, label: 'Connect Notion' }]
+    await route.fulfill({ json: { view, ...(body.action === Action.Connect ? {
+      authorization_url: `${new URL(callback).origin}/settings-oauth-fixture`
+    } : {}) } })
+  })
+  await context.route('**/settings-oauth-fixture', (route) => route.fulfill({ contentType: 'text/html',
+    body: `<a href="${callback}">Authorize fixture account</a>` }))
+  await context.route('**/api/v1/connections/complete?**', async (route) => {
+    connected = true
+    const completion = renderOAuthCompletion(Object.fromEntries(new URL(route.request().url()).searchParams))!
+    await route.fulfill({ contentType: 'text/html', body: completion.html,
+      headers: { 'Content-Security-Policy': completion.contentSecurityPolicy } })
+  })
+  await page.goto('settings/tools')
+  await expect(page.getByRole('listitem', { name: 'Notion', exact: true }).locator('img.package-icon'))
+    .toHaveAttribute('src', `/api/v1/${logoUrl}`)
+  const [popup] = await Promise.all([page.waitForEvent('popup'),
+    page.getByRole('listitem', { name: 'Notion', exact: true }).getByRole('button', { name: 'Connect', exact: true }).click()])
+  const dialog = page.getByRole('dialog', { name: 'Connection setup', exact: true })
+  await expect(dialog.locator('img.package-icon')).toHaveAttribute('src', `/api/v1/${logoUrl}`)
+  await popup.getByRole('link', { name: 'Authorize fixture account' }).click()
+  await expect(dialog.getByRole('status')).toContainText('Connected')
+  await expect(dialog.getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0)
+  await expect(page).toHaveURL(/\/settings\/tools$/)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('listitem', { name: 'Notion', exact: true }).getByRole('button', { name: 'Manage' })).toBeVisible()
+})
+
 test('opens catalog documents on demand and shares contacts and availability controls with skills', async ({ page, ui }) => {
   void ui
   const entry = { ...notion, author: { name: 'Original creator', github: 'creator' },

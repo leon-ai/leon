@@ -36,7 +36,7 @@ const SETUP_CACHE_TIME_MS = 60_000
  * Uses Query for safe server screens and mutation lifecycle, but never puts
  * credentials in mutation variables, cached results, drafts or owner messages.
  */
-export function useConnectionSetup(sessionId: string, provider: string): ConnectionSetupController {
+export function useConnectionSetup(sessionId: string, provider: string, initialAuthorization?: ConnectionAuthorizationPopup): ConnectionSetupController {
   const profile = useProfile()
   const send = useSendMessage(sessionId)
   const { showToast } = useToast()
@@ -45,6 +45,7 @@ export function useConnectionSetup(sessionId: string, provider: string): Connect
   const continuation = useRef<{ id: string, query: string } | undefined>(undefined)
   const popup = useRef<ConnectionAuthorizationPopup | undefined>(undefined)
   const popupError = useRef<unknown>(undefined)
+  const startedAuthorization = useRef(false)
   const scope = `${profile}:${sessionId}:${provider}`
   const authorization = useRef({ scope, failed: false })
   const currentScope = useRef(scope)
@@ -113,7 +114,7 @@ export function useConnectionSetup(sessionId: string, provider: string): Connect
 
   const query = useQuery({
     queryKey: key,
-    enabled: Boolean(profile && sessionId && provider),
+    enabled: Boolean(profile && provider),
     meta: { errorTitle: CONNECTION_SETUP_MESSAGES.loadError, profile },
     queryFn: async ({ signal }) => {
       const state = queryClient.getQueryData<ConnectionSetupSnapshot>(key)?.view.state
@@ -213,7 +214,8 @@ export function useConnectionSetup(sessionId: string, provider: string): Connect
           view: result.view, authorizationFailed: authorization.current.failed
         })
         if (action.id === ConnectionSetupActionId.Connect && result.view.state.step === ConnectionSetupStep.Connected) {
-          showToast({ type: 'success', title: 'Account connected', description: 'You can continue your request.' })
+          void queryClient.invalidateQueries({ queryKey: ['tool-catalog', profile], exact: true })
+          showToast({ type: 'success', title: 'Account connected', description: sessionId ? 'You can continue your request.' : 'Your connection is ready to use.' })
         }
 
         return result.view
@@ -241,6 +243,46 @@ export function useConnectionSetup(sessionId: string, provider: string): Connect
     }
   })
 
+  async function act(action: ConnectionSetupAction, state: ConnectionSetupView['state'], values: Record<string, string>, reservedPopup?: ConnectionAuthorizationPopup): Promise<void> {
+    credentials.current = values
+    try {
+      // Reserve before any await, while browser user activation still exists.
+      if (action.id === ConnectionSetupActionId.Connect && state.method === 'oauth') {
+        try {
+          popup.current = reservedPopup ?? openConnectionAuthorization(provider)
+        } catch (error) {
+          popupError.current = error
+        }
+      }
+      await queryClient.cancelQueries({ queryKey: key, exact: true })
+      await mutation.mutateAsync({ action, state })
+    } finally {
+      credentials.current = undefined
+      popup.current?.dispose()
+      popup.current = undefined
+      popupError.current = undefined
+    }
+  }
+
+  useEffect(() => {
+    if (!initialAuthorization || startedAuthorization.current || query.isFetching || !isCurrent()) {
+      return
+    }
+    const view = query.data?.view
+    if (!view && !query.isError) {
+      return
+    }
+    startedAuthorization.current = true
+    const connect = view?.actions.find((action) => action.id === ConnectionSetupActionId.Connect)
+    // A settings click may reserve OAuth before the screen loads. Claim it only
+    // after fresh server guidance permits sign-in; otherwise show prerequisites.
+    if (view?.state.method === 'oauth' && connect) {
+      void act(connect, view.state, {}, initialAuthorization).catch(() => undefined)
+    } else {
+      initialAuthorization.dispose()
+    }
+  }, [initialAuthorization, query.data, query.isFetching, query.isError, scope])
+
   return {
     view: query.data?.view,
     loading: query.isFetching,
@@ -251,25 +293,6 @@ export function useConnectionSetup(sessionId: string, provider: string): Connect
       mutation.reset()
       void query.refetch()
     },
-    act: async (action: ConnectionSetupAction, state: ConnectionSetupView['state'], values: Record<string, string>): Promise<void> => {
-      credentials.current = values
-      try {
-        // Reserve before any await, while browser user activation still exists.
-        if (action.id === ConnectionSetupActionId.Connect && state.method === 'oauth') {
-          try {
-            popup.current = openConnectionAuthorization(provider)
-          } catch (error) {
-            popupError.current = error
-          }
-        }
-        await queryClient.cancelQueries({ queryKey: key, exact: true })
-        await mutation.mutateAsync({ action, state })
-      } finally {
-        credentials.current = undefined
-        popup.current?.dispose()
-        popup.current = undefined
-        popupError.current = undefined
-      }
-    }
+    act
   }
 }

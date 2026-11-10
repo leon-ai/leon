@@ -81,6 +81,7 @@ export interface ConnectionSetupDescriptor {
   provider: string
   name?: string
   iconName?: string
+  logoUrl?: string
 }
 
 export interface ConnectionSetupResult {

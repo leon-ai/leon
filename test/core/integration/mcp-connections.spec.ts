@@ -83,6 +83,53 @@ it('cancels one concurrent call without closing another call or replaying a writ
   })
 })
 
+it('completes PKCE sign-in once in its originating profile and clears encrypted grants on disconnect', async () => {
+  const server = await startMCPFixture(true)
+  servers.push(server)
+  await owner('mcp-owner-a', async () => {
+    const id = await catalog.TOOL_CATALOG.install({ url: server.url, name: 'Private workspace' })
+    const manifest = (await catalog.getInstalledMCP(id))!
+    await expect(manager.MCP_MANAGER.discover(manifest)).rejects.toThrow(auth.MCPAuthenticationRequired)
+    const rejected = await manager.startMCPOAuth(manifest, server.origin,
+      `${server.origin}/api/v1/connections/complete?channel=fixture`, 'v1')
+    const invalidAuthorization = await fetch(rejected.authorization_url!, { redirect: 'manual' })
+    const invalidCallback = new URL(invalidAuthorization.headers.get('location')!)
+    invalidCallback.searchParams.set('iss', 'https://another-issuer.example')
+    const refused = await manager.completeMCPOAuth(invalidCallback.searchParams)
+    expect(new URL(refused!).searchParams.get('connection_result')).toBe('failed')
+    expect(server.tokenExchanges).toBe(0)
+    const result = await manager.startMCPOAuth(manifest, server.origin,
+      `${server.origin}/api/v1/connections/complete?channel=fixture`, 'v1')
+    expect(result.authorization_url).toBeTruthy()
+    const authorization = await fetch(result.authorization_url!, { redirect: 'manual' })
+    const callback = new URL(authorization.headers.get('location')!)
+    const completion = await owner('mcp-owner-b', () => manager.completeMCPOAuth(callback.searchParams))
+    expect(new URL(completion!).searchParams.get('connection_result')).toBe('connected')
+    expect(await manager.completeMCPOAuth(callback.searchParams)).toBeUndefined()
+    expect(server.tokenExchanges).toBe(1)
+    expect((await owner('mcp-owner-b', () => auth.MCP_CONNECTIONS.list()))).toHaveLength(0)
+    expect((await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)?.connected).toBe(true)
+    const saved = await fs.readFile(path.join(home, 'profiles', 'mcp-owner-a', 'connections', 'mcp', `${id}.json`), 'utf8')
+    expect(saved).not.toContain('fixture-access-secret')
+    expect(saved).not.toContain('fixture-refresh-secret')
+    expect(JSON.stringify(await catalog.TOOL_CATALOG.list())).not.toContain('secret')
+    await catalog.TOOL_CATALOG.act(id, 'disconnect')
+    expect(await auth.MCP_CONNECTIONS.getCredentials(id)).toBeNull()
+    expect((await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)?.connected).toBe(false)
+    const reconnect = await manager.startMCPOAuth(manifest, server.origin,
+      `${server.origin}/api/v1/connections/complete?channel=fixture`, 'v1')
+    const returnTo = await fetch(reconnect.authorization_url!, { redirect: 'manual' })
+    server.oauth.hold = true
+    const finishing = manager.completeMCPOAuth(new URL(returnTo.headers.get('location')!).searchParams)
+    await vi.waitFor(() => expect(server.held.has('oauth-token')).toBe(true))
+    await catalog.TOOL_CATALOG.act(id, 'remove')
+    server.held.get('oauth-token')?.()
+    expect(new URL((await finishing)!).searchParams.get('connection_result')).toBe('failed')
+    expect(await auth.MCP_CONNECTIONS.getCredentials(id)).toBeNull()
+    expect(await catalog.getInstalledMCP(id)).toBeUndefined()
+  })
+})
+
 it('blocks private network destinations and ignores malformed discovery snapshots', async () => {
   expect(() => http.getMCPURL('http://192.168.1.1/mcp')).toThrow()
   expect(() => http.getMCPURL('https://example.com/mcp?token=secret')).toThrow()
@@ -246,6 +293,29 @@ it('retains installed identities and curated documentation only for the declared
     expect(changed.documents?.readme).toBe(false)
     await catalog.TOOL_CATALOG.act(legacyId, 'remove')
     expect(await auth.MCP_CONNECTIONS.getCredentials(legacyId)).toBeNull()
+  })
+})
+
+it('edits an installed server’s public OAuth application through trusted setup without reinstalling or using chat credentials', async () => {
+  const { setupMCPConnection } = await import('@/core/tool-manager/mcp/setup')
+  const { ConnectionSetupActionId: Action } = await import('../../../aurora/src/contracts/connection-setup')
+  const server = await startMCPFixture(true)
+  servers.push(server)
+  await owner('mcp-owner-a', async () => {
+    const id = await catalog.TOOL_CATALOG.install({ url: server.url, name: 'Public OAuth workspace' })
+    try {
+      const input = { provider: id, session_id: '', callback_origin: 'http://127.0.0.1:1337', api_version: 'v1' }
+      const screen = await setupMCPConnection({ ...input, action: Action.Credentials })
+      expect(screen?.view.fields.map((field) => field.name)).toEqual(['client_id', 'client_metadata_url'])
+      expect(server.requests).toBe(0)
+      const result = await setupMCPConnection({ ...input, action: Action.Connect, state: screen!.view.state,
+        credentials: { client_id: 'fixture-client', client_metadata_url: '' } })
+      expect(new URL(result!.authorization_url!).searchParams.get('client_id')).toBe('fixture-client')
+      expect((await catalog.getInstalledMCP(id))?.source.clientId).toBe('fixture-client')
+      expect((await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)?.connected).toBe(false)
+    } finally {
+      await catalog.TOOL_CATALOG.act(id, 'remove')
+    }
   })
 })
 
