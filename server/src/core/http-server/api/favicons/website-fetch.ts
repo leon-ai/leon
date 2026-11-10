@@ -1,32 +1,19 @@
 import { lookup } from 'node:dns'
 import { request as requestHTTP } from 'node:http'
 import { request as requestHTTPS } from 'node:https'
-import { BlockList, isIP } from 'node:net'
+import { isIP } from 'node:net'
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 import type { Readable } from 'node:stream'
 import { MIMEType } from 'node:util'
 
 import PACKAGE from '@@/package.json' with { type: 'json' }
+import { NetworkHelper } from '@/helpers/network-helper'
 
 const REQUEST_TIMEOUT_MS = 4_000
 const MAXIMUM_REDIRECTS = 3
-const PUBLIC_IPV6 = new BlockList()
-const RESERVED_ADDRESSES = new BlockList()
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const WEBSITE_USER_AGENT = `LeonAI (+${PACKAGE.homepage})`
 
-PUBLIC_IPV6.addSubnet('2000::', 3, 'ipv6')
-for (const [address, prefix] of [
-  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
-  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
-  ['192.88.99.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24],
-  ['203.0.113.0', 24], ['224.0.0.0', 3]
-] as const) {
-  RESERVED_ADDRESSES.addSubnet(address, prefix, 'ipv4')
-}
-RESERVED_ADDRESSES.addSubnet('2001::', 23, 'ipv6')
-RESERVED_ADDRESSES.addSubnet('2001:db8::', 32, 'ipv6')
-RESERVED_ADDRESSES.addSubnet('2002::', 16, 'ipv6')
 
 export interface WebsiteResource {
   bytes: Buffer
@@ -42,15 +29,6 @@ interface FetchOptions {
   signal: AbortSignal
 }
 
-function isPublicAddress(address: string): boolean {
-  const family = isIP(address)
-  if (family === 4) {
-    return !RESERVED_ADDRESSES.check(address, 'ipv4')
-  }
-
-  return family === 6 && PUBLIC_IPV6.check(address, 'ipv6') && !RESERVED_ADDRESSES.check(address, 'ipv6')
-}
-
 /**
  * Restricts both supplied URLs and discovered assets to ordinary public websites.
  */
@@ -59,7 +37,7 @@ export function getWebsiteURL(value: string, base?: string): URL | null {
     const url = new URL(value, base)
     const hostname = url.hostname.replace(/^\[|\]$/g, '')
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port ||
-      isIP(hostname) && !isPublicAddress(hostname)) {
+      isIP(hostname) && !NetworkHelper.isPublicAddress(hostname)) {
       return null
     }
 
@@ -97,7 +75,7 @@ export async function fetchWebsiteResource(url: URL, options: FetchOptions, redi
       headers: { Accept: Array.from(options.types).join(', '), 'Accept-Encoding': 'identity', 'User-Agent': WEBSITE_USER_AGENT },
       lookup: (host, dnsOptions, callback) => {
         lookup(host, { all: true }, (error, addresses) => {
-          if (error || addresses.length === 0 || addresses.some(({ address }) => !isPublicAddress(address))) {
+          if (error || addresses.length === 0 || addresses.some(({ address }) => !NetworkHelper.isPublicAddress(address))) {
             callback(error ?? new Error('Website host is not public'), '', 4)
             return
           }
