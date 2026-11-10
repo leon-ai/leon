@@ -5,11 +5,7 @@ import url from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { execFile, execFileSync } from 'node:child_process'
 
-import {
-  NetworkHelper,
-  type DownloadFileOptions
-} from '@/helpers/network-helper'
-import { SystemHelper } from '@/helpers/system-helper'
+import type { DownloadFileOptions } from '@/helpers/network-helper'
 
 const DEFAULT_FILE_ICON_NAME = 'file-line'
 const FOLDER_ICON_NAME = 'folder-3-line'
@@ -241,6 +237,7 @@ export class FileHelper {
    * @returns The resolved path that was opened
    */
   public static async openPath(targetPath: string): Promise<string> {
+    const { SystemHelper } = await import('@/helpers/system-helper')
     const expandedPath = FileHelper.expandHomeAlias(targetPath)
     const resolvedPath = path.resolve(expandedPath)
 
@@ -323,6 +320,7 @@ export class FileHelper {
     destinationPath: string,
     options?: DownloadFileOptions
   ): Promise<void> {
+    const { NetworkHelper } = await import('@/helpers/network-helper')
     await NetworkHelper.downloadFile(fileURL, destinationPath, options)
   }
 
@@ -365,6 +363,7 @@ export class FileHelper {
       stripComponents?: number
     }
   ): Promise<void> {
+    const { SystemHelper } = await import('@/helpers/system-helper')
     const stripComponents = options?.stripComponents ?? 0
 
     await fs.promises.mkdir(targetPath, { recursive: true })

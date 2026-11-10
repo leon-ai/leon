@@ -1,9 +1,6 @@
 import { BlockList, isIP } from 'node:net'
-import axios from 'axios'
 
-import { FileDownloader } from '@@/bridges/runtime/nodejs/file-downloader'
-import { LogHelper } from '@/helpers/log-helper'
-
+import type { FileDownloader, DownloadFileOptions } from '@@/bridges/runtime/nodejs/file-downloader'
 export type { DownloadFileOptions, DownloadFileProgress } from '@@/bridges/runtime/nodejs/file-downloader'
 
 const HUGGING_FACE_URL = 'https://huggingface.co'
@@ -28,9 +25,14 @@ RESERVED_ADDRESSES.addSubnet('2001:db8::', 32, 'ipv6')
 RESERVED_ADDRESSES.addSubnet('2002::', 16, 'ipv6')
 
 /**
- * Core download entry point with host logging and model-resource URL selection.
+ * Shares address policy and host download facilities without loading download
+ * or provider dependencies for callers that only validate a destination.
  */
-export class NetworkHelper extends FileDownloader {
+export class NetworkHelper {
+  private static downloader: typeof FileDownloader | undefined
+  private static downloaderRequest: Promise<typeof FileDownloader> | undefined
+  private static readonly preparing = new Set<{ error?: Error }>()
+
   /**
    * Identifies routable destinations before connecting to an untrusted hostname.
    */
@@ -53,46 +55,88 @@ export class NetworkHelper extends FileDownloader {
     return family !== 0 && LOOPBACK_ADDRESSES.check(address, family === 4 ? 'ipv4' : 'ipv6')
   }
 
-
   /**
-   * Keep transport warnings attached to Core's owning profile.
+   * Downloads through the shared runtime implementation with Core-owned logging.
+   * Cancellation also covers requests waiting for that implementation to load.
    */
-  protected static override warn(message: string): void {
-    LogHelper.warning(message)
+  public static async downloadFile(fileURL: string, destinationPath: string, options?: DownloadFileOptions): Promise<void> {
+    const pending: { error?: Error } = {}
+    this.preparing.add(pending)
+    let downloader: typeof FileDownloader
+    try {
+      downloader = await this.loadDownloader()
+      if (pending.error) {
+        throw pending.error
+      }
+    } finally {
+      this.preparing.delete(pending)
+    }
+
+    await downloader.downloadFile(fileURL, destinationPath, options)
   }
 
   /**
-   * Check if the current network can access Hugging Face
-   * @example canAccessHuggingFace() // true
+   * Stops active downloads and prevents pending lazy initialization from starting
+   * more work after setup has been cancelled.
+   */
+  public static abortActiveDownloads(reason = 'Download interrupted'): number {
+    let count = this.downloader?.abortActiveDownloads(reason) ?? 0
+    for (const pending of this.preparing) {
+      if (!pending.error) {
+        pending.error = new DOMException(reason, 'AbortError')
+        count++
+      }
+    }
+
+    return count
+  }
+
+  private static loadDownloader(): Promise<typeof FileDownloader> {
+    this.downloaderRequest ??= Promise.all([
+      import('@@/bridges/runtime/nodejs/file-downloader'),
+      import('@/helpers/log-helper')
+    ]).then(([{ FileDownloader }, { LogHelper }]) => {
+      class CoreDownloader extends FileDownloader {
+        protected static override warn(message: string): void {
+          LogHelper.warning(message)
+        }
+      }
+      this.downloader = CoreDownloader
+
+      return CoreDownloader
+    }).catch((error) => {
+      this.downloaderRequest = undefined
+      throw error
+    })
+
+    return this.downloaderRequest
+  }
+
+  /**
+   * Checks provider reachability without loading its HTTP client for IP guards.
    */
   public static async canAccessHuggingFace(): Promise<boolean> {
     try {
+      const { default: axios } = await import('axios')
       await axios.head(HUGGING_FACE_URL)
 
       return true
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (e) {
+    } catch {
       return false
     }
   }
 
   /**
-   * Set the Hugging Face URL based on the network access
-   * @param url The URL to set
-   * @example setHuggingFaceURL('https://huggingface.co') // https://hf-mirror.com
+   * Selects the existing provider mirror when the main host is unreachable.
    */
   public static async setHuggingFaceURL(url: string): Promise<string> {
     if (!url.includes('huggingface.co')) {
       return url
     }
-
-    const canAccess = await NetworkHelper.canAccessHuggingFace()
-
-    if (!canAccess) {
+    if (!await NetworkHelper.canAccessHuggingFace()) {
       return url.replace(HUGGING_FACE_URL, HUGGING_FACE_MIRROR_URL)
     }
 
     return url
   }
-
 }
