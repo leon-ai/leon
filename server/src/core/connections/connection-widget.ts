@@ -6,14 +6,15 @@ import { getActiveConversationSessionId, getActiveConversationResponseId } from 
 /**
  * Displays setup only for a tool requested in this profile's current conversation.
  */
-export function emitConnectionWidget(provider: string): void {
+export function emitConnectionWidget(provider: string, presentation?: { name: string, iconName: string, logoUrl?: string }): void {
   const [toolkitId, toolId] = provider.split('.')
-  const remote = toolkitId && toolId && TOOLKIT_REGISTRY.getToolSource(toolkitId, toolId)?.type === 'mcp'
+  const remote = !presentation && toolkitId && toolId && TOOLKIT_REGISTRY.getToolSource(toolkitId, toolId)?.type === 'mcp'
     ? TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId) : undefined
-  const tool = remote ? { name: remote.toolName, icon_name: remote.toolIconName }
+  const tool = presentation ? { name: presentation.name, icon_name: presentation.iconName }
+    : remote ? { name: remote.toolName, icon_name: remote.toolIconName }
     : TOOLKIT_REGISTRY.getConnectionTool(provider)
   const sessionId = getActiveConversationSessionId()
-  const logoUrl = toolkitId && toolId ? TOOLKIT_REGISTRY.getToolLogoUrl(toolkitId, toolId) : undefined
+  const logoUrl = presentation?.logoUrl ?? (toolkitId && toolId ? TOOLKIT_REGISTRY.getToolLogoUrl(toolkitId, toolId) : undefined)
   const responseId = getActiveConversationResponseId()
   const id = `connection-${responseId || sessionId || 'current'}-${provider}`
 

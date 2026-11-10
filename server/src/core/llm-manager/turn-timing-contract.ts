@@ -29,6 +29,7 @@ export enum TurnPhase {
   Clarification = 'clarification',
   Cancellation = 'cancellation',
   Connection = 'connection-setup',
+  CatalogSearch = 'catalog-search',
   VisualSetup = 'visual-setup',
   Visual = 'visual-generation',
   VisualPresentation = 'visual-presentation',

@@ -140,6 +140,7 @@ import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/ag
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
 import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnInferences } from '../turn-timing'
+import { CATALOG_SEARCH_TOOL_NAME } from '@/core/tool-manager/catalog/agent-catalog'
 import { AURORA_LOADER_NAME, AURORA_PREVIEW_NAME, AURORA_PRESENT_NAME } from '@/core/aurora/agent-ui-contract'
 import {
   type AccumulatedLLMMetricsState,
@@ -173,6 +174,7 @@ const TOOL_REQUEST_GOALS: ReadonlyMap<string, TurnPhase> = new Map([
   [AGENT_CLARIFICATION_TOOL_NAME, TurnPhase.Clarification],
   [AGENT_CANCELLATION_TOOL_NAME, TurnPhase.Cancellation],
   [CONNECTION_SETUP_TOOL_NAME, TurnPhase.Connection],
+  [CATALOG_SEARCH_TOOL_NAME, TurnPhase.CatalogSearch],
   [AURORA_LOADER_NAME, TurnPhase.VisualSetup],
   [AURORA_PREVIEW_NAME, TurnPhase.Visual],
   [AURORA_PRESENT_NAME, TurnPhase.VisualPresentation]

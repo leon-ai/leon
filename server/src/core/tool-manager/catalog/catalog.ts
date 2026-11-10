@@ -17,9 +17,32 @@ import { MCP_MANAGER } from '../mcp/manager'
 import { getMCPURL } from '../mcp/http'
 import { BUNDLED_TOOL_CATALOG, type BundledToolDefinition } from './catalog-loader'
 import type { MCPManifest, ToolCatalogEntry } from '../tool-source'
+import { CatalogToolState } from '../tool-source'
 import { getPreferredConnectionMethod } from '@@/aurora/src/contracts/connection-setup'
 
 const MAXIMUM_MANIFEST_BYTES = 1_024 * 1_024
+
+/**
+ * Describes availability separately from authorization without retrieving secrets.
+ */
+export function getCatalogToolState(tool: ToolCatalogEntry): CatalogToolState {
+  if (!tool.installed) {
+    return CatalogToolState.NotAdded
+  }
+  if (!tool.enabled) {
+    return CatalogToolState.Disabled
+  }
+  return tool.canConnect && !tool.connected ? CatalogToolState.NeedsConnection : CatalogToolState.Ready
+}
+
+/**
+ * Profile allow-only policy cannot be changed by an Add or Enable card.
+ */
+export function isCatalogToolRestricted(tool: ToolCatalogEntry): boolean {
+  const [toolkitId, toolId] = tool.id.split('.')
+
+  return ProfileHelper.hasToolAllowlist() && ProfileHelper.isToolDisabled(toolId!, toolkitId)
+}
 
 export interface CatalogToolDefinition {
   manifest: Readonly<ToolManifestSchema>
@@ -143,7 +166,7 @@ export class ToolCatalog {
   /**
    * Combines local presentation and safe connection summaries without discovery.
    */
-  public async list(): Promise<ToolCatalogEntry[]> {
+  public async list(options: { presentation?: boolean } = {}): Promise<ToolCatalogEntry[]> {
     const nativeConnections = await CONNECTION_STORE.list()
     const remoteConnections = await MCP_CONNECTIONS.list()
     const entries: ToolCatalogEntry[] = []
@@ -171,12 +194,14 @@ export class ToolCatalog {
         ...(connectionMethod ? { connectionMethod } : {}),
         ...(cache ? { toolCount: Object.keys(cache.functions).length } : {}),
         ...(manifest.source ? { url: manifest.source.url } : {}),
-        ...await catalogPresentation(
+        ...(options.presentation === false ? {
+          ...((presentation?.manifest ?? manifest).logo ? { logoUrl: `tools/${encodeURIComponent(id)}/assets/logo.svg` } : {})
+        } : await catalogPresentation(
           presentation?.manifest ?? manifest,
           presentation?.directory ?? directory,
           !owned || Boolean(presentation),
           `tools/${encodeURIComponent(id)}`
-        )
+        ))
       })
     }
 
