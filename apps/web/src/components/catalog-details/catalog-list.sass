@@ -1,0 +1,99 @@
+.catalog-list
+  display: grid
+  gap: var(--space-md)
+  min-width: 0
+
+.catalog-list-toolbar
+  display: flex
+  gap: var(--space-sm)
+  align-items: center
+
+  > :first-child
+    flex: 1
+    min-width: 0
+
+.catalog-list-filters
+  display: flex
+  gap: var(--space-xs)
+
+.catalog-list-note, .catalog-list-empty
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+.catalog-list-viewport
+  height: min(620px, calc(100dvh - 240px))
+  min-height: 280px
+
+.catalog-list-row
+  display: flex
+  box-sizing: border-box
+  gap: var(--space-md)
+  align-items: flex-start
+  padding: var(--space-lg) var(--space-sm)
+  border-bottom: 1px solid var(--color-border)
+
+.catalog-list-summary
+  flex: 1
+  min-width: 0
+
+  h3
+    display: flex
+    align-items: center
+    flex-wrap: wrap
+    gap: var(--space-sm)
+    margin: 0 0 var(--space-xs)
+    font-size: var(--font-size-md)
+    font-weight: var(--font-weight-semi-bold)
+
+    .catalog-list-title
+      margin-left: calc(-1 * var(--space-sm))
+      font-size: inherit
+      font-weight: inherit
+      color: var(--color-text)
+
+    > span
+      font-weight: var(--font-weight-regular)
+      font-size: var(--font-size-xs)
+      color: var(--color-text-tertiary)
+
+  p
+    margin-bottom: var(--space-xs)
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+    line-height: var(--line-height-sm)
+    overflow-wrap: anywhere
+
+  small
+    color: var(--color-text-tertiary)
+
+.catalog-list-actions
+  display: flex
+  align-items: center
+  flex-wrap: wrap
+  justify-content: flex-end
+
+.tools-settings-form
+  display: grid
+  gap: var(--space-lg)
+
+  label, details
+    display: grid
+    gap: var(--space-sm)
+
+  p
+    color: var(--color-text-secondary)
+
+  summary
+    cursor: pointer
+    color: var(--color-text-secondary)
+
+@media (max-width: 680px)
+  .catalog-list-toolbar
+    flex-wrap: wrap
+
+  .catalog-list-row
+    gap: var(--space-sm)
+
+  .catalog-list-actions
+    max-width: 100px
