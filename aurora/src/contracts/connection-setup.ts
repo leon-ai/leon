@@ -59,6 +59,7 @@ export interface ConnectionSetupAction {
 
 export interface ConnectionSetupView {
   state: { method: string, step: string }
+  tool?: { name: string, description: string }
   title: string
   description: string
   status?: string
@@ -84,6 +85,7 @@ export interface ConnectionSetupView {
 export interface ConnectionSetupDescriptor {
   provider: string
   name?: string
+  description?: string
   iconName?: string
   logoUrl?: string
 }

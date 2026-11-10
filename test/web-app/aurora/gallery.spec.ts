@@ -21,6 +21,23 @@ for (const theme of ['light', 'dark'] as const) {
       const logo = card.locator('.aurora-connection-icon img.package-icon')
       await logo.scrollIntoViewIfNeeded()
       await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+      await expect(card.locator('.aurora-connection-icon')).toHaveCSS('width', '48px')
+      await expect(card.locator('.aurora-connection-icon')).toHaveCSS('height', '48px')
+      await expect(card.locator('.aurora-connection-identity h3')).toHaveCSS('font-size', '18px')
+      await expect(card.locator('.aurora-connection-identity h3')).toHaveCSS('font-weight', '600')
+      await expect(card.locator('.aurora-connection-identity p')).toHaveCSS('font-size', '16px')
+      await expect(card.getByRole('button', { name: 'Refresh status', exact: true })).toHaveCount(0)
+      if (name === 'TickTick') {
+        await card.getByRole('combobox', { name: 'Preview state' }).selectOption('installation')
+        const add = card.getByRole('button', { name: 'Add TickTick', exact: true })
+        await expect(add).toHaveText('Add')
+        await expect(card.getByText('A one-time application setup', { exact: false })).toHaveCount(0)
+        await card.locator('.aurora-connection').screenshot({ path: testInfo.outputPath(`ticktick-add-${theme}.png`) })
+        await add.click()
+        await expect(card.getByRole('button', { name: 'Connect TickTick', exact: true })).toHaveText('Connect')
+        await expect(card.locator('input')).toHaveCount(0)
+        await card.locator('.aurora-connection').screenshot({ path: testInfo.outputPath(`ticktick-compact-${theme}.png`) })
+      }
     }
     for (const name of ['Notion', 'TickTick']) {
       const card = page.getByRole('region', { name: `${name} connection`, exact: true })
@@ -34,10 +51,18 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(card.getByRole('status')).toContainText('Connected — preview only')
         continue
       }
-      await expect(card.getByText('A one-time application setup', { exact: false })).toBeVisible()
+      await expect(card.getByText('A one-time application setup', { exact: false })).toHaveCount(0)
       await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
+      await expect(card.getByText('A one-time application setup', { exact: false })).toBeVisible()
       await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
       await expect(card.getByLabel('client secret', { exact: true })).toHaveAttribute('type', 'password')
+      await card.locator('.aurora-connection').screenshot({ path: testInfo.outputPath(`ticktick-expanded-${theme}.png`) })
+      await card.getByLabel('Client ID', { exact: true }).fill('preview-client')
+      await card.getByLabel('client secret', { exact: true }).fill('preview-secret')
+      await card.getByLabel('client secret', { exact: true }).press('Enter')
+      await expect(card.getByRole('status')).toContainText('Working on the connection')
+      await card.getByRole('button', { name: 'Finish authorization', exact: true }).click()
+      await expect(card.getByRole('status')).toContainText('Connected — preview only')
       await card.getByRole('combobox', { name: 'Preview state' }).selectOption('cancelled')
       await expect(card.getByRole('status')).toContainText('Authorization was cancelled')
       await expect(card.getByLabel('access token', { exact: true })).toHaveCount(0)

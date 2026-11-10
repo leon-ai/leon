@@ -83,7 +83,7 @@ test('keeps connection credentials inside explicit setup requests and clears fai
     await route.fulfill({ json: { view } })
   })
   await page.goto(SESSION_URL)
-  const card = page.getByRole('region', { name: 'Set up TickTick', exact: true })
+  const card = page.getByRole('region', { name: 'TickTick', exact: true })
   await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
   const token = card.getByLabel('access token', { exact: true })
   await expect(token).toHaveAttribute('type', 'password')
@@ -134,10 +134,11 @@ test('sends guided setup through ordinary owner commands and retains retry ident
         methodParams: { from: 'owner', utterance: 'Help me connect TickTick using my browser, then continue my request.' } } } : {}) } })
   })
   await page.goto(SESSION_URL)
-  const card = page.getByRole('region', { name: 'Set up TickTick', exact: true })
+  const card = page.getByRole('region', { name: 'TickTick', exact: true })
   await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
   await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
   expect(commands).toHaveLength(0)
+  await card.getByText('Show setup instructions', { exact: true }).click()
   await card.getByRole('button', { name: 'Set it up for me', exact: true }).click()
   await expect(card.getByRole('alert')).toBeVisible()
   await card.getByRole('button', { name: 'Set it up for me', exact: true }).click()
@@ -189,7 +190,7 @@ for (const name of ['notion', 'spotify']) {
         await route.fulfill({ json: { view } })
       })
       await page.goto(SESSION_URL)
-      const card = page.getByRole('region', { name: `Set up ${preview.name}`, exact: true })
+      const card = page.getByRole('region', { name: preview.name, exact: true })
       await expect(card.locator('input[type="password"]')).toHaveCount(0)
       if (configured) {
         await expect(card.locator('input')).toHaveCount(0)
@@ -243,7 +244,7 @@ for (const explicit of [false, true]) {
     })
     await page.goto(SESSION_URL)
     const body = page.getByRole('region', { name: 'Leon’s final answer', exact: true })
-    await expect(body.getByRole('region', { name: 'Set up Notion', exact: true })).toBeVisible()
+    await expect(body.getByRole('region', { name: 'Notion', exact: true })).toBeVisible()
     answer.message = 'Connect Notion below, then I can read the pages you share.'
     answer.isAddedToHistory = true
     ui.sessions[0]!.status = 'idle' as SessionStatus
@@ -255,10 +256,10 @@ for (const explicit of [false, true]) {
     ])
     await expect(page.getByRole('button', { name: /Worked for/ })).toBeVisible()
     await expect(body).toContainText(answer.message)
-    await expect(body.getByRole('region', { name: 'Set up Notion', exact: true })).toBeVisible()
+    await expect(body.getByRole('region', { name: 'Notion', exact: true })).toBeVisible()
     await expect(page.locator('.aurora-connection')).toHaveCount(1)
     await page.reload()
-    await expect(body.getByRole('region', { name: 'Set up Notion', exact: true })).toBeVisible()
+    await expect(body.getByRole('region', { name: 'Notion', exact: true })).toBeVisible()
     await expect(page.locator('.aurora-connection')).toHaveCount(1)
   })
 }
@@ -299,7 +300,7 @@ test('reports blocked authorization windows without sending credentials or leavi
   await page.evaluate(() => {
     window.open = (): null => null
   })
-  const card = page.getByRole('region', { name: 'Set up Notion', exact: true })
+  const card = page.getByRole('region', { name: 'Notion', exact: true })
   await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
   await expect(card.getByRole('alert')).toContainText('Allow pop-ups')
   await expect(page.locator('.toast-error')).toHaveCount(1)
@@ -327,7 +328,7 @@ for (const action of ['close', 'navigate'] as const) {
       await route.fulfill({ json: { view: connectionPreviewView(preview, 'oauth', started ? 'cancelled' : Step.Choice, true) } })
     })
     await page.goto(SESSION_URL)
-    const card = page.getByRole('region', { name: 'Set up Notion', exact: true })
+    const card = page.getByRole('region', { name: 'Notion', exact: true })
     const [popup] = await Promise.all([page.waitForEvent('popup'), card.getByRole('button', { name: 'Connect Notion', exact: true }).click()])
     await expect(popup).toHaveURL(/\/oauth-fixture$/)
     if (action === 'close') {

@@ -17,7 +17,8 @@ export default function ConnectionSetupCard({ connection, initialAuthorization }
   const owner = useContext(ConversationDetailsContext)
   const setup = useConnectionSetup(owner?.sessionId ?? '', connection.provider, initialAuthorization)
 
-  return <ConnectionSetupWidget title={connection.name ? `Set up ${connection.name}` : 'Connection setup'}
+  return <ConnectionSetupWidget title={connection.name ?? 'Connection setup'}
+    {...(connection.description ? { description: connection.description } : {})}
     view={setup.view} loading={setup.loading} busy={setup.busy} error={setup.error}
     icon={<PackageIcon logoUrl={connection.logoUrl} iconName={connection.iconName ?? 'plug-line'} />} statusIcon={<Icon name="check-fill" />}
     onRefresh={setup.refresh} onAction={setup.act}

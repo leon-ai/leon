@@ -6,12 +6,12 @@ import { getActiveConversationSessionId, getActiveConversationResponseId } from 
 /**
  * Displays setup only for a tool requested in this profile's current conversation.
  */
-export function emitConnectionWidget(provider: string, presentation?: { name: string, iconName: string, logoUrl?: string }): void {
+export function emitConnectionWidget(provider: string, presentation?: { name: string, description?: string, iconName: string, logoUrl?: string }): void {
   const [toolkitId, toolId] = provider.split('.')
   const remote = !presentation && toolkitId && toolId && TOOLKIT_REGISTRY.getToolSource(toolkitId, toolId)?.type === 'mcp'
     ? TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId) : undefined
-  const tool = presentation ? { name: presentation.name, icon_name: presentation.iconName }
-    : remote ? { name: remote.toolName, icon_name: remote.toolIconName }
+  const tool = presentation ? { name: presentation.name, description: presentation.description, icon_name: presentation.iconName }
+    : remote ? { name: remote.toolName, description: remote.toolDescription, icon_name: remote.toolIconName }
     : TOOLKIT_REGISTRY.getConnectionTool(provider)
   const sessionId = getActiveConversationSessionId()
   const logoUrl = presentation?.logoUrl ?? (toolkitId && toolId ? TOOLKIT_REGISTRY.getToolLogoUrl(toolkitId, toolId) : undefined)
@@ -26,6 +26,7 @@ export function emitConnectionWidget(provider: string, presentation?: { name: st
     connection: {
       provider,
       name: tool.name,
+      ...(tool.description ? { description: tool.description } : {}),
       ...(logoUrl ? { logoUrl } : {}),
       ...(tool.icon_name ? { iconName: tool.icon_name } : {})
     },

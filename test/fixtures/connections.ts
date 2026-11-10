@@ -15,21 +15,24 @@ interface PreviewMethod {
 export interface ConnectionPreview {
   provider: string
   name: string
+  description: string
   iconName: string
   logo?: string
   methods: Record<string, PreviewMethod>
 }
 
 export const CONNECTION_PREVIEWS: Record<string, ConnectionPreview> = {
-  'connection-notion': { provider: `${notion.toolkit_id}.${notion.tool_id}`, name: notion.name, iconName: notion.icon_name, logo: notion.logo, methods: {
+  'connection-notion': { provider: `${notion.toolkit_id}.${notion.tool_id}`, name: notion.name, description: notion.description, iconName: notion.icon_name, logo: notion.logo, methods: {
     oauth: { name: 'OAuth', description: 'Sign in through Notion’s official MCP server.',
       setup_url: 'https://developers.notion.com/guides/mcp/get-started-with-mcp', settings: {} }
   } },
-  'connection-spotify': { provider: `${spotify.toolkit_id}.${spotify.tool_id}`, name: spotify.name, iconName: spotify.icon_name, logo: spotify.logo, methods: spotify.connection.methods },
-  'connection-ticktick': { provider: `${ticktick.toolkit_id}.${ticktick.tool_id}`, name: ticktick.name, iconName: ticktick.icon_name, logo: ticktick.logo, methods: ticktick.connection.methods }
+  'connection-spotify': { provider: `${spotify.toolkit_id}.${spotify.tool_id}`, name: spotify.name, description: spotify.description, iconName: spotify.icon_name, logo: spotify.logo, methods: spotify.connection.methods },
+  'connection-ticktick': { provider: `${ticktick.toolkit_id}.${ticktick.tool_id}`, name: ticktick.name, description: ticktick.description, iconName: ticktick.icon_name, logo: ticktick.logo, methods: ticktick.connection.methods }
 }
 
 export const CONNECTION_PREVIEW_STATES = [
+  { value: Step.Installation, label: 'Not added' },
+  { value: Step.Disabled, label: 'Disabled' },
   { value: Step.Choice, label: 'Start' },
   { value: Step.Application, label: 'Setup instructions' },
   { value: Step.Credentials, label: 'Connection fields' },
@@ -55,6 +58,7 @@ export function connectionPreviewView(preview: ConnectionPreview, methodId: stri
   const application = step === Step.Application
   const view: ConnectionSetupView = {
     state: { method: methodId, step }, title: connected ? preview.name : `Set up ${preview.name}`,
+    tool: { name: preview.name, description: preview.description },
     description: connected ? 'This is a local preview. No account was connected.' :
       step === Step.Assisted ? 'You can follow setup progress in the conversation.' :
         needsApplication ? 'A one-time application setup is needed before you can authorize access. Enter its credentials to get started.' :
@@ -62,6 +66,18 @@ export function connectionPreviewView(preview: ConnectionPreview, methodId: stri
     fields: [], links: [], actions: [], messages: CONNECTION_SETUP_MESSAGES,
     ...(connected ? { status: 'Connected — preview only' } : {}),
     ...(step === 'cancelled' ? { notice: 'Authorization was cancelled. You can start again when you’re ready.' } : {})
+  }
+
+  if (step === Step.Installation || step === Step.Disabled) {
+    view.description = step === Step.Installation
+      ? `${preview.name} is in my catalog, but hasn’t been added to this profile.`
+      : `${preview.name} is added but currently disabled.`
+    view.actions.push({
+      id: step === Step.Installation ? Action.Install : Action.Enable,
+      label: `${step === Step.Installation ? 'Add' : 'Enable'} ${preview.name}`
+    })
+
+    return view
   }
 
   if (connected) {

@@ -22,6 +22,7 @@ export function getConnectionSetupDescriptor(widget: ConversationRecord['widget'
 
   return { provider,
     ...(typeof widget.connection?.name === 'string' ? { name: widget.connection.name } : {}),
+    ...(typeof widget.connection?.description === 'string' ? { description: widget.connection.description } : {}),
     ...(typeof widget.connection?.iconName === 'string' ? { iconName: widget.connection.iconName } : {}),
     ...(typeof widget.connection?.logoUrl === 'string' ? { logoUrl: widget.connection.logoUrl } : {}) }
 }

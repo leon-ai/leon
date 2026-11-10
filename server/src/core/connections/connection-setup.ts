@@ -250,6 +250,7 @@ export async function handleConnectionSetup(
     ): ConnectionSetupAction => ({ id, label, secondary })
     const view: ConnectionSetupView = {
       state: { method: method.id, step },
+      tool: { name: tool.name, description: tool.description },
       title: connected() ? tool.name : `Set up ${tool.name}`,
       description: '',
       fields: [],
