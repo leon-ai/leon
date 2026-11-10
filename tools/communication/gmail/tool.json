@@ -5,6 +5,7 @@
   "name": "Gmail",
   "description": "Search and read Gmail messages and inspect mailbox labels with read-only access.",
   "icon_name": "mail-line",
+  "logo": "logo.svg",
   "distribution": "extension",
   "maintenance": "official",
   "maintainers": [

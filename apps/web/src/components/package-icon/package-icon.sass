@@ -1,0 +1,14 @@
+.package-icon
+  object-fit: contain
+  border-radius: var(--border-radius-sm)
+
+.package-icon-mask
+  border-radius: 0
+
+  &[data-logo-mask='inverse-luminance']
+    mask-image: var(--app-icon-image), var(--app-icon-image)
+    mask-mode: alpha, luminance
+    mask-composite: subtract
+
+  .package-icon-probe
+    display: none

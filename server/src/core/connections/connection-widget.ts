@@ -7,8 +7,13 @@ import { getActiveConversationSessionId, getActiveConversationResponseId } from 
  * Displays setup only for a tool requested in this profile's current conversation.
  */
 export function emitConnectionWidget(provider: string): void {
-  const tool = TOOLKIT_REGISTRY.getConnectionTool(provider)
+  const [toolkitId, toolId] = provider.split('.')
+  const remote = toolkitId && toolId && TOOLKIT_REGISTRY.getToolSource(toolkitId, toolId)?.type === 'mcp'
+    ? TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId) : undefined
+  const tool = remote ? { name: remote.toolName, icon_name: remote.toolIconName }
+    : TOOLKIT_REGISTRY.getConnectionTool(provider)
   const sessionId = getActiveConversationSessionId()
+  const logoUrl = toolkitId && toolId ? TOOLKIT_REGISTRY.getToolLogoUrl(toolkitId, toolId) : undefined
   const responseId = getActiveConversationResponseId()
   const id = `connection-${responseId || sessionId || 'current'}-${provider}`
 
@@ -20,10 +25,11 @@ export function emitConnectionWidget(provider: string): void {
     connection: {
       provider,
       name: tool.name,
+      ...(logoUrl ? { logoUrl } : {}),
       ...(tool.icon_name ? { iconName: tool.icon_name } : {})
     },
     historyMode: 'system_widget',
-    fallbackText: `Connect ${tool.name} to continue. You can use guided setup in your browser or connect manually below.`,
+    fallbackText: `Set up ${tool.name} to continue.`,
     supportedEvents: [],
     componentTree: {
       component: 'WidgetWrapper',

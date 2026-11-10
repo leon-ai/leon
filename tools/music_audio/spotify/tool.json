@@ -5,6 +5,7 @@
   "name": "Spotify",
   "description": "Search Spotify, browse playlists, and control playback on your Spotify Connect devices.",
   "icon_name": "spotify-line",
+  "logo": "logo.svg",
   "distribution": "extension",
   "maintenance": "official",
   "maintainers": [

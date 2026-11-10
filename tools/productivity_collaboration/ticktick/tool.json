@@ -5,6 +5,7 @@
   "name": "TickTick",
   "description": "Read TickTick projects and tasks, create or update tasks, and mark tasks complete.",
   "icon_name": "checkbox-circle-line",
+  "logo": "logo.svg",
   "distribution": "extension",
   "maintenance": "official",
   "maintainers": [

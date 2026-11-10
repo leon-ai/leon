@@ -185,3 +185,49 @@ test('opens catalog documents on demand and shares contacts and availability con
   await expect(skill.getByText('Disabled · 1.0.0', { exact: true })).toBeVisible()
   await expect(page.getByText('Skill disabled', { exact: true })).toBeVisible()
 })
+
+for (const theme of ['light', 'dark']) {
+  test(`keeps catalog logos and custom server setup readable on narrow screens in ${theme} theme`, async ({ page, ui }) => {
+    void ui
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.addInitScript((value) => localStorage.setItem('leon.web-app.theme', value), theme)
+    const inputs: unknown[] = []
+    const entries = [
+      ['productivity_collaboration.notion', 'Notion', 'notion-line'],
+      ['music_audio.spotify', 'Spotify', 'spotify-line'],
+      ['communication.gmail', 'Gmail', 'mail-line'],
+      ['productivity_collaboration.ticktick', 'TickTick', 'checkbox-circle-line']
+    ].map(([id, name, iconName]) => ({ ...notion, id: id!, catalogId: id!, name: name!, iconName: iconName!,
+      logoUrl: `tools/${id}/assets/logo.svg` }))
+    await page.route('**/api/v1/tools**', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ json: { tools: entries } })
+      } else {
+        inputs.push(route.request().postDataJSON())
+        await route.fulfill({ status: 201, json: { id: 'mcp.custom' } })
+      }
+    })
+    await page.route('**/api/v1/tools/*/assets/logo.svg', (route) => {
+      const id = new URL(route.request().url()).pathname.split('/')[4]!
+
+      return route.fulfill({ contentType: 'image/svg+xml', path: `tools/${id.replace('.', '/')}/logo.svg` })
+    })
+    await page.goto('settings/tools')
+    await expect(page.getByRole('listitem', { name: 'Notion', exact: true })).toBeVisible()
+    for (const entry of entries) {
+      const image = page.getByRole('listitem', { name: entry.name, exact: true }).locator('img.package-icon')
+      await expect(image).toHaveAttribute('src', `/api/v1/${entry.logoUrl}`)
+      await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `/tmp/leon-settings-${theme}.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Add MCP server', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Add MCP server', exact: true })
+    await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('My workspace')
+    await dialog.getByRole('textbox', { name: 'Server URL', exact: true }).fill('https://example.com/mcp')
+    await dialog.getByRole('button', { name: 'Add server', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    expect(inputs).toEqual([{ name: 'My workspace', url: 'https://example.com/mcp' }])
+  })
+}
