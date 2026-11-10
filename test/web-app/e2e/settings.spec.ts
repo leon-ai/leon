@@ -75,3 +75,63 @@ test('keeps catalog navigation virtualized and applies only accepted management 
   await page.getByRole('button', { name: 'Light', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 })
+
+test('opens catalog documents on demand and shares contacts and availability controls with skills', async ({ page, ui }) => {
+  void ui
+  const entry = { ...notion, author: { name: 'Original creator', github: 'creator' },
+    maintainers: [
+      { name: 'Current maintainer', github: 'maintainer', discord: { id: '123456789012345678', username: 'friendly-maker' } },
+      { name: 'Another maintainer', discord: { username: 'studio-maker' } }
+    ],
+    maintenance: CatalogMaintenance.Community, distribution: CatalogDistribution.Extension,
+    documents: { readme: true, changelog: true } }
+  const reads: string[] = []
+  await page.route('**/api/v1/tools/catalog', (route) => route.fulfill({ json: { tools: [entry] } }))
+  await page.route('**/documents/*', (route) => {
+    const document = route.request().url().split('/').at(-1)!
+    reads.push(document)
+
+    return route.fulfill({ json: { text: document === 'readme'
+      ? '# A useful workspace\n\nAsk me to find your notes.\n\n![Workspace preview](/api/v1/tools/productivity_collaboration.notion/assets/media/screen.svg)'
+      : '# Release notes\n\nA clearer connection flow.' } })
+  })
+  await page.route('**/assets/media/screen.svg', (route) => route.fulfill({ contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120"><rect width="240" height="120" fill="gray"/></svg>' }))
+  let enabled = true
+  await page.route('**/api/v1/skills**', (route) => {
+    if (route.request().method() === 'POST') {
+      enabled = route.request().postDataJSON().action === 'enable'
+
+      return route.fulfill({ json: { success: true } })
+    }
+
+    return route.fulfill({ json: { skills: [{ ...entry, id: 'coding', name: 'Coding', kind: 'agent', version: '1.0.0',
+      installed: true, enabled, owned: false }] } })
+  })
+  await page.goto('settings/tools')
+  const row = page.getByRole('listitem', { name: 'Notion', exact: true })
+  await expect(row).toBeVisible()
+  expect(reads).toEqual([])
+  await row.getByRole('button', { name: 'Notion', exact: true }).click()
+  const details = page.getByRole('dialog', { name: 'Notion', exact: true })
+  await expect(details.getByRole('heading', { name: 'A useful workspace' })).toBeVisible()
+  await expect(details.getByRole('img', { name: 'Workspace preview' })).toBeVisible()
+  expect(reads).toEqual(['readme'])
+  await details.getByRole('button', { name: 'Changelog', exact: true }).click()
+  await expect(details.getByRole('heading', { name: 'Release notes' })).toBeVisible()
+  await details.getByRole('button', { name: 'People', exact: true }).click()
+  await expect(details.getByRole('link', { name: 'friendly-maker', exact: true })).toHaveAttribute('href', 'https://discord.com/users/123456789012345678')
+  await expect(details.getByRole('link', { name: 'maintainer', exact: true })).toHaveAttribute('href', 'https://github.com/maintainer')
+  await expect(details.getByText('studio-maker', { exact: true })).toBeVisible()
+  await expect(details.getByRole('link', { name: 'studio-maker', exact: true })).toHaveCount(0)
+  await expect(details.getByRole('button', { name: 'Copy Discord username', exact: true })).toBeVisible()
+  await expect(details.getByText('Original creator', { exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByRole('link', { name: 'Skills', exact: true }).click()
+  const skill = page.getByRole('listitem', { name: 'Coding', exact: true })
+  await expect(skill).toBeVisible()
+  await skill.getByRole('button', { name: 'Skill options', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Disable', exact: true }).click()
+  await expect(skill.getByText('Disabled · 1.0.0', { exact: true })).toBeVisible()
+  await expect(page.getByText('Skill disabled', { exact: true })).toBeVisible()
+})

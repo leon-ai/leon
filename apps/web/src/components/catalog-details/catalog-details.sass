@@ -1,0 +1,62 @@
+.catalog-logo
+  display: block
+  flex: 0 0 auto
+  width: var(--font-size-3xl)
+  height: var(--font-size-3xl)
+  object-fit: contain
+  border-radius: var(--border-radius-sm)
+
+.catalog-details
+  display: grid
+  gap: var(--space-lg)
+  min-width: 0
+
+.catalog-tabs
+  display: flex
+  flex-wrap: wrap
+  gap: var(--space-xs)
+  padding-bottom: var(--space-sm)
+  border-bottom: 1px solid var(--color-border)
+
+.catalog-document
+  max-height: min(60dvh, 640px)
+
+  h3
+    font-size: var(--font-size-md)
+    font-weight: var(--font-weight-semi-bold)
+    margin: 0 0 var(--space-sm)
+
+  section + section
+    margin-top: var(--space-lg)
+
+  .markdown-content img
+    display: block
+    max-width: 100%
+    height: auto
+    border-radius: var(--border-radius-sm)
+
+.catalog-contact
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  gap: var(--space-sm)
+  padding-block: var(--space-xs)
+  overflow-wrap: anywhere
+
+  > span
+    min-width: 0
+
+  a, .catalog-contact-username
+    display: inline-flex
+    gap: var(--space-xs)
+    align-items: center
+    color: var(--color-text-secondary)
+    text-decoration: none
+    overflow-wrap: anywhere
+
+    &:hover
+      color: var(--color-text)
+
+  .icon
+    width: var(--font-size-md)
+    height: var(--font-size-md)
