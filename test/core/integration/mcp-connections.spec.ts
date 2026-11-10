@@ -208,6 +208,65 @@ it('requires explicit profile activation for native extensions without changing 
   })
 })
 
+it('retains installed identities and curated documentation only for the declared server', async () => {
+  await owner('mcp-owner-a', async () => {
+    const id = await catalog.TOOL_CATALOG.install({ catalogId: 'productivity_collaboration.notion' })
+    const installed = (await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === id)!
+    expect(installed).toMatchObject({ maintenance: 'official', documents: { readme: true } })
+    const definition = (await catalog.toolDefinitions()).find((entry) => entry.manifest.tool_id === 'notion')!
+    const { FileHelper } = await import('@/helpers/file-helper')
+    const legacyId = 'productivity_collaboration.notion-mcp'
+    const legacyDirectory = path.join(path.dirname(definition.directory), 'notion-mcp')
+    await fs.rename(definition.directory, legacyDirectory)
+    await FileHelper.writeAtomicJSON(path.join(legacyDirectory, 'tool.json'), {
+      ...definition.manifest, tool_id: 'notion-mcp'
+    })
+    const toolkitPath = path.join(path.dirname(definition.directory), 'toolkit.json')
+    const toolkit = JSON.parse(await fs.readFile(toolkitPath, 'utf8'))
+    await FileHelper.writeAtomicJSON(toolkitPath, {
+      ...toolkit, tools: toolkit.tools.map((tool: string) => tool === 'notion' ? 'notion-mcp' : tool)
+    })
+    await auth.MCP_CONNECTIONS.save({ provider: legacyId, auth_type: 'oauth',
+      credentials: { source: definition.manifest.source, oauth: { tokens: { access_token: 'legacy-grant' } } } })
+    const credentialsPath = path.join(home, 'profiles', 'mcp-owner-a', 'connections', 'mcp', `${legacyId}.json`)
+    const encrypted = await fs.readFile(credentialsPath, 'utf8')
+    await core.TOOLKIT_REGISTRY.reload()
+    const aliases = (await catalog.TOOL_CATALOG.list()).filter((entry) => entry.id === id || entry.id === legacyId)
+    expect(aliases).toHaveLength(1)
+    expect(aliases[0]).toMatchObject({ id: legacyId, installed: true, maintenance: 'official', documents: { readme: true } })
+    expect(await catalog.getInstalledMCP(legacyId)).toMatchObject({ tool_id: 'notion-mcp', source: definition.manifest.source })
+    expect(await auth.MCP_CONNECTIONS.getCredentials(legacyId)).toMatchObject({ oauth: { tokens: { access_token: 'legacy-grant' } } })
+    expect(await fs.readFile(credentialsPath, 'utf8')).toBe(encrypted)
+    await FileHelper.writeAtomicJSON(path.join(legacyDirectory, 'tool.json'), {
+      ...definition.manifest, tool_id: 'notion-mcp', maintenance: 'official',
+      source: { type: 'mcp', transport: 'http', url: 'https://example.com/mcp' }
+    })
+    const changed = (await catalog.TOOL_CATALOG.list()).find((entry) => entry.id === legacyId)!
+    expect(changed.maintenance).toBeUndefined()
+    expect(changed.documents?.readme).toBe(false)
+    await catalog.TOOL_CATALOG.act(legacyId, 'remove')
+    expect(await auth.MCP_CONNECTIONS.getCredentials(legacyId)).toBeNull()
+  })
+})
+
+it('serves package-local documentation and images without leaking neighboring files or requesting remote assets', async () => {
+  const { readCatalogDocument, readCatalogAsset } = await import('@/core/catalog/presentation')
+  const directory = path.join(home, 'package-documents')
+  await fs.mkdir(path.join(directory, 'media'), { recursive: true })
+  await fs.writeFile(path.join(directory, 'README.md'), '# Example\n\n![Preview](media/screen.png)\n\n![Remote](https://example.com/tracker.png)')
+  await fs.writeFile(path.join(directory, 'media', 'screen.png'), 'fixture')
+  const secret = path.join(home, 'private.json')
+  await fs.writeFile(secret, 'private fixture')
+  await fs.symlink(secret, path.join(directory, 'media', 'escape.png'))
+  const document = await readCatalogDocument(directory, 'readme', '/api/v1/tools/example.tool')
+  expect(document.text).toContain('/api/v1/tools/example.tool/assets/media/screen.png')
+  expect(document.text).not.toContain('https://example.com/tracker.png')
+  expect((await readCatalogAsset(directory, 'media/screen.png')).type).toBe('image/png')
+  await expect(readCatalogAsset(directory, 'media/escape.png')).rejects.toThrow('outside the package')
+  await expect(readCatalogAsset(directory, '../private.json')).rejects.toThrow('Unknown package asset')
+  await expect(readCatalogDocument(directory, '../private', '')).rejects.toThrow('Unknown document')
+})
+
 it('uses existing skill formats for profile-scoped catalog metadata and availability without trusting imported official labels', async () => {
   const { SKILL_CATALOG } = await import('@/core/catalog/skills')
   const { SkillDomainHelper } = await import('@/helpers/skill-domain-helper')
