@@ -208,6 +208,44 @@ it('requires explicit profile activation for native extensions without changing 
   })
 })
 
+it('uses existing skill formats for profile-scoped catalog metadata and availability without trusting imported official labels', async () => {
+  const { SKILL_CATALOG } = await import('@/core/catalog/skills')
+  const { SkillDomainHelper } = await import('@/helpers/skill-domain-helper')
+  const { skillsPlugin } = await import('@/core/http-server/api/skills')
+  const profile = path.join(home, 'profiles', 'mcp-owner-a')
+  const directory = path.join(profile, 'skills', 'agent', 'catalog-example')
+  await fs.mkdir(directory, { recursive: true })
+  const metadata = { author: { name: 'Original creator', discord: { id: '123456789012345678', username: 'maker' } },
+    maintainers: [{ name: 'Current maintainer', github: 'maintainer' }], maintenance: 'official' }
+  await fs.writeFile(path.join(directory, 'SKILL.md'), [
+    '---', 'name: catalog-example', 'description: >-', '  Find useful workspace examples.',
+    'metadata:', '  author: Original creator', '  version: "2.0.0"', '---', '', 'Use the existing workspace tools.'
+  ].join('\n'))
+  await fs.writeFile(path.join(directory, 'skill.json'), JSON.stringify({ format: 'agent-skill', ...metadata }))
+  const app = Fastify()
+  await app.register(skillsPlugin, { apiVersion: 'v1' })
+  try {
+    await owner('mcp-owner-a', async () => {
+      const entry = (await SKILL_CATALOG.list()).find((item) => item.id === 'catalog-example')!
+      expect(entry).toMatchObject({ installed: true, owned: true, kind: 'agent', version: '2.0.0',
+        description: 'Find useful workspace examples.', author: metadata.author, maintainers: metadata.maintainers })
+      expect(entry.maintenance).toBeUndefined()
+      expect((await app.inject({ url: '/api/v1/skills/catalog' })).statusCode).toBe(200)
+      expect((await app.inject({ method: 'POST', url: '/api/v1/skills/catalog-example', payload: { action: 'disable' } })).statusCode).toBe(200)
+      expect(SkillDomainHelper.getSkillDescriptorSync('catalog-example')).toBeNull()
+      await SKILL_CATALOG.act('catalog-example', 'enable')
+      expect(SkillDomainHelper.getSkillDescriptorSync('catalog-example')).not.toBeNull()
+      await fs.unlink(path.join(directory, 'skill.json'))
+      expect(SkillDomainHelper.getSkillDescriptorSync('catalog-example')).toMatchObject({ name: 'catalog-example' })
+      await fs.writeFile(path.join(directory, 'skill.json'), JSON.stringify({ unrelated: 'third-party configuration' }))
+      expect(SkillDomainHelper.getSkillDescriptorSync('catalog-example')).toMatchObject({ name: 'catalog-example' })
+    })
+    expect((await owner('mcp-owner-b', () => SKILL_CATALOG.list())).some((item) => item.id === 'catalog-example')).toBe(false)
+  } finally {
+    await app.close()
+  }
+})
+
 it('preserves configured integration activation during retryable setup without enabling fresh suggestions or replacing Notion credentials', async () => {
   const { default: migrate } = await import('../../../scripts/setup/migrations/2026111012260200-preserve-configured-tool-extensions')
   const profile = path.join(home, 'migration-profile')

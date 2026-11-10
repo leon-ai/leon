@@ -33,6 +33,8 @@ import { openPathPlugin } from '@/core/http-server/api/open-path'
 import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
 import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
 import { connectionsPlugin } from '@/core/http-server/api/connections'
+import { toolsPlugin } from '@/core/http-server/api/tools'
+import { skillsPlugin } from '@/core/http-server/api/skills'
 import { ambientPlugin } from '@/core/http-server/api/ambient'
 import { faviconsPlugin } from '@/core/http-server/api/favicons'
 import {
@@ -241,6 +243,8 @@ export default class HTTPServer {
     this.fastify.register(fileSystemListPlugin, { apiVersion: API_VERSION })
     this.fastify.register(extensionFilesPlugin, { apiVersion: API_VERSION })
     this.fastify.register(connectionsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(toolsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(skillsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(ambientPlugin, { apiVersion: API_VERSION })
     this.fastify.register(faviconsPlugin, { apiVersion: API_VERSION })
     await registerHTTPPlugins(this.fastify, { apiVersion: API_VERSION })
