@@ -1,4 +1,4 @@
-Third-party notices for Leon Web App assets
+Third-party notices for Leon Web App and catalog assets
 ==========================================
 
 These notices cover third-party assets and do not replace Leon's project license.
@@ -486,12 +486,31 @@ Interface icons
 The interface uses local SVG paths from Remix Icon 4.9.1 with selected Leon Soft B
 redraws and authored morph pairs. Original paths are retained in the common and
 tool registries; filled morph endpoints preserve the original source geometry.
-Unmodified Discord, Notion, Spotify, YouTube, Grok, Qwen and OpenAI brand paths in
-src/components/icon/brand-icons.ts retain their original appearance and identify
-their respective owners.
+Monochrome service glyphs for Discord, GitHub, Spotify, YouTube, Grok, Qwen,
+OpenAI and Notion live in img/icons/. They inherit the interface text color and
+are separate from package-local catalog logos.
 Copyright (c) 2017-2026 Remix Design. Remix Icon License v1.0.
 Source: https://github.com/Remix-Design/RemixIcon
 License: https://github.com/Remix-Design/RemixIcon/blob/master/License
+
+Catalog and connection logos (tools/<toolkit>/<tool>/logo.svg)
+------------------------------------------------------------
+
+These local symbols identify third-party integrations, retain their source colors,
+and have transparent surroundings without added background tiles. All trademarks
+belong to their respective owners; use does not imply endorsement.
+
+Notion: Notion Labs, Inc.; original SVG from Wikimedia Commons, marked PD-textlogo.
+  Source: https://commons.wikimedia.org/wiki/File:Notion-logo.svg
+Gmail: Google LLC; original SVG from Wikimedia Commons, marked PD-textlogo.
+  Source: https://commons.wikimedia.org/wiki/File:Gmail_icon_(2020).svg
+Spotify: Spotify AB; SVG distributed by gilbarbara/logos under CC0 1.0 Universal.
+  Source: https://github.com/gilbarbara/logos/blob/main/logos/spotify-icon.svg
+  License: https://github.com/gilbarbara/logos/blob/main/LICENSE.txt
+TickTick: Appest Inc.; Simple Icons SVG under CC0 1.0 Universal, with the
+  published TickTick blue (#4772FA) applied to the unmodified path.
+  Source: https://github.com/simple-icons/simple-icons/blob/develop/icons/ticktick.svg
+  License: https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
 
 Provider logos (img/providers/)
 ------------------------------
