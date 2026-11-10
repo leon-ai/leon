@@ -93,6 +93,21 @@
   persistence, query data and mutation variables; clear fields after every attempt.
   Preserve the server-owned connection recommendation and setup lifecycle;
   cancellation or transport errors must not silently switch authentication methods.
+- Catalogs share contact, maintenance-badge, branding and documentation components.
+  Keep creator attribution separate from current maintainers and trust server-validated
+  provenance, not client-declared official labels. Load optional README/screenshots
+  and changelogs on demand; render only bounded authenticated package-local images.
+- Catalogs and connection cards use the shared package icon: declared local
+  `logo.svg`, then declared icon, then generic fallback. Preserve logo colors and
+  transparent symbol artwork without added background tiles. Tool activities may
+  reuse `logo.svg` only with an explicit `logo_mask`: `alpha` for transparent
+  silhouettes or `inverse-luminance` to remove white fills from black-and-white
+  artwork. Paint masks with the existing text/activity colors; fall back to
+  `icon_name` when undeclared, unavailable or unsupported. Never infer modes from
+  brand names, parse/inject SVGs or recolor catalog/connection logos. Store static
+  interface glyphs in `public/img/icons/`; inline paths are for
+  authored part animations or morphs. Keep asset loading independent of morph
+  bundles. Actions/status retain their semantic icons.
 
 References: [Fluent layout](https://fluent2.microsoft.design/layout),
 [GOV.UK modifications](https://design-system.service.gov.uk/get-started/extending-and-modifying-components/),
