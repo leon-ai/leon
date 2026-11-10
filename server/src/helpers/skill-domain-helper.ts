@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { parse as parseYAML } from 'yaml'
 
 import { SkillFormat, SkillOrigin, type ShortLanguageCode } from '@/types'
 import type { GlobalEntitySchema } from '@/schemas/global-data-schemas'
@@ -19,6 +20,10 @@ import {
 import { FileHelper } from '@/helpers/file-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { ajv } from '@/ajv'
+import type { CatalogMetadata } from '@/schemas/catalog-metadata-schemas'
+import { agentSkillSchemaObject, type AgentSkillManifest } from '@/schemas/agent-skill-schemas'
+import { isCatalogInstalled } from '@/core/catalog/activation'
 
 interface SkillDomain {
   domainId: string
@@ -53,6 +58,9 @@ interface SkillLookupOptions {
 interface AgentSkillFrontmatter {
   name: string
   description: string
+  catalog?: CatalogMetadata
+  version?: string
+  iconName?: string
 }
 
 export interface SkillDescriptor {
@@ -65,6 +73,7 @@ export interface SkillDescriptor {
   version: string
   format: SkillFormat
   path: string
+  catalog?: CatalogMetadata
 }
 
 export interface AgentSkillExecutionContext {
@@ -86,6 +95,7 @@ const AGENT_SKILL_NAME_MAX_LENGTH = 64
 const AGENT_SKILL_DESCRIPTION_MAX_LENGTH = 1_024
 const AGENT_SKILL_ICON_NAME = 'ri-apps-ai-line'
 const AGENT_SKILL_VERSION = '1.0.0'
+const MAXIMUM_AGENT_MANIFEST_BYTES = 16_384
 
 export class SkillDomainHelper {
   public static normalizeSkillName(skillName: string): string {
@@ -118,19 +128,6 @@ export class SkillDomainHelper {
     return [AGENT_SKILLS_PATH, getProfilePaths().agentSkills]
   }
 
-  private static normalizeAgentSkillFrontmatterValue(value: string): string {
-    const trimmedValue = value.trim()
-
-    if (
-      (trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) ||
-      (trimmedValue.startsWith('\'') && trimmedValue.endsWith('\''))
-    ) {
-      return trimmedValue.slice(1, -1).trim()
-    }
-
-    return trimmedValue
-  }
-
   /**
    * Validate discovery metadata consistently for installed and learned skills.
    */
@@ -152,28 +149,21 @@ export class SkillDomainHelper {
       return null
     }
 
-    const metadata = new Map<string, string>()
-    const frontmatterLines = lines.slice(1, boundaryIndex)
-
-    for (const line of frontmatterLines) {
-      const separatorIndex = line.indexOf(':')
-
-      if (separatorIndex === -1) {
-        continue
+    let frontmatter: { name?: unknown, description?: unknown, metadata?: Record<string, string> }
+    let catalog: CatalogMetadata | undefined
+    try {
+      frontmatter = parseYAML(lines.slice(1, boundaryIndex).join('\n'), { maxAliasCount: 0 })
+      if (!frontmatter || typeof frontmatter !== 'object') {
+        return null
       }
-
-      const key = line.slice(0, separatorIndex).trim()
-      const value = this.normalizeAgentSkillFrontmatterValue(
-        line.slice(separatorIndex + 1)
-      )
-
-      if (key) {
-        metadata.set(key, value)
+      if (typeof frontmatter.metadata?.['author'] === 'string') {
+        catalog = { author: { name: frontmatter.metadata['author'] } }
       }
+    } catch {
+      return null
     }
-
-    const name = metadata.get('name') || ''
-    const description = metadata.get('description') || ''
+    const name = typeof frontmatter.name === 'string' ? frontmatter.name : ''
+    const description = typeof frontmatter.description === 'string' ? frontmatter.description : ''
 
     if (
       !AGENT_SKILL_NAME_PATTERN.test(name) ||
@@ -184,7 +174,14 @@ export class SkillDomainHelper {
       return null
     }
 
-    return { name, description }
+    return {
+      name,
+      description,
+      ...(catalog ? { catalog } : {}),
+      ...(typeof frontmatter.metadata?.['version'] === 'string'
+        ? { version: frontmatter.metadata['version'] }
+        : {})
+    }
   }
 
   private static getAgentSkillFrontmatterFromPath(
@@ -196,9 +193,39 @@ export class SkillDomainHelper {
       return null
     }
 
-    return this.parseAgentSkillFrontmatter(
+    const frontmatter = this.parseAgentSkillFrontmatter(
       fs.readFileSync(skillMarkdownPath, 'utf8')
     )
+    if (!frontmatter) {
+      return null
+    }
+    const manifestPath = path.join(skillPath, SKILL_CONFIG_FILENAME)
+    if (!fs.existsSync(manifestPath)) {
+      return frontmatter
+    }
+    try {
+      if (fs.statSync(manifestPath).size > MAXIMUM_AGENT_MANIFEST_BYTES) {
+        return null
+      }
+      const manifest: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+      if (!manifest || typeof manifest !== 'object' ||
+          !('format' in manifest) || manifest.format !== SkillFormat.AgentSkill) {
+        return frontmatter
+      }
+      if (!ajv.validate(agentSkillSchemaObject, manifest)) {
+        return null
+      }
+      const metadata = manifest as AgentSkillManifest
+
+      return {
+        ...frontmatter,
+        catalog: { ...frontmatter.catalog, ...metadata },
+        ...(metadata.version ? { version: metadata.version } : {}),
+        ...(metadata.icon_name ? { iconName: metadata.icon_name } : {})
+      }
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -235,9 +262,7 @@ export class SkillDomainHelper {
    * List enabled skill folders.
    */
   public static listSkillFoldersSync(): string[] {
-    return this.listAllSkillFoldersSync().filter(
-      (folder) => !ProfileHelper.isSkillDisabled(folder)
-    )
+    return this.listAllSkillFoldersSync().filter((folder) => this.resolveSkillPath(folder) !== null)
   }
 
   public static async listSkillFolders(): Promise<string[]> {
@@ -270,6 +295,10 @@ export class SkillDomainHelper {
               fs.readFileSync(skillConfigPath, 'utf8')
             ) as SkillSchema
 
+            if (skillConfig.format && skillConfig.format !== SkillFormat.LeonNative) {
+              continue
+            }
+
             descriptors.set(folder, {
               origin: skillsPath === NATIVE_SKILLS_PATH ? SkillOrigin.BuiltIn : SkillOrigin.Owner,
               id: folder,
@@ -279,7 +308,8 @@ export class SkillDomainHelper {
               iconName: skillConfig.icon_name,
               version: skillConfig.version,
               format: SkillFormat.LeonNative,
-              path: skillPath
+              path: skillPath,
+              catalog: skillConfig
             })
           } catch {
             continue
@@ -314,10 +344,11 @@ export class SkillDomainHelper {
           commandName: frontmatter.name,
           name: frontmatter.name,
           description: frontmatter.description,
-          iconName: AGENT_SKILL_ICON_NAME,
-          version: AGENT_SKILL_VERSION,
+          iconName: frontmatter.iconName ?? AGENT_SKILL_ICON_NAME,
+          version: frontmatter.version ?? AGENT_SKILL_VERSION,
           format: SkillFormat.AgentSkill,
-          path: skillPath
+          path: skillPath,
+          ...(frontmatter.catalog ? { catalog: frontmatter.catalog } : {})
         })
       }
     }
@@ -351,6 +382,10 @@ export class SkillDomainHelper {
             fs.readFileSync(skillConfigPath, 'utf8')
           ) as SkillSchema
 
+          if (skillConfig.format && skillConfig.format !== SkillFormat.LeonNative) {
+            continue
+          }
+
           descriptors.set(folder, {
             origin: SkillOrigin.Owner,
             id: folder,
@@ -360,7 +395,8 @@ export class SkillDomainHelper {
             iconName: skillConfig.icon_name,
             version: skillConfig.version,
             format: SkillFormat.LeonNative,
-            path: skillPath
+            path: skillPath,
+            catalog: skillConfig
           })
         } catch {
           continue
@@ -388,10 +424,11 @@ export class SkillDomainHelper {
           commandName: frontmatter.name,
           name: frontmatter.name,
           description: frontmatter.description,
-          iconName: AGENT_SKILL_ICON_NAME,
-          version: AGENT_SKILL_VERSION,
+          iconName: frontmatter.iconName ?? AGENT_SKILL_ICON_NAME,
+          version: frontmatter.version ?? AGENT_SKILL_VERSION,
           format: SkillFormat.AgentSkill,
-          path: skillPath
+          path: skillPath,
+          ...(frontmatter.catalog ? { catalog: frontmatter.catalog } : {})
         })
       }
     }
@@ -440,8 +477,17 @@ export class SkillDomainHelper {
    */
   public static listSkillDescriptorsSync(): SkillDescriptor[] {
     return this.listAllSkillDescriptorsSync().filter(
-      (descriptor) => !ProfileHelper.isSkillDisabled(descriptor.id)
+      (descriptor) => !ProfileHelper.isSkillDisabled(descriptor.id) && this.isSkillInstalled(descriptor)
     )
+  }
+
+  /**
+   * Installed owner packages are explicit. Bundled extensions require a profile
+   * receipt without copying instructions or enabling dependent tools silently.
+   */
+  public static isSkillInstalled(descriptor: SkillDescriptor): boolean {
+    return descriptor.origin === SkillOrigin.Owner || isCatalogInstalled(descriptor.catalog?.distribution,
+      path.join(descriptor.format === SkillFormat.AgentSkill ? getProfilePaths().agentSkills : getProfilePaths().nativeSkills, descriptor.id))
   }
 
   private static isSafeProfileSkillPath(
@@ -626,6 +672,15 @@ export class SkillDomainHelper {
       const skillConfigPath = path.join(skillPath, 'skill.json')
 
       if (fs.existsSync(skillConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(skillConfigPath, 'utf8')) as SkillSchema
+        if (config.format && config.format !== SkillFormat.LeonNative) {
+          return null
+        }
+        if (!options?.includeDisabled && skillsPath === NATIVE_SKILLS_PATH) {
+          if (!isCatalogInstalled(config.distribution, path.join(getProfilePaths().nativeSkills, skillName))) {
+            return null
+          }
+        }
         return skillPath
       }
     }

@@ -15,6 +15,7 @@ vi.mock('@/config', () => ({
 }))
 vi.mock('@/constants', () => ({
   CODEBASE_PATH: process.cwd(),
+  REMIX_ICON_NAME_PATTERN: '^(?!.*-fill$).+$',
   get MAXIMUM_EXPERIENCES(): number {
     return fixture.maximum
   }

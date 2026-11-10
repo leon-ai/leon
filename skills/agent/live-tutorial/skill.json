@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../schemas/skill-schemas/agent-skill.json",
+  "format": "agent-skill",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
+  },
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
+  "version": "1.2.9"
+}

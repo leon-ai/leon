@@ -8,6 +8,7 @@ import {
   skillLocaleConfigObject
 } from '@/schemas/skill-schemas'
 import { toolManifestSchemaObject } from '@/schemas/tool-schemas'
+import { agentSkillSchemaObject } from '@/schemas/agent-skill-schemas'
 import { toolkitSchemaObject } from '@/schemas/toolkit-schemas'
 import {
   globalEntitySchemaObject,
@@ -71,6 +72,7 @@ export default async () => {
       new Map([
         ['domain', domainSchemaObject],
         ['skill', skillSchemaObject],
+        ['agent-skill', agentSkillSchemaObject],
         ['skill-config', skillConfigSchemaObject],
         ['skill-locale-config', skillLocaleConfigObject]
       ])

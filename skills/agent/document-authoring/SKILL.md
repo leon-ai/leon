@@ -1,9 +1,6 @@
 ---
 name: document-authoring
 description: Create, inspect and deliver charts, PDFs, Word documents and spreadsheets, and open animated browser presentations.
-metadata:
-  author: "Louis Grenard <louis@getleon.ai>"
-  version: "1.0.0"
 ---
 
 # Document Authoring
