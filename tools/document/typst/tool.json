@@ -5,10 +5,28 @@
   "name": "Typst",
   "description": "Compile local Typst source into PDF documents or SVG/PNG page images, with no generation-provider account.",
   "icon_name": "pages-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "progressive_guidance": "Use this tool for local PDF typesetting and document page images. Write .typ source with the file tool first, then compile, inspect and revise. Typst supports tables, equations, figures, captions, references and SVG/PNG image assets; it does not export DOCX. Use document.document.create for editable Word output. Compilation itself needs no account. Preview-package imports can download missing packages; use built-in/local assets for offline work. Prefer the document-authoring skill for the complete workflow.",
   "functions": {

@@ -5,10 +5,28 @@
   "name": "ECAPA",
   "description": "A tool for voice gender classification using ECAPA-TDNN model.",
   "icon_name": "voice-recognition-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "binaries": {
     "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-linux-x86_64",

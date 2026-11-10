@@ -5,6 +5,19 @@
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Generate podcast conversations between two people on any topic with research.",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Leon"
   },

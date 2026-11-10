@@ -5,10 +5,28 @@
   "name": "YT-DLP",
   "description": "Inspect video metadata without downloading media, or download videos and audio from streaming platforms using yt-dlp.",
   "icon_name": "youtube-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "binaries": {
     "linux-x86_64": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_linux",

@@ -5,10 +5,28 @@
   "name": "Hosted LLM Web",
   "description": "Search and read URLs through the active provider using its selected profile connection.",
   "icon_name": "global-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "functions": {
     "searchWeb": {

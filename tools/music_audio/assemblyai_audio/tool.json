@@ -5,10 +5,28 @@
   "name": "AssemblyAI Audio",
   "description": "A tool for audio processing using AssemblyAI's API.",
   "icon_name": "mic-2-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "functions": {
     "transcribeToFile": {

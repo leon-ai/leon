@@ -5,10 +5,28 @@
   "name": "Grok",
   "description": "AI-powered deep research tool with real-time web search and X/Twitter access. Use this for comprehensive research, trending topics on X, searching social media posts, or when the owner explicitly asks for Grok.",
   "icon_name": "grok-ai-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "functions": {
     "listModels": {

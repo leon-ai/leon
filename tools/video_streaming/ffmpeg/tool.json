@@ -5,10 +5,28 @@
   "name": "FFmpeg",
   "description": "A tool for video/audio processing, conversion, and manipulation. Use this for encoding, decoding, transcoding, muxing, demuxing, streaming, filtering, and playing media files. For analyzing or extracting metadata without modifying files, use ffprobe instead.",
   "icon_name": "film-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "binaries": {
     "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_9.0.1/ffmpeg_9.0.1-linux-x86_64",

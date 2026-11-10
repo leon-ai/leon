@@ -5,10 +5,28 @@
   "name": "Temporary LAN Sharing",
   "description": "Share selected files read-only on the local network until expiry or explicit revocation.",
   "icon_name": "home-wifi-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "maintainers": [
+    {
+      "name": "Louis Grenard",
+      "email": "louis@getleon.ai",
+      "github": "louistiti",
+      "discord": {
+        "username": "louistiti",
+        "id": "86842425233936384"
+      }
+    }
+  ],
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://x.com/grenlouis"
+    "url": "https://x.com/grenlouis",
+    "github": "louistiti",
+    "discord": {
+      "username": "louistiti",
+      "id": "86842425233936384"
+    }
   },
   "progressive_guidance": "Shares copy only the selected files, never expose a parent directory, do not follow symlinks, and permit no uploads or deletion. Anyone on the LAN with a returned secret URL can download it over HTTP. Links expire automatically and stop on tool shutdown. The host must stay running. Firewall and network isolation may prevent access. Use magic_wormhole for encrypted live internet transfers; these HTTP links are intended for the LAN.",
   "functions": {
