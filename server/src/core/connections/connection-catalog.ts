@@ -103,7 +103,8 @@ export async function getOAuthClientSettings(
  */
 export function getConnectionCallbackURL(
   origin: string,
-  apiVersion: string
+  apiVersion: string,
+  resource: 'connections' | 'tools' = 'connections'
 ): string {
   const publicURL = CONFIG_MANAGER.getConfig().server.public_url || origin
   const base = new URL(publicURL)
@@ -112,7 +113,7 @@ export function getConnectionCallbackURL(
     base.pathname += '/'
   }
 
-  const url = new URL(`api/${apiVersion}/connections/oauth/callback`, base)
+  const url = new URL(`api/${apiVersion}/${resource}/oauth/callback`, base)
 
   // Numeric loopback addresses work with providers that reject localhost redirects.
   if (url.hostname === 'localhost') {
