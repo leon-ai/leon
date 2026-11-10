@@ -24,15 +24,23 @@ $activity-wave-travel-fraction: .9
     svg
       color: var(--color-text-secondary)
 
+    // Masked artwork shares the heading's paint and native animation clock.
+    .app-icon-mask
+      background-color: inherit
+      background-image: inherit
+      background-position: inherit
+      background-repeat: inherit
+      background-size: inherit
+
 @keyframes activity-wave
   0%
     background-position: calc(0px - var(--activity-wave-highlight-width)) 0
 
   #{$activity-wave-travel-fraction * 100%}
-    background-position: calc(100% + var(--activity-wave-highlight-width)) 0
+    background-position: var(--activity-wave-width, calc(100% + var(--activity-wave-highlight-width))) 0
 
   100%
-    background-position: calc(100% + var(--activity-wave-highlight-width)) 0
+    background-position: var(--activity-wave-width, calc(100% + var(--activity-wave-highlight-width))) 0
 
 @media (prefers-reduced-motion: reduce)
   .activity-wave.activity-wave-active
@@ -42,3 +50,6 @@ $activity-wave-travel-fraction: .9
 
     svg
       color: inherit
+
+    .app-icon-mask
+      background: currentColor

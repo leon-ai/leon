@@ -209,6 +209,8 @@ export function ActivityWave({
       const durationSeconds = (width + highlightWidth) /
         ACTIVITY_WAVE_SPEED_PX_PER_SECOND / travelFraction
 
+      // Pixel coordinates let a masked leading icon inherit the exact text sweep.
+      observedHeading.style.setProperty('--activity-wave-width', `${width}px`)
       observedHeading.style.setProperty(
         '--activity-wave-duration',
         `${durationSeconds}s`
@@ -228,10 +230,23 @@ export function ActivityWave({
 
     const resizeObserver = new ResizeObserver(updateWaveDuration)
     resizeObserver.observe(observedHeading)
+    // An SVG fallback and its lazily loaded paths can change without resizing.
+    const iconObserver = observedHeading.querySelector('.package-icon-mask')
+      ? new MutationObserver((records) => {
+        if (records.some((record) => record.type === 'attributes' || [...record.addedNodes].some((node) =>
+          node instanceof Element && node.matches('svg.app-icon, path')
+        ))) {
+          updateWaveDuration()
+        }
+      }) : undefined
+    iconObserver?.observe(observedHeading, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['d', 'fill', 'stroke']
+    })
     reducedMotion.addEventListener('change', updateWaveDuration)
 
     return () => {
       resizeObserver.disconnect()
+      iconObserver?.disconnect()
       reducedMotion.removeEventListener('change', updateWaveDuration)
       cleanupSvgStrokes?.()
     }
