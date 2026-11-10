@@ -28,6 +28,10 @@ export function ConnectionPreview({ id }: { id: string }) {
 
   async function act(action: ConnectionSetupAction): Promise<void> {
     switch (action.id) {
+      case Action.Install:
+      case Action.Enable:
+        setStep(Step.Choice)
+        break
       case Action.Manual:
         setStep(method === 'oauth' && configuration !== 'ready' ? Step.Application : Step.Credentials)
         break
@@ -57,7 +61,8 @@ export function ConnectionPreview({ id }: { id: string }) {
     </select></label><label>Preview state <select value={step} onChange={(event) => setStep(event.target.value)}>
       {CONNECTION_PREVIEW_STATES.map((state) => <option key={state.value} value={state.value}>{state.label}</option>)}
     </select></label></div>
-    <ConnectionSetupWidget title={`Set up ${preview.name}`} view={step === 'loading' ? undefined : connectionPreviewView(preview, method, step, configuration === 'ready')}
+    <ConnectionSetupWidget title={preview.name} description={preview.description}
+      view={step === 'loading' ? undefined : connectionPreviewView(preview, method, step, configuration === 'ready')}
       loading={step === 'loading'} busy={step === 'authorizing'}
       error={step === 'failed' ? CONNECTION_SETUP_MESSAGES.actionError : undefined}
       icon={<PackageIcon assetSrc={logo} iconName={preview.iconName} />} statusIcon={<Icon name="check-fill" />}

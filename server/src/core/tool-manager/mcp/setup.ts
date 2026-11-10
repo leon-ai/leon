@@ -95,6 +95,7 @@ export async function setupMCPConnection(input: ConnectionSetupInput): Promise<C
     ...(continued ? { event: { methodName: 'send_utterance', session_id: input.session_id,
       methodParams: { from: 'owner' as const, utterance: 'Continue.' } } } : {}),
     view: {
+    tool: { name: manifest.name, description: manifest.description },
     title: manifest.name, description: entry.connected ? 'Your MCP connection is ready.'
       : 'Sign in on the provider’s website to choose what I can access.',
     state: { method: 'oauth', step: continued ? Step.Continued : entry.connected ? Step.Connected : configuring ? Step.Credentials : Step.Choice },

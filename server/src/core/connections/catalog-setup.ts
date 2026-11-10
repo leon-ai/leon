@@ -56,6 +56,7 @@ export async function prepareCatalogConnection(
     } : {}),
     view: {
       title: entry.name,
+      tool: { name: entry.name, description: entry.description },
       state: {
         method: 'catalog',
         step: !entry.installed ? Step.Installation
