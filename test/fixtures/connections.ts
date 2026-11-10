@@ -20,7 +20,10 @@ export interface ConnectionPreview {
 }
 
 export const CONNECTION_PREVIEWS: Record<string, ConnectionPreview> = {
-  'connection-notion': { provider: `${notion.toolkit_id}.${notion.tool_id}`, name: notion.name, iconName: notion.icon_name, methods: notion.connection.methods },
+  'connection-notion': { provider: `${notion.toolkit_id}.${notion.tool_id}`, name: notion.name, iconName: notion.icon_name, methods: {
+    oauth: { name: 'OAuth', description: 'Sign in through Notion’s official MCP server.',
+      setup_url: 'https://developers.notion.com/guides/mcp/get-started-with-mcp', settings: {} }
+  } },
   'connection-spotify': { provider: `${spotify.toolkit_id}.${spotify.tool_id}`, name: spotify.name, iconName: spotify.icon_name, methods: spotify.connection.methods },
   'connection-ticktick': { provider: `${ticktick.toolkit_id}.${ticktick.tool_id}`, name: ticktick.name, iconName: ticktick.icon_name, methods: ticktick.connection.methods }
 }

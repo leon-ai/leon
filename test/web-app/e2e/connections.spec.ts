@@ -5,8 +5,8 @@ import { renderOAuthCompletion } from '../../../server/src/core/connections/oaut
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 
 test('keeps connection credentials inside explicit setup requests and clears failed fields', async ({ page, ui }) => {
-  const preview = CONNECTION_PREVIEWS['connection-notion']!
-  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: 'connection-notion', message: 'Connect Notion to continue.',
+  const preview = CONNECTION_PREVIEWS['connection-ticktick']!
+  ui.history.get(SESSION_ID)!.push({ who: 'leon', messageId: 'connection-ticktick', message: 'Connect TickTick to continue.',
     sentAt: Date.now(), isAddedToHistory: false, widget: { widget: 'ConnectionWidget',
       componentTree: { component: 'WidgetWrapper', props: { children: [
         { component: 'ConnectionSetup', props: { provider: preview.provider, sessionId: OTHER_SESSION_ID } }
@@ -36,11 +36,11 @@ test('keeps connection credentials inside explicit setup requests and clears fai
     await route.fulfill({ json: { view } })
   })
   await page.goto(SESSION_URL)
-  const card = page.getByRole('region', { name: 'Set up Notion', exact: true })
-  await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
+  const card = page.getByRole('region', { name: 'Set up TickTick', exact: true })
+  await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
   const token = card.getByLabel('access token', { exact: true })
   await expect(token).toHaveAttribute('type', 'password')
-  await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
+  await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
   expect(attempts).toHaveLength(0)
   await token.fill('sample-token-one')
   await token.press('Enter')
@@ -51,12 +51,12 @@ test('keeps connection credentials inside explicit setup requests and clears fai
   expect(await page.locator('body').textContent()).not.toContain('sample-token-one')
   expect(await page.evaluate(() => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]))).not.toContain('sample-token-one')
   await token.fill('sample-token-two')
-  await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
-  await expect(page.getByRole('region', { name: 'Notion', exact: true }).getByRole('status')).toContainText('Connected')
+  await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'TickTick', exact: true }).getByRole('status')).toContainText('Connected')
   expect(attempts).toHaveLength(2)
   expect(otherBodies.join(' ')).not.toContain('sample-token')
   await page.reload()
-  await expect(page.getByRole('region', { name: 'Notion', exact: true }).getByRole('status')).toContainText('Connected')
+  await expect(page.getByRole('region', { name: 'TickTick', exact: true }).getByRole('status')).toContainText('Connected')
   expect(attempts).toHaveLength(2)
 })
 
