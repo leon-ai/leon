@@ -102,6 +102,7 @@
     "@huggingface/inference": "4.13.30",
     "@json-render/core": "0.22.0",
     "@json-render/react": "0.22.0",
+    "@modelcontextprotocol/client": "2.4.0",
     "@openrouter/ai-sdk-provider": "3.1.0",
     "@pierre/diffs": "1.6.2",
     "@pierre/highlights": "0.3.0",
