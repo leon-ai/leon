@@ -57,6 +57,8 @@ function themed(option: Record<string, unknown>): Record<string, unknown> {
       ...(series['type'] === 'bar' ? { barMaxWidth: 40 } : {}),
       ...(series['type'] === 'line' ? { symbolSize: 6, showSymbol: false } : {}),
       ...series,
+      // Transparent chart surfaces cannot provide a matching automatic text halo.
+      label: { textBorderColor: 'transparent', ...(series['label'] as object) },
       ...(series['type'] === 'bar'
         ? { itemStyle: { borderRadius: radius, ...(series['itemStyle'] as object) } }
         : {})
@@ -64,7 +66,7 @@ function themed(option: Record<string, unknown>): Record<string, unknown> {
   }
 
   return { ...option, color: PALETTE_TOKENS.map((name) => styles.getPropertyValue(name).trim()),
-    backgroundColor: 'transparent', animation: false,
+    backgroundColor: 'transparent', darkMode: styles.colorScheme === 'dark', animation: false,
     textStyle: { fontFamily: styles.getPropertyValue('--font-family').trim(), color: text, fontSize },
     tooltip: { trigger: 'item', ...(option['tooltip'] as object), renderMode: 'richText',
       backgroundColor: styles.getPropertyValue('--color-surface-elevated').trim(),
