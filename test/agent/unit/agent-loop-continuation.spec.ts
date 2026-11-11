@@ -76,6 +76,26 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it.each([4, 12])('compacts a stalled task with %i large exchanges without splitting recent results', async (exchanges) => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+    for (let index = 1; index <= exchanges; index += 1) {
+      appendToolExchange(transcript, index)
+      transcript.at(-1)!.content = `Source ${index}: ${'verified detail '.repeat(1_000)}`
+    }
+    const result = await buildAgentContinuationTranscript(
+      transcript, async () => null, createCheckpointInput(), true
+    )
+    const recent = transcript.slice(-exchanges)
+
+    expect(JSON.stringify(result).length).toBeLessThan(JSON.stringify(transcript).length)
+    expect(result.slice(-exchanges)).toEqual(recent)
+    expect(result[0]?.content).toBe('Prepare the release.')
+    expect(JSON.stringify(result)).toContain('Publish release')
+    expect(JSON.stringify(result)).toContain('/tmp/release-build.log')
+  })
+
   it('retains unfinished task evidence across extended owner waits', () => {
     const state = createAgentLoopContinuationState({
       ...createCheckpointInput(),

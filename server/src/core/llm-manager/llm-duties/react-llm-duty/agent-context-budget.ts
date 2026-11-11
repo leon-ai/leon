@@ -455,7 +455,8 @@ function findCompletedToolExchanges(
  * Requiring another tail's worth of work avoids re-summarizing every turn.
  */
 export function splitAgentTranscriptForSummary(
-  transcript: AgentToolTranscriptMessage[]
+  transcript: AgentToolTranscriptMessage[],
+  forceCompaction = false
 ): {
   older: AgentToolTranscriptMessage[]
   visual: AgentToolTranscriptMessage[]
@@ -472,13 +473,18 @@ export function splitAgentTranscriptForSummary(
         : []
     )
   ])].sort((left, right) => left - right)
-  if (boundaries.length < SUMMARY_RECENT_EXCHANGES * 2) {
+  // A stalled request may need reduction before ordinary compaction is due.
+  // Retain half a short history while preserving complete recent exchanges.
+  const recentExchanges = forceCompaction
+    ? Math.min(SUMMARY_RECENT_EXCHANGES, Math.floor(boundaries.length / 2))
+    : SUMMARY_RECENT_EXCHANGES
+  if (recentExchanges === 0 || boundaries.length < recentExchanges * 2) {
     return null
   }
 
   // The continuation retains the latest owner message separately. Anchoring the
   // tail to that message would retain all subsequent work in a long task.
-  const boundary = boundaries[boundaries.length - SUMMARY_RECENT_EXCHANGES]!
+  const boundary = boundaries[boundaries.length - recentExchanges]!
   if (boundary <= 0) return null
 
   // Keep a bounded visual reference even when the recent tail is text-only.

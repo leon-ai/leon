@@ -276,6 +276,12 @@ export interface ProviderActivitySnapshot {
   failureSummary?: string | undefined
   firstOutputMs?: number | undefined
   outputPreliminary?: boolean | undefined
+  reasoningOnly?: boolean | undefined
+  /**
+   * The caller permits replay and no provider-owned work or terminal completion
+   * was observed. Higher-level recovery must also check the failure kind.
+   */
+  replaySafe?: boolean | undefined
   pingCount?: number | undefined
   pongCount?: number | undefined
   lastPingAgeMs?: number | undefined
@@ -353,6 +359,10 @@ export interface CompletionParams {
    */
   onToolCall?: (toolCall: OpenAIToolCall) => void
   shouldStream?: boolean
+  /**
+   * Selects HTTP for a single Responses request without changing other sessions.
+   */
+  responseTransport?: 'http'
   /**
    * Optional provider hint to disable thinking/reasoning for a request.
    * The core may also enable this proactively for compatibility when

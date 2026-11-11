@@ -79,7 +79,8 @@ export class OpenAIResponsesTransport {
   public async fetch(
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit,
-    onStreamEvent?: CompletionParams['onStreamEvent']
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    responseTransport?: CompletionParams['responseTransport']
   ): Promise<Response> {
     let observation: PromptCacheObservation | undefined
     const observe: CompletionParams['onStreamEvent'] = (event) => {
@@ -87,8 +88,8 @@ export class OpenAIResponsesTransport {
       onStreamEvent?.(event)
     }
     const result = await (this.accountId
-      ? this.fetchChatGPT(input, init, observe)
-      : this.fetchOpenAI(input, init, observe))
+      ? this.fetchChatGPT(input, init, observe, responseTransport)
+      : this.fetchOpenAI(input, init, observe, responseTransport))
 
     const { response, transport, socket } = result
     this.transport = transport
@@ -120,7 +121,8 @@ export class OpenAIResponsesTransport {
   private async fetchChatGPT(
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit,
-    onStreamEvent?: CompletionParams['onStreamEvent']
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    responseTransport?: CompletionParams['responseTransport']
   ): Promise<TransportResponse> {
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
     for (const field of CHATGPT_UNSUPPORTED_FIELDS) {
@@ -171,7 +173,7 @@ export class OpenAIResponsesTransport {
         headers,
         body: JSON.stringify(body),
         redirect: 'error'
-      }, onStreamEvent)
+      }, onStreamEvent, responseTransport)
 
       return result.response
     })
@@ -185,7 +187,8 @@ export class OpenAIResponsesTransport {
   private async fetchOpenAI(
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit,
-    onStreamEvent?: CompletionParams['onStreamEvent']
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    responseTransport?: CompletionParams['responseTransport']
   ): Promise<TransportResponse> {
     init?.signal?.throwIfAborted()
     const authorization = new Headers(init?.headers).get('authorization') || ''
@@ -203,17 +206,19 @@ export class OpenAIResponsesTransport {
       init = { ...init, body: JSON.stringify(body) }
       onStreamEvent?.({ type: 'prompt-cache', promptCache: observation })
     }
-    return this.fetchAuthenticated(input, init, onStreamEvent)
+    return this.fetchAuthenticated(input, init, onStreamEvent, responseTransport)
   }
 
   /**
    * Keeps sockets private to a profile, conversation and authenticated binding.
-   * HTTP fallback is allowed only before a WebSocket request was dispatched.
+   * Automatic HTTP fallback precedes dispatch. An explicit HTTP recovery is a
+   * separate caller-authorized request whose replay safety the caller owns.
    */
   private async fetchAuthenticated(
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit,
-    onStreamEvent?: CompletionParams['onStreamEvent']
+    onStreamEvent?: CompletionParams['onStreamEvent'],
+    responseTransport?: CompletionParams['responseTransport']
   ): Promise<TransportResponse> {
     init?.signal?.throwIfAborted()
     const headers = Object.fromEntries(new Headers(init?.headers).entries())
@@ -253,7 +258,7 @@ export class OpenAIResponsesTransport {
 
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
     // Concurrent requests must not share one socket's event stream or lineage.
-    if (connection.signature === signature && !connection.http &&
+    if (responseTransport !== 'http' && connection.signature === signature && !connection.http &&
       !connection.socket.busy && body['stream'] === true) {
       try {
         this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
