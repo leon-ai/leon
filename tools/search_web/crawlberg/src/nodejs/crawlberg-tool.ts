@@ -36,6 +36,9 @@ export default class CrawlbergTool extends Tool {
         error: error instanceof Error ? error.message : String(error),
         ...(error instanceof UrlFetchError ? {
           kind: error.kind,
+          ...(error.kind === 'Ssl' ? {
+            guidance: 'Certificate verification failed. If the owner explicitly trusts this source and authorizes an unverified connection, retry with options.allowInvalidCertificates=true. Keep that option on subsequent snapshot reads. Otherwise, keep certificate verification enabled.'
+          } : {}),
           ...(error.browserFallback ? {
             fallback: {
               toolkit: 'browser_use',

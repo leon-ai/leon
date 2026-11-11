@@ -60,6 +60,10 @@
               "refresh": {
                 "type": "boolean",
                 "description": "Refetch from the beginning; default false."
+              },
+              "allowInvalidCertificates": {
+                "type": "boolean",
+                "description": "Disable TLS certificate verification for this request, including redirects, only when the owner explicitly trusts the source and authorizes an unverified connection. Default false. Keep the same value for snapshot pagination. Results report tlsVerificationDisabled when enabled."
               }
             },
             "additionalProperties": false
