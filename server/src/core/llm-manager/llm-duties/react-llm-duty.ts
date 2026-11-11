@@ -1373,6 +1373,22 @@ export class ReActLLMDuty extends LLMDuty {
         this.continuationSummaryFailed = true
       }
     }
+    // When recent results alone exceed the budget, retain the checkpoint and
+    // source references once instead of repeating compaction of the same tail.
+    if (!providerManagesContext &&
+      preparedContext.estimatedInputTokens > contextCompactionTriggerTokens) {
+      const compacted = await buildAgentContinuationTranscript(
+        transcript, async () => null, checkpointInput, true, 0
+      )
+      transcript.splice(0, transcript.length, ...compacted)
+      preparedContext = prepareAgentModelContext({
+        transcript,
+        systemPrompt: activeSystemPrompt,
+        tools,
+        preserveToolSchemas: options.isCompletionReview === true,
+        compactionTriggerTokens: contextCompactionTriggerTokens
+      })
+    }
     if (
       !providerManagesContext &&
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens

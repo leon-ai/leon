@@ -17,6 +17,7 @@ export interface UrlReadOptions {
   offsetChars?: number
   maxChars?: number
   refresh?: boolean
+  allowInvalidCertificates?: boolean
 }
 
 interface SourceContent {
@@ -71,6 +72,9 @@ export class UrlReader {
 
     source.hash = ''
     const key = source.href
+    const allowInvalidCertificates = options.allowInvalidCertificates === true
+    // An unverified download must never satisfy a certificate-verified read.
+    const cacheKey = JSON.stringify([key, allowInvalidCertificates])
     const offset = options.offsetChars ?? 0
     const size = options.maxChars ?? MAX_TEXT_CHARS
 
@@ -82,7 +86,7 @@ export class UrlReader {
       throw new Error('Refresh from offsetChars=0 to start a new snapshot.')
     }
 
-    let page = this.cache.get(key)
+    let page = this.cache.get(cacheKey)
     const cached = Boolean(page && !options.refresh && (
       offset > 0 || Date.now() - page.createdAt < CACHE_LIFETIME_MS
     ))
@@ -93,7 +97,7 @@ export class UrlReader {
     }
 
     if (!cached) {
-      const content = await this.fetch(key)
+      const content = await this.fetch(key, allowInvalidCertificates)
 
       if (content.text.length > MAX_CACHE_CHARS) {
         throw new Error('Extracted URL text exceeds the local snapshot budget.')
@@ -104,8 +108,8 @@ export class UrlReader {
         createdAt: Date.now()
       }
 
-      this.cache.delete(key)
-      this.cache.set(key, page)
+      this.cache.delete(cacheKey)
+      this.cache.set(cacheKey, page)
 
       while (this.cache.size > MAX_CACHE_ENTRIES || [...this.cache.values()].reduce(
         (total, item) => total + item.text.length, 0
@@ -136,6 +140,7 @@ export class UrlReader {
       nextOffsetChars,
       cached,
       fetchedAt: new Date(page!.createdAt).toISOString(),
+      ...(allowInvalidCertificates ? { tlsVerificationDisabled: true } : {}),
       ...(page!.jsRenderHint ? {
         jsRenderHint: true,
         fallback: 'Content may be incomplete without JavaScript. Inspect this URL with browser_use before treating this snapshot as complete.'
@@ -151,7 +156,10 @@ export class UrlReader {
     this.cache.clear()
   }
 
-  private async fetch(url: string): Promise<SourceContent> {
+  private async fetch(
+    url: string,
+    allowInvalidCertificates: boolean
+  ): Promise<SourceContent> {
     if (this.extractUrl) {
       return this.documentContent(await this.extractUrl(url), url)
     }
@@ -165,6 +173,7 @@ export class UrlReader {
       retryCount: 0,
       maxBodySize: MAX_BODY_BYTES,
       ssrfDenyPrivateExplicit: true,
+      dangerAcceptInvalidCerts: allowInvalidCertificates,
       downloadDocuments: true,
       documentMaxSize: MAX_BODY_BYTES,
       documentContentEncoding: DocumentContentEncoding.Base64,

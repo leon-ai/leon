@@ -4951,10 +4951,27 @@ describe('agent automatic compaction', () => {
   })
 
   it.each([
-    { exchanges: 13, resultCharacters: 30_000, summaryAvailable: false },
-    { exchanges: 8, resultCharacters: 100_000, summaryAvailable: false },
-    { exchanges: 13, resultCharacters: 30_000, summaryAvailable: true }
-  ])('fits large tool results when summaries cannot reduce them ($exchanges exchanges, summary available: $summaryAvailable)', async ({ exchanges, resultCharacters, summaryAvailable }) => {
+    {
+      exchanges: 13, resultCharacters: 30_000,
+      lastResultCharacters: 30_000, summaryAvailable: false
+    },
+    {
+      exchanges: 8, resultCharacters: 100_000,
+      lastResultCharacters: 100_000, summaryAvailable: false
+    },
+    {
+      exchanges: 13, resultCharacters: 30_000,
+      lastResultCharacters: 30_000, summaryAvailable: true
+    },
+    {
+      exchanges: 1, resultCharacters: 300_000,
+      lastResultCharacters: 300_000, summaryAvailable: false
+    },
+    {
+      exchanges: 5, resultCharacters: 100,
+      lastResultCharacters: 300_000, summaryAvailable: false
+    }
+  ])('fits large tool results when summaries cannot reduce them ($exchanges exchanges, summary available: $summaryAvailable)', async ({ exchanges, resultCharacters, lastResultCharacters, summaryAvailable }) => {
     vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
       provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
     })
@@ -4965,7 +4982,7 @@ describe('agent automatic compaction', () => {
       transcript.push(
         { role: 'assistant', content: '', toolCalls: [toolCall(`source-${index}`, CALLABLE_TOOL_NAME, { query: `source-${index}` })] },
         { role: 'tool', toolCallId: `source-${index}`, toolName: CALLABLE_TOOL_NAME,
-          content: `Source ${index}: ${'x'.repeat(resultCharacters)} Receipt: release-42.` }
+          content: `Source ${index}: ${'x'.repeat(index === exchanges - 1 ? lastResultCharacters : resultCharacters)} Receipt: release-42.` }
       )
     }
     const duty = new ReActLLMDuty({ input: 'Report the verified receipt.' })
@@ -4983,7 +5000,9 @@ describe('agent automatic compaction', () => {
     }, {
       originalInput: 'Report the verified receipt without saving it again.',
       trackedSteps: [{ label: 'Save receipt', status: 'completed', details: 'Verified release-42.' }],
-      executionHistory: [{ function: 'receipt.save', status: 'success', observation: 'Verified release-42.' }],
+      executionHistory: [{ function: 'receipt.save', status: 'success', observation: JSON.stringify({
+        status: 'success', message: 'Verified release-42.', output_log_path: '/tmp/receipt.log'
+      }) }],
       loadedToolkitIds: [], activeSkillId: null
     })
 
@@ -4993,7 +5012,10 @@ describe('agent automatic compaction', () => {
     expect(JSON.stringify(request).length).toBeLessThan(
       AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN
     )
-    expect(request.at(-1)).toEqual(before.at(-1))
+    if (lastResultCharacters < AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN) {
+      expect(request.at(-1)).toEqual(before.at(-1))
+    }
+    expect(JSON.stringify(request)).toContain('/tmp/receipt.log')
     expect(JSON.stringify(request)).toContain('Save receipt')
     expect(request[0]?.content).toBe(before[0]?.content)
   })
