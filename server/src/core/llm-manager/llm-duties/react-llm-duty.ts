@@ -1221,7 +1221,7 @@ export class ReActLLMDuty extends LLMDuty {
         LogHelper.warning('Agent continuation summary unavailable; retaining original context')
         return null
       }
-    }, checkpointInput)
+    }, checkpointInput, restoreSourceEvidence)
   }
 
   private callAgentModel(
@@ -1338,33 +1338,51 @@ export class ReActLLMDuty extends LLMDuty {
         ? false
         : options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
-    if (
+    let hasAttemptedSummary = false
+    while (
       !providerManagesContext &&
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
     ) {
-      const summarized = await this.prepareContinuation(
+      executionSignal?.throwIfAborted()
+      this.runBudget?.throwIfExpired()
+      const previousTokens = preparedContext.estimatedInputTokens
+      const isDeterministicCompaction = hasAttemptedSummary
+      // Try semantic synthesis once, then reduce complete exchanges without
+      // another inference. Short histories can still exceed the token budget.
+      const summarized = hasAttemptedSummary
+        ? await buildAgentContinuationTranscript(
+            transcript, async () => null, checkpointInput, true
+          )
+        : await this.prepareContinuation(transcript, checkpointInput, true)
+      hasAttemptedSummary = true
+      transcript.splice(0, transcript.length, ...summarized)
+      preparedContext = prepareAgentModelContext({
         transcript,
-        checkpointInput,
-        true
-      )
-      if (summarized !== transcript) {
-        transcript.splice(0, transcript.length, ...summarized)
-        preparedContext = prepareAgentModelContext({
-          transcript,
-          systemPrompt: activeSystemPrompt,
-          tools,
-          preserveToolSchemas: options.isCompletionReview === true,
-          compactionTriggerTokens: contextCompactionTriggerTokens
-        })
+        systemPrompt: activeSystemPrompt,
+        tools,
+        preserveToolSchemas: options.isCompletionReview === true,
+        compactionTriggerTokens: contextCompactionTriggerTokens
+      })
+      if (preparedContext.estimatedInputTokens >= previousTokens) {
+        if (isDeterministicCompaction) {
+          break
+        }
+
+        // A non-reducing summary must not consume another auxiliary request
+        // every time this task encounters context pressure.
+        this.continuationSummaryFailed = true
       }
     }
     if (
       !providerManagesContext &&
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
     ) {
+      LogHelper.warning(
+        `Agent context preparation stopped before dispatch | est_tokens=${preparedContext.estimatedInputTokens} | target=${contextCompactionTriggerTokens} | messages=${transcript.length}`
+      )
       throw new AgentModelProviderError(
         `Agent context remains above its ${contextCompactionTriggerTokens}-token target after compaction.`,
-        !options.isContextRecoveryAttempt,
+        false,
         CompletionFailureKind.Context
       )
     }
@@ -1934,6 +1952,12 @@ export class ReActLLMDuty extends LLMDuty {
         )
       }
       return null
+    }
+
+    if (options.isStallRecoveryAttempt) {
+      // Productive recovery makes the model available for later compaction.
+      // A subsequent failed summary still suppresses repeated auxiliary calls.
+      this.continuationSummaryFailed = false
     }
 
     const completionEndedAt = Date.now()

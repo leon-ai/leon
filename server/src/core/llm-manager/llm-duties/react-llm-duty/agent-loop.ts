@@ -1091,8 +1091,10 @@ export async function runAgentLoop(
             // Replaying the same stalled request has already failed. Rebuild
             // from retained evidence once without replaying completed actions.
             hasUsedStallRecovery = true
+            hasUsedContextRecovery = true
             isRecoveryAttempt = true
             isStallRecoveryAttempt = true
+            isContextRecoveryAttempt = true
             await params.onProgressMessage?.(
               'I am recovering from the model stall using compacted evidence and a fresh request.'
             )
@@ -2069,7 +2071,7 @@ function buildResumableAgentAnswer(
     deadline: 'The task reached its run deadline.',
     review: 'The completion check failed.',
     [CompletionFailureKind.Timeout]: 'The model response exceeded its time limit.',
-    [CompletionFailureKind.Context]: 'The model could not process the task context.',
+    [CompletionFailureKind.Context]: 'My task context could not fit within the working limit.',
     [CompletionFailureKind.Unavailable]: 'The model provider is temporarily unavailable or rate limited.',
     [CompletionFailureKind.Provider]: 'The model provider failed to return a usable response.',
     synthesis: 'The model did not finish the final response.'
