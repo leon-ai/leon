@@ -69,6 +69,8 @@ import {
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_REMOTE_PROVIDER_HISTORY_LOGS,
+  AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
+  CHARS_PER_TOKEN,
   AGENT_MODEL_RESPONSE_TIMEOUT_MS,
   AGENT_MODEL_RESPONSE_MAX_DURATION_MS
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
@@ -4948,6 +4950,73 @@ describe('agent automatic compaction', () => {
     coreMocks.prompt.mockReset()
   })
 
+  it.each([
+    { exchanges: 13, resultCharacters: 30_000, summaryAvailable: false },
+    { exchanges: 8, resultCharacters: 100_000, summaryAvailable: false },
+    { exchanges: 13, resultCharacters: 30_000, summaryAvailable: true }
+  ])('fits large tool results when summaries cannot reduce them ($exchanges exchanges, summary available: $summaryAvailable)', async ({ exchanges, resultCharacters, summaryAvailable }) => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Report the verified receipt without saving it again.' }
+    ]
+    for (let index = 0; index < exchanges; index += 1) {
+      transcript.push(
+        { role: 'assistant', content: '', toolCalls: [toolCall(`source-${index}`, CALLABLE_TOOL_NAME, { query: `source-${index}` })] },
+        { role: 'tool', toolCallId: `source-${index}`, toolName: CALLABLE_TOOL_NAME,
+          content: `Source ${index}: ${'x'.repeat(resultCharacters)} Receipt: release-42.` }
+      )
+    }
+    const duty = new ReActLLMDuty({ input: 'Report the verified receipt.' })
+    Object.assign(duty, {
+      automaticCompactionFailed: true, continuationSummaryFailed: !summaryAvailable, writeAgentPromptLog: vi.fn()
+    })
+    coreMocks.prompt.mockImplementation(async (history, params) => ({
+      output: params.usagePurpose === InferencePurpose.ContextCompaction
+        ? String(history)
+        : 'The verified receipt is release-42.'
+    }))
+    const before = structuredClone(transcript)
+    const result = await duty['callAgentModel'](transcript, 'Follow the request.', [], {
+      isRecoveryAttempt: false, isContextRecoveryAttempt: true
+    }, {
+      originalInput: 'Report the verified receipt without saving it again.',
+      trackedSteps: [{ label: 'Save receipt', status: 'completed', details: 'Verified release-42.' }],
+      executionHistory: [{ function: 'receipt.save', status: 'success', observation: 'Verified release-42.' }],
+      loadedToolkitIds: [], activeSkillId: null
+    })
+
+    expect(result?.textContent).toContain('release-42')
+    expect(coreMocks.prompt).toHaveBeenCalledTimes(summaryAvailable ? 2 : 1)
+    const request = coreMocks.prompt.mock.calls.at(-1)![0] as AgentToolTranscriptMessage[]
+    expect(JSON.stringify(request).length).toBeLessThan(
+      AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN
+    )
+    expect(request.at(-1)).toEqual(before.at(-1))
+    expect(JSON.stringify(request)).toContain('Save receipt')
+    expect(request[0]?.content).toBe(before[0]?.content)
+  })
+
+  it('stops irreducible context without repeating the same preparation or losing its evidence', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: `Required evidence: ${'x'.repeat(500_000)}` }
+    ]
+    const duty = new ReActLLMDuty({ input: 'Analyze the supplied evidence.' })
+    Object.assign(duty, {
+      automaticCompactionFailed: true, continuationSummaryFailed: true, writeAgentPromptLog: vi.fn()
+    })
+    const before = structuredClone(transcript)
+    await expect(duty['callAgentModel'](transcript, 'Follow the request.', [], {
+      isRecoveryAttempt: false
+    })).rejects.toMatchObject({
+      failureKind: CompletionFailureKind.Context, canRetryWithCompaction: false
+    })
+
+    expect(coreMocks.prompt).not.toHaveBeenCalled()
+    expect(transcript).toEqual(before)
+  })
+
   it('keeps clock and mood changes outside reusable duty rules', () => {
     const persona = Object.assign(Object.create(Persona.prototype), {
       contextInfo: 'Clock one', whoYouAre: 'Owner facts', whatYouDo: 'Profile facts',
@@ -6146,11 +6215,14 @@ describe('model response status', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('recovers repeated reasoning stalls with smaller evidence over HTTP and completes review', async () => {
+  it('continues through growing context after stall recovery and completes review', async () => {
+    vi.spyOn(LogHelper, 'timeEnd').mockImplementation(() => {})
     vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
       reasoning: 'high', speed: 'fast'
     })
     const attempts: { params: CompletionParams, prompt: string }[] = []
+    const sourceCount = 10
+    let requestedSources = 0
     const runChatCompletion = vi.fn((history, params: CompletionParams) => {
       attempts.push({ params, prompt: JSON.stringify(history) })
       if (attempts.length <= 2) {
@@ -6162,12 +6234,27 @@ describe('model response status', () => {
         })
       }
 
-      const content = params.toolChoice === 'none'
-        ? JSON.stringify({ status: 'complete', reason: 'The saved receipt is reported.' })
-        : 'The saved receipt is release-42.'
+      const content = params.usagePurpose === InferencePurpose.ContextCompaction
+        ? 'The saved receipt is release-42. Completed source lookups are verified; report the verified receipt.'
+        : params.toolChoice === 'none'
+          ? JSON.stringify({ status: 'complete', reason: 'The saved receipt is reported.' })
+          : 'The saved receipt is release-42.'
       params.onToken?.(content)
       params.onStreamEvent?.({ type: 'finish' })
-      return Promise.resolve({ data: { choices: [{ message: { content }, finish_reason: 'stop' }] } })
+      const inspectSource = params.usagePurpose !== InferencePurpose.ContextCompaction &&
+        params.toolChoice !== 'none' && requestedSources < sourceCount
+      if (inspectSource) {
+        requestedSources += 1
+      }
+      return Promise.resolve({ data: { choices: [{
+        message: {
+          content,
+          ...(inspectSource ? { tool_calls: [
+            toolCall(`inspect-${requestedSources}`, CALLABLE_TOOL_NAME, { query: `source-${requestedSources}` })
+          ] } : {})
+        },
+        finish_reason: 'stop'
+      }] } })
     })
     coreMocks.prompt.mockImplementation((history, params) => runCompletionAttempt(
       { modelName: 'test-model', runChatCompletion }, LLMProviders.OpenAI, history,
@@ -6192,13 +6279,20 @@ describe('model response status', () => {
     }]
     const duty = new ReActLLMDuty({ input: 'Report the saved receipt.' })
     Object.assign(duty, { writeAgentPromptLog: vi.fn() })
-    const executeFunction = vi.fn()
+    const executeFunction = vi.fn(async (_callable, toolInput) => ({
+      execution: {
+        function: callable.qualifiedName, status: 'success',
+        observation: `Verified source: ${'x'.repeat(30_000)}`,
+        requestedToolInput: JSON.stringify(toolInput)
+      }
+    }))
     const pending = runAgentLoopWithCompletionReview({
       transcript, catalog: createCatalog(), initialExecutionHistory: executionHistory,
       executeFunction, loadAgentSkill: async () => null,
-      callModel: (messages, tools, options) => duty['callAgentModel'](
+      callModel: (messages, tools, options, state) => duty['callAgentModel'](
         messages, 'Follow the request.', tools, options, {
-          originalInput: 'Report the saved receipt.', trackedSteps: [], executionHistory,
+          originalInput: 'Report the saved receipt.',
+          trackedSteps: state.trackedSteps, executionHistory: state.executionHistory,
           loadedToolkitIds: [], activeSkillId: null
         }
       )
@@ -6208,14 +6302,23 @@ describe('model response status', () => {
 
     expect(result.intent).toBe('answer')
     expect(result.answer).toContain('release-42')
-    expect(attempts).toHaveLength(4)
+    const summaries = attempts.filter(({ params }) => params.usagePurpose === InferencePurpose.ContextCompaction)
+    expect(summaries.length).toBeGreaterThan(0)
+    expect(attempts).toHaveLength(sourceCount + summaries.length + 4)
     expect(attempts[2]?.params).toMatchObject({
       responseTransport: 'http', reasoningEffort: 'high', maxRetries: 0,
       remoteProviderErrorRetries: 0, connectionErrorRetries: 0, disableContextCompaction: true
     })
     expect(attempts[2]!.prompt.length).toBeLessThan(attempts[1]!.prompt.length)
     expect(attempts[2]!.prompt).toContain('release-42')
-    expect(executeFunction).not.toHaveBeenCalled()
+    expect(executeFunction).toHaveBeenCalledTimes(sourceCount)
+    expect(result.executionHistory).toHaveLength(sourceCount + 1)
+    expect(result.executionHistory[0]).toEqual(executionHistory[0])
+    for (const attempt of attempts.slice(2).filter(({ params }) => params.usagePurpose !== InferencePurpose.ContextCompaction)) {
+      expect(attempt.prompt.length).toBeLessThan(
+        AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN
+      )
+    }
     expect(attempts.slice(0, 2).every(({ params }) => params.signal?.aborted)).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
   })
