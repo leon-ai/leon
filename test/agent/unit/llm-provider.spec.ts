@@ -14,7 +14,7 @@ import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-p
 import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
 import { attachProviderFailureDiagnostics, formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
 import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
-import { CompletionFailureKind, InferencePurpose, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { CompletionFailureKind, InferencePurpose, LLMDuties, LLMProviders, ProviderConnectionErrorCode, type CompletionParams } from '@/core/llm-manager/types'
 import { appendInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'
 
@@ -625,7 +625,8 @@ describe('LLMProvider', () => {
     { code: 'ETIMEDOUT', aggregate: true },
     { code: 'ECONNRESET', aggregate: false },
     { code: 'WEBSOCKET_ABNORMAL_CLOSURE', aggregate: false },
-    { code: 'PROVIDER_CONNECTION_UNRESPONSIVE', aggregate: false }
+    { code: ProviderConnectionErrorCode.Unresponsive, aggregate: false },
+    { code: ProviderConnectionErrorCode.Closing, aggregate: false }
   ])('bounds $code connection retries without extending inference time', async ({ code, aggregate }) => {
     vi.useFakeTimers()
     vi.mocked(LogHelper.warning).mockClear()
@@ -645,6 +646,7 @@ describe('LLMProvider', () => {
       })
       const attempts: CompletionParams[] = []
       const onConnectionRetry = vi.fn()
+      const onAttempt = vi.fn()
       const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
         attempts.push(params)
 
@@ -662,26 +664,32 @@ describe('LLMProvider', () => {
         shouldStream: false,
         timeout: 120_000,
         maxRetries: 2,
-        onConnectionRetry
+        onConnectionRetry,
+        onAttempt
       })
 
       await vi.advanceTimersByTimeAsync(0)
-      expect(attempts).toHaveLength(1)
+      expect(attempts).toHaveLength(2)
 
       await vi.advanceTimersByTimeAsync(4_999)
-      expect(attempts).toHaveLength(1)
+      expect(attempts).toHaveLength(2)
 
       await vi.advanceTimersByTimeAsync(1)
-      expect(attempts).toHaveLength(2)
-      for (const delayMs of [10_000, 15_000, 20_000, 25_000]) {
+      expect(attempts).toHaveLength(3)
+      for (const delayMs of [10_000, 15_000, 20_000]) {
         await vi.advanceTimersByTimeAsync(delayMs)
       }
       expect(await result).toBeNull()
       expect(attempts).toHaveLength(6)
+      expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+        connectionRetryAttempt: 5,
+        retryDecision: 'stop', retryReason: 'retry_budget_exhausted'
+      })
       expect(attempts.map((params) => params.timeout)).toEqual(Array(6).fill(120_000))
       expect(onConnectionRetry.mock.calls.map(([notice]) => notice)).toEqual(
-        [5_000, 10_000, 15_000, 20_000, 25_000].map((delayMs, index) => ({
-          attempt: index + 1, maxRetries: 5, delayMs
+        [0, 5_000, 10_000, 15_000, 20_000].map((delayMs, index) => ({
+          attempt: index + 1, maxRetries: 5, delayMs,
+          failureMessage: expect.any(String)
         }))
       )
       expect(vi.mocked(appendInferenceUsage).mock.calls).toHaveLength(6)
@@ -801,7 +809,7 @@ describe('LLMProvider', () => {
     expect(await manager.prompt('Continue.', {
       dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true, onConnectionRetry,
       retryInterruptedResponse: !['accepted', 'output'].includes(blocker),
-      ...(blocker === 'deadline' ? { getRetryTimeout: (timeout: number): number => Math.min(timeout, 4_000) } : {})
+      ...(blocker === 'deadline' ? { getRetryTimeout: (): number => 0 } : {})
     })).toBeNull()
     expect(runChatCompletion).toHaveBeenCalledOnce()
     expect(onConnectionRetry).not.toHaveBeenCalled()
@@ -828,8 +836,8 @@ describe('LLMProvider', () => {
 
       await vi.advanceTimersByTimeAsync(100)
       await pending
-      expect(runChatCompletion).toHaveBeenCalledOnce()
-      expect(onConnectionRetry).toHaveBeenCalledOnce()
+      expect(runChatCompletion).toHaveBeenCalledTimes(2)
+      expect(onConnectionRetry).toHaveBeenCalledTimes(2)
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()

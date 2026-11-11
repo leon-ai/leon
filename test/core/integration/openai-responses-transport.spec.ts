@@ -3,16 +3,16 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WebSocketServer } from 'ws'
+import WebSocket, { WebSocketServer } from 'ws'
 
 import { OpenAIResponsesTransport } from '@/core/llm-manager/llm-providers/openai-responses-transport'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
 import { formatPromptErrorForLog } from '@/core/llm-manager/llm-provider/llm-provider-errors'
-import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
+import { getConnectionErrorCode, ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
 import { LogHelper } from '@/helpers/log-helper'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
-import { CompletionFailureKind, LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { CompletionFailureKind, LLMDuties, LLMProviders, ProviderConnectionErrorCode, type CompletionParams } from '@/core/llm-manager/types'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 
@@ -654,10 +654,8 @@ describe('Responses connection lifecycle', () => {
           remoteProviderErrorRetries: 1, onConnectionRetry, onAttempt,
           retryInterruptedResponse: true
         })
-        await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(1))
-        await vi.advanceTimersByTimeAsync(5_000)
         await vi.waitFor(() => expect(onConnectionRetry).toHaveBeenCalledTimes(2))
-        await vi.advanceTimersByTimeAsync(10_000)
+        await vi.advanceTimersByTimeAsync(5_000)
         await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
 
         expect((await pending)?.output).toBe('Ready.')
@@ -673,7 +671,7 @@ describe('Responses connection lifecycle', () => {
         if (stage === 'tool input') {
           expect(failures.every((timing) => typeof timing.firstToolInputMs === 'number')).toBe(true)
         }
-        expect(onConnectionRetry.mock.calls.map(([notice]) => notice.delayMs)).toEqual([5_000, 10_000])
+        expect(onConnectionRetry.mock.calls.map(([notice]) => notice.delayMs)).toEqual([0, 5_000])
         expect(vi.getTimerCount()).toBe(0)
       } finally {
         provider.dispose()
@@ -736,6 +734,173 @@ describe('Responses connection lifecycle', () => {
     expect(await request()).toContain('recovered')
     expect(transport.transport).toBe('websocket')
     expect(attempts).toBe(2)
+  })
+
+  it.each(['before acceptance', 'after acceptance', 'after a heartbeat'])(
+    'detects ten seconds of transport silence %s and opens a fresh socket',
+    async (stage) => {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+      sockets.options.autoPong = false
+      const received = vi.fn()
+      sockets.on('connection', (socket) => {
+        let acknowledged = false
+        socket.on('ping', (data) => {
+          if (stage === 'after a heartbeat' && !acknowledged) {
+            acknowledged = true
+            socket.pong(data)
+          }
+        })
+        socket.on('message', () => {
+          received()
+          if (received.mock.calls.length > 1) {
+            socket.send(JSON.stringify({
+              type: 'response.completed', response: { id: 'recovered', output: OUTPUT }
+            }))
+          } else if (stage === 'after acceptance') {
+            socket.send(JSON.stringify({ type: 'response.in_progress' }))
+          }
+        })
+      })
+      const activity = new ProviderRequestActivity()
+
+      try {
+        const pending = request(INPUT, {}, undefined, (event) => activity.observe(event))
+          .catch((error: unknown) => error)
+        await vi.waitFor(() => expect(activity.snapshot().uploadDurationMs).toBeDefined())
+        if (stage === 'after acceptance') {
+          await vi.waitFor(() => expect(activity.snapshot().requestAcceptedMs).toBeDefined())
+        } else if (stage === 'after a heartbeat') {
+          await vi.advanceTimersByTimeAsync(5_000)
+          await vi.waitFor(() => expect(activity.snapshot().pongCount).toBe(1))
+        }
+        await vi.advanceTimersByTimeAsync(9_000)
+        expect(activity.snapshot().pingCount).toBe(stage === 'after a heartbeat' ? 2 : 1)
+        await vi.advanceTimersByTimeAsync(2_000)
+        const error = await pending
+
+        expect(getConnectionErrorCode(error)).toBe(ProviderConnectionErrorCode.Unresponsive)
+        expect(error).toMatchObject({
+          pongCount: stage === 'after a heartbeat' ? 1 : 0,
+          transportPhase: 'response'
+        })
+        expect(await request()).toContain('recovered')
+        expect(received).toHaveBeenCalledTimes(2)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it.each(['pongs', 'provider events'])(
+    'preserves long responses while receiving %s',
+    async (progress) => {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+      sockets.options.autoPong = progress === 'pongs'
+      const received = vi.fn()
+      sockets.on('connection', (socket) => {
+        socket.on('message', received)
+      })
+      const activity = new ProviderRequestActivity()
+
+      try {
+        const pending = request(INPUT, {}, undefined, (event) => activity.observe(event))
+        await vi.waitFor(() => expect(received).toHaveBeenCalledOnce())
+        const socket = [...sockets.clients][0]!
+        for (let interval = 1; interval <= 5; interval += 1) {
+          await vi.advanceTimersByTimeAsync(5_000)
+          if (progress === 'pongs') {
+            await vi.waitFor(() => expect(activity.snapshot().pongCount).toBe(interval))
+          } else {
+            socket.send(JSON.stringify({ type: 'response.in_progress' }))
+            await vi.waitFor(() => expect(activity.snapshot().providerEventCount).toBe(interval))
+          }
+        }
+
+        socket.send(JSON.stringify({
+          type: 'response.completed', response: { id: 'complete', output: OUTPUT }
+        }))
+        expect(await pending).toContain('complete')
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it.each([true, false])('distinguishes progressing uploads from stalled writes (progress: %s)', async (progressing) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    sockets.options.autoPong = false
+    const originalSend = WebSocket.prototype.send
+    let fragments = 0
+    const received = vi.fn()
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data, isBinary) => {
+        received(JSON.parse(data.toString()), isBinary)
+        socket.send(JSON.stringify({
+          type: 'response.completed', response: { id: 'uploaded', output: OUTPUT }
+        }))
+      })
+    })
+    vi.spyOn(WebSocket.prototype, 'send').mockImplementation(function (this: WebSocket, data, options, callback) {
+      if (options && typeof options === 'object' && options.fin === false) {
+        originalSend.call(this, data, options, (error) => {
+          fragments += 1
+          if (progressing || fragments === 1) {
+            setTimeout(() => callback?.(error), 6_000)
+          }
+        })
+        return
+      }
+
+      originalSend.call(this, data, options, callback)
+    })
+    const input = [{ role: 'user', content: '🦁'.repeat(40_000) }]
+
+    try {
+      const pending = request(input).catch((error: unknown) => error)
+      await vi.waitFor(() => expect(fragments).toBe(1))
+      await vi.advanceTimersByTimeAsync(6_000)
+      await vi.waitFor(() => expect(fragments).toBe(2))
+      if (progressing) {
+        await vi.advanceTimersByTimeAsync(6_000)
+        expect(await pending).toContain('uploaded')
+        expect(received).toHaveBeenCalledWith(expect.objectContaining({ input }), false)
+      } else {
+        await vi.advanceTimersByTimeAsync(10_000)
+        const error = await pending
+
+        expect(getConnectionErrorCode(error)).toBe(ProviderConnectionErrorCode.Unresponsive)
+        expect(error).toMatchObject({ transportPhase: 'upload' })
+        expect(received).not.toHaveBeenCalled()
+      }
+
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('interrupts a closing socket without waiting for its closing handshake', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    const closing = vi.fn()
+    sockets.on('connection', (socket) => {
+      socket.on('message', () => {
+        socket.pause()
+        socket.close(1_011, 'keepalive ping timeout')
+        closing()
+      })
+    })
+
+    try {
+      const pending = request().catch((error: unknown) => error)
+      await vi.waitFor(() => expect(closing).toHaveBeenCalledOnce())
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(getConnectionErrorCode(await pending)).toBe(ProviderConnectionErrorCode.Closing)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([true, false])('logs request-local heartbeat timing on disconnect (pong received: %s)', async (acknowledge) => {

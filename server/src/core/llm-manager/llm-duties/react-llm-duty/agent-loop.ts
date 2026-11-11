@@ -64,6 +64,7 @@ import {
 } from './agent-image-batches'
 import { parseToolCallArguments, validateToolInput } from './agent-utils'
 import { AgentRunDeadlineError, type AgentRunBudget } from './agent-run-budget'
+import { describeProviderConnectionFailure } from '@/core/llm-manager/llm-provider/provider-request-activity'
 
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
 export const AGENT_CANCELLATION_TOOL_NAME = 'cancel_task'
@@ -2009,7 +2010,8 @@ function createResumableAgentResult(
   const answer = buildResumableAgentAnswer(
     failureKind,
     trackedSteps,
-    answerDrafted
+    answerDrafted,
+    diagnostics
   )
   if (diagnostics?.failureSummary) {
     transcript.push({
@@ -2033,10 +2035,11 @@ function createResumableAgentResult(
 function buildResumableAgentAnswer(
   failureKind: CompletionFailureKind | 'synthesis' | 'deadline' | 'review',
   trackedSteps: TrackedPlanStep[],
-  answerDrafted = false
+  answerDrafted = false,
+  diagnostics?: ProviderActivitySnapshot
 ): string {
   const explanations: Record<typeof failureKind, string> = {
-    [CompletionFailureKind.Connection]: 'The connection to my model provider was interrupted before I could finish.',
+    [CompletionFailureKind.Connection]: describeProviderConnectionFailure(diagnostics),
     deadline: 'The task reached its run deadline.',
     review: 'The completion check failed.',
     [CompletionFailureKind.Timeout]: 'The model response exceeded its time limit.',

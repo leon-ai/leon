@@ -543,7 +543,7 @@ export function prepareCompletionRetry(
       return stop(ProviderRetryReason.Exhausted)
     }
     const attempt = (completionParams.connectionRetryAttempt ?? 0) + 1
-    const delayMs = REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS * attempt
+    const delayMs = REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS * (attempt - 1)
     const remainingTime = completionParams.getRetryTimeout?.(delayMs + completionParams.timeout)
     if (remainingTime !== undefined && remainingTime <= delayMs) {
       return stop(ProviderRetryReason.Deadline)
