@@ -1664,7 +1664,7 @@ export class ReActLLMDuty extends LLMDuty {
         ...(isFinishingCall ? { remoteProviderErrorRetries: 0, connectionErrorRetries: 0 } : {}),
         // This loop executes local tools only after the whole response succeeds.
         retryInterruptedResponse: true,
-        onConnectionRetry: async ({ attempt, maxRetries, delayMs }): Promise<void> => {
+        onConnectionRetry: async ({ attempt, maxRetries, delayMs, failureMessage }): Promise<void> => {
           cancellationSignal.throwIfAborted()
           if (!isPrivateResponse) {
             this.answerStream.discard()
@@ -1673,8 +1673,12 @@ export class ReActLLMDuty extends LLMDuty {
           clearWaitDiagnostics()
           renewModelResponseDeadline(inferenceTimeout + delayMs)
           emitModelStatus(ModelResponseState.Retrying)
+          const retryNotice = delayMs > 0
+            ? `I will reconnect and retry (${attempt}/${maxRetries}) in ${delayMs / 1_000} seconds.`
+            : `I am reconnecting and retrying (${attempt}/${maxRetries}).`
+
           await this.emitProgress(
-            `Connection to my model provider failed. Retry ${attempt}/${maxRetries} in ${delayMs / 1_000} seconds.`
+            `${failureMessage || 'My connection to the model provider failed.'} ${retryNotice}`
           )
         },
         maxTokens: maxOutputTokens,

@@ -76,6 +76,8 @@ import {
   LLMDuties,
   LLMProviders,
   CompletionFailureKind,
+  ProviderConnectionErrorCode,
+  ProviderRetryReason,
   InferencePurpose,
   type AgentToolTranscriptMessage,
   type ProviderReasoningItem,
@@ -882,7 +884,35 @@ describe('continuous agent loop', () => {
     })
   })
 
-  it('reports an interrupted connection with saved work and its pending step', async () => {
+  it.each([
+    { diagnostics: {}, explanation: 'The connection to my model provider was interrupted before I could finish.' },
+    {
+      diagnostics: { provider: LLMProviders.OpenAI, connectionErrorCode: ProviderConnectionErrorCode.Unresponsive },
+      explanation: 'My connection to OpenAI stopped responding.'
+    },
+    {
+      diagnostics: { provider: LLMProviders.OpenAI, connectionErrorCode: ProviderConnectionErrorCode.Closing },
+      explanation: 'My connection to OpenAI was interrupted.'
+    },
+    {
+      diagnostics: { provider: LLMProviders.OpenAI, connectionErrorCode: 'ECONNREFUSED' },
+      explanation: 'I could not reach OpenAI.'
+    },
+    {
+      diagnostics: {
+        provider: LLMProviders.OpenAI, connectionErrorCode: ProviderConnectionErrorCode.Unresponsive,
+        retryReason: ProviderRetryReason.Exhausted, connectionRetryAttempt: 5
+      },
+      explanation: 'I could not reconnect to OpenAI after several attempts.'
+    },
+    {
+      diagnostics: {
+        provider: LLMProviders.OpenAI, connectionErrorCode: ProviderConnectionErrorCode.Unresponsive,
+        retryReason: ProviderRetryReason.Exhausted, connectionRetryAttempt: 0
+      },
+      explanation: 'My connection to OpenAI stopped responding.'
+    }
+  ])('explains connection failures alongside saved work: $explanation', async ({ diagnostics, explanation }) => {
     const trackedSteps = [
       { label: 'Inspect originals', status: 'completed' as const },
       { label: 'Review the saved edit', status: 'in_progress' as const }
@@ -891,12 +921,14 @@ describe('continuous agent loop', () => {
       transcript: [{ role: 'user', content: 'Continue.' }], catalog: createCatalog(),
       initialTrackedSteps: trackedSteps,
       callModel: async () => {
-        throw new AgentModelProviderError('Connection failed', false, CompletionFailureKind.Connection)
+        throw new AgentModelProviderError('Connection failed', false, CompletionFailureKind.Connection, {
+          ...diagnostics, providerEventCount: 0, providerCompleted: false, elapsedMs: 10_000
+        })
       },
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
 
-    expect(result.answer).toContain('The connection to my model provider was interrupted before I could finish.')
+    expect(result.answer).toContain(explanation)
     expect(result.answer).toContain('progress is saved')
     expect(result.answer).toContain('Inspect originals')
     expect(result.answer).toContain('Review the saved edit')
@@ -5830,9 +5862,14 @@ describe('model response status', () => {
       expect(params.retryInterruptedResponse).toBe(true)
       params.onToken?.('Unfinished draft')
       for (let attempt = 1; attempt <= 5; attempt += 1) {
-        await params.onConnectionRetry?.({ attempt, maxRetries: 5, delayMs: attempt * 5_000 })
+        await params.onConnectionRetry?.({
+          attempt, maxRetries: 5, delayMs: (attempt - 1) * 5_000,
+          failureMessage: 'My connection to OpenAI stopped responding.'
+        })
         expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(expect.objectContaining({
-          answer: expect.stringContaining(`Retry ${attempt}/5 in ${attempt * 5} seconds`),
+          answer: expect.stringContaining(attempt === 1
+            ? 'My connection to OpenAI stopped responding. I am reconnecting and retrying (1/5).'
+            : `My connection to OpenAI stopped responding. I will reconnect and retry (${attempt}/5) in ${(attempt - 1) * 5} seconds.`),
           historyMode: 'system_widget'
         }))
       }

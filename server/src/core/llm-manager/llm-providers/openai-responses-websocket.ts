@@ -4,6 +4,7 @@ import type { ClientRequest, IncomingMessage } from 'node:http'
 import WebSocket, { type RawData } from 'ws'
 
 import type { CompletionParams } from '@/core/llm-manager/types'
+import { ProviderConnectionErrorCode } from '@/core/llm-manager/types'
 
 interface CompletedResponse {
   id: string
@@ -24,6 +25,9 @@ const EXPIRED_CONTINUATION_CODES = new Set([
 // Retire idle connections before the provider's 60-minute lifetime expires.
 const MAXIMUM_CONNECTION_AGE_MS = 55 * 60_000
 const KEEP_ALIVE_INTERVAL_MS = 5_000
+const CONNECTION_CHECK_INTERVAL_MS = 1_000
+const CONNECTION_IDLE_TIMEOUT_MS = 10_000
+const UPLOAD_FRAGMENT_BYTES = 64 * 1_024
 // Leave headroom below the authenticated route's observed 16 MiB boundary.
 const MAXIMUM_REQUEST_BYTES = 15 * 1_024 * 1_024
 const CONNECTION_LIMIT_ERROR_CODE = 'websocket_connection_limit_reached'
@@ -136,6 +140,8 @@ export class OpenAIResponsesWebSocket {
         let requestBytes = 0
         let uploadStartedAt: number | undefined
         let uploadDurationMs: number | undefined
+        let lastTransportProgressAt = Date.now()
+        let nextPingAt = lastTransportProgressAt + KEEP_ALIVE_INTERVAL_MS
 
         // Publish heartbeat evidence independently of provider output so local
         // watchdog failures retain socket health without extending generation.
@@ -146,11 +152,39 @@ export class OpenAIResponsesWebSocket {
           })
         }
 
-        // Reasoning can be silent long enough for intermediaries to drop the
-        // socket. Protocol pings preserve transport without claiming model progress.
+        // Socket health is independent of model progress. Successful upload
+        // fragments, provider events and matched pongs keep slow work alive.
         const keepAliveTimer = setInterval(() => {
+          if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
+            fail(Object.assign(
+              new Error('The provider socket is closing before terminal completion.'),
+              { code: ProviderConnectionErrorCode.Closing }
+            ))
+            return
+          }
           if (socket.readyState === WebSocket.OPEN) {
-            lastPingAt = Date.now()
+            const now = Date.now()
+
+            if (now - lastTransportProgressAt >= CONNECTION_IDLE_TIMEOUT_MS) {
+              fail(Object.assign(
+                new Error('The provider connection stopped responding.'),
+                { code: ProviderConnectionErrorCode.Unresponsive }
+              ))
+              return
+            }
+
+            // Expire unmatched pings even when model output keeps flowing.
+            for (const payload of pendingPings) {
+              if (now - Number(payload) >= CONNECTION_IDLE_TIMEOUT_MS) {
+                pendingPings.delete(payload)
+              }
+            }
+            if (now < nextPingAt) {
+              return
+            }
+
+            nextPingAt = now + KEEP_ALIVE_INTERVAL_MS
+            lastPingAt = now
             pingCount += 1
             const payload = String(lastPingAt)
             pendingPings.add(payload)
@@ -161,7 +195,7 @@ export class OpenAIResponsesWebSocket {
               }
             })
           }
-        }, KEEP_ALIVE_INTERVAL_MS)
+        }, CONNECTION_CHECK_INTERVAL_MS)
         keepAliveTimer.unref()
 
         const cleanup = (): void => {
@@ -213,7 +247,7 @@ export class OpenAIResponsesWebSocket {
         const onClose = (closeCode: number, reason: Buffer): void => {
           fail(Object.assign(
             new Error('The provider socket closed before terminal completion.'),
-            { closeCode, closeReason: reason.toString() }
+            { code: ProviderConnectionErrorCode.AbnormalClosure, closeCode, closeReason: reason.toString() }
           ))
         }
         const onAbort = (): void => {
@@ -230,6 +264,7 @@ export class OpenAIResponsesWebSocket {
           const now = Date.now()
 
           pongCount += 1
+          lastTransportProgressAt = now
           lastPongAt = now
           lastPongRttMs = now - Number(payload)
           reportHeartbeat()
@@ -253,19 +288,46 @@ export class OpenAIResponsesWebSocket {
           }
 
           uploadStartedAt = Date.now()
-          socket.send(serialized, (error) => {
-            if (error) {
-              fail(error)
+          lastTransportProgressAt = uploadStartedAt
+          const bytes = Buffer.from(serialized)
+          let offset = 0
+
+          // Bounded fragments let heartbeat frames pass between upload writes
+          // and distinguish a progressing upload from an unresponsive socket.
+          const sendFragment = (): void => {
+            if (finished) {
               return
             }
-            if (!finished) {
-              uploadDurationMs = Date.now() - uploadStartedAt!
+
+            const end = Math.min(offset + UPLOAD_FRAGMENT_BYTES, bytes.length)
+
+            socket.send(bytes.subarray(offset, end), {
+              binary: false,
+              fin: end === bytes.length
+            }, (error) => {
+              if (finished) {
+                return
+              }
+              if (error) {
+                fail(error)
+                return
+              }
+
+              lastTransportProgressAt = Date.now()
+              offset = end
+              if (offset < bytes.length) {
+                sendFragment()
+                return
+              }
+
+              uploadDurationMs = lastTransportProgressAt - uploadStartedAt!
               onStreamEvent?.({
-                type: 'request-uploaded', transport: 'websocket',
-                requestBytes, uploadDurationMs
+                type: 'request-uploaded', transport: 'websocket', requestBytes, uploadDurationMs
               })
-            }
-          })
+            })
+          }
+
+          sendFragment()
         }
         const listen = (): void => {
           socket.on('message', onMessage)
@@ -275,6 +337,7 @@ export class OpenAIResponsesWebSocket {
         }
         const onMessage = async (data: RawData): Promise<void> => {
           try {
+            lastTransportProgressAt = Date.now()
             const text = data.toString()
             const event = JSON.parse(text) as Record<string, unknown>
             const error = event['error'] as Record<string, unknown> | undefined

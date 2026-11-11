@@ -55,7 +55,7 @@ import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-ac
 import { LogHelper } from '@/helpers/log-helper'
 import { getTurnTimingContext, recordTurnInference } from '../turn-timing'
 import { recordInferenceAttempt, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
-import { ProviderRequestActivity } from './provider-request-activity'
+import { describeProviderConnectionFailure, ProviderRequestActivity } from './provider-request-activity'
 
 const LEADING_EMPTY_THINKING_BLOCK_PATTERN = /^(?:\s*<think>\s*<\/think>)+\s*/i
 
@@ -159,6 +159,7 @@ export async function runCompletionAttempt(
         failureKind: getCompletionFailureKind(error)
       } : {}),
       connectionErrorCode: getConnectionErrorCode(error),
+      connectionRetryAttempt: completionParams.connectionRetryAttempt,
       failureSummary: error instanceof Error
         ? (error as Error & { failureSummary?: string }).failureSummary
         : undefined,
@@ -628,7 +629,11 @@ export async function runCompletionAttempt(
         await completionParams.onConnectionRetry?.({
           attempt,
           maxRetries: attempt + recovery.params.connectionErrorRetries!,
-          delayMs: recovery.delayMs
+          delayMs: recovery.delayMs,
+          failureMessage: describeProviderConnectionFailure({
+            provider: providerName,
+            connectionErrorCode: getConnectionErrorCode(e)
+          })
         })
       }
       if (recovery.delayMs > 0) {

@@ -227,6 +227,12 @@ export enum CompletionFailureKind {
   Provider = 'provider'
 }
 
+export enum ProviderConnectionErrorCode {
+  Unresponsive = 'PROVIDER_CONNECTION_UNRESPONSIVE',
+  Closing = 'WEBSOCKET_CONNECTION_CLOSING',
+  AbnormalClosure = 'WEBSOCKET_ABNORMAL_CLOSURE'
+}
+
 export enum ProviderRetryDecision {
   Retry = 'retry',
   Stop = 'stop'
@@ -251,6 +257,9 @@ export enum ProviderRetryReason {
  * Distinguishes transport waits, generation and retry decisions without prompt content.
  */
 export interface ProviderActivitySnapshot {
+  provider?: LLMProviders | undefined
+  connectionErrorCode?: string | undefined
+  connectionRetryAttempt?: number | undefined
   providerRequestId?: string | undefined
   transport?: 'http' | 'websocket' | 'local' | undefined
   requestId?: string | undefined
@@ -289,7 +298,6 @@ export interface CompletionAttemptTiming extends ProviderActivitySnapshot {
   transport: 'http' | 'websocket' | 'local'
   outcome: string
   failureKind?: CompletionFailureKind | undefined
-  connectionErrorCode?: string | undefined
   promptCache?: PromptCacheObservation | undefined
   inferenceTimeoutMs: number
   streamIdleTimeoutMs: number
@@ -412,6 +420,7 @@ export interface CompletionParams {
     attempt: number
     maxRetries: number
     delayMs: number
+    failureMessage?: string
   }) => Promise<void> | void
   /**
    * Recomputes the retry wait from the caller's remaining work budget.

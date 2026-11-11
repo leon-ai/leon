@@ -1,6 +1,9 @@
 import type { CompletionStreamEvent, ProviderActivitySnapshot } from '@/core/llm-manager/types'
+import { ProviderConnectionErrorCode, ProviderRetryReason } from '@/core/llm-manager/types'
+import { getLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 
 const CONNECTION_ERROR_CODES = new Set([
+  ...Object.values(ProviderConnectionErrorCode),
   'UND_ERR_CONNECT_TIMEOUT',
   'UND_ERR_SOCKET',
   'ECONNREFUSED',
@@ -114,6 +117,7 @@ export class ProviderRequestActivity {
 export function getConnectionErrorCode(error: unknown): string | undefined {
   const pending: unknown[] = [error]
   const visited = new Set<object>()
+  let unresponsive = false
 
   while (pending.length > 0) {
     const current = pending.pop()
@@ -135,13 +139,13 @@ export function getConnectionErrorCode(error: unknown): string | undefined {
       return code
     }
     if (details['closeCode'] === 1_006) {
-      return 'WEBSOCKET_ABNORMAL_CLOSURE'
+      return ProviderConnectionErrorCode.AbnormalClosure
     }
     // A connection that delivered neither events nor pong replies needs
     // transport recovery even when the eventual error is a watchdog timeout.
     if (details['providerEventCount'] === 0 && details['requestAcceptedMs'] === undefined &&
       typeof details['pingCount'] === 'number' && details['pingCount'] > 0 && details['pongCount'] === 0) {
-      return 'PROVIDER_CONNECTION_UNRESPONSIVE'
+      unresponsive = true
     }
 
     pending.push(details['cause'])
@@ -151,7 +155,40 @@ export function getConnectionErrorCode(error: unknown): string | undefined {
     }
   }
 
-  return undefined
+  return unresponsive ? ProviderConnectionErrorCode.Unresponsive : undefined
+}
+
+/**
+ * Explains observed connection failures without exposing transport internals or
+ * attributing a network fault to the owner or provider.
+ */
+export function describeProviderConnectionFailure(
+  diagnostics: Pick<ProviderActivitySnapshot,
+    'provider' | 'connectionErrorCode' | 'retryReason' | 'connectionRetryAttempt'> = {}
+): string {
+  const provider = diagnostics.provider
+    ? getLLMProviderAccountConfig(diagnostics.provider)?.label
+    : undefined
+  const target = provider || 'my model provider'
+
+  if (diagnostics.retryReason === ProviderRetryReason.Exhausted &&
+    (diagnostics.connectionRetryAttempt ?? 0) > 0) {
+    return `I could not reconnect to ${target} after several attempts.`
+  }
+  if (diagnostics.connectionErrorCode === ProviderConnectionErrorCode.Unresponsive) {
+    return `My connection to ${target} stopped responding.`
+  }
+  if (diagnostics.connectionErrorCode === ProviderConnectionErrorCode.Closing ||
+    diagnostics.connectionErrorCode === ProviderConnectionErrorCode.AbnormalClosure ||
+    diagnostics.connectionErrorCode === 'ECONNRESET' ||
+    diagnostics.connectionErrorCode === 'EPIPE') {
+    return `My connection to ${target} was interrupted.`
+  }
+  if (diagnostics.connectionErrorCode) {
+    return `I could not reach ${target}.`
+  }
+
+  return 'The connection to my model provider was interrupted before I could finish.'
 }
 
 /**
