@@ -212,7 +212,8 @@ export async function buildAgentContinuationTranscript(
   transcript: AgentToolTranscriptMessage[],
   summarize: (history: string) => Promise<string | null>,
   checkpointInput?: AgentContinuityCheckpointInput,
-  forceCompaction = false
+  forceCompaction = false,
+  recentExchangeLimit?: number
 ): Promise<AgentToolTranscriptMessage[]> {
   const rawTranscript = removePreviousContinuityCheckpoint(transcript)
   const checkpoint = checkpointInput
@@ -225,7 +226,9 @@ export async function buildAgentContinuationTranscript(
     return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
   }
 
-  const parts = splitAgentTranscriptForSummary(rawTranscript, forceCompaction)
+  const parts = splitAgentTranscriptForSummary(
+    rawTranscript, forceCompaction, recentExchangeLimit
+  )
   if (!parts) return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
 
   // The summary needs textual evidence, not image bytes or opaque replay data.

@@ -76,6 +76,45 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it('replaces an oversized completed parallel exchange while retaining unfinished calls and owner instructions', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+    appendToolExchange(transcript, 1)
+    const completed = transcript[1]!
+    if (completed.role === 'assistant' && completed.toolCalls) {
+      completed.toolCalls.push({
+        ...completed.toolCalls[0]!, id: 'parallel-call'
+      })
+    }
+    transcript[2]!.content = 'Verified detail. '.repeat(20_000)
+    transcript.push(
+      {
+        role: 'tool', toolCallId: 'parallel-call',
+        toolName: 'release__builder__run', content: 'Verified parallel result.'
+      },
+      { role: 'user', content: 'Publish only to staging.' },
+      {
+        role: 'assistant', content: '', toolCalls: [{
+          id: 'unfinished', type: 'function',
+          function: { name: 'release__publisher__run', arguments: '{}' }
+        }]
+      }
+    )
+    const original = structuredClone(transcript)
+    const result = await buildAgentContinuationTranscript(
+      transcript, async () => null, createCheckpointInput(), true
+    )
+
+    expect(result[0]).toEqual(original[0])
+    expect(result.slice(-2)).toEqual(original.slice(-2))
+    expect(result.some((message) => message.role === 'tool')).toBe(false)
+    expect(JSON.stringify(result)).not.toContain('parallel-call')
+    expect(JSON.stringify(result)).toContain('/tmp/release-build.log')
+    expect(JSON.stringify(result)).toContain('Publish release')
+    expect(transcript).toEqual(original)
+  })
+
   it.each([4, 12])('compacts a stalled task with %i large exchanges without splitting recent results', async (exchanges) => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Prepare the release.' }
