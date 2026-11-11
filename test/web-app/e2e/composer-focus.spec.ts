@@ -160,6 +160,26 @@ test('aligns search carets with placeholders, edited text and cleared values', a
   await expectCaretAtTextStart(sessionSearch)
 })
 
+test('keeps composer action alignment independent of text font metrics', async ({ page }) => {
+  await page.goto(SESSION_URL)
+  await page.evaluate(() => document.fonts.ready)
+  const send = page.getByRole('button', { name: 'Send message', exact: true })
+
+  for (const fontFamily of ['serif', 'sans-serif', 'monospace']) {
+    await send.evaluate((element, family) => {
+      element.style.fontFamily = family
+    }, fontFamily)
+    const offset = await send.evaluate((element) => {
+      const button = element.getBoundingClientRect()
+      const icon = element.querySelector('.button-icon')!.getBoundingClientRect()
+
+      return Math.abs(icon.top + icon.height / 2 - button.top - button.height / 2)
+    })
+
+    expect(offset).toBeLessThan(0.1)
+  }
+})
+
 test('recalls only from empty input and keeps normal caret navigation after editing', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
