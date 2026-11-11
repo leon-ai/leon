@@ -12,7 +12,12 @@ import { isWindows } from '@sdk/utils'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
-import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from './lib/browser-use-environment'
+import {
+  BROWSER_USE_DAEMON_NAME,
+  BROWSER_USE_DAEMON_FILE_STEM,
+  describeBrowserUseReadinessFailure,
+  prepareBrowserUseEnvironment
+} from './lib/browser-use-environment'
 
 const LEGACY_TOOL_IDS = ['cli', 'playwright'] as const
 const MAX_PORT = 65_535
@@ -25,7 +30,7 @@ const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url))
 const CLI_PATH = path.join(SOURCE_DIRECTORY, '.venv', isWindows() ? 'Scripts' : 'bin', isWindows() ? 'browser-use.exe' : 'browser-use')
 const SCREENSHOT_MAX_DIMENSION = 1_800
 const CLI_ENVIRONMENT = {
-  BU_NAME: 'default', BU_BROWSER_ID: '', BU_AUTOSPAWN: '',
+  BU_NAME: BROWSER_USE_DAEMON_NAME, BU_BROWSER_ID: '', BU_AUTOSPAWN: '',
   BH_RECORD: '0', BH_TAB_MARKER: '0', BH_DOMAIN_SKILLS: '0',
   ANONYMIZED_TELEMETRY: 'false', PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1'
 }
@@ -235,7 +240,7 @@ export class BrowserUseTool extends Tool {
         // so the existing owner-action handoff pauses instead of retrying tools.
         const failure = describeBrowserUseReadinessFailure(
           stopped,
-          path.join(environment['BH_TMP_DIR']!, 'bu.log')
+          path.join(environment['BH_TMP_DIR']!, `${BROWSER_USE_DAEMON_FILE_STEM}.log`)
         )
         if (failure.requiresOwnerAction) {
           throw this.createBrowserConnectionError(failure.message)
@@ -251,7 +256,10 @@ export class BrowserUseTool extends Tool {
       input: 'list_tabs()', env: environment, timeout: COMMAND_TIMEOUT_MS, reject: false
     })
     if (readiness.exitCode !== 0 || readiness.timedOut) {
-      const failure = describeBrowserUseReadinessFailure(readiness, path.join(environment['BH_TMP_DIR']!, 'bu.log'))
+      const failure = describeBrowserUseReadinessFailure(
+        readiness,
+        path.join(environment['BH_TMP_DIR']!, `${BROWSER_USE_DAEMON_FILE_STEM}.log`)
+      )
       if (failure.requiresOwnerAction) throw this.createBrowserConnectionError(failure.message)
       throw new Error(failure.message)
     }

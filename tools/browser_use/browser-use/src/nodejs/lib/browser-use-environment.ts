@@ -3,10 +3,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 
+export const BROWSER_USE_DAEMON_NAME = 'default'
+export const BROWSER_USE_DAEMON_FILE_STEM = `bu-${BROWSER_USE_DAEMON_NAME}`
+
 const RUNTIME_ID_LENGTH = 24
 // macOS has the smaller POSIX sun_path budget, including the terminating NUL.
 const MAX_SOCKET_PATH_BYTES = 103
-const SOCKET_FILENAME = 'bu.sock'
+const SOCKET_FILENAME = `${BROWSER_USE_DAEMON_FILE_STEM}.sock`
 const SHORT_POSIX_TEMP_DIRECTORY = '/tmp'
 // Upstream diagnostics, not task-routing keywords. Explicit WS endpoints report
 // stale/refused connections as handshake failures rather than permission codes.
@@ -45,9 +48,10 @@ export async function prepareBrowserUseEnvironment(settingsPath: string): Promis
   return {
     BH_HOME: home,
     BH_RUNTIME_DIR: runtimeDirectory,
-    BH_RUNTIME_DIR_SHARED: '0',
+    // Browser Use includes the daemon name in IPC and log filenames.
+    BH_RUNTIME_DIR_SHARED: '1',
     BH_TMP_DIR: path.join(home, 'tmp'),
-    BH_TMP_DIR_SHARED: '0'
+    BH_TMP_DIR_SHARED: '1'
   }
 }
 
