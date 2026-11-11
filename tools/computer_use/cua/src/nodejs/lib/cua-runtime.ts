@@ -1217,6 +1217,8 @@ export class CuaRuntime {
       // collapse the selection and append instead of replacing the value.
       const clickParameters = { ...typeParameters }
       delete clickParameters['text']
+      // Typing pace must not leak into the focus click's native schema.
+      delete clickParameters['delay_ms']
       const clickResult = await driver.callTool('click', JSON.stringify(clickParameters))
       const clickOutput = parseJsonRecord(clickResult.structuredJson) || parseJsonRecord(clickResult.rawJson)
       if (hasCuaError(clickResult) || this.resultCompactor.getStructuredFailure(clickOutput)) return clickResult
@@ -1228,6 +1230,7 @@ export class CuaRuntime {
       signal?.throwIfAborted()
       const selectionParameters: Record<string, unknown> = { ...typeParameters, keys: COMPUTER_USE_SELECT_ALL_KEYS }
       delete selectionParameters['text']
+      delete selectionParameters['delay_ms']
       const selected = await driver.callTool('hotkey', JSON.stringify(selectionParameters))
       const selectionOutput = parseJsonRecord(selected.structuredJson) || parseJsonRecord(selected.rawJson)
       if (hasCuaError(selected) || this.resultCompactor.getStructuredFailure(selectionOutput)) return selected
@@ -1242,6 +1245,7 @@ export class CuaRuntime {
       signal?.throwIfAborted()
       const pasteParameters: Record<string, unknown> = { ...typeParameters, keys: [COMPUTER_USE_SELECT_ALL_KEYS[0], 'v'] }
       delete pasteParameters['text']
+      delete pasteParameters['delay_ms']
       return driver.callTool('hotkey', JSON.stringify(pasteParameters))
     }
     return driver.callTool('type_text', JSON.stringify(typeParameters))

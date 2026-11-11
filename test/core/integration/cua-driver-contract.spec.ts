@@ -24,6 +24,8 @@ it('keeps native Cua action arguments compatible with the installed driver', asy
     const catalog = JSON.parse(await driver.listToolsJson())
     const hostParameters: Record<string, string[]> = {
       list_apps: ['query'],
+      // The host maps observed macOS .app paths to the native name argument.
+      launch_app: process.platform === 'darwin' ? ['launch_path'] : [],
       get_window_state: ['settle_ms'],
       get_desktop_state: ['settle_ms'],
       zoom: ['purpose', 'scope'],

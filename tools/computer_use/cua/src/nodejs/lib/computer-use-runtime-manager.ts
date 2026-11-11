@@ -14,7 +14,7 @@ import { LogHelper } from '@/helpers/log-helper'
 
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
 import { COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_FOREGROUND_DELIVERY_MODE } from './constants'
-import { asRecord, hasCuaError } from './utils'
+import { asRecord, hasCuaError, hasText } from './utils'
 
 /**
  * Owns persistent driver instances and host-managed runtime parameters.
@@ -134,6 +134,12 @@ export class ComputerUseRuntimeManager {
     parameters: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
     let managedParameters = { ...parameters }
+    if (action === 'launch_app' && process.platform === 'darwin' &&
+        hasText(managedParameters['launch_path'])) {
+      // macOS accepts observed .app paths through name, not launch_path.
+      managedParameters['name'] = managedParameters['launch_path']
+      delete managedParameters['launch_path']
+    }
     if (action === 'verify_state' && Array.isArray(managedParameters['expect'])) {
       // Preserve the predicate's meaning when the model flattens its selector.
       // Conflicting selectors must never be silently overwritten.

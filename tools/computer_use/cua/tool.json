@@ -1757,6 +1757,12 @@
             ],
             "default": "insert",
             "description": "insert types at the caret. replace selects all in the established field before typing; x/y or a current element handle focuses it once. Without a field selector, uses the already focused field."
+          },
+          "delay_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 200,
+            "description": "Typing pace in milliseconds per character for type_text with method=type. Omit or use 0 for batched typing; use a positive value only when the app drops rapid input or needs paced updates. Ignored for method=paste."
           }
         },
         "required": [
@@ -2565,6 +2571,12 @@
                     "action": {
                       "type": "string",
                       "description": "For click: observed native action; default press, open for an element advertising open."
+                    },
+                    "delay_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 200,
+                      "description": "Typing pace in milliseconds per character for type_text with method=type. Omit or use 0 for batched typing; use a positive value only when the app drops rapid input or needs paced updates. Ignored for method=paste."
                     }
                   }
                 },
@@ -2767,6 +2779,12 @@
                     "action": {
                       "type": "string",
                       "description": "For click: observed native action; default press, open for an element advertising open."
+                    },
+                    "delay_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 200,
+                      "description": "Typing pace in milliseconds per character for type_text with method=type. Omit or use 0 for batched typing; use a positive value only when the app drops rapid input or needs paced updates. Ignored for method=paste."
                     }
                   }
                 },
@@ -3253,9 +3271,9 @@
     }
   },
   "resources": {
-    "gnome_wayland": [
-      "https://raw.githubusercontent.com/trycua/cua/6d6c734c127025fb39ad5d585a10382808b39dc1/libs/cua-driver/wayland-helper/winrects@cua/metadata.json",
-      "https://raw.githubusercontent.com/trycua/cua/6d6c734c127025fb39ad5d585a10382808b39dc1/libs/cua-driver/wayland-helper/winrects@cua/extension.js"
+    "gnome_wayland_v12": [
+      "https://raw.githubusercontent.com/trycua/cua/93c9b500a0d4f9daa56063d3d3e3fb3c9e6070ee/libs/cua-driver/wayland-helper/winrects@cua/metadata.json",
+      "https://raw.githubusercontent.com/trycua/cua/93c9b500a0d4f9daa56063d3d3e3fb3c9e6070ee/libs/cua-driver/wayland-helper/winrects@cua/extension.js"
     ]
   },
   "concurrency": "serial"
