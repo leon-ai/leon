@@ -1390,6 +1390,7 @@ describe('LLMProvider', () => {
       expect(onToken).not.toHaveBeenCalledWith('Late discarded output.')
       expect(onAttempt.mock.calls[1]![0]).toMatchObject({
         outcome: 'LLMStreamIdleTimeout', elapsedMs: 90_000,
+        reasoningOnly: true, replaySafe: true,
         retryDecision: 'retry', retryReason: 'reasoning_only_timeout'
       })
       if (!recovers) {

@@ -1,4 +1,5 @@
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import fs from 'node:fs'
 import path from 'node:path'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
@@ -97,10 +98,38 @@ export class AgentSessionState {
 
     if (existingStore) return existingStore
 
-    const store = new ContextStateStore<AgentLoopContinuationState | null>(
+    const legacyStore = new ContextStateStore<AgentLoopContinuationState | null>(
       filename,
       null
     )
+    const sessionId = getActiveConversationSessionId()
+    let store = legacyStore
+
+    if (sessionId && CONVERSATION_SESSION_MANAGER.getSession(sessionId)) {
+      const directory = path.dirname(
+        CONVERSATION_SESSION_MANAGER.resolveConversationLogPath(sessionId)
+      )
+      const checkpointPath = path.join(directory, AGENT_CONTINUATION_STATE_FILENAME)
+      store = new ContextStateStore<AgentLoopContinuationState | null>(
+        AGENT_CONTINUATION_STATE_FILENAME, null, directory
+      )
+
+      // Keep task evidence with its conversation so deletion removes it too.
+      // Adopt older profile-scoped checkpoints only before a session has its own.
+      if (!fs.existsSync(checkpointPath)) {
+        const previous = legacyStore.load()
+        if (previous) {
+          store.save(previous)
+          if (store.load()?.createdAt === previous.createdAt) {
+            legacyStore.save(null)
+          } else {
+            // Failed adoption must leave the original checkpoint resumable.
+            store = legacyStore
+          }
+        }
+      }
+    }
+
     this.continuationStores.set(storeKey, store)
 
     return store

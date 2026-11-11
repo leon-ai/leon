@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import syncFs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -22,6 +23,10 @@ import type { ConversationRecord, ConversationEvent } from '../../../apps/web/sr
 import { FyiKind } from '@/core/fyi/fyi-contract'
 import { auroraParts, AURORA_CHOICE_SPEC, AURORA_GENERATED_SPEC } from '../../fixtures/aurora'
 import { PreparationStatus } from '../../../aurora/src/v2/contracts/preparation'
+import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import { AgentSessionState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
+import { createAgentLoopContinuationState, type AgentLoopContinuationState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
+import { runWithConversationSession } from '@/core/session-manager/session-context'
 
 const fixture = vi.hoisted(() => ({
   root: '',
@@ -57,7 +62,10 @@ vi.mock('@/core/profile-runtime/profile-paths', async (importOriginal) => {
       const profile = readProfile()
       const root = paths.join(fixture.root, profile)
 
-      return { ...actual.getProfilePaths(profile), root, sessions: paths.join(root, 'sessions') }
+      return {
+        ...actual.getProfilePaths(profile), root,
+        sessions: paths.join(root, 'sessions'), context: paths.join(root, 'context')
+      }
     }
   }
 })
@@ -498,5 +506,53 @@ describe('web conversation runtime', () => {
       expect(queued).not.toHaveBeenCalled()
       expect(CONVERSATION_REPOSITORY.readSession(session.id)).toBeNull()
     })
+  })
+
+  it('adopts unfinished task checkpoints into their session and removes them with the conversation', async () => {
+    await runWithProfileContext({ profileName: profile }, async () => {
+      const session = CONVERSATION_SESSION_MANAGER.createSession()
+      const state = createAgentLoopContinuationState({
+        originalInput: 'Report the saved receipt.', clarificationQuestion: 'Model unavailable.',
+        planWidgetId: 'receipt-plan', activeSkillId: null, loadedToolkitIds: [],
+        trackedSteps: [{ label: 'Report receipt', status: 'in_progress' }],
+        executionHistory: [{ function: 'receipt.save', status: 'success', observation: 'Receipt: release-42.' }],
+        transcript: [{ role: 'user', content: 'Report the saved receipt.' }]
+      })
+      const legacy = new ContextStateStore<AgentLoopContinuationState | null>(
+        `.agent-loop-continuation-state.json--${session.id}`, null
+      )
+      legacy.save(state)
+      const checkpointPath = path.join(fixture.root, profile, 'sessions', session.id, '.agent-loop-continuation-state.json')
+
+      await runWithConversationSession({ sessionId: session.id }, async () => {
+        const first = new AgentSessionState().getContinuationStore()
+        expect(first.load()).toEqual(state)
+        expect(legacy.load()).toBeNull()
+        expect(new AgentSessionState().getContinuationStore().load()).toEqual(state)
+        expect(JSON.parse(await fs.readFile(checkpointPath, 'utf8'))).toEqual(state)
+      })
+
+      CONVERSATION_SESSION_MANAGER.deleteSession(session.id)
+      await expect(fs.access(checkpointPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    })
+  })
+
+  it('preserves the last checkpoint when publishing a replacement fails', async () => {
+    const store = new ContextStateStore('checkpoint.json', { receipt: '' }, fixture.root)
+    store.save({ receipt: 'release-42' })
+    const rename = vi.spyOn(syncFs, 'renameSync').mockImplementationOnce(() => {
+      throw new Error('Storage unavailable')
+    })
+
+    try {
+      store.save({ receipt: 'release-43' })
+      expect(store.load()).toEqual({ receipt: 'release-42' })
+      expect(await fs.readdir(fixture.root)).toEqual(['checkpoint.json'])
+    } finally {
+      rename.mockRestore()
+    }
+
+    store.save({ receipt: 'release-43' })
+    expect(store.load()).toEqual({ receipt: 'release-43' })
   })
 })

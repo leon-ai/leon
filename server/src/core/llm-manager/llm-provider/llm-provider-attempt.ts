@@ -163,6 +163,15 @@ export async function runCompletionAttempt(
       failureSummary: error instanceof Error
         ? (error as Error & { failureSummary?: string }).failureSummary
         : undefined,
+      ...(error instanceof Error && error.name === STREAM_IDLE_TIMEOUT_ERROR_NAME
+        ? {
+            reasoningOnly: !hasNonReasoningOutput && (
+              firstReasoningTokenAt !== undefined || isReasoning || isAwaitingReasoningContinuation
+            ),
+            replaySafe: completionParams.retryInterruptedResponse === true &&
+              !hasProviderExecutedTools && !activity.snapshot().providerCompleted
+          }
+        : {}),
       ...retryDiagnostics,
       ...(promptCache ? { promptCache } : {}),
       elapsedMs: Date.now() - completionStartedAt,

@@ -149,6 +149,32 @@ describe('Responses connection lifecycle', () => {
     }))
   })
 
+  it('uses explicit HTTP recovery without changing subsequent WebSocket requests', async () => {
+    const received = vi.fn()
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        received(JSON.parse(data.toString()))
+        socket.send(JSON.stringify({
+          type: 'response.completed', response: { id: 'socket', output: OUTPUT }
+        }))
+      })
+    })
+    const http = vi.fn()
+    server.on('request', http)
+    const events = vi.fn()
+    const recovered = await transport.fetch(url, {
+      method: 'POST', body: JSON.stringify({ model: 'fixture', stream: true, input: INPUT })
+    }, events, 'http')
+
+    expect(await recovered.text()).toContain('http')
+    expect(events).toHaveBeenCalledWith({ type: 'request-dispatched', transport: 'http' })
+    expect(http).toHaveBeenCalledOnce()
+    expect(received).not.toHaveBeenCalled()
+    expect(await request()).toContain('socket')
+    expect(received).toHaveBeenCalledOnce()
+    expect(http).toHaveBeenCalledOnce()
+  })
+
   it('preserves authentication and sends only new input on a matching connection', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'unrelated-key')
     vi.stubEnv('OPENAI_ORG_ID', 'unrelated-organization')

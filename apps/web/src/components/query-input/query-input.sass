@@ -117,6 +117,13 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, 
     .dropdown-trigger
       min-width: 0
 
+  .query-input-submit .app-icon
+    transition: transform var(--transition-duration-main) var(--transition-timing-main)
+
+    &[data-icon='send-ins']
+      // The send artwork carries more visual weight above its box's center.
+      transform: translateY(2px)
+
   .query-input-field
     width: auto
     min-width: 0

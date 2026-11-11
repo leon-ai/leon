@@ -7,6 +7,29 @@ async function countWaves(page: Page): Promise<number> {
   return page.evaluate(() => Reflect.get(window, 'composerWaveCount') as number)
 }
 
+/**
+ * Checks the painted caret against the native field's text origin.
+ */
+async function expectCaretAtTextStart(field: Locator): Promise<void> {
+  await expect(field).toBeFocused()
+  await expect(field.locator('..').locator('.input-effects-caret')).toBeVisible()
+  await expect.poll(() => field.evaluate((element: HTMLInputElement | HTMLTextAreaElement) => {
+    const style = getComputedStyle(element)
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')!
+    context.font = style.font
+
+    const glyph = (element.value || element.placeholder).charAt(0)
+    const box = element.getBoundingClientRect()
+    const caret = element.parentElement!.querySelector('.input-effects-block')!.getBoundingClientRect()
+    const textLeft = box.left + Number.parseFloat(style.borderLeftWidth) +
+      Number.parseFloat(style.paddingLeft)
+    const glyphCenter = textLeft + context.measureText(glyph).width / 2
+
+    return Math.abs(caret.left + caret.width / 2 - glyphCenter)
+  })).toBeLessThan(1)
+}
+
 interface ScrollTiming {
   durationMs: number
   gaps: number[]
@@ -110,6 +133,51 @@ test('respects reduced motion on deliberate focus', async ({ page }) => {
   await page.getByRole('button', { name: 'Add attachment' }).click()
   await page.getByRole('textbox', { name: 'Message Leon' }).click()
   expect(await countWaves(page)).toBe(0)
+})
+
+test('aligns search carets with placeholders, edited text and cleared values', async ({ page }) => {
+  await page.goto(SESSION_URL)
+  await page.evaluate(() => document.fonts.ready)
+  await expectCaretAtTextStart(page.getByRole('textbox', { name: 'Message Leon' }))
+
+  await page.getByRole('button', { name: /^Choose model, current:/ }).click()
+  const modelSearch = page.getByRole('combobox', { name: 'Search models', exact: true })
+  await expectCaretAtTextStart(modelSearch)
+  await modelSearch.fill('models')
+  await modelSearch.press('Home')
+  await expectCaretAtTextStart(modelSearch)
+  await modelSearch.fill('')
+  await expectCaretAtTextStart(modelSearch)
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+  const sessionSearch = page.getByRole('combobox', { name: 'Search sessions', exact: true })
+  await expectCaretAtTextStart(sessionSearch)
+  await sessionSearch.fill('sessions')
+  await sessionSearch.press('Home')
+  await expectCaretAtTextStart(sessionSearch)
+  await sessionSearch.fill('')
+  await expectCaretAtTextStart(sessionSearch)
+})
+
+test('keeps composer action alignment independent of text font metrics', async ({ page }) => {
+  await page.goto(SESSION_URL)
+  await page.evaluate(() => document.fonts.ready)
+  const send = page.getByRole('button', { name: 'Send message', exact: true })
+
+  for (const fontFamily of ['serif', 'sans-serif', 'monospace']) {
+    await send.evaluate((element, family) => {
+      element.style.fontFamily = family
+    }, fontFamily)
+    const offset = await send.evaluate((element) => {
+      const button = element.getBoundingClientRect()
+      const icon = element.querySelector('.button-icon')!.getBoundingClientRect()
+
+      return Math.abs(icon.top + icon.height / 2 - button.top - button.height / 2)
+    })
+
+    expect(offset).toBeLessThan(0.1)
+  }
 })
 
 test('recalls only from empty input and keeps normal caret navigation after editing', async ({ page, ui }) => {

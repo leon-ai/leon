@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { FileHelper } from '@/helpers/file-helper'
 
 export class ContextStateStore<T> {
   private readonly stateFilePath: string
@@ -29,8 +30,7 @@ export class ContextStateStore<T> {
 
   public save(state: T): void {
     try {
-      fs.mkdirSync(this.directoryPath, { recursive: true })
-      fs.writeFileSync(this.stateFilePath, JSON.stringify(state, null, 2), 'utf8')
+      FileHelper.writeAtomicJSONSync(this.stateFilePath, state)
     } catch {
       // Ignore state persistence failures.
     }

@@ -277,7 +277,8 @@ export default class AISDKRemoteLLMProvider {
     contexts: ProviderCompactionContext[] = [],
     onStreamEvent?: CompletionParams['onStreamEvent'],
     toolCalls: OpenAIToolCall[] = [],
-    cacheScope?: string
+    cacheScope?: string,
+    responseTransport?: CompletionParams['responseTransport']
   ): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
@@ -320,7 +321,7 @@ export default class AISDKRemoteLLMProvider {
           init = { ...init, body: JSON.stringify(body) }
         }
 
-        return this.getOpenAITransport().fetch(input, init, onStreamEvent)
+        return this.getOpenAITransport().fetch(input, init, onStreamEvent, responseTransport)
       } else {
         init?.signal?.throwIfAborted()
         if (onStreamEvent && typeof init?.body === 'string') {
@@ -539,10 +540,11 @@ export default class AISDKRemoteLLMProvider {
       ? prompt.flatMap((message) => message.role === 'assistant' ? message.toolCalls || [] : [])
       : []
 
-    if (contexts.length > 0 || toolCalls.length > 0 || onStreamEvent) {
+    if (contexts.length > 0 || toolCalls.length > 0 || onStreamEvent || completionParams.responseTransport) {
       return this.createLanguageModel(
         flavor, contexts, onStreamEvent, toolCalls,
-        completionParams.usagePurpose || completionParams.dutyType
+        completionParams.usagePurpose || completionParams.dutyType,
+        completionParams.responseTransport
       )
     }
 

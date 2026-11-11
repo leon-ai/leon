@@ -4,11 +4,13 @@ import path from 'node:path'
 
 import type { RealAgentScenario } from '../e2e/run-agent-provider-scenario'
 import type { AgentToolTranscriptMessage, OpenAITool, OpenAIToolCall } from '@/core/llm-manager/types'
+import { ProviderRetryReason } from '@/core/llm-manager/types'
 import { inScenarioWorkspace } from './scenario-fixture'
 
 export enum ModelFault {
   IncorrectDraft = 'incorrect-draft',
-  ContextFailure = 'context-failure'
+  ContextFailure = 'context-failure',
+  ReasoningStall = 'reasoning-stall'
 }
 
 interface ModelReply {
@@ -22,7 +24,7 @@ type ModelCall = (
   messages: AgentToolTranscriptMessage[],
   prompt: string,
   tools: OpenAITool[],
-  options: { isCompletionReview?: boolean, isRecoveryAttempt: boolean },
+  options: { isCompletionReview?: boolean, isRecoveryAttempt: boolean, isStallRecoveryAttempt?: boolean },
   ...rest: unknown[]
 ) => Promise<ModelReply | null>
 
@@ -37,15 +39,26 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
     async run(context): Promise<Record<string, unknown>> {
       return inScenarioWorkspace(context.profilePath, async (workspace) => {
         const { ReActLLMDuty } = await import('@/core/llm-manager/llm-duties/react-llm-duty')
-        const { AgentModelProviderError } = await import('@/core/llm-manager/llm-duties/react-llm-duty/agent-loop')
+        const { AgentModelProviderError, AgentModelResponseTimeoutError } = await import('@/core/llm-manager/llm-duties/react-llm-duty/agent-loop')
         const prototype = ReActLLMDuty.prototype as unknown as { callAgentModel: ModelCall }
         const original = prototype.callAgentModel
         let injected = false
         let reviews = 0
         let rejections = 0
+        let stallRecoveries = 0
         prototype.callAgentModel = async function (...args: Parameters<ModelCall>): Promise<ModelReply | null> {
           const [messages, , , options] = args
           const hasWritten = messages.some((message) => message.role === 'tool' && message.toolName.endsWith('__write'))
+          if (!injected && hasWritten && !options.isCompletionReview && fault === ModelFault.ReasoningStall) {
+            injected = true
+            throw new AgentModelResponseTimeoutError({
+              providerEventCount: 3, providerCompleted: false, elapsedMs: 90_000,
+              reasoningOnly: true, replaySafe: true, retryReason: ProviderRetryReason.Exhausted
+            })
+          }
+          if (options.isStallRecoveryAttempt) {
+            stallRecoveries += 1
+          }
           if (!injected && hasWritten && !options.isCompletionReview && fault === ModelFault.ContextFailure) {
             injected = true
             throw new AgentModelProviderError('The controlled provider rejected the context size.', true)
@@ -84,8 +97,11 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
           if (fault === ModelFault.IncorrectDraft) {
             assert.ok(rejections > 0, 'Real review must reject the unsupported draft.')
           }
+          if (fault === ModelFault.ReasoningStall) {
+            assert.equal(stallRecoveries, 1)
+          }
 
-          return { turn, injected, reviews, rejections }
+          return { turn, injected, reviews, rejections, stallRecoveries }
         } finally {
           prototype.callAgentModel = original
         }

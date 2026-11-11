@@ -413,7 +413,7 @@ export class ReActLLMDuty extends LLMDuty {
       const ownerInput = this.getInputAsText(this.input)
       const { messageLogs: history, conversationState } =
         await runTurnPhase(TurnPhase.History, () => ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput))
-      const continuation = this.consumeAgentLoopContinuation()
+      const continuation = this.loadValidAgentLoopContinuation()
       const loadedState = continuation ?? conversationState
       const originalInput = continuation?.originalInput || ownerInput
       const planWidgetIdValue =
@@ -602,6 +602,7 @@ export class ReActLLMDuty extends LLMDuty {
             '<clarification_response>',
             ownerInput,
             '</clarification_response>',
+            '<resumed_task>Continue from saved task evidence and completed actions. Browser/device observations and connection facts are historical; refresh live state before new interactions. Do not repeat completed writes merely because the task was paused.</resumed_task>',
             connectionContext
           ]
             .filter(Boolean)
@@ -628,8 +629,8 @@ export class ReActLLMDuty extends LLMDuty {
           getLLMProviderName()
       )
 
-      // Store findings and queued sources together so a restart can resume
-      // inspection without repeating pages that already have validated notes.
+      // Keep settled tool results and findings together so resumption does not
+      // repeat completed actions or pages that already have validated notes.
       const saveCheckpoint = (
         state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>,
         reason: string
@@ -846,7 +847,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.reportProgressEvent({ type: 'reasoning_summary', summary: message })
           await this.emitProgress(message, this.answerStream.finish())
         },
-        onInspectionCheckpoint: (state) => saveCheckpoint(state, 'Image inspection is in progress.'),
+        onCheckpoint: (state) => saveCheckpoint(state, 'The task is in progress.'),
         onPlanUpdated: (steps) => {
           trackedSteps = steps.map((step) => ({ ...step }))
           emitPlanWidget(
@@ -894,7 +895,6 @@ export class ReActLLMDuty extends LLMDuty {
       if (result.intent !== 'answer' && result.intent !== 'cancelled') {
         saveCheckpoint({ transcript: result.transcript, trackedSteps, executionHistory }, result.answer)
       } else {
-        ReActLLMDuty.sessionState.getContinuationStore().save(null)
         await ReActLLMDuty.historyManager.saveConversationState(
           {
             transcript: retainRecentToolImages(result.transcript),
@@ -909,6 +909,7 @@ export class ReActLLMDuty extends LLMDuty {
           },
           StringHelper.normalizeUserFacingText(result.answer)
         )
+        ReActLLMDuty.sessionState.getContinuationStore().save(null)
       }
 
       this.signal?.throwIfAborted()
@@ -916,6 +917,9 @@ export class ReActLLMDuty extends LLMDuty {
     } catch (error) {
       this.answerStream.discard()
       this.responseTraceCollector.interrupt()
+      if (this.signal?.aborted || agentTurn?.signal.aborted) {
+        ReActLLMDuty.sessionState.getContinuationStore().save(null)
+      }
       this.signal?.throwIfAborted()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${String(error)}`)
@@ -1126,16 +1130,6 @@ export class ReActLLMDuty extends LLMDuty {
     ReActLLMDuty.sessionState.getContinuationStore().save(state)
   }
 
-  private consumeAgentLoopContinuation(): AgentLoopContinuationState | null {
-    const state = this.loadValidAgentLoopContinuation()
-    if (!state) {
-      return null
-    }
-
-    ReActLLMDuty.sessionState.getContinuationStore().save(null)
-    return state
-  }
-
   // ---------------------------------------------------------------------------
   // LLM calling helpers
   // ---------------------------------------------------------------------------
@@ -1248,6 +1242,7 @@ export class ReActLLMDuty extends LLMDuty {
       isCompletionReviewRetry?: boolean
       completionReviewIntent?: 'answer' | 'clarification'
       isContextRecoveryAttempt?: boolean
+      isStallRecoveryAttempt?: boolean
       isImageInspection?: boolean
       hasPendingImages?: boolean
     },
@@ -1265,11 +1260,22 @@ export class ReActLLMDuty extends LLMDuty {
     this.runBudget?.throwIfExpired()
     const executionSignal = this.getExecutionSignal()
     executionSignal?.throwIfAborted()
-    if (options.isContextRecoveryAttempt) {
+    if (options.isContextRecoveryAttempt || options.isStallRecoveryAttempt) {
       // An opaque window can itself exceed the wire budget. Rebuild from its
       // saved sources rather than carrying the same window into recovery.
       const sources = restoreCompactionSources(transcript, null)
       transcript.splice(0, transcript.length, ...sources)
+    }
+    if (options.isStallRecoveryAttempt) {
+      // Recovery must not depend on another summary request to the stalled
+      // model. Exact results remain in execution history and tool artifacts.
+      const compacted = await buildAgentContinuationTranscript(
+        transcript,
+        async () => null,
+        checkpointInput,
+        true
+      )
+      transcript.splice(0, transcript.length, ...compacted)
     }
     if (transcript.some((message) =>
       message.role === 'assistant' && message.compactionContext
@@ -1301,7 +1307,8 @@ export class ReActLLMDuty extends LLMDuty {
         : [])
     ].join('\n\n')
     const providerName = getLLMProviderName()
-    if (providerName === LLMProviders.OpenAI && options.isContextRecoveryAttempt) {
+    if (providerName === LLMProviders.OpenAI &&
+      (options.isContextRecoveryAttempt || options.isStallRecoveryAttempt)) {
       this.automaticCompactionFailed = true
     }
     const nativeContextWindowTokens = providerName === LLMProviders.LlamaCPP
@@ -1312,7 +1319,7 @@ export class ReActLLMDuty extends LLMDuty {
       providerName === LLMProviders.OpenAI &&
       !this.automaticCompactionFailed && !options.hasPendingImages
     )
-    const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
+    const contextCompactionTriggerTokens = options.isContextRecoveryAttempt || options.isStallRecoveryAttempt
       ? nativeContextWindowTokens
         ? Math.floor(nativeContextWindowTokens * AGENT_CONTEXT_RECOVERY_BUDGET_RATIO)
         : resolveAgentContextRecoveryTriggerTokens(providerName)
@@ -1614,7 +1621,7 @@ export class ReActLLMDuty extends LLMDuty {
     startWaitDiagnostics()
 
     const isFinishingCall = options.isCompletionReview ||
-      options.isFinalizationAttempt || this.runBudget?.isFinishing
+      options.isFinalizationAttempt || options.isStallRecoveryAttempt || this.runBudget?.isFinishing
     const remainingMs = this.runBudget?.remainingMs
     // Operational reasoning gets the same initial wait advertised by the loop.
     const inferenceLimit = isPrivateResponse
@@ -1653,7 +1660,9 @@ export class ReActLLMDuty extends LLMDuty {
         timeout: this.runBudget?.capTimeout(inferenceTimeout) ?? inferenceTimeout,
         // Keep provider compatibility retries before the finishing reserve;
         // the shared cancellation signal still caps the entire request.
-        maxRetries: this.runBudget?.isFinishing ? 0 : AGENT_TIMEOUT_MAX_RETRIES,
+        maxRetries: this.runBudget?.isFinishing || options.isStallRecoveryAttempt
+          ? 0
+          : AGENT_TIMEOUT_MAX_RETRIES,
         getRetryTimeout: (timeoutMs): number => {
           const remaining = this.runBudget?.remainingMs
 
@@ -1662,6 +1671,9 @@ export class ReActLLMDuty extends LLMDuty {
             : Math.min(timeoutMs, Math.max(0, remaining - (this.runBudget?.finishingReserveMs ?? 0)))
         },
         ...(isFinishingCall ? { remoteProviderErrorRetries: 0, connectionErrorRetries: 0 } : {}),
+        ...(options.isStallRecoveryAttempt && providerName === LLMProviders.OpenAI
+          ? { responseTransport: 'http' as const }
+          : {}),
         // This loop executes local tools only after the whole response succeeds.
         retryInterruptedResponse: true,
         onConnectionRetry: async ({ attempt, maxRetries, delayMs, failureMessage }): Promise<void> => {

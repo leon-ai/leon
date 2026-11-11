@@ -884,6 +884,104 @@ describe('continuous agent loop', () => {
     })
   })
 
+  it.each([true, false])('bounds stall recovery while preserving completed actions (recovers: %s)', async (recovers) => {
+    const timeout = new AgentModelResponseTimeoutError({
+      providerEventCount: 3, providerCompleted: false, elapsedMs: 90_000,
+      reasoningOnly: true, replaySafe: true, retryReason: ProviderRetryReason.Exhausted
+    })
+    const executeFunction = vi.fn().mockResolvedValue({
+      execution: { function: callable.qualifiedName, status: 'success', observation: 'Receipt saved: release-42.' }
+    })
+    const checkpoints: unknown[] = []
+    const onCheckpoint = vi.fn((state) => {
+      checkpoints.push(structuredClone(state))
+    })
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [toolCall('save-receipt', CALLABLE_TOOL_NAME, { query: 'release' })] })
+      .mockRejectedValueOnce(timeout)
+      .mockImplementationOnce(async (messages, _tools, options) => {
+        expect(options).toMatchObject({ isRecoveryAttempt: true, isStallRecoveryAttempt: true })
+        expect(messages.some((message: AgentToolTranscriptMessage) => message.content.includes('release-42'))).toBe(true)
+        expect(onCheckpoint).toHaveBeenCalledOnce()
+        if (!recovers) {
+          throw timeout
+        }
+
+        return { textContent: 'Receipt saved: release-42.' }
+      })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The receipt is verified.' }) })
+
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Save the release receipt.' }], catalog: createCatalog(),
+      callModel, executeFunction, onCheckpoint, loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe(recovers ? 'answer' : 'error')
+    expect(callModel).toHaveBeenCalledTimes(recovers ? 4 : 3)
+    expect(executeFunction).toHaveBeenCalledOnce()
+    expect(result.executionHistory).toHaveLength(1)
+    expect(result.executionHistory[0]?.observation).toContain('release-42')
+    expect(checkpoints[0]).toMatchObject({
+      transcript: expect.arrayContaining([expect.objectContaining({ role: 'tool', content: 'Receipt saved: release-42.' })])
+    })
+  })
+
+  it.each([
+    { reasoningOnly: false, replaySafe: true, providerCompleted: false },
+    { reasoningOnly: true, replaySafe: false, providerCompleted: false },
+    { reasoningOnly: true, replaySafe: true, providerCompleted: true }
+  ])('does not replay a stall without safe unfinished reasoning: %j', async (evidence) => {
+    const callModel = vi.fn().mockRejectedValue(new AgentModelResponseTimeoutError({
+      providerEventCount: 3, elapsedMs: 90_000, retryReason: ProviderRetryReason.Exhausted,
+      ...evidence
+    }))
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [], catalog: createCatalog(), callModel,
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('error')
+    expect(callModel).toHaveBeenCalledOnce()
+  })
+
+  it.each(['cancellation', 'deadline'])('honors %s before dispatching stall recovery', async (stop) => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const budget = new AgentRunBudget(Date.now() + 120_000)
+    const owner = new AbortController()
+    const cancellation = new Error('Stopped by the owner.')
+    const callModel = vi.fn().mockRejectedValue(new AgentModelResponseTimeoutError({
+      providerEventCount: 3, providerCompleted: false, elapsedMs: 90_000,
+      reasoningOnly: true, replaySafe: true, retryReason: ProviderRetryReason.Exhausted
+    }))
+
+    try {
+      const pending = runAgentLoopWithCompletionReview({
+        transcript: [], catalog: createCatalog(), callModel, runBudget: budget, signal: owner.signal,
+        executeFunction: vi.fn(), loadAgentSkill: async () => null,
+        onProgressMessage: () => {
+          if (stop === 'cancellation') {
+            owner.abort(cancellation)
+          } else {
+            clock.mockReturnValue(120_000)
+          }
+        }
+      })
+
+      if (stop === 'cancellation') {
+        await expect(pending).rejects.toBe(cancellation)
+      } else {
+        expect(await pending).toMatchObject({
+          intent: 'error', answer: expect.stringContaining('progress is saved')
+        })
+        expect(budget.isExpired).toBe(true)
+      }
+      expect(callModel).toHaveBeenCalledOnce()
+    } finally {
+      budget.dispose()
+      clock.mockRestore()
+    }
+  })
+
   it.each([
     { diagnostics: {}, explanation: 'The connection to my model provider was interrupted before I could finish.' },
     {
@@ -966,7 +1064,7 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoop({
       transcript, catalog: createCatalog(), executeFunction,
       loadAgentSkill: async () => null,
-      onInspectionCheckpoint: (state) => {
+      onCheckpoint: (state) => {
         checkpoints.push(state.transcript.flatMap((message) =>
           message.role === 'assistant' ? [] : message.files ?? []).length)
       },
@@ -4653,7 +4751,7 @@ describe('continuous agent loop', () => {
     )
   })
 
-  it('persists a resumable transcript with a bounded lifetime', () => {
+  it('persists the task evidence and catalog needed for resumption', () => {
     const state = createAgentLoopContinuationState({
       originalInput: 'Send the message.',
       clarificationQuestion: 'Which recipient?',
@@ -6045,6 +6143,80 @@ describe('model response status', () => {
     finish({ output: 'Late result' })
     expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledTimes(count)
     expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('recovers repeated reasoning stalls with smaller evidence over HTTP and completes review', async () => {
+    vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
+      reasoning: 'high', speed: 'fast'
+    })
+    const attempts: { params: CompletionParams, prompt: string }[] = []
+    const runChatCompletion = vi.fn((history, params: CompletionParams) => {
+      attempts.push({ params, prompt: JSON.stringify(history) })
+      if (attempts.length <= 2) {
+        params.onStreamEvent?.({ type: 'reasoning-start' })
+        params.onReasoningToken?.('Checking saved evidence.')
+        params.onStreamEvent?.({ type: 'reasoning-end' })
+        return new Promise((_resolve, reject) => {
+          params.signal?.addEventListener('abort', () => reject(params.signal?.reason), { once: true })
+        })
+      }
+
+      const content = params.toolChoice === 'none'
+        ? JSON.stringify({ status: 'complete', reason: 'The saved receipt is reported.' })
+        : 'The saved receipt is release-42.'
+      params.onToken?.(content)
+      params.onStreamEvent?.({ type: 'finish' })
+      return Promise.resolve({ data: { choices: [{ message: { content }, finish_reason: 'stop' }] } })
+    })
+    coreMocks.prompt.mockImplementation((history, params) => runCompletionAttempt(
+      { modelName: 'test-model', runChatCompletion }, LLMProviders.OpenAI, history,
+      { ...params, data: params.data ?? null, remoteProviderErrorRetries: params.remoteProviderErrorRetries ?? 3 } as PreparedCompletionParams,
+      'recovery-test', (retryParams) => coreMocks.prompt(history, retryParams), vi.fn()
+    ))
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Report the saved receipt.' }
+    ]
+    for (let index = 0; index < 24; index += 1) {
+      transcript.push(
+        { role: 'assistant', content: '', toolCalls: [toolCall(`history-${index}`, CALLABLE_TOOL_NAME, { query: `source-${index}` })] },
+        { role: 'tool', toolCallId: `history-${index}`, toolName: CALLABLE_TOOL_NAME, content: `Historical evidence ${index}: ${'details '.repeat(300)}` }
+      )
+    }
+    transcript.push(
+      { role: 'assistant', content: '', toolCalls: [toolCall('saved', CALLABLE_TOOL_NAME, { query: 'release' })] },
+      { role: 'tool', toolCallId: 'saved', toolName: CALLABLE_TOOL_NAME, content: 'Receipt saved: release-42.' }
+    )
+    const executionHistory = [{
+      function: callable.qualifiedName, status: 'success', observation: 'Receipt saved: release-42.'
+    }]
+    const duty = new ReActLLMDuty({ input: 'Report the saved receipt.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const executeFunction = vi.fn()
+    const pending = runAgentLoopWithCompletionReview({
+      transcript, catalog: createCatalog(), initialExecutionHistory: executionHistory,
+      executeFunction, loadAgentSkill: async () => null,
+      callModel: (messages, tools, options) => duty['callAgentModel'](
+        messages, 'Follow the request.', tools, options, {
+          originalInput: 'Report the saved receipt.', trackedSteps: [], executionHistory,
+          loadedToolkitIds: [], activeSkillId: null
+        }
+      )
+    })
+    await vi.advanceTimersByTimeAsync(180_001)
+    const result = await pending
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toContain('release-42')
+    expect(attempts).toHaveLength(4)
+    expect(attempts[2]?.params).toMatchObject({
+      responseTransport: 'http', reasoningEffort: 'high', maxRetries: 0,
+      remoteProviderErrorRetries: 0, connectionErrorRetries: 0, disableContextCompaction: true
+    })
+    expect(attempts[2]!.prompt.length).toBeLessThan(attempts[1]!.prompt.length)
+    expect(attempts[2]!.prompt).toContain('release-42')
+    expect(executeFunction).not.toHaveBeenCalled()
+    expect(attempts.slice(0, 2).every(({ params }) => params.signal?.aborted)).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
   })
 

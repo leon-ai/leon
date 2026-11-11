@@ -14,6 +14,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import {
   CompletionFailureKind,
+  ProviderRetryReason,
   type AgentToolTranscriptMessage,
   type ProviderReasoningItem,
   type ProviderMessageMetadata,
@@ -391,6 +392,7 @@ interface AgentModelCallOptions {
   completionReviewIntent?: 'answer' | 'clarification'
   requiresPlanReconciliation?: boolean
   isContextRecoveryAttempt?: boolean
+  isStallRecoveryAttempt?: boolean
   isImageInspection?: boolean
   hasPendingImages?: boolean
   elapsedMs?: number
@@ -427,7 +429,7 @@ export interface AgentLoopParams {
    * Settles previews with the result of a call handled without tool dispatch.
    */
   onToolCallSkipped?: (toolCallId: string, reason: string) => void
-  onInspectionCheckpoint?: (
+  onCheckpoint?: (
     state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>
   ) => Promise<void> | void
   drainOwnerMessages?: () => Promise<AgentToolTranscriptMessage[]>
@@ -969,6 +971,7 @@ export async function runAgentLoop(
   const mainIterations = iterationLimit - finishingIterations
   let hasUsedOutputRecovery = false
   let hasUsedContextRecovery = false
+  let hasUsedStallRecovery = false
   let hasOwnerUpdates = false
   const lastQueuedSource = transcript.findLastIndex((message) =>
     message.role !== 'assistant' && message.files?.some((file) => file.inspectionPending)
@@ -1017,6 +1020,7 @@ export async function runAgentLoop(
     let isImageInspection = false
     let isRecoveryAttempt = false
     let isOutputRecoveryAttempt = false
+    let isStallRecoveryAttempt = false
     // Once a provider needs the smaller context target, keep that target for
     // the rest of the run instead of allowing the prompt to grow back.
     let isContextRecoveryAttempt = hasUsedContextRecovery
@@ -1058,6 +1062,7 @@ export async function runAgentLoop(
             ...(imageBatch ? { isImageInspection, hasPendingImages: true } : {}),
             ...(remindPlan ? { requiresPlanReconciliation: true } : {}),
             ...(isOutputRecoveryAttempt ? { isOutputRecoveryAttempt: true } : {}),
+            ...(isStallRecoveryAttempt ? { isStallRecoveryAttempt: true } : {}),
             ...(isContextRecoveryAttempt
               ? { isContextRecoveryAttempt: true }
               : {})
@@ -1078,6 +1083,22 @@ export async function runAgentLoop(
         }
 
         if (error instanceof AgentModelResponseTimeoutError) {
+          if (!hasUsedStallRecovery && !params.runBudget?.isFinishing &&
+            error.diagnostics?.reasoningOnly === true &&
+            error.diagnostics.replaySafe === true &&
+            !error.diagnostics.providerCompleted &&
+            error.diagnostics.retryReason === ProviderRetryReason.Exhausted) {
+            // Replaying the same stalled request has already failed. Rebuild
+            // from retained evidence once without replaying completed actions.
+            hasUsedStallRecovery = true
+            isRecoveryAttempt = true
+            isStallRecoveryAttempt = true
+            await params.onProgressMessage?.(
+              'I am recovering from the model stall using compacted evidence and a fresh request.'
+            )
+            continue
+          }
+
           // An operational stall may consume the work budget. Use the existing
           // reserve once to deliver from evidence without renewing the deadline.
           if (params.runBudget?.isFinishing && !hasEnteredFinishing) {
@@ -1092,7 +1113,7 @@ export async function runAgentLoop(
         if (
           error instanceof AgentModelProviderError &&
           error.canRetryWithCompaction &&
-          !hasUsedContextRecovery
+          !hasUsedContextRecovery && !isStallRecoveryAttempt
         ) {
           // Context pressure gets one smaller retry inside the same loop turn.
           hasUsedContextRecovery = true
@@ -1138,7 +1159,7 @@ export async function runAgentLoop(
         Boolean(modelResult.textContent?.trim()) ||
         Boolean(modelResult.toolCalls?.length)
       const shouldRecover = modelResult.isTruncated || !hasUsableOutput
-      if (!shouldRecover || hasUsedOutputRecovery || params.runBudget?.isFinishing) {
+      if (!shouldRecover || hasUsedOutputRecovery || isStallRecoveryAttempt || params.runBudget?.isFinishing) {
         break
       }
 
@@ -1167,7 +1188,7 @@ export async function runAgentLoop(
         )
       }
 
-      await params.onInspectionCheckpoint?.({ transcript, executionHistory, trackedSteps })
+      await params.onCheckpoint?.({ transcript, executionHistory, trackedSteps })
       await params.onProgressMessage?.(
         `Saved findings for this image batch. Images inspected: ${imageBatch.entries.length}; remaining: ${imageBatch.remainingImages}.`
       )
@@ -1216,7 +1237,7 @@ export async function runAgentLoop(
         }
 
         const canSkipReview = iteration === 1 && !hasOwnerUpdates &&
-          !hasUsedOutputRecovery && !hasUsedContextRecovery && !hasEnteredFinishing &&
+          !hasUsedOutputRecovery && !hasUsedContextRecovery && !hasUsedStallRecovery && !hasEnteredFinishing &&
           params.initialExecutionHistory === undefined &&
           params.initialTrackedSteps === undefined && trackedSteps.length === 0 &&
           isCompleteOptionalLookup(params.catalog, executionHistory)
@@ -1409,6 +1430,11 @@ export async function runAgentLoop(
     else if (trackedSteps.length > 0 && toolCalls.some((call) =>
       params.catalog.functionsByToolName.has(call.function.name))) {
       operationalTurnsSincePlanUpdate += 1
+    }
+
+    if (terminalSignal?.intent !== 'cancelled') {
+      // Persist only settled exchanges, before another inference can fail.
+      await params.onCheckpoint?.({ transcript, executionHistory, trackedSteps })
     }
 
     if (params.runBudget?.isExpired && terminalSignal?.intent !== 'cancelled') {
