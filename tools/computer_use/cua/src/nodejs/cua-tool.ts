@@ -6,7 +6,8 @@ import { CuaRuntime } from './lib/cua-runtime'
 import { CuaDesktopSetup } from './lib/cua/cua-desktop-setup'
 import { createCuaDriverAdapter } from './lib/cua/cua-driver-adapter'
 
-const GNOME_RESOURCE = 'gnome_wayland'
+// Resource caches use filenames, so each helper revision needs a distinct key.
+const GNOME_RESOURCE = 'gnome_wayland_v12'
 
 /**
  * Owns desktop setup, native sessions and Cua actions inside the standard tool runtime.
@@ -291,7 +292,8 @@ export default class CuaTool extends Tool {
     y?: unknown,
     settle_ms?: unknown,
     mode?: unknown,
-    method?: unknown
+    method?: unknown,
+    delay_ms?: unknown
   ): Promise<Record<string, unknown>> {
     return this.invoke('type_text', {
       capture_after,
@@ -306,7 +308,8 @@ export default class CuaTool extends Tool {
       y,
       settle_ms,
       mode,
-      method
+      method,
+      delay_ms
     })
   }
 
