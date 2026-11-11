@@ -427,7 +427,7 @@ export interface AgentLoopParams {
    * Settles previews with the result of a call handled without tool dispatch.
    */
   onToolCallSkipped?: (toolCallId: string, reason: string) => void
-  onInspectionCheckpoint?: (
+  onCheckpoint?: (
     state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>
   ) => Promise<void> | void
   drainOwnerMessages?: () => Promise<AgentToolTranscriptMessage[]>
@@ -1167,7 +1167,7 @@ export async function runAgentLoop(
         )
       }
 
-      await params.onInspectionCheckpoint?.({ transcript, executionHistory, trackedSteps })
+      await params.onCheckpoint?.({ transcript, executionHistory, trackedSteps })
       await params.onProgressMessage?.(
         `Saved findings for this image batch. Images inspected: ${imageBatch.entries.length}; remaining: ${imageBatch.remainingImages}.`
       )
@@ -1409,6 +1409,11 @@ export async function runAgentLoop(
     else if (trackedSteps.length > 0 && toolCalls.some((call) =>
       params.catalog.functionsByToolName.has(call.function.name))) {
       operationalTurnsSincePlanUpdate += 1
+    }
+
+    if (terminalSignal?.intent !== 'cancelled') {
+      // Persist only settled exchanges, before another inference can fail.
+      await params.onCheckpoint?.({ transcript, executionHistory, trackedSteps })
     }
 
     if (params.runBudget?.isExpired && terminalSignal?.intent !== 'cancelled') {

@@ -76,6 +76,25 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it('retains unfinished task evidence across extended owner waits', () => {
+    const state = createAgentLoopContinuationState({
+      ...createCheckpointInput(),
+      transcript: [{ role: 'user', content: 'Prepare the release.' }],
+      clarificationQuestion: 'Which registry?',
+      planWidgetId: 'release-plan'
+    })
+    const later = state.createdAt + 7 * 24 * 60 * 60 * 1_000
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later)
+
+    try {
+      expect(isAgentLoopContinuationStateValid(state)).toBe(true)
+      expect(state.executionHistory).toEqual(createCheckpointInput().executionHistory)
+      expect(isAgentLoopContinuationStateValid({ ...state, version: -1 })).toBe(false)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('summarizes accumulated inspection findings while preserving the queued source exchange', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Compare the photo collection.' }

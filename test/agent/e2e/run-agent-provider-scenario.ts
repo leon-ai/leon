@@ -537,6 +537,12 @@ async function main(): Promise<void> {
   TOOL_EXECUTOR.executeTool = async (
     input: ToolExecutionInput
   ): Promise<ToolExecutionResult> => {
+    // Retained dispatch re-enters the executor for native work. Record the
+    // originating agent call once rather than counting that internal handoff.
+    if (input.retainExecution === false) {
+      return originalExecuteTool(input)
+    }
+
     const toolResult = realScenario?.toolResult?.(input) ?? await originalExecuteTool(input)
     const toolName = `${input.toolkitId}.${input.toolId}.${input.functionName || 'unknown'}`
     const serializedInput = input.toolInput || ''
@@ -675,6 +681,8 @@ async function main(): Promise<void> {
       data: { input }
     })
 
+    const { CONVERSATION_SESSION_MANAGER } = await import('../../../server/src/core/session-manager')
+    CONVERSATION_SESSION_MANAGER.createSession(testRunId)
     await CONVERSATION_LOGGER.push(
       createConversationLoggerRecord('owner', input)
     )

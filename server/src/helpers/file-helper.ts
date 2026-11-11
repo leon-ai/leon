@@ -130,6 +130,23 @@ const FILE_EXTENSION_REMIX_ICON_NAMES = new Map<string, string>([
 
 export class FileHelper {
   /**
+   * Publishes synchronous runtime checkpoints without exposing partial JSON.
+   */
+  public static writeAtomicJSONSync(filename: string, value: unknown): void {
+    const temporary = `${filename}.${randomUUID()}.tmp`
+    fs.mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 })
+
+    try {
+      fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, {
+        flag: 'wx', mode: 0o600
+      })
+      fs.renameSync(temporary, filename)
+    } finally {
+      fs.rmSync(temporary, { force: true })
+    }
+  }
+
+  /**
    * Publishes complete profile state atomically, optionally without replacing a
    * file created concurrently. Partial writes never become visible to readers.
    */

@@ -966,7 +966,7 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoop({
       transcript, catalog: createCatalog(), executeFunction,
       loadAgentSkill: async () => null,
-      onInspectionCheckpoint: (state) => {
+      onCheckpoint: (state) => {
         checkpoints.push(state.transcript.flatMap((message) =>
           message.role === 'assistant' ? [] : message.files ?? []).length)
       },
@@ -4653,7 +4653,7 @@ describe('continuous agent loop', () => {
     )
   })
 
-  it('persists a resumable transcript with a bounded lifetime', () => {
+  it('persists the task evidence and catalog needed for resumption', () => {
     const state = createAgentLoopContinuationState({
       originalInput: 'Send the message.',
       clarificationQuestion: 'Which recipient?',

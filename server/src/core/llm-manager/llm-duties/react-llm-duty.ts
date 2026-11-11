@@ -413,7 +413,7 @@ export class ReActLLMDuty extends LLMDuty {
       const ownerInput = this.getInputAsText(this.input)
       const { messageLogs: history, conversationState } =
         await runTurnPhase(TurnPhase.History, () => ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput))
-      const continuation = this.consumeAgentLoopContinuation()
+      const continuation = this.loadValidAgentLoopContinuation()
       const loadedState = continuation ?? conversationState
       const originalInput = continuation?.originalInput || ownerInput
       const planWidgetIdValue =
@@ -602,6 +602,7 @@ export class ReActLLMDuty extends LLMDuty {
             '<clarification_response>',
             ownerInput,
             '</clarification_response>',
+            '<resumed_task>Continue from saved task evidence and completed actions. Browser/device observations and connection facts are historical; refresh live state before new interactions. Do not repeat completed writes merely because the task was paused.</resumed_task>',
             connectionContext
           ]
             .filter(Boolean)
@@ -628,8 +629,8 @@ export class ReActLLMDuty extends LLMDuty {
           getLLMProviderName()
       )
 
-      // Store findings and queued sources together so a restart can resume
-      // inspection without repeating pages that already have validated notes.
+      // Keep settled tool results and findings together so resumption does not
+      // repeat completed actions or pages that already have validated notes.
       const saveCheckpoint = (
         state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>,
         reason: string
@@ -846,7 +847,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.reportProgressEvent({ type: 'reasoning_summary', summary: message })
           await this.emitProgress(message, this.answerStream.finish())
         },
-        onInspectionCheckpoint: (state) => saveCheckpoint(state, 'Image inspection is in progress.'),
+        onCheckpoint: (state) => saveCheckpoint(state, 'The task is in progress.'),
         onPlanUpdated: (steps) => {
           trackedSteps = steps.map((step) => ({ ...step }))
           emitPlanWidget(
@@ -894,7 +895,6 @@ export class ReActLLMDuty extends LLMDuty {
       if (result.intent !== 'answer' && result.intent !== 'cancelled') {
         saveCheckpoint({ transcript: result.transcript, trackedSteps, executionHistory }, result.answer)
       } else {
-        ReActLLMDuty.sessionState.getContinuationStore().save(null)
         await ReActLLMDuty.historyManager.saveConversationState(
           {
             transcript: retainRecentToolImages(result.transcript),
@@ -909,6 +909,7 @@ export class ReActLLMDuty extends LLMDuty {
           },
           StringHelper.normalizeUserFacingText(result.answer)
         )
+        ReActLLMDuty.sessionState.getContinuationStore().save(null)
       }
 
       this.signal?.throwIfAborted()
@@ -916,6 +917,9 @@ export class ReActLLMDuty extends LLMDuty {
     } catch (error) {
       this.answerStream.discard()
       this.responseTraceCollector.interrupt()
+      if (this.signal?.aborted || agentTurn?.signal.aborted) {
+        ReActLLMDuty.sessionState.getContinuationStore().save(null)
+      }
       this.signal?.throwIfAborted()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${String(error)}`)
@@ -1124,16 +1128,6 @@ export class ReActLLMDuty extends LLMDuty {
 
   private saveAgentLoopContinuation(state: AgentLoopContinuationState): void {
     ReActLLMDuty.sessionState.getContinuationStore().save(state)
-  }
-
-  private consumeAgentLoopContinuation(): AgentLoopContinuationState | null {
-    const state = this.loadValidAgentLoopContinuation()
-    if (!state) {
-      return null
-    }
-
-    ReActLLMDuty.sessionState.getContinuationStore().save(null)
-    return state
   }
 
   // ---------------------------------------------------------------------------

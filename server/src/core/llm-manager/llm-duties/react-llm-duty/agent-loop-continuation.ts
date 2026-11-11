@@ -10,7 +10,6 @@ import {
 import { parseToolCallArguments } from './agent-utils'
 
 const AGENT_CONTINUATION_VERSION = 5
-const AGENT_CONTINUATION_TTL_MS = 30 * 60 * 1_000
 const AGENT_CONTINUITY_EXECUTION_LIMIT = 6
 const AGENT_CONTINUITY_ARTIFACT_LIMIT = 16
 const AGENT_CONTINUITY_OBJECTIVE_MAX_CHARS = 1_200
@@ -308,7 +307,8 @@ export function createAgentLoopContinuationState(
 }
 
 /**
- * Rejects stale or incompatible continuation payloads before resuming.
+ * Rejects incompatible checkpoints while retaining unfinished work across waits.
+ * Live observations must be refreshed by the resumed task before acting on them.
  */
 export function isAgentLoopContinuationStateValid(
   state: AgentLoopContinuationState
@@ -316,7 +316,6 @@ export function isAgentLoopContinuationStateValid(
   return (
     state.version === AGENT_CONTINUATION_VERSION &&
     Number.isFinite(state.createdAt) &&
-    Date.now() - state.createdAt <= AGENT_CONTINUATION_TTL_MS &&
     typeof state.originalInput === 'string' &&
     typeof state.clarificationQuestion === 'string' &&
     typeof state.planWidgetId === 'string' &&
