@@ -269,6 +269,19 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
       const paddingTop = Number.parseFloat(style.paddingTop)
       const paddingBottom = Number.parseFloat(style.paddingBottom)
       const isMultiline = nativeField instanceof HTMLTextAreaElement
+      // Native single-line fields can include padding in their client geometry.
+      // Measure their border box so the mirror applies padding only once;
+      // textareas retain client geometry to exclude their scrollbars.
+      const viewportLeft = isMultiline
+        ? nativeField.clientLeft : Number.parseFloat(style.borderLeftWidth)
+      const viewportTop = isMultiline
+        ? nativeField.clientTop : Number.parseFloat(style.borderTopWidth)
+      const viewportWidth = isMultiline
+        ? nativeField.clientWidth
+        : nativeField.offsetWidth - viewportLeft - Number.parseFloat(style.borderRightWidth)
+      const viewportHeight = isMultiline
+        ? nativeField.clientHeight
+        : nativeField.offsetHeight - viewportTop - Number.parseFloat(style.borderBottomWidth)
       const scrollDeltaX = previousScrollLeft - nativeField.scrollLeft
       const scrollDeltaY = previousScrollTop - nativeField.scrollTop
 
@@ -298,11 +311,11 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
 
       caretWidth = fontSize * CARET_WIDTH_EM
       layer.style.setProperty('--input-caret-width', `${caretWidth}px`)
-      layer.style.left = `${nativeField.offsetLeft + nativeField.clientLeft}px`
-      layer.style.top = `${nativeField.offsetTop + nativeField.clientTop}px`
-      layer.style.width = `${nativeField.clientWidth}px`
-      layer.style.height = `${nativeField.clientHeight}px`
-      text.style.width = `${nativeField.clientWidth}px`
+      layer.style.left = `${nativeField.offsetLeft + viewportLeft}px`
+      layer.style.top = `${nativeField.offsetTop + viewportTop}px`
+      layer.style.width = `${viewportWidth}px`
+      layer.style.height = `${viewportHeight}px`
+      text.style.width = `${viewportWidth}px`
       text.style.padding = style.padding
       text.style.whiteSpace = isMultiline && nativeField.wrap !== 'off'
         ? 'pre-wrap' : 'pre'
@@ -313,7 +326,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
         // Single-line native fields vertically center their text inside padding.
         text.style.paddingTop = `${paddingTop + Math.max(
           0,
-          (nativeField.clientHeight - paddingTop - paddingBottom - lineHeight) / 2
+          (viewportHeight - paddingTop - paddingBottom - lineHeight) / 2
         )}px`
       }
 
