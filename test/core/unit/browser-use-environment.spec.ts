@@ -7,7 +7,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
-import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from '@@/tools/browser_use/browser-use/src/nodejs/lib/browser-use-environment'
+import {
+  BROWSER_USE_DAEMON_FILE_STEM,
+  describeBrowserUseReadinessFailure,
+  prepareBrowserUseEnvironment
+} from '@@/tools/browser_use/browser-use/src/nodejs/lib/browser-use-environment'
 import { BrowserUseTool } from '@@/tools/browser_use/browser-use/src/nodejs/browser-use-tool'
 
 const directories = new Set<string>()
@@ -55,8 +59,10 @@ it('uses stable private IPC per profile without shortening artifact or log paths
   expect(first['BH_HOME']).toBe(path.join(await fs.realpath(path.dirname(settings)), 'runtime'))
   expect(first['BH_TMP_DIR']).toBe(path.join(first['BH_HOME']!, 'tmp'))
   if (process.platform !== 'win32') {
+    const socketPath = path.join(first['BH_RUNTIME_DIR']!, `${BROWSER_USE_DAEMON_FILE_STEM}.sock`)
+
     expect((await fs.stat(first['BH_RUNTIME_DIR']!)).mode & 0o077).toBe(0)
-    expect(Buffer.byteLength(path.join(first['BH_RUNTIME_DIR']!, 'bu.sock'))).toBeLessThanOrEqual(103)
+    expect(Buffer.byteLength(socketPath)).toBeLessThanOrEqual(103)
   }
 })
 
@@ -68,7 +74,7 @@ it.skipIf(process.platform === 'win32')('binds a real socket even when TMPDIR an
   try {
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
-      server.listen(path.join(env['BH_RUNTIME_DIR']!, 'bu.sock'), resolve)
+      server.listen(path.join(env['BH_RUNTIME_DIR']!, `${BROWSER_USE_DAEMON_FILE_STEM}.sock`), resolve)
     })
     expect(server.listening).toBe(true)
   } finally {
