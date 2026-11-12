@@ -144,6 +144,9 @@ and [enhanced](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.
 
 ## Verification
 
+- When adding or changing Aurora components, widgets, or feed UI, keep the
+  corresponding Aurora preview examples and relevant states in sync. Reuse the
+  real components rather than maintaining preview-only copies.
 - Use Playwright browser E2E flows for web-app behavior, not unit/component tests.
   Keep independent tests fully parallel with bounded workers, isolated contexts/data,
   user-facing locators, and auto-waiting assertions. Exercise normal/reduced motion

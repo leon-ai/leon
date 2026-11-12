@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -23,7 +24,12 @@ export default defineConfig({
   cacheDir: fileURLToPath(new URL('../../../node_modules/.cache/vite-web-previews', import.meta.url)),
   define: { AURORA_CONNECTION_PREVIEWS: JSON.stringify(CONNECTIONS) },
   resolve: {
-    alias: { '@': fileURLToPath(new URL('../../../apps/web/src', import.meta.url)) }
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('../../../apps/web/src', import.meta.url)) },
+      // Use the app's bounded fallback catalog and native Wasm asset for inspectors.
+      { find: /^shiki\/langs$/, replacement: fileURLToPath(new URL('../../../apps/web/src/components/code-view/fallback-languages.ts', import.meta.url)) },
+      { find: /^shiki\/wasm$/, replacement: `${createRequire(import.meta.url).resolve('shiki/onig.wasm')}?init` }
+    ]
   },
   server: { port: 5_174, strictPort: true },
   build: {

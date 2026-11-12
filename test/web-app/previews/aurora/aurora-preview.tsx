@@ -26,12 +26,13 @@ import documentURL from '../../../fixtures/documents/attention-is-all-you-need.p
 import './aurora-preview.sass'
 import { ConnectionsPreview } from './connection-preview'
 
-type GalleryKind = 'component' | 'widget' | 'connection' | 'generated' | 'answer'
+type GalleryKind = 'component' | 'widget' | 'connection' | 'generated' | 'answer' | 'feed'
 type DemoOutcome = 'success' | 'failure' | 'pending'
 
 const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, entry.description])
 const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
+const FeedPreview = lazy(() => import('./feed-preview'))
 const CHOICES = [
   { value: 'quiet', label: 'A quiet morning', description: 'A little room to think.' },
   { value: 'creative', label: 'Something creative', description: 'Try an idea and see where it goes.' },
@@ -302,16 +303,18 @@ function App() {
     </header>
     <div className="gallery-toolbar">
       <nav aria-label="Aurora collection" className="aurora-actions">
-        {(['component', 'widget', 'connection', 'generated', 'answer'] as const).map((value) => <Button key={value}
+        {(['component', 'widget', 'connection', 'generated', 'answer', 'feed'] as const).map((value) => <Button key={value}
           ariaPressed={kind === value} variant={kind === value ? 'secondary' : 'ghost'}
-          onClick={() => setKind(value)}>{value === 'component' ? 'Components' : value === 'widget' ? 'Widgets' : value === 'connection' ? 'Connections' : value === 'generated' ? 'Generated UI' : 'Answer preview'}</Button>)}
+          onClick={() => setKind(value)}>{value === 'component' ? 'Components' : value === 'widget' ? 'Widgets' : value === 'connection' ? 'Connections' : value === 'generated' ? 'Generated UI' : value === 'feed' ? 'Feed' : 'Answer preview'}</Button>)}
       </nav>
-      {kind !== 'answer' && kind !== 'connection' && <AppInput ariaLabel="Find a component or widget" type="search" iconName="search"
+      {kind !== 'answer' && kind !== 'connection' && kind !== 'feed' && <AppInput ariaLabel="Find a component or widget" type="search" iconName="search"
         placeholder="Find something…" value={query} onChange={(event) => setQuery(event.target.value)} />}
     </div>
     <p className="gallery-notice">Interactive local examples. Nothing here is sent to Leon or an AI provider.</p>
     {kind === 'widget' && <p className="gallery-notice">Copy a query into a session to try it with Leon. He chooses the presentation; the result may differ from these examples.</p>}
-    {kind === 'connection' ? <div className={`connections-example${narrow ? ' gallery-narrow' : ''}`}><ConnectionsPreview /></div> : kind === 'answer' ? <section aria-label="Visual answer preview" className={`answer-example${narrow ? ' gallery-narrow' : ''}`}>
+    {kind === 'feed' ? <div className={`feed-example${narrow ? ' gallery-narrow' : ''}`}>
+      <Suspense fallback={<Loader size="sm" label="Opening feed examples…" />}><FeedPreview /></Suspense>
+    </div> : kind === 'connection' ? <div className={`connections-example${narrow ? ' gallery-narrow' : ''}`}><ConnectionsPreview /></div> : kind === 'answer' ? <section aria-label="Visual answer preview" className={`answer-example${narrow ? ' gallery-narrow' : ''}`}>
       <p>A slow Sunday sounds lovely. Here’s a little inspiration for the morning.</p>
       <Artifacts />
       <p>You could make breakfast, then leave a little time for something you enjoy.</p>
