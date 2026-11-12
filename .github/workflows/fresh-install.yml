@@ -28,12 +28,12 @@ jobs:
       # Scheduled workflows are loaded from the default branch, but Leon's
       # integration work lands on develop before it reaches a release branch.
       - name: Check out Leon
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           check-latest: true
@@ -56,7 +56,7 @@ jobs:
 
       - name: Upload installer log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: fresh-install-log
           path: /tmp/leon-fresh-install.log
@@ -74,12 +74,12 @@ jobs:
 
     steps:
       - name: Check out Leon
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           check-latest: true
@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload inference log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: fresh-install-log-${{ matrix.os }}
           path: ${{ runner.temp }}/leon-fresh-inferences.log
