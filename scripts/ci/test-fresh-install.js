@@ -16,6 +16,11 @@ const PNPM_COMMAND = process.platform === 'win32'
 const PNPM_ARGUMENTS_PREFIX = process.platform === 'win32'
   ? ['/d', '/s', '/c', 'pnpm']
   : []
+// POSIX cleanup needs process groups; Windows uses taskkill and attached pipes.
+const PNPM_PROCESS_OPTIONS = {
+  detached: process.platform !== 'win32',
+  windowsHide: true
+}
 const INSTALL_TIMEOUT = 45 * 60 * 1_000
 const REBUILD_TIMEOUT = 15 * 60 * 1_000
 const START_TIMEOUT = 2 * 60 * 1_000
@@ -321,7 +326,7 @@ function runCommand(command, args, environment, timeoutMs) {
   return new Promise((resolve, reject) => {
     let hasSettled = false
     const child = spawn(command, args, {
-      detached: true,
+      ...PNPM_PROCESS_OPTIONS,
       env: environment,
       stdio: ['ignore', 'pipe', 'pipe']
     })
@@ -433,7 +438,7 @@ function smokeTestStart(environment, logPath) {
     let output = ''
     let forceStopTimeout = null
     const child = spawn(PNPM_COMMAND, [...PNPM_ARGUMENTS_PREFIX, 'start'], {
-      detached: true,
+      ...PNPM_PROCESS_OPTIONS,
       env: {
         ...environment,
         LEON_OPEN_BROWSER: 'false'
@@ -476,7 +481,7 @@ function smokeTestStart(environment, logPath) {
           PNPM_COMMAND,
           [...PNPM_ARGUMENTS_PREFIX, 'exec', 'tsx', INFERENCE_SCRIPT, 'run'],
           {
-            detached: true,
+            ...PNPM_PROCESS_OPTIONS,
             env: environment,
             stdio: ['ignore', 'pipe', 'pipe']
           }
