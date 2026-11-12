@@ -84,6 +84,8 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
             fallback={<ToolOutput content={output} label="Tool output" />} />
         ) : (
           <ToolOutput key={tab} content={content}
+            {...(contents.isError || contents.fetchStatus === 'paused' ? { emptyMessage: null }
+              : tab === ToolDetailsTab.Input ? { emptyMessage: 'This tool function does not take input.' } : {})}
             label={tab === ToolDetailsTab.Input ? 'Input JSON' : content?.language === 'markdown' ? 'Output' : 'Output JSON'}
             animationId={`${toolCall.id}:${tab}:details`}
             active={active} loading={contents.isFetching} />

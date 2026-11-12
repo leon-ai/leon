@@ -10,7 +10,8 @@ import { inScenarioWorkspace } from './scenario-fixture'
 export enum ModelFault {
   IncorrectDraft = 'incorrect-draft',
   ContextFailure = 'context-failure',
-  ReasoningStall = 'reasoning-stall'
+  ReasoningStall = 'reasoning-stall',
+  OutputStall = 'output-stall'
 }
 
 interface ModelReply {
@@ -49,11 +50,15 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
         prototype.callAgentModel = async function (...args: Parameters<ModelCall>): Promise<ModelReply | null> {
           const [messages, , , options] = args
           const hasWritten = messages.some((message) => message.role === 'tool' && message.toolName.endsWith('__write'))
-          if (!injected && hasWritten && !options.isCompletionReview && fault === ModelFault.ReasoningStall) {
+          if (!injected && hasWritten && !options.isCompletionReview &&
+            (fault === ModelFault.ReasoningStall || fault === ModelFault.OutputStall)) {
             injected = true
             throw new AgentModelResponseTimeoutError({
               providerEventCount: 3, providerCompleted: false, elapsedMs: 90_000,
-              reasoningOnly: true, replaySafe: true, retryReason: ProviderRetryReason.Exhausted
+              reasoningOnly: fault === ModelFault.ReasoningStall, replaySafe: true,
+              retryReason: fault === ModelFault.ReasoningStall
+                ? ProviderRetryReason.Exhausted
+                : ProviderRetryReason.Output
             })
           }
           if (options.isStallRecoveryAttempt) {
@@ -97,7 +102,7 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
           if (fault === ModelFault.IncorrectDraft) {
             assert.ok(rejections > 0, 'Real review must reject the unsupported draft.')
           }
-          if (fault === ModelFault.ReasoningStall) {
+          if (fault === ModelFault.ReasoningStall || fault === ModelFault.OutputStall) {
             assert.equal(stallRecoveries, 1)
           }
 

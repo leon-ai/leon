@@ -29,6 +29,36 @@ import './leon-message.sass'
 
 const ConnectionSetupCard = lazy(() => import('@/components/connection-setup/connection-setup'))
 
+/**
+ * Collects call-owned widgets outside activity disclosures, including planned calls.
+ */
+function getPreparations(activities: LeonFeedActivity[]): { id: string, preparation: NonNullable<FeedToolCall['preparation']> }[] {
+  const preparations = new Map<string, NonNullable<FeedToolCall['preparation']>>()
+
+  function visit(items: LeonFeedActivity[]): void {
+    for (const activity of items) {
+      const calls = activity.type === 'tools' ? activity.toolCalls
+        : activity.type === 'plan' ? activity.steps.flatMap((step) => step.toolCalls) : []
+
+      for (const call of calls) {
+        if (call.preparation) {
+          preparations.set(call.id, call.preparation)
+        }
+      }
+
+      if (activity.type === 'plan') {
+        for (const step of activity.steps) {
+          visit(step.activities ?? [])
+        }
+      }
+    }
+  }
+
+  visit(activities)
+
+  return Array.from(preparations, ([id, preparation]) => ({ id, preparation }))
+}
+
 interface LeonMessageProps {
   entry: LeonFeedEntry
 }
@@ -313,6 +343,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
   }
   const bonusResponse = entry.bonusResponse
   const activities = entry.activities.map(renderActivity)
+  const preparations = getPreparations(entry.activities)
   const duration = formatToolDuration(entry.durationMs, DurationFormat.Compact)
 
   return (
@@ -328,12 +359,13 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
           {activities.length > 0 ? <div className="leon-message-activities">{activities}</div> : undefined}
         </ProcessGroup>
       ) : activities}
-      {(entry.finalAnswer.trim().length > 0 || entry.answerParts?.length || entry.artifacts?.length || entry.connections?.length) ? (
+      {(preparations.length > 0 || entry.finalAnswer.trim().length > 0 || entry.answerParts?.length || entry.artifacts?.length || entry.connections?.length) ? (
         <FinalAnswer animationId={`${entry.id}:${entry.answerGenerationId ?? 'accepted'}:final-answer`}
           active={entry.status !== FeedTurnStatus.Completed}
           parts={entry.answerParts}
           artifacts={entry.artifacts}
           connections={entry.connections}
+          preparations={preparations}
           timestamp={entry.sentAt} metrics={entry.metrics}
           footer={bonusResponse !== undefined && bonusResponse.trim().length > 0 ? (
             <BonusResponse animationId={`${entry.id}:bonus-response`}>

@@ -33,6 +33,7 @@ export enum ToolRuntimePhase {
 }
 
 export interface ToolRuntimeProgress {
+  downloads?: import('./download-progress').FileDownloadProgress[]
   source: 'log' | 'report'
   message: string
   key?: string

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from threading import Event
 from typing import Any, Callable, Literal, NotRequired, TypedDict
 
@@ -19,6 +20,28 @@ class ToolProgressStream(TypedDict):
     state: Literal["running", "completed", "failed"]
 
 
+class DownloadStatus(str, Enum):
+    """Observed file transfer lifecycle, shared with the Node.js SDK."""
+
+    QUEUED = "queued"
+    DOWNLOADING = "downloading"
+    COMPLETE = "complete"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class FileDownloadProgress(TypedDict):
+    """Measured bytes and remaining time for one uniquely identified file."""
+
+    id: str
+    fileName: str
+    status: DownloadStatus
+    downloadedBytes: int
+    totalBytes: int | None
+    etaMs: float | None
+    error: NotRequired[str]
+
+
 class ToolRuntimeProgress(TypedDict):
     """Progress emitted by a tool during execution."""
 
@@ -29,6 +52,7 @@ class ToolRuntimeProgress(TypedDict):
     stream: NotRequired[ToolProgressStream]
     activity: NotRequired[bool]
     phase: NotRequired[Literal["preparation", "execution"]]
+    downloads: NotRequired[list[FileDownloadProgress]]
 
 
 class ToolTimeoutPolicy(TypedDict, total=False):

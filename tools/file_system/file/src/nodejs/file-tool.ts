@@ -10,6 +10,7 @@ import type { ReusableToolContext } from '@@/bridges/runtime/contracts/tool-runt
 import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
 import { contentHash, patchTextFile, type TextChange, type PatchOptions } from './lib/text-patch'
+import type { DownloadFile } from '@sdk/utils/download'
 
 // Leave room for metadata and JSON escaping in inline tool observations.
 const DEFAULT_MAX_CHARS = 20_000
@@ -17,6 +18,7 @@ const MAX_CHARS = 250_000
 const BINARY_SAMPLE_BYTES = 8_192
 const REPOSITORY_MARKER = '.git'
 const REPOSITORY_INSTRUCTIONS_FILE = 'AGENTS.md'
+const DOWNLOAD_PROTOCOLS = new Set(['http:', 'https:'])
 
 interface RepositoryInstructions extends ReusableToolContext {
   path: string
@@ -62,6 +64,58 @@ export default class FileTool extends Tool {
 
   get description(): string {
     return this.config['description']
+  }
+
+  /**
+   * Downloads declared files with shared progress and exclusive publication.
+   * Staging keeps partial transfers away from task files and preserves collisions.
+   */
+  public async download(files: DownloadFile[]): Promise<Record<string, unknown>> {
+    const downloads = files.map((file) => ({ ...file, path: this.resolvePath(file.path) }))
+    const destinations = new Set<string>()
+
+    for (const file of downloads) {
+      if (!DOWNLOAD_PROTOCOLS.has(new URL(file.url).protocol)) {
+        throw new Error('File downloads require an HTTP or HTTPS URL.')
+      }
+      if (destinations.has(file.path)) {
+        throw new Error('Each download needs a distinct destination path.')
+      }
+      destinations.add(file.path)
+
+      const occupied = await fs.promises.lstat(file.path).then(() => true, (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') {
+          throw error
+        }
+
+        return false
+      })
+      if (occupied) {
+        throw new Error(`The download destination already exists: ${file.path}. Choose an unused path.`)
+      }
+    }
+
+    this.queueDownloads(downloads)
+    const results: { path: string, bytes: number }[] = []
+
+    for (const file of downloads) {
+      this.executionContext?.signal?.throwIfAborted()
+      await fs.promises.mkdir(path.dirname(file.path), { recursive: true })
+      const staging = await fs.promises.mkdtemp(path.join(path.dirname(file.path), '.leon-download-'))
+      const temporary = path.join(staging, path.basename(file.path))
+
+      try {
+        await this.downloadFile(file.url, file.path, temporary)
+        this.executionContext?.signal?.throwIfAborted()
+        // A hard link publishes atomically and fails if another writer won the path.
+        await fs.promises.link(temporary, file.path)
+        results.push({ path: file.path, bytes: (await fs.promises.stat(file.path)).size })
+      } finally {
+        await fs.promises.rm(staging, { recursive: true, force: true })
+      }
+    }
+
+    return { success: true, files: results }
   }
 
   /**

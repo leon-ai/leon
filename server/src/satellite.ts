@@ -207,7 +207,7 @@ async function startSatellite(): Promise<void> {
                 signal: controller.signal,
                 retainedSignal: preparationController.signal,
                 onProgress: (progress) => {
-                  const transport = progress.stream || progress.phase ? socket : socket.volatile
+                  const transport = progress.stream || progress.phase || progress.downloads?.length ? socket : socket.volatile
                   transport.emit(SATELLITE_EVENTS.toolProgress, {
                     invocationId: invocation.invocationId,
                     progress

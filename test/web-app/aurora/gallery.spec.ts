@@ -519,13 +519,17 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     await expect(page.getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible()
     for (const title of ['Multiple choice', 'Form', 'Tool preparation', 'Data table']) {
       const widget = page.getByRole('region', { name: title, exact: true })
-      const footer = widget.locator('.aurora-surface-footer')
-      await expect(footer).toBeVisible()
-      await expect(footer).toHaveCSS('padding', '12px 16px')
-      await expect(footer).toHaveCSS('gap', '8px')
-      await expect(footer).toHaveCSS('justify-content', 'flex-end')
-      await expect(footer.getByRole('button').first()).toBeVisible()
-      await widget.locator('.aurora-surface').screenshot({ path: testInfo.outputPath(`${title.toLowerCase().replaceAll(' ', '-')}-${theme}.png`) })
+      const surfaces = widget.locator('.aurora-surface')
+      await expect(surfaces).toHaveCount(title === 'Tool preparation' ? 2 : 1)
+      for (const [index, surface] of (await surfaces.all()).entries()) {
+        const footer = surface.locator('.aurora-surface-footer')
+        await expect(footer).toBeVisible()
+        await expect(footer).toHaveCSS('padding', '12px 16px')
+        await expect(footer).toHaveCSS('gap', '8px')
+        await expect(footer).toHaveCSS('justify-content', 'flex-end')
+        await expect(footer.getByRole('button').first()).toBeVisible()
+        await surface.screenshot({ path: testInfo.outputPath(`${title.toLowerCase().replaceAll(' ', '-')}-${index}-${theme}.png`) })
+      }
     }
     const emptyCheckbox = page.getByRole('region', { name: 'Multiple choice', exact: true }).getByRole('checkbox').first()
     const emptyBackground = await emptyCheckbox.evaluate((input) => getComputedStyle(input).backgroundColor)
@@ -740,16 +744,21 @@ test('validates fields, preserves failed drafts and locks pending or accepted su
   await expect(form.getByRole('textbox', { name: 'Project name' })).toHaveValue('')
 })
 
-test('shows measured and indeterminate preparation with cancellation and retry', async ({ page }) => {
+test('shows measured and indeterminate preparation with cancellation and retry', async ({ page }, testInfo) => {
   await page.goto('/aurora.html')
   await page.getByRole('button', { name: 'Widgets', exact: true }).click()
-  const preparation = page.getByRole('region', { name: 'Tool preparation', exact: true })
+  const example = page.getByRole('region', { name: 'Tool preparation', exact: true })
+  const preparation = example.getByRole('region', { name: 'Getting things ready', exact: true })
+  const downloads = example.getByRole('region', { name: 'File downloads', exact: true })
+  await expect(downloads.getByRole('listitem')).toHaveCount(3)
+  await expect(downloads).toContainText('36 MB / 100 MB · ETA 12s')
+  await expect(downloads.getByText('36%', { exact: true })).toHaveCount(1)
   await expect(preparation.getByRole('progressbar')).toHaveAttribute('value', '36')
-  await preparation.getByRole('slider', { name: 'Measured progress' }).fill('72')
+  await example.getByRole('slider', { name: 'Measured progress' }).fill('72')
   await expect(preparation.getByRole('progressbar')).toHaveAttribute('value', '72')
   await preparation.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(preparation.getByRole('status')).toHaveText('Download cancelled.')
-  const state = preparation.getByRole('combobox', { name: 'Preview state' })
+  const state = example.getByRole('combobox', { name: 'Preview state' })
   await state.selectOption('failed')
   await expect(preparation.getByRole('alert')).toContainText('try again')
   await preparation.getByRole('button', { name: 'Try again' }).click()
@@ -757,6 +766,58 @@ test('shows measured and indeterminate preparation with cancellation and retry',
   await state.selectOption('preparing')
   await expect(preparation.getByRole('progressbar')).toHaveCount(0)
   await expect(preparation.getByRole('status')).toContainText('Checking the files')
+  await state.selectOption('downloading')
+  await example.getByRole('checkbox', { name: 'Known file size' }).uncheck()
+  await expect(downloads.getByRole('progressbar')).toHaveCount(0)
+  await expect(downloads).toContainText('72 MB')
+  await expect(downloads).not.toContainText('ETA')
+  await example.getByRole('checkbox', { name: 'Known file size' }).check()
+  const eta = example.getByRole('combobox', { name: 'Remaining time' })
+  for (const [label, text] of [
+    ['Minutes', '59m 42s'], ['Hours', '1h 59m 42s'], ['Minute boundary', '1m']
+  ] as const) {
+    await eta.selectOption({ label })
+    await expect(downloads).toContainText(`ETA ${text}`)
+  }
+  await eta.selectOption({ label: 'Minutes' })
+  const viewport = downloads.getByRole('region', { name: 'Download progress', exact: true })
+  const topMask = downloads.locator('.scroll-container-mask-top')
+  const bottomMask = downloads.locator('.scroll-container-mask-bottom')
+  const moreFiles = example.getByRole('checkbox', { name: 'More download files' })
+
+  for (const theme of ['light', 'dark']) {
+    await page.emulateMedia({ reducedMotion: theme === 'light' ? 'reduce' : 'no-preference' })
+    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition', '')
+    for (const width of [1_512, 390]) {
+      await page.setViewportSize({ width, height: 982 })
+      await expect.poll(() => downloads.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await expect(topMask).toHaveCSS('opacity', '0')
+      await expect(bottomMask).toHaveCSS('opacity', '0')
+      await downloads.screenshot({ path: testInfo.outputPath(`downloads-${theme}-${width}.png`) })
+      await moreFiles.check()
+      await expect(topMask).toHaveCSS('opacity', '0')
+      await expect(bottomMask).toHaveCSS('opacity', '1')
+      await downloads.screenshot({ path: testInfo.outputPath(`downloads-top-${theme}-${width}.png`) })
+      await viewport.evaluate((element) => {
+        element.scrollTop = (element.scrollHeight - element.clientHeight) / 2
+      })
+      await expect(topMask).toHaveCSS('opacity', '1')
+      await expect(bottomMask).toHaveCSS('opacity', '1')
+      await downloads.screenshot({ path: testInfo.outputPath(`downloads-middle-${theme}-${width}.png`) })
+      await viewport.evaluate((element) => {
+        element.scrollTop = element.scrollHeight
+      })
+      await expect(topMask).toHaveCSS('opacity', '1')
+      await expect(bottomMask).toHaveCSS('opacity', '0')
+      await viewport.press('Home')
+      await expect(topMask).toHaveCSS('opacity', '0')
+      await moreFiles.uncheck()
+      await expect(topMask).toHaveCSS('opacity', '0')
+      await expect(bottomMask).toHaveCSS('opacity', '0')
+    }
+  }
 })
 
 test('embeds artifacts in answer order with image enlargement and a local document download', async ({ page }) => {

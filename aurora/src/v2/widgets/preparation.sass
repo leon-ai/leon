@@ -1,0 +1,48 @@
+.aurora-downloads-scroll
+  max-height: 400px
+  // Match the surface edges while rows retain the shared content inset.
+  margin-inline: calc(-1 * var(--space-lg))
+
+  > .scroll-container-viewport
+    overscroll-behavior: auto
+
+.aurora-downloads
+  display: grid
+  margin: 0
+  padding: 0
+  list-style: none
+
+.aurora-download
+  display: grid
+  gap: var(--space-sm)
+  min-width: 0
+  padding: var(--space-md) var(--space-lg)
+
+  &:first-child
+    padding-top: 0
+
+  &:last-child
+    padding-bottom: 0
+
+  & + .aurora-download
+    border-top: 1px solid var(--color-border)
+
+  .aurora-progress-label
+    flex-wrap: wrap
+
+    > :first-child
+      flex: 1 1 120px
+      min-width: 0
+      overflow-wrap: anywhere
+
+.aurora-download-heading
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  justify-content: space-between
+  gap: var(--space-sm)
+
+.aurora-download-name
+  min-width: 0
+  overflow-wrap: anywhere
+  font-size: var(--font-size-sm)

@@ -4,7 +4,7 @@
   "toolkit_id": "file_system",
   "concurrency": "serial",
   "name": "File",
-  "description": "Read PDF text and visuals, prepare searchable document batches, OCR images, and read, write, append or patch local text files.",
+  "description": "Download files with measured progress, read PDF text and visuals, prepare searchable document batches, OCR images, and read, write, append or patch local text files.",
   "icon_name": "file-text-line",
   "distribution": "built-in",
   "maintenance": "official",
@@ -42,6 +42,29 @@
     ]
   },
   "functions": {
+    "download": {
+      "description": "Download HTTP or HTTPS files to unused local paths with measured per-file progress, sizes and ETA.",
+      "progressive_guidance": "Prefer this function over curl or wget for ordinary file downloads. Batch known files together. Supply a destination path for each file; existing files are preserved and occupied destinations are rejected, so choose an unused sibling path on collision. Downloads run as retained work: inspect the returned execution handle after a follow-up before starting another transfer. Verify completion before reading, using or attaching downloaded files. Use shell only when a transfer requires behavior this function does not support.",
+      "background": true,
+      "timeout": { "idleMs": 30000 },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array", "minItems": 1, "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string", "format": "uri" },
+                "path": { "type": "string", "minLength": 1 }
+              },
+              "required": ["url", "path"], "additionalProperties": false
+            }
+          }
+        },
+        "required": ["files"], "additionalProperties": false
+      }
+    },
     "readDocument": {
       "description": "Extract PDF with LiteParse, or Word, Excel, PowerPoint, OpenDocument, EPUB, RTF and CSV with Xberg, as cached local Markdown.",
       "progressive_guidance": "Follow nextOffsetChars for full coverage and reuse extracted facts. If requiresPageRead is returned, use readPdf. Embedded images and charts are not interpreted by text conversion.",
