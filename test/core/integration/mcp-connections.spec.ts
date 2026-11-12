@@ -431,8 +431,20 @@ it('edits an installed server’s public OAuth application through trusted setup
     const id = await catalog.TOOL_CATALOG.install({ url: server.url, name: 'Public OAuth workspace' })
     try {
       const input = { provider: id, session_id: '', callback_origin: 'http://127.0.0.1:1337', api_version: 'v1' }
+      const original = await catalog.getInstalledMCP(id)
+      const initial = await setupMCPConnection({ ...input, action: Action.Refresh })
+      expect(initial?.view.fields).toEqual([])
+      expect(initial?.view.details).toBeUndefined()
       const screen = await setupMCPConnection({ ...input, action: Action.Credentials })
       expect(screen?.view.fields.map((field) => field.name)).toEqual(['client_id', 'client_metadata_url'])
+      expect(server.requests).toBe(0)
+      const back = await setupMCPConnection({ ...input, action: Action.SelectMethod, state: screen!.view.state,
+        credentials: { client_id: 'unsubmitted-client', client_metadata_url: '' } })
+      expect(back?.view.state.step).toBe('choice')
+      expect(back?.view.fields).toEqual([])
+      expect(back?.view.details).toBeUndefined()
+      expect(back?.view.actions).toContainEqual({ id: Action.Credentials, label: 'Display OAuth settings', secondary: true })
+      expect(await catalog.getInstalledMCP(id)).toEqual(original)
       expect(server.requests).toBe(0)
       const result = await setupMCPConnection({ ...input, action: Action.Connect, state: screen!.view.state,
         credentials: { client_id: 'fixture-client', client_metadata_url: '' } })

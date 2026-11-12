@@ -60,6 +60,7 @@ test('keeps connection credentials inside explicit setup requests and clears fai
       ] } } } })
   let view = connectionPreviewView(preview, 'api_key', Step.Choice)
   const attempts: Record<string, unknown>[] = []
+  let finishAttempt: (() => void) | undefined
   const otherBodies: string[] = []
   page.on('request', (request) => {
     if (request.method() === 'POST' && !request.url().includes('/connections/')) {
@@ -75,22 +76,38 @@ test('keeps connection credentials inside explicit setup requests and clears fai
     if (body.action === Action.Connect) {
       attempts.push(body.credentials)
       if (attempts.length === 1) {
+        await new Promise<void>((resolve) => {
+          finishAttempt = resolve
+        })
         await route.fulfill({ status: 400, json: { message: 'Rejected sample-token-one' } })
         return
       }
       view = connectionPreviewView(preview, 'api_key', Step.Connected)
+    }
+    if (body.action === Action.Continue) {
+      view = connectionPreviewView(preview, 'api_key', Step.Continued)
+      await route.fulfill({ json: { view, event: { methodName: 'send_utterance', session_id: SESSION_ID,
+        methodParams: { from: 'owner', utterance: 'Continue.' } } } })
+      return
     }
     await route.fulfill({ json: { view } })
   })
   await page.goto(SESSION_URL)
   const card = page.getByRole('region', { name: 'TickTick', exact: true })
   await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
-  const token = card.getByLabel('access token', { exact: true })
+  const token = card.getByLabel('Access token', { exact: true })
   await expect(token).toHaveAttribute('type', 'password')
-  await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
+  await expect(card.getByRole('button', { name: 'Connect TickTick', exact: true })).toBeDisabled()
   expect(attempts).toHaveLength(0)
   await token.fill('sample-token-one')
   await token.press('Enter')
+  const connecting = card.getByRole('button', { name: 'Connecting…', exact: true })
+  await expect(connecting).toBeDisabled()
+  await expect(connecting).toHaveAttribute('aria-busy', 'true')
+  await expect(connecting.locator('.loader-indicator')).toBeVisible()
+  await expect(token).toHaveValue('')
+  await expect.poll(() => attempts.length).toBe(1)
+  finishAttempt!()
   await expect(card.getByRole('alert')).toContainText('I couldn’t complete this step')
   await expect(token).toHaveValue('')
   await expect(page.locator('.toast-error')).toHaveCount(1)
@@ -105,6 +122,10 @@ test('keeps connection credentials inside explicit setup requests and clears fai
   await page.reload()
   await expect(page.getByRole('region', { name: 'TickTick', exact: true }).getByRole('status')).toContainText('Connected')
   expect(attempts).toHaveLength(2)
+  await card.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page.getByText('Continue.', { exact: true })).toBeVisible()
+  await expect(card.getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0)
+  expect(otherBodies.join(' ')).not.toContain('sample-token')
 })
 
 test('sends guided setup through ordinary owner commands and retains retry identity', async ({ page, ui }) => {
@@ -138,15 +159,19 @@ test('sends guided setup through ordinary owner commands and retains retry ident
   await card.getByRole('button', { name: 'Connect TickTick', exact: true }).click()
   await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
   expect(commands).toHaveLength(0)
-  await card.getByText('Show setup instructions', { exact: true }).click()
+  await expect(card.getByRole('list')).toBeVisible()
   await card.getByRole('button', { name: 'Set it up for me', exact: true }).click()
   await expect(card.getByRole('alert')).toBeVisible()
   await card.getByRole('button', { name: 'Set it up for me', exact: true }).click()
   await expect(card.getByText('You can follow setup progress in the conversation.', { exact: true })).toBeVisible()
+  await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
+  await expect(card.getByLabel('Client secret', { exact: true })).toBeVisible()
+  await expect(card.getByRole('button', { name: 'Connect TickTick', exact: true })).toBeDisabled()
   expect(commands).toHaveLength(2)
   expect(commands[0]!.id).toBe(commands[1]!.id)
   await page.reload()
   await expect(card.getByText('You can follow setup progress in the conversation.', { exact: true })).toBeVisible()
+  await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
   expect(commands).toHaveLength(2)
 })
 
@@ -161,6 +186,7 @@ for (const name of ['notion', 'spotify']) {
       let callback = ''
       let returned = false
       let cancelled = false
+      let connectAttempts = 0
       await context.route('**/oauth-fixture', async (route) => {
         await route.fulfill({ contentType: 'text/html', headers: { 'Cross-Origin-Opener-Policy': 'same-origin' },
           body: `<a href="${callback}">Authorize test account</a>` })
@@ -172,7 +198,11 @@ for (const name of ['notion', 'spotify']) {
       })
       await page.route(`**/api/v1/connections/${preview.provider}/setup`, async (route) => {
         const body = route.request().postDataJSON()
+        if (!returned && [Action.Credentials, Action.SelectMethod].includes(body.action)) {
+          view = connectionPreviewView(preview, 'oauth', body.action === Action.Credentials ? Step.Credentials : Step.Choice, configured)
+        }
         if (body.action === Action.Connect) {
+          connectAttempts++
           expect(body.credentials).toEqual(configured ? {} : { client_id: 'sample-client' })
           const destination = new URL(body.return_url)
           destination.searchParams.set('provider', preview.provider)
@@ -194,6 +224,14 @@ for (const name of ['notion', 'spotify']) {
       await expect(card.locator('input[type="password"]')).toHaveCount(0)
       if (configured) {
         await expect(card.locator('input')).toHaveCount(0)
+        await expect(card.locator('.aurora-connection-body')).toHaveCount(0)
+        await card.getByRole('button', { name: 'Display OAuth settings', exact: true }).click()
+        await card.getByLabel('Client ID', { exact: true }).fill('unsaved-application')
+        await card.getByRole('button', { name: 'Back', exact: true }).click()
+        await expect(card.locator('input')).toHaveCount(0)
+        await expect(card.locator('.aurora-connection-body')).toHaveCount(0)
+        expect(context.pages()).toHaveLength(1)
+        expect(connectAttempts).toBe(0)
       } else {
         await card.getByLabel('Client ID', { exact: true }).fill('sample-client')
       }

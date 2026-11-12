@@ -2051,8 +2051,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
     const loading = page.getByRole('status').filter({ hasText: 'Loading earlier messages…' })
     await expect(loading).toBeVisible()
-    await expect(loading.locator('.loader-indicator')).toHaveCSS('width', '12px')
-    await expect(loading.locator('.loader-indicator')).toHaveCSS('height', '12px')
+    await expect(loading.locator('.loader-indicator')).toHaveCSS('width', '16px')
+    await expect(loading.locator('.loader-indicator')).toHaveCSS('height', '16px')
     await expect.poll(() => loading.locator('.loader-indicator').evaluate((element) =>
       getComputedStyle(element, '::before').animationName
     )).toBe(reducedMotion === 'reduce' ? 'none' : 'loader-indicator-pulse')

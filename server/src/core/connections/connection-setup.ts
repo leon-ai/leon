@@ -21,6 +21,7 @@ import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
 import { getConnectionCatalog, getConnectionCallbackURL } from './connection-catalog'
 import { CONNECTION_STORE, ConnectionStatus } from './connection-store'
 import { saveConnection, startConnectionOAuth } from './connection-service'
+import { StringHelper } from '@/helpers/string-helper'
 
 const MAXIMUM_CREDENTIAL_LENGTH = 4_096
 
@@ -272,33 +273,25 @@ export async function handleConnectionSetup(
         view.actions.push(action(SetupAction.Continue, 'Continue'))
       }
     } else {
-      if (step === SetupStep.Choice || step === SetupStep.Assisted) {
+      if (step === SetupStep.Choice) {
+        view.description =
+          needsApplication
+            ? 'A one-time application setup is needed before you can authorize access. Enter its credentials to get started.'
+            : method.id === 'oauth'
+              ? 'Authorize access on the provider’s website. You stay in control of your permissions.'
+              : 'Enter your account token to connect securely.'
+        view.actions.push(
+          action(
+            method.id === 'oauth' && !needsApplication
+              ? SetupAction.Connect
+              : SetupAction.Credentials,
+            `Connect ${tool.name}`
+          )
+        )
+      } else {
         view.description =
           step === SetupStep.Assisted
             ? 'You can follow setup progress in this conversation.'
-            : needsApplication
-              ? 'A one-time application setup is needed before you can authorize access. Enter its credentials to get started.'
-              : method.id === 'oauth'
-                ? 'Authorize access on the provider’s website. You stay in control of your permissions.'
-                : 'Enter your account token to connect securely.'
-        if (step === SetupStep.Choice) {
-          view.actions.push(
-            action(
-              method.id === 'oauth' && !needsApplication
-                ? SetupAction.Connect
-                : SetupAction.Credentials,
-              `Connect ${tool.name}`
-            )
-          )
-        }
-
-        if (step === SetupStep.Assisted) {
-          view.actions.push(action(SetupAction.Manual, 'Set up manually', true))
-        }
-      } else {
-        view.description =
-          step === SetupStep.Application
-            ? 'Create an application once, then return here with its application credentials.'
             : needsApplication
               ? 'Enter the application credentials, then authorize access on the provider’s website.'
               : method.description
@@ -321,34 +314,26 @@ export async function handleConnectionSetup(
             copyLabel: `Copy ${item.label.toLowerCase()}`
           }))
         }
-        if (step === SetupStep.Application) {
-          view.actions.push(
-            action(SetupAction.Credentials, 'I have my application credentials')
-          )
-        } else {
-          view.fields = Object.entries(method.settings).map(
-            ([name, fallback]) => ({
-              name,
-              label:
-                name === 'client_id' ? 'Client ID' : name.split('_').join(' '),
-              type: name === 'client_id' ? 'text' : 'password',
-              required: fallback === null,
-              value: fallback || '',
-              maxLength: MAXIMUM_CREDENTIAL_LENGTH
-            })
-          )
-          view.actions.push({
-            ...action(SetupAction.Connect, `Connect ${tool.name}`),
-            submit: true
+        // Assistance changes who is preparing the application, not which
+        // credential fields the owner can use to finish connecting it.
+        view.fields = Object.entries(method.settings).map(
+          ([name, fallback]) => ({
+            name,
+            label:
+              name === 'client_id' ? 'Client ID' : StringHelper.ucFirst(name.split('_').join(' ')),
+            type: name === 'client_id' ? 'text' : 'password',
+            required: fallback === null,
+            value: fallback || '',
+            maxLength: MAXIMUM_CREDENTIAL_LENGTH
           })
-          if (needsApplication) {
-            view.actions.push(
-              action(SetupAction.Manual, 'Back to setup instructions', true)
-            )
-          }
-        }
+        )
+        view.actions.push({
+          ...action(SetupAction.Connect, `Connect ${tool.name}`),
+          submit: true
+        })
+        view.actions.push(action(SetupAction.SelectMethod, 'Back', true))
 
-        if (needsApplication) {
+        if (needsApplication && step !== SetupStep.Assisted) {
           view.actions.push(
             action(SetupAction.StartSetup, 'Set it up for me', true)
           )

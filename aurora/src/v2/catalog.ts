@@ -3,6 +3,7 @@
  */
 export const AURORA_CATALOG = [
   { id: 'button', kind: 'component', title: 'Buttons', description: 'Actions, toggles and submission states.' },
+  { id: 'badge', kind: 'component', title: 'Badges', description: 'Quiet labels and success, error and warning statuses.' },
   { id: 'input', kind: 'component', title: 'Inputs', description: 'Native text fields with shared typing and selection.' },
   { id: 'selection', kind: 'component', title: 'Selections', description: 'Keyboard-accessible radio and checkbox rows.' },
   { id: 'range', kind: 'component', title: 'Ranges', description: 'Native sliders with the shared accent and focus treatment.' },
@@ -18,9 +19,6 @@ export const AURORA_CATALOG = [
   { id: 'single-choice', kind: 'widget', title: 'Single choice', description: 'Activate an option to continue; arrow keys only browse.' },
   { id: 'multi-choice', kind: 'widget', title: 'Multiple choice', description: 'Choose several options together.' },
   { id: 'form', kind: 'widget', title: 'Form', description: 'Labelled fields, native validation and a submission receipt.' },
-  { id: 'connection-notion', kind: 'widget', title: 'Notion connection', description: 'One recommended connection path, with guided application setup when needed.' },
-  { id: 'connection-spotify', kind: 'widget', title: 'Spotify connection', description: 'OAuth setup with a Client ID and no client-secret field.' },
-  { id: 'connection-ticktick', kind: 'widget', title: 'TickTick connection', description: 'OAuth-first setup for tasks, with a token fallback when OAuth is unavailable.' },
   { id: 'preparation', kind: 'widget', title: 'Tool preparation', description: 'Preparing, downloading, ready, failed and cancelled.' },
   { id: 'artifacts', kind: 'widget', title: 'Artifacts', description: 'Images, audio, video and document cards inside an answer.' },
   { id: 'data-table', kind: 'widget', title: 'Data table', description: 'Searchable, sortable data with small pages and horizontal scrolling.' },

@@ -445,6 +445,11 @@ describe('HTTP plugin Leon services', () => {
       expect(manual.view.state).toEqual({ method: 'oauth', step: SetupStep.Application })
       const assisted = await handleConnectionSetup({ ...input, state: view.state, action: SetupAction.StartSetup })
       expect(assisted.view.state.step).toBe(SetupStep.Assisted)
+      expect(assisted.view.fields).toEqual(started.view.fields)
+      expect(assisted.view.actions).toEqual([
+        { id: SetupAction.Connect, label: 'Connect TickTick', secondary: false, submit: true },
+        { id: SetupAction.SelectMethod, label: 'Back', secondary: true }
+      ])
       expect(assisted.event?.methodParams.utterance).toContain('Keep credentials out of chat')
       application.mockResolvedValue({ client_id: 'configured-app', client_secret: 'configured-secret' })
       const refreshed = await handleConnectionSetup({ ...input, state: assisted.view.state })

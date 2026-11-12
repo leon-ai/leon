@@ -3,7 +3,6 @@ import { ConnectionSetupWidget } from '../../../../../aurora/src/v2/widgets/conn
 import type { ConnectionSetupDescriptor } from '../../../../../aurora/src/contracts/connection-setup'
 import { ConversationDetailsContext } from '@/data/conversation-details'
 import { useConnectionSetup } from '@/data/connection-setup'
-import { Icon } from '@/components/icon'
 import { PackageIcon } from '@/components/package-icon/package-icon'
 import { CopyButton } from '@/components/copy-button'
 import { Tooltip } from '@/components/tooltip'
@@ -20,7 +19,7 @@ export default function ConnectionSetupCard({ connection, initialAuthorization }
   return <ConnectionSetupWidget title={connection.name ?? 'Connection setup'}
     {...(connection.description ? { description: connection.description } : {})}
     view={setup.view} loading={setup.loading} busy={setup.busy} error={setup.error}
-    icon={<PackageIcon logoUrl={connection.logoUrl} iconName={connection.iconName ?? 'plug-line'} />} statusIcon={<Icon name="check-fill" />}
+    icon={<PackageIcon logoUrl={connection.logoUrl} iconName={connection.iconName ?? 'plug-line'} />}
     onRefresh={setup.refresh} onAction={setup.act}
     renderCopyButton={(item) => <CopyButton text={item.value} label={item.copyLabel} size="sm" />}
     renderLink={(link) => <Tooltip message={link.href} multiline blurOnClick={false}>

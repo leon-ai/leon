@@ -3,21 +3,52 @@
 
   .aurora-surface
     container-type: inline-size
+    row-gap: 0
+
+    > .aurora-surface-footer
+      margin-top: var(--space-lg)
 
   a
-    color: var(--color-text)
-    text-decoration-color: var(--color-accent)
+    color: inherit
+    text-decoration: underline
     text-underline-offset: 3px
+
+    &:hover
+      color: var(--color-text)
 
 .aurora-connection-header
   display: grid
-  grid-template-columns: 48px minmax(0, 1fr) auto
+  grid-template-columns: 48px minmax(0, 1fr)
   align-items: center
   gap: var(--space-lg)
   min-width: 0
 
   &[data-with-icon='false']
+    grid-template-columns: minmax(0, 1fr)
+
+  &:has(.aurora-connection-status)
+    grid-template-columns: 48px minmax(0, 1fr) auto
+
+  &[data-with-icon='false']:has(.aurora-connection-status)
     grid-template-columns: minmax(0, 1fr) auto
+
+.aurora-connection-collapse
+  margin-inline: calc(-1 * var(--space-lg))
+
+  > .collapse-content > .collapse-body
+    // Keep the disappearing gap inside the animated height, not the surface grid.
+    padding-top: var(--space-lg)
+
+.aurora-connection-body
+  display: grid
+  gap: var(--space-lg)
+  min-width: 0
+  padding: var(--space-lg) var(--space-lg) 0
+  border-top: 1px solid var(--color-border)
+
+  .aurora-feedback
+    font-size: inherit
+    line-height: inherit
 
 .aurora-connection-identity
   display: grid
@@ -49,58 +80,54 @@
     height: 100%
     border-radius: inherit
 
-.aurora-connection-action
+.aurora-connection-status
   display: grid
+  align-self: start
   justify-items: end
   gap: var(--space-sm)
 
-.aurora-connection-expanded
-  display: grid
-  grid-template-rows: 1fr
-  opacity: 1
-  transition: grid-template-rows var(--transition-duration-collapse) var(--transition-timing-main), opacity var(--transition-duration-collapse) var(--transition-timing-main)
-
-.aurora-connection-expanded-content
+.aurora-connection-form
   display: grid
   gap: var(--space-lg)
   min-width: 0
-  min-height: 0
-  overflow: hidden
 
-@starting-style
-  .aurora-connection-expanded
-    grid-template-rows: 0fr
-    opacity: 0
+.aurora-connection-setup
+  display: grid
+  min-width: 0
+  gap: var(--space-xl)
 
-.aurora-connection-status
+.aurora-connection-assistance
+  display: grid
+  justify-items: center
+  gap: var(--space-lg)
+
+.aurora-connection-divider
   display: flex
   align-items: center
-  gap: var(--space-sm)
-  color: var(--color-success)
-  font-size: var(--font-size-sm)
-  line-height: var(--line-height-sm)
+  gap: var(--space-lg)
+  width: 100%
+  color: var(--color-text-secondary)
 
-  .app-icon
-    width: 1em
-    height: 1em
+  &::before,
+  &::after
+    flex: 1
+    border-top: 1px solid var(--color-border)
+    content: ''
 
-.aurora-connection-details
+.aurora-connection-details,
+.aurora-connection-values
+  display: grid
+  gap: var(--space-lg)
   min-width: 0
-  font-size: var(--font-size-sm)
-  line-height: var(--line-height-sm)
-
-  summary
-    color: var(--color-text-secondary)
-    cursor: pointer
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
 
   ol
     display: grid
     gap: var(--space-sm)
-    padding-left: var(--space-xl)
-
-  dl
-    display: grid
-    gap: var(--space-md)
+    padding: 0
+    list-style: decimal inside
 
   dt
     color: var(--color-text-secondary)
@@ -116,26 +143,12 @@
   code
     min-width: 0
     font-family: var(--font-family-code)
-    font-size: var(--font-size-xs)
+    font-size: inherit
     overflow-wrap: anywhere
 
-.aurora-connection-options
-  display: grid
-  gap: var(--space-lg)
-  padding-top: var(--space-md)
+.aurora-connection-values
+  gap: var(--space-md)
 
 @container (max-width: 360px)
   .aurora-connection-header
-    grid-template-columns: 48px minmax(0, 1fr)
     gap: var(--space-md)
-
-    &[data-with-icon='false']
-      grid-template-columns: minmax(0, 1fr)
-
-  .aurora-connection-action
-    grid-column: 1 / -1
-    justify-self: end
-
-@media (prefers-reduced-motion: reduce)
-  .aurora-connection-expanded
-    transition: none

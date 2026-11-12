@@ -59,6 +59,10 @@
     text-overflow: ellipsis
     white-space: nowrap
 
+  .loader,
+  .loader-indicator
+    color: inherit
+
   &.button-icon-only
     border-radius: var(--border-radius-pill)
 
@@ -143,14 +147,17 @@
   &.button-danger:active:not(:disabled):not([aria-disabled='true'])
     --button-background: var(--color-danger-pressed)
 
-  &:disabled
-    color: var(--color-text-disabled)
-
-    &:not([aria-busy='true'])
-      cursor: not-allowed !important
-
+  &:disabled,
   &[aria-disabled='true']
-    color: var(--color-text-disabled)
-
     &:not([aria-busy='true'])
+      color: var(--color-text-disabled)
       cursor: not-allowed !important
+
+    &.button-secondary
+      --button-border-gradient: linear-gradient(var(--color-border), var(--color-border))
+
+    &.button-primary,
+    &.button-danger
+      // Extend both fill layers to the edge so translucent fills have no seam.
+      --button-border-gradient: none
+      background-clip: border-box

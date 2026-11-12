@@ -5,7 +5,7 @@ import '@/styles/main.sass'
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  AURORA_CATALOG, ArtifactWidget, BooleanChoiceWidget, Button, ChoiceWidget,
+  AURORA_CATALOG, ArtifactWidget, Badge, BooleanChoiceWidget, Button, ChoiceWidget,
   FormWidget, Input, Loader, PreparationStatus, PreparationWidget, Progress,
   Selection, Range, Surface, Switch, Segmented, Tabs, NumberStepper, SearchSelect,
   DataTableWidget, ComparisonWidget
@@ -24,9 +24,9 @@ import imageURL from '../../../../aurora/preview/public/pancakes.jpeg?url'
 import documentURL from '../../../fixtures/documents/attention-is-all-you-need.pdf?url'
 
 import './aurora-preview.sass'
-import { ConnectionPreview } from './connection-preview'
+import { ConnectionsPreview } from './connection-preview'
 
-type GalleryKind = 'component' | 'widget' | 'generated' | 'answer'
+type GalleryKind = 'component' | 'widget' | 'connection' | 'generated' | 'answer'
 type DemoOutcome = 'success' | 'failure' | 'pending'
 
 const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, entry.description])
@@ -205,9 +205,6 @@ function Example({ id }: { id: string }) {
   const [receipt, setReceipt] = useState<unknown>()
   const [selected, setSelected] = useState<string[]>([])
   const presentation = AURORA_PRESENTATION_SPEC.elements[id]
-  if (id === 'connection-notion' || id === 'connection-spotify' || id === 'connection-ticktick') {
-    return <ConnectionPreview id={id} />
-  }
   if (presentation?.type === 'DataTable') {
     return <DataTableWidget {...presentation.props} />
   }
@@ -228,6 +225,12 @@ function Example({ id }: { id: string }) {
   switch (id) {
     case 'button':
       return <ButtonDemo />
+    case 'badge':
+      return <div className="aurora-actions">
+        <Badge label="New" /><Badge label="Soon" variant="secondary" />
+        <Badge label="Connected" variant="success" /><Badge label="Failed" variant="error" />
+        <Badge label="Action needed" variant="warning" />
+      </div>
     case 'input':
       return <div className="demo-stack"><Input ariaLabel="A small idea" placeholder="What’s on your mind?" />
         <Input ariaLabel="A longer note" multiline rows={3} placeholder="A little more room…" /></div>
@@ -253,11 +256,12 @@ function Example({ id }: { id: string }) {
         <SearchSelect label="Make room for" multiple options={CHOICES} value={selected} onValueChange={setSelected} />
         <output aria-label="Selected moments">{selected.join(', ')}</output></div>
     case 'loader':
-      return <div className="aurora-actions"><Loader size="sm" label="A moment…" /><Loader size="md" label="Getting things ready…" /></div>
+      return <div className="aurora-actions"><Loader size="xs" label="A moment…" /><Loader size="sm" label="Getting ready…" /><Loader size="md" label="Getting things ready…" /></div>
     case 'progress':
       return <div className="demo-stack"><Progress label="Preparing a workspace" /><Progress label="Files downloaded" value={64} /></div>
     case 'surface':
-      return <Surface title="A place for your ideas" description="Small pieces can make something useful."><p>Start wherever feels right.</p></Surface>
+      return <Surface title="A place for your ideas" description="Small pieces can make something useful."
+        footer={<Button variant="primary">Keep this idea</Button>}><p>Start wherever feels right.</p></Surface>
     case 'boolean':
       return <SubmissionDemo>{(submit) => <BooleanChoiceWidget title="Keep this idea for later?" onSubmit={submit} />}</SubmissionDemo>
     case 'single-choice':
@@ -298,16 +302,16 @@ function App() {
     </header>
     <div className="gallery-toolbar">
       <nav aria-label="Aurora collection" className="aurora-actions">
-        {(['component', 'widget', 'generated', 'answer'] as const).map((value) => <Button key={value}
+        {(['component', 'widget', 'connection', 'generated', 'answer'] as const).map((value) => <Button key={value}
           ariaPressed={kind === value} variant={kind === value ? 'secondary' : 'ghost'}
-          onClick={() => setKind(value)}>{value === 'component' ? 'Components' : value === 'widget' ? 'Widgets' : value === 'generated' ? 'Generated UI' : 'Answer preview'}</Button>)}
+          onClick={() => setKind(value)}>{value === 'component' ? 'Components' : value === 'widget' ? 'Widgets' : value === 'connection' ? 'Connections' : value === 'generated' ? 'Generated UI' : 'Answer preview'}</Button>)}
       </nav>
-      {kind !== 'answer' && <AppInput ariaLabel="Find a component or widget" type="search" iconName="search"
+      {kind !== 'answer' && kind !== 'connection' && <AppInput ariaLabel="Find a component or widget" type="search" iconName="search"
         placeholder="Find something…" value={query} onChange={(event) => setQuery(event.target.value)} />}
     </div>
     <p className="gallery-notice">Interactive local examples. Nothing here is sent to Leon or an AI provider.</p>
     {kind === 'widget' && <p className="gallery-notice">Copy a query into a session to try it with Leon. He chooses the presentation; the result may differ from these examples.</p>}
-    {kind === 'answer' ? <section aria-label="Visual answer preview" className={`answer-example${narrow ? ' gallery-narrow' : ''}`}>
+    {kind === 'connection' ? <div className={`connections-example${narrow ? ' gallery-narrow' : ''}`}><ConnectionsPreview /></div> : kind === 'answer' ? <section aria-label="Visual answer preview" className={`answer-example${narrow ? ' gallery-narrow' : ''}`}>
       <p>A slow Sunday sounds lovely. Here’s a little inspiration for the morning.</p>
       <Artifacts />
       <p>You could make breakfast, then leave a little time for something you enjoy.</p>

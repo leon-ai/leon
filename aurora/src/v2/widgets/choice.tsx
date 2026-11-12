@@ -64,8 +64,18 @@ export function ChoiceWidget({
     void submit(next)
   }
 
-  return <Surface title={title} {...(description === undefined ? {} : { description })}>
-    <form className="aurora-fields" onSubmit={(event) => {
+  return <Surface title={title} {...(description === undefined ? {} : { description })}
+    footer={(multiple || status !== SubmissionStatus.Ready) && <>
+      <SubmissionFeedback status={status} />
+      {multiple && <Button type="submit" form={name} variant="primary" disabled={disabled || selected.length === 0}
+        loading={status === SubmissionStatus.Pending}>{submitLabel}</Button>}
+      {!multiple && status === SubmissionStatus.Pending && <Loader size="sm" label="Saving…" />}
+      {!multiple && status === SubmissionStatus.Failed && <Button variant="secondary" disabled={disabled}
+        onClick={() => {
+          void submit(selected)
+        }}>Retry</Button>}
+    </>}>
+    <form id={name} className="aurora-fields" onSubmit={(event) => {
       event.preventDefault()
       if (multiple && !disabled && selected.length > 0) {
         void submit(selected)
@@ -115,16 +125,6 @@ export function ChoiceWidget({
           }}
         />)}
       </fieldset>
-      {(multiple || status !== SubmissionStatus.Ready) && <div className="aurora-actions">
-        {multiple && <Button type="submit" variant="primary" disabled={disabled || selected.length === 0}
-          loading={status === SubmissionStatus.Pending}>{submitLabel}</Button>}
-        {!multiple && status === SubmissionStatus.Pending && <Loader size="sm" label="Saving…" />}
-        {!multiple && status === SubmissionStatus.Failed && <Button variant="secondary" disabled={disabled}
-          onClick={() => {
-            void submit(selected)
-          }}>Retry</Button>}
-        <SubmissionFeedback status={status} />
-      </div>}
     </form>
   </Surface>
 }
