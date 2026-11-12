@@ -18,12 +18,12 @@
     "url": "https://github.com/leon-ai/leon/issues"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=26.0.0"
   },
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=24.0.0",
+      "version": ">=26.0.0",
       "onFail": "error"
     },
     "packageManager": {
@@ -159,7 +159,7 @@
     "@types/better-sqlite3": "7.6.13",
     "@types/cli-spinner": "0.2.3",
     "@types/getos": "3.0.4",
-    "@types/node": "25.6.0",
+    "@types/node": "26.6.6",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "@types/ws": "8.18.2",
@@ -184,7 +184,7 @@
     "sass": "1.100.0",
     "semver": "7.5.4",
     "shx": "0.4.0",
-    "tsx": "4.20.5",
+    "tsx": "4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.3.5",
     "vitest": "5.0.5"
