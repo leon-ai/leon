@@ -5,7 +5,6 @@ import { performance } from 'node:perf_hooks'
 import { runTurnPhase, TurnPhase } from '../../turn-timing'
 
 import {
-  BRAIN,
   SOCKET_SERVER,
   TOOL_EXECUTOR,
   TOOLKIT_REGISTRY
@@ -301,7 +300,7 @@ export function emitToolExecutionOutputToWebApp(params: {
 }
 
 /**
- * Runs an agent tool call and keeps retained preparation/output on its original card.
+ * Runs an agent tool call and keeps retained downloads and output on their originating call.
  */
 export async function runToolExecution(
   toolkitId: string,
@@ -315,7 +314,6 @@ export async function runToolExecution(
     event: Extract<AgentRunProgressEvent, { type: 'tool_call' }>['toolCall']
   ) => void,
   signal?: AbortSignal,
-  onPreparationProgress?: (message: string) => Promise<void>,
   streamedToolGroupId?: string,
   retainedSignal?: AbortSignal
 ): Promise<ToolExecutionResult> {
@@ -456,9 +454,6 @@ export async function runToolExecution(
   })
 
   let didObservePreparationStarted = false
-  let didNotifyOwnerPreparationStarted = false
-  let didObservePreparationFailure = false
-  const reportedPreparationMilestones = new Set<string>()
   let didFinishToolCall = false
   let commandOutput = ''
   let progressStream: ToolRuntimeProgress['stream']
@@ -467,9 +462,25 @@ export async function runToolExecution(
   let preparation: ToolPreparationSnapshot | undefined
 
   function finishPreparation(success: boolean, detail: string, canceled = false): void {
-    if (preparation && preparation.status !== PreparationStatus.Ready) {
-      preparation = { ...preparation, detail, status: success ? PreparationStatus.Ready
-        : canceled ? PreparationStatus.Cancelled : PreparationStatus.Failed }
+    if (!preparation || preparation.status === PreparationStatus.Ready) {
+      return
+    }
+
+    const downloads = preparation.downloads?.map((file) => {
+      if (file.status !== 'queued' && file.status !== 'downloading') {
+        return file
+      }
+
+      // A settled call cannot leave queued rows looking as though work continues.
+      return { ...file, etaMs: null, status: canceled ? 'cancelled' as const : 'failed' as const }
+    })
+
+    preparation = {
+      ...preparation,
+      detail,
+      status: success ? PreparationStatus.Ready
+        : canceled ? PreparationStatus.Cancelled : PreparationStatus.Failed,
+      ...(downloads ? { downloads } : {})
     }
   }
 
@@ -484,12 +495,31 @@ export async function runToolExecution(
       TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key) || TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key) ||
       preparation && TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key)
     ))
-    if (progress.preparationComplete) {
+    if (progress.downloads?.length) {
+      const files = new Map(preparation?.downloads?.map((file) => [file.id, file]))
+      for (const file of progress.downloads) {
+        files.set(file.id, file)
+      }
+      const downloads = Array.from(files.values())
+      const failed = downloads.some((file) => file.status === 'failed')
+      const cancelled = downloads.some((file) => file.status === 'cancelled')
+      preparation = {
+        ...preparation,
+        status: failed ? PreparationStatus.Failed : cancelled ? PreparationStatus.Cancelled
+          : downloads.some((file) => file.status === 'downloading')
+            ? PreparationStatus.Downloading : PreparationStatus.Preparing,
+        detail: failed ? 'I could not download all files.' : cancelled ? 'The download was cancelled.' : 'Getting files ready.',
+        downloads,
+        ...(!preparation && !preparationReport ? { purpose: 'download' as const } : {}),
+        ...(progress.stream?.id ? { executionId: progress.stream.id } : {})
+      }
+    } else if (progress.preparationComplete && preparation?.purpose !== 'download') {
       finishPreparation(true, progress.message)
     } else if (preparationReport && progress.phase !== ToolRuntimePhase.Execution) {
       const percentage = typeof progress.data?.['percentage'] === 'number' ? progress.data['percentage'] : undefined
       const measured = percentage !== undefined && Number.isFinite(percentage) && percentage >= 0 && percentage <= 100
       preparation = {
+        ...preparation,
         status: progress.key && TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key) ? PreparationStatus.Failed
           : measured ? PreparationStatus.Downloading : PreparationStatus.Preparing,
         detail: progress.message,
@@ -533,11 +563,6 @@ export async function runToolExecution(
           ...(toolCallTitle ? { toolCallTitle } : {}),
           ...(stepLabel ? { stepLabel } : {})
         })
-        if (didFinishToolCall && didNotifyOwnerPreparationStarted && status === 'success') {
-          void onPreparationProgress?.(
-            BRAIN.wernicke('react.tool.ready', '', { '{{ tool_name }}': toolDisplayContext.toolName })
-          )
-        }
         return
       }
     }
@@ -610,7 +635,7 @@ export async function runToolExecution(
     }
 
     // Cached binaries also report readiness; only actual setup belongs in
-    // preparation cards and owner-facing preparation announcements.
+    // preparation widgets.
     if (
       !isPreparationStart &&
       !isPreparationFailure &&
@@ -642,44 +667,6 @@ export async function runToolExecution(
       ...(toolCallTitle ? { toolCallTitle } : {}),
       ...(stepLabel ? { stepLabel } : {})
     })
-
-    if (isPreparationFailure) {
-      didObservePreparationFailure = true
-    }
-
-    // Keep frequent percentages in the live card; surface named preparation
-    // milestones in the conversation without repeating the same report.
-    if (
-      TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key) ||
-      isPreparationFailure
-    ) {
-      const milestoneId = JSON.stringify([progress.key, progress.data])
-
-      if (progress.message && !reportedPreparationMilestones.has(milestoneId)) {
-        reportedPreparationMilestones.add(milestoneId)
-        didNotifyOwnerPreparationStarted = true
-        void onPreparationProgress?.(
-          BRAIN.wernicke('react.tool.preparation_progress', '', {
-            '{{ tool_name }}': toolDisplayContext.toolName,
-            '{{ message }}': progress.message
-          })
-        )
-      }
-      return
-    }
-
-    if (
-      !didNotifyOwnerPreparationStarted &&
-      TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key)
-    ) {
-      didNotifyOwnerPreparationStarted = true
-      void onPreparationProgress?.(
-        BRAIN.wernicke('react.tool.preparing', '', {
-          '{{ tool_name }}': toolDisplayContext.toolName
-        })
-      )
-      return
-    }
   }
 
   // Streamed argument previews can appear before execution starts. Measure the
@@ -788,21 +775,6 @@ export async function runToolExecution(
   LogHelper.debug(
     `Tool output: ${JSON.stringify(toolExecutionResult.data?.output)}`
   )
-
-  // Individual resources can finish while other downloads are still running.
-  // The successful call is the boundary where all required resources are ready.
-  if (
-    didNotifyOwnerPreparationStarted &&
-    !didObservePreparationFailure &&
-    effectiveStatus === 'success' &&
-    progressStream?.state !== 'running'
-  ) {
-    await onPreparationProgress?.(
-      BRAIN.wernicke('react.tool.ready', '', {
-        '{{ tool_name }}': toolDisplayContext.toolName
-      })
-    )
-  }
 
   const isStreamRunning = progressStream?.state === 'running'
   const displayedOutput = progressStream

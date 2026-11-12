@@ -27,6 +27,7 @@ const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
 const DOWNLOAD_REQUEST_HEADERS = { 'accept-encoding': 'identity' }
 
 export interface DownloadFileOptions {
+  signal?: AbortSignal
   cliProgress?: boolean
   inactivityTimeoutMs?: number
   onProgress?: (progress: DownloadFileProgress) => void
@@ -84,8 +85,9 @@ type DownloadInfoRetryOptions = Required<
 >
 type ResolvedDownloadFileOptions = Omit<
   Required<DownloadFileOptions>,
-  'retry' | 'retryFetchDownloadInfo' | 'onProgress'
+  'retry' | 'retryFetchDownloadInfo' | 'onProgress' | 'signal'
 > & {
+  signal?: AbortSignal
   onProgress?: DownloadFileOptions['onProgress']
   retry: RetryOptions
   retryFetchDownloadInfo: DownloadInfoRetryOptions
@@ -1054,6 +1056,15 @@ export class FileDownloader {
     const legacyTemporaryPath = `${destinationPath}.ipull`
     const abortController = new AbortController()
     const { signal } = abortController
+    const abortDownload = (): void => {
+      abortController.abort(options.signal?.reason)
+    }
+
+    if (options.signal?.aborted) {
+      abortDownload()
+    } else {
+      options.signal?.addEventListener('abort', abortDownload, { once: true })
+    }
 
     this.activeDownloadControllers.add(abortController)
 
@@ -1143,6 +1154,7 @@ export class FileDownloader {
         }
       }
     } finally {
+      options.signal?.removeEventListener('abort', abortDownload)
       this.activeDownloadControllers.delete(abortController)
     }
   }
@@ -1164,6 +1176,7 @@ export class FileDownloader {
     destinationPath: string,
     options?: DownloadFileOptions
   ): Promise<void> {
+    options?.signal?.throwIfAborted()
     const resolvedOptions: ResolvedDownloadFileOptions = {
       ...this.DEFAULT_DOWNLOAD_OPTIONS,
       ...options,

@@ -271,8 +271,7 @@ it.each(['success', 'error', 'background', 'throw'])(
   }
 )
 
-it('announces binary readiness only after actual preparation starts', async () => {
-  const onPreparationProgress = vi.fn(async (): Promise<void> => {})
+it('reports binary readiness only after actual preparation starts', async () => {
   const preparationUpdates = vi.fn()
   const readyReport = {
     key: 'bridges.tools.binary_ready',
@@ -288,9 +287,7 @@ it('announces binary readiness only after actual preparation starts', async () =
       {},
       undefined,
       undefined,
-      preparationUpdates,
-      undefined,
-      onPreparationProgress
+      preparationUpdates
     )
   }
 
@@ -302,7 +299,6 @@ it('announces binary readiness only after actual preparation starts', async () =
 
   await run()
 
-  expect(onPreparationProgress).not.toHaveBeenCalled()
   expect(preparationUpdates.mock.calls.some(([event]) => event.preparation)).toBe(false)
   expect(coreMocks.emitAnswerToChatClients).not.toHaveBeenCalledWith(
     expect.objectContaining({ toolPhase: 'preparation' })
@@ -326,11 +322,6 @@ it('announces binary readiness only after actual preparation starts', async () =
     preparation: expect.objectContaining({ status: 'ready' })
   }))
 
-  expect(onPreparationProgress.mock.calls).toEqual([
-    ['Downloading missing binary.'],
-    ['Binary ready.'],
-    ['react.tool.ready']
-  ])
   expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(
     expect.objectContaining({
       toolPhase: 'preparation',
@@ -338,7 +329,6 @@ it('announces binary readiness only after actual preparation starts', async () =
     })
   )
 
-  onPreparationProgress.mockClear()
   const onProgress = vi.fn()
   const stream = { id: 'preparing-fixture', state: 'running' }
   const followUp = new AbortController()
@@ -356,11 +346,10 @@ it('announces binary readiness only after actual preparation starts', async () =
   })
   const retained = await runToolExecution(
     'test', 'lookup', 'run', '{}', {}, undefined, undefined, onProgress,
-    followUp.signal, onPreparationProgress, undefined, turn.signal
+    followUp.signal, undefined, turn.signal
   )
   expect(retained.executionHandle).toEqual(stream)
   expect(JSON.parse(retained.execution.observation).execution.progress.data.percentage).toBe(40)
-  expect(onPreparationProgress).not.toHaveBeenCalledWith('react.tool.ready')
   expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'running', preparation: {
     status: 'downloading', detail: 'Downloading fixture: 40%.', executionId: stream.id, completed: 40, total: 100
   } }))
@@ -368,7 +357,6 @@ it('announces binary readiness only after actual preparation starts', async () =
     source: 'report', message: 'Done.', data: { result: 'Prepared' },
     stream: { ...stream, state: 'completed' }
   })
-  expect(onPreparationProgress).toHaveBeenLastCalledWith('react.tool.ready')
   expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'success',
     preparation: expect.objectContaining({ status: 'ready', executionId: stream.id }) }))
 })
@@ -382,12 +370,21 @@ it.each(['failure', 'cancellation', 'execution failure'])(
       expect(updates).toHaveBeenLastCalledWith(expect.objectContaining({ preparation: {
         status: 'preparing', detail: 'Preparing files.', executionId: 'preparation'
       } }))
+      const files = [
+        { id: 'first/model', fileName: 'model', status: 'downloading', downloadedBytes: 40, totalBytes: 100, etaMs: 1_000 },
+        { id: 'second/model', fileName: 'model', status: 'queued', downloadedBytes: 0, totalBytes: null, etaMs: null }
+      ]
+      input.onProgress({ source: 'report', message: 'File download progress.', downloads: files,
+        stream: { id: 'preparation', state: 'running' } })
       if (outcome === 'execution failure') {
+        input.onProgress({ source: 'report', message: 'File download progress.',
+          downloads: files.map((file) => ({ ...file, status: 'complete', etaMs: null })),
+          stream: { id: 'preparation', state: 'running' } })
         input.onProgress({ source: 'report', phase: 'execution', message: 'Files ready.', preparationComplete: true })
       } else {
         input.onProgress({ source: 'report', phase: 'execution', message: 'Preparation scope exited.' })
         expect(updates).toHaveBeenLastCalledWith(expect.objectContaining({
-          preparation: expect.objectContaining({ status: 'preparing' })
+          preparation: expect.objectContaining({ status: 'downloading' })
         }))
       }
       input.onProgress({ source: 'report', message: 'Stopped.', stream: {
@@ -398,7 +395,13 @@ it.each(['failure', 'cancellation', 'execution failure'])(
     })
     await runToolExecution('test', 'lookup', 'run', '{}', {}, undefined, undefined, updates)
     expect(updates).toHaveBeenLastCalledWith(expect.objectContaining({ preparation: expect.objectContaining({
-      status: outcome === 'execution failure' ? 'ready' : outcome === 'cancellation' ? 'cancelled' : 'failed'
+      status: outcome === 'execution failure' ? 'ready' : outcome === 'cancellation' ? 'cancelled' : 'failed',
+      downloads: [
+        expect.objectContaining({ id: 'first/model', status: outcome === 'execution failure' ? 'complete'
+          : outcome === 'cancellation' ? 'cancelled' : 'failed' }),
+        expect.objectContaining({ id: 'second/model', status: outcome === 'execution failure' ? 'complete'
+          : outcome === 'cancellation' ? 'cancelled' : 'failed' })
+      ]
     }) }))
   }
 )

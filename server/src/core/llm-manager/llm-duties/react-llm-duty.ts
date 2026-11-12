@@ -806,7 +806,6 @@ export class ReActLLMDuty extends LLMDuty {
               })
             },
             this.getExecutionSignal(),
-            (message) => this.emitProgress(message),
             preview?.groupId,
             this.getExecutionSignal(false)
           )

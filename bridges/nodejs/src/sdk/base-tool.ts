@@ -12,11 +12,8 @@ import { randomUUID } from 'node:crypto'
 import { spawn, execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import {
-  FileDownloader,
-  type DownloadFileProgress
-} from '@@/bridges/runtime/nodejs/file-downloader'
 import { resolveToolBinaryPath } from '@@/bridges/runtime/nodejs/tool-binary'
+import { DownloadTracker, type DownloadFile } from './utils/download'
 
 import {
   LEON_TOOLKITS_PATH,
@@ -32,8 +29,6 @@ import {
   isMacOS,
   setHuggingFaceURL,
   formatBytes,
-  formatSpeed,
-  formatETA,
   formatFilePath,
   extractArchive
 } from '@sdk/utils'
@@ -76,6 +71,7 @@ export abstract class Tool {
   protected executionContext: ToolExecutionContext | null = null
   private readonly preparations = new Set<Promise<unknown>>()
   private preparationFailed = false
+  private downloadTracker: DownloadTracker | undefined
   /**
    * Declares emitted text as rich prose only when the producer opts in.
    */
@@ -87,6 +83,44 @@ export abstract class Tool {
   public async prepareExecution(context: ToolExecutionContext): Promise<void> {
     this.executionContext = context
     this.modelFiles.length = 0
+    this.downloadTracker = undefined
+  }
+
+  private get downloads(): DownloadTracker {
+    // Native skill stdout carries protocol messages; keep CLI progress in SDK logs.
+    this.downloadTracker ??= new DownloadTracker(
+      this.executionContext,
+      this.cliProgress
+        ? (file): void => {
+            this.log(`${file.fileName}: ${formatBytes(file.downloadedBytes)} (${file.status})`)
+          }
+        : undefined
+    )
+
+    return this.downloadTracker
+  }
+
+  /**
+   * Publishes known files before downloading them, including queued resources.
+   */
+  protected queueDownloads(files: DownloadFile[]): void {
+    this.downloads.queue(files)
+  }
+
+  /**
+   * Downloads through the shared transport and reports measured file progress.
+   * Preparation survives owner follow-ups; the host still enforces explicit stops.
+   */
+  protected async downloadFile(
+    url: string,
+    targetPath: string,
+    destination = targetPath
+  ): Promise<void> {
+    await this.downloads.download({ url, path: targetPath }, {
+      destination,
+      ...(this.preparations.size === 0 && this.executionContext?.signal
+        ? { signal: this.executionContext.signal } : {})
+    })
   }
 
   /**
@@ -1037,6 +1071,11 @@ export abstract class Tool {
         resource_name: resourceName
       })
 
+      this.queueDownloads(resourceUrls.map((url) => ({
+        url,
+        path: path.join(resourcePath, this.getResourceRelativePath(url))
+      })))
+
       // Download each resource file
       for (const resourceUrl of resourceUrls) {
         const adjustedUrl = await setHuggingFaceURL(resourceUrl)
@@ -1056,12 +1095,7 @@ export abstract class Tool {
 
         try {
           await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-          await FileDownloader.downloadFile(adjustedUrl, filePath, {
-            cliProgress: false,
-            parallelStreams: 3,
-            skipExisting: false,
-            onProgress: this.createDownloadProgressListener(fileName)
-          })
+          await this.downloadFile(adjustedUrl, filePath)
           await this.report('bridges.tools.resource_file_downloaded', {
             resource_name: resourceName,
             file_name: fileName,
@@ -1507,14 +1541,7 @@ export abstract class Tool {
         downloadPath = outputPath + archiveExt
       }
 
-      await FileDownloader.downloadFile(url, downloadPath, {
-        cliProgress: false,
-        parallelStreams: 3,
-        skipExisting: false,
-        onProgress: this.createDownloadProgressListener(
-          path.basename(downloadPath)
-        )
-      })
+      await this.downloadFile(url, downloadPath)
 
       // If it's an archive, extract it
       if (isArchiveDownload) {
@@ -1598,99 +1625,6 @@ export abstract class Tool {
       process.stderr.write(logMessage + '\n')
     } else {
       process.stdout.write(logMessage + '\n')
-    }
-  }
-
-  /**
-   * Create a throttled progress listener for a download.
-   * @param fileName The name of the file being downloaded
-   */
-  private createDownloadProgressListener(
-    fileName: string
-  ): (progress: DownloadFileProgress) => void {
-    if (!this.cliProgress && !this.executionContext?.onProgress) {
-      return (): void => {}
-    }
-
-    let lastLoggedPercentage = -1
-    let lastLogTime = 0
-    let lastReportedBytes = 0
-    const context = this.executionContext
-    const LOG_INTERVAL_MS = 2_000 // Log every 2 seconds at most
-    const PERCENTAGE_THRESHOLD = 5 // Log every 5% progress
-
-    return (progress: DownloadFileProgress): void => {
-      const percentage = Math.round(progress.percentage ?? 0)
-      const currentTime = Date.now()
-
-      // Only log if we've made significant progress or enough time has passed
-      const shouldLog =
-        percentage >= lastLoggedPercentage + PERCENTAGE_THRESHOLD ||
-        currentTime - lastLogTime >= LOG_INTERVAL_MS ||
-        percentage === 100
-
-      if (!shouldLog) {
-        return
-      }
-
-      lastReportedBytes = Math.min(lastReportedBytes, progress.downloadedBytes)
-      if (progress.downloadedBytes > lastReportedBytes) {
-        this.emitProgress(`Downloading ${fileName}: ${formatBytes(progress.downloadedBytes)}`, context)
-        lastReportedBytes = progress.downloadedBytes
-      }
-      lastLoggedPercentage = percentage
-      lastLogTime = currentTime
-
-      if (!this.cliProgress) {
-        return
-      }
-
-      const speed =
-        progress.bytesPerSecond > 0
-          ? formatSpeed(progress.bytesPerSecond)
-          : ''
-      const eta =
-        progress.etaMs !== null ? formatETA(progress.etaMs / 1_000) : ''
-
-      const progressData: Record<string, string | number> = {
-        file_name: fileName,
-        percentage: percentage,
-        speed: '',
-        eta: '',
-        downloaded_size: '',
-        total_size: ''
-      }
-      if (speed) {
-        progressData['speed'] = speed
-      }
-      if (eta && eta !== '∞') {
-        progressData['eta'] = eta
-      }
-      if (
-        progress.totalBytes !== null &&
-        progress.downloadedBytes <= progress.totalBytes
-      ) {
-        progressData['downloaded_size'] = formatBytes(progress.downloadedBytes)
-        progressData['total_size'] = formatBytes(progress.totalBytes)
-      }
-
-      const progressKey =
-        progressData['speed'] &&
-        progressData['eta'] &&
-        progressData['downloaded_size'] &&
-        progressData['total_size']
-          ? 'bridges.tools.download_progress_with_details'
-          : 'bridges.tools.download_progress'
-      void this.report(progressKey, progressData)
-
-      if (
-        progress.totalBytes !== null &&
-        progress.downloadedBytes === progress.totalBytes
-      ) {
-        void this.report('bridges.tools.download_completed', {
-          file_name: fileName
-        })
-      }
     }
   }
 

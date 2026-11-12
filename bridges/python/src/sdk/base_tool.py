@@ -15,7 +15,10 @@ from abc import ABC, abstractmethod
 from typing import Callable, Dict, Optional, Union, List, Any, cast
 from pypdl import Pypdl
 from urllib.parse import urlparse, quote
-from .tool_runtime_types import ToolExecutionContext, ToolModelFile, ToolProgressStream
+from .tool_runtime_types import (
+    ToolExecutionContext, ToolModelFile, ToolProgressStream,
+    DownloadStatus, FileDownloadProgress,
+)
 from .toolkit_config import ToolkitConfig
 from .leon import leon
 from .utils import (
@@ -23,8 +26,6 @@ from .utils import (
     is_macos,
     set_hugging_face_url,
     format_bytes,
-    format_speed,
-    format_eta,
     format_file_path,
     extract_archive,
 )
@@ -63,6 +64,8 @@ COMMAND_OUTPUT_PROGRESS_INTERVAL_SECONDS = 2.0
 OUTPUT_CHUNK_MAX_CHARS = 4_000
 COMMAND_OUTPUT_CHUNK_BYTES = 4_096
 COMMAND_READER_CLEANUP_SECONDS = 1.0
+DOWNLOAD_PROGRESS_INTERVAL_SECONDS = 1.0
+DOWNLOAD_POLL_INTERVAL_SECONDS = 0.1
 
 
 # Command execution options
@@ -97,6 +100,7 @@ class BaseTool(ABC):
         # Rich text is opt-in; command output remains literal by default.
         self.output_format = "text"
         self._model_files: list[ToolModelFile] = []
+        self._downloads: dict[str, FileDownloadProgress] = {}
         self.cli_progress = True
         self.settings: Dict[str, Any] = {}
         self.required_settings: List[str] = []
@@ -106,6 +110,67 @@ class BaseTool(ABC):
         """Reset per-call evidence when a host prepares this tool for execution."""
         self.execution_context = context
         self._model_files.clear()
+        self._downloads.clear()
+
+    def queue_downloads(self, paths: list[str]) -> None:
+        """Publish known files before starting the first transfer."""
+        for file_path in paths:
+            if file_path not in self._downloads:
+                self._downloads[file_path] = {
+                    "id": file_path,
+                    "fileName": os.path.basename(file_path),
+                    "status": DownloadStatus.QUEUED,
+                    "downloadedBytes": 0,
+                    "totalBytes": None,
+                    "etaMs": None,
+                }
+        self._publish_downloads()
+
+    def _publish_downloads(self, activity: bool = False) -> None:
+        """Emit immutable snapshots attached to the active tool invocation."""
+        context = self.execution_context
+        if context and context.on_progress:
+            context.on_progress({
+                "source": "report",
+                "message": "File download progress.",
+                "activity": activity,
+                "downloads": [dict(file) for file in self._downloads.values()],
+            })
+
+    def download_file(self, url: str, file_path: str) -> None:
+        """Download through the SDK transport with measured progress and cancellation."""
+        self.queue_downloads([file_path])
+        current = self._downloads[file_path]
+        current["status"] = DownloadStatus.DOWNLOADING
+        self._publish_downloads()
+        dl = Pypdl()
+
+        try:
+            dl.start(url=url, file_path=file_path, display=False, block=False)
+            self._handle_download_progress(dl, file_path)
+            if not os.path.isfile(file_path):
+                raise RuntimeError("The download did not create a file.")
+
+            current.update({
+                "status": DownloadStatus.COMPLETE,
+                "downloadedBytes": os.path.getsize(file_path),
+                "totalBytes": int(dl.size) if dl.size is not None else None,
+                "etaMs": None,
+            })
+            self._publish_downloads(True)
+        except Exception as error:
+            context = self.execution_context
+            current.update({
+                "status": DownloadStatus.CANCELLED
+                if context and context.signal and context.signal.is_set()
+                else DownloadStatus.FAILED,
+                "error": str(error),
+                "etaMs": None,
+            })
+            self._publish_downloads()
+            raise
+        finally:
+            dl.shutdown()
 
     def emit_output(
         self,
@@ -1006,6 +1071,11 @@ class BaseTool(ABC):
             "bridges.tools.downloading_resource", {"resource_name": resource_name}
         )
 
+        self.queue_downloads([
+            os.path.join(resource_path, self._get_resource_relative_path(url))
+            for url in resource_urls
+        ])
+
         # Download each resource file
         for resource_url in resource_urls:
             adjusted_url = set_hugging_face_url(resource_url)
@@ -1033,24 +1103,7 @@ class BaseTool(ABC):
                 if not os.path.exists(file_dir):
                     os.makedirs(file_dir, exist_ok=True)
 
-                # Use pypdl to download the file properly
-                dl = Pypdl()
-
-                if self.cli_progress or (
-                    self.execution_context and self.execution_context.on_progress
-                ):
-                    # Start download without blocking and with custom progress tracking
-                    dl.start(
-                        url=adjusted_url,
-                        file_path=file_path,
-                        display=False,
-                        block=False,
-                    )
-
-                    self._handle_download_progress(dl, file_name)
-                else:
-                    # Use standard download with display=False
-                    dl.start(url=adjusted_url, file_path=file_path, display=False)
+                self.download_file(adjusted_url, file_path)
 
                 # Verify the file was downloaded correctly
                 if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
@@ -1325,19 +1378,7 @@ class BaseTool(ABC):
                     archive_ext = os.path.splitext(url_basename)[1]
                 download_path = output_path + archive_ext
 
-            # Use pypdl to download the file
-            dl = Pypdl()
-
-            if self.cli_progress or (
-                self.execution_context and self.execution_context.on_progress
-            ):
-                # Start download without blocking and with custom progress tracking
-                dl.start(url=url, file_path=download_path, display=False, block=False)
-
-                self._handle_download_progress(dl, os.path.basename(download_path))
-            else:
-                # Use standard download with display=False
-                dl.start(url=url, file_path=download_path, display=False)
+            self.download_file(url, download_path)
 
             # Verify the file was downloaded correctly
             if not os.path.exists(download_path) or os.path.getsize(download_path) == 0:
@@ -1418,83 +1459,42 @@ class BaseTool(ABC):
         sys.stdout.write(log_message + "\n")
         sys.stdout.flush()
 
-    def _handle_download_progress(self, dl: "Pypdl", file_name: str) -> None:
-        """
-        Handle download progress tracking with custom logging
-
-        Args:
-            dl: The Pypdl downloader instance
-            file_name: The name of the file being downloaded
-        """
-        last_logged_percentage = -1
-        last_log_time = 0
+    def _handle_download_progress(self, dl: Pypdl, file_path: str) -> None:
+        """Report measured bytes while waiting for the transport's actual completion."""
+        last_report_time = 0.0
         last_reported_bytes = 0
+        current = self._downloads[file_path]
         context = self.execution_context
-        LOG_INTERVAL_MS = 2000  # Log every 2 seconds at most
-        PERCENTAGE_THRESHOLD = 5  # Log every 5% progress
 
-        dl_any = cast(Any, dl)
-        failed = bool(getattr(dl_any, "Failed", False))
-        while dl.progress < 100 and not failed:
-            current_progress = int(dl.progress)
-            current_time = int(time.time() * 1000)
+        while not dl.completed:
+            if context and context.signal and context.signal.is_set():
+                dl.stop()
+                raise RuntimeError("Download cancelled.")
 
-            # Only log if we've made significant progress or enough time has passed
-            should_log = (
-                current_progress >= last_logged_percentage + PERCENTAGE_THRESHOLD
-                or current_time - last_log_time >= LOG_INTERVAL_MS
-                or current_progress == 100
-            )
-
-            if should_log:
-                downloaded_bytes = float(getattr(dl_any, "doneMB", 0) or 0) * 1_024 * 1_024
-                last_reported_bytes = min(last_reported_bytes, downloaded_bytes)
-                if downloaded_bytes > last_reported_bytes:
-                    self.emit_progress(
-                        f"Downloading {file_name}: {format_bytes(downloaded_bytes)}", context
-                    )
-                    last_reported_bytes = downloaded_bytes
-
-                speed_info = ""
-                speed_value = getattr(dl_any, "speed", None)
-                if speed_value and speed_value > 0:
-                    speed_info = f" at {format_speed(speed_value)}"
-
-                eta_info = ""
-                eta_value = getattr(dl_any, "eta", None)
-                if eta_value:
-                    eta_value_str: str = str(eta_value)
-                    formatted_eta = format_eta(eta_value_str)
-                    if formatted_eta != "∞":
-                        eta_info = f" (ETA: {formatted_eta})"
-
-                size_info = ""
-                total_mb = getattr(dl_any, "totalMB", None)
-                done_mb = getattr(dl_any, "doneMB", None)
-                if total_mb and done_mb:
-                    total_bytes = total_mb * 1024 * 1024
-                    done_bytes = done_mb * 1024 * 1024
-                    size_info = (
-                        f" [{format_bytes(done_bytes)}/{format_bytes(total_bytes)}]"
-                    )
-
-                progress_line = f"Downloading {file_name}: {current_progress}%{speed_info}{eta_info}{size_info}"
+            now = time.monotonic()
+            if now - last_report_time >= DOWNLOAD_PROGRESS_INTERVAL_SECONDS:
+                downloaded_bytes = int(dl.current_size)
+                current.update({
+                    "downloadedBytes": downloaded_bytes,
+                    "totalBytes": int(dl.size) if dl.size is not None else None,
+                    "etaMs": float(dl.eta) * 1_000
+                    if dl.eta is not None and dl.eta >= 0 else None,
+                })
+                self._publish_downloads(downloaded_bytes > last_reported_bytes)
                 if self.cli_progress:
-                    self.log(progress_line)
+                    self.log(
+                        f"Downloading {current['fileName']}: {format_bytes(downloaded_bytes)}"
+                    )
+                last_report_time = now
+                last_reported_bytes = downloaded_bytes
 
-                last_logged_percentage = current_progress
-                last_log_time = current_time
+            if context and context.signal:
+                context.signal.wait(DOWNLOAD_POLL_INTERVAL_SECONDS)
+            else:
+                time.sleep(DOWNLOAD_POLL_INTERVAL_SECONDS)
 
-            # Small delay to prevent busy waiting
-            time.sleep(0.1)
-            failed = bool(getattr(dl_any, "Failed", False))
-
-        # Log completion
-        if self.cli_progress:
-            self.log(f"Download completed: {file_name}")
-
-        if bool(getattr(dl_any, "Failed", False)):
-            raise Exception("Download failed")
+        if dl.failed:
+            raise RuntimeError("Download failed.")
 
     def report(
         self,
