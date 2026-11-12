@@ -5,6 +5,7 @@ import { clsx } from 'clsx'
 import type { FeedPlanStep, LeonFeedActivity } from '@/data/feed'
 import { isToolCallVisible } from '@/data/feed'
 import { Collapse } from '@/components/collapse'
+import { Loader } from '@/components/loader'
 import { useProcessGroupNestedDisclosureDefault } from '@/components/process-group'
 import { ToolCallList } from '@/components/tool-call-list'
 
@@ -44,7 +45,9 @@ export function TaskListItem({ step, renderActivity }: TaskListItemProps) {
     ? <Icon name="check-line" className="task-list-item-marker-icon" />
     : step.status === 'error'
       ? <Icon name="close-line" className="task-list-item-marker-icon" />
-      : null
+      : step.status === 'in_progress'
+        ? <Loader size="xs" />
+        : null
   const label = (
     <>
       <span className="task-list-item-label">{step.label}</span>
