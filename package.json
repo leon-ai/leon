@@ -32,9 +32,6 @@
       "onFail": "ignore"
     }
   },
-  "volta": {
-    "node": "24.22.1"
-  },
   "scripts": {
     "pre-commit": "lint-staged",
     "lint": "tsx scripts/lint.js",
