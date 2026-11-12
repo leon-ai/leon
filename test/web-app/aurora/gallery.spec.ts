@@ -2,12 +2,100 @@ import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import { AURORA_QUERY_EXAMPLES } from '../../fixtures/aurora'
 import { createConnectionPreview } from '../../fixtures/connections'
+import { finishFiniteAnimations } from '../e2e/fixtures'
 
 const CONNECTIONS = [...fs.globSync('tools/*/*/tool.json')].flatMap((file) => {
   const connection = createConnectionPreview(JSON.parse(fs.readFileSync(file, 'utf8')))
 
   return connection ? [connection] : []
 })
+
+test('slides connection details as one reversible block and releases cancelled exits', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/aurora.html')
+  await page.getByRole('button', { name: 'Connections', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Connection', exact: true }).selectOption('productivity_collaboration.notion')
+  const card = page.getByRole('region', { name: 'Notion', exact: true })
+  const open = card.getByRole('button', { name: 'Display OAuth settings', exact: true })
+  const back = card.getByRole('button', { name: 'Back', exact: true })
+  const collapse = card.locator('.aurora-connection-collapse')
+  const field = card.getByLabel('Client ID', { exact: true })
+  const footer = card.locator('footer')
+  const closedTop = (await footer.boundingBox())!.y
+
+  await open.click()
+  await expect(field).toBeVisible()
+  await finishFiniteAnimations(card)
+  const openTop = (await footer.boundingBox())!.y
+  await field.fill('unsaved-preview-value')
+  // Pause browser-owned motion at its midpoint to inspect layout without sleeps.
+  await back.evaluate(async (button: HTMLButtonElement) => {
+    const block = button.closest('section')!.querySelector('.aurora-connection-collapse')!
+    button.click()
+    await new Promise(requestAnimationFrame)
+    for (const animation of block.getAnimations()) {
+      animation.pause()
+      animation.currentTime = Number(animation.effect!.getComputedTiming().duration) / 2
+    }
+  })
+  await expect(collapse).toHaveAttribute('inert', '')
+  await expect(collapse).toHaveAttribute('aria-hidden', 'true')
+  await expect(field).toHaveValue('')
+  const middleTop = (await footer.boundingBox())!.y
+  expect(middleTop).toBeGreaterThan(closedTop)
+  expect(middleTop).toBeLessThan(openTop)
+  await collapse.evaluate((element) => {
+    for (const animation of element.getAnimations()) {
+      animation.finish()
+    }
+  })
+  await expect(collapse).toHaveCount(0)
+  expect(Math.abs((await footer.boundingBox())!.y - closedTop)).toBeLessThan(1)
+
+  await open.click()
+  await finishFiniteAnimations(card)
+  await back.evaluate(async (button: HTMLButtonElement) => {
+    const block = button.closest('section')!.querySelector('.aurora-connection-collapse')!
+    button.click()
+    await new Promise(requestAnimationFrame)
+    for (const animation of block.getAnimations()) {
+      animation.pause()
+    }
+  })
+  // A new screen must survive the previous screen's pending exit cleanup.
+  await open.evaluate((button: HTMLButtonElement) => button.click())
+  await finishFiniteAnimations(card)
+  await expect(field).toBeVisible()
+  await expect(collapse).toHaveAttribute('aria-hidden', 'false')
+  await back.evaluate(async (button: HTMLButtonElement) => {
+    const block = button.closest('section')!.querySelector('.aurora-connection-collapse')!
+    button.click()
+    await new Promise(requestAnimationFrame)
+    for (const animation of block.getAnimations()) {
+      animation.cancel()
+    }
+  })
+  await expect(collapse).toHaveCount(0)
+})
+
+for (const motion of ['reduced', 'zero duration'] as const) {
+  test(`releases connection fields when closing with ${motion} motion`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: motion === 'reduced' ? 'reduce' : 'no-preference' })
+    await page.goto('/aurora.html')
+    if (motion === 'zero duration') {
+      await page.addStyleTag({ content: '.aurora-connection-collapse { transition-duration: 0s; }' })
+    }
+    await page.getByRole('button', { name: 'Connections', exact: true }).click()
+    await page.getByRole('combobox', { name: 'Connection', exact: true }).selectOption('productivity_collaboration.notion')
+    const card = page.getByRole('region', { name: 'Notion', exact: true })
+    await card.getByRole('button', { name: 'Display OAuth settings', exact: true }).click()
+    await card.getByLabel('Client ID', { exact: true }).fill('unsaved-preview-value')
+    await card.getByRole('button', { name: 'Back', exact: true }).click()
+    await expect(card.locator('.aurora-connection-body')).toHaveCount(0)
+    await card.getByRole('button', { name: 'Display OAuth settings', exact: true }).click()
+    await expect(card.getByLabel('Client ID', { exact: true })).toHaveValue('')
+  })
+}
 
 for (const theme of ['light', 'dark'] as const) {
   test(`previews declared connections and their setup states without external requests (${theme})`, async ({ page }, testInfo) => {
@@ -34,11 +122,171 @@ for (const theme of ['light', 'dark'] as const) {
         const logo = card.locator('.aurora-connection-icon img.package-icon')
         await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
       }
+      await expect(card.locator('.aurora-connection-icon')).toHaveCSS('width', '48px')
+      await expect(card.locator('.aurora-connection-icon')).toHaveCSS('height', '48px')
+      await expect(card.locator('.aurora-connection-identity h3')).toHaveCSS('font-size', '18px')
+      await expect(card.locator('.aurora-connection-identity h3')).toHaveCSS('font-weight', '600')
+      await expect(card.locator('.aurora-connection-identity p')).toHaveCSS('font-size', '16px')
+      await expect(card.getByRole('button', { name: 'Refresh status', exact: true })).toHaveCount(0)
+      const state = page.getByRole('combobox', { name: 'Preview state' })
+      for (const [value, label] of [['adding', 'Adding…'], ['enabling', 'Enabling…'], ['loading', 'Loading…']] as const) {
+        await state.selectOption(value)
+        const pending = card.getByRole('button', { name: label, exact: true })
+        await expect(pending).toBeDisabled()
+        await expect(pending.locator('.loader-indicator')).toBeVisible()
+      }
+      await state.selectOption('installation')
+      const add = card.getByRole('button', { name: `Add ${name}`, exact: true })
+      await expect(add).toHaveText('Add')
+      await add.click()
+      await expect(card.getByRole('button', { name: `Connect ${name}`, exact: true })).toHaveText('Connect')
+      await expect(card.locator('input')).toHaveCount(0)
+      await expect(card.locator('header').getByRole('button')).toHaveCount(0)
+      const footer = card.locator('footer')
+      await expect(footer.getByRole('button', { name: `Connect ${name}`, exact: true })).toBeVisible()
+      await expect(footer).toHaveCSS('padding', '12px 16px')
+      await expect(footer).toHaveCSS('gap', '8px')
+      expect(await footer.evaluate((element) => {
+        const styles = getComputedStyle(document.documentElement)
+        const probe = document.createElement('span')
+        probe.style.color = styles.getPropertyValue('--color-surface')
+        document.body.append(probe)
+        const surface = getComputedStyle(probe).color
+        probe.remove()
+
+        return getComputedStyle(element).backgroundColor === surface
+      })).toBe(true)
+      if (connection.serverURL) {
+        await expect(card.locator('.aurora-connection-body')).toHaveCount(0)
+        await footer.getByRole('button', { name: 'Display OAuth settings', exact: true }).click()
+        await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
+        await card.getByLabel('Client ID', { exact: true }).fill('unsaved-preview-client')
+        await footer.getByRole('button', { name: 'Back', exact: true }).click()
+        await expect(card.locator('input')).toHaveCount(0)
+        await expect(card.locator('.aurora-connection-body')).toHaveCount(0)
+        await card.screenshot({ path: testInfo.outputPath(`${connection.provider}-initial-${theme}.png`) })
+      }
+      await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
+      const method = connection.methods['oauth'] ?? connection.methods['api_key']!
+      const needsApplication = Object.keys(method.settings).length > 0
+      if (needsApplication) {
+        const instructions = card.getByRole('list')
+        await expect(instructions).toHaveCSS('list-style-type', 'decimal')
+        await expect(instructions).toHaveCSS('list-style-position', 'inside')
+        await expect(instructions).toHaveCSS('padding-left', '0px')
+        await expect(instructions).toHaveCSS('font-size', '16px')
+        await expect(instructions.getByRole('link').first()).toHaveAttribute('href', method.setup_url)
+        await expect(card.locator('details')).toHaveCount(0)
+        await expect(card.getByRole('button', { name: 'Back to setup instructions' })).toHaveCount(0)
+        const connect = card.getByRole('button', { name: `Connect ${name}`, exact: true })
+        await expect(connect).toBeDisabled()
+        await expect(card.locator('header').getByRole('button')).toHaveCount(0)
+        await expect(footer.getByRole('button', { name: `Connect ${name}`, exact: true })).toBeVisible()
+        await footer.getByRole('button', { name: 'Back', exact: true }).click()
+        await expect(card.locator('input')).toHaveCount(0)
+        await connect.click()
+        await expect(connect).toBeDisabled()
+        const fields = card.locator('input')
+        for (const field of await fields.all()) {
+          await field.fill(' ')
+        }
+        await expect(connect).toBeDisabled()
+        for (const field of await card.locator('input').all()) {
+          await field.fill('preview-only-value')
+        }
+        if (name === 'TickTick' || name === 'Gmail') {
+          await expect(card.getByLabel('Client secret', { exact: true })).toHaveAttribute('type', 'password')
+        }
+        const help = card.getByRole('button', { name: 'Set it up for me', exact: true })
+        if (await help.count()) {
+          const divider = card.getByRole('separator', { name: 'or', exact: true })
+          await expect(divider).toBeVisible()
+          await expect.poll(() => help.evaluate((button) => {
+            const divider = button.parentElement!.querySelector('[role="separator"]')!
+
+            return button.getBoundingClientRect().y - divider.getBoundingClientRect().bottom
+          })).toBeGreaterThan(0)
+          await page.setViewportSize({ width: 390, height: 844 })
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+          await expect.poll(() => help.evaluate((button) => {
+            const instructions = button.closest('.aurora-connection-body')!.querySelector('ol')!
+
+            return button.getBoundingClientRect().y - instructions.getBoundingClientRect().bottom
+          })).toBeGreaterThan(0)
+          await page.setViewportSize({ width: 1_512, height: 982 })
+        }
+        await card.screenshot({ path: testInfo.outputPath(`${connection.provider}-${theme}.png`) })
+        await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
+      }
+      if (connection.methods['oauth']) {
+        const connecting = card.getByRole('button', { name: 'Connecting…', exact: true })
+        await expect(connecting).toBeDisabled()
+        await expect(connecting).toHaveAttribute('aria-busy', 'true')
+        expect(await connecting.evaluate((button) => getComputedStyle(button).color ===
+          getComputedStyle(button.querySelector('.loader-indicator')!).color)).toBe(true)
+        await page.getByRole('button', { name: 'Finish authorization', exact: true }).click()
+      }
+      await expect(card.locator('header .badge-success')).toHaveText('Connected')
+      await expect(card.locator('header .badge-success .badge-dot')).toBeVisible()
+      await expect(card.getByRole('button', { name: 'Connected', exact: true })).toHaveCount(0)
+      await card.screenshot({ path: testInfo.outputPath(`${connection.provider}-connected-${theme}.png`) })
+      const continuation = card.getByRole('button', { name: 'Continue', exact: true })
+      await expect(continuation).toHaveClass(/button-primary/)
+      expect(await continuation.evaluate((button) => {
+        const bounds = button.getBoundingClientRect()
+        const parent = button.parentElement!.getBoundingClientRect()
+
+        return Math.abs(bounds.right - parent.right + parseFloat(getComputedStyle(button.parentElement!).paddingRight))
+      })).toBeLessThan(1)
+      await continuation.click()
+      await expect(continuation).toHaveCount(0)
+      await state.selectOption('failed')
+      await expect(card.getByRole('alert')).toContainText('I couldn’t complete this step')
+      await expect(card.locator('header .badge-error .badge-dot')).toBeVisible()
+      if (connection.methods['oauth']) {
+        await state.selectOption('cancelled')
+        await expect(card.getByRole('status')).toContainText('Authorization was cancelled')
+        await expect(card.locator('header .badge-warning .badge-dot')).toBeVisible()
+      }
+      if (connection.methods['api_key'] && connection.methods['oauth']) {
+        await page.getByRole('combobox', { name: 'Preview configuration' }).selectOption('fallback')
+        await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
+        const token = card.getByLabel('Access token', { exact: true })
+        await token.fill('preview-only-token')
+        await token.press('Enter')
+        await expect(card.locator('header .badge-success')).toHaveText('Connected')
+      }
     }
+    await chooser.selectOption('music_audio.spotify')
+    const spotify = page.getByRole('region', { name: 'Spotify', exact: true })
+    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
+    await expect(spotify.getByText('Redirect URI', { exact: true })).toBeVisible()
+    await expect(spotify.locator('input[type="password"]')).toHaveCount(0)
+    await spotify.getByLabel('Client ID', { exact: true }).fill('sample-client')
+    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
+    await expect(spotify.getByRole('button', { name: 'Connecting…', exact: true })).toBeDisabled()
+    await page.getByRole('button', { name: 'Finish authorization', exact: true }).click()
+    await expect(spotify.locator('header .badge-success')).toHaveText('Connected')
+    await page.getByRole('combobox', { name: 'Preview configuration' }).selectOption('ready')
+    await expect(spotify.locator('input')).toHaveCount(0)
+    await expect(spotify.getByRole('button', { name: 'Set up manually', exact: true })).toHaveCount(0)
+    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
+    await expect(spotify.getByRole('button', { name: 'Connecting…', exact: true })).toBeDisabled()
+    await page.getByRole('button', { name: 'Cancel authorization', exact: true }).click()
+    await expect(spotify.getByRole('status')).toContainText('Authorization was cancelled')
+    await page.getByRole('combobox', { name: 'Preview state' }).selectOption('failed')
+    await expect(spotify.getByRole('alert')).toContainText('I couldn’t complete this step')
+    await page.getByRole('combobox', { name: 'Preview configuration' }).selectOption('application')
+    await page.getByRole('combobox', { name: 'Preview state' }).selectOption('assisted')
+    await expect(spotify.getByLabel('Client ID', { exact: true })).toBeVisible()
+    await expect(spotify.getByRole('button', { name: 'Connect Spotify', exact: true })).toBeDisabled()
+    await expect(spotify.getByText('You can follow setup progress in the conversation.', { exact: true })).toBeVisible()
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: testInfo.outputPath(`connections-${theme}.png`), fullPage: true })
+    await spotify.screenshot({ path: testInfo.outputPath(`spotify-${theme}.png`) })
     expect(external).toEqual([])
+    expect(await page.evaluate(() => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]))).not.toContain('preview-only-token')
   })
 }
 
