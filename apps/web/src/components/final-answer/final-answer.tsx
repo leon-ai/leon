@@ -9,6 +9,8 @@ import { AnswerParts } from '@/components/aurora-answer/answer-parts'
 import type { AnswerPart } from '../../../../../aurora/src/v2/contracts/answer'
 import type { Artifact } from '../../../../../server/src/core/artifacts/artifact-types'
 import { ArtifactAttachments } from '@/components/artifact-attachments'
+import { ToolPreparation } from '@/components/tool-call/tool-preparation'
+import type { ToolPreparationSnapshot } from '../../../../../aurora/src/v2/contracts/preparation'
 
 import './final-answer.sass'
 
@@ -25,6 +27,7 @@ interface FinalAnswerProps {
   metrics?: ConversationMetrics | undefined
   footer?: ReactNode
   active?: boolean | undefined
+  preparations?: { id: string, preparation: ToolPreparationSnapshot }[] | undefined
 }
 
 export function FinalAnswer({
@@ -36,11 +39,13 @@ export function FinalAnswer({
   active,
   parts,
   connections,
+  preparations,
   artifacts = []
 }: FinalAnswerProps) {
   return (
     <div className="final-answer">
       <section className="final-answer-body" aria-label="Leon’s final answer">
+        {preparations?.map(({ id, preparation }) => <ToolPreparation key={id} preparation={preparation} />)}
         {parts?.length ? <AnswerParts parts={parts} artifacts={artifacts} animationId={animationId} active={active} fallbackText={children} /> : <>
         <MarkdownContent
           animationId={animationId}

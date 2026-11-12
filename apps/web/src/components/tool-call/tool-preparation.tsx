@@ -15,9 +15,10 @@ import { useToast } from '@/components/toast'
 export function ToolPreparation({ preparation }: { preparation: ToolPreparationSnapshot }) {
   const owner = useContext(ConversationDetailsContext)
   const profile = useProfile()
+  const subject = preparation.purpose === 'download' ? 'download' : 'preparation'
   const { showToast } = useToast()
   const request = useMutation({
-    meta: { errorTitle: 'I could not cancel the preparation', profile },
+    meta: { errorTitle: `I could not cancel the ${subject}`, profile },
     retry: false,
     mutationFn: () => requestAPI<{ execution: { state: string } }>('tool-executions/cancel', {
       method: 'POST', body: JSON.stringify({ sessionId: owner?.sessionId, executionId: preparation.executionId })
@@ -25,13 +26,13 @@ export function ToolPreparation({ preparation }: { preparation: ToolPreparationS
     onSuccess: ({ execution }) => {
       if (queryClient.getQueryData<{ profile_name: string | null }>(PROFILE_AUTH_QUERY_KEY)?.profile_name === profile) {
         showToast({ type: 'success', title: execution.state === 'canceled'
-          ? 'I cancelled the preparation' : 'I requested cancellation',
-          description: execution.state === 'canceled' ? 'The preparation has stopped.' : 'I’ll show the result when the tool stops.' })
+          ? `I cancelled the ${subject}` : 'I requested cancellation',
+          description: execution.state === 'canceled' ? `The ${subject} has stopped.` : 'I’ll show the result when the tool stops.' })
       }
     }
   })
 
-  return <PreparationWidget title="Getting files ready" {...preparation}
+  return <PreparationWidget title={preparation.purpose === 'download' ? 'Downloads' : 'Getting files ready'} {...preparation}
     cancelling={request.isPending || request.isSuccess}
     {...(owner && preparation.executionId ? { onCancel: () => request.mutate() } : {})} />
 }

@@ -29,6 +29,13 @@ import { ConnectionsPreview } from './connection-preview'
 type GalleryKind = 'component' | 'widget' | 'connection' | 'generated' | 'answer' | 'feed'
 type DemoOutcome = 'success' | 'failure' | 'pending'
 
+const DOWNLOAD_ETA_EXAMPLES = [
+  { label: 'Seconds', value: 12_000 },
+  { label: 'Minutes', value: 3_582_000 },
+  { label: 'Hours', value: 7_182_000 },
+  { label: 'Minute boundary', value: 59_999 }
+] as const
+const DOWNLOAD_PREVIEW_EXTRA_FILES = 12
 const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, entry.description])
 const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
@@ -122,6 +129,9 @@ function SubmissionDemo({ children }: { children: (submit: (value: unknown) => P
 function PreparationDemo() {
   const [status, setStatus] = useState(PreparationStatus.Downloading)
   const [completed, setCompleted] = useState(36)
+  const [knownSize, setKnownSize] = useState(true)
+  const [etaMs, setEtaMs] = useState<number>(DOWNLOAD_ETA_EXAMPLES[0].value)
+  const [moreFiles, setMoreFiles] = useState(false)
   const details = {
     [PreparationStatus.Preparing]: 'Checking the files I need…',
     [PreparationStatus.Downloading]: 'Downloading the speech model',
@@ -134,12 +144,39 @@ function PreparationDemo() {
     <PreparationWidget title="Getting things ready" status={status} detail={details[status]}
       {...(status === PreparationStatus.Downloading ? { completed, total: 100 } : {})}
       onCancel={() => setStatus(PreparationStatus.Cancelled)} onRetry={() => setStatus(PreparationStatus.Downloading)} />
+    <PreparationWidget title="File downloads" status={status} detail={details[status]} downloads={[
+      { id: 'configuration', fileName: 'config.json', status: 'complete',
+        downloadedBytes: 1_024, totalBytes: 1_024, etaMs: null },
+      { id: 'model', fileName: 'model.safetensors', status: status === PreparationStatus.Ready ? 'complete'
+        : status === PreparationStatus.Failed ? 'failed' : status === PreparationStatus.Cancelled ? 'cancelled'
+          : status === PreparationStatus.Preparing ? 'queued' : 'downloading',
+      downloadedBytes: completed * 1_024 * 1_024, totalBytes: knownSize ? 100 * 1_024 * 1_024 : null, etaMs: knownSize ? etaMs : null,
+      ...(status === PreparationStatus.Failed ? { error: details[status] } : {}) },
+      { id: 'vocabulary', fileName: 'vocabulary.json', status: status === PreparationStatus.Ready ? 'complete'
+        : status === PreparationStatus.Cancelled ? 'cancelled' : 'queued',
+      downloadedBytes: 0, totalBytes: null, etaMs: null },
+      ...(moreFiles ? Array.from({ length: DOWNLOAD_PREVIEW_EXTRA_FILES }, (_, index) => ({
+        id: `model-part-${index + 1}`,
+        fileName: `model-part-${index + 1}.safetensors`,
+        status: 'queued' as const,
+        downloadedBytes: 0,
+        totalBytes: null,
+        etaMs: null
+      })) : [])
+    ]} onCancel={() => setStatus(PreparationStatus.Cancelled)} onRetry={() => setStatus(PreparationStatus.Downloading)} />
     <div className="demo-controls">
       <label>Preview state <select value={status} onChange={(event) => setStatus(event.target.value as PreparationStatus)}>
         {Object.values(PreparationStatus).map((value) => <option key={value} value={value}>{value}</option>)}
       </select></label>
       <label>Measured progress <input aria-label="Measured progress" type="range" min={0} max={100}
         value={completed} onChange={(event) => setCompleted(Number(event.target.value))} /></label>
+      <label><input type="checkbox" checked={knownSize}
+        onChange={(event) => setKnownSize(event.target.checked)} />Known file size</label>
+      <label>Remaining time <select value={etaMs} onChange={(event) => setEtaMs(Number(event.target.value))}>
+        {DOWNLOAD_ETA_EXAMPLES.map((example) => <option key={example.value} value={example.value}>{example.label}</option>)}
+      </select></label>
+      <label><input type="checkbox" checked={moreFiles}
+        onChange={(event) => setMoreFiles(event.target.checked)} />More download files</label>
     </div>
   </div>
 }
