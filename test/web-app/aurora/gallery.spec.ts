@@ -101,6 +101,19 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     }
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await expect(page.getByRole('heading', { name: 'Buttons', exact: true })).toBeVisible()
+    const badges = page.getByRole('region', { name: 'Badges', exact: true })
+    for (const variant of ['primary', 'secondary', 'success', 'error', 'warning']) {
+      const badge = badges.locator(`.badge-${variant}`)
+      await expect(badge).toBeVisible()
+      await expect(badge.locator('.badge-dot')).toHaveCount(variant === 'secondary' ? 0 : 1)
+      if (variant !== 'secondary') {
+        expect(await badge.evaluate((element) => getComputedStyle(element).color ===
+          getComputedStyle(element.querySelector('.badge-dot')!).backgroundColor)).toBe(true)
+      }
+    }
+    for (const label of ['New', 'Soon']) {
+      await expect(badges.getByText(label, { exact: true })).toHaveCSS('width', '56px')
+    }
     await page.getByRole('button', { name: 'Pin', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Pinned', exact: true })).toHaveAttribute('aria-pressed', 'true')
     const selection = page.getByRole('region', { name: 'Selections', exact: true })

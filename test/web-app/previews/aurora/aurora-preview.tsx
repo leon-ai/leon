@@ -5,7 +5,7 @@ import '@/styles/main.sass'
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  AURORA_CATALOG, ArtifactWidget, BooleanChoiceWidget, Button, ChoiceWidget,
+  AURORA_CATALOG, ArtifactWidget, Badge, BooleanChoiceWidget, Button, ChoiceWidget,
   FormWidget, Input, Loader, PreparationStatus, PreparationWidget, Progress,
   Selection, Range, Surface, Switch, Segmented, Tabs, NumberStepper, SearchSelect,
   DataTableWidget, ComparisonWidget
@@ -225,6 +225,12 @@ function Example({ id }: { id: string }) {
   switch (id) {
     case 'button':
       return <ButtonDemo />
+    case 'badge':
+      return <div className="aurora-actions">
+        <Badge label="New" /><Badge label="Soon" variant="secondary" />
+        <Badge label="Connected" variant="success" /><Badge label="Failed" variant="error" />
+        <Badge label="Action needed" variant="warning" />
+      </div>
     case 'input':
       return <div className="demo-stack"><Input ariaLabel="A small idea" placeholder="What’s on your mind?" />
         <Input ariaLabel="A longer note" multiline rows={3} placeholder="A little more room…" /></div>

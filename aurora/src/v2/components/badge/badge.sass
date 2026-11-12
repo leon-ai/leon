@@ -2,19 +2,22 @@
   display: inline-flex
   align-items: center
   justify-content: center
+  flex: 0 0 auto
   gap: 6px
-  padding: 4px 0
-  width: 56px
+  box-sizing: border-box
+  min-width: 56px
+  padding: var(--space-xs) var(--space-sm)
   border-radius: var(--border-radius-pill)
   background-color: var(--color-accent-soft)
   color: var(--color-accent)
   font-size: var(--font-size-xs)
   line-height: var(--line-height-xs)
+  white-space: nowrap
   transition: opacity var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
   .badge-dot
     display: inline-block
-    position: relative
+    flex: 0 0 4px
     width: 4px
     height: 4px
     border-radius: var(--border-radius-pill)
@@ -23,3 +26,15 @@
   &.badge-secondary
     background-color: var(--color-surface)
     color: var(--color-text-secondary)
+
+  &.badge-success
+    background-color: var(--color-success-soft)
+    color: var(--color-success)
+
+  &.badge-error
+    background-color: var(--color-danger-soft)
+    color: var(--color-danger)
+
+  &.badge-warning
+    background-color: var(--color-warning-soft)
+    color: var(--color-warning)

@@ -3,6 +3,7 @@
  */
 export const AURORA_CATALOG = [
   { id: 'button', kind: 'component', title: 'Buttons', description: 'Actions, toggles and submission states.' },
+  { id: 'badge', kind: 'component', title: 'Badges', description: 'Quiet labels and success, error and warning statuses.' },
   { id: 'input', kind: 'component', title: 'Inputs', description: 'Native text fields with shared typing and selection.' },
   { id: 'selection', kind: 'component', title: 'Selections', description: 'Keyboard-accessible radio and checkbox rows.' },
   { id: 'range', kind: 'component', title: 'Ranges', description: 'Native sliders with the shared accent and focus treatment.' },
