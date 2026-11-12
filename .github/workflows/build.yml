@@ -5,7 +5,7 @@ name: Build and tests
 
 on:
   push:
-    branches: [master, develop]
+    branches: [master]
   pull_request:
     branches: [master, develop]
 
@@ -25,8 +25,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    env:
-      LEON_HOME: ${{ runner.temp }}/leon-verification
 
     steps:
       - uses: actions/checkout@v6
@@ -85,6 +83,7 @@ jobs:
             const fs = require('node:fs');
             const path = require('node:path');
             const values = {
+              LEON_HOME: path.join(process.env.RUNNER_TEMP, 'leon-verification'),
               LEON_NODE_PATH: process.execPath,
               LEON_PNPM_PATH: path.join(process.env.PNPM_BIN_DIR, process.platform === 'win32' ? 'pnpm.exe' : 'pnpm'),
               LEON_PYTHON_PATH: process.env.PYTHON_BINARY,

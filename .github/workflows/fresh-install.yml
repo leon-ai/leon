@@ -69,10 +69,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
-    env:
-      LEON_HOME: ${{ runner.temp }}/leon-fresh-install
-      pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
-      UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
 
     steps:
       - name: Check out Leon
@@ -96,6 +92,10 @@ jobs:
       # Use the owner's installer, including managed runtimes, without the CI
       # shortcuts. Hosted runners have no interactive terminal for setup prompts.
       - name: Install and build from scratch
+        env:
+          LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+          pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
+          UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
         run: |
           node -e "
             const fs = require('node:fs');
@@ -117,6 +117,9 @@ jobs:
 
       - name: Verify installed server and DeepSeek inferences
         env:
+          LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+          pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
+          UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
           LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
           LEON_FRESH_INSTALL_LOG_PATH: ${{ runner.temp }}/leon-fresh-inferences.log
         run: node scripts/ci/test-fresh-install.js --verify
