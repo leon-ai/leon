@@ -191,7 +191,7 @@ export default async function buildServer(options = {}) {
   await runBuildStep(
     'Compiling TypeScript...',
     // Capture output in quiet mode so execa includes compiler diagnostics on failure.
-    () => execa('tsc', ['--project', 'tsconfig.json'], {
+    () => execa('tsrs', ['--fast', '--project', 'tsconfig.json'], {
       stdio: quiet ? 'pipe' : 'inherit'
     }),
     quiet

@@ -28,7 +28,7 @@
     },
     "packageManager": {
       "name": "pnpm",
-      "version": "12.14.0",
+      "version": "12.18.0",
       "onFail": "ignore"
     }
   },
@@ -159,13 +159,12 @@
     "@types/better-sqlite3": "7.6.13",
     "@types/cli-spinner": "0.2.3",
     "@types/getos": "3.0.4",
-    "@types/node": "25.6.0",
+    "@types/node": "26.6.6",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "@types/ws": "8.18.2",
     "@typescript-eslint/eslint-plugin": "8.64.0",
     "@typescript-eslint/parser": "8.64.0",
-    "@typescript/native": "npm:typescript@7.0.2",
     "@vitejs/plugin-react": "6.0.2",
     "cli-spinner": "0.2.10",
     "esbuild": "0.27.4",
@@ -184,7 +183,8 @@
     "sass": "1.100.0",
     "semver": "7.5.4",
     "shx": "0.4.0",
-    "tsx": "4.20.5",
+    "tsrs": "0.25.0-ts7.1.0-beta",
+    "tsx": "4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.3.5",
     "vitest": "5.0.5"
