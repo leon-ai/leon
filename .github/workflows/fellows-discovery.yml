@@ -1,3 +1,6 @@
+# Compare Leon's fellow catalog against released upstream configuration sources.
+# These network/source checks are platform-independent, so run them only on Linux.
+# Native discovery behavior is covered separately by the build workflow.
 name: Fellows discovery
 
 on:

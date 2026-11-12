@@ -14,6 +14,10 @@
 - Reuse suitable installed facilities instead of custom replacements. Propose
   missing TanStack packages first, explaining avoided complexity and maintainability
   or performance benefits; never install packages by default.
+- Treat filesystem paths, URLs, and bundler module IDs as distinct formats. Use
+  Node path utilities for filesystem paths, URL utilities for URLs, and Vite's
+  normalization where module IDs require it; never split filesystem paths on a
+  hardcoded separator. Verify build-tool changes on Windows and POSIX hosts.
 - Give explicit owner actions feedback through shared request/toast facilities:
   confirm successful management mutations only after server acceptance and report
   actionable failures once. Preserve profile isolation; do not duplicate cache-owned
