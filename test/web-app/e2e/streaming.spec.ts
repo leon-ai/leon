@@ -293,18 +293,20 @@ test('reuses completed Markdown parses across session remounts without sharing I
     const parse = JSON.parse
     const reads = { completed: 0, live: 0 }
     Reflect.set(window, 'markdownCacheReads', reads)
-    JSON.parse = function (...args: Parameters<typeof parse>): ReturnType<typeof parse> {
-      const value = parse(...args)
-      if (value?.type === 'root' && Array.isArray(value.children)) {
-        if (args[0].includes('Cacheable idea')) {
-          reads.completed++
+    JSON.parse = new Proxy(parse, {
+      apply(target, thisArg, args): ReturnType<typeof parse> {
+        const value = Reflect.apply(target, thisArg, args)
+        if (value?.type === 'root' && Array.isArray(value.children)) {
+          if (args[0].includes('Cacheable idea')) {
+            reads.completed++
+          }
+          if (args[0].includes('Live cache probe')) {
+            reads.live++
+          }
         }
-        if (args[0].includes('Live cache probe')) {
-          reads.live++
-        }
+        return value
       }
-      return value
-    }
+    })
   })
   const source = '## Cacheable idea\n\nA **warm** note[^craft] with $x^2$.\n\n[^craft]: Keep creating.'
   ui.history.get(SESSION_ID)!.at(-1)!.message = source

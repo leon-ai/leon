@@ -18,12 +18,12 @@
     "url": "https://github.com/leon-ai/leon/issues"
   },
   "engines": {
-    "node": ">=26.0.0"
+    "node": ">=24.0.0"
   },
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=26.0.0",
+      "version": ">=24.0.0",
       "onFail": "error"
     },
     "packageManager": {
@@ -165,7 +165,6 @@
     "@types/ws": "8.18.2",
     "@typescript-eslint/eslint-plugin": "8.64.0",
     "@typescript-eslint/parser": "8.64.0",
-    "@typescript/native": "npm:typescript@7.0.2",
     "@vitejs/plugin-react": "6.0.2",
     "cli-spinner": "0.2.10",
     "esbuild": "0.27.4",
@@ -184,6 +183,7 @@
     "sass": "1.100.0",
     "semver": "7.5.4",
     "shx": "0.4.0",
+    "tsrs": "0.25.0-ts7.1.0-beta",
     "tsx": "4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.3.5",

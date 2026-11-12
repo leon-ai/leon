@@ -14,6 +14,18 @@ saveExact: true
 minimumReleaseAge: 2160
 minimumReleaseAgeStrict: true
 
+# Keep the pinned compiler available with matching native builds on every platform.
+minimumReleaseAgeExclude:
+  - tsrs@0.25.0-ts7.1.0-beta
+  - '@tsrs/darwin-arm64@0.25.0-ts7.1.0-beta'
+  - '@tsrs/darwin-x64@0.25.0-ts7.1.0-beta'
+  - '@tsrs/linux-arm64-gnu@0.25.0-ts7.1.0-beta'
+  - '@tsrs/linux-arm64-musl@0.25.0-ts7.1.0-beta'
+  - '@tsrs/linux-x64-gnu@0.25.0-ts7.1.0-beta'
+  - '@tsrs/linux-x64-musl@0.25.0-ts7.1.0-beta'
+  - '@tsrs/win32-arm64@0.25.0-ts7.1.0-beta'
+  - '@tsrs/win32-x64@0.25.0-ts7.1.0-beta'
+
 # Do not let `pnpm run` auto-install dependencies before running scripts
 verifyDepsBeforeRun: false
 

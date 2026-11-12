@@ -3,7 +3,22 @@ import ora from 'ora'
 import { createSetupJokeScheduler } from './setup-jokes'
 
 /**
+ * A setup spinner whose lifecycle methods return the same status handle.
+ * @typedef {object} SetupStatus
+ * @property {() => SetupStatus} start
+ * @property {() => SetupStatus} pause
+ * @property {() => SetupStatus} stop
+ * @property {(text?: string) => SetupStatus} succeed
+ * @property {(text?: string) => SetupStatus} fail
+ * @property {(text?: string) => SetupStatus} warn
+ * @property {boolean} isSpinning
+ * @property {string} text
+ */
+
+/**
  * Create a setup spinner that plays well with prompts and download output.
+ * @param {string} text
+ * @returns {SetupStatus}
  */
 export function createSetupStatus(text) {
   const spinner = ora({

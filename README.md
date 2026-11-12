@@ -77,7 +77,7 @@ Leon also keeps a compact self-model and a bounded proactive pulse system so it 
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 26.0.0
+- [Node.js](https://nodejs.org/) >= 24.0.0
 - Supported OSes: Linux, macOS, and Windows
 
 Recommended: manage Node.js with [fnm](https://github.com/Schniz/fnm).

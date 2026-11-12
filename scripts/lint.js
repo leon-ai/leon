@@ -33,7 +33,7 @@ const globs = [
 
   try {
     await buildAurora({ quiet: true })
-    // Reuse unchanged files while still running both full TypeScript checks below.
+    // Reuse unchanged files while still checking every TypeScript project below.
     await execa('eslint', [
       ...globs,
       '--fix',
@@ -44,13 +44,13 @@ const globs = [
     ], {
       stdio: 'inherit'
     })
-    await execa('tsc', ['--noEmit', '-p', 'tsconfig.json'], {
+    await execa('tsrs', ['--fast', '--noEmit', '-p', 'tsconfig.json'], {
       stdio: 'inherit'
     })
-    await execa('tsc', ['--noEmit', '-p', 'apps/web/tsconfig.json'], {
+    await execa('tsrs', ['--fast', '--noEmit', '-p', 'apps/web/tsconfig.json'], {
       stdio: 'inherit'
     })
-    await execa('tsc', ['--noEmit', '-p', 'test/web-app/tsconfig.json'], {
+    await execa('tsrs', ['--fast', '--noEmit', '-p', 'test/web-app/tsconfig.json'], {
       stdio: 'inherit'
     })
 
