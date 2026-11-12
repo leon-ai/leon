@@ -28,19 +28,19 @@ jobs:
       # Scheduled workflows are loaded from the default branch, but Leon's
       # integration work lands on develop before it reaches a release branch.
       - name: Check out Leon
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           check-latest: true
           package-manager-cache: false
 
       - name: Install latest pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6.1.1
         with:
           version: latest
           run_install: false
@@ -50,11 +50,13 @@ jobs:
           LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
           LEON_FRESH_INSTALL_LOG_PATH: /tmp/leon-fresh-install.log
           LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+          pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
+          UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
         run: node scripts/ci/test-fresh-install.js
 
       - name: Upload installer log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: fresh-install-log
           path: /tmp/leon-fresh-install.log
@@ -72,19 +74,19 @@ jobs:
 
     steps:
       - name: Check out Leon
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           check-latest: true
           package-manager-cache: false
 
       - name: Install latest pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6.1.1
         with:
           version: latest
           run_install: false
@@ -107,8 +109,11 @@ jobs:
             }
             const env = { ...process.env };
             delete env.GITHUB_ACTIONS;
-            const command = process.platform === 'win32' ? 'pnpm.exe' : 'pnpm';
-            const result = spawnSync(command, ['install', '--frozen-lockfile'], { env, stdio: 'inherit', windowsHide: true });
+            // Package-manager actions can expose pnpm through a Windows command shim.
+            const isWindows = process.platform === 'win32';
+            const command = isWindows ? process.env.ComSpec || 'cmd.exe' : 'pnpm';
+            const args = [...(isWindows ? ['/d', '/s', '/c', 'pnpm'] : []), 'install', '--frozen-lockfile'];
+            const result = spawnSync(command, args, { env, stdio: 'inherit', windowsHide: true });
             if (result.error) {
               throw result.error;
             }
@@ -126,7 +131,7 @@ jobs:
 
       - name: Upload inference log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: fresh-install-log-${{ matrix.os }}
           path: ${{ runner.temp }}/leon-fresh-inferences.log

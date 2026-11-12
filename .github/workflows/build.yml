@@ -27,7 +27,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - name: Read runtime versions
         id: versions
@@ -41,16 +41,18 @@ jobs:
 
       - name: Use Python
         id: python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: ${{ steps.versions.outputs.python }}
 
       - name: Use uv
         id: uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           version: ${{ steps.versions.outputs.uv }}
           enable-cache: true
+          # Keep saved Python dependency caches compact across verification runs.
+          prune-cache: true
           cache-dependency-glob: |
             uv.toml
             **/pyproject.toml
@@ -60,12 +62,12 @@ jobs:
       # The action reads the repository's package-manager version before caching.
       - name: Install pnpm
         id: pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6.1.1
         with:
           run_install: false
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           check-latest: true
@@ -85,7 +87,7 @@ jobs:
             const values = {
               LEON_HOME: path.join(process.env.RUNNER_TEMP, 'leon-verification'),
               LEON_NODE_PATH: process.execPath,
-              LEON_PNPM_PATH: path.join(process.env.PNPM_BIN_DIR, process.platform === 'win32' ? 'pnpm.exe' : 'pnpm'),
+              LEON_PNPM_PATH: path.join(process.env.PNPM_BIN_DIR, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'),
               LEON_PYTHON_PATH: process.env.PYTHON_BINARY,
               LEON_UV_PATH: process.env.UV_BINARY
             };

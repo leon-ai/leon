@@ -9,7 +9,13 @@ import { stripVTControlCharacters } from 'node:util'
 
 const INSTALL_COMMAND =
   'stty rows 40 cols 120 && pnpm install --frozen-lockfile'
-const PNPM_COMMAND = process.platform === 'win32' ? 'pnpm.exe' : 'pnpm'
+// Windows command shims need a command interpreter even when pnpm is on PATH.
+const PNPM_COMMAND = process.platform === 'win32'
+  ? process.env.ComSpec || 'cmd.exe'
+  : 'pnpm'
+const PNPM_ARGUMENTS_PREFIX = process.platform === 'win32'
+  ? ['/d', '/s', '/c', 'pnpm']
+  : []
 const INSTALL_TIMEOUT = 45 * 60 * 1_000
 const REBUILD_TIMEOUT = 15 * 60 * 1_000
 const START_TIMEOUT = 2 * 60 * 1_000
@@ -135,10 +141,14 @@ process.once('SIGINT', () => stopActiveChildAndExit('SIGINT'))
 process.once('SIGTERM', () => stopActiveChildAndExit('SIGTERM'))
 
 function ensureEmptyPNPMStore(environment) {
-  const result = spawnSync(PNPM_COMMAND, ['store', 'path'], {
-    encoding: 'utf8',
-    env: environment
-  })
+  const result = spawnSync(
+    PNPM_COMMAND,
+    [...PNPM_ARGUMENTS_PREFIX, 'store', 'path'],
+    {
+      encoding: 'utf8',
+      env: environment
+    }
+  )
 
   if (result.status !== 0) {
     throw new Error(`Unable to resolve pnpm store path: ${result.stderr}`)
@@ -174,10 +184,14 @@ function forwardSafeOutput(source, destination, logStream) {
 
 function getPromptResponse(prompt, apiKey) {
   if (prompt.name === 'remote provider') {
-    const result = spawnSync(PNPM_COMMAND, ['exec', 'tsx', INFERENCE_SCRIPT, 'provider-selection'], {
-      encoding: 'utf8',
-      timeout: START_TIMEOUT
-    })
+    const result = spawnSync(
+      PNPM_COMMAND,
+      [...PNPM_ARGUMENTS_PREFIX, 'exec', 'tsx', INFERENCE_SCRIPT, 'provider-selection'],
+      {
+        encoding: 'utf8',
+        timeout: START_TIMEOUT
+      }
+    )
     if (result.status !== 0) {
       throw new Error('Unable to resolve the DeepSeek setup choice')
     }
@@ -390,7 +404,7 @@ async function verifyPendingBuilds(environment) {
   )
   await runCommand(
     PNPM_COMMAND,
-    ['rebuild', '--pending'],
+    [...PNPM_ARGUMENTS_PREFIX, 'rebuild', '--pending'],
     environment,
     REBUILD_TIMEOUT
   )
@@ -418,7 +432,7 @@ function smokeTestStart(environment, logPath) {
     const logStream = fs.createWriteStream(logPath, { flags: 'a' })
     let output = ''
     let forceStopTimeout = null
-    const child = spawn(PNPM_COMMAND, ['start'], {
+    const child = spawn(PNPM_COMMAND, [...PNPM_ARGUMENTS_PREFIX, 'start'], {
       detached: true,
       env: {
         ...environment,
@@ -458,11 +472,15 @@ function smokeTestStart(environment, logPath) {
       if (!isReady && normalizeOutput(output).includes(SERVER_READY_MESSAGE)) {
         isReady = true
         clearTimeout(startTimeout)
-        inferenceChild = spawn(PNPM_COMMAND, ['exec', 'tsx', INFERENCE_SCRIPT, 'run'], {
-          detached: true,
-          env: environment,
-          stdio: ['ignore', 'pipe', 'pipe']
-        })
+        inferenceChild = spawn(
+          PNPM_COMMAND,
+          [...PNPM_ARGUMENTS_PREFIX, 'exec', 'tsx', INFERENCE_SCRIPT, 'run'],
+          {
+            detached: true,
+            env: environment,
+            stdio: ['ignore', 'pipe', 'pipe']
+          }
+        )
         const stopServer = (error) => {
           if (inferenceComplete) {
             return
@@ -531,7 +549,7 @@ async function main() {
     // without automating a second, interactive installation on this platform.
     await runCommand(
       PNPM_COMMAND,
-      ['exec', 'tsx', INFERENCE_SCRIPT, 'configure'],
+      [...PNPM_ARGUMENTS_PREFIX, 'exec', 'tsx', INFERENCE_SCRIPT, 'configure'],
       environment,
       START_TIMEOUT
     )

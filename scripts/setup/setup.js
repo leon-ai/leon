@@ -341,7 +341,9 @@ async function syncLLMSetupChoice(preferences) {
     await setupToolsSettings()
     currentStep = 'setupSkills'
     await setupSkills()
-    if (!IS_GITHUB_ACTIONS) {
+    // CI can exercise full setup without the GitHub Actions marker.
+    // Local memory model downloads are unnecessary for those smoke checks.
+    if (!IS_GITHUB_ACTIONS && process.env.CI !== 'true') {
       currentStep = 'setupQMDLLM'
       await setupQMDLLM()
     } else {
