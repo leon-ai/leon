@@ -40,7 +40,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install latest pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6.1.1
         with:
           version: latest
           run_install: false
@@ -50,6 +50,8 @@ jobs:
           LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
           LEON_FRESH_INSTALL_LOG_PATH: /tmp/leon-fresh-install.log
           LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+          pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
+          UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
         run: node scripts/ci/test-fresh-install.js
 
       - name: Upload installer log on failure
@@ -84,7 +86,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install latest pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6.1.1
         with:
           version: latest
           run_install: false
@@ -107,8 +109,11 @@ jobs:
             }
             const env = { ...process.env };
             delete env.GITHUB_ACTIONS;
-            const command = process.platform === 'win32' ? 'pnpm.exe' : 'pnpm';
-            const result = spawnSync(command, ['install', '--frozen-lockfile'], { env, stdio: 'inherit', windowsHide: true });
+            // Package-manager actions can expose pnpm through a Windows command shim.
+            const isWindows = process.platform === 'win32';
+            const command = isWindows ? process.env.ComSpec || 'cmd.exe' : 'pnpm';
+            const args = [...(isWindows ? ['/d', '/s', '/c', 'pnpm'] : []), 'install', '--frozen-lockfile'];
+            const result = spawnSync(command, args, { env, stdio: 'inherit', windowsHide: true });
             if (result.error) {
               throw result.error;
             }
