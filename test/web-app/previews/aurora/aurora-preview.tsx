@@ -256,11 +256,12 @@ function Example({ id }: { id: string }) {
         <SearchSelect label="Make room for" multiple options={CHOICES} value={selected} onValueChange={setSelected} />
         <output aria-label="Selected moments">{selected.join(', ')}</output></div>
     case 'loader':
-      return <div className="aurora-actions"><Loader size="sm" label="A moment…" /><Loader size="md" label="Getting things ready…" /></div>
+      return <div className="aurora-actions"><Loader size="xs" label="A moment…" /><Loader size="sm" label="Getting ready…" /><Loader size="md" label="Getting things ready…" /></div>
     case 'progress':
       return <div className="demo-stack"><Progress label="Preparing a workspace" /><Progress label="Files downloaded" value={64} /></div>
     case 'surface':
-      return <Surface title="A place for your ideas" description="Small pieces can make something useful."><p>Start wherever feels right.</p></Surface>
+      return <Surface title="A place for your ideas" description="Small pieces can make something useful."
+        footer={<Button variant="primary">Keep this idea</Button>}><p>Start wherever feels right.</p></Surface>
     case 'boolean':
       return <SubmissionDemo>{(submit) => <BooleanChoiceWidget title="Keep this idea for later?" onSubmit={submit} />}</SubmissionDemo>
     case 'single-choice':

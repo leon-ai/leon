@@ -38,7 +38,8 @@ export function DataTableWidget({ title, description, columns, rows, searchable 
   const currentPage = Math.min(page, pages - 1)
   const visible = results.slice(currentPage * PRESENTATION_PAGE_SIZE, (currentPage + 1) * PRESENTATION_PAGE_SIZE)
 
-  return <Surface title={title} {...(description === undefined ? {} : { description })}>
+  return <Surface title={title} {...(description === undefined ? {} : { description })}
+    footer={pages > 1 && <Pagination label={title} page={currentPage} pages={pages} onPageChange={setPage} />}>
     {searchable && <Input type="search" ariaLabel={`Search ${title}`} placeholder="Find in this table…" value={query}
       onChange={(event) => {
         setQuery(event.target.value)
@@ -61,6 +62,5 @@ export function DataTableWidget({ title, description, columns, rows, searchable 
       </table>
     </ScrollContainer>
     {results.length === 0 && <p role="status" className="aurora-feedback">No matching rows.</p>}
-    <Pagination label={title} page={currentPage} pages={pages} onPageChange={setPage} />
   </Surface>
 }

@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Input } from '../components/input/input'
 import { Button } from '../components/button/button'
 import { Surface } from '../components/surface'
@@ -39,12 +40,17 @@ function readFormValues(form: HTMLFormElement, fields: readonly FormField[]): Re
  */
 export function FormWidget({ title, description, fields, submitLabel = 'Save', onSubmit,
   submitted = false, readOnly = false, initialValues, onDraftChange }: FormWidgetProps) {
+  const formId = useId()
   const { status: localStatus, disabled: localDisabled, submit } = useSubmission(onSubmit)
   const status = submitted ? SubmissionStatus.Submitted : localStatus
   const disabled = localDisabled || submitted || readOnly
 
-  return <Surface title={title} {...(description === undefined ? {} : { description })}>
-    <form className="aurora-fields" onChange={(event) => {
+  return <Surface title={title} {...(description === undefined ? {} : { description })} footer={<>
+    <SubmissionFeedback status={status} />
+    <Button type="submit" form={formId} variant="primary" disabled={disabled}
+      loading={status === SubmissionStatus.Pending}>{submitLabel}</Button>
+  </>}>
+    <form id={formId} className="aurora-fields" onChange={(event) => {
       if (onDraftChange && !disabled) {
         onDraftChange(readFormValues(event.currentTarget, fields))
       }
@@ -72,10 +78,6 @@ export function FormWidget({ title, description, fields, submitLabel = 'Save', o
           )}
         </label>)}
       </fieldset>
-      <div className="aurora-actions">
-        <Button type="submit" variant="primary" disabled={disabled} loading={status === SubmissionStatus.Pending}>{submitLabel}</Button>
-        <SubmissionFeedback status={status} />
-      </div>
     </form>
   </Surface>
 }

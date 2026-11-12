@@ -3,7 +3,7 @@ import { clsx } from 'clsx'
 import './loader.sass'
 
 interface LoaderProps {
-  size?: 'sm' | 'md'
+  size?: 'xs' | 'sm' | 'md'
   label?: string
 }
 

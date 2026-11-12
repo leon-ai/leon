@@ -21,13 +21,13 @@ export interface PreparationWidgetProps {
 export function PreparationWidget({ title, status, detail, completed, total, onCancel, onRetry, cancelling = false }: PreparationWidgetProps) {
   const active = status === PreparationStatus.Preparing || status === PreparationStatus.Downloading
 
-  return <Surface title={title}>
+  return <Surface title={title} footer={active && onCancel ?
+    <Button variant="secondary" loading={cancelling} onClick={onCancel}>Cancel</Button> :
+    status === PreparationStatus.Failed && onRetry && <Button variant="secondary" onClick={onRetry}>Try again</Button>}>
     <div role={status === PreparationStatus.Failed ? 'alert' : 'status'} aria-live="polite">
       {active ? <Progress label={detail}
         {...(completed !== undefined && total !== undefined && total > 0 ? { value: completed, max: total } : {})}
       /> : <p className="aurora-feedback">{detail}</p>}
     </div>
-    {active && onCancel && <div className="aurora-actions"><Button variant="secondary" loading={cancelling} onClick={onCancel}>Cancel</Button></div>}
-    {status === PreparationStatus.Failed && onRetry && <div className="aurora-actions"><Button variant="secondary" onClick={onRetry}>Try again</Button></div>}
   </Surface>
 }

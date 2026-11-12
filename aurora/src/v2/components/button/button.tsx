@@ -1,6 +1,7 @@
 import type { AnchorHTMLAttributes, AriaAttributes, CSSProperties, MouseEvent, ReactNode } from 'react'
 import { clsx } from 'clsx'
 import { BUTTON_VARIANTS, BUTTON_SIZES } from '../../contracts/controls'
+import { Loader } from '../loader/loader'
 
 import './button.sass'
 
@@ -24,6 +25,7 @@ export interface ButtonProps {
   disabled?: boolean
   loading?: boolean
   type?: 'button' | 'submit' | undefined
+  form?: string
   href?: string | undefined
   target?: string | undefined
   rel?: string | undefined
@@ -53,7 +55,7 @@ export function Button({
   children, className, icon, iconPosition = 'left', ariaLabel, ariaPressed,
   ariaBusy, ariaExpanded, ariaControls, ariaHasPopup, tone = 'default',
   variant = 'ghost', size = 'md', cursorStyle = 'pointer', disabled = false,
-  loading = false, type = 'button', href, target, rel, onClick, renderLink
+  loading = false, type = 'button', form, href, target, rel, onClick, renderLink
 }: ButtonProps) {
   const isDisabled = disabled || loading
   const isIconOnly = children === undefined
@@ -67,11 +69,13 @@ export function Button({
     'aria-haspopup': ariaHasPopup,
     style: { cursor: loading ? 'wait' : cursorStyle }
   }
-  const iconContent = icon !== undefined && <span className="button-icon" aria-hidden="true">{icon}</span>
+  const iconContent = (loading || icon !== undefined) && <span className="button-icon" aria-hidden="true">
+    {loading ? <Loader size="sm" /> : icon}
+  </span>
   const content = <>
-    {iconPosition === 'left' && iconContent}
+    {(loading || iconPosition === 'left') && iconContent}
     {children && <span className="button-label">{children}</span>}
-    {iconPosition === 'right' && iconContent}
+    {!loading && iconPosition === 'right' && iconContent}
   </>
 
   if (href !== undefined || renderLink !== undefined) {
@@ -90,5 +94,5 @@ export function Button({
     return renderLink ? renderLink(props) : <a {...props} href={href} target={target} />
   }
 
-  return <button {...common} type={type} disabled={isDisabled} onClick={onClick}>{content}</button>
+  return <button {...common} type={type} form={form} disabled={isDisabled} onClick={onClick}>{content}</button>
 }

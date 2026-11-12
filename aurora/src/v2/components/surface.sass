@@ -3,12 +3,26 @@
   gap: var(--space-lg)
   min-width: 0
   padding: var(--space-lg)
-  border: 1px solid var(--color-border)
+  border: 1px solid transparent
   border-radius: var(--border-radius-lg)
-  background-color: var(--color-surface-elevated)
+  background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
   color: var(--color-text)
   font-size: var(--font-size-md)
   line-height: var(--line-height-md)
+
+.aurora-surface-footer
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  justify-content: flex-end
+  gap: var(--space-sm)
+  min-width: 0
+  // Extend through the surface padding while preserving its content alignment.
+  margin: 0 calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg))
+  padding: var(--space-md) var(--space-lg)
+  border-top: 1px solid var(--color-border)
+  border-radius: 0 0 calc(var(--border-radius-lg) - 1px) calc(var(--border-radius-lg) - 1px)
+  background-color: var(--color-surface)
 
 .aurora-surface-header
   display: grid
