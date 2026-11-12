@@ -1,3 +1,6 @@
+# Exercise cold installations and live DeepSeek weather/OCR turns on all three OSes.
+# Linux also verifies interactive setup; Windows/macOS install without prompts.
+# Do not restore dependency/profile caches or repeat the discovery/regression suites.
 name: Fresh installation
 
 on:
@@ -17,6 +20,7 @@ concurrency:
 
 jobs:
   fresh-install:
+    name: Fresh installation (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -54,5 +58,74 @@ jobs:
         with:
           name: fresh-install-log
           path: /tmp/leon-fresh-install.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  platform-install:
+    name: Fresh installation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+      pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
+      UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
+
+    steps:
+      - name: Check out Leon
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
+
+      - name: Use Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          check-latest: true
+          package-manager-cache: false
+
+      - name: Install latest pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: latest
+          run_install: false
+
+      # Use the owner's installer, including managed runtimes, without the CI
+      # shortcuts. Hosted runners have no interactive terminal for setup prompts.
+      - name: Install and build from scratch
+        run: |
+          node -e "
+            const fs = require('node:fs');
+            const { spawnSync } = require('node:child_process');
+            for (const directory of ['node_modules', process.env.LEON_HOME, process.env.pnpm_config_store_dir, process.env.UV_CACHE_DIR]) {
+              if (fs.existsSync(directory) && fs.readdirSync(directory).length > 0) {
+                throw new Error('Fresh installation requires an empty directory: ' + directory);
+              }
+            }
+            const env = { ...process.env };
+            delete env.GITHUB_ACTIONS;
+            const command = process.platform === 'win32' ? 'pnpm.exe' : 'pnpm';
+            const result = spawnSync(command, ['install', '--frozen-lockfile'], { env, stdio: 'inherit', windowsHide: true });
+            if (result.error) {
+              throw result.error;
+            }
+            process.exit(result.status ?? 1);
+          "
+
+      - name: Verify installed server and DeepSeek inferences
+        env:
+          LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+          LEON_FRESH_INSTALL_LOG_PATH: ${{ runner.temp }}/leon-fresh-inferences.log
+        run: node scripts/ci/test-fresh-install.js --verify
+
+      - name: Upload inference log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fresh-install-log-${{ matrix.os }}
+          path: ${{ runner.temp }}/leon-fresh-inferences.log
           if-no-files-found: ignore
           retention-days: 7

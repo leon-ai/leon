@@ -2,21 +2,22 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { stripVTControlCharacters } from 'node:util'
 
 const INSTALL_COMMAND =
   'stty rows 40 cols 120 && pnpm install --frozen-lockfile'
+const PNPM_COMMAND = process.platform === 'win32' ? 'pnpm.exe' : 'pnpm'
 const INSTALL_TIMEOUT = 45 * 60 * 1_000
 const REBUILD_TIMEOUT = 15 * 60 * 1_000
-const BUILD_TIMEOUT = 10 * 60 * 1_000
 const START_TIMEOUT = 2 * 60 * 1_000
 const PROCESS_STOP_TIMEOUT = 5_000
 const OUTPUT_BUFFER_LIMIT = 32_000
 const INFERENCE_TIMEOUT = 22 * 60 * 1_000
 const INFERENCE_SCRIPT = 'scripts/ci/fresh-install-inferences.ts'
-const DEFAULT_LOG_PATH = '/tmp/leon-fresh-install.log'
+const DEFAULT_LOG_PATH = path.join(os.tmpdir(), 'leon-fresh-install.log')
 const MODULES_STATE_PATH = path.join('node_modules', '.modules.yaml')
 const SERVER_READY_MESSAGE = 'Server is available at '
 const INSTALL_OUTPUT_RESUME_MARKER = 'Base Setup'
@@ -92,6 +93,24 @@ function stopProcessGroup(child, signal = 'SIGTERM') {
   }
 
   try {
+    if (process.platform === 'win32') {
+      const result = spawnSync('taskkill.exe', [
+        '/PID', String(child.pid), '/T', '/F'
+      ], { encoding: 'utf8', windowsHide: true, timeout: PROCESS_STOP_TIMEOUT })
+
+      if (result.error) {
+        throw result.error
+      }
+
+      if (result.status !== 0) {
+        // An already-exited tree is safe to clean up repeatedly.
+        process.kill(child.pid, 0)
+        throw new Error(`Unable to stop process tree ${child.pid}: ${result.stderr}`)
+      }
+
+      return
+    }
+
     process.kill(-child.pid, signal)
   } catch (error) {
     if (error.code !== 'ESRCH') {
@@ -101,7 +120,10 @@ function stopProcessGroup(child, signal = 'SIGTERM') {
 }
 
 function stopActiveChildAndExit(signal) {
-  if (inferenceChild) stopProcessGroup(inferenceChild)
+  if (inferenceChild) {
+    stopProcessGroup(inferenceChild)
+  }
+
   if (activeChild) {
     stopProcessGroup(activeChild, signal)
   }
@@ -113,7 +135,7 @@ process.once('SIGINT', () => stopActiveChildAndExit('SIGINT'))
 process.once('SIGTERM', () => stopActiveChildAndExit('SIGTERM'))
 
 function ensureEmptyPNPMStore(environment) {
-  const result = spawnSync('pnpm', ['store', 'path'], {
+  const result = spawnSync(PNPM_COMMAND, ['store', 'path'], {
     encoding: 'utf8',
     env: environment
   })
@@ -152,13 +174,17 @@ function forwardSafeOutput(source, destination, logStream) {
 
 function getPromptResponse(prompt, apiKey) {
   if (prompt.name === 'remote provider') {
-    const result = spawnSync('pnpm', ['exec', 'tsx', INFERENCE_SCRIPT, 'provider-selection'], {
+    const result = spawnSync(PNPM_COMMAND, ['exec', 'tsx', INFERENCE_SCRIPT, 'provider-selection'], {
       encoding: 'utf8',
       timeout: START_TIMEOUT
     })
-    if (result.status !== 0) throw new Error('Unable to resolve the DeepSeek setup choice')
+    if (result.status !== 0) {
+      throw new Error('Unable to resolve the DeepSeek setup choice')
+    }
+
     return result.stdout
   }
+
   return prompt.name === 'API key' ? `${apiKey}\r` : prompt.response
 }
 
@@ -363,7 +389,7 @@ async function verifyPendingBuilds(environment) {
     `Rebuilding pending dependencies: ${initialPendingBuilds.join(', ')}`
   )
   await runCommand(
-    'pnpm',
+    PNPM_COMMAND,
     ['rebuild', '--pending'],
     environment,
     REBUILD_TIMEOUT
@@ -392,7 +418,7 @@ function smokeTestStart(environment, logPath) {
     const logStream = fs.createWriteStream(logPath, { flags: 'a' })
     let output = ''
     let forceStopTimeout = null
-    const child = spawn('pnpm', ['start'], {
+    const child = spawn(PNPM_COMMAND, ['start'], {
       detached: true,
       env: {
         ...environment,
@@ -432,13 +458,16 @@ function smokeTestStart(environment, logPath) {
       if (!isReady && normalizeOutput(output).includes(SERVER_READY_MESSAGE)) {
         isReady = true
         clearTimeout(startTimeout)
-        inferenceChild = spawn('pnpm', ['exec', 'tsx', INFERENCE_SCRIPT, 'run'], {
+        inferenceChild = spawn(PNPM_COMMAND, ['exec', 'tsx', INFERENCE_SCRIPT, 'run'], {
           detached: true,
           env: environment,
           stdio: ['ignore', 'pipe', 'pipe']
         })
         const stopServer = (error) => {
-          if (inferenceComplete) return
+          if (inferenceComplete) {
+            return
+          }
+
           inferenceComplete = true
           inferenceError = error
           clearTimeout(inferenceTimeout)
@@ -489,20 +518,39 @@ function smokeTestStart(environment, logPath) {
 async function main() {
   const environment = getCleanEnvironment()
   const apiKey = process.env.LEON_FRESH_INSTALL_API_KEY?.trim()
-  if (!apiKey) throw new Error('LEON_FRESH_INSTALL_API_KEY is required (GitHub secret LEON_DEEPSEEK_API_KEY)')
+
+  if (!apiKey) {
+    throw new Error('LEON_FRESH_INSTALL_API_KEY is required (GitHub secret LEON_DEEPSEEK_API_KEY)')
+  }
+
   const logPath =
     process.env.LEON_FRESH_INSTALL_LOG_PATH || DEFAULT_LOG_PATH
 
-  ensureEmptyPNPMStore(environment)
-  await runInteractiveInstall(environment, apiKey, logPath)
+  if (process.argv[2] === '--verify') {
+    // Headless installation has already completed; use the same server checks
+    // without automating a second, interactive installation on this platform.
+    await runCommand(
+      PNPM_COMMAND,
+      ['exec', 'tsx', INFERENCE_SCRIPT, 'configure'],
+      environment,
+      START_TIMEOUT
+    )
+  } else {
+    ensureEmptyPNPMStore(environment)
+    await runInteractiveInstall(environment, apiKey, logPath)
+  }
+
   await verifyPendingBuilds(environment)
-  await runCommand('pnpm', ['build'], environment, BUILD_TIMEOUT)
+  // Postinstall already builds both apps and the server.
   await smokeTestStart(environment, logPath)
   console.log('Fresh installation, build, weather, and OCR verification passed.')
 }
 
 main().catch((error) => {
-  if (inferenceChild) stopProcessGroup(inferenceChild)
+  if (inferenceChild) {
+    stopProcessGroup(inferenceChild)
+  }
+
   if (activeChild) {
     stopProcessGroup(activeChild)
   }

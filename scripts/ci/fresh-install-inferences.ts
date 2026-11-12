@@ -7,15 +7,21 @@ import { parse } from 'yaml'
 
 import { LEON_PROFILE_NAME, PROFILE_CONFIG_PATH } from '@/leon-roots'
 import { readStoredProfileToken } from '@/core/profile-auth'
+import { CONFIG_MANAGER } from '@/config'
 import { PROFILE_TOKEN_SEPARATOR } from '@/core/profile-runtime/profile-paths'
 import {
   LEON_CLIENT_INTERFACE_EVENTS as EVENTS,
   LEON_CLIENT_INTERFACE_PROTOCOL_VERSION,
   type LeonClientInterfaceAnswerPayload
 } from '@/core/leon-interface/types'
-import { getLLMModelCatalogProviders } from '@/core/llm-manager/llm-model-catalog'
+import {
+  getLLMModelCatalogEntries,
+  getLLMModelCatalogProviders
+} from '@/core/llm-manager/llm-model-catalog'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { RoutingMode, type AgentResponseTrace } from '@/types'
+
+import { updateDotEnvVariable } from '../setup/setup-dotenv'
 
 const CONNECTION_TIMEOUT = 120_000
 const INFERENCE_TIMEOUT = 10 * 60 * 1_000
@@ -117,6 +123,29 @@ function runInference(socket: Socket, scenario: Scenario): Promise<void> {
   })
 }
 
+/**
+ * Give an unattended, isolated installation the same provider/model choice as
+ * interactive setup, without embedding credentials or model IDs in workflows.
+ */
+async function configureFreshInstall(): Promise<void> {
+  assert(process.env['LEON_HOME'], 'An isolated LEON_HOME is required')
+  assert(fs.existsSync(PROFILE_CONFIG_PATH), 'Installation must finish before configuring inference checks')
+
+  const config = CONFIG_MANAGER.getConfig().llm
+
+  assert(!config.default && !config.agent && !config.workflow, 'Inference checks require an unconfigured fresh profile')
+
+  const apiKey = process.env['LEON_FRESH_INSTALL_API_KEY']?.trim()
+  const apiKeyEnv = CONFIG_MANAGER.getProviderAPIKeyEnv(LLMProviders.DeepSeek)
+  const model = getLLMModelCatalogEntries(LLMProviders.DeepSeek)[0]
+
+  assert(apiKey, 'LEON_FRESH_INSTALL_API_KEY is required')
+  assert(apiKeyEnv && model, 'DeepSeek setup metadata is missing')
+
+  await updateDotEnvVariable(apiKeyEnv, apiKey)
+  await CONFIG_MANAGER.setValue(['llm', 'default'], `${LLMProviders.DeepSeek}/${model.model}`)
+}
+
 async function main(): Promise<void> {
   const config = parse(fs.readFileSync(PROFILE_CONFIG_PATH, 'utf8'))
   const target = config.llm.agent || config.llm.default
@@ -166,8 +195,10 @@ if (process.argv[2] === 'provider-selection') {
   const index = getLLMModelCatalogProviders().indexOf(LLMProviders.DeepSeek)
   assert(index >= 0, 'DeepSeek is missing from the setup catalog')
   process.stdout.write('\x1b[B'.repeat(index) + '\r')
-} else if (process.argv[2] === 'run') {
-  main().catch((error: unknown) => {
+} else if (process.argv[2] === 'configure' || process.argv[2] === 'run') {
+  const operation = process.argv[2] === 'configure' ? configureFreshInstall : main
+
+  operation().catch((error: unknown) => {
     console.error(error)
     process.exitCode = 1
   })

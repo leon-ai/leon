@@ -1,35 +1,69 @@
-name: Build
+# Verify installation/build and native AI-fellow discovery on all three OSes.
+# Reuse dependency caches and run full regression suites and lint only on Linux.
+# Paid inference and cold-install checks belong to the fresh-install workflow.
+name: Build and tests
 
 on:
   push:
-    # branches: [master, develop]
-    branches: [master]
+    branches: [master, develop]
   pull_request:
-    # branches: [master, develop]
-    branches: [master]
+    branches: [master, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Verification (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      LEON_HOME: ${{ runner.temp }}/leon-verification
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Use Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: 3.x
-
-      - name: Read pnpm version
+      - name: Read runtime versions
         id: versions
         run: |
-          echo "pnpm=$(jq -r '.devEngines.packageManager.version' package.json)" >> "$GITHUB_OUTPUT"
+          node -e "
+            const fs = require('node:fs');
+            const python = JSON.parse(fs.readFileSync('bin/python/versions.json', 'utf8')).python.split('+')[0].split('.').slice(0, 2).join('.');
+            const uv = JSON.parse(fs.readFileSync('bin/uv/versions.json', 'utf8')).uv;
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'python=' + python + '\nuv=' + uv + '\n');
+          "
 
-      # Install pnpm before setup-node restores its package cache.
+      - name: Use Python
+        id: python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ steps.versions.outputs.python }}
+
+      - name: Use uv
+        id: uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ steps.versions.outputs.uv }}
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.toml
+            **/pyproject.toml
+            !**/.venv/**
+            !**/node_modules/**
+
+      # The action reads the repository's package-manager version before caching.
       - name: Install pnpm
+        id: pnpm
         uses: pnpm/action-setup@v5
         with:
-          version: ${{ steps.versions.outputs.pnpm }}
           run_install: false
 
       - name: Use Node.js
@@ -39,11 +73,53 @@ jobs:
           check-latest: true
           cache: pnpm
 
-      - name: Install
-        run: pnpm install
+      # Fast CI uses action-provided runtimes through Leon's existing overrides.
+      # Managed runtime downloads are exercised by the cold-install workflow.
+      - name: Bind CI runtimes
+        env:
+          PYTHON_BINARY: ${{ steps.python.outputs.python-path }}
+          UV_BINARY: ${{ steps.uv.outputs.uv-path }}
+          PNPM_BIN_DIR: ${{ steps.pnpm.outputs.bin_dest }}
+        run: |
+          node -e "
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const values = {
+              LEON_NODE_PATH: process.execPath,
+              LEON_PNPM_PATH: path.join(process.env.PNPM_BIN_DIR, process.platform === 'win32' ? 'pnpm.exe' : 'pnpm'),
+              LEON_PYTHON_PATH: process.env.PYTHON_BINARY,
+              LEON_UV_PATH: process.env.UV_BINARY
+            };
+            fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(values).map(([key, value]) => key + '=' + value).join('\n') + '\n');
+          "
 
-      - name: Check setup
-        run: pnpm run check
+      # Postinstall exercises setup and builds both apps and the server once.
+      - name: Install, set up and build Leon
+        run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm run build
+      - name: Build Aurora previews
+        if: runner.os == 'Linux'
+        run: pnpm exec vite build --config test/web-app/previews/vite.config.ts
+
+      - name: Run linter
+        if: runner.os == 'Linux'
+        run: pnpm run lint
+
+      # Linux's full unit suite already includes these isolated discovery fixtures.
+      - name: Check AI fellow discovery
+        if: runner.os != 'Linux'
+        env:
+          LEON_NODE_ENV: testing
+        run: pnpm exec vitest run --config vitest.config.ts test/onboarding/unit/fellows-discovery.spec.ts
+
+      - name: Run unit tests
+        if: runner.os == 'Linux'
+        run: pnpm run test:unit
+
+      - name: Run integration tests
+        if: runner.os == 'Linux'
+        run: pnpm run test:integration
+
+      - name: Run controlled e2e tests
+        if: runner.os == 'Linux'
+        run: pnpm run test:controlled:e2e

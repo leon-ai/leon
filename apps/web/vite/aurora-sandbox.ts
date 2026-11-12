@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { basename } from 'node:path'
 import { build } from 'esbuild'
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
@@ -67,10 +68,10 @@ export function auroraSandbox(): Plugin {
             return `export default ${JSON.stringify(result.outputFiles[0]!.text)}`
           }
           const files = result.outputFiles.map((file) => {
-            const name = file.path.split('/').at(-1)!
+            const name = basename(file.path)
             const metadata = result.metafile!.outputs[`aurora-engine/${name}`]!
             moduleFiles.set(`${group}/${name}`, JSON.stringify({ source: file.text,
-              imports: metadata.imports.map((item) => item.path.split('/').at(-1)!) }))
+              imports: metadata.imports.map((item) => basename(item.path)) }))
 
             return `${JSON.stringify(name)}: () => import(${JSON.stringify(`virtual:aurora-part/${group}/${name}`)})`
           })
