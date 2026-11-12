@@ -889,10 +889,15 @@ describe('continuous agent loop', () => {
     })
   })
 
-  it.each([true, false])('bounds stall recovery while preserving completed actions (recovers: %s)', async (recovers) => {
+  it.each([
+    { recovers: true, retryReason: ProviderRetryReason.Exhausted, reasoningOnly: true },
+    { recovers: false, retryReason: ProviderRetryReason.Exhausted, reasoningOnly: true },
+    { recovers: true, retryReason: ProviderRetryReason.Output, reasoningOnly: false },
+    { recovers: false, retryReason: ProviderRetryReason.Output, reasoningOnly: false }
+  ])('bounds $retryReason recovery while preserving completed actions (recovers: $recovers)', async ({ recovers, retryReason, reasoningOnly }) => {
     const timeout = new AgentModelResponseTimeoutError({
       providerEventCount: 3, providerCompleted: false, elapsedMs: 90_000,
-      reasoningOnly: true, replaySafe: true, retryReason: ProviderRetryReason.Exhausted
+      reasoningOnly, replaySafe: true, retryReason
     })
     const executeFunction = vi.fn().mockResolvedValue({
       execution: { function: callable.qualifiedName, status: 'success', observation: 'Receipt saved: release-42.' }
@@ -932,12 +937,15 @@ describe('continuous agent loop', () => {
   })
 
   it.each([
-    { reasoningOnly: false, replaySafe: true, providerCompleted: false },
-    { reasoningOnly: true, replaySafe: false, providerCompleted: false },
-    { reasoningOnly: true, replaySafe: true, providerCompleted: true }
-  ])('does not replay a stall without safe unfinished reasoning: %j', async (evidence) => {
+    { reasoningOnly: false, replaySafe: true, providerCompleted: false, retryReason: ProviderRetryReason.Exhausted },
+    { reasoningOnly: true, replaySafe: false, providerCompleted: false, retryReason: ProviderRetryReason.Exhausted },
+    { reasoningOnly: true, replaySafe: true, providerCompleted: true, retryReason: ProviderRetryReason.Exhausted },
+    { reasoningOnly: false, replaySafe: false, providerCompleted: false, retryReason: ProviderRetryReason.Output },
+    { reasoningOnly: false, replaySafe: true, providerCompleted: true, retryReason: ProviderRetryReason.Output },
+    { reasoningOnly: false, replaySafe: true, providerCompleted: false, retryReason: ProviderRetryReason.Deadline }
+  ])('does not replay a stall without safe unfinished output: %j', async (evidence) => {
     const callModel = vi.fn().mockRejectedValue(new AgentModelResponseTimeoutError({
-      providerEventCount: 3, elapsedMs: 90_000, retryReason: ProviderRetryReason.Exhausted,
+      providerEventCount: 3, elapsedMs: 90_000,
       ...evidence
     }))
     const result = await runAgentLoopWithCompletionReview({
@@ -949,14 +957,19 @@ describe('continuous agent loop', () => {
     expect(callModel).toHaveBeenCalledOnce()
   })
 
-  it.each(['cancellation', 'deadline'])('honors %s before dispatching stall recovery', async (stop) => {
+  it.each([
+    { stop: 'cancellation', retryReason: ProviderRetryReason.Exhausted, reasoningOnly: true },
+    { stop: 'deadline', retryReason: ProviderRetryReason.Exhausted, reasoningOnly: true },
+    { stop: 'cancellation', retryReason: ProviderRetryReason.Output, reasoningOnly: false },
+    { stop: 'deadline', retryReason: ProviderRetryReason.Output, reasoningOnly: false }
+  ])('honors $stop before dispatching $retryReason recovery', async ({ stop, retryReason, reasoningOnly }) => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
     const budget = new AgentRunBudget(Date.now() + 120_000)
     const owner = new AbortController()
     const cancellation = new Error('Stopped by the owner.')
     const callModel = vi.fn().mockRejectedValue(new AgentModelResponseTimeoutError({
       providerEventCount: 3, providerCompleted: false, elapsedMs: 90_000,
-      reasoningOnly: true, replaySafe: true, retryReason: ProviderRetryReason.Exhausted
+      reasoningOnly, replaySafe: true, retryReason
     }))
 
     try {
@@ -6240,20 +6253,32 @@ describe('model response status', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('continues through growing context after stall recovery and completes review', async () => {
+  it.each(['reasoning', 'text', 'tool input'])('continues through growing context after a %s stall and completes review', async (output) => {
     vi.spyOn(LogHelper, 'timeEnd').mockImplementation(() => {})
     vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
       reasoning: 'high', speed: 'fast'
     })
     const attempts: { params: CompletionParams, prompt: string }[] = []
     const sourceCount = 10
+    const stalledAttempts = output === 'reasoning' ? 2 : 1
     let requestedSources = 0
     const runChatCompletion = vi.fn((history, params: CompletionParams) => {
       attempts.push({ params, prompt: JSON.stringify(history) })
-      if (attempts.length <= 2) {
-        params.onStreamEvent?.({ type: 'reasoning-start' })
-        params.onReasoningToken?.('Checking saved evidence.')
-        params.onStreamEvent?.({ type: 'reasoning-end' })
+      if (attempts.length <= stalledAttempts) {
+        if (output === 'reasoning') {
+          params.onStreamEvent?.({ type: 'reasoning-start' })
+          params.onReasoningToken?.('Checking saved evidence.')
+          params.onStreamEvent?.({ type: 'reasoning-end' })
+        } else if (output === 'text') {
+          params.onToken?.('Unfinished receipt draft.')
+        } else {
+          params.onStreamEvent?.({ type: 'tool-input-delta' })
+          params.onToolCall?.({
+            id: 'unfinished', type: 'function',
+            function: { name: CALLABLE_TOOL_NAME, arguments: '{' }
+          })
+        }
+
         return new Promise((_resolve, reject) => {
           params.signal?.addEventListener('abort', () => reject(params.signal?.reason), { once: true })
         })
@@ -6322,29 +6347,45 @@ describe('model response status', () => {
         }
       )
     })
-    await vi.advanceTimersByTimeAsync(180_001)
+    await vi.advanceTimersByTimeAsync(output === 'reasoning' ? 180_001 : 30_001)
     const result = await pending
 
     expect(result.intent).toBe('answer')
     expect(result.answer).toContain('release-42')
     const summaries = attempts.filter(({ params }) => params.usagePurpose === InferencePurpose.ContextCompaction)
     expect(summaries.length).toBeGreaterThan(0)
-    expect(attempts).toHaveLength(sourceCount + summaries.length + 4)
-    expect(attempts[2]?.params).toMatchObject({
+    expect(attempts).toHaveLength(sourceCount + summaries.length + stalledAttempts + 2)
+    expect(attempts[stalledAttempts]?.params).toMatchObject({
       responseTransport: 'http', reasoningEffort: 'high', maxRetries: 0,
       remoteProviderErrorRetries: 0, connectionErrorRetries: 0, disableContextCompaction: true
     })
-    expect(attempts[2]!.prompt.length).toBeLessThan(attempts[1]!.prompt.length)
-    expect(attempts[2]!.prompt).toContain('release-42')
+    expect(attempts[stalledAttempts]!.prompt.length).toBeLessThan(attempts[stalledAttempts - 1]!.prompt.length)
+    expect(attempts[stalledAttempts]!.prompt).toContain('release-42')
+    expect(attempts[stalledAttempts]!.prompt).not.toContain('Unfinished receipt draft.')
+    expect(attempts[stalledAttempts]!.prompt).not.toContain('"id":"unfinished"')
     expect(executeFunction).toHaveBeenCalledTimes(sourceCount)
     expect(result.executionHistory).toHaveLength(sourceCount + 1)
     expect(result.executionHistory[0]).toEqual(executionHistory[0])
-    for (const attempt of attempts.slice(2).filter(({ params }) => params.usagePurpose !== InferencePurpose.ContextCompaction)) {
+    for (const attempt of attempts.slice(stalledAttempts).filter(({ params }) => params.usagePurpose !== InferencePurpose.ContextCompaction)) {
       expect(attempt.prompt.length).toBeLessThan(
         AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN
       )
     }
-    expect(attempts.slice(0, 2).every(({ params }) => params.signal?.aborted)).toBe(true)
+    expect(attempts.slice(0, stalledAttempts).every(({ params }) => params.signal?.aborted)).toBe(true)
+    const emitted = coreMocks.emitToChatClients.mock.calls
+      .filter(([event]) => event === 'llm-token')
+      .map(([, payload]) => payload)
+    if (output === 'text') {
+      const draft = emitted.find((payload) => payload.token === 'Unfinished receipt draft.')
+
+      expect(draft).toBeDefined()
+      expect(emitted).toContainEqual(expect.objectContaining({
+        token: '', generationId: draft.generationId, reset: true
+      }))
+    }
+    const count = coreMocks.emitToChatClients.mock.calls.length
+    attempts[0]!.params.onToken?.('Late discarded output.')
+    expect(coreMocks.emitToChatClients).toHaveBeenCalledTimes(count)
     expect(vi.getTimerCount()).toBe(0)
   })
 

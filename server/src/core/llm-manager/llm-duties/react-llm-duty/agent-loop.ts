@@ -1084,12 +1084,13 @@ export async function runAgentLoop(
 
         if (error instanceof AgentModelResponseTimeoutError) {
           if (!hasUsedStallRecovery && !params.runBudget?.isFinishing &&
-            error.diagnostics?.reasoningOnly === true &&
-            error.diagnostics.replaySafe === true &&
+            error.diagnostics?.replaySafe === true &&
             !error.diagnostics.providerCompleted &&
-            error.diagnostics.retryReason === ProviderRetryReason.Exhausted) {
-            // Replaying the same stalled request has already failed. Rebuild
-            // from retained evidence once without replaying completed actions.
+            (error.diagnostics.retryReason === ProviderRetryReason.Output ||
+              (error.diagnostics.reasoningOnly === true &&
+                error.diagnostics.retryReason === ProviderRetryReason.Exhausted))) {
+            // Interrupted drafts and unexecuted tool arguments are provisional.
+            // Rebuild once from retained evidence without replaying completed actions.
             hasUsedStallRecovery = true
             hasUsedContextRecovery = true
             isRecoveryAttempt = true
