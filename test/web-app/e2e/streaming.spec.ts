@@ -1583,20 +1583,28 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       const stepLines = Array.from(element.querySelectorAll('.task-list-item'))
         .map((step) => getComputedStyle(step, '::after').content)
       const marker = element.querySelector('.task-list-item-in_progress .task-list-item-marker')!
-      const dot = getComputedStyle(marker, '::before')
+      const indicator = marker.querySelector('.loader-xs .loader-indicator')!
+      const dot = getComputedStyle(indicator, '::before')
+      const markerBounds = marker.getBoundingClientRect()
+      const loaderBounds = indicator.getBoundingClientRect()
       return { spread: Math.max(...columns) - Math.min(...columns),
         incoming, stepLines, dot: { color: dot.backgroundColor, accent: getComputedStyle(marker).color,
-          width: dot.width, animation: dot.animationName, duration: dot.animationDuration } }
+          width: dot.width, animation: dot.animationName, duration: dot.animationDuration,
+          delay: getComputedStyle(indicator, '::after').animationDelay,
+          centered: Math.abs(markerBounds.x + markerBounds.width / 2 - loaderBounds.x - loaderBounds.width / 2) < 1 &&
+            Math.abs(markerBounds.y + markerBounds.height / 2 - loaderBounds.y - loaderBounds.height / 2) < 1 } }
     })
     expect(geometry.spread).toBeLessThanOrEqual(1)
     expect(geometry.incoming).toHaveLength(3)
     expect(geometry.incoming.every((content) => content === '""')).toBe(true)
     expect(geometry.stepLines.every((content) => content === 'none')).toBe(true)
-    expect(geometry.dot.width).toBe('6px')
+    expect(geometry.dot.width).toBe('12px')
+    expect(geometry.dot.centered).toBe(true)
     expect(geometry.dot.color).toBe(geometry.dot.accent)
-    expect(geometry.dot.animation).toBe(reducedMotion === 'reduce' ? 'none' : 'task-list-item-dot-pulse')
+    expect(geometry.dot.animation).toBe(reducedMotion === 'reduce' ? 'none' : 'loader-indicator-pulse')
     if (reducedMotion === 'no-preference') {
-      expect(geometry.dot.duration).toBe('3s')
+      expect(geometry.dot.duration).toBe('3.2s')
+      expect(geometry.dot.delay).toBe('1.6s')
     }
     for (const theme of ['light', 'dark']) {
       await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()

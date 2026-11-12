@@ -31,14 +31,6 @@
 .task-list-item-in_progress
   --task-list-item-title-color: var(--color-text)
 
-  .task-list-item-marker::before
-    width: 6px
-    height: 6px
-    border-radius: var(--border-radius-pill)
-    background-color: currentColor
-    animation: task-list-item-dot-pulse 3s ease-in-out infinite
-    content: ''
-
 .task-list-item-pending
   cursor: default
 
@@ -118,20 +110,7 @@
   transform-origin: center
   transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
 
-@keyframes task-list-item-dot-pulse
-  0%,
-  100%
-    opacity: .55
-    transform: scale(.85)
-
-  50%
-    opacity: 1
-    transform: scale(1)
-
 @media (prefers-reduced-motion: reduce)
-  .task-list-item-in_progress .task-list-item-marker::before
-    animation: none
-
   .task-list-item-label,
   .task-list-item-chevron
     transition: none

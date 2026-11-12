@@ -3,12 +3,113 @@ import fs from 'node:fs'
 import { AURORA_QUERY_EXAMPLES } from '../../fixtures/aurora'
 import { createConnectionPreview } from '../../fixtures/connections'
 import { finishFiniteAnimations } from '../e2e/fixtures'
+import { createFeedPreviewExamples } from '../../fixtures/feed-preview'
 
 const CONNECTIONS = [...fs.globSync('tools/*/*/tool.json')].flatMap((file) => {
   const connection = createConnectionPreview(JSON.parse(fs.readFileSync(file, 'utf8')))
 
   return connection ? [connection] : []
 })
+
+for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preference']] as const) {
+  test(`explores real feed activity states and complete turns without API requests (${theme}, ${reducedMotion})`, async ({ page }, testInfo) => {
+    const unexpectedRequests: string[] = []
+    const errors: string[] = []
+    const origin = new URL(testInfo.project.use.baseURL!).origin
+    const modules: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    page.on('request', (request) => {
+      if (request.url().startsWith('data:') || request.url().startsWith('blob:')) {
+        return
+      }
+      const url = new URL(request.url())
+      modules.push(url.pathname)
+      if (url.origin !== origin || url.pathname.startsWith('/api/')) {
+        unexpectedRequests.push(request.url())
+      }
+    })
+    await page.emulateMedia({ reducedMotion })
+    await page.goto('/aurora.html')
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    expect(modules.some((url) => url.includes('/feed-preview-'))).toBe(false)
+    await page.getByRole('button', { name: 'Feed', exact: true }).click()
+    const feed = page.getByRole('region', { name: 'Feed preview', exact: true })
+    const chooser = feed.getByRole('combobox', { name: 'Feed example', exact: true })
+    await expect(chooser).toBeVisible()
+    expect(modules.some((url) => url.includes('/feed-preview-') && url.endsWith('.js'))).toBe(true)
+    for (const status of ['preparing', 'running', 'success', 'error']) {
+      await expect(feed.locator(`.tool-call-${status}`).first()).toBeVisible()
+    }
+    const check = feed.getByRole('button', { name: /^Check the project/ })
+    await check.click()
+    const call = feed.locator('.tool-call').filter({ has: page.getByRole('button', { name: /^Check the project/ }) })
+    await expect(call.getByRole('region', { name: 'Tool output', exact: true })).toContainText('No warnings or errors.')
+    await call.getByRole('button', { name: 'View details', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Check the project', exact: true })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('tab', { name: 'Input', exact: true }).click()
+    await expect(dialog.getByRole('region', { name: 'Input JSON', exact: true })).toContainText('pnpm lint')
+    await dialog.getByRole('tab', { name: 'Output', exact: true }).click()
+    await expect(dialog.getByRole('region', { name: 'Output JSON', exact: true })).toContainText('No warnings or errors.')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await feed.getByRole('button', { name: /^Update the example greeting/ }).click()
+    await expect(feed.locator('.tool-changes')).toBeVisible()
+    await expect.poll(() => feed.locator('.tool-changes').evaluate((element) =>
+      element.querySelector('diffs-container')?.shadowRoot?.querySelector('pre')?.textContent ?? ''
+    )).toContain('Welcome home')
+    await chooser.selectOption('plan')
+    for (const status of ['pending', 'in_progress', 'completed', 'error']) {
+      await expect(feed.locator(`.task-list-item-${status}`)).toHaveCount(1)
+    }
+    const marker = feed.locator('.task-list-item-in_progress .loader-xs .loader-indicator')
+    await expect(marker).toHaveCSS('width', '12px')
+    await expect.poll(() => marker.evaluate((element) => getComputedStyle(element, '::before').animationName))
+      .toBe(reducedMotion === 'reduce' ? 'none' : 'loader-indicator-pulse')
+    await finishFiniteAnimations(feed)
+    await feed.screenshot({ path: testInfo.outputPath(`feed-plan-${theme}.png`) })
+    const examples = createFeedPreviewExamples(Date.now())
+    for (const example of examples) {
+      await chooser.selectOption(example.id)
+      await expect(feed.getByRole('heading', { name: example.title, exact: true })).toBeVisible()
+      await expect(feed.locator('.leon-message')).toHaveCount(1)
+      if (example.kind === 'turn') {
+        await expect(feed.locator('.owner-message')).toContainText('Check the project')
+      }
+    }
+    await chooser.selectOption('completed-no-plan')
+    await feed.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
+    await expect(feed.getByRole('region', { name: 'Leon’s review', exact: true })).toContainText('Reviewed for 1s')
+    await expect(feed.getByRole('region', { name: 'Leon’s final answer', exact: true })).toContainText('The project checks are complete.')
+    await expect(feed.getByRole('complementary', { name: 'FYI', exact: true })).toBeVisible()
+    const actions = feed.getByRole('group', { name: 'Answer actions', exact: true })
+    await actions.hover()
+    await actions.getByRole('button', { name: 'Turn info', exact: true }).click()
+    await expect(page.getByLabel('Recorded token metrics', { exact: true })).toContainText('2,400 in')
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Narrow preview', exact: true }).click()
+    await page.setViewportSize({ width: 390, height: 844 })
+    for (const id of ['tools', 'plan', 'completed-plan']) {
+      await chooser.selectOption(id)
+      if (id === 'completed-plan') {
+        await feed.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
+        await feed.getByRole('button', { name: 'Completed plan for 7s', exact: true }).click()
+      }
+      await finishFiniteAnimations(feed)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await feed.screenshot({ path: testInfo.outputPath(`feed-${id}-${theme}-narrow.png`) })
+    }
+    await feed.getByRole('button', { name: 'Replay example', exact: true }).click()
+    await expect(feed.getByRole('button', { name: 'Worked for 12s', exact: true })).toHaveAttribute('aria-expanded', 'false')
+    await page.getByRole('button', { name: 'Components', exact: true }).click()
+    await expect(feed).toHaveCount(0)
+    await expect.poll(() => page.workers().length).toBe(0)
+    expect(errors).toEqual([])
+    expect(unexpectedRequests).toEqual([])
+  })
+}
 
 test('slides connection details as one reversible block and releases cancelled exits', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })

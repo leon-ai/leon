@@ -1,0 +1,26 @@
+.feed-preview
+  display: grid
+  gap: var(--space-xl)
+  min-width: 0
+
+.feed-preview-description
+  display: grid
+  gap: var(--space-xs)
+
+  h2
+    font-weight: var(--font-weight-semi-bold)
+
+  p
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+.feed-preview-content
+  display: grid
+  gap: calc(var(--space-xl) * 2)
+  min-width: 0
+  color: var(--color-feed-text)
+  font-size: var(--font-size-lg)
+  line-height: var(--line-height-lg)
+
+  .scroll-container-viewport
+    overscroll-behavior-y: auto
