@@ -66,14 +66,17 @@ export async function setupMCPConnection(input: ConnectionSetupInput): Promise<C
     return undefined
   }
   const enabled = !ProfileHelper.isToolDisabled(manifest.tool_id, manifest.toolkit_id)
-  if (![Action.Refresh, Action.Credentials, Action.Connect, Action.Continue].includes(input.action as Action)) {
+  if (![Action.Refresh, Action.Credentials, Action.SelectMethod, Action.Connect, Action.Continue].includes(input.action as Action)) {
     throw new Error('Unknown connection action.')
   }
   if (input.authorization_failed) {
     await MCP_MANAGER.close(input.provider)
   }
   let authorization: { authorization_url?: string } = {}
-  const configuring = input.action === Action.Credentials || input.state?.step === Step.Credentials
+  // Returning to sign-in changes only the screen; application settings are
+  // persisted exclusively by an explicit Connect submission.
+  const configuring = input.action !== Action.SelectMethod &&
+    (input.action === Action.Credentials || input.state?.step === Step.Credentials)
   if (input.action === Action.Connect) {
     if (!enabled) {
       throw new Error('Enable this tool before connecting it.')
@@ -106,17 +109,18 @@ export async function setupMCPConnection(input: ConnectionSetupInput): Promise<C
       { name: 'client_id', label: 'Client ID', type: 'text', required: false, value: manifest.source.clientId ?? '', maxLength: 256 },
       { name: 'client_metadata_url', label: 'Client metadata URL', type: 'text', required: false, value: manifest.source.clientMetadataUrl ?? '', maxLength: 2_048 }
     ] : [], links: [],
-    details: { label: 'Connection details', instructions: configuring ? [
+    ...(configuring && !entry.connected ? { details: { label: 'Connection details', instructions: [
       'Use a public OAuth application with the redirect URI below. Client secrets are not supported by this flow.',
       'Enter its client ID or HTTPS client metadata URL only if the server requires it. Leave both empty for automatic registration.',
       'Changing application settings clears the previous authorization before starting a new sign-in.'
-    ] : ['This server supplies its functions after connecting.'], values: [
+    ], values: [
       { label: 'MCP server', value: manifest.source.url, copyLabel: 'Copy server URL' },
       { label: 'Redirect URI', value: getConnectionCallbackURL(input.callback_origin, input.api_version, 'tools'), copyLabel: 'Copy redirect URI' }
-    ] },
+    ] } } : {}),
     actions: entry.connected ? input.session_id && !continued ? [{ id: Action.Continue, label: 'Continue' }] : [] :
       !enabled ? [] : [{ id: Action.Connect, label: `Connect ${manifest.name}`, ...(configuring ? { submit: true } : {}) },
-        ...(!configuring ? [{ id: Action.Credentials, label: 'OAuth application settings', secondary: true }] : [])],
+        { id: configuring ? Action.SelectMethod : Action.Credentials,
+          label: configuring ? 'Back' : 'Display OAuth settings', secondary: true }],
     messages: CONNECTION_SETUP_MESSAGES
   } }
 }
