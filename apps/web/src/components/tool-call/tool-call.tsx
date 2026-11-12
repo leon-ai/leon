@@ -139,6 +139,7 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
               fallback={<ToolOutput content={output} label="Tool output" preview />} />
           ) : (
             <ToolOutput content={output} label="Tool output" active={isActive}
+              {...(disclosure.isError || disclosure.fetchStatus === 'paused' ? { emptyMessage: null } : {})}
               animationId={`${toolCall.id}:output`}
               loading={disclosure.isFetching} preview
               previewTail={liveCommand !== undefined || disclosure.data?.commandOutput !== undefined} />

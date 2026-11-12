@@ -68,15 +68,22 @@ interface ToolOutputProps {
   preview?: boolean
   previewTail?: boolean
   animationId?: string
+  emptyMessage?: string | null
 }
 
 /**
  * Keeps prose readable and bounded while terminal/code results remain literal.
  */
-export function ToolOutput({ content, label, active = false, loading = false, preview = false, previewTail = false, animationId }: ToolOutputProps) {
+export function ToolOutput({ content, label, active = false, loading = false, preview = false, previewTail = false, animationId,
+  emptyMessage = 'This tool function does not return output.' }: ToolOutputProps) {
   const localId = useId()
   const markdown = content?.language === 'markdown'
   const rich = markdown && content.text.length <= MAXIMUM_RENDERED_MARKDOWN_CHARACTERS
+  const empty = !content?.text.trim()
+
+  if (empty && !active && !loading) {
+    return emptyMessage ? <p className="tool-diff-notice">{emptyMessage}</p> : null
+  }
 
   return (
     <div className={`tool-output${markdown && !rich ? ' tool-output-document-source' : ''}`}>

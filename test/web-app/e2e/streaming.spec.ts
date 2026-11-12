@@ -9,6 +9,25 @@ import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/c
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
+test('explains completed empty tool output in both the preview and inspector', async ({ page, ui }) => {
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [{
+    id: 'empty-output', name: 'fixture.actions.run', toolCallTitle: 'Finish the action',
+    status: 'success', input: {}, output: '   ', durationMs: 50
+  }] }
+  await page.goto(SESSION_URL)
+  await page.getByRole('button', { name: 'Worked for', exact: false }).click()
+  await page.getByRole('button', { name: 'Used 1 tool', exact: false }).click()
+  await page.getByRole('button', { name: 'Finish the action', exact: false }).click()
+  const message = 'This tool function does not return output.'
+  await expect(page.getByText(message, { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'View details', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Finish the action', exact: true })
+  await expect(dialog.getByText(message, { exact: true })).toBeVisible()
+  await dialog.getByRole('tab', { name: 'Input', exact: true }).click()
+  await expect(dialog.getByText(message, { exact: true })).toHaveCount(0)
+})
+
 test('replaces fallback artwork after favicon loading and shows complete URL tooltips within the viewport', async ({ page, ui }) => {
   const url = `https://example.com/guide?note=${'slow-craft-'.repeat(24)}`
   ui.history.get(SESSION_ID)!.at(-1)!.message = `A little guidance from [a warm guide](${url}) and [another page](https://missing.example/page).`
