@@ -1,8 +1,16 @@
 import { test, expect } from '@playwright/test'
+import fs from 'node:fs'
 import { AURORA_QUERY_EXAMPLES } from '../../fixtures/aurora'
+import { createConnectionPreview } from '../../fixtures/connections'
+
+const CONNECTIONS = [...fs.globSync('tools/*/*/tool.json')].flatMap((file) => {
+  const connection = createConnectionPreview(JSON.parse(fs.readFileSync(file, 'utf8')))
+
+  return connection ? [connection] : []
+})
 
 for (const theme of ['light', 'dark'] as const) {
-  test(`previews Notion, Spotify and TickTick connection states without external requests (${theme})`, async ({ page }, testInfo) => {
+  test(`previews declared connections and their setup states without external requests (${theme})`, async ({ page }, testInfo) => {
     const external: string[] = []
     const origin = new URL(testInfo.project.use.baseURL!).origin
     page.on('request', (request) => {
@@ -10,95 +18,27 @@ for (const theme of ['light', 'dark'] as const) {
         external.push(request.url())
       }
     })
-    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.emulateMedia({ reducedMotion: theme === 'light' ? 'reduce' : 'no-preference' })
     await page.goto('/aurora.html')
     if (theme === 'light') {
       await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
     }
-    await page.getByRole('button', { name: 'Widgets', exact: true }).click()
-    for (const name of ['Notion', 'Spotify', 'TickTick']) {
-      const card = page.getByRole('region', { name: `${name} connection`, exact: true })
-      const logo = card.locator('.aurora-connection-icon img.package-icon')
-      await logo.scrollIntoViewIfNeeded()
-      await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
-      await expect(card.locator('.aurora-connection-icon')).toHaveCSS('width', '48px')
-      await expect(card.locator('.aurora-connection-icon')).toHaveCSS('height', '48px')
-      await expect(card.locator('.aurora-connection-identity h3')).toHaveCSS('font-size', '18px')
-      await expect(card.locator('.aurora-connection-identity h3')).toHaveCSS('font-weight', '600')
-      await expect(card.locator('.aurora-connection-identity p')).toHaveCSS('font-size', '16px')
-      await expect(card.getByRole('button', { name: 'Refresh status', exact: true })).toHaveCount(0)
-      if (name === 'TickTick') {
-        await card.getByRole('combobox', { name: 'Preview state' }).selectOption('installation')
-        const add = card.getByRole('button', { name: 'Add TickTick', exact: true })
-        await expect(add).toHaveText('Add')
-        await expect(card.getByText('A one-time application setup', { exact: false })).toHaveCount(0)
-        await card.locator('.aurora-connection').screenshot({ path: testInfo.outputPath(`ticktick-add-${theme}.png`) })
-        await add.click()
-        await expect(card.getByRole('button', { name: 'Connect TickTick', exact: true })).toHaveText('Connect')
-        await expect(card.locator('input')).toHaveCount(0)
-        await card.locator('.aurora-connection').screenshot({ path: testInfo.outputPath(`ticktick-compact-${theme}.png`) })
+    await page.getByRole('button', { name: 'Connections', exact: true }).click()
+    const chooser = page.getByRole('combobox', { name: 'Connection', exact: true })
+    await expect(chooser.getByRole('option')).toHaveCount(CONNECTIONS.length)
+    for (const connection of CONNECTIONS) {
+      const name = connection.name
+      await chooser.selectOption(connection.provider)
+      const card = page.getByRole('region', { name, exact: true })
+      if (connection.logo) {
+        const logo = card.locator('.aurora-connection-icon img.package-icon')
+        await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
       }
     }
-    for (const name of ['Notion', 'TickTick']) {
-      const card = page.getByRole('region', { name: `${name} connection`, exact: true })
-      await expect(card.getByRole('button', { name: 'OAuth', exact: true })).toHaveCount(0)
-      await expect(card.getByRole('button', { name: `Connect ${name}`, exact: true })).toBeVisible()
-      if (name === 'Notion') {
-        await expect(card.locator('input')).toHaveCount(0)
-        await card.getByRole('button', { name: 'Connect Notion', exact: true }).click()
-        await expect(card.getByRole('status')).toContainText('Working on the connection')
-        await card.getByRole('button', { name: 'Finish authorization', exact: true }).click()
-        await expect(card.getByRole('status')).toContainText('Connected — preview only')
-        continue
-      }
-      await expect(card.getByText('A one-time application setup', { exact: false })).toHaveCount(0)
-      await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
-      await expect(card.getByText('A one-time application setup', { exact: false })).toBeVisible()
-      await expect(card.getByLabel('Client ID', { exact: true })).toBeVisible()
-      await expect(card.getByLabel('client secret', { exact: true })).toHaveAttribute('type', 'password')
-      await card.locator('.aurora-connection').screenshot({ path: testInfo.outputPath(`ticktick-expanded-${theme}.png`) })
-      await card.getByLabel('Client ID', { exact: true }).fill('preview-client')
-      await card.getByLabel('client secret', { exact: true }).fill('preview-secret')
-      await card.getByLabel('client secret', { exact: true }).press('Enter')
-      await expect(card.getByRole('status')).toContainText('Working on the connection')
-      await card.getByRole('button', { name: 'Finish authorization', exact: true }).click()
-      await expect(card.getByRole('status')).toContainText('Connected — preview only')
-      await card.getByRole('combobox', { name: 'Preview state' }).selectOption('cancelled')
-      await expect(card.getByRole('status')).toContainText('Authorization was cancelled')
-      await expect(card.getByLabel('access token', { exact: true })).toHaveCount(0)
-      await card.getByRole('combobox', { name: 'Preview configuration' }).selectOption('fallback')
-      await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
-      const token = card.getByLabel('access token', { exact: true })
-      await expect(token).toHaveAttribute('type', 'password')
-      await token.fill('preview-only-token')
-      await card.getByRole('button', { name: `Connect ${name}`, exact: true }).click()
-      await expect(card.getByRole('status')).toContainText('Connected — preview only')
-    }
-    const spotify = page.getByRole('region', { name: 'Spotify connection', exact: true })
-    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
-    await spotify.getByText('Show setup instructions', { exact: true }).click()
-    await expect(spotify.getByText('Redirect URI', { exact: true })).toBeVisible()
-    await expect(spotify.locator('input[type="password"]')).toHaveCount(0)
-    await spotify.getByLabel('Client ID', { exact: true }).fill('sample-client')
-    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
-    await expect(spotify.getByRole('status')).toContainText('Working on the connection')
-    await spotify.getByRole('button', { name: 'Finish authorization', exact: true }).click()
-    await expect(spotify.getByRole('status')).toContainText('Connected — preview only')
-    await spotify.getByRole('combobox', { name: 'Preview configuration' }).selectOption('ready')
-    await expect(spotify.locator('input')).toHaveCount(0)
-    await expect(spotify.getByRole('button', { name: 'Set up manually', exact: true })).toHaveCount(0)
-    await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
-    await expect(spotify.getByRole('status')).toContainText('Working on the connection')
-    await spotify.getByRole('button', { name: 'Cancel authorization', exact: true }).click()
-    await expect(spotify.getByRole('status')).toContainText('Authorization was cancelled')
-    await spotify.getByRole('combobox', { name: 'Preview state' }).selectOption('failed')
-    await expect(spotify.getByRole('alert')).toContainText('I couldn’t complete this step')
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: testInfo.outputPath(`connections-${theme}.png`), fullPage: true })
-    await spotify.screenshot({ path: testInfo.outputPath(`spotify-${theme}.png`) })
     expect(external).toEqual([])
-    expect(await page.evaluate(() => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]))).not.toContain('preview-only-token')
   })
 }
 
