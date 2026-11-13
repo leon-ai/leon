@@ -37,6 +37,7 @@ import {
 } from '@/core/llm-manager/inference-metadata'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 import { normalizeCompletionResultForOpenAICompatibleProvider } from '@/core/llm-manager/llm-provider/llm-provider-response'
+import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
 import { resolveLlamaCPPContextPlan } from '@/core/llm-manager/llm-providers/llamacpp-context'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
@@ -309,7 +310,10 @@ describe('AISDKRemoteLLMProvider', () => {
     const provider = new OpenAILLMProvider(target)
     const transcript: PromptOrChatHistory = [{ role: 'user', content: 'Read the file.' }]
     const onStreamEvent = vi.fn()
-    const params = { ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream, onStreamEvent }
+    const params = {
+      ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream, onStreamEvent,
+      promptCacheKey: AGENT_PROMPT_CACHE_KEY
+    }
     const result = await provider.runChatCompletion(transcript, params)
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
     const context = normalized.compactionContext!
@@ -346,6 +350,10 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(JSON.stringify(replayBody)).not.toContain('Read the file.')
     expect(JSON.stringify(replayBody)).not.toContain('Provider response')
     expect(replayBody.input.filter((item: Record<string, unknown>) => item['type'] === 'function_call')).toHaveLength(1)
+    expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'prompt-cache',
+      promptCache: expect.objectContaining({ compactionItems: 1, preCompactionItems: 0 })
+    }))
     const next = normalizeCompletionResultForOpenAICompatibleProvider(
       await resumed.runChatCompletion(replay, params)
     ).compactionContext!
@@ -353,6 +361,71 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(JSON.stringify(next.sourceTranscript)).toContain('Retained evidence.')
     resumed.dispose()
     provider.dispose()
+  })
+
+  it('measures compaction before terminal completion without SDK buffering or duplicate intervals', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000)
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    websocketMocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(streamController): void {
+        controller = streamController
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+    const item = { type: 'compaction', id: 'cmp-measured', encrypted_content: 'opaque-window' }
+    const response = {
+      id: 'resp-measured', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
+      output: [item], usage: { input_tokens: 100_000, output_tokens: 200, total_tokens: 100_200 }
+    }
+    const activity = new ProviderRequestActivity()
+    const started = Promise.withResolvers<void>()
+    const ended = Promise.withResolvers<void>()
+    const onStreamEvent: CompletionParams['onStreamEvent'] = (event) => {
+      activity.observe(event)
+      if (event.type === 'compaction-start') {
+        started.resolve()
+      } else if (event.type === 'compaction-end') {
+        ended.resolve()
+      }
+    }
+    const send = (event: Record<string, unknown>): void => {
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
+    }
+
+    try {
+      const pending = provider.runChatCompletion([{ role: 'user', content: 'Retain the evidence.' }], {
+        ...PARAMS, shouldStream: true, onStreamEvent
+      })
+      send({ type: 'response.created', response: { ...response, output: [], status: 'in_progress' } })
+      send({ type: 'response.output_item.added', output_index: 0, item })
+      await started.promise
+      expect(activity.snapshot()).toMatchObject({
+        providerCompleted: false, compactionCount: 1, compactionDurationMs: 0
+      })
+
+      vi.setSystemTime(2_000)
+      send({ type: 'response.compaction.compacting', output_index: 0, item_id: item.id })
+      vi.setSystemTime(5_000)
+      send({ type: 'response.output_item.done', output_index: 0, item })
+      await ended.promise
+      expect(activity.snapshot()).toMatchObject({
+        providerCompleted: false, compactionCount: 1, compactionDurationMs: 4_000
+      })
+
+      vi.setSystemTime(7_000)
+      send({ type: 'response.completed', response })
+      const result = normalizeCompletionResultForOpenAICompatibleProvider(await pending)
+      expect(result.compactionContext?.output).toEqual([item])
+      expect(activity.snapshot()).toMatchObject({
+        providerCompleted: true, compactionCount: 1, compactionDurationMs: 4_000
+      })
+    } finally {
+      provider.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it('omits automatic compaction during portable recovery', async () => {

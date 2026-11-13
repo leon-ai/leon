@@ -86,6 +86,47 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('measures compaction intervals without double-counting repeated starts or later delivery', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+
+    try {
+      vi.setSystemTime(0)
+      const activity = new ProviderRequestActivity()
+      expect(activity.snapshot().compactionDurationMs).toBeUndefined()
+
+      vi.setSystemTime(100)
+      activity.observe({ type: 'compaction-start' })
+      vi.setSystemTime(200)
+      activity.observe({ type: 'compaction-start' })
+      vi.setSystemTime(350)
+      activity.observe({ type: 'compaction-end' })
+      activity.observe({ type: 'compaction-end' })
+      expect(activity.snapshot()).toMatchObject({
+        firstCompactionMs: 100, compactionCount: 1, compactionDurationMs: 250
+      })
+
+      vi.setSystemTime(500)
+      activity.observe({ type: 'compaction-start' })
+      vi.setSystemTime(700)
+      const interrupted = new Error('Interrupted')
+      attachProviderFailureDiagnostics(interrupted, activity.snapshot())
+      expect(formatPromptErrorForLog(interrupted)).toContain('"compactionDurationMs":450')
+      expect(activity.snapshot()).toMatchObject({
+        compactionCount: 2, compactionDurationMs: 450
+      })
+
+      vi.setSystemTime(750)
+      activity.observe({ type: 'provider-event', providerCompleted: true })
+      vi.setSystemTime(1_000)
+      activity.observe({ type: 'finish' })
+      expect(activity.snapshot()).toMatchObject({
+        firstCompactionMs: 100, compactionCount: 2, compactionDurationMs: 500
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('releases foreground priority when execution or delivery fails', async () => {
     const manager = new LLMProvider()
     const state = manager as unknown as LLMProviderTestState

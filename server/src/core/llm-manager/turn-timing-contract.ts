@@ -78,6 +78,9 @@ export interface TurnTiming {
   provider?: string
   model?: string
   firstOutputMs?: number
+  firstCompactionMs?: number
+  compactionCount?: number
+  compactionDurationMs?: number
   usageId?: string
   usage?: import('./llm-usage/usage-accounting').InferenceUsage
 }

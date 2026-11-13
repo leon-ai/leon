@@ -404,6 +404,15 @@ export class OpenAIResponsesTransport {
             // buffer it. Only metadata crosses this diagnostic boundary.
             if (event && typeof event['type'] === 'string') {
               const result = event['response'] as Record<string, unknown> | undefined
+              const item = event['item'] as Record<string, unknown> | undefined
+
+              // Observe compaction before SDK lookahead can buffer its entire interval.
+              if (event['type'] === 'response.compaction.compacting' ||
+                (item?.['type'] === 'compaction' && event['type'] === 'response.output_item.added')) {
+                onStreamEvent?.({ type: 'compaction-start', transport })
+              } else if (item?.['type'] === 'compaction' && event['type'] === 'response.output_item.done') {
+                onStreamEvent?.({ type: 'compaction-end', transport })
+              }
 
               onStreamEvent?.({
                 type: 'provider-event',

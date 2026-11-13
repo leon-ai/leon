@@ -213,6 +213,15 @@ export function recordTurnInference(timing: CompletionAttemptTiming): void {
     startedAt: timing.startedAt, durationMs: timing.elapsedMs, outcome: timing.outcome,
     duty: timing.duty, ...(timing.usagePurpose ? { purpose: timing.usagePurpose } : {}),
     provider: timing.provider, ...(timing.model ? { model: timing.model } : {}),
+    ...(timing.firstCompactionMs === undefined ? {} : {
+      firstCompactionMs: timing.firstCompactionMs
+    }),
+    ...(timing.compactionCount === undefined ? {} : {
+      compactionCount: timing.compactionCount
+    }),
+    ...(timing.compactionDurationMs === undefined ? {} : {
+      compactionDurationMs: timing.compactionDurationMs
+    }),
     ...(outputTimes.length ? { firstOutputMs: Math.min(...outputTimes) } : {})
   })
   notifyActivity(scope, scope.state.timings.get(timing.attemptId)!)
