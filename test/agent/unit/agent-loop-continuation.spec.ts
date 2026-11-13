@@ -76,6 +76,58 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it('preserves source owner workflow and later corrections through repeated failed summaries', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'For each window, propose three slots. Do not create events.' }
+    ]
+    for (let index = 0; index < 16; index += 1) {
+      if (index === 4) {
+        transcript.push({ role: 'user', content: 'Use four slots from now on.' })
+      }
+      if (index === 8) {
+        transcript.push({ role: 'user', content: 'New window: 14:00 to 14:30.' })
+      }
+      appendToolExchange(transcript, index)
+    }
+    const checkpoint = { ...createCheckpointInput(), originalInput: 'New window: 14:00 to 14:30.' }
+    const recovered = await buildAgentContinuationTranscript(transcript, async () => null, checkpoint, true, 0)
+    for (let index = 16; index < 20; index += 1) {
+      appendToolExchange(recovered, index)
+    }
+    const repeated = await buildAgentContinuationTranscript(recovered, async () => null, checkpoint, true, 0)
+    const ownerMessages = repeated.filter((message) => message.role === 'user' && !message.runtimeContext)
+
+    expect(ownerMessages.map((message) => message.content)).toEqual([
+      'For each window, propose three slots. Do not create events.',
+      'Use four slots from now on.',
+      'New window: 14:00 to 14:30.'
+    ])
+    expect(JSON.stringify(repeated)).not.toContain('Result 0:')
+    expect(JSON.stringify(repeated)).toContain('Semantic summary unavailable')
+  })
+
+  it('bounds recovered owner text while retaining the opening workflow and latest corrections', async () => {
+    const opening = 'Prepare a schedule. '.repeat(1_000)
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: opening }]
+    for (let index = 0; index < 10; index += 1) {
+      transcript.push({ role: 'user', content: `Use window ${index}.` })
+      appendToolExchange(transcript, index)
+    }
+    const result = await buildAgentContinuationTranscript(
+      transcript, async () => null, createCheckpointInput(), true, 0
+    )
+    const ownerMessages = result.filter((message) => message.role === 'user' && !message.runtimeContext)
+
+    expect(ownerMessages).toHaveLength(4)
+    expect(ownerMessages[0]!.content.length).toBeLessThan(opening.length)
+    expect(ownerMessages[0]!.content).toContain('content compacted')
+    expect(ownerMessages.slice(1).map((message) => message.content)).toEqual([
+      'Use window 7.', 'Use window 8.', 'Use window 9.'
+    ])
+    expect(JSON.stringify(result)).toContain('recover the needed source with the sessions tools')
+    expect(JSON.stringify(result)).not.toContain('Result 0:')
+  })
+
   it('replaces an oversized completed parallel exchange while retaining unfinished calls and owner instructions', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Prepare the release.' }
@@ -352,7 +404,7 @@ describe('agent loop continuation', () => {
     const summarize = vi.fn().mockResolvedValue('Earlier release work verified.')
     const result = await buildAgentContinuationTranscript(transcript, summarize)
 
-    expect(result[0]).toEqual(followUp)
+    expect(result.slice(0, 2)).toEqual([transcript[0], followUp])
     expect(summarize.mock.calls[0]?.[0]).toContain('Result 16:')
     expect(result.some((message) =>
       message.role === 'tool' && message.toolCallId === 'call-16'

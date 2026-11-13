@@ -20,7 +20,7 @@ interface ModelReply {
   isTruncated?: boolean
 }
 
-type ModelCall = (
+export type ModelCall = (
   this: unknown,
   messages: AgentToolTranscriptMessage[],
   prompt: string,

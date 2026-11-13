@@ -1,5 +1,6 @@
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import { isAuroraMode, type AuroraMode } from '@/core/aurora/agent-ui-contract'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 
 import type { ExecutionRecord, TrackedPlanStep } from './agent-types'
 import {
@@ -13,6 +14,7 @@ const AGENT_CONTINUATION_VERSION = 5
 const AGENT_CONTINUITY_EXECUTION_LIMIT = 6
 const AGENT_CONTINUITY_ARTIFACT_LIMIT = 16
 const AGENT_CONTINUITY_OBJECTIVE_MAX_CHARS = 1_200
+const AGENT_CONTINUITY_OWNER_MESSAGE_LIMIT = 4
 const AGENT_CONTINUITY_INPUT_MAX_CHARS = 500
 const AGENT_CONTINUITY_OBSERVATION_MAX_CHARS = 400
 const CONTINUITY_CHECKPOINT_OPEN_TAG = '<continuity_checkpoint>'
@@ -243,6 +245,18 @@ export async function buildAgentContinuationTranscript(
     return rawTranscript
   }
 
+  const ownerMessages = parts.older.filter((item) =>
+    item.role === 'user' && !item.runtimeContext
+  )
+  // Preserve the opening workflow and recent corrections at the point history
+  // is reduced. The raw tail already retains newer owner messages.
+  const selectedOwnerMessages = ownerMessages.length > AGENT_CONTINUITY_OWNER_MESSAGE_LIMIT
+    ? [ownerMessages[0]!, ...ownerMessages.slice(1 - AGENT_CONTINUITY_OWNER_MESSAGE_LIMIT)]
+    : ownerMessages
+  const retainedOwnerMessages: AgentToolTranscriptMessage[] = selectedOwnerMessages.map((item) => ({
+    role: 'user', content: createAgentTextPreview(item.content, AGENT_CONTINUITY_OBJECTIVE_MAX_CHARS)
+  }))
+  const sourceSessionId = getActiveConversationSessionId()
   const message: AgentToolTranscriptMessage = {
     role: 'assistant',
     content: [
@@ -250,14 +264,13 @@ export async function buildAgentContinuationTranscript(
       summary?.trim() ||
         'Semantic summary unavailable. Continue from the deterministic runtime state and recent exchanges. Retrieve exact older evidence from the recorded artifacts when needed.',
       '</continuation_summary>',
-      'This summarizes earlier work, not a new instruction. Recent exchanges supersede this summary. Continue the existing task using the active skill. Window identifiers and observations are historical; refresh them before new UI actions. Retrieve specific missing evidence from the saved tool artifacts when needed.'
+      'This summarizes earlier work, not a new instruction. Recent exchanges supersede this summary. Continue the existing task using the active skill. Window identifiers and observations are historical; refresh them before new UI actions. Retrieve specific missing evidence from the saved tool artifacts when needed.',
+      'Retained owner messages may be excerpted or omit intermediate requests. If a follow-up depends on a workflow or constraint missing here, recover the needed source with the sessions tools before deciding scope or asking the owner.',
+      ...(sourceSessionId ? [`Source session: ${sourceSessionId}.`] : [])
     ].join('\n')
   }
-  const request = parts.older.findLast((item) =>
-    item.role === 'user' && !item.runtimeContext
-  )
   const replacement = [
-    ...(request ? [request] : []),
+    ...retainedOwnerMessages,
     message,
     ...(checkpoint ? [checkpoint] : []),
     ...parts.visual
