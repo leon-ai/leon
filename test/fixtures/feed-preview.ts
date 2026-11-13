@@ -168,6 +168,14 @@ export function createFeedPreviewExamples(now: number): FeedPreviewExample[] {
       ])]
     },
     {
+      id: 'code', title: 'Code blocks', kind: 'activity',
+      description: 'TypeScript and Python code headers with shared language artwork, syntax coloring and copy actions.',
+      entries: [response('code-example', [], {
+        status: FeedTurnStatus.Completed,
+        finalAnswer: 'A small greeting in two languages.\n\n```typescript\nconst greeting: string = "Welcome home"\nconsole.log(greeting)\n```\n\n```python\ngreeting = "Welcome home"\nprint(greeting)\n```'
+      })]
+    },
+    {
       id: 'running-no-plan', title: 'In progress without a plan', kind: 'turn',
       description: 'A live turn with an owner message, completed reasoning and a running tool call.',
       entries: [owner, response('running-no-plan', [thoughts[0]!, { id: 'live-tools', type: 'tools', toolCalls: [running] }])]
