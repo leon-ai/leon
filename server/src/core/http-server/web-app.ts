@@ -7,6 +7,9 @@ import fastifyStatic from '@fastify/static'
 import { readProfileAuthentication } from './profile-auth-routes'
 import { renderWebAppDocument } from './web-app-document'
 
+const FILE_ICON_VERSION_PATTERN = /^[a-f0-9]{64}$/
+const IMMUTABLE_CACHE_MAXIMUM_AGE_SECONDS = 31_536_000
+
 /**
  * Serves cacheable static assets separately from private, request-specific HTML.
  * Identity validation does not start models or other profile runtime services.
@@ -23,7 +26,16 @@ export const webAppPlugin: FastifyPluginAsync<{ root: string }> = async (app, { 
   }
 
   await app.register(fastifyStatic, {
-    root, prefix: '/', decorateReply: false, index: false
+    root, prefix: '/', decorateReply: false, index: false,
+    setHeaders(reply, filePath): void {
+      const directory = path.dirname(filePath)
+      // Only content-versioned artwork is immutable. Ordinary public files
+      // and profile-specific documents must retain their existing cache policy.
+      if (path.dirname(directory) === path.join(root, 'img/file-icons') &&
+        FILE_ICON_VERSION_PATTERN.test(path.basename(directory)) && path.extname(filePath) === '.svg') {
+        reply.header('Cache-Control', `public, max-age=${IMMUTABLE_CACHE_MAXIMUM_AGE_SECONDS}, immutable`)
+      }
+    }
   })
   // The parent owns /web-app -> /web-app/; do not register its no-slash alias.
   app.get('/', { prefixTrailingSlash: 'slash' }, sendDocument)
