@@ -3,7 +3,7 @@
   "tool_id": "memory",
   "toolkit_id": "structured_knowledge",
   "name": "Memory",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Read, write, correct and forget Leon memory entries (persistent, daily, discussion, temporary).",
   "icon_name": "brain-2-line",
   "distribution": "built-in",
@@ -130,6 +130,7 @@
               },
               "sourceType": {
                 "type": "string",
+                "description": "Use explicit_user for direct owner statements. Temporary content not quoted from the current owner message is retained as inferred; evidence alone does not make added interpretations explicit.",
                 "enum": [
                   "explicit_user",
                   "inferred",

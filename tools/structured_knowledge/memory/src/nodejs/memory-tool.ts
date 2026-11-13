@@ -911,7 +911,9 @@ export default class MemoryTool extends Tool {
     const newItemId = randomUUID()
     const scope = this.normalizeScope(options.scope)
     const kind = this.normalizeKind(options.kind)
-    const sourceType = scope === 'temporary' ? 'explicit_user' : this.normalizeSourceType(options.sourceType)
+    let sourceType = scope === 'temporary' && options.sourceType === undefined
+      ? 'explicit_user'
+      : this.normalizeSourceType(options.sourceType)
     const sessionId = this.executionContext?.conversationSessionId
     let sourceRef = options.sourceRef || (sessionId ? `session:${sessionId}` : null)
     if (scope === 'temporary') {
@@ -946,6 +948,12 @@ export default class MemoryTool extends Tool {
       }
       if (typeof owner?.message !== 'string' || !owner.message.includes(evidence)) {
         return { success: false, error: 'Evidence must occur verbatim in the latest owner message; assistant text and guesses are not evidence.' }
+      }
+      // A valid quote supports provenance, not every conclusion added around it.
+      // Preserve model-authored paraphrases without promoting them to owner statements.
+      if (sourceType === 'explicit_user' &&
+        !normalizeContent(owner.message).includes(normalizedContent)) {
+        sourceType = 'inferred'
       }
       if (Buffer.byteLength(normalizedContent, 'utf8') > policy.tokenBudget / 2) {
         return { success: false, error: 'Temporary memory must be a concise fact; shorten its content without losing qualifications.' }
