@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#34a2f2" fill-rule="evenodd" data-iconColor="DockerCompose"><g transform="translate(.4 5.6)"><path d="M14.85003 2.4387013c-.0387213-.03074925-.4001799-.30367632-1.1624576-.30367632-.2012787.00087912-.4021378.01814185-.6006194.05162837-.1475324-1.01122877-.9835764-1.50425575-1.0210589-1.52637363l-.2046953-.11804196-.1346254.19426574c-.122136.18905168-.2203847.39212323-.2927255.60456551-.0275154.08080416-.0512827.162964-.0711906.2462237-.1364835.57724275-.0534865 1.11942058.2397403 1.58293706-.3540859.19732268-.9220979.24589411-1.037043.25018981H.6C.54995733 4.80102519.68744667 5.85944 1.012468 6.595664 1.5 7.7 2.042777 8.40941 2.945414 8.83972s1.4584821.576204 2.7524881.576204c.58457542.00183816 1.16805195-.05106891 1.74277722-.157982.79892108-.14669331 1.56769231-.42593428 2.2745055-.826214.58239758-.33726274 1.10655348-.76631334 1.55220778-1.270649.745055-.84341658 1.1889111-2.38273734 1.519001-3.21752256.0442558 0 .0885315 0 .1315485 0 .8157442 0 1.3173826-.32643356 1.594006-.59998002.1838361-.17446553.3273526-.386993.4204795-.62271728l.0584016-.17088911z"/><circle cx="4.75" cy="5.65" r="1.25" fill="#fff"/><circle cx="4.75" cy="5.65" r="1" fill-rule="nonzero"/></g><path fill-rule="nonzero" d="M3 5h3v3H3z"/><path fill-rule="nonzero" d="M7 5h3v3H7z"/><path fill-rule="nonzero" d="M5 1h3v3H5z"/></g></svg>

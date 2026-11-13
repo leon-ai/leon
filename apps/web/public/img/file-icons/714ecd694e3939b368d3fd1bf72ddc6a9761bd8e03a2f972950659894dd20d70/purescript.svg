@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#7963e6" d="m188.2068176 368.1990967-39.9728546-37.3269043h175.53508l39.9728394 37.3269043zm0-130.8504944-39.9728546 37.3269348h175.53508l39.9728394-37.3269348zm175.5227051-56.2084198-39.9604797-37.3392944H148.2463226l39.960495 37.3392944zm-233.965744 36.9403686-26.4066544-26.4067383-97.9088135 97.896347c-3.5155382 3.515564-5.4600935 8.2149048-5.448256 13.2037048 0 4.9888 1.9327178 9.6763916 5.448256 13.1912842l97.9088135 97.9087524 26.4066544-26.394989-84.7050476-84.7050476zm376.7637482-22.033966L408.655304 98.1261063l-26.394989 26.4067383 84.6567993 84.7056656-84.6567993 84.7050629 26.394989 26.3943787 97.8722229-97.8840027C510.0548401 218.9142914 512 214.2149506 512 209.2261505c-.0123596-4.9888-1.9451599-9.6640167-5.4724731-13.1795654" data-iconColor="PureScript"/></svg>

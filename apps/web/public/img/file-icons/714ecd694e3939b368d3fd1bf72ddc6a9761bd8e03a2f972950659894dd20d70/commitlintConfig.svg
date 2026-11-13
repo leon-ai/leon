@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><g fill="#66bb6a" data-iconColor="Commitlint Config"><path fill="#ce3d40" d="M20.869 17.282H30v1.343h-9.131Zm5.382 2.687L28.985 24h-1.544l-2-2.627L23.428 24h-1.545l2.735-4.031Z"/><path d="M7.811 18.259a5.576 5.576 0 0 1-1.037.287 6.34 6.34 0 0 1-1.1.093 3.664 3.664 0 0 1-2.723-.962A3.822 3.822 0 0 1 2 14.867a4.508 4.508 0 0 1 .275-1.611 3.582 3.582 0 0 1 .773-1.237 3.407 3.407 0 0 1 1.189-.794 4.009 4.009 0 0 1 1.523-.28 6.747 6.747 0 0 1 1.085.082 4.51 4.51 0 0 1 .966.268v1.238a4.082 4.082 0 0 0-.985-.369 4.6 4.6 0 0 0-1.036-.116 2.348 2.348 0 0 0-.94.191 2.287 2.287 0 0 0-.777.547 2.589 2.589 0 0 0-.527.873 3.283 3.283 0 0 0-.194 1.163 2.8 2.8 0 0 0 .658 2.031 2.431 2.431 0 0 0 1.824.675 4.312 4.312 0 0 0 1.022-.119 4.211 4.211 0 0 0 .955-.358Zm5.113-9.193h-2.207V8h3.514v9.454h2.222v1.081h-5.982v-1.081h2.453Z"/></g></svg>

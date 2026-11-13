@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="#d73736" fill-rule="evenodd" d="M11.43 10.94c-.23.74-.56 1.53-1.01 2.4-.2.38-.42.74-.5 1.04l.11-.04c1.27-.49 2.47-.77 3.34-.93-.15-.1-.29-.21-.41-.32-.6-.51-1.12-1.25-1.53-2.15m6.48 3.81c-.17.19-.47.3-.91.3-.76 0-2-.23-3-.74-1.72.19-3 .42-4.03.75-.05.02-.11.04-.18.07-1.24 2.12-2.16 3.07-2.97 3.07-.16 0-.32-.04-.44-.11l-.48-.31-.03-.05c-.07-.18-.09-.35-.05-.54.11-.53.68-1.37 1.88-2.12.19-.14.49-.3.89-.49.3-.52.62-1.13.96-1.8.51-1.03.83-2.05 1.08-2.93v-.01c-.37-1.21-.59-1.94-.22-3.27.09-.38.42-.77.79-.77h.24c.23 0 .45.08.61.24.66.66.35 2.27.02 3.6-.02.06-.03.11-.04.14.4 1.13.97 2.04 1.6 2.56.26.2.55.4.87.58.45-.05.88-.07 1.29-.07 1.24 0 1.99.22 2.28.69.1.16.15.35.12.55-.01.25-.1.48-.28.66M19 3H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5c0-1.11-.9-2-2-2m-1.5 11.04c-.1-.1-.5-.35-1.9-.35-.07 0-.14 0-.23.1.73.32 1.44.51 1.9.51.07 0 .13-.01.19-.02h.04c.05-.02.08-.03.09-.13-.02-.03-.04-.07-.09-.11M8.33 15.5c-.21.12-.38.23-.48.31-.71.65-1.16 1.31-1.21 1.69.45-.15 1.04-.81 1.69-2m3.02-6.91.05-.04c.07-.32.1-.6.16-.82l.03-.16c.1-.57.08-.86-.09-1.1l-.15-.05c-.02.03-.05.08-.07.12-.17.42-.16 1.15.07 2.05" data-iconColor="PDF"/></svg>

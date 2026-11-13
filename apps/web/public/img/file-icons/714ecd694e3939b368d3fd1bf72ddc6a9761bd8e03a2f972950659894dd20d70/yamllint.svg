@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#eeb62b" d="M320.4455872 29.3965263h101.780426l-302.743042 453.2069702H17.7033958L169.074707 256 0 29.3965263h101.7795715l118.184906 150.4206238zm-48.3713379 348.1630135c10.2857666 8.2172241 21.2311096 22.4058228 32.8308105 42.5659485 44.0107117-97.6838989 94.2474976-180.9106598 148.0999756-231.5752106 1.9329834-3.6160278 78.471283-23.3442841 54.2693787-.4140625-91.7485657 87.0812225-142.7290344 204.299057-180.1026611 286.3615112-2.0613403 1.9746704-12.0012207 8.7069092-36.5943909 6.5369263-22.2215576-.0323792-18.6898499-21.6177673-69.2982025-75.5751953-21.2108307-25.3041534 18.606018-56.1901093 50.7950897-27.8999176" data-iconColor="Yamllint"/></svg>

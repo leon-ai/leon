@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 120 120"><path fill="#4700a3" d="M115.45 23.033S97.961 33.27 97.534 33.412c-.42654.28436-.85236.56915-1.1367.85352-1.4218 1.4218-1.8484 3.4114-1.4219 5.2598.28436.85309.71097 1.8496 1.4219 2.5605.7109.71091 1.5633 1.1375 2.5586 1.4219 1.8484.42654 3.8399-.000064 5.2617-1.4219.42655-.42654.70938-.85275.85156-1.2793l.14258-.42774 2.5606-4.6914zm-39.102 9.2422c-27.441 0-31.99 13.08-31.99 29.289 0 3.8389.56902 7.9623-1.9902 11.943-3.8389 5.9716-8.9567 5.8281-10.236 5.8281-1.7062 0-7.9617-.99344-8.2461-2.8418h.99414c6.6825 0 11.658-5.4031 11.658-12.654V61.279h-5.6855c-4.1233 0-7.8212 1.849-10.238 5.1191-2.4171-3.2702-6.1131-5.1191-10.236-5.1191h-5.8301v2.5605c0 7.1091 5.6878 12.795 12.797 12.795h1.8477c0 4.1233 5.6874 20.332 47.631 20.332 16.351 0 40.664-2.844 40.664-33.697 0-5.8294-1.8478-11.231-4.6914-15.781-.99526.28436-1.9914.56836-3.1289.56836-4.9763 0-8.957-3.9807-8.957-8.957 0-.99527.14142-1.9911.42578-2.9863-4.2654-2.7014-8.5311-3.8379-14.787-3.8379z" data-iconColor="Webhint"/></svg>

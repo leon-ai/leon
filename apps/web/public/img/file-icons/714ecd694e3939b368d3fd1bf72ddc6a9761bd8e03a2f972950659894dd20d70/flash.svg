@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><g fill="#d92f3c" data-iconColor="Flash"><rect width="19.487" height="19.487" x="2.2563" y="-21.744" ry="0" transform="rotate(90)"/><path fill="#fff" d="M16.56 5.9994c-.0046.000383-.0087.00127-.01324.00165-.42659.03629-.83051.09268-1.1813.19192-.55415.166-1.0532.40447-1.494.71803-.4282.32278-.81705.72086-1.1697 1.1912-.34004.47956-.6824 1.0323-1.0224 1.6594-.12109.22868-.23331.42505-.35074.63696v.0017c-.0001.000183-.0032-.000183-.0033 0l-1.3401 2.394-.005-.0017c-.23782.4425-.46149.84702-.66509 1.1978-.2141.36889-.45189.6815-.71637.93972s-.56659.45561-.90663.59394c-.071945.02731-.1614.04195-.24155.06287-.0005144.000134-.00114-.000134-.00165 0h-.9877v2.4138h.98935v-.0017c.42844-.03628.83244-.09229 1.1846-.19192.55415-.166 1.0532-.40447 1.494-.71803.4282-.32278.8187-.72086 1.1713-1.1912.34005-.47956.68074-1.0323 1.0208-1.6594.12084-.22819.23523-.42557.3524-.63696l.0066.0017.0033-.005.0364-.06618h2.5296v.0017h1.125v-2.4072h-.33089v-.0017h-1.9787c.21975-.40713.43079-.78837.62041-1.1151.2141-.36889.45189-.6815.71637-.93972s.56659-.45561.90663-.59394c.07046-.026754.15931-.041111.23824-.061214h.99266v-.00331h-.0017v-2.4105h-.97777v-.00165z"/></g></svg>

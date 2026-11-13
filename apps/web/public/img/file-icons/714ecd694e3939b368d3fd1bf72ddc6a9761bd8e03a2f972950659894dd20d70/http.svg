@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="16" height="16" viewBox="0 0 512 512"><g fill="#29b6f6" data-iconColor="HTTP"><path d="M467 73.56H45c-24.813 0-45 20.187-45 45v274.881c0 24.813 20.187 45 45 45h422c24.813 0 45-20.187 45-45V118.56c0-24.814-20.187-45-45-45m15 319.881c0 8.271-6.729 15-15 15H45c-8.271 0-15-6.729-15-15V177.965h452zm0-245.476H30V118.56c0-8.271 6.729-15 15-15h422c8.271 0 15 6.729 15 15z"/><path d="M171.741 217.264c-26.749 0-48.512 21.763-48.512 48.512v65.461c0 8.284 6.716 15 15 15s15-6.716 15-15v-28.435h37.023v28.435c0 8.284 6.716 15 15 15s15-6.716 15-15v-65.461c.001-26.749-21.762-48.512-48.511-48.512m18.512 55.539H153.23v-7.026h-.001c0-10.208 8.305-18.512 18.512-18.512s18.512 8.304 18.512 18.512z"/><path d="M295.255 217.264H256c-8.284 0-15 6.716-15 15v98.973c0 8.284 6.716 15 15 15s15-6.716 15-15v-28.435h24.255c23.583 0 42.77-19.187 42.77-42.77 0-23.582-19.187-42.768-42.77-42.768m0 55.539H271v-25.538h24.255c7.041 0 12.77 5.729 12.77 12.77 0 7.042-5.729 12.768-12.77 12.768"/><path d="M373.771 217.264c-8.284 0-15 6.716-15 15v98.973c0 8.284 6.716 15 15 15s15-6.716 15-15v-98.973c0-8.284-6.716-15-15-15"/></g></svg>

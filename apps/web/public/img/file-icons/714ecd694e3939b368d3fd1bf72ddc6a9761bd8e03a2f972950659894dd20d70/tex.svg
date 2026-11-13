@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path fill="#4e85f4" d="M15.866 9.727a1.379 1.379 0 0 1-.524-.07.885.885 0 0 1-.311-.273l-1.947-2.767 1.245-1.789a1.581 1.581 0 0 1 .429-.383 1.746 1.746 0 0 1 .895-.172V4H13.5v.273a.592.592 0 0 1 .406.129.377.377 0 0 1 .146.285.681.681 0 0 1-.008.105.2.2 0 0 1-.063.105l-1.04 1.516-1.181-1.726-.035-.043-.035-.09a.24.24 0 0 1 .15-.2.825.825 0 0 1 .41-.086V4H9.742v.273h.142a1.775 1.775 0 0 1 .544.063.54.54 0 0 1 .284.219l1.671 2.477-1.459 2.14a1.537 1.537 0 0 1-.374.355 1.672 1.672 0 0 1-.95.2V10h.513a3.433 3.433 0 0 1-.434 1.242 1.691 1.691 0 0 1-1.466.484H7.031a.541.541 0 0 1-.367-.07.5.5 0 0 1-.051-.273V9.031h.764a.98.98 0 0 1 .8.234 1.4 1.4 0 0 1 .173.8h.21V7.727h-.213a1.59 1.59 0 0 1-.146.8.984.984 0 0 1-.824.23h-.764v-2.14a.5.5 0 0 1 .051-.273.541.541 0 0 1 .367-.07h1.111a1.639 1.639 0 0 1 1.336.4A2.868 2.868 0 0 1 9.884 8h.2l-.271-2H5.772l-.137-1.93H.142L0 6.07h.2a3.067 3.067 0 0 1 .367-1.406 1.638 1.638 0 0 1 1.245-.32h.482a.165.165 0 0 1 .185.094.914.914 0 0 1 .028.25v4.625a.4.4 0 0 1-.114.309 1.605 1.605 0 0 1-.792.105h-.419V10h3.342v-.273H4.24a1.578 1.578 0 0 1-.788-.105.407.407 0 0 1-.11-.309V4.688a1.088 1.088 0 0 1 .016-.223.208.208 0 0 1 .118-.121h.489a1.638 1.638 0 0 1 1.245.32A2.891 2.891 0 0 1 5.558 6h-.687v.273h.2a1.292 1.292 0 0 1 .615.078.462.462 0 0 1 .087.336v4.625a.463.463 0 0 1-.087.336 1.291 1.291 0 0 1-.615.078h-.2V12h5.147l.305-2h1.508v-.273a.526.526 0 0 1-.437-.156.465.465 0 0 1-.122-.258.681.681 0 0 1 .008-.105.2.2 0 0 1 .062-.108L12.6 7.242l1.387 2.141a.048.048 0 0 0 .035.055l.035.008a.239.239 0 0 1-.146.2.8.8 0 0 1-.406.086V10H16v-.273z" data-iconColor="TeX"/></svg>

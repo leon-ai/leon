@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" style="isolation:isolate" viewBox="0 0 64 64"><path fill="#66bb6a" d="M38.329 3.129 32 0l-6.258 3.129c-9.475-7.07-20.231-1.144-17.209 8.604L0 16v32l32 16 32-16V16l-8.533-4.267c3.089-9.489-7.457-15.725-17.138-8.604m9.742 19.413-10.382-5.191h9.671c2.133 0 4.267-.782 5.831-2.275l4.907 2.488zM26.169 7.396c1.493 1.92 2.702 4.124 3.982 6.186l-8.178-4.124zm11.662 0 4.196 2.133-8.178 4.053c1.28-2.062 2.489-4.266 3.982-6.186m12.729 6.328c-.924.64-2.062.925-3.2.925h-9.742l7.395-3.698zm-31.573-2.773 7.324 3.698H16.64c-1.138 0-2.204-.356-3.2-.925zm-2.347 6.4h9.671l-10.382 5.191-10.027-4.978 4.907-2.488c1.635 1.493 3.698 2.275 5.831 2.275M32 30.507l-13.084-6.543 9.528-4.693-1.706 4.267 2.489.995L32 17.636l2.773 6.897 2.489-.995-1.706-4.267 9.528 4.765zM40.96 4.48c7.423-4.341 13.67-.162 12.089 6.044zm-5.547 1.707C34.204 7.893 33.138 9.742 32 11.52c-1.138-1.778-2.204-3.627-3.413-5.333L32 4.48zM10.88 10.596C9.383 3.282 16.605.521 22.969 4.551z" data-iconColor="Pipfile"/></svg>

@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2026 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 101 100"><g fill="#f55c15" data-iconColor="Doppler"><path d="M64.3092.259394C60.1163-.864113 55.8423 1.77302 54.9657 6.02449L50.9884 25.3158c-2.598 12.601-12.4419 22.4495-25.0417 25.0534L7.02287 54.2801c-4.251.8785-6.88689 5.1528-5.7634 9.3457 1.12362 4.1934 5.54433 6.5771 9.66533 5.2115l18.4159-6.1022c12.2444-4.0572 25.7288-.4441 34.3041 9.1918l12.8986 14.4938c2.8855 3.2424 7.9048 3.3885 10.974.3193 3.0697-3.0697 2.923-8.0899-.3205-10.9752L72.609 62.7885c-9.6622-8.5949-13.2851-22.1139-9.2158-34.3887l6.1256-18.47702c1.3659-4.11993-1.017-8.54-5.2096-9.663386"/><path d="M14.1852 24.3911c-3.429-3.1024-3.5624-8.4435-.2926-11.7132 3.2697-3.26978 8.6107-3.13634 11.7131.2926l9.7534 10.7801c2.6309 2.9078 2.5194 7.3677-.2533 10.1405-2.7728 2.7728-7.2328 2.8842-10.1405.2533z"/><path d="M90.0279 30.3514c4.4013-1.4184 9.0935 1.1366 10.2901 5.6031 1.197 4.4666-1.5891 9.0253-6.1099 9.9976l-14.2124 3.0567c-3.8337.8245-7.6404-1.502-8.6553-5.2897s1.1186-7.7058 4.8508-8.9086z"/><path d="M46.5794 93.3443c-.9723 4.5208-5.531 7.3067-9.9976 6.1101-4.4666-1.1969-7.0215-5.889-5.6032-10.2903l4.4592-13.8367c1.2027-3.7322 5.1209-5.8657 8.9086-4.8508 3.7876 1.0149 6.1141 4.8216 5.2896 8.6552z"/></g></svg>

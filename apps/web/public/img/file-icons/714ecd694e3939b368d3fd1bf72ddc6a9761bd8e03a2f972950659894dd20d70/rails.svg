@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path fill="#7963e6" d="M2.516 15h6.833a15.2 15.2 0 0 1-1.13-6.725 5.367 5.367 0 0 1 4.29-4.841 2.592 2.592 0 0 1 2.184.733L15 3.7a6.387 6.387 0 0 0-4.6-1.858 6.943 6.943 0 0 0-5.444 4.052 19.219 19.219 0 0 0-2.183 5.757A10.681 10.681 0 0 0 2.516 15m-1.362-3.506 1.336.106-.231 1.359L1 12.8Zm2.107-2.879.359-1.021-1.181-.471-.385 1.1ZM4.93 5.109l.694-.837-.9-.6-.719.811Zm1.824-3.245.617.759.848-.5-.619-.704ZM9.76 1l.154.759 1.053-.026-.1-.68Zm3.57.811-.03.471.719.393.154-.236Zm-.154 2.015v.393l.694.081v-.317Zm-2.209.34.333.629.489-.395-.1-.419Zm-1.053.811.514.785-.308.55-.746-.837ZM8.886 7.15l-.334.68.874.759.205-.864Zm-.359 2.381-.051.916 1.079.471-.055-.864Zm.308 3.245.257.942 1.361.082-.488-1.024z" data-iconColor="Rails"/></svg>

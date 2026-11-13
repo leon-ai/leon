@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 100 100"><g fill="#f06292" data-iconColor="UML"><path d="M52 51.67719 64.98024 45v27.6607l17.95068-9.19684L83 73.88739 52.03499 90z" transform="translate(2 2)"/><path d="M25.97483 78.56115V55.3739l4.35871 25.04244 7.09641 3.60708 4.56156-20.81746v22.77563L50 90V51.56115l-12.16465-5.87451-3.85203 18.34378-3.88569-22.1222L18 36v38.47348z" transform="translate(-2 2)"/><path d="m46.1038124 10-9.1281157 8.1758452s17.8098576 9.273663 19.9733327 10.3696414c2.1637777 1.0956718 5.2429998 3.2033224 1.914111 6.322952-3.3288888 3.119323-6.9906664 2.6977929-9.487333 1.4332025S28.4038082 25.5947756 28.4038082 25.5947756L19 33.6878477s18.1421412 9.357969 21.1384437 10.9597835c2.9959999 1.6021211 14.1477773 5.5641978 24.7169991-2.7820989 10.5692219-8.3462967 9.0715245-11.3813137 9.0715245-11.9714559s-.2496666-3.7094652-2.0805554-5.6485038c-1.8311915-1.9390386-7.1571109-4.7211375-9.4041108-5.9014219S46.1038124 10 46.1038124 10"/></g></svg>

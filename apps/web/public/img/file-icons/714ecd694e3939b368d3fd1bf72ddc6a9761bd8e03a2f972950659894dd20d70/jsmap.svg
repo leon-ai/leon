@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><g fill="#ffca28" data-iconColor="JS Map"><path d="M18 8v2h2v10H10v-2H8v4h14V8z" transform="translate(-.22193 -.25318)"/><path d="M2.4439 2.5064h14.136v14.136H2.4439zm3.7145 11.811c.31412.66751.93452 1.2172 1.9947 1.2172 1.178 0 1.9868-.62825 1.9868-2.0025V8.993h-1.335v4.5077c0 .67537-.27486.84814-.70678.84814-.45548 0-.64396-.31412-.85599-.68322l-1.0837.65181m4.6962-.14136c.39266.7696 1.1858 1.3586 2.4266 1.3586 1.2565 0 2.1989-.65181 2.1989-1.8533 0-1.1073-.6361-1.602-1.767-2.0889l-.32983-.14136c-.57328-.24345-.81672-.40836-.81672-.80102 0-.32198.24345-.57328.6361-.57328.37695 0 .62825.16492.85599.57328l1.0288-.68322c-.43192-.7539-1.0445-1.0445-1.8847-1.0445-1.1858 0-1.9476.7539-1.9476 1.7512 0 1.0837.6361 1.5942 1.5942 2.0025l.32983.14136c.61254.26701.97379.43192.97379.8874 0 .37695-.35339.65181-.90311.65181-.65181 0-1.0288-.33768-1.3115-.80887z" transform="translate(-.22193 -.25318)"/></g></svg>

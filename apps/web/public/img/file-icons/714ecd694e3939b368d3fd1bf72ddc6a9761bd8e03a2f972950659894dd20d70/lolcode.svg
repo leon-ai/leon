@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="#d32f2f" d="m12 7.687-1.3497.091334c-.87275-1.0351-3.3185-3.6432-5.7541-3.6432 0 0-1.9992 3.0039-.040594 7.0125-.55816.84231-.9032 1.2787-.97424 2.2834l-1.9586.2943.21311.99453 1.7861-.26386.14208.72053-1.5933.95394.47697.9032 1.4715-.9032c1.1671 2.4762 4.1202 3.7346 7.5808 3.7346s6.4137-1.2584 7.5808-3.7346l1.4715.9032.47697-.9032-1.5933-.95394.14208-.72053 1.7861.26386.21311-.99453-1.9586-.2943c-.07103-1.0047-.41608-1.4411-.97424-2.2834 1.9586-4.0086-.0406-7.0125-.0406-7.0125-2.4356 0-4.8813 2.6081-5.7541 3.6432l-1.3497-.091335m-3.0445 3.0445a1.0148 1.0148 0 0 1 1.0148 1.0148 1.0148 1.0148 0 0 1-1.0148 1.0148 1.0148 1.0148 0 0 1-1.0148-1.0148 1.0148 1.0148 0 0 1 1.0148-1.0148m6.089 0a1.0148 1.0148 0 0 1 1.0148 1.0148 1.0148 1.0148 0 0 1-1.0148 1.0148 1.0148 1.0148 0 0 1-1.0148-1.0148 1.0148 1.0148 0 0 1 1.0148-1.0148m-4.0593 3.0445h2.0297l-.71038 1.4106c.20297.64949.77127 1.1265 1.4715 1.1265a1.5222 1.5222 0 0 0 1.5222-1.5222h.50742a2.0297 2.0297 0 0 1-2.0297 2.0297c-.76112 0-1.4208-.41608-1.776-1.0148-.35519.59875-1.0148 1.0148-1.776 1.0148a2.0297 2.0297 0 0 1-2.0297-2.0297h.50741a1.5222 1.5222 0 0 0 1.5222 1.5222c.70023 0 1.2685-.47697 1.4715-1.1265z" data-iconColor="LOLCode"/></svg>

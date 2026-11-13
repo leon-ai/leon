@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="16" height="16" viewBox="0 0 512 512"><path fill="#d52b2a" d="M403.88 196.563h-9.484v-44.388c0-82.099-65.151-150.681-146.582-152.145-2.225-.04-6.671-.04-8.895 0C157.486 1.494 92.336 70.076 92.336 152.175v44.388h-9.485c-14.616 0-26.538 15.082-26.538 33.709v222.632c0 18.606 11.922 33.829 26.539 33.829H403.88c14.616 0 26.539-15.223 26.539-33.829V230.272c0-18.626-11.922-33.709-26.539-33.709M273.442 341.362v67.271c0 7.703-6.449 14.222-14.158 14.222H227.45c-7.71 0-14.159-6.519-14.159-14.222v-67.271c-7.477-7.36-11.83-17.537-11.83-28.795 0-21.334 16.491-39.666 37.459-40.513 2.222-.09 6.673-.09 8.895 0 20.968.847 37.459 19.179 37.459 40.513-.002 11.258-4.355 21.435-11.832 28.795m58.444-144.799H154.847v-44.388c0-48.905 39.744-89.342 88.519-89.342s88.521 40.437 88.521 89.342v44.388z" data-iconColor="PDM Lock"/></svg>

@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 40 40"><path fill="#ffc107" d="m148.20355-1044.71326 15.99001-27.71973-20.93001-36.28003-36.92008 63.99976z" transform="matrix(0.20299377110908937,0,0,0.20299377110908937,0.643549342643837,245.0408342001066)"/><path fill="#0f9d58" d="M181.653483-1102.713632c2.14-3.71 2.14-8.28 0-11.99l-33.46-58h-41.85l57.85 100.28s17.46-30.29 17.46-30.29" transform="matrix(0.20299377110908937,0,0,0.20299377110908937,0.643549342643837,245.0408342001066)"/><path fill="#db4437" d="m9.23495 6.98738-3.24586 5.62698 4.24865 7.36463 7.49453-12.99161z"/><path fill="#4285f4" d="M8.873483-1114.713632c-2.14 3.71-2.14 8.28 0 11.99l33.46 58h41.85l-57.85-100.27z" data-iconColor="Protobuf" transform="matrix(0.20299377110908937,0,0,0.20299377110908937,0.643549342643837,245.0408342001066)"/></svg>

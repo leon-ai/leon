@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="gray" d="M2.2 9.76h2.24v2.18H2.2zm2.75 0H7.2v2.18H4.95zm0-2.8H7.2v2.18H4.95zm2.76 2.8h2.24v2.18H7.71zm0-2.8h2.24v2.18H7.71zm2.75 2.8h2.25v2.18h-2.25zm0-2.8h2.25v2.18h-2.25zm2.76 2.8h2.24v2.18h-2.24zm-2.76-5.6h2.25v2.18h-2.25zM5.33 15.09c.35 0 .63.27.63.61 0 .33-.28.61-.63.61-.33 0-.62-.28-.62-.61 0-.34.29-.61.62-.61m17.36-4.2.31.17-.16.31c-.64 1.21-1.97 1.58-3.27 1.52-1.95 4.71-6.2 6.95-11.34 6.95-2.66 0-5.1-.97-6.49-3.26l-.02-.04-.22-.4c-.45-1.01-.61-2.11-.5-3.22l.03-.33H15.8c.53 0 1.07-.09 1.56-.25l.76-.34c-.31-.4-.48-.91-.52-1.41-.07-.68.07-1.59.55-2.09l.24-.28.28.22c.71.56 1.3 1.33 1.41 2.21.85-.24 1.86-.19 2.61.24M5.34 16.85c.66 0 1.16-.52 1.16-1.15 0-.64-.5-1.16-1.17-1.16-.65 0-1.18.52-1.18 1.16s.53 1.15 1.19 1.15" data-iconColor="Docker Ignore" data-themed="true"/></svg>

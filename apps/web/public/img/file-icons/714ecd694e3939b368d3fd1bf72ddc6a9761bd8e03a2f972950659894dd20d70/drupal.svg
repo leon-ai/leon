@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" clip-rule="evenodd" viewBox="0 0 1011.55 1333.33"><path fill="#009cde" d="M716.04 281.05C622.35 189.77 533.47 100.89 507.04 0c-26.43 100.89-115.31 189.79-209 281.07C158.71 420.4.17 578.94.17 816.76c-7.21 278.66 216.2 511.68 494.86 516.49s511.68-216.2 516.49-494.86v-21.62c2.39-237.83-156.15-396.37-295.48-535.71zM259.61 862.39c-14.41 19.22-28.82 40.84-38.44 62.46-2.41 2.41-4.81 7.21-9.6 7.21l-2.4-.02c-12.01 0-24.03-21.62-24.03-21.62-2.41-4.81-7.21-12-9.6-16.81l-2.41-4.79c-31.24-67.28-4.81-160.95-4.81-160.95 12-45.63 33.63-91.29 60.06-129.72 16.81-24.03 36.04-48.04 55.25-72.07l24.03 24.03 112.91 115.31c4.81 4.81 4.81 12 0 16.81L302.85 814.36l-43.25 48.02zm252.24 331.51c-96.09 0-175.36-79.28-172.97-175.36 0-43.25 16.81-84.07 43.25-115.31 36.04-43.25 81.68-86.48 132.13-144.13 57.65 62.46 96.09 103.29 132.13 151.35 2.41 2.41 4.81 7.21 7.21 12.01 19.22 28.82 31.22 62.46 31.22 98.5 2.39 96.08-76.87 172.96-172.97 172.96zm329.11-278.67c-2.41 7.22-9.6 12.01-16.81 14.41l-2.41.02c-7.21-2.41-12-7.21-16.81-12.01-31.22-45.63-64.85-88.88-103.29-127.32l-45.63-48.04-153.75-158.54c-31.22-28.82-62.46-62.46-91.29-93.69 0-2.4-2.4-2.4-2.4-2.4-4.81-7.21-9.6-14.41-12.01-24.03v-4.81c-4.81-26.43 4.81-52.85 24.03-72.07 28.82-28.82 60.06-60.06 88.88-91.28 31.22 33.63 64.85 67.26 98.5 100.89 67.26 62.46 127.32 132.13 182.57 206.6 45.63 64.85 69.66 139.33 69.66 218.61-4.82 28.82-9.63 62.45-19.23 93.67z" data-iconColor="Drupal"/></svg>

@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#ff8a65" d="M256 0C114.6151123 0 0 114.6151123 0 256s114.6151123 256 256 256 256-114.6151123 256-256S397.3848877 0 256 0m138.1992188 389.8251953c-5.6125488 2.5087891-14.0546265 3.6921387-19.930542.7542114l-160.4898071-88.9425659 113.7612305.2925415-70.9551392-158.7877808-103.7299805 233.9902344C147.375 390.125 135.2155151 395.4790039 121.125 390.75c-18.25-6.125-19.5756836-21.2597656-13.9799805-33.8818359L222.2006836 97.3295898c.0229492-.0512695.0454102-.1020508.0683594-.152832 6.1655273-13.6601562 19.840332-22.3583984 34.8168945-22.1289062 14.8505859.215332 28.1533203 9.1328125 34.0048828 22.7568359l115.734375 258.9960938c5.6328125 12.6054687-.0195312 27.3906249-12.6259765 33.024414" data-iconColor="ANTLR"/></svg>

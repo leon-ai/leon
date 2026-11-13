@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path fill="#26a2c1" d="M13.924 5.537c0 .241-.007.483-.005.725 0 .327 0 .655 0 .983s0 .649 0 .973c0 .291 0 .583 0 .876 0 .128 0 .256-.012.385-.01.759 0 1.518-.009 2.278q0 .571 0 1.142c-.875 0-1.751.009-2.626-.006h-.044a1.485 1.485 0 0 1-.2-.639c0-.929-.005-1.858.006-2.786a11.535 11.535 0 0 0-.066-1.768q-.115.208-.238.412l-.04.075c-.234.385-.447.781-.663 1.174-.194.366-.4.724-.6 1.088q-.1.19-.211.38c-.01.018-.03.052-.04.069-.745-.045-1.492-.041-2.238-.052q-.461-.8-.916-1.6c-.177-.3-.337-.6-.522-.9-.074-.104-.146-.216-.21-.332-.054-.091-.109-.18-.166-.269l-.061.025a1.47 1.47 0 0 0-.151.314q.021 1.094.057 2.189a17.322 17.322 0 0 1 0 2.18 3.036 3.036 0 0 1-1.484.48l-.155.022-.071.045H2V2.3l.056.03q.26-.03.522-.054c.986-.094 1.972-.188 2.959-.265.269.611.522 1.228.78 1.843.567 1.322 1.083 2.663 1.664 3.98.062-.151.125-.3.191-.451.172-.4.338-.8.515-1.192.213-.5.426-1 .645-1.5q.247-.58.5-1.159c.181-.4.338-.82.534-1.219h.093c.466.007.932 0 1.4 0h.841c.166.422.365.833.5 1.267a1.955 1.955 0 0 1 .413-.6 1.955 1.955 0 0 0-.413.6c-.13-.434-.33-.845-.5-1.267.153 0 .306 0 .459 0 .284 0 .567-.005.85.018v3.294ZM2.086 9.9c.005.871-.005 1.743.009 2.614-.015-.871 0-1.742-.009-2.614m-.021-7.55c.012.027.028.06.035.079-.021.928-.013 1.855-.01 2.783 0-.928-.01-1.856.01-2.783-.007-.019-.023-.052-.035-.079M2.1 12.94c.223.009.446.007.669.008-.223-.001-.447.001-.669-.008m1.8-3.069a7.692 7.692 0 0 0 .67-1.564 7.692 7.692 0 0 1-.67 1.564m7.927 1.714c.045-.072.088-.144.131-.216.21-.521.419-1.043.6-1.575.093-.277.192-.553.276-.833s.179-.581.262-.873c-.083.292-.175.582-.262.873s-.183.556-.276.833c-.181.532-.39 1.054-.6 1.575-.041.073-.084.145-.129.216Zm.363-4.891a1.035 1.035 0 0 1-.224-.74 1.035 1.035 0 0 0 .224.74 2.683 2.683 0 0 0 1-1.155 2.683 2.683 0 0 1-.998 1.156Zm1.726-2.634c0 .3 0 .59 0 .885 0-.145 0-.29 0-.435s.002-.299.002-.449Z" data-iconColor="Maya"/></svg>

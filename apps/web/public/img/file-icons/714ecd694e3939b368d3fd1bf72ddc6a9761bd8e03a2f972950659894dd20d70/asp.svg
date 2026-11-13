@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="16" height="16" viewBox="0 0 439.875 439.875"><g fill="#1e9cef" data-iconColor="ASP"><path d="M114.75 172.125H95.625c-11.475 0-19.125 7.65-19.125 19.125v19.125h57.375V191.25c0-11.475-7.65-19.125-19.125-19.125"/><path d="M344.25 172.125H306v38.25h38.25c11.475 0 19.125-7.65 19.125-19.125s-7.65-19.125-19.125-19.125"/><path d="M382.5 95.625H57.375C24.862 95.625 0 120.487 0 153v133.875c0 32.513 24.862 57.375 57.375 57.375H382.5c32.513 0 57.375-24.862 57.375-57.375V153c0-32.513-24.862-57.375-57.375-57.375M153 229.5v57.375h-19.125V229.5H76.5v57.375H57.375V191.25c0-21.038 17.212-38.25 38.25-38.25h19.125c21.038 0 38.25 17.212 38.25 38.25zm57.375-19.125H229.5c21.037 0 38.25 17.213 38.25 38.25s-17.213 38.25-38.25 38.25h-19.125c-21.038 0-38.25-17.213-38.25-38.25h19.125c0 9.562 7.65 19.125 19.125 19.125H229.5c11.475 0 19.125-7.65 19.125-19.125S239.062 229.5 229.5 229.5h-19.125c-21.038 0-38.25-17.213-38.25-38.25 0-21.038 17.212-38.25 38.25-38.25H229.5c21.037 0 38.25 17.212 38.25 38.25h-19.125c0-9.562-7.65-19.125-19.125-19.125h-19.125c-11.475 0-19.125 7.65-19.125 19.125s9.562 19.125 19.125 19.125M344.25 229.5H306v57.375h-19.125V153h57.375c21.037 0 38.25 17.212 38.25 38.25 0 21.037-17.213 38.25-38.25 38.25"/></g></svg>

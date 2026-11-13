@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><g fill-rule="evenodd"><path fill="#fff" d="M26.594 12.968c0 .912-.74 1.651-1.652 1.651H3.058a1.651 1.651 0 0 1-.852-3.065 1.65 1.65 0 0 1 .543-2.547 1.651 1.651 0 0 1 1.778-2.213A1.651 1.651 0 0 1 6.79 4.532a1.651 1.651 0 0 1 2.472-1.654 1.652 1.652 0 0 1 2.977-.786 1.652 1.652 0 0 1 3.11 0 1.652 1.652 0 0 1 2.977.785 1.651 1.651 0 0 1 2.472 1.654 1.651 1.651 0 0 1 2.263 2.262 1.651 1.651 0 0 1 1.778 2.213 1.65 1.65 0 0 1 .65 2.404 1.652 1.652 0 0 1 1.105 1.558" transform="matrix(.76115 0 0 .76115 1.3343 1.4969)"/><path d="M9.531 24.937h8.938V27H9.531z" transform="matrix(.76115 0 0 .76115 1.3343 1.4969)"/><path fill="#2196f3" d="M1 13.794h26c-.42 6.909-6.08 12.38-13 12.38S1.42 20.704 1 13.795z" data-iconColor="Umi" transform="matrix(.76115 0 0 .76115 1.3343 1.4969)"/><path d="M8.313 8.016a.41.41 0 0 1-.407-.413.41.41 0 0 1 .407-.413.41.41 0 0 1 .406.413.41.41 0 0 1-.406.413m-1.626 2.063a.41.41 0 0 1-.406-.412.41.41 0 0 1 .407-.413.41.41 0 0 1 .406.413.41.41 0 0 1-.407.412m1.625 1.651a.41.41 0 0 1-.406-.413.41.41 0 0 1 .407-.412.41.41 0 0 1 .406.412.41.41 0 0 1-.406.413zm1.626-3.3a.41.41 0 0 1-.407-.413.41.41 0 0 1 .406-.413.41.41 0 0 1 .407.413.41.41 0 0 1-.406.413m9.75 1.65a.41.41 0 0 1-.407-.412.41.41 0 0 1 .407-.413.41.41 0 0 1 .406.413.41.41 0 0 1-.407.412z" transform="matrix(.76115 0 0 .76115 1.3343 1.4969)"/></g></svg>

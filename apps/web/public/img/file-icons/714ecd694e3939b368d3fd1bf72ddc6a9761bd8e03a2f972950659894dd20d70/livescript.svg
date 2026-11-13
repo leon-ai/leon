@@ -1,0 +1,42 @@
+<!--
+  - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  -
+  -->
+
+<svg  width="16px" height="16px" version="1.1" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(0,-257)" fill="#317eac" data-iconColor="LiveScript">
+    <rect x="5.4186" y="260.18" width="3.6853" height="34.207"/>
+    <rect transform="rotate(90)" x="288.2" y="-37.074" width="3.6853" height="34.207"/>
+    <rect transform="rotate(45)" x="208.79" y="166.91" width="2.8348" height="34.207"/>
+    <rect x="10.73" y="262.47" width="2.8348" height="22.08"/>
+    <rect x="15.36" y="262.52" width="2.8348" height="17.382"/>
+    <rect x="19.99" y="262.47" width="2.8348" height="12.802"/>
+    <rect x="24.526" y="262.49" width="2.8348" height="8.2544"/>
+    <rect x="28.783" y="262.46" width="2.8348" height="5.1972"/>
+    <rect transform="matrix(0,-1,-1,0,0,0)" x="-286.54" y="-34.801" width="2.8348" height="22.08"/>
+    <rect transform="matrix(0,-1,-1,0,0,0)" x="-281.91" y="-34.753" width="2.8348" height="17.382"/>
+    <rect transform="matrix(0,-1,-1,0,0,0)" x="-277.28" y="-34.801" width="2.8348" height="12.802"/>
+    <rect transform="matrix(0,-1,-1,0,0,0)" x="-272.75" y="-34.781" width="2.8348" height="8.2544"/>
+    <rect transform="matrix(0,-1,-1,0,0,0)" x="-268.49" y="-34.809" width="2.8348" height="5.1972"/>
+  </g>
+</svg>

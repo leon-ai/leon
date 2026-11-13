@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><defs><radialGradient id="a" cx="572.646" cy="-769.85" r="14.375" gradientTransform="matrix(0.358, 0, 0, -0.358, -181.98, -268.597)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#fff520" stop-opacity=".891"/><stop offset="1" stop-color="#fff300" stop-opacity="0"/></radialGradient></defs><g fill="#4e9a06" stroke="#4e9a06" data-iconColor="WebP"><path fill-rule="evenodd" stroke-width="3" d="M6.2 6.374h3.281v3.3H6.2Z"/><path fill-rule="evenodd" stroke-width="3" d="M4.646 8h22.707a1.977 1.977 0 0 1 1.981 1.972v15.989a1.977 1.977 0 0 1-1.972 1.98H4.646a1.976 1.976 0 0 1-1.98-1.972V9.978A1.976 1.976 0 0 1 4.638 8z"/><path fill="#fff" d="M20.877 17.969A4.878 4.878 0 1 1 16 13.092a4.877 4.877 0 0 1 4.877 4.877Z"/><circle cx="23.184" cy="7.22" r="5.15" stroke="none" style="fill:url(#a)"/></g></svg>

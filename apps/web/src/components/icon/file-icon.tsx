@@ -14,13 +14,14 @@ export function FileIconFallback({ ariaLabel, fallbackLabel }: FileIconProps) {
   return fallbackLabel ? <span>{fallbackLabel}</span> : <Icon name="file-text" ariaLabel={ariaLabel} />
 }
 
-const PierreFileIcon = lazy(() => import('./pierre-file-icon').catch(() => ({ default: FileIconFallback })))
+const AtomFileIcon = lazy(() => import('./atom-file-icon').catch(() => ({ default: FileIconFallback })))
 
 /**
- * Shares Pierre's filename-aware artwork without loading it with the application shell.
+ * Loads filename associations only when file artwork is needed. The local SVGs
+ * are requested individually; unknown formats retain a readable fallback.
  */
 export function FileIcon(props: FileIconProps) {
-  return <Suspense fallback={<Icon name="file-text" ariaLabel={props.ariaLabel} />}>
-    <PierreFileIcon {...props} />
+  return <Suspense fallback={<FileIconFallback {...props} />}>
+    <AtomFileIcon {...props} />
   </Suspense>
 }

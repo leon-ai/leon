@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 264 512"><path fill="#ec407a" d="M264 512H0v-16h264zm0-88.4353333H0v-16h264zM1.1143544 224.7771606C3.6666667 69.6666641 211 187.6666718 210.1004333 90.6068954c1.4678192-29.3639259-10.7370758-67.8338852-59.6455383-72.2849121C70 11 37.2859154 48.8122559 34.6779633 101.4058914H17.6702404C21.6182613 29.0255222 72-7.5 150.9204865 1.3521686c27.9860382 3.1390734 74.2303467 19.733427 76.2833099 85.507431v178.9245605c-.2554169 19.1893311 16.2711029 18.0827026 36.2868958 15.6560059v17.2721863c-55.2421875.3731689-53.0794067-7.5570679-53.0636902-55.4024963C159.5 336.5-4.8866258 318.4769897 1.1143544 224.7771606m208.7537639-90.2882537C168 175.5 16.2114716 113.9298096 16.8532982 224.777359c0 68.3419647 79.3839722 67.7612152 113.3091888 59.0364532 42.3394012-10.8887024 78.6600647-43.6743011 79.670639-103.2542725z" data-iconColor="Alex"/></svg>

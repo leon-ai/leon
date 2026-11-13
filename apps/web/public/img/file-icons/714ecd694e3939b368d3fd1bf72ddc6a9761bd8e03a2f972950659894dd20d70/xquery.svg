@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><g fill="#f1662a" data-iconColor="XQuery"><path d="m20.42 21.157 2.211 2.211L30 16l-7.369-7.369-2.211 2.212L25.58 16Zm-8.84-10.314L9.369 8.631 2 16l7.369 7.369 2.211-2.211L6.42 16Zm5.831-3.166 1.6.437-4.42 16.209-1.6-.437Z"/><path d="M20.332 18.462a3.354 3.354 0 0 1 .975-1.423 4.014 4.014 0 0 1 1.617-.8A9.118 9.118 0 0 1 25.138 16a5.472 5.472 0 0 1 3.681 1.039A3.5 3.5 0 0 1 30 19.808a4.47 4.47 0 0 1-.24 1.491 3.124 3.124 0 0 1-.838 1.239l-1.675 1.6a1.512 1.512 0 0 0-.424.789 5.307 5.307 0 0 0-.1 1.1H23v-.54a6.32 6.32 0 0 1 .207-1.778 2.886 2.886 0 0 1 .78-1.24l1.352-1.289a1.84 1.84 0 0 0 .563-.894 3.682 3.682 0 0 0 .1-.8 1.5 1.5 0 0 0-.252-.9.9.9 0 0 0-.779-.346 1.255 1.255 0 0 0-.483.086.724.724 0 0 0-.344.337 2.347 2.347 0 0 0-.217.721 7.614 7.614 0 0 0-.081 1.24H20a6.155 6.155 0 0 1 .332-2.162m6.457 8.5V30h-3.853v-3.038Z"/></g></svg>

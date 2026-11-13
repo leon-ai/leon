@@ -374,41 +374,45 @@ test('shares lazy file artwork across languages, themes and session navigation',
   const resources: string[] = []
   page.on('request', (request) => resources.push(request.url()))
   const languages = [
-    ['js', 'JavaScript', 'javascript'], ['typescript', 'TypeScript', 'typescript'],
-    ['tsx', 'TSX', 'react'], ['python', 'Python', 'python'],
-    ['json', 'JSON', 'json'], ['yaml', 'YAML', 'yml'],
-    ['rust', 'Rust', 'rust'], ['dockerfile', 'Dockerfile', 'docker']
+    ['js', 'JavaScript', 'js'], ['typescript', 'TypeScript', 'typeScript'],
+    ['tsx', 'TSX', 'jsx'], ['python', 'Python', 'python'],
+    ['json', 'JSON', 'json'], ['yaml', 'YAML', 'yaml'],
+    ['rust', 'Rust', 'rust'], ['dockerfile', 'Dockerfile', 'docker'],
+    ['csharp', 'C#', 'csharp'], ['kotlin', 'Kotlin', 'kotlin']
   ] as const
   ui.history.get(SESSION_ID)!.at(-1)!.message = languages.map(([language]) =>
     `\`\`\`${language}\nA little code.\n\`\`\``).join('\n\n') + '\n\n```unknown-language\nSome text.\n```'
   await page.goto('./')
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
-  expect(resources.some((url) => url.includes('pierre-file-icon-'))).toBe(false)
+  expect(resources.some((url) => url.includes('atom-file-icon-') || url.includes('/img/file-icons/'))).toBe(false)
   await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
   const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
   for (const [, label, token] of languages) {
     const icon = answer.getByRole('img', { name: label, exact: true })
     await expect(icon).toHaveAttribute('data-file-icon', token)
-    expect(await icon.locator('use').getAttribute('href')).toBe(`#file-tree-builtin-${token}`)
-    expect(await icon.evaluate((element) => (element as SVGSVGElement).getBBox().width)).toBeGreaterThan(0)
+    await icon.scrollIntoViewIfNeeded()
+    await expect.poll(() => icon.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true)
   }
   await expect(answer.locator('.markdown-language-icon').last()).toHaveText('unknown-language')
-  expect(resources.filter((url) => /pierre-file-icon-.*\.js$/.test(url))).toHaveLength(1)
+  expect(resources.filter((url) => /atom-file-icon-.*\.js$/.test(url))).toHaveLength(1)
   const python = answer.getByRole('img', { name: 'Python', exact: true })
-  const colors: string[] = []
+  const sources: string[] = []
   for (const theme of ['light', 'dark']) {
     await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
-    colors.push(await python.evaluate((element) => getComputedStyle(element).color))
+    sources.push((await python.getAttribute('src'))!)
   }
-  expect(colors[0]).not.toBe(colors[1])
+  // Artwork without a dark variant stays unchanged instead of being recolored.
+  expect(sources[0]).toBe(sources[1])
+  const pythonSource = (await python.getAttribute('src'))!
+  const fetchedPythonIcons = resources.filter((url) => url.endsWith(pythonSource)).length
   await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
   await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
   await expect(answer.getByRole('img', { name: 'Python', exact: true })).toHaveAttribute('data-file-icon', 'python')
-  await expect(page.locator('#leon-pierre-file-icons')).toHaveCount(1)
-  const ids = await page.locator('#leon-pierre-file-icons symbol').evaluateAll((elements) => elements.map((element) => element.id))
-  expect(new Set(ids).size).toBe(ids.length)
+  await expect.poll(() => answer.getByRole('img', { name: 'Python', exact: true })
+    .evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true)
+  expect(resources.filter((url) => url.endsWith(pythonSource))).toHaveLength(fetchedPythonIcons)
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -460,9 +464,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     for (const label of ['JavaScript', 'TypeScript', 'Python', 'JSON', 'HTML', 'CSS', 'Shell']) {
       const icon = answer.getByRole('img', { name: label, exact: true })
       await expect(() => icon.scrollIntoViewIfNeeded()).toPass()
-      await expect(icon).toHaveClass(/pierre-file-icon/)
-      expect(await icon.locator('use').getAttribute('href')).toContain('#file-tree-builtin-')
-      expect(await icon.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0)
+      await expect.poll(() => icon.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true)
     }
     await expect(answer.getByRole('region', { name: 'Code block', exact: true }).first()).toHaveCSS('overscroll-behavior-y', 'auto')
     const footnote = answer.getByRole('link', { name: '1', exact: true })
@@ -510,7 +512,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
             return { background: getComputedStyle(block).backgroundColor, body: getComputedStyle(body).backgroundColor,
               header: getComputedStyle(header).backgroundColor, border: getComputedStyle(block).borderWidth,
               separator: getComputedStyle(header).borderBottomWidth,
-              logoSize: logo.getBoundingClientRect().width, fontSize: Number.parseFloat(getComputedStyle(header).fontSize),
+              logoSize: logo.getBoundingClientRect().width,
               logoRadius: getComputedStyle(logo).borderRadius }
           }),
           alerts: Array.from(element.querySelectorAll<HTMLElement>('.markdown-alert')).map((alert) => {
@@ -534,7 +536,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         expect(block.header).toBe('rgba(0, 0, 0, 0)')
         expect(block.border).toBe('0px')
         expect(block.separator).toBe('0px')
-        expect(block.logoSize).toBe(block.fontSize)
+        expect(block.logoSize).toBe(16)
         expect(block.logoRadius).toBe('4px')
       }
       expect(visuals.alerts).toHaveLength(5)

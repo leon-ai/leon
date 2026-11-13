@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><path fill="#c3e88d" d="M27.317 16.285c0 6.251-5.067 11.318-11.317 11.318S4.683 22.536 4.683 16.285C4.683 10.035 9.75 4.969 16 4.969s11.317 5.066 11.317 11.316m-6.369-7.13c-1.15.04-2.153.674-2.9 1.55-.828.961-1.378 2.101-1.774 3.265-.709-.581-1.256-1.333-2.394-1.662-.88-.253-1.803-.149-2.653.484-.403.301-.68.755-.811 1.182-.342 1.11.358 2.098.677 2.453l.695.744c.143.146.488.527.32 1.074-.182.595-.899.979-1.633.753-.328-.102-.8-.346-.694-.689.043-.141.144-.247.199-.368.049-.105.073-.183.088-.229.134-.439-.049-1.009-.518-1.154-.438-.134-.886-.028-1.06.536-.197.641.109 1.803 1.751 2.31 1.924.591 3.551-.457 3.782-1.822.146-.855-.241-1.492-.949-2.309l-.576-.637c-.35-.35-.469-.944-.108-1.401.305-.386.74-.55 1.451-.357 1.039.281 1.502 1.003 2.274 1.584-.319 1.046-.527 2.096-.716 3.039l-.116.702c-.553 2.897-.974 4.487-2.07 5.401-.221.157-.536.392-1.012.409-.249.008-.33-.164-.334-.239-.005-.175.142-.255.24-.334.146-.08.368-.213.353-.636-.016-.502-.432-.937-1.032-.916-.45.015-1.135.438-1.109 1.213.027.8.772 1.4 1.897 1.361.601-.02 1.944-.265 3.267-1.837 1.54-1.803 1.97-3.87 2.295-5.383l.361-1.997c.201.024.416.04.65.046 1.917.041 2.876-.953 2.891-1.675.009-.437-.287-.868-.702-.858-.297.009-.67.206-.759.617-.087.403.61.767.064 1.12-.387.251-1.082.428-2.06.284l.178-.983c.363-1.864.811-4.157 2.509-4.212.124-.006.577.005.587.305.003.1-.021.126-.139.355-.12.178-.164.33-.159.505.017.476.379.789.902.77.701-.023.902-.705.891-1.056-.029-.824-.898-1.345-2.046-1.308z" data-iconColor="Symfony Dark"/></svg>

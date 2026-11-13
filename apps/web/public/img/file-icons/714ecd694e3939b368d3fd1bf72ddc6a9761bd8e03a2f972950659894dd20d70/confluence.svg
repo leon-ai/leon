@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><g fill="#2684ff" data-iconColor="Confluence"><path d="M3.015 23.087c-.289.472-.614 1.02-.891 1.456a.892.892 0 0 0 .3 1.212l5.792 3.564a.89.89 0 0 0 1.226-.29l.008-.013c.231-.387.53-.891.855-1.43 2.294-3.787 4.6-3.323 8.763-1.336l5.743 2.731A.892.892 0 0 0 26 28.559l.011-.024 2.755-6.235a.891.891 0 0 0-.445-1.167c-1.212-.57-3.622-1.707-5.792-2.754-7.805-3.793-14.439-3.548-19.514 4.708"/><path d="M28.985 8.932c.289-.472.614-1.02.891-1.456a.892.892 0 0 0-.3-1.212L23.785 2.7a.89.89 0 0 0-1.236.241.584.584 0 0 0-.033.053c-.232.387-.53.891-.856 1.43-2.294 3.787-4.6 3.323-8.763 1.336L7.172 3.043a.89.89 0 0 0-1.187.421l-.011.024-2.758 6.238a.891.891 0 0 0 .445 1.167c1.212.57 3.622 1.706 5.792 2.753 7.823 3.787 14.457 3.533 19.532-4.714"/></g></svg>

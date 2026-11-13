@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256"><g fill="#924e96" data-iconColor="ThunderClient"><path d="M1175 2554c-317-34-580-158-796-373C133 1935 6 1628 6 1280s127-655 373-901S932 6 1280 6s655 127 901 373 373 553 373 901-127 655-373 901c-187 186-414 306-669 353-87 17-269 27-337 20m365-193c337-90 590-295 739-599 82-166 106-276 106-482 0-103-5-186-13-220-87-359-295-625-610-779-166-82-276-106-482-106s-316 24-482 106c-315 154-523 420-610 779-8 34-13 117-13 220 0 167 6 209 47 340 119 374 457 676 838 749 30 6 64 13 75 15 11 3 90 3 175 1 114-2 175-9 230-24" transform="translate(0.000000,256.000000) scale(0.100000,-0.100000)"/><path d="M1297 2208c-14-13-168-236-342-497-351-523-341-503-275-563l30-28h380v-29c0-17-16-176-35-355-22-210-32-334-26-348 21-56 103-83 145-48 14 11 516 722 699 989 46 66 50 119 12 156l-24 25h-235c-129 0-237 3-239 8-2 4 13 144 33 312 24 200 33 315 28 335-17 63-102 87-151 43" transform="translate(0.000000,256.000000) scale(0.100000,-0.100000)"/></g></svg>

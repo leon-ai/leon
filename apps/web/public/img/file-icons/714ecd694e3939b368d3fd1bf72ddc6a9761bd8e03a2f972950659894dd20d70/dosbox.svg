@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#b33b00" fill-rule="evenodd" d="M296 103.5c35.9348755 15.6288605 18.212616 51.6093597-17 56.5h-75v-16h16V64h-16V48s53.5 0 65 0c5.5 0 20.9602356-1.0060196 37.5 14.5 16 15 8.5 34.5-10.5 41M252 96h21c7 0 13-8 13-15 0-6.7891998-4-17-13-17h-21zm0 16h21c9 0 13 10.2108002 13 17 0 7-6 15-13 15h-21zM115 310H48v-16h16v-86H48v-16h67c27 9 42.8941956 38.6535339 44.7602386 57C161.8946381 269.9850159 138 304.9991455 115 310m18-61c0 29-18 45-25 45H96v-86h12c9 0 25 21 25 41m71 104 43 47-43 46v18h32v-14l24-33 24 32v15h32v-17l-43-47 43-46v-18h-32v14l-24 33-24-33v-14h-32zm166-68c6 7 15 19 28 19h38c21.9082642-10.5555725 29.074646-23.4614563 26-38 0 0-9-12-33-24-21.7807312-10.8903656-32-18.3619232-32-24 0-7 11.3992615-12 18-12 12 0 14.7797852 3.029068 23 10v8h24v-14c-9-8-18.6666565-18-28-18 0 0-17 0-34 0s-30 19-30 29c0 7 0 16 31 32 25.0868225 12.9480286 31 13 33 24 1.0733032 5.9032288-2 13-17 13-16 0-23-12-23-12v-6h-24zm-134-51.2300873c0-33.3497314 48-33.3497314 48 0v33.9713287c0 32.7494202-48 32.7494202-48 0zm-32 33.4159394S211.5517426 310 260 310s56-42.8141479 56-42.8141479v-33.4159393s-5-41.7699127-56-41.7699127c-48 0-56 41.7699127-56 41.7699127zM512 0H0v512h512z" clip-rule="evenodd" data-iconColor="DosBOX"/></svg>

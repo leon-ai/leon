@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#4dd0e1" d="M0 384h42.6666679v85.3333435H128V512H0zm28.4439907-213.3333282H159.368536L264.6651917 18.9583359C272.5806885 7.1249919 285.8956604 0 300.1510315 0h190.515625C502.4512024 0 512 9.5833178 512 21.333334v190.4998474c0 14.2502441-7.1167908 27.5835724-18.973877 35.5003662l-151.6927795 105.291544v130.9162598c0 15.7098389-12.734314 28.4586487-28.4441528 28.4586487h-99.5558624l-42.6666565-42.6666565L224 416l-42.6666718-42.6666565-53.33461 53.333313L85.3320541 384l53.3346176-53.3333435L96 288l-53.3333321 53.3333435L0 298.6666565v-99.5417633c0-15.7081452 12.7343788-28.4582214 28.4439907-28.4582214M448 128c0-49.0845795-53.5018921-79.9290009-96.0722351-55.3867111s-42.570343 86.2311478 0 110.7734299S448 177.0845795 448 128" data-iconColor="Azure" transform="scale(0.8) translate(64 64)"/></svg>

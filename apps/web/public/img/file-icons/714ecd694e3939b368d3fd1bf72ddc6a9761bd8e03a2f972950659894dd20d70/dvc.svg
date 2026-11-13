@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><g fill="#f46737" data-iconColor="DVC"><path d="M2 20.4V8.452a.268.268 0 0 1 .238-.3.339.339 0 0 1 .078 0h4.676a6.64 6.64 0 0 1 4.751 1.877 6.032 6.032 0 0 1 .1 8.848l-.1.091a6.69 6.69 0 0 1-4.751 1.879H2.319a.3.3 0 0 1-.237-.076c0-.151-.082-.226-.082-.371m3.009-2.328h1.825a3.563 3.563 0 0 0 2.613-1.052 3.466 3.466 0 0 0 1.026-2.629 3.546 3.546 0 0 0-3.507-3.6q-.066 0-.132 0H5.012Z"/><path d="M15.627 23.775 9.685 11.607c-.08-.15-.08-.225 0-.3a.419.419 0 0 1 .316-.15h2.534c.159 0 .238.075.318.226l3.167 6.609h.08l3.167-6.609c.08-.151.158-.226.317-.226h2.534a.419.419 0 0 1 .316.15.219.219 0 0 1 0 .3L16.5 23.775c-.079.15-.158.225-.317.225h-.163c-.237-.075-.393-.15-.393-.225"/><path d="M20.376 19.043a6.019 6.019 0 0 1-1.98-4.582 6.016 6.016 0 0 1 1.98-4.582A6.7 6.7 0 0 1 25.207 8 6.736 6.736 0 0 1 29.8 9.654c.158.151.158.3 0 .526l-1.506 1.427a.307.307 0 0 1-.415.056.263.263 0 0 1-.059-.056 3.848 3.848 0 0 0-2.534-.9 3.632 3.632 0 0 0-2.693 1.126 3.58 3.58 0 0 0-1.027 2.629 3.485 3.485 0 0 0 1.109 2.554 3.46 3.46 0 0 0 2.692 1.052 3.857 3.857 0 0 0 2.535-.9.308.308 0 0 1 .417-.055.275.275 0 0 1 .058.055l1.505 1.5a.274.274 0 0 1 .058.4.3.3 0 0 1-.058.055 6.328 6.328 0 0 1-4.594 1.727 6.515 6.515 0 0 1-4.912-1.807"/></g></svg>

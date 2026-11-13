@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" preserveAspectRatio="xMidYMid" viewBox="0 0 24 24"><g fill="#2196f3" stroke-width=".98413" data-iconColor="MarkoJS"><path d="M4.0017 126.48c-.65506 1.0702-1.3205 2.1388-1.9755 3.209-.65506 1.061-1.3085 2.1428-1.9636 3.213l.002.002-.002.002c.65506 1.0702 1.3085 2.15 1.9636 3.211.65506 1.0702 1.3205 2.1408 1.9755 3.211h3.3304c-.66429-1.0703-1.3185-2.1408-1.9736-3.211-.65386-1.0683-1.3078-2.1447-1.9616-3.213.65386-1.0683 1.3078-2.1467 1.9616-3.215.65506-1.0702 1.3093-2.1388 1.9736-3.209z" transform="translate(0,-115.5) translate(0 -5.4609)"/><path fill="#26a69a" d="m3.9989 126.48-.002.002c.65506 1.0702 1.3094 2.1509 1.9644 3.2119.65506 1.0702 1.319 2.1397 1.974 3.21h3.3311c-.66429-1.0702-1.319-2.1397-1.974-3.2099-.65386-1.0683-1.3067-2.1455-1.9606-3.2138z" transform="translate(0,-115.5) translate(0 -5.4609)"/><path fill="#8bc34a" d="m15.203 126.48.0019.002c-.65506 1.0702-1.3094 2.1509-1.9644 3.2119-.65506 1.0702-1.319 2.1397-1.974 3.21h-3.331c.66429-1.0702 1.319-2.1397 1.974-3.21.65386-1.0683 1.3067-2.1455 1.9606-3.2138z" transform="translate(0,-115.5) translate(0 -5.4609)"/><path fill="#ffc107" d="M11.874 126.48c.66429 1.0702 1.3185 2.1388 1.9736 3.209.65386 1.0683 1.3078 2.1467 1.9616 3.215-.65386 1.0683-1.3078 2.1447-1.9616 3.213-.65506 1.0702-1.3093 2.1388-1.9736 3.209h3.3304c.65506-1.0702 1.3185-2.1388 1.9736-3.209.65506-1.061 1.3105-2.1408 1.9656-3.211l-.002-.002.002-.002c-.65506-1.0702-1.3105-2.152-1.9656-3.213-.65506-1.0702-1.3185-2.1388-1.9736-3.209z" transform="translate(0,-115.5) translate(0 -5.4609)"/><path fill="#f44336" d="M16.74 126.48c.66429 1.0702 1.3185 2.1388 1.9736 3.209.65386 1.0683 1.3058 2.1467 1.9596 3.215-.65386 1.0683-1.3058 2.1447-1.9596 3.213-.65506 1.0702-1.3093 2.1408-1.9736 3.211h3.3304c.65506-1.0702 1.3185-2.1408 1.9736-3.211.65506-1.061 1.3105-2.1408 1.9656-3.211l-.002-.002.002-.002c-.65506-1.0702-1.3105-2.152-1.9656-3.213-.65506-1.0702-1.3185-2.1388-1.9736-3.209z" transform="translate(0,-115.5) translate(0 -5.4609)"/></g></svg>
