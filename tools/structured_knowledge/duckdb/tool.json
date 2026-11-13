@@ -3,6 +3,7 @@
   "tool_id": "duckdb",
   "toolkit_id": "structured_knowledge",
   "name": "DuckDB",
+  "version": "1.0.0",
   "description": "Inspect and analyze local structured files with read-only SQL, including aggregations and joins.",
   "icon_name": "database-2-line",
   "distribution": "built-in",

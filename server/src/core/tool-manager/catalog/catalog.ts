@@ -183,6 +183,7 @@ export class ToolCatalog {
         id,
         ...(!owned && !installed ? { catalogId: id } : {}),
         name: manifest.name,
+        ...(manifest.version ? { version: manifest.version } : {}),
         description: manifest.description,
         iconName: manifest.icon_name ?? 'tools-line',
         kind,

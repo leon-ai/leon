@@ -3,6 +3,7 @@
   "tool_id": "openrouter",
   "toolkit_id": "communication",
   "name": "OpenRouter",
+  "version": "1.0.0",
   "description": "A tool for interacting with various LLMs through the OpenRouter API gateway.",
   "icon_name": "route-line",
   "distribution": "built-in",

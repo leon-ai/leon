@@ -3,6 +3,7 @@
   "tool_id": "vectorcraft",
   "toolkit_id": "media_production",
   "name": "VectorCraft",
+  "version": "1.0.0",
   "description": "Create and edit vector artwork, artboards and typography headlessly; deliver native documents and SVG, PDF or PNG artifacts.",
   "icon_name": "brush-line",
   "distribution": "built-in",

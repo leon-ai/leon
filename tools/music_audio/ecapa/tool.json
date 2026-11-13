@@ -3,6 +3,7 @@
   "tool_id": "ecapa",
   "toolkit_id": "music_audio",
   "name": "ECAPA",
+  "version": "1.0.0",
   "description": "A tool for voice gender classification using ECAPA-TDNN model.",
   "icon_name": "voice-recognition-line",
   "distribution": "built-in",

@@ -3,6 +3,7 @@
   "tool_id": "magic_wormhole",
   "toolkit_id": "file_system",
   "name": "Magic Wormhole",
+  "version": "1.0.0",
   "description": "Send a selected file securely over the internet without an account or cloud storage. Returns a one-time code and browser receiver link; the host stays online.",
   "icon_name": "file-cloud-line",
   "distribution": "built-in",

@@ -3,6 +3,7 @@
   "tool_id": "echarts",
   "toolkit_id": "document",
   "name": "Apache ECharts",
+  "version": "1.0.0",
   "description": "Render styled Apache ECharts data charts locally as separate downloadable SVG and PNG artifacts, ready for PDF or Word documents.",
   "icon_name": "pie-chart-line",
   "distribution": "built-in",

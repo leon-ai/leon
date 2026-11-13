@@ -3,6 +3,7 @@
   "tool_id": "shell",
   "toolkit_id": "operating_system_control",
   "name": "Shell",
+  "version": "1.0.0",
   "description": "Run finite shell commands or retain command sessions with bounded output, stdin and optional PTY on the active platform.",
   "icon_name": "terminal-line",
   "distribution": "built-in",

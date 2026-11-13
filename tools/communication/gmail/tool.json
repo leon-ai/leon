@@ -3,6 +3,7 @@
   "tool_id": "gmail",
   "toolkit_id": "communication",
   "name": "Gmail",
+  "version": "1.0.0",
   "description": "Search and read Gmail messages and inspect mailbox labels with read-only access.",
   "icon_name": "mail-line",
   "logo": "logo.svg",

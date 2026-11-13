@@ -3,6 +3,7 @@
   "tool_id": "openai_audio",
   "toolkit_id": "music_audio",
   "name": "OpenAI Audio",
+  "version": "1.0.0",
   "description": "A tool for audio processing using OpenAI's API.",
   "icon_name": "openai-line",
   "distribution": "built-in",

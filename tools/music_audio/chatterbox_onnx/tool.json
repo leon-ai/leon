@@ -3,6 +3,7 @@
   "tool_id": "chatterbox_onnx",
   "toolkit_id": "music_audio",
   "name": "Chatterbox ONNX",
+  "version": "1.0.0",
   "description": "A tool for text-to-speech synthesis and voice cloning using the Chatterbox ONNX model.",
   "icon_name": "chat-voice-line",
   "distribution": "built-in",

@@ -3,6 +3,7 @@
   "tool_id": "elevenlabs_audio",
   "toolkit_id": "music_audio",
   "name": "ElevenLabs Audio",
+  "version": "1.0.0",
   "description": "A tool for audio processing using ElevenLabs's API.",
   "icon_name": "sound-module-line",
   "distribution": "built-in",

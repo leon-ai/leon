@@ -3,6 +3,7 @@
   "tool_id": "miniserve",
   "toolkit_id": "file_system",
   "name": "Temporary LAN Sharing",
+  "version": "1.0.0",
   "description": "Share selected files read-only on the local network until expiry or explicit revocation.",
   "icon_name": "home-wifi-line",
   "distribution": "built-in",

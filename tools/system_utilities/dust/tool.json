@@ -3,6 +3,7 @@
   "tool_id": "dust",
   "toolkit_id": "system_utilities",
   "name": "Dust",
+  "version": "1.0.0",
   "description": "Inspect disk usage and the largest files or directories without modifying them.",
   "icon_name": "hard-drive-line",
   "distribution": "built-in",

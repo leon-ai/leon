@@ -4,6 +4,7 @@
   "toolkit_id": "file_system",
   "concurrency": "serial",
   "name": "File",
+  "version": "1.0.0",
   "description": "Download files with measured progress, read PDF text and visuals, prepare searchable document batches, OCR images, and read, write, append or patch local text files.",
   "icon_name": "file-text-line",
   "distribution": "built-in",

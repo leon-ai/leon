@@ -3,6 +3,7 @@
   "tool_id": "figcraft",
   "toolkit_id": "media_production",
   "name": "FigCraft",
+  "version": "1.0.0",
   "description": "Create and edit interface designs, reusable components and prototypes headlessly; deliver editable FigCraft documents, previews and design exports.",
   "icon_name": "layout-4-line",
   "distribution": "built-in",

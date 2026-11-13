@@ -3,6 +3,7 @@
   "tool_id": "assemblyai_audio",
   "toolkit_id": "music_audio",
   "name": "AssemblyAI Audio",
+  "version": "1.0.0",
   "description": "A tool for audio processing using AssemblyAI's API.",
   "icon_name": "mic-2-line",
   "distribution": "built-in",

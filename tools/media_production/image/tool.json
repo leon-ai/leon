@@ -3,6 +3,7 @@
   "tool_id": "image",
   "toolkit_id": "media_production",
   "name": "Image Generation",
+  "version": "1.0.0",
   "description": "Create downloadable image artifacts through configured generation providers.",
   "icon_name": "image-line",
   "distribution": "built-in",

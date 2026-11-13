@@ -20,6 +20,7 @@ export interface MCPManifest extends Partial<CatalogMetadata> {
   tool_id: string
   toolkit_id: string
   name: string
+  version?: string
   description: string
   icon_name: string
   source: MCPSource
@@ -30,6 +31,7 @@ export interface ToolCatalogEntry extends CatalogPresentation {
   id: string
   catalogId?: string
   name: string
+  version?: string
   description: string
   iconName: string
   kind: 'native' | 'mcp'

@@ -3,6 +3,7 @@
   "tool_id": "faster_whisper",
   "toolkit_id": "music_audio",
   "name": "Faster Whisper",
+  "version": "1.0.0",
   "description": "A tool for speech recognition and audio transcription using the Faster Whisper model.",
   "icon_name": "mic-2-line",
   "distribution": "built-in",

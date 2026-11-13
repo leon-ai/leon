@@ -3,6 +3,7 @@
   "tool_id": "ast-grep",
   "toolkit_id": "coding_development",
   "name": "ast-grep",
+  "version": "1.0.0",
   "description": "Search code by syntax structure and return source locations, matched text and metavariable captures.",
   "icon_name": "node-tree",
   "distribution": "built-in",

@@ -3,6 +3,7 @@
   "tool_id": "typst",
   "toolkit_id": "document",
   "name": "Typst",
+  "version": "1.0.0",
   "description": "Compile local Typst source into PDF documents or SVG/PNG page images, with no generation-provider account.",
   "icon_name": "pages-line",
   "distribution": "built-in",
