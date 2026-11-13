@@ -3,6 +3,7 @@
   "tool_id": "document",
   "toolkit_id": "document",
   "name": "Document Generation",
+  "version": "1.0.0",
   "description": "Create editable Word documents locally or document artifacts through configured generation providers.",
   "icon_name": "file-text-line",
   "distribution": "built-in",

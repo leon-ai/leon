@@ -3,6 +3,7 @@
   "tool_id": "context",
   "toolkit_id": "structured_knowledge",
   "name": "Context",
+  "version": "1.0.0",
   "description": "Read and search Leon context files.",
   "icon_name": "file-list-3-line",
   "distribution": "built-in",

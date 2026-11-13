@@ -3,6 +3,7 @@
   "tool_id": "cerebras",
   "toolkit_id": "communication",
   "name": "Cerebras",
+  "version": "1.0.0",
   "description": "A tool for interacting with Cerebras LLM APIs (e.g., GLM 4.7).",
   "distribution": "built-in",
   "maintenance": "official",

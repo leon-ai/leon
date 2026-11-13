@@ -3,6 +3,7 @@
   "tool_id": "ticktick",
   "toolkit_id": "productivity_collaboration",
   "name": "TickTick",
+  "version": "1.0.0",
   "description": "Read TickTick projects and tasks, create or update tasks, and mark tasks complete.",
   "icon_name": "checkbox-circle-line",
   "logo": "logo.svg",

@@ -2073,15 +2073,6 @@ export default class AISDKRemoteLLMProvider {
 
       if (type === 'raw') {
         const raw = part['rawValue'] as Record<string, unknown> | undefined
-        const item = raw?.['item'] as Record<string, unknown> | undefined
-
-        // Providers can compact context after text ends, before terminal usage.
-        if (raw?.['type'] === 'response.compaction.compacting' ||
-          (item?.['type'] === 'compaction' && raw?.['type'] === 'response.output_item.added')) {
-          completionParams.onStreamEvent?.({ type: 'compaction-start' })
-        } else if (item?.['type'] === 'compaction' && raw?.['type'] === 'response.output_item.done') {
-          completionParams.onStreamEvent?.({ type: 'compaction-end' })
-        }
 
         if (
           raw?.['type'] === 'response.output_item.done' &&

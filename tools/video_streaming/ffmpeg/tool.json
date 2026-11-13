@@ -3,6 +3,7 @@
   "tool_id": "ffmpeg",
   "toolkit_id": "video_streaming",
   "name": "FFmpeg",
+  "version": "1.0.0",
   "description": "A tool for video/audio processing, conversion, and manipulation. Use this for encoding, decoding, transcoding, muxing, demuxing, streaming, filtering, and playing media files. For analyzing or extracting metadata without modifying files, use ffprobe instead.",
   "icon_name": "film-line",
   "distribution": "built-in",

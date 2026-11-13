@@ -32,7 +32,8 @@ const ERROR_DIAGNOSTIC_FIELDS = [
   'requestId', 'responseId', 'providerRequestId', 'elapsedMs', 'requestAcceptedMs',
   'firstProviderEventMs', 'lastProviderEvent', 'lastProviderEventMs',
   'providerIdleMs', 'providerEventCount', 'providerCompleted', 'failureSummary',
-  'firstOutputMs', 'outputPreliminary', 'reasoningOnly', 'retryDecision', 'retryReason',
+  'firstOutputMs', 'outputPreliminary', 'firstCompactionMs', 'compactionCount', 'compactionDurationMs',
+  'reasoningOnly', 'retryDecision', 'retryReason',
   'pingCount', 'pongCount', 'lastPingAgeMs', 'lastPongAgeMs', 'lastPongRttMs'
 ] as const
 const ERROR_CAUSE_FIELDS = ['cause', 'error', 'data', 'response'] as const

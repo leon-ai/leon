@@ -3,6 +3,7 @@
   "tool_id": "hosted",
   "toolkit_id": "search_web",
   "name": "Hosted LLM Web",
+  "version": "1.0.0",
   "description": "Search and read URLs through the active provider using its selected profile connection.",
   "icon_name": "global-line",
   "distribution": "built-in",

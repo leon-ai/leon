@@ -789,6 +789,7 @@ export default class OpenCodeTool extends Tool {
     guidelines += '  "tool_id": "mynew",\n'
     guidelines += '  "toolkit_id": "{toolkit_name}",\n'
     guidelines += '  "name": "My New Tool",\n'
+    guidelines += '  "version": "1.0.0",\n'
     guidelines += '  "description": "My new tool description",\n'
     guidelines += '  "author": { "name": "Your Name" },\n'
     guidelines += '  "binaries": {\n'

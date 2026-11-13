@@ -3,6 +3,7 @@
   "tool_id": "ytdlp",
   "toolkit_id": "video_streaming",
   "name": "YT-DLP",
+  "version": "1.0.0",
   "description": "Inspect video metadata without downloading media, or download videos and audio from streaming platforms using yt-dlp.",
   "icon_name": "youtube-line",
   "distribution": "built-in",

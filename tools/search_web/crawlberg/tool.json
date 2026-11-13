@@ -3,6 +3,7 @@
   "tool_id": "crawlberg",
   "toolkit_id": "search_web",
   "name": "Crawlberg",
+  "version": "1.0.0",
   "description": "Fetch web pages and remote documents as locally extracted Markdown without an LLM or hosted extraction service.",
   "icon_name": "eye-line",
   "concurrency": "serial",

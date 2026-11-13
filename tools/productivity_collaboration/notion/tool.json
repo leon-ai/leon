@@ -4,6 +4,7 @@
   "previous_tool_ids": ["notion-mcp"],
   "toolkit_id": "productivity_collaboration",
   "name": "Notion",
+  "version": "1.0.0",
   "description": "Work with your Notion pages through its official MCP server.",
   "icon_name": "notion-line",
   "author": {

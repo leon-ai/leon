@@ -3,6 +3,7 @@
   "tool_id": "spotify",
   "toolkit_id": "music_audio",
   "name": "Spotify",
+  "version": "1.0.0",
   "description": "Search Spotify, browse playlists, and control playback on your Spotify Connect devices.",
   "icon_name": "spotify-line",
   "logo": "logo.svg",

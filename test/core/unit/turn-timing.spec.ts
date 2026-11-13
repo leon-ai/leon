@@ -49,7 +49,10 @@ it('logs phases and each inference once with profile, session, turn and parent o
         }
         recordTurnInference(timing)
         await Promise.resolve()
-        recordTurnInference({ ...timing, elapsedMs: 12, firstTokenMs: 5, outcome: 'completed' })
+        recordTurnInference({
+          ...timing, elapsedMs: 12, firstTokenMs: 5, outcome: 'completed',
+          firstCompactionMs: 1, compactionCount: 1, compactionDurationMs: 4
+        })
         setTurnPhaseGoal(TurnPhase.Tools)
         runOutsideTurnTiming(() => runTurnPhase(TurnPhase.Review, () => undefined))
       })
@@ -64,7 +67,10 @@ it('logs phases and each inference once with profile, session, turn and parent o
     expect(records.every((record) => record['profile'] === profile && record['sessionId'] === `${profile}-session` && record['turnId'] === profile)).toBe(true)
     const inference = records.filter((record) => record['kind'] === 'inference')
     expect(inference).toHaveLength(1)
-    expect(inference[0]).toMatchObject({ id: `${profile}-attempt`, goal: TurnPhase.Tools, durationMs: 12, outcome: 'completed' })
+    expect(inference[0]).toMatchObject({
+      id: `${profile}-attempt`, goal: TurnPhase.Tools, durationMs: 12, outcome: 'completed',
+      firstCompactionMs: 1, compactionCount: 1, compactionDurationMs: 4
+    })
     expect(records.some((record) => record['id'] === inference[0]!['parentId'])).toBe(true)
     expect(records.filter((record) => record['parentId'] === `${profile}-attempt`).map((record) => record['durationMs'])).toEqual([5, 7])
     expect(records.some((record) => record['goal'] === TurnPhase.Review)).toBe(false)

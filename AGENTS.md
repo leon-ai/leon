@@ -44,6 +44,7 @@ These are community expectations and guidance for agents, not additional license
 
 ## Tools
 
+- Declare each tool's semver `version` in `tool.json`, starting at `1.0.0` and advancing when that tool changes. Bundled tools ship with Leon and use the main `CHANGELOG.md` for release notes. An MCP tool's version identifies Leon's integration definition, not the remote service.
 - Keep application/device-specific behavior in tools, orchestration in skills, and generic execution/transport in Core. Follow `tools/video_streaming/ffmpeg/` and the parent SDK classes before implementing a tool.
 - Keep each tool self-contained. Duplicate small application-specific helpers when appropriate; do not introduce toolkit-level source folders. Put generic capabilities in SDK helpers when they avoid repeated dependencies or meaningful implementation duplication.
 - Preserve the tool's existing directory layout. Actual implementations belong in `src/nodejs/` or `src/python/`: Node.js extends SDK `Tool` and exports through `index.ts`; Python extends SDK `BaseTool` and follows the package exports. Supporting scripts belong under the implementation's `lib/`, not in a language folder implying another SDK implementation.

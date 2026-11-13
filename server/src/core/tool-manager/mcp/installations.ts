@@ -12,6 +12,7 @@ import { getMCPURL } from './http'
 
 const MAXIMUM_CACHE_BYTES = 4 * 1_024 * 1_024
 const CACHE_FILE = '.mcp-tools.json'
+const INITIAL_TOOL_VERSION = '1.0.0'
 
 interface MCPDiscoveryCache {
   source: MCPSource
@@ -93,6 +94,7 @@ export async function installMCP(input: { catalogId?: string, name?: string, url
     $schema: path.join(CODEBASE_PATH, 'schemas', 'tool-schemas', 'tool.json'),
     tool_id: toolId, toolkit_id: toolkitId,
     name: catalog?.name ?? (input.name?.trim() || url.hostname),
+    version: catalog?.version ?? INITIAL_TOOL_VERSION,
     description: catalog?.description ?? 'Tools provided by an owner-installed MCP server.',
     icon_name: catalog?.icon_name ?? 'plug-line', author: catalog?.author ?? { name: 'MCP server' },
     distribution: 'extension',

@@ -3,6 +3,7 @@
   "tool_id": "inference",
   "toolkit_id": "communication",
   "name": "Inference",
+  "version": "1.0.0",
   "description": "A generic Leon workflow inference tool backed by the active workflow LLM provider.",
   "distribution": "built-in",
   "maintenance": "official",

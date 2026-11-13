@@ -34,6 +34,7 @@ export class ProviderRequestActivity {
   }
 
   private heartbeat: CompletionStreamEvent['heartbeat']
+  private compactionStartedAt: number | undefined
 
   public constructor(private readonly startedAt = Date.now()) {}
 
@@ -42,6 +43,18 @@ export class ProviderRequestActivity {
    */
   public observe(event: CompletionStreamEvent): void {
     const now = Date.now() - this.startedAt
+    if (event.type === 'compaction-start' && this.compactionStartedAt === undefined) {
+      // A provider can announce the same interval through multiple protocol events.
+      this.compactionStartedAt = now
+      this.state.firstCompactionMs ??= now
+      this.state.compactionCount = (this.state.compactionCount ?? 0) + 1
+    } else if ((event.type === 'compaction-end' || event.providerCompleted ||
+        event.type === 'finish') && this.compactionStartedAt !== undefined) {
+      this.state.compactionDurationMs = (this.state.compactionDurationMs ?? 0) +
+        Math.max(0, now - this.compactionStartedAt)
+      this.compactionStartedAt = undefined
+    }
+
     if (event.heartbeat) {
       this.heartbeat = { ...event.heartbeat }
     }
@@ -92,6 +105,11 @@ export class ProviderRequestActivity {
 
     return {
       ...this.state,
+      ...(this.compactionStartedAt === undefined ? {} : {
+        // Failed requests retain the measured portion of unfinished compaction.
+        compactionDurationMs: (this.state.compactionDurationMs ?? 0) +
+          Math.max(0, elapsedMs - this.compactionStartedAt)
+      }),
       ...(this.heartbeat ? {
         pingCount: this.heartbeat.pingCount,
         pongCount: this.heartbeat.pongCount,

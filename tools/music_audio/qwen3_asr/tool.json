@@ -3,6 +3,7 @@
   "tool_id": "qwen3_asr",
   "toolkit_id": "music_audio",
   "name": "Qwen3-ASR",
+  "version": "1.0.0",
   "description": "A tool for speech recognition and timestamped transcription using the Qwen3 ASR models.",
   "icon_name": "qwen-ai-line",
   "distribution": "built-in",

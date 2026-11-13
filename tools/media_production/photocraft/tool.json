@@ -3,6 +3,7 @@
   "tool_id": "photocraft",
   "toolkit_id": "media_production",
   "name": "PhotoCraft",
+  "version": "1.0.0",
   "description": "Edit local images and layered projects headlessly with the managed PhotoCraft CLI, or drive its authenticated desktop control API.",
   "icon_name": "image-edit-line",
   "concurrency": "serial",

@@ -206,6 +206,8 @@ export interface PromptCacheObservation {
   systemHash: string
   toolsHash: string
   inputItems: number
+  compactionItems?: number
+  preCompactionItems?: number
   previousInputItems: number
   matchingPrefixItems: number
   changedInputs: string[]
@@ -276,6 +278,13 @@ export interface ProviderActivitySnapshot {
   failureSummary?: string | undefined
   firstOutputMs?: number | undefined
   outputPreliminary?: boolean | undefined
+  firstCompactionMs?: number | undefined
+  compactionCount?: number | undefined
+  /**
+   * Time between observed compaction markers, including an unfinished interval.
+   * Provider computation before the first marker cannot be isolated from waiting.
+   */
+  compactionDurationMs?: number | undefined
   reasoningOnly?: boolean | undefined
   /**
    * The caller permits replay and no provider-owned work or terminal completion

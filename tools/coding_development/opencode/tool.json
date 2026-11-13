@@ -3,6 +3,7 @@
   "tool_id": "opencode",
   "toolkit_id": "coding_development",
   "name": "OpenCode",
+  "version": "1.0.0",
   "description": "An AI-powered coding agent tool that generates skills using multiple LLM providers (Cerebras, MiniMax, Anthropic, OpenAI, Gemini).",
   "icon_name": "code-box-line",
   "distribution": "built-in",

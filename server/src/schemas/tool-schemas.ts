@@ -190,6 +190,10 @@ const toolManifestObject = Type.Object(
       minLength: 1,
       description: 'Human-readable tool name shown in interfaces.'
     }),
+    version: Type.String({
+      minLength: 1,
+      description: 'Version following semver.'
+    }),
     concurrency: Type.Optional(
       Type.Enum(ToolConcurrency, {
         description:
@@ -282,9 +286,13 @@ export const toolManifestSchemaObject = Type.Strict(toolManifestObject)
 
 // Catalog discovery validates presentation and identity without interpreting
 // function schemas or loading executable guidance into the browsing layer.
-export const toolCatalogSchemaObject = Type.Strict(Type.Pick(toolManifestObject, [
-  '$schema', 'tool_id', 'previous_tool_ids', 'toolkit_id', 'name', 'description', 'icon_name',
-  'author', 'maintainers', 'distribution', 'maintenance', 'logo', 'logo_mask', 'source'
-], { additionalProperties: true }))
+export const toolCatalogSchemaObject = Type.Strict(Type.Object({
+  ...Type.Pick(toolManifestObject, [
+    '$schema', 'tool_id', 'previous_tool_ids', 'toolkit_id', 'name', 'description', 'icon_name',
+    'author', 'maintainers', 'distribution', 'maintenance', 'logo', 'logo_mask', 'source'
+  ]).properties,
+  // Owner-installed tools remain discoverable without authored release metadata.
+  version: Type.Optional(toolManifestObject.properties.version)
+}, { additionalProperties: true }))
 
 export type ToolManifestSchema = Static<typeof toolManifestSchemaObject>

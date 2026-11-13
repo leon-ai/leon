@@ -3,6 +3,7 @@
   "tool_id": "slidev",
   "toolkit_id": "document",
   "name": "Slidev",
+  "version": "1.0.0",
   "description": "Create and open animated browser presentations with icons, motion and speaker notes; inspect click states and export requested downloads.",
   "icon_name": "slideshow-line",
   "distribution": "built-in",

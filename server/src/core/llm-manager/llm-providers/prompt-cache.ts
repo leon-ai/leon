@@ -64,6 +64,7 @@ export class ProviderPromptCache {
       item?.['role'] !== 'system' && item?.['role'] !== 'developer'
     )
     const head = input.slice(0, firstHistoryIndex < 0 ? input.length : firstHistoryIndex)
+    const compactionIndex = input.findLastIndex((item) => item?.['type'] === 'compaction')
     const tools = new Map<string, string>()
 
     for (const tool of (Array.isArray(body['tools']) ? body['tools'] : [])) {
@@ -127,6 +128,11 @@ export class ProviderPromptCache {
         systemHash: snapshot.systemHash,
         toolsHash: snapshot.toolsHash,
         inputItems: snapshot.items.length,
+        ...(compactionIndex < 0 ? {} : {
+          // System instructions are independent of the compacted history window.
+          compactionItems: input.filter((item) => item?.['type'] === 'compaction').length,
+          preCompactionItems: Math.max(0, compactionIndex - Math.max(0, firstHistoryIndex))
+        }),
         previousInputItems: previous?.items.length ?? 0,
         matchingPrefixItems,
         changedInputs,

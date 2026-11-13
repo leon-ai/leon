@@ -3,6 +3,7 @@
   "tool_id": "sessions",
   "toolkit_id": "structured_knowledge",
   "name": "Sessions",
+  "version": "1.0.0",
   "description": "Discover prior conversations and supplied documents, then read selected archived source text.",
   "icon_name": "chat-history-line",
   "distribution": "built-in",
