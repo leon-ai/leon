@@ -79,6 +79,13 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
         await expect(feed.locator('.owner-message')).toContainText('Check the project')
       }
     }
+    await chooser.selectOption('code')
+    for (const language of ['TypeScript', 'Python']) {
+      const logo = feed.locator('.markdown-code-header').getByRole('img', { name: language, exact: true })
+      await expect(logo).toHaveCSS('width', '16px')
+      await expect(logo).toHaveCSS('height', '16px')
+    }
+    await feed.screenshot({ path: testInfo.outputPath(`feed-code-${theme}.png`) })
     await chooser.selectOption('completed-no-plan')
     await feed.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
     await expect(feed.getByRole('region', { name: 'Leon’s review', exact: true })).toContainText('Reviewed for 1s')
