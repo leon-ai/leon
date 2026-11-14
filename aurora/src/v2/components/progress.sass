@@ -14,24 +14,36 @@
     color: var(--color-text-secondary)
     font-variant-numeric: tabular-nums
 
-.aurora-progress progress
-  display: block
-  width: 100%
+.aurora-progress-track
+  position: relative
   height: 6px
   overflow: hidden
-  border: 0
   border-radius: var(--border-radius-pill)
   background: var(--color-border)
-  accent-color: var(--color-accent)
 
-  &::-webkit-progress-bar
-    border-radius: inherit
-    background: var(--color-border)
+  progress
+    position: absolute
+    inset: 0
+    width: 100%
+    height: 100%
+    margin: 0
+    opacity: 0
+    accent-color: var(--color-accent)
 
-  &::-webkit-progress-value
-    border-radius: inherit
-    background: var(--color-accent)
+.aurora-progress-fill
+  position: absolute
+  inset: 0 auto 0 0
+  border-radius: inherit
+  background: var(--color-accent)
+  transition: width var(--transition-duration-main) var(--transition-timing-main)
 
-  &::-moz-progress-bar
-    border-radius: inherit
-    background: var(--color-accent)
+@media (prefers-reduced-motion: reduce)
+  .aurora-progress-fill
+    transition: none
+
+@media (forced-colors: active)
+  .aurora-progress-track progress
+    opacity: 1
+
+  .aurora-progress-fill
+    display: none

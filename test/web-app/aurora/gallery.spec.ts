@@ -752,6 +752,7 @@ test('validates fields, preserves failed drafts and locks pending or accepted su
 })
 
 test('shows measured and indeterminate preparation with cancellation and retry', async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto('/aurora.html')
   await page.getByRole('button', { name: 'Widgets', exact: true }).click()
   const example = page.getByRole('region', { name: 'Tool preparation', exact: true })
@@ -761,8 +762,42 @@ test('shows measured and indeterminate preparation with cancellation and retry',
   await expect(downloads).toContainText('36 MB / 100 MB · ETA 12s')
   await expect(downloads.getByText('36%', { exact: true })).toHaveCount(1)
   await expect(preparation.getByRole('progressbar')).toHaveAttribute('value', '36')
+  const fill = preparation.locator('.aurora-progress-fill')
+  await fill.evaluate((element) => {
+    const start = element.getBoundingClientRect().width
+    const observer = new MutationObserver(() => {
+      observer.disconnect()
+      const animation = element.getAnimations().find((motion) => motion instanceof CSSTransition && motion.transitionProperty === 'width')
+      if (!animation) {
+        return
+      }
+      animation.pause()
+      animation.currentTime = Number(animation.effect!.getComputedTiming().duration) / 2
+      const middle = element.getBoundingClientRect().width
+      animation.finish()
+      Reflect.set(element, 'observedProgressMotion', { start, middle, end: element.getBoundingClientRect().width })
+    })
+    observer.observe(element, { attributes: true, attributeFilter: ['style'] })
+  })
   await example.getByRole('slider', { name: 'Measured progress' }).fill('72')
   await expect(preparation.getByRole('progressbar')).toHaveAttribute('value', '72')
+  const motion = await fill.evaluate((element) => Reflect.get(element, 'observedProgressMotion')) as {
+    start: number
+    middle: number
+    end: number
+  }
+  expect(motion.middle).toBeGreaterThan(motion.start)
+  expect(motion.middle).toBeLessThan(motion.end)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(fill).toHaveCSS('transition-duration', '0s')
+  await example.getByRole('slider', { name: 'Measured progress' }).fill('80')
+  await expect(preparation.getByRole('progressbar')).toHaveAttribute('value', '80')
+  expect(await fill.evaluate((element) => element.getAnimations().length)).toBe(0)
+  await page.emulateMedia({ forcedColors: 'active' })
+  await expect(preparation.getByRole('progressbar')).toHaveCSS('opacity', '1')
+  await expect(fill).toBeHidden()
+  await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' })
+  await example.getByRole('slider', { name: 'Measured progress' }).fill('72')
   await preparation.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(preparation.getByRole('status')).toHaveText('Download cancelled.')
   const state = example.getByRole('combobox', { name: 'Preview state' })
