@@ -49,7 +49,7 @@ import type {
   PromptOrChatHistory,
   ProviderCompactionContext
 } from '@/core/llm-manager/types'
-import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
 import {
   canDisableLLMModelReasoning,
   getLLMModelCatalogEntry
@@ -2105,6 +2105,20 @@ export default class AISDKRemoteLLMProvider {
       }
 
       this.appendReasoningItem(state, part)
+
+      if (
+        (type === 'finish' || type === 'finish-step') &&
+        this.readFinishReason(part['finishReason']) === 'interrupted'
+      ) {
+        this.appendUsageFromUnknown(state, part['usage'])
+        this.appendProviderMetadataUsageFromUnknown(state, part['providerMetadata'])
+
+        // An SDK finish event can describe a disconnect. Keep provisional
+        // output out of completed decisions and use the host's recovery policy.
+        throw Object.assign(new Error('The provider stream ended before completing the response.'), {
+          code: ProviderConnectionErrorCode.Interrupted
+        })
+      }
 
       completionParams.onStreamEvent?.({
         type,

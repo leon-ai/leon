@@ -230,6 +230,7 @@ export enum CompletionFailureKind {
 }
 
 export enum ProviderConnectionErrorCode {
+  Interrupted = 'PROVIDER_STREAM_INTERRUPTED',
   Unresponsive = 'PROVIDER_CONNECTION_UNRESPONSIVE',
   Closing = 'WEBSOCKET_CONNECTION_CLOSING',
   AbnormalClosure = 'WEBSOCKET_ABNORMAL_CLOSURE'

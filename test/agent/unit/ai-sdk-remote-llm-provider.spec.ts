@@ -8,7 +8,7 @@ import type {
   OpenAIToolCall,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
-import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
@@ -1748,6 +1748,95 @@ describe('AISDKRemoteLLMProvider', () => {
       provider.dispose()
     }
   }, 2_000)
+
+  it.each([
+    ['anthropic', 'text'],
+    ['anthropic', 'tool'],
+    ['deepseek', 'text'],
+    ['deepseek', 'tool']
+  ] as const)('rejects unfinished %s streams after provisional %s output', async (flavor, output) => {
+    const anthropic = flavor === 'anthropic'
+    const model = anthropic ? 'claude-sonnet-5-5' : 'deepseek-flash'
+    const events = anthropic
+      ? [
+          {
+            type: 'message_start',
+            message: {
+              id: 'msg_interrupted',
+              type: 'message',
+              role: 'assistant',
+              model,
+              content: [],
+              stop_reason: null,
+              stop_sequence: null,
+              usage: { input_tokens: 10, output_tokens: 0 }
+            }
+          },
+          {
+            type: 'content_block_start',
+            index: 0,
+            content_block: output === 'text'
+              ? { type: 'text', text: '' }
+              : { type: 'tool_use', id: 'call_interrupted', name: 'read_file', input: {} }
+          },
+          {
+            type: 'content_block_delta',
+            index: 0,
+            delta: output === 'text'
+              ? { type: 'text_delta', text: 'Provisional.' }
+              : { type: 'input_json_delta', partial_json: '{"path":"README.md"}' }
+          },
+          { type: 'content_block_stop', index: 0 }
+        ]
+      : [{
+          id: 'chat_interrupted',
+          choices: [{
+            index: 0,
+            delta: output === 'text'
+              ? { content: 'Provisional.' }
+              : {
+                  tool_calls: [{
+                    index: 0,
+                    id: 'call_interrupted',
+                    type: 'function',
+                    function: { name: 'read_file', arguments: '{"path":"README.md"}' }
+                  }]
+                }
+          }]
+        }]
+    const fetch = vi.fn().mockResolvedValue(new Response(
+      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new AISDKRemoteLLMProvider({
+      name: flavor,
+      providerName: anthropic ? LLMProviders.Anthropic : LLMProviders.DeepSeek,
+      model,
+      flavor,
+      apiKeyEnv: 'TEST_KEY',
+      baseURL: 'https://example.invalid/v1'
+    })
+    const onStreamEvent = vi.fn()
+    const onToken = vi.fn()
+    const onToolCall = vi.fn()
+
+    await expect(provider.runChatCompletion('Read the file.', {
+      ...createCompletionParams(null),
+      shouldStream: true,
+      tools: [TOOL],
+      onStreamEvent,
+      onToken,
+      onToolCall
+    })).rejects.toMatchObject({ code: ProviderConnectionErrorCode.Interrupted })
+
+    expect(onStreamEvent).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'finish' }))
+    if (output === 'text') {
+      expect(onToken).toHaveBeenCalledWith('Provisional.')
+    } else {
+      expect(onToolCall).toHaveBeenCalledWith(expect.objectContaining({ id: 'call_interrupted' }))
+    }
+  })
 
   it('finishes an incomplete websocket response even when the adapter leaves it open', async () => {
     const response = {
