@@ -17,6 +17,7 @@ import {
   getLlamaCPPModelArguments,
   getLlamaCPPServerBinaryPath,
   resolveLlamaCPPContextPlan,
+  LlamaCPPExecutionMode,
   LlamaCPPBackendError,
   LlamaCPPCapacityError
 } from '@/core/llm-manager/llm-providers/llamacpp-context'
@@ -29,7 +30,11 @@ const INSPECTION_TIMEOUT_MS = 60_000
 const METADATA_TIMEOUT_MS = 30_000
 const GGUF_HEADER_PREFIX_BYTES = 16 * BYTES_PER_MIB
 const MODEL_URL = 'https://huggingface.co'
-const ROI_WEIGHTS = { quality: 0.75, speed: 0.05, context: 0.15, headroom: 0.05 }
+const ROI_WEIGHTS = { quality: 0.7, speed: 0.1, context: 0.15, headroom: 0.05 }
+// Decode estimates are a usability filter, not a benchmark: once replies are
+// interactive, additional speed should not dominate model capability.
+const MINIMUM_INTERACTIVE_TPS = 10
+const TARGET_INTERACTIVE_TPS = 20
 const CATALOG_QUANT_PENALTIES = new Map([
   ...LOCAL_LLM_PRECISIONS.map(({ name, qualityPenalty }) => [name, qualityPenalty]),
   ['mlx-8bit', 0], ['mlx-4bit', 4], ['Q3_K_M', 8], ['Q2_K', 12]
@@ -85,23 +90,35 @@ export async function resolveLocalLLMInstallation(selected) {
 }
 
 /**
- * Prefer capability and usable context while letting speed and headroom break
- * close choices. These are planning estimates, never measured accuracy or speed.
+ * Prefer interactive plans, then balance capability, speed and usable context.
+ * Planning estimates do not guarantee measured accuracy or inference latency.
  */
 export function rankLocalLLMPlans(candidates) {
-  const fastest = Math.max(...candidates.map((candidate) => candidate.estimatedTPS), 1)
+  const hasInteractivePlan = candidates.some((candidate) =>
+    candidate.estimatedTPS >= MINIMUM_INTERACTIVE_TPS)
+  const maximumContext = Math.max(MINIMUM_LOCAL_CONTEXT_TOKENS,
+    ...candidates.map((candidate) => candidate.contextPlan.contextTokens))
 
   return candidates.map((candidate) => {
-    const context = Math.min(1, candidate.contextPlan.contextTokens / candidate.maximumContextTokens)
-    const headroom = Math.max(0,
-      1 - candidate.contextPlan.estimatedMiB / candidate.contextPlan.memoryBudgetMiB)
+    // Compare absolute usable context with diminishing returns. A model's native
+    // maximum does not make a smaller fitted window less useful than its peers'.
+    const context = Math.log2(1 + candidate.contextPlan.contextTokens / MINIMUM_LOCAL_CONTEXT_TOKENS) /
+      Math.log2(1 + maximumContext / MINIMUM_LOCAL_CONTEXT_TOKENS)
+    const speed = 1 - Math.exp(-candidate.estimatedTPS / TARGET_INTERACTIVE_TPS)
     const score = candidate.quality * ROI_WEIGHTS.quality +
-      100 * candidate.estimatedTPS / fastest * ROI_WEIGHTS.speed +
+      100 * speed * ROI_WEIGHTS.speed +
       100 * context * ROI_WEIGHTS.context +
-      100 * headroom * ROI_WEIGHTS.headroom
+      100 * candidate.contextPlan.headroomRatio * ROI_WEIGHTS.headroom
 
     return { ...candidate, score }
-  }).sort((first, second) => second.score - first.score ||
+  }).sort((first, second) =>
+    // If every plan is slow, retain the fastest fallback. Otherwise a useful
+    // CPU/GPU split can compete on quality without an absolute placement veto.
+    (hasInteractivePlan
+      ? Number(second.estimatedTPS >= MINIMUM_INTERACTIVE_TPS) -
+        Number(first.estimatedTPS >= MINIMUM_INTERACTIVE_TPS)
+      : second.estimatedTPS - first.estimatedTPS) ||
+    second.score - first.score ||
     first.sizeBytes - second.sizeBytes)
 }
 
@@ -163,15 +180,38 @@ async function inspectCandidate(candidate, directory, binary, settings, readGguf
     getLlamaCPPModelArguments(modelPath, kvCacheType),
     settings?.memory_reserve_mib, settings?.context_size,
     { requireGPU: hardware.hasGPU, preserveContext: settings?.context_size !== undefined })
-  // Compare baseline decode speed at one common context. Catalog KV estimates
-  // must not apply fictitious offload penalties to a native-verified placement.
+  // Match the native placement rather than attaching hypothetical GPU speed to
+  // a CPU allocation. Native memory estimates remain authoritative for fit.
   const estimate = await runLLMFit([
     ...hardware.arguments,
     'plan', candidate.modelId, '--context', String(contextPlan.contextTokens),
     '--quant', candidate.precision, '--kv-quant', kvCacheType
   ])
-  const estimatedTPS = estimate.run_paths?.find((entry) =>
-    entry.path === (hardware.hasGPU ? 'gpu' : 'cpu_only'))?.estimated_tps
+  let speedEstimate = estimate.run_paths?.find((entry) =>
+    entry.path === contextPlan.executionMode && entry.feasible)
+  // llmfit omits CPU offload estimates on unified memory. CPU-only throughput
+  // is a conservative comparison for such placements, never full-GPU speed.
+  if (!speedEstimate && hardware.unifiedMemory &&
+      contextPlan.executionMode === LlamaCPPExecutionMode.CPUOffload) {
+    speedEstimate = estimate.run_paths?.find((entry) =>
+      entry.path === LlamaCPPExecutionMode.CPUOnly && entry.feasible)
+  }
+  let estimatedTPS = speedEstimate?.estimated_tps
+  const cpuShare = contextPlan.cpuOffloadedModelRatio
+  if (!candidate.isMoE && contextPlan.executionMode === LlamaCPPExecutionMode.CPUOffload && cpuShare > 0) {
+    const gpuTPS = estimate.run_paths?.find((entry) =>
+      entry.path === LlamaCPPExecutionMode.GPU && entry.feasible)?.estimated_tps
+    const cpuTPS = estimate.run_paths?.find((entry) =>
+      entry.path === LlamaCPPExecutionMode.CPUOnly && entry.feasible)?.estimated_tps
+    if (!Number.isFinite(gpuTPS) || gpuTPS <= 0 || !Number.isFinite(cpuTPS) || cpuTPS <= 0) {
+      throw new Error(`Missing placement throughput estimates for ${candidate.fileName}.`)
+    }
+
+    // Dense layers run sequentially across devices. Bound the catalog estimate
+    // by the time spent on each native weight share at its respective speed.
+    estimatedTPS = Math.min(estimatedTPS,
+      1 / ((1 - cpuShare) / gpuTPS + cpuShare / cpuTPS))
+  }
   if (!Number.isFinite(estimatedTPS) || estimatedTPS <= 0) {
     throw new Error(`Missing throughput estimate for ${candidate.fileName}.`)
   }
@@ -239,6 +279,7 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
 
       candidates.push({
         modelId: model.id, name: model.name, repository,
+        isMoE: recommendation.model.is_moe === true,
         revision: metadata.sha, precision: precision.name,
         quality: Math.min(100, recommendation.score_components.quality +
           baselinePenalty - precision.qualityPenalty),

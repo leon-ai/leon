@@ -149,7 +149,6 @@ export interface LlamaCPPContextPlan {
   arguments: string[]
   contextTokens: number
   hostBudgetMiB: number
-  memoryBudgetMiB: number
   cacheMiB: number
   estimatedMiB: number
   hostEstimatedMiB: number
@@ -342,8 +341,6 @@ export async function resolveLlamaCPPContextPlan(
       return {
         arguments: [...fitted, '--fit', 'off', '--cache-ram', String(cacheMiB)],
         contextTokens, hostBudgetMiB, cacheMiB,
-        memoryBudgetMiB: hostBudgetMiB + (unifiedMemory ? 0 : rows.filter((row) => row.kind === MemoryKind.Device).reduce(
-          (total, row) => total + Math.max(0, row.free! - deviceReserve(row)), 0)),
         estimatedMiB: rows.reduce((total, row) => total + row.self, 0),
         hostEstimatedMiB: hostMiB,
         devices: deviceAllocations,
