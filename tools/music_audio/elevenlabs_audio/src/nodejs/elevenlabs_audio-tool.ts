@@ -8,7 +8,7 @@ import { Network } from '@sdk/network'
 
 // Hardcoded default settings for ElevenLabs audio tool
 const ELEVENLABS_AUDIO_API_KEY: string | null = null
-const ELEVENLABS_AUDIO_MODEL = 'scribe_v1'
+const ELEVENLABS_AUDIO_MODEL = 'scribe_v2'
 const DEFAULT_SETTINGS: Record<string, unknown> = {
   ELEVENLABS_AUDIO_API_KEY,
   ELEVENLABS_AUDIO_MODEL
@@ -86,7 +86,7 @@ export default class ElevenLabsAudioTool extends Tool {
   }
 
   /**
-   * Transcribe audio to a file using ElevenLabs' Scribe v1 API
+   * Transcribe audio to a file using ElevenLabs' Scribe v2 API
    * @param inputPath Path to the audio file to transcribe
    * @param outputPath Path to save the JSON transcription (unified format)
    * @param apiKey ElevenLabs API key (uses env/hardcoded default if not provided)
