@@ -694,6 +694,49 @@ describe('AISDKRemoteLLMProvider', () => {
   })
 
   it.each([
+    [LLMProviders.Groq, 'groq', 'qwen/qwen3.8-27b'],
+    [LLMProviders.Cerebras, 'cerebras', 'qwen-3.8-27b']
+  ] as const)('honors explicit reasoning controls on %s models that can disable thinking', async (providerName, flavor, model) => {
+    const fetch = vi.fn().mockImplementation(async (url) => Response.json(
+      String(url).endsWith('/responses')
+        ? {
+            id: 'resp_reasoning', created_at: 1, model, status: 'completed',
+            output: [{ type: 'message', id: 'message', role: 'assistant',
+              content: [{ type: 'output_text', text: 'Done.', annotations: [] }] }],
+            usage: { input_tokens: 10, output_tokens: 2 }
+          }
+        : {
+            id: 'chat_reasoning', created: 1, model,
+            choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 10, completion_tokens: 2 }
+          }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new AISDKRemoteLLMProvider({
+      name: providerName, providerName, model, flavor,
+      apiKeyEnv: 'TEST_KEY', baseURL: 'https://example.invalid/v1'
+    })
+    const params = { ...createCompletionParams(null), shouldStream: false }
+    const controls = [
+      { reasoningMode: 'off', reasoningEffort: 'high' },
+      { reasoningMode: 'on', disableThinking: true },
+      { reasoningMode: 'on', reasoningEffort: 'none' },
+      { reasoningMode: 'on', reasoningEffort: 'high' },
+      { disableThinking: true }
+    ] as const
+
+    for (const control of controls) {
+      await provider.runChatCompletion('Answer.', { ...params, ...control })
+    }
+
+    expect(fetch.mock.calls.map(([, request]) => {
+      const body = JSON.parse(request.body)
+
+      return body.reasoning?.effort ?? body.reasoning_effort
+    })).toEqual(['none', 'none', 'none', 'high', 'none'])
+  })
+
+  it.each([
     { protocol: 'anthropic', model: 'MiniMax-M3' },
     { protocol: 'openai', model: 'MiniMax-M3' },
     { protocol: 'anthropic', model: 'MiniMax-M3.1-Flash' },
@@ -956,6 +999,36 @@ describe('AISDKRemoteLLMProvider', () => {
       thinking: { type: 'adaptive', display: 'summarized' },
       effort: 'medium',
       temperature: undefined
+    },
+    {
+      model: 'claude-fable-5-2',
+      thinking: {
+        type: 'adaptive',
+        display: 'summarized',
+        block_binding: { prefix_mismatch_behavior: 'drop_block' }
+      },
+      effort: 'medium',
+      temperature: undefined
+    },
+    {
+      model: 'claude-mythos-5-2',
+      thinking: {
+        type: 'adaptive',
+        display: 'summarized',
+        block_binding: { prefix_mismatch_behavior: 'drop_block' }
+      },
+      effort: 'medium',
+      temperature: undefined
+    },
+    {
+      model: 'claude-sonnet-5-5',
+      thinking: {
+        type: 'adaptive',
+        display: 'summarized',
+        block_binding: { prefix_mismatch_behavior: 'drop_block' }
+      },
+      effort: 'medium',
+      temperature: undefined
     }
   ])('uses supported thinking and sampling for $model', async ({
     model,
@@ -997,6 +1070,10 @@ describe('AISDKRemoteLLMProvider', () => {
     const body = JSON.parse(fetch.mock.calls[0]![1].body)
 
     expect(body.thinking).toEqual(thinking)
+    if ('block_binding' in thinking) {
+      expect(new Headers(fetch.mock.calls[0]![1].headers).get('anthropic-beta'))
+        .toContain('thinking-binding-controls-2026-08-01')
+    }
     expect(body.output_config?.effort).toBe(effort)
     expect(body.temperature).toBeUndefined()
   })
@@ -1006,6 +1083,9 @@ describe('AISDKRemoteLLMProvider', () => {
     ['claude-opus-5-5', true, 'on'],
     ['claude-opus-5', true, 'high'],
     ['claude-haiku-5-5', true, 'high'],
+    ['claude-fable-5-2', true, 'high'],
+    ['claude-mythos-5-2', true, 'high'],
+    ['claude-sonnet-5-5', true, 'high'],
     ['claude-fable-5-1', true, 'high'],
     ['claude-mythos-5-1', true, 'high'],
     ['claude-opus-4-8', false, 'high'],
@@ -1122,8 +1202,13 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   )
 
-  it.each([LLMProviders.Anthropic, LLMProviders.MiniMax])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
-    const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3.1-Flash'
+  it.each([
+    [LLMProviders.Anthropic, 'claude-opus-5-5'],
+    [LLMProviders.Anthropic, 'claude-fable-5-2'],
+    [LLMProviders.Anthropic, 'claude-mythos-5-2'],
+    [LLMProviders.Anthropic, 'claude-sonnet-5-5'],
+    [LLMProviders.MiniMax, 'MiniMax-M3.1-Flash']
+  ] as const)('preserves %s/%s cache accounting and signed thinking through streamed tool turns', async (providerName, model) => {
     const message = { id: 'msg_claude', type: 'message', role: 'assistant', model,
       content: [], stop_reason: null, stop_sequence: null,
       usage: { input_tokens: 100, output_tokens: 0, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 } }
@@ -1184,7 +1269,8 @@ describe('AISDKRemoteLLMProvider', () => {
     })
   })
 
-  it('replays OpenRouter reasoning details and retains cache usage with stable session routing', async () => {
+  it.each(['anthropic/claude-opus-5.5', 'meta/muse-ember'])(
+    'preserves reasoning and supported controls when finalizing %s tool turns', async (model) => {
     const actual = await vi.importActual<typeof import('@openrouter/ai-sdk-provider')>('@openrouter/ai-sdk-provider')
     openRouterMocks.createOpenRouter.mockImplementationOnce((...args: unknown[]) =>
       actual.createOpenRouter(args[0] as Parameters<typeof actual.createOpenRouter>[0]) as unknown as
@@ -1205,9 +1291,9 @@ describe('AISDKRemoteLLMProvider', () => {
       { headers: { 'content-type': 'text/event-stream' } }
     ))
     vi.stubGlobal('fetch', fetch)
-    const provider = createOpenRouterProvider('anthropic/claude-opus-5.5')
+    const provider = createOpenRouterProvider(model)
     const params = { ...createCompletionParams(null), shouldStream: true, promptCacheKey: 'agent',
-      serviceTier: 'priority' as const }
+      serviceTier: 'priority' as const, tools: [TOOL], toolChoice: 'auto' as const }
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
       await provider.runChatCompletion('Check.', params)
     )
@@ -1217,7 +1303,7 @@ describe('AISDKRemoteLLMProvider', () => {
       { role: 'assistant', content: '', reasoningItems: normalized.reasoningItems,
         toolCalls: [{ id: 'tool_or', type: 'function', function: { name: 'check', arguments: '{}' } }] },
       { role: 'tool', toolCallId: 'tool_or', toolName: 'check', content: 'Checked.' }
-    ], params)
+    ], { ...params, toolChoice: 'none' })
     const body = JSON.parse(fetch.mock.calls[1]![1].body)
     expect(body).toMatchObject({
       provider: { sort: 'throughput' },
@@ -1226,6 +1312,13 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' })
     expect(body.messages[2].reasoning_details).toEqual(reasoningDetails)
+    if (model === 'meta/muse-ember') {
+      expect(body.tools).toBeUndefined()
+      expect(body.tool_choice).toBeUndefined()
+    } else {
+      expect(body.tools).toHaveLength(1)
+      expect(body.tool_choice).toBe('none')
+    }
   })
   it.each([
     { auth_kind: 'api_key', expected: 'https://openrouter.ai/api/v1' },

@@ -1209,11 +1209,18 @@ export default class AISDKRemoteLLMProvider {
     }
 
     if (this.config.flavor === 'cerebras') {
+      const entry = getLLMModelCatalogEntry(LLMProviders.Cerebras, this.model)
+      const disabled = completionParams.disableThinking === true ||
+        reasoningMode === 'off' || completionParams.reasoningEffort === 'none'
+
       return {
         cerebras: {
-          reasoningEffort:
-            completionParams.reasoningEffort ||
-            (reasoningMode === 'on' ? 'medium' : 'low')
+          reasoningEffort: disabled
+            ? entry?.reasoning.includes('none')
+              ? 'none'
+              : 'low'
+            : completionParams.reasoningEffort ||
+              (reasoningMode === 'on' ? 'medium' : 'low')
         }
       }
     }
@@ -1291,7 +1298,11 @@ export default class AISDKRemoteLLMProvider {
         : {})
     }
 
-    const tools = this.toTools(completionParams.tools)
+    const toolChoice = this.toToolChoice(completionParams.toolChoice)
+    // Auto-only endpoints need an empty tool catalog to request a final answer.
+    const omitTools = toolChoice?.type === 'none' &&
+      catalogEntry?.supportsToolChoiceNone === false
+    const tools = this.toTools(omitTools ? undefined : completionParams.tools)
     if (tools.length > 0) {
       options.tools = tools
 
@@ -1304,17 +1315,16 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
-    const toolChoice = this.toToolChoice(completionParams.toolChoice)
     if (
       catalogEntry?.supportsForcedToolChoice === false &&
       (toolChoice?.type === 'required' || toolChoice?.type === 'tool')
     ) {
       throw new Error(
-        `${this.model} does not support forced tool selection. Use toolChoice "auto" or "none".`
+        `${this.model} does not support forced tool selection. Use toolChoice "auto".`
       )
     }
     if (toolChoice) {
-      options.toolChoice = toolChoice
+      options.toolChoice = omitTools ? { type: 'auto' } : toolChoice
     }
 
     if (normalizedSchema) {
@@ -1411,13 +1421,16 @@ export default class AISDKRemoteLLMProvider {
         )
       )
     } else if (this.config.flavor === 'cerebras') {
-      providerOptions['cerebras'] = completionParams.disableThinking === true
-        ? {
-            reasoningEffort: 'low'
+      Object.assign(
+        providerOptions,
+        this.buildManagedProviderOptions(
+          completionParams.disableThinking === true ? 'off' : 'on',
+          {
+            ...completionParams,
+            reasoningEffort: completionParams.reasoningEffort || 'high'
           }
-        : {
-            reasoningEffort: 'high'
-          }
+        )
+      )
     } else if (this.config.flavor === 'groq') {
       Object.assign(
         providerOptions,
@@ -1430,7 +1443,10 @@ export default class AISDKRemoteLLMProvider {
 
     // OpenRouter's SDK omits tool_choice when the tool list is empty. Preserve
     // an explicit text-only request even if the transcript contains tool calls.
-    if (this.config.flavor === 'openrouter' && toolChoice?.type === 'none') {
+    if (
+      this.config.flavor === 'openrouter' &&
+      toolChoice?.type === 'none' && !omitTools
+    ) {
       providerOptions['openrouter'] = {
         ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
         tool_choice: 'none'

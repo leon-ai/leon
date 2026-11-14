@@ -74,6 +74,26 @@ const CLAUDE_SAMPLING_UNSUPPORTED_MINIMUMS: Partial<
   opus: {
     major: 4,
     minor: 7
+  },
+  sonnet: {
+    major: 5,
+    minor: 5
+  }
+}
+const CLAUDE_STRICT_THINKING_BINDING_MINIMUMS: Partial<
+  Record<ClaudeModelFamily, { major: number, minor: number }>
+> = {
+  fable: {
+    major: 5,
+    minor: 2
+  },
+  mythos: {
+    major: 5,
+    minor: 2
+  },
+  sonnet: {
+    major: 5,
+    minor: 5
   }
 }
 
@@ -196,6 +216,15 @@ function buildAnthropicProviderOptions(
     )
     ? 'off'
     : reasoningMode
+  const adaptiveThinking = {
+    type: 'adaptive',
+    display: 'summarized',
+    // Tool discovery and context compaction intentionally change the prefix.
+    // Retain matching signed blocks and let Claude discard invalidated ones.
+    ...(isClaudeModelAtLeast(model, CLAUDE_STRICT_THINKING_BINDING_MINIMUMS)
+      ? { blockBinding: { prefixMismatchBehavior: 'drop_block' } }
+      : {})
+  }
 
   if (
     (effectiveReasoningMode === 'off' || effectiveReasoningMode === 'guarded') &&
@@ -203,10 +232,7 @@ function buildAnthropicProviderOptions(
   ) {
     return {
       anthropic: {
-        thinking: {
-          type: 'adaptive',
-          display: 'summarized'
-        },
+        thinking: adaptiveThinking,
         effort: 'low',
         ...(speed ? { speed } : {}),
         sendReasoning: true
@@ -230,10 +256,7 @@ function buildAnthropicProviderOptions(
 
   return {
     anthropic: {
-      thinking: {
-        type: 'adaptive',
-        display: 'summarized'
-      },
+      thinking: adaptiveThinking,
       effort: completionParams.reasoningEffort === 'none'
         ? DEFAULT_ADAPTIVE_REASONING_EFFORT
         : completionParams.reasoningEffort || DEFAULT_ADAPTIVE_REASONING_EFFORT,
