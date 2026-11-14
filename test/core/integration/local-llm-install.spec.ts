@@ -22,7 +22,7 @@ vi.mock('@/constants', () => ({
   LLM_DIR_PATH: fixture.root,
   LLM_MANIFEST_PATH: path.join(fixture.root, 'manifest.json'),
   LLAMACPP_RELEASE_VERSION: 'fixture-runtime',
-  MINIMUM_LOCAL_CONTEXT_TOKENS: 4_096,
+  MINIMUM_LOCAL_CONTEXT_TOKENS: 131_072,
   LLAMACPP_DEFAULT_KV_CACHE_TYPE: 'q8_0'
 }))
 vi.mock('@/config', () => ({ CONFIG_MANAGER: {
@@ -74,7 +74,8 @@ function selected(fileName: string): Record<string, unknown> {
     repository: 'publisher/fixture', revision: 'pinned-revision',
     estimatedTPS: 25, score: 90, kvCacheType: 'q4_0',
     contextPlan: { contextTokens: 65_536, estimatedMiB: 8_000,
-      hostBudgetMiB: 12_000, memoryBudgetMiB: 12_000 }
+      hostBudgetMiB: 12_000,
+      hostEstimatedMiB: 8_000, devices: [], executionMode: 'cpu_only', gpuLayers: 0 }
   }
 }
 

@@ -10,6 +10,7 @@ import { CONFIG_MANAGER } from '@/config'
 import { FileHelper } from '@/helpers/file-helper'
 import { readLLMManifest, resolveConfiguredLLMTarget } from '@/core/llm-manager/llm-routing'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { describeLlamaCPPContextPlan } from '@/core/llm-manager/llm-providers/llamacpp-context'
 
 import inspectLocalAICapability from './local-ai-capability'
 import { selectLocalLLM, isLocalLLMFileVerified, resolveLocalLLMInstallation } from './local-llm-selection'
@@ -51,7 +52,12 @@ export async function downloadLocalLLM(selected) {
       contextWindowTokens: selected.contextPlan.contextTokens,
       estimatedMemoryMiB: selected.contextPlan.estimatedMiB,
       hostBudgetMiB: selected.contextPlan.hostBudgetMiB,
-      memoryBudgetMiB: selected.contextPlan.memoryBudgetMiB
+      executionMode: selected.contextPlan.executionMode,
+      gpuLayers: selected.contextPlan.gpuLayers,
+      cpuOffloadedModelRatio: selected.contextPlan.cpuOffloadedModelRatio,
+      hostEstimatedMiB: selected.contextPlan.hostEstimatedMiB,
+      unifiedMemory: selected.contextPlan.unifiedMemory,
+      devices: selected.contextPlan.devices
     } : {}),
     estimatedTPS: selected.estimatedTPS,
     plannerScore: selected.score
@@ -113,9 +119,8 @@ export default async function setupLocalLLM(localAICapability, setupState = {}) 
       }, hardware)
       status.pause()
       const context = selected.contextPlan.contextTokens.toLocaleString('en-US')
-      const memory = (selected.contextPlan.estimatedMiB / 1_024).toFixed(1)
-      const budget = (selected.contextPlan.memoryBudgetMiB / 1_024).toFixed(1)
-      console.info(`I selected ${selected.name} ${selected.precision}: ${context} tokens, estimated ${memory} GiB within a ${budget} GiB available-memory budget.`)
+      const speed = selected.estimatedTPS.toFixed(1)
+      console.info(`I selected ${selected.name} ${selected.precision}: ${context} tokens; ${describeLlamaCPPContextPlan(selected.contextPlan)}; estimated decode ${speed} tokens/s.`)
       targetPath = await downloadLocalLLM(selected)
       status.start()
     }

@@ -17,6 +17,7 @@ import {
   getLlamaCPPModelArguments,
   getLlamaCPPServerBinaryPath,
   resolveLlamaCPPContextPlan,
+  LlamaCPPBackendError,
   LlamaCPPCapacityError
 } from '@/core/llm-manager/llm-providers/llamacpp-context'
 
@@ -139,9 +140,11 @@ async function inspectCandidate(candidate, directory, binary, settings, readGguf
   })
   const architecture = info.metadata.general.architecture
   const maximumContextTokens = info.metadata[architecture]?.context_length
-  if (!Number.isSafeInteger(maximumContextTokens) ||
-      maximumContextTokens < MINIMUM_LOCAL_CONTEXT_TOKENS) {
+  if (!Number.isSafeInteger(maximumContextTokens) || maximumContextTokens < 1) {
     throw new Error(`Invalid native context metadata for ${candidate.fileName}.`)
+  }
+  if (settings?.context_size === undefined && maximumContextTokens < MINIMUM_LOCAL_CONTEXT_TOKENS) {
+    throw new LlamaCPPCapacityError(`The model's native context is below the required ${MINIMUM_LOCAL_CONTEXT_TOKENS.toLocaleString('en-US')} tokens.`)
   }
 
   if (!Number.isSafeInteger(info.infoEndOffset) || info.infoEndOffset > data.length) {
@@ -157,12 +160,14 @@ async function inspectCandidate(candidate, directory, binary, settings, readGguf
 
   const kvCacheType = settings?.kv_cache_type ?? LLAMACPP_DEFAULT_KV_CACHE_TYPE
   const contextPlan = await resolveLlamaCPPContextPlan(binary,
-    [...getLlamaCPPModelArguments(modelPath, kvCacheType), '--gpu-layers', 'all'],
-    settings?.memory_reserve_mib, settings?.context_size)
+    getLlamaCPPModelArguments(modelPath, kvCacheType),
+    settings?.memory_reserve_mib, settings?.context_size,
+    { requireGPU: hardware.hasGPU, preserveContext: settings?.context_size !== undefined })
   // Compare baseline decode speed at one common context. Catalog KV estimates
   // must not apply fictitious offload penalties to a native-verified placement.
   const estimate = await runLLMFit([
-    'plan', candidate.modelId, '--context', String(MINIMUM_LOCAL_CONTEXT_TOKENS),
+    ...hardware.arguments,
+    'plan', candidate.modelId, '--context', String(contextPlan.contextTokens),
     '--quant', candidate.precision, '--kv-quant', kvCacheType
   ])
   const estimatedTPS = estimate.run_paths?.find((entry) =>
@@ -188,10 +193,12 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
   if (hasGPU && availableVRAM <= 0) {
     throw new LlamaCPPCapacityError('I could not find available GPU memory for local AI.')
   }
-  const hardware = { hasGPU, availableVRAM, unifiedMemory }
-  const comparison = await runLLMFit([
+  const hardware = { hasGPU, unifiedMemory, arguments: [
     ...(hasGPU ? ['--memory', `${unifiedMemory ? Math.min(availableVRAM, availableGiB) : availableVRAM}G`] : []),
-    '--ram', `${availableGiB}G`,
+    '--ram', `${availableGiB}G`
+  ] }
+  const comparison = await runLLMFit([
+    ...hardware.arguments,
     '--max-context', String(MINIMUM_LOCAL_CONTEXT_TOKENS),
     'diff', ...LOCAL_LLM_MODELS.map((model) => model.id)
   ])
@@ -258,6 +265,9 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
       try {
         plans.push(await inspectCandidate(candidate, directory, binary, settings, readGgufFileInfo, hardware))
       } catch (error) {
+        if (error instanceof LlamaCPPBackendError) {
+          throw error
+        }
         if (!(error instanceof LlamaCPPCapacityError)) {
           failures.push(`${candidate.fileName}: ${error.message}`)
         }
@@ -273,7 +283,8 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
     throw new Error(`I could not finish assessing the local models. ${failures.join(' ')}`)
   }
   if (plans.length === 0) {
-    throw new LlamaCPPCapacityError('I could not fit a supported local model in the currently available memory. Close other applications and retry.')
+    const context = (settings?.context_size ?? MINIMUM_LOCAL_CONTEXT_TOKENS).toLocaleString('en-US')
+    throw new LlamaCPPCapacityError(`I could not fit a supported local model with at least ${context} tokens of context in the currently available memory. Close other applications and retry.`)
   }
 
   await fs.promises.mkdir(LLM_DIR_PATH, { recursive: true })

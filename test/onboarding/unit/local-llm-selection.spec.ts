@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { selectLocalLLM, rankLocalLLMPlans } from '@@/scripts/setup/local-llm-selection'
 import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '@@/scripts/setup/local-llm-catalog'
-import { LlamaCPPCapacityError } from '@/core/llm-manager/llm-providers/llamacpp-context'
+import { LlamaCPPBackendError, LlamaCPPCapacityError, LlamaCPPExecutionMode } from '@/core/llm-manager/llm-providers/llamacpp-context'
 
 const fixture = await vi.hoisted(async () => {
   const fs = await import('node:fs/promises')
@@ -23,7 +23,7 @@ vi.mock('@/constants', () => ({
   LLM_DIR_PATH: path.join(fixture.root, 'models'),
   LLMFIT_INSTALL_PATH: path.join(fixture.root, 'bin'),
   TMP_PATH: path.join(fixture.root, 'tmp'),
-  MINIMUM_LOCAL_CONTEXT_TOKENS: 4_096,
+  MINIMUM_LOCAL_CONTEXT_TOKENS: 131_072,
   LLAMACPP_DEFAULT_KV_CACHE_TYPE: 'q8_0'
 }))
 vi.mock('@/config', () => ({
@@ -40,6 +40,8 @@ vi.mock('axios', () => ({ default: { get: fixture.get } }))
 vi.mock('node-llama-cpp', () => ({ readGgufFileInfo: fixture.read }))
 vi.mock('@/core/llm-manager/llm-providers/llamacpp-context', () => ({
   LlamaCPPCapacityError: class extends Error {},
+  LlamaCPPBackendError: class extends Error {},
+  LlamaCPPExecutionMode: { GPU: 'gpu', CPUOffload: 'cpu_offload', CPUOnly: 'cpu_only' },
   getLlamaCPPHostMemoryBudget: (): object => fixture.budget,
   getLlamaCPPServerBinaryPath: (): string => '/fixture/llama-server',
   getLlamaCPPModelArguments: (model: string, cacheType: string): string[] => [
@@ -65,7 +67,11 @@ beforeEach(() => {
   fixture.run.mockReset().mockImplementation(async (_binary: string, args: string[]) => JSON.stringify(
     args.includes('diff') ? { models: LOCAL_LLM_MODELS.map((model) => ({
       model: { name: model.id }, best_quant: 'Q8_0', score_components: { quality: 90 }
-    })) } : { run_paths: [{ path: 'gpu', estimated_tps: 25 }] }
+    })) } : { run_paths: [
+      { path: 'gpu', feasible: true, estimated_tps: 25 },
+      { path: 'cpu_offload', feasible: true, estimated_tps: 3 },
+      { path: 'cpu_only', feasible: true, estimated_tps: 1 }
+    ] }
   ))
   fixture.read.mockReset().mockResolvedValue({
     metadata: { general: { architecture: 'fixture' }, fixture: { context_length: 262_144 } },
@@ -73,7 +79,8 @@ beforeEach(() => {
   })
   fixture.fit.mockReset().mockResolvedValue({
     arguments: [], contextTokens: 262_144, hostBudgetMiB: 12_000,
-    memoryBudgetMiB: 12_000, estimatedMiB: 8_000, cacheMiB: 1_000
+    memoryBudgetMiB: 12_000, estimatedMiB: 8_000, cacheMiB: 1_000,
+    executionMode: LlamaCPPExecutionMode.GPU, headroomRatio: 0.3
   })
 })
 
@@ -85,7 +92,6 @@ describe('local model selection', () => {
   it('evaluates original precision through metadata and cleans up all planning files', async () => {
     await selectLocalLLM()
     expect(fixture.read.mock.calls.some(([url]) => url.includes('-BF16.gguf'))).toBe(true)
-    expect(fixture.fit.mock.calls.every(([, args]) => args.includes('--gpu-layers'))).toBe(true)
     expect(await fs.readdir(path.join(fixture.root, 'tmp'))).toEqual([])
   })
 
@@ -108,10 +114,23 @@ describe('local model selection', () => {
       }
       return {
         arguments: [], contextTokens: 262_144, hostBudgetMiB: 12_000,
-        memoryBudgetMiB: 12_000, estimatedMiB: 8_000, cacheMiB: 1_000
+        memoryBudgetMiB: 12_000, estimatedMiB: 8_000, cacheMiB: 1_000,
+        executionMode: LlamaCPPExecutionMode.GPU, headroomRatio: 0.3
       }
     })
     expect((await selectLocalLLM()).name).toBe('Ornith-1.5-9B')
+  })
+
+  it('skips models with insufficient native context without treating their metadata as broken', async () => {
+    fixture.read.mockImplementation(async (file: string) => ({
+      metadata: { general: { architecture: 'fixture' }, fixture: {
+        context_length: file.includes('Qwen3.8') ? 65_536 : 262_144
+      } },
+      infoEndOffset: 4
+    }))
+
+    expect((await selectLocalLLM()).name).toBe('Ornith-1.5-9B')
+    expect(await fs.readdir(path.join(fixture.root, 'tmp'))).toEqual([])
   })
 
   it('keeps discrete GPU capacity separate from the host memory budget', async () => {
@@ -141,6 +160,14 @@ describe('local model selection', () => {
     expect(await fs.readdir(path.join(fixture.root, 'tmp'))).toEqual([])
   })
 
+  it('stops probing candidates when the managed GPU backend is unavailable and cleans up', async () => {
+    fixture.fit.mockRejectedValue(new LlamaCPPBackendError('GPU backend unavailable'))
+
+    await expect(selectLocalLLM()).rejects.toThrow('GPU backend unavailable')
+    expect(fixture.fit).toHaveBeenCalledTimes(1)
+    expect(await fs.readdir(path.join(fixture.root, 'tmp'))).toEqual([])
+  })
+
   it('prefers useful context over a marginal increase in weight precision', () => {
     const base = {
       maximumContextTokens: 262_144, quality: 90, estimatedTPS: 25, sizeBytes: 1_024,
@@ -148,8 +175,26 @@ describe('local model selection', () => {
     }
     const ranked = rankLocalLLMPlans([
       { ...base, precision: 'Q6_K', quality: 89 },
-      { ...base, precision: 'Q8_0', contextPlan: { ...base.contextPlan, contextTokens: 32_768 } }
+      { ...base, precision: 'Q8_0', contextPlan: { ...base.contextPlan, contextTokens: 131_072 } }
     ])
     expect(ranked[0].precision).toBe('Q6_K')
+  })
+  it('uses the owners KV precision and fixed context for native fitting and throughput estimates', async () => {
+    fixture.settings = { kv_cache_type: 'q4_0', context_size: 65_536 }
+    fixture.fit.mockResolvedValue({
+      contextTokens: 65_536, headroomRatio: 0.3,
+      executionMode: LlamaCPPExecutionMode.GPU
+    })
+
+    await selectLocalLLM()
+    const fitArgs = fixture.fit.mock.calls[0]!
+    expect(fitArgs[1]).toEqual(expect.arrayContaining([
+      '--cache-type-k', 'q4_0', '--cache-type-v', 'q4_0'
+    ]))
+    expect(fitArgs[3]).toBe(65_536)
+    expect(fitArgs[4]).toMatchObject({ preserveContext: true })
+    const args = fixture.run.mock.calls.find(([, args]) => args.includes('plan'))![1] as string[]
+    expect(args[args.indexOf('--kv-quant') + 1]).toBe('q4_0')
+    expect(args[args.indexOf('--context') + 1]).toBe('65536')
   })
 })

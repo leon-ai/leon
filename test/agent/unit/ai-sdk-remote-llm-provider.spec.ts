@@ -38,7 +38,7 @@ import {
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 import { normalizeCompletionResultForOpenAICompatibleProvider } from '@/core/llm-manager/llm-provider/llm-provider-response'
 import { ProviderRequestActivity } from '@/core/llm-manager/llm-provider/provider-request-activity'
-import { resolveLlamaCPPContextPlan } from '@/core/llm-manager/llm-providers/llamacpp-context'
+import { describeLlamaCPPContextPlan, LlamaCPPExecutionMode, resolveLlamaCPPContextPlan } from '@/core/llm-manager/llm-providers/llamacpp-context'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CPUArchitectures } from '@/types'
@@ -2589,8 +2589,10 @@ describe('AISDKRemoteLLMProvider', () => {
 describe('managed llama.cpp memory budgets', () => {
   const server = path.resolve('runtime', 'llama-server')
   const modelArguments = ['--model', path.resolve('fixture.gguf')]
-  const device = { kind: 'device', name: 'GPU0', total: 16_384, free: 12_288, self: 6_000 }
-  const host = { kind: 'host', name: 'Host', self: 1_000 }
+  const device = { kind: 'device', name: 'GPU0', total: 16_384, free: 12_288, self: 6_000,
+    model: 4_000, context: 1_000, compute: 1_000 }
+  const host = { kind: 'host', name: 'Host', self: 1_000,
+    model: 500, context: 250, compute: 250 }
   const estimate = (rows: unknown[]): string => JSON.stringify({
     type: 'fit_memory_breakdown', data: { unit: 'MiB', rows }
   })
@@ -2606,13 +2608,19 @@ describe('managed llama.cpp memory budgets', () => {
     const run = vi.spyOn(RuntimeHelper, 'runBinary')
       .mockResolvedValueOnce(estimate([device, host]))
       .mockResolvedValueOnce('-c 262144 -ngl -1 -ot "blk.*.ffn_up_exps.weight=CPU"')
-      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce(estimate([
+        { ...device, self: 5_000, model: 3_000 },
+        { ...host, self: 2_000, model: 1_500 }
+      ]))
     const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
 
     expect(plan.contextTokens).toBe(262_144)
     expect(plan.arguments).toEqual(['-c', '262144', '-ngl', '-1',
       '-ot', 'blk.*.ffn_up_exps.weight=CPU', '--fit', 'off', '--cache-ram', '2048'])
     expect(plan.hostBudgetMiB).toBe(15_155)
+    expect(plan.executionMode).toBe(LlamaCPPExecutionMode.CPUOffload)
+    expect(plan.devices[0]).toMatchObject({ modelMiB: 3_000, contextMiB: 1_000, computeMiB: 1_000 })
+    expect(plan.cpuOffloadedModelRatio).toBe(0.25)
     expect(run.mock.calls[1]![1]).toContain('1639')
     expect(run.mock.calls[1]![1]).not.toContain('--ctx-size')
     expect(run.mock.calls[2]![1]).toContain('blk.*.ffn_up_exps.weight=CPU')
@@ -2623,11 +2631,12 @@ describe('managed llama.cpp memory budgets', () => {
     vi.spyOn(SystemHelper, 'getFreeRAMInBytes').mockReturnValue(8 * 1_024 ** 3)
     const run = vi.spyOn(RuntimeHelper, 'runBinary')
       .mockResolvedValueOnce(estimate([{ ...host, self: 12_000 }]))
-      .mockResolvedValueOnce('-c 65536 -ngl 0')
+      .mockResolvedValueOnce('-c 131072 -ngl 0')
       .mockResolvedValueOnce(estimate([{ ...host, self: 4_000 }]))
     const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
 
-    expect(plan.contextTokens).toBe(65_536)
+    expect(plan.contextTokens).toBe(131_072)
+    expect(plan.executionMode).toBe(LlamaCPPExecutionMode.CPUOnly)
     expect(plan.hostBudgetMiB).toBe(5_325)
     expect(run.mock.calls[1]![1]).toContain('11059')
   })
@@ -2640,7 +2649,7 @@ describe('managed llama.cpp memory budgets', () => {
     const metal = { ...device, total: 38_338, free: 38_337 }
     const run = vi.spyOn(RuntimeHelper, 'runBinary')
       .mockResolvedValueOnce(estimate([metal, host]))
-      .mockResolvedValueOnce('-c 32768 -ngl -1')
+      .mockResolvedValueOnce('-c 131072 -ngl -1')
       .mockResolvedValueOnce(estimate([{ ...metal, self: 4_500 }, host]))
     const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
 
@@ -2666,7 +2675,7 @@ describe('managed llama.cpp memory budgets', () => {
   it('honors an explicit reserve and refuses a minimum context that exceeds available memory', async () => {
     const run = vi.spyOn(RuntimeHelper, 'runBinary')
       .mockResolvedValueOnce(estimate([device, host]))
-      .mockResolvedValueOnce('-c 4096 -ngl 0')
+      .mockResolvedValueOnce('-c 131072 -ngl 0')
       .mockResolvedValueOnce(estimate([{ ...host, self: 20_000 }]))
 
     await expect(resolveLlamaCPPContextPlan(server, modelArguments, 4_096))
@@ -2681,5 +2690,60 @@ describe('managed llama.cpp memory budgets', () => {
 
     await expect(resolveLlamaCPPContextPlan(server, modelArguments)).rejects.toThrow('Not enough available RAM')
     expect(run).not.toHaveBeenCalled()
+  })
+
+  it('refuses CPU fallback when hardware detection promised GPU execution', async () => {
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([host]))
+
+    await expect(resolveLlamaCPPContextPlan(server, modelArguments, undefined, undefined,
+      { requireGPU: true })).rejects.toThrow('cannot use the detected GPU')
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps GPU pressure visible even when host RAM has ample spare capacity', async () => {
+    vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce('-c 262144 -ngl -1')
+      .mockResolvedValueOnce(estimate([{ ...device, self: 10_000 }, host]))
+
+    const plan = await resolveLlamaCPPContextPlan(server, modelArguments)
+    expect(plan.executionMode).toBe(LlamaCPPExecutionMode.GPU)
+    expect(plan.headroomRatio).toBeCloseTo(1 - 10_000 / (12_288 - 1_639))
+    expect(describeLlamaCPPContextPlan(plan)).toContain('RAM 1.0/14.8 GiB')
+    expect(describeLlamaCPPContextPlan(plan)).toContain('GPU0 9.8/10.4 GiB')
+  })
+
+  it('rejects an explicit context that cannot preserve host headroom instead of shrinking it', async () => {
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce('-c 262144 -ngl 12')
+      .mockResolvedValueOnce(estimate([device, { ...host, self: 16_000 }]))
+
+    await expect(resolveLlamaCPPContextPlan(server, modelArguments, undefined, 262_144,
+      { preserveContext: true })).rejects.toThrow('cannot fit')
+    expect(run).toHaveBeenCalledTimes(3)
+  })
+
+  it('rejects automatic fits below the context needed for agent work', async () => {
+    const run = vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce('-c 65536 -ngl -1')
+
+    await expect(resolveLlamaCPPContextPlan(server, modelArguments))
+      .rejects.toThrow('required 131,072-token context')
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('allows a smaller explicit owner capacity while retaining the memory checks', async () => {
+    vi.spyOn(RuntimeHelper, 'runBinary')
+      .mockResolvedValueOnce(estimate([device, host]))
+      .mockResolvedValueOnce('-c 65536 -ngl -1')
+      .mockResolvedValueOnce(estimate([device, host]))
+
+    const plan = await resolveLlamaCPPContextPlan(server, modelArguments, undefined, 65_536,
+      { preserveContext: true })
+    expect(plan.contextTokens).toBe(65_536)
+    expect(plan.devices[0]!.estimatedMiB).toBeLessThan(plan.devices[0]!.budgetMiB)
   })
 })

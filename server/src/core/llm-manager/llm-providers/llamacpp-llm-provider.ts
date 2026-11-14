@@ -20,7 +20,11 @@ import {
   LLAMACPP_MAX_OUTPUT_TOKENS
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
-import { getLlamaCPPServerBinaryPath, getLlamaCPPModelArguments, resolveLlamaCPPContextPlan, type LlamaCPPKVCacheType } from './llamacpp-context'
+import { SystemHelper } from '@/helpers/system-helper'
+import {
+  describeLlamaCPPContextPlan, getLlamaCPPServerBinaryPath,
+  getLlamaCPPModelArguments, resolveLlamaCPPContextPlan, type LlamaCPPKVCacheType
+} from './llamacpp-context'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { recordInferenceUsage, getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -859,15 +863,14 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       `Starting llama-server with model "${modelPath}".`
     )
     const modelArguments = getLlamaCPPModelArguments(modelPath, kvCacheType)
-    const contextPlan = contextSize === undefined
-      ? await resolveLlamaCPPContextPlan(binaryPath, modelArguments, memoryReserveMiB)
-      : undefined
-    const contextArguments = contextPlan?.arguments ?? ['--ctx-size', String(contextSize)]
-    if (contextPlan) {
-      const message = `Automatic llama.cpp context | tokens=${contextPlan.contextTokens} | estimated_mib=${contextPlan.estimatedMiB} | host_budget_mib=${contextPlan.hostBudgetMiB} | cache_mib=${contextPlan.cacheMiB}`
-      LogHelper.info(message)
-      this.writeServerLogLine(message)
-    }
+    const contextPlan = await resolveLlamaCPPContextPlan(
+      binaryPath, modelArguments, memoryReserveMiB, contextSize,
+      { requireGPU: await SystemHelper.hasGPU(), preserveContext: contextSize !== undefined }
+    )
+    const contextArguments = contextPlan.arguments
+    const message = `${contextSize === undefined ? 'Automatic' : 'Configured'} llama.cpp context | tokens=${contextPlan.contextTokens} | gpu_layers=${contextPlan.gpuLayers} | cache_mib=${contextPlan.cacheMiB} | ${describeLlamaCPPContextPlan(contextPlan)} | devices=${JSON.stringify(contextPlan.devices)}`
+    LogHelper.info(message)
+    this.writeServerLogLine(message)
 
     // Check the port after memory inspection so fitting does not widen the
     // interval between checking availability and starting the native listener.

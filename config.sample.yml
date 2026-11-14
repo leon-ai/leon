@@ -32,6 +32,7 @@ llm:
     llamacpp:
       base_url: http://127.0.0.1:8080/v1
       # Context is fitted to available memory and the model's native limit.
+      # Automatic sizing requires at least 131,072 tokens for agent work.
       # Set a fixed capacity to override automatic sizing.
       # context_size: 32768
       # Q8 KV cache is the default. Q4 saves context memory at some accuracy cost.
