@@ -1640,6 +1640,11 @@ async function reviewAgentCompletion(
       }, state)
       params.signal?.throwIfAborted()
       params.runBudget?.throwIfExpired()
+      if (response?.isTruncated && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+        // A fitted output budget may be too small for the complete verdict.
+        isContextRecoveryAttempt = true
+        continue
+      }
       const review = response && !response.isTruncated && !response.toolCalls?.length
         ? parseToolCallArguments(response.textContent || '')
         : null
@@ -1690,6 +1695,13 @@ async function reviewAgentCompletion(
             CompletionFailureKind.Timeout, state.trackedSteps, true
           )
         }
+      }
+      if (error instanceof AgentModelProviderError && error.canRetryWithCompaction &&
+          !isContextRecoveryAttempt && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+        // Review adds the draft and instructions after operational admission.
+        // Retry the same evidence through compaction instead of enlarging it.
+        isContextRecoveryAttempt = true
+        continue
       }
       if (error instanceof AgentModelProviderError && (
         error.failureKind === CompletionFailureKind.Unavailable ||

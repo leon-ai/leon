@@ -4,11 +4,10 @@ interface RandomStringOptions {
 }
 
 const REDACTED_SECRET = '[REDACTED_SECRET]'
-const SECRET_PATTERNS = [
-  /(\b(?:api[_\s-]?key|token|password|secret)\b["']?\s*[:=]\s*)(["']?)([A-Za-z0-9._\-+/=]{16,})(\2)/gi,
-  /(\bBearer\s+)([A-Za-z0-9._\-+/=]{16,})/gi,
-  /(--api-token\s+)([^\s"'`]+)/gi
-] as const
+// Underscores delimit credential names; alphanumeric boundaries exclude prose.
+// Match opening quotes at any JSON escape depth and leave closing delimiters intact.
+const SECRET_PATTERN = /((?:^|[^a-z0-9])(?:api[_\s-]?key|token|password|secret(?:[_-]?key)?)(?![a-z0-9])(?:\\*["'])?\s*[:=]\s*(?:\\*["'])?|\bBearer\s+)[A-Za-z0-9._+\-/=]{16,}|(--api-token\s+)[^\s"'`]+(?:(?<!\\)|(?![\\"'`]))/gi
+const SECRET_REPLACEMENT = `$1$2${REDACTED_SECRET}`
 
 export class StringHelper {
   /**
@@ -117,22 +116,6 @@ export class StringHelper {
    * @example redactSecrets('apiKey: abcdefghijklmnop') // apiKey: [REDACTED_SECRET]
    */
   public static redactSecrets(str: string): string {
-    let redacted = String(str || '')
-
-    redacted = redacted.replace(
-      SECRET_PATTERNS[0],
-      (_match, prefix: string, quote: string, _secret: string, suffix: string) =>
-        `${prefix}${quote}${REDACTED_SECRET}${suffix}`
-    )
-    redacted = redacted.replace(
-      SECRET_PATTERNS[1],
-      (_match, prefix: string) => `${prefix}${REDACTED_SECRET}`
-    )
-    redacted = redacted.replace(
-      SECRET_PATTERNS[2],
-      (_match, prefix: string) => `${prefix}${REDACTED_SECRET}`
-    )
-
-    return redacted
+    return String(str || '').replace(SECRET_PATTERN, SECRET_REPLACEMENT)
   }
 }

@@ -1,91 +1,134 @@
 # Contributing
 
-Thanks a lot for your interest in contributing to Leon! :heart:
+Thank you for wanting to help with Leon ❤️
 
-**Leon needs open source to live**, the more skills he has, the more skillful he becomes.
+There are people behind this project, and I want contributing to feel welcoming. You can bring code, ideas, feedback, design, documentation, or simply help someone get started. You don't need to know the whole project to have something useful to share.
 
-**Before submitting your contribution**, please take a moment to review this document.
+We are preparing the first 2.0 alpha and its desktop application. The core and interface are still changing, and the public documentation mostly describes the previous version. Broader community onboarding will follow the alpha, but you can already [join Discord](https://discord.gg/MNQqqKg) and fill out the [Leon AI contributor interest form](https://forms.gle/6PCG2D5rYo1q8tKMA).
 
-Please note we have a [code of conduct](https://github.com/leon-ai/leon/blob/develop/.github/CODE_OF_CONDUCT.md), please follow it in all your interactions with the project.
+You can report bugs and suggest ideas directly through [GitHub issues](https://github.com/leon-ai/leon/issues). The interest form helps me organize contributors and find useful starting points.
 
-## How You Can Help
+Please follow our [code of conduct](./CODE_OF_CONDUCT.md) and respect each other's time and opinions.
 
-Here are few examples about how you could help on Leon, by:
+## Before you start
 
-- [Creating a new module](https://docs.getleon.ai/packages-modules).
-- [Working on new features](http://roadmap.getleon.ai) (what is in backlog or todo).
-- [Suggesting new ideas](https://github.com/leon-ai/leon/issues/new/choose).
-- [Reporting a bug](https://github.com/leon-ai/leon/issues/new?labels=bug&template=BUG.md).
-- [Improving the documentation](https://github.com/leon-ai/docs.getleon.ai) (translations, typos, better writing, etc.).
-- [Sponsoring Leon](http://sponsor.getleon.ai).
+- Check existing issues and pull requests so we can coordinate our work.
+- Discuss substantial features, refactors, and architecture changes in an issue before implementing them. Agreeing on the direction first helps everyone spend their time well.
+- Use Discord for questions and conversation. Keep the agreed scope, decisions, and progress in the related GitHub issue.
+- Start with a small, focused contribution. A useful fix or a clear explanation can make a real difference.
 
-## Pull Requests
+AI and coding agents are welcome. Take the time to understand their output, review it, and verify that it works. You should be able to explain the decisions in your contribution and feel proud of what you submit.
 
-**Working on your first Pull Request?** You can learn how from this _free_ series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github).
+## Where you can help
 
-- **Please first discuss** the change you wish to make via [issue](https://github.com/leon-ai/leon/issues),
-  email, or any other method with the owners of this repository before making a change.
-  It might avoid a waste of your time.
+| Area | Starting point |
+| --- | --- |
+| Core, agent loop, context, and memory | [`server/src/`](../server/src/) |
+| New web app | [`apps/web/`](../apps/web/) and its [contributor instructions](../apps/web/AGENTS.md) |
+| Aurora components and visual answers | [`aurora/`](../aurora/) and the local previews below |
+| Tools and integrations | [`tools/`](../tools/) |
+| Native skills and agent skills | [`skills/native/`](../skills/native/) and [`skills/agent/`](../skills/agent/) |
+| Bridge SDKs and shared runtime contracts | [`bridges/`](../bridges/) |
+| Testing and reproducible bug reports | [`test/`](../test/) and [GitHub issues](https://github.com/leon-ai/leon/issues) |
+| Documentation, translation, design, and showcases | Bring an idea to Discord or an issue so we can find the right place for it |
 
-- The `master` branch is actually used as a snapshot of the latest stable release. **Do not submit your PRs
-  against the `master` branch**.
+Read the relevant source and look for existing helpers, components, and utilities before adding new ones. Tools own application-specific behavior, skills guide workflows, and Core owns generic execution and orchestration.
 
-- Ensure your code **respect our coding standards** (cf. [.eslintrc.json](https://github.com/leon-ai/leon/blob/develop/.eslintrc.json)).
-  To do so, you can run:
+The [repository instructions](../AGENTS.md) cover architecture, style, dependencies, and testing in more detail. The generated [Leon overview](../core/context/LEON.md) and [architecture overview](../core/context/ARCHITECTURE.md) can help you find your way around; check the source for the details.
 
-  ```sh
-  pnpm run lint
-  ```
+## Development setup
 
-- Make sure your **code passes the tests**. You can run the tests via the following command:
+- macOS, Linux, or Windows
+- [Node.js](https://nodejs.org/) 24 or newer
+- Git and [pnpm](https://pnpm.io/installation), using the version declared in [`package.json`](../package.json)
 
-  ```sh
-  npm test
-  ```
-
-  If you're adding new features to Leon, please include tests.
-
-## Development Setup
-
-Choose the setup method you want to go for.
-
-### Single-Click
-
-Gitpod will automatically set up an environment and run an instance for you.
-
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
-
-### Basic
+Fork the repository, then clone your fork's `develop` branch. Replace `YOUR_USERNAME` with your GitHub username.
 
 ```sh
-# Clone the repository
-git clone https://github.com/leon-ai/leon.git leon
-
-# Go to the project root
+git clone --branch develop https://github.com/YOUR_USERNAME/leon.git
 cd leon
-
-# Install
 pnpm install
-
-# Check the setup went well
 pnpm run check
-
-# Run the development server
-pnpm run dev:server
-
-# Run the development web app
-pnpm run dev:app
+git switch -c my-change
 ```
 
-## Versioning
+Follow the installation prompts. Setup prepares Leon's managed runtimes, dependencies, and applications.
 
-- We use [Semantic Versioning](https://semver.org) for releases.
+Run the development server in one terminal.
+
+```sh
+pnpm dev:server
+```
+
+For live changes to the new web app, open a second terminal in the same checkout.
+
+```sh
+pnpm dev:web-app
+```
+
+- The web app development server is available at `http://localhost:5173` by default and proxies API requests to Leon.
+- The built web app is served by Leon at `http://localhost:5366/web-app/` with the default server configuration.
+- `pnpm dev:app` runs the legacy interface. Use it when working on that interface.
+- Use a separate profile for development when you want to keep its settings, conversations, and memory apart from your everyday setup. Set `LEON_PROFILE` consistently for setup and the processes you run.
+
+### Aurora previews
+
+```sh
+pnpm dev:aurora
+```
+
+Open `http://localhost:5174/aurora.html` by default to explore the components, widgets, feed, and generated UI examples with local sample data.
+
+### Python development
+
+The Python bridge and TCP speech services run from source using Leon's managed Python runtime. Installation prepares their environments with uv from the `pyproject.toml` files under [`bridges/python/src/`](../bridges/python/src/pyproject.toml) and [`tcp_server/src/`](../tcp_server/src/pyproject.toml).
+
+Use `pnpm python-bridge` for the sample bridge invocation, or `pnpm start:tcp-server` to run the TCP server directly when working on those parts. After changing dependency manifests, rerun `pnpm install` to synchronize the environments.
+
+Keep dependencies in the package that owns them. Use pnpm for JavaScript dependencies and the managed uv setup for Python. Preserve the repository's 36-hour dependency cooldown and pinned versions.
+
+## Checks before a pull request
+
+Always run lint and fix every warning or error. It also runs the TypeScript checks.
+
+```sh
+pnpm lint
+```
+
+The rules live in [`eslint.config.mjs`](../eslint.config.mjs). Run the existing checks relevant to your change.
+
+| Change | Check |
+| --- | --- |
+| Core behavior and fast feedback | `pnpm test:unit` |
+| Real workers, downloads, capture, and rendering | `pnpm test:integration` |
+| Web app behavior | `pnpm test:web-app:e2e` |
+| Aurora components and rendering | `pnpm test:aurora:e2e` |
+| Controlled skills and actions | `pnpm test:controlled:e2e` |
+| Agent behavior in real scenarios | `pnpm test:agent:scenario -- <selection>` |
+
+- `pnpm test` runs unit, integration, and controlled e2e suites.
+- Use `pnpm test:agent:scenario -- --list` to find scenario selections. Scenarios use the latest-used profile's active model; `LEON_PROFILE` selects a specific profile.
+- Agent provider e2e checks must use `pnpm test:agent:e2e -- -t openai` unless other providers have been explicitly agreed with the maintainer.
+- Real agent scenarios and provider e2e checks can make model calls. Use a dedicated profile and understand its configured provider before running them.
+- Add meaningful coverage for observable behavior where there is a real gap. New Core mechanisms need real scenarios. Coordinate with the maintainer before adding tests for SDKs, tools, or skills, and run their affected existing tests.
+- For bridge boundary changes, also verify the built import graph and isolated Core startup without bridge-only dependencies. Follow the [repository instructions](../AGENTS.md) for these checks.
+
+## Send your pull request
+
+- Target **`develop`**. The `master` branch contains the previous release.
+- Link the issue or discussion and keep the change focused on the agreed scope.
+- Explain the problem, what users will experience, and how you verified it. Mention anything you could not check.
+- Include screenshots or a short recording for visible interface changes.
+- Follow the existing architecture and coding style, preserve unrelated work, and keep profile data isolated.
+- Keep generated context documents maintained through their generators rather than editing the generated copies.
+
+Small contributions are welcome too. If this is your first pull request, tell us where you need a hand. We'll figure it out together.
 
 ## Commits
 
 The commit message guideline is adapted from the [AngularJS Git Commit Guidelines](https://github.com/angular/angular.js/blob/master/DEVELOPERS.md#-git-commit-guidelines).
 
-Use `type(scope): description`, or `type: description` when no single scope fits. The description must be between 1 and 50 characters. An optional body follows the subject on separate lines. The commit hook validates the subject with `scripts/commit-msg.js`.
+Use `type(scope): description`, or `type: description` when no single scope fits. The description must be between 1 and 50 characters. An optional body follows the subject on separate lines. The commit hook validates the subject with [`scripts/commit-msg.js`](../scripts/commit-msg.js).
 
 ### Types
 
@@ -132,12 +175,12 @@ Use the scope names listed below, including spaces in multiword names such as `m
 | hotword | Wake-word detection. |
 | python tcp server | Python TCP service. |
 
-Use these namespaces for changes confined to one component:
+Use these namespaces for changes confined to one component.
 
-- `bridge/python` or `bridge/nodejs`: the corresponding bridge and SDK.
-- `tool/<name>`: one tool, such as `tool/browser-use` or `tool/tool_executions`.
-- `skill/<name>`: one native or agent skill, such as `skill/timer_skill` or `skill/coding`.
-- `provider/<name>`: one provider integration. Accepted names are `llamacpp`, `sglang`, `openrouter`, `zai`, `deepseek`, `minimax`, `openai`, `anthropic`, `moonshotai`, `huggingface`, `cerebras`, `groq` and `celeris`.
+- `bridge/python` or `bridge/nodejs` covers the corresponding bridge and SDK.
+- `tool/<name>` covers one tool, such as `tool/browser-use` or `tool/tool_executions`.
+- `skill/<name>` covers one native or agent skill, such as `skill/timer_skill` or `skill/coding`.
+- `provider/<name>` covers one provider integration. Accepted names are `llamacpp`, `sglang`, `openrouter`, `zai`, `deepseek`, `minimax`, `openai`, `anthropic`, `moonshotai`, `huggingface`, `cerebras`, `groq` and `celeris`.
 
 Use `tools` for shared tool infrastructure and `tool/<name>` for an individual tool. Likewise, use `llm` for shared model infrastructure and `provider/<name>` for a provider-specific change.
 
@@ -153,73 +196,8 @@ git commit -m "style(app/web): simplify chat layout"
 git commit -m "refactor: share dependency-free runtime contracts"
 ```
 
-### GUI Clients
+## Support the project
 
-If you are using a GUI client such as GitKraken, you may need to disable the default Git executable to make sure to use your default shell.
-Otherwise you may encounter an error such as "npx not found".
+You can also help by sharing what you build, writing a guide, helping someone on Discord, or [sponsoring Leon](http://sponsor.getleon.ai).
 
-## Sponsor
-
-You can also contribute by [sponsoring Leon](http://sponsor.getleon.ai).
-
-Please note that I dedicate most of my free time to Leon.
-
-By sponsoring the project you make the project sustainable and faster to develop features.
-
-The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process and so on...
-
-## Contributing to the Python Bridge or TCP HttpServer
-
-Leon makes use of two binaries, the Python bridge and the TCP server. These binaries are compiled from Python sources.
-
-The Python bridge is used to communicate between the core and skills made with Python.
-
-The TCP server is used to communicate between the core and third-party nodes, such as spaCy.
-
-### Set Up the Python Environment
-
-To contribute to these parts, you need to set up a Python environment running with a specific Python version and a specific Pipenv version.
-
-It is recommended to use Pyenv to manage your Python versions.
-
-If you are on GNU/Linux Ubuntu, you can run the following to install Pyenv, otherwise, please refer to the [Pyenv documentation to install it](https://github.com/pyenv/pyenv#installation):
-
-```bash
-# Update registry
-sudo apt-get update
-
-# Install Pyenv deps
-sudo apt-get install make build-essential libssl-dev zlib1g-dev \
-libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
-libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
-
-# Install Pyenv
-curl https://pyenv.run | bash
-
-# Add output lines to .bashrc
-
-# Restart shell
-exec "$SHELL"
-```
-
-Once Pyenv installed, run:
-
-```bash
-# Install Python
-pyenv install 3.11.9 --force
-pyenv global 3.11.9
-```
-
-Your Python environment should be ready now. Leon uses `uv` as the Python dependency standard, and `postinstall` provisions the Python bridge and TCP server environments automatically from `pyproject.toml`:
-
-```bash
-# Run the Python bridge
-npm run python-bridge
-
-# Run the TCP server
-npm run start:tcp-server
-```
-
-## Spread the Word
-
-Use [#LeonAI](<https://x.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query>) if you tweet about Leon and/or mention [@grenlouis](https://x.com/grenlouis).
+Thank you for giving this project some of your time. I'm looking forward to building together.
