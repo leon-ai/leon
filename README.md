@@ -10,6 +10,12 @@
 <p align="center"><em>Your open-source personal AI assistant.</em></p>
 
 <p align="center">
+  <a href="./README.md">English</a> ·
+  <a href="./README.zh-CN.md">简体中文</a> ·
+  <a href="./README.fr.md">Français</a>
+</p>
+
+<p align="center">
   <a href="https://discord.gg/MNQqqKg"><img src="https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white" alt="Join Leon on Discord" /></a>
   <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-1c75db?style=for-the-badge" alt="MIT license" /></a>
 </p>
