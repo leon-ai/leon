@@ -2,6 +2,6 @@
 name = "leon-browser-use-tool"
 version = "0.1.0"
 dependencies = [
-    "browser-use==1.0.0",
+    "browser-use==1.0.3",
     "pypdfium2==5.13.0",
 ]

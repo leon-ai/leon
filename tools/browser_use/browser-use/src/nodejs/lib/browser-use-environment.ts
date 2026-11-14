@@ -16,7 +16,8 @@ const SHORT_POSIX_TEMP_DIRECTORY = '/tmp'
 const OWNER_ACTION_DIAGNOSTICS = [
   'permission-blocked:',
   'remote-debugging-setup:',
-  'CDP WS handshake failed:'
+  'CDP WS handshake failed:',
+  'BU_CDP_URL='
 ]
 const MAX_DIAGNOSTIC_CHARACTERS = 16_000
 

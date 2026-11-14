@@ -23,6 +23,8 @@ _LEON_ITEM_TEXT_LIMIT = 300
 _LEON_LABEL_LIMIT = 200
 _LEON_HREF_LIMIT = 1_000
 _LEON_ACTIONS = []
+_LEON_POINTERS = []
+_LEON_INPUT_ACTIVITY = []
 _LEON_DIALOG_PENDING = 'browser_dialog_pending'
 _LEON_DIALOG_RECOVERY = (
     'Inspect the dialog message and confirm its tab before responding through '
@@ -83,7 +85,11 @@ def _leon_send(request, **kwargs):
             target = _LEON_TARGET_ID or _leon_native_send({'meta': 'current_tab'})['targetId']
             switch_tab(target)
         request = {**request, 'session_id': _LEON_SESSION_ID}
-    return _leon_native_send(request, **kwargs)
+    started_at = time.time_ns() // 1_000_000
+    result = _leon_native_send(request, **kwargs)
+    if method and method.startswith('Input.'):
+        _leon_save_input_activity(started_at, time.time_ns() // 1_000_000)
+    return result
 
 
 def new_tab(url='about:blank'):
@@ -100,6 +106,23 @@ _leon_helpers.switch_tab = switch_tab
 _leon_helpers.new_tab = new_tab
 
 
+def _leon_save_input_activity(started_at, ended_at):
+    """Protect delivered input during video trimming without retaining keys or text."""
+    journal = os.environ.get('LEON_BROWSER_INPUT_ACTIVITY')
+    if not journal:
+        return
+    try:
+        _LEON_INPUT_ACTIVITY.append({'tab_id': _LEON_TARGET_ID,
+                                     'startedAt': started_at, 'endedAt': ended_at})
+        destination = Path(journal)
+        temporary = destination.with_suffix('.tmp')
+        temporary.write_text(json.dumps(_LEON_INPUT_ACTIVITY), encoding='utf-8')
+        temporary.replace(destination)
+    except Exception:
+        # Optional timing evidence must not change successful input delivery.
+        pass
+
+
 def _leon_save_actions():
     """Persist outcomes even if user code catches an error or is interrupted."""
     journal = os.environ.get('LEON_BROWSER_ACTIONS')
@@ -108,6 +131,64 @@ def _leon_save_actions():
         temporary = destination.with_suffix('.tmp')
         temporary.write_text(json.dumps(_LEON_ACTIONS), encoding='utf-8')
         temporary.replace(destination)
+
+
+def _leon_pointer_event(x, y, clicked):
+    """Measure a dispatched page point in its outer browser window's coordinates."""
+    try:
+        # Use native bounds: page-visible outer dimensions can differ from the captured window.
+        tab_id = current_tab()['targetId']
+        bounds = cdp('Browser.getWindowForTarget', targetId=tab_id)['bounds']
+        viewport = cdp('Page.getLayoutMetrics')['cssVisualViewport']
+        zoom = float(viewport['zoom'])
+        border = (bounds['width'] - viewport['clientWidth'] * zoom) / 2
+        top = bounds['height'] - viewport['clientHeight'] * zoom - border
+        window_x = (border + float(x) * zoom) / bounds['width']
+        window_y = (top + float(y) * zoom) / bounds['height']
+        if 0 <= window_x <= 1 and 0 <= window_y <= 1:
+            return {'at': time.time_ns() // 1_000_000, 'x': window_x, 'y': window_y,
+                    'click': clicked, 'tab_id': tab_id}
+    except Exception:
+        # Optional recording telemetry must not change browser input delivery.
+        return None
+    return None
+
+
+def _leon_save_pointer(event):
+    """Keep recording telemetry separate from action-outcome convergence evidence."""
+    if event is None:
+        return
+    _LEON_POINTERS.append(event)
+    journal = os.environ.get('LEON_BROWSER_POINTERS')
+    if journal:
+        destination = Path(journal)
+        temporary = destination.with_suffix('.tmp')
+        temporary.write_text(json.dumps(_LEON_POINTERS), encoding='utf-8')
+        temporary.replace(destination)
+
+
+_leon_native_click = click_at_xy
+_leon_native_scroll = scroll
+
+
+def click_at_xy(x, y, button='left', clicks=1):
+    """Record a pointer click only after upstream delivered its input successfully."""
+    event = _leon_pointer_event(x, y, True)
+    result = _leon_native_click(x, y, button=button, clicks=clicks)
+    _leon_save_pointer(event)
+    return result
+
+
+def scroll(x, y, dy=-300, dx=0):
+    """Retain the observed scroll position without inventing a click."""
+    event = _leon_pointer_event(x, y, False)
+    result = _leon_native_scroll(x, y, dy=dy, dx=dx)
+    _leon_save_pointer(event)
+    return result
+
+
+_leon_helpers.click_at_xy = click_at_xy
+_leon_helpers.scroll = scroll
 
 
 def _leon_operation(name):
@@ -226,6 +307,8 @@ def _leon_snapshot(selector, offset, limit):
         href: e.getAttribute('href')?.length <= {_LEON_HREF_LIMIT} ? e.getAttribute('href') : null,
         href_omitted: e.getAttribute('href')?.length > {_LEON_HREF_LIMIT},
         disabled: e.matches(':disabled,[aria-disabled="true"]'),
+        ...(e.hasAttribute('aria-busy') ? {{busy:e.getAttribute('aria-busy') === 'true'}} : {{}}),
+        ...(e.hasAttribute('aria-controls') ? {{controls:e.getAttribute('aria-controls')}} : {{}}),
         ...(e.localName === 'select' ? {{multiple:e.multiple, options_total:e.options.length,
           options:Array.from(e.options).slice(0, {_LEON_MAX_ITEMS}).map(o => ({{
             value:o.value, label:o.label, selected:o.selected, disabled:o.matches(':disabled')

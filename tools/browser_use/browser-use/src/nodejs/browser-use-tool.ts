@@ -275,6 +275,8 @@ export class BrowserUseTool extends Tool {
     await fs.mkdir(directory, { recursive: true })
     const screenshot = path.join(directory, `${randomUUID()}.png`)
     const actionsPath = path.join(directory, `${randomUUID()}.actions.json`)
+    const pointerPath = path.join(directory, `${randomUUID()}.pointer.json`)
+    const inputActivityPath = path.join(directory, `${randomUUID()}.input-activity.json`)
     // JSON string literals are also valid Python strings for these generated paths.
     let code = functionName === 'screenshot'
       ? `print(capture_screenshot(path=${JSON.stringify(screenshot)}, max_dim=${SCREENSHOT_MAX_DIMENSION}))`
@@ -294,7 +296,13 @@ export class BrowserUseTool extends Tool {
     const startedAt = performance.now()
     const execution = this.command([], {
       input: `${workflow}\n_leon_execute(${JSON.stringify(code)})`, cwd: directory,
-      env: { ...env, LEON_BROWSER_ARTIFACTS: directory, LEON_BROWSER_ACTIONS: actionsPath },
+      env: {
+        ...env,
+        LEON_BROWSER_ARTIFACTS: directory,
+        LEON_BROWSER_ACTIONS: actionsPath,
+        LEON_BROWSER_POINTERS: pointerPath,
+        LEON_BROWSER_INPUT_ACTIVITY: inputActivityPath
+      },
       timeout: this.executionContext?.timeout ? 0 : COMMAND_TIMEOUT_MS,
       maxBuffer: MAX_OUTPUT_BYTES, reject: false
     })
@@ -307,10 +315,16 @@ export class BrowserUseTool extends Tool {
 
     const result = await execution
     let actions: Array<Record<string, unknown>> = []
+    let pointerEvents: Array<Record<string, unknown>> = []
     try {
       actions = JSON.parse(await fs.readFile(actionsPath, 'utf8')) as typeof actions
     } catch {
       // Syntax failures or forced termination may precede the first action record.
+    }
+    try {
+      pointerEvents = JSON.parse(await fs.readFile(pointerPath, 'utf8')) as typeof pointerEvents
+    } catch {
+      // Read-only scripts and input rejected before dispatch have no pointer journal.
     }
     // A forced termination can bypass Python finally; the persisted record tells
     // us whether this execution still owns a download-behavior override.
@@ -354,6 +368,8 @@ export class BrowserUseTool extends Tool {
       artifacts_directory: directory,
       ...(observation ? { observation } : {}),
       ...(actions.length ? { browser_actions: actions } : {}),
+      ...(pointerEvents.length ? { pointer_events: pointerEvents, pointer_events_path: pointerPath } : {}),
+      ...(existsSync(inputActivityPath) ? { input_activity_path: inputActivityPath } : {}),
       ...(!success ? { effect: actions.findLast((action) => action['success'] !== true)?.['effect'] ?? 'unverifiable' } : {})
     }
   }
