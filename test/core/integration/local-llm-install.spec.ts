@@ -143,6 +143,18 @@ describe('managed model downloads', () => {
     expect(fixture.setValue).not.toHaveBeenCalled()
   })
 
+  it('installs optional local weights while keeping the remote AI selected', async () => {
+    fixture.config = { default: 'openai/owner-model', workflow: '', agent: '' }
+    fixture.select.mockResolvedValue(selected('optional.gguf'))
+    corrupt = false
+
+    await setupLocalLLM({ canInstallLocalAI: true, hasGPU: true })
+
+    expect(await fs.readFile(path.join(fixture.root, 'optional.gguf'))).toEqual(weights)
+    expect(fixture.config).toEqual({ default: 'openai/owner-model', workflow: '', agent: '' })
+    expect(fixture.setValue).not.toHaveBeenCalled()
+  })
+
   it('binds a fresh profile only after the selected model has been verified', async () => {
     fixture.config = { default: '', workflow: '', agent: '' }
     fixture.select.mockResolvedValue(selected('selected.gguf'))
