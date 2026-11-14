@@ -360,7 +360,7 @@ async function syncLLMSetupChoice(preferences) {
         currentStep = 'setupNinja'
         await setupNinja()
         currentStep = 'setupLlamaCPP'
-        await setupLlamaCPP()
+        await setupLlamaCPP(localAICapability)
         currentStep = 'setupLLMFit'
         await setupLLMFit()
         currentStep = 'setupLocalLLM'

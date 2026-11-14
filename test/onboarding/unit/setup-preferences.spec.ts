@@ -81,21 +81,29 @@ describe('setup preferences', () => {
     expect(connections).toHaveLength(8)
   })
 
-  it('discovers fellows first and skips manual/local questions after selection', async () => {
+  it.each([true, false])('offers optional local AI after connecting an account and retains both choices (%s)', async (setupLocalAI) => {
     setup.fellows.mockResolvedValueOnce({ fellowAccount: 'openai.example' })
+    setup.prompt.mockResolvedValueOnce(setupLocalAI)
     const preferences = await setupPreferences(capability, existing, installed)
 
     expect(preferences.fellowAccount).toBe('openai.example')
-    expect(preferences.setupLocalAI).toBe(false)
+    expect(preferences.setupLocalAI).toBe(setupLocalAI)
     expect(preferences.setupVoice).toBe(false)
-    expect(setup.prompt).not.toHaveBeenCalled()
+    expect(setup.prompt).toHaveBeenCalledExactlyOnceWith('Would you also like me to install local AI?', {
+      type: 'confirm', initial: false, cancel: 'default'
+    })
+    expect(setup.fellows.mock.invocationCallOrder.at(-1))
+      .toBeLessThan(setup.prompt.mock.invocationCallOrder.at(-1)!)
+    expect(setup.info).toHaveBeenCalledWith('I will keep using your selected AI. You can switch to a local model later.')
     expect(setup.remote).not.toHaveBeenCalled()
   })
 
-  it('keeps the existing local question with No as default when no fellow is selected', async () => {
+  it.each([true, false])('asks about local AI before manual remote setup when no connection is selected (%s)', async (setupLocalAI) => {
     setup.fellows.mockResolvedValueOnce(null)
-    setup.prompt.mockResolvedValueOnce(false)
-    setup.remote.mockResolvedValueOnce({ remoteLLMProvider: 'openai', remoteLLMModel: 'example' })
+    setup.prompt.mockResolvedValueOnce(setupLocalAI)
+    if (!setupLocalAI) {
+      setup.remote.mockResolvedValueOnce({ remoteLLMProvider: 'openai', remoteLLMModel: 'example' })
+    }
     const preferences = await setupPreferences(capability, existing, installed)
 
     expect(setup.prompt).toHaveBeenCalledExactlyOnceWith('Do you want me to set up local AI now?', {
@@ -103,8 +111,39 @@ describe('setup preferences', () => {
     })
     expect(setup.fellows.mock.invocationCallOrder.at(-1))
       .toBeLessThan(setup.prompt.mock.invocationCallOrder.at(-1)!)
-    expect(preferences.remoteLLMProvider).toBe('openai')
+    expect(preferences.setupLocalAI).toBe(setupLocalAI)
+    if (setupLocalAI) {
+      expect(setup.remote).not.toHaveBeenCalled()
+    } else {
+      expect(setup.prompt.mock.invocationCallOrder.at(-1))
+        .toBeLessThan(setup.remote.mock.invocationCallOrder.at(-1)!)
+      expect(preferences.remoteLLMProvider).toBe('openai')
+    }
     expect(preferences.setupVoice).toBe(false)
+  })
+
+  it('keeps a connected account without offering unsupported local AI or another provider', async () => {
+    setup.fellows.mockResolvedValueOnce({ fellowAccount: 'openai.example' })
+    const preferences = await setupPreferences({ canInstallLocalAI: false }, existing, installed)
+
+    expect(preferences.fellowAccount).toBe('openai.example')
+    expect(preferences.setupLocalAI).toBe(false)
+    expect(setup.prompt).not.toHaveBeenCalled()
+    expect(setup.remote).not.toHaveBeenCalled()
+  })
+
+  it('offers optional local AI without rediscovering or replacing an existing remote choice', async () => {
+    setup.prompt.mockResolvedValueOnce(true)
+    const preferences = await setupPreferences(capability, {
+      hasResolvedChoice: true, setupLocalAI: false, targetType: 'remote', label: 'openai/example'
+    }, installed)
+
+    expect(preferences.setupLocalAI).toBe(true)
+    expect(setup.prompt).toHaveBeenCalledExactlyOnceWith('Would you also like me to install local AI?', {
+      type: 'confirm', initial: false, cancel: 'default'
+    })
+    expect(setup.fellows).not.toHaveBeenCalled()
+    expect(setup.remote).not.toHaveBeenCalled()
   })
 
   it('links OpenRouter in manual setup without asking for a model or key', async () => {

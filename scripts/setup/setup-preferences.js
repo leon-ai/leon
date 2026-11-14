@@ -64,55 +64,53 @@ export default async function setupPreferences(
   //   SetupUI.info('Voice is already installed, so I will keep it updated.')
   // }
 
-  if (!hasUsableExistingLLMChoice) {
-    const fellowPreferences = await setupFellows()
+  let connectionPreferences = {}
 
-    if (fellowPreferences) {
-      return { ...defaultPreferences, ...fellowPreferences }
-    }
+  if (!hasUsableExistingLLMChoice) {
+    connectionPreferences = (await setupFellows()) || {}
   }
 
+  const hasSelectedAI =
+    hasUsableExistingLLMChoice || Boolean(connectionPreferences.fellowAccount)
+
   if (!localAICapability.canInstallLocalAI) {
-    if (!hasUsableExistingLLMChoice) {
-      return {
-        ...defaultPreferences,
-        // setupVoice: hasInstalledVoice,
-        ...(await setupRemoteLLM())
-      }
+    if (!hasSelectedAI) {
+      connectionPreferences = await setupRemoteLLM()
     }
 
     return {
       ...defaultPreferences,
       setupLocalAI: hasInstalledLocalAI,
       // setupVoice: hasInstalledVoice
-      setupVoice: false
+      setupVoice: false,
+      ...connectionPreferences
     }
   }
 
   // if (!hasInstalledLocalAI || !hasInstalledVoice) {
   if (!hasInstalledLocalAI) {
     SetupUI.info(
-      'I just have a few quick questions so I can set things up the way you want.'
+      hasSelectedAI
+        ? 'I will keep using your selected AI. You can switch to a local model later.'
+        : 'I just have a few quick questions so I can set things up the way you want.'
     )
   }
 
   const setupLocalAI = hasInstalledLocalAI
     ? true
-    : await setupConsola.prompt('Do you want me to set up local AI now?', {
-        type: 'confirm',
-        initial: false,
-        cancel: 'default'
-      })
+    : await setupConsola.prompt(
+        hasSelectedAI
+          ? 'Would you also like me to install local AI?'
+          : 'Do you want me to set up local AI now?',
+        {
+          type: 'confirm',
+          initial: false,
+          cancel: 'default'
+        }
+      )
 
-  let remoteLLMPreferences = {
-    remoteLLMProvider: '',
-    remoteLLMModel: '',
-    remoteLLMAPIKeyEnv: '',
-    remoteLLMAPIKey: ''
-  }
-
-  if (!setupLocalAI && !hasUsableExistingLLMChoice) {
-    remoteLLMPreferences = await setupRemoteLLM()
+  if (!setupLocalAI && !hasSelectedAI) {
+    connectionPreferences = await setupRemoteLLM()
   }
 
   // const setupVoice = hasInstalledVoice
@@ -128,7 +126,7 @@ export default async function setupPreferences(
     setupLocalAI,
     // setupVoice,
     setupVoice: false,
-    ...remoteLLMPreferences
+    ...connectionPreferences
   }
 
   return preferences
