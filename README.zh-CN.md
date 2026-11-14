@@ -10,9 +10,9 @@
 <p align="center"><em>你的开源个人 AI 助手。</em></p>
 
 <p align="center">
-  <a href="./README.md">English</a> ·
-  <a href="./README.zh-CN.md">简体中文</a> ·
-  <a href="./README.fr.md">Français</a>
+  <a href="./README.md">🇬🇧 English</a> ·
+  <a href="./README.zh-CN.md">🇨🇳 简体中文</a> ·
+  <a href="./README.fr.md">🇫🇷 Français</a>
 </p>
 
 <p align="center">
