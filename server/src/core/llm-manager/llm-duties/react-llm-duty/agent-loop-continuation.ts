@@ -228,10 +228,24 @@ export async function buildAgentContinuationTranscript(
     return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
   }
 
+  // Keep state before the pending user request. A trailing assistant checkpoint
+  // would become a prefill instead of allowing the model to answer that request.
+  const checkpointIndex = rawTranscript.at(-1)?.role === 'user'
+    ? rawTranscript.length - 1
+    : rawTranscript.length
+  const checkpointTranscript = checkpoint
+    ? [
+        ...rawTranscript.slice(0, checkpointIndex),
+        checkpoint,
+        ...rawTranscript.slice(checkpointIndex)
+      ]
+    : rawTranscript
   const parts = splitAgentTranscriptForSummary(
     rawTranscript, forceCompaction, recentExchangeLimit
   )
-  if (!parts) return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
+  if (!parts) {
+    return checkpointTranscript
+  }
 
   // The summary needs textual evidence, not image bytes or opaque replay data.
   // Full tool observations remain in the execution history and artifact logs.
@@ -282,7 +296,7 @@ export async function buildAgentContinuationTranscript(
       : value
   )
   if (replacementText.length >= history.length) {
-    return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
+    return checkpointTranscript
   }
   return [...replacement, ...parts.recent]
 }

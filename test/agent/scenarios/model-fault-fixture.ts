@@ -10,6 +10,7 @@ import { inScenarioWorkspace } from './scenario-fixture'
 export enum ModelFault {
   IncorrectDraft = 'incorrect-draft',
   ContextFailure = 'context-failure',
+  ReviewContextFailure = 'review-context-failure',
   ReasoningStall = 'reasoning-stall',
   OutputStall = 'output-stall'
 }
@@ -25,7 +26,12 @@ export type ModelCall = (
   messages: AgentToolTranscriptMessage[],
   prompt: string,
   tools: OpenAITool[],
-  options: { isCompletionReview?: boolean, isRecoveryAttempt: boolean, isStallRecoveryAttempt?: boolean },
+  options: {
+    isCompletionReview?: boolean
+    isRecoveryAttempt: boolean
+    isStallRecoveryAttempt?: boolean
+    isContextRecoveryAttempt?: boolean
+  },
   ...rest: unknown[]
 ) => Promise<ModelReply | null>
 
@@ -47,6 +53,7 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
         let reviews = 0
         let rejections = 0
         let stallRecoveries = 0
+        let reviewContextRecoveries = 0
         prototype.callAgentModel = async function (...args: Parameters<ModelCall>): Promise<ModelReply | null> {
           const [messages, , , options] = args
           const hasWritten = messages.some((message) => message.role === 'tool' && message.toolName.endsWith('__write'))
@@ -67,6 +74,13 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
           if (!injected && hasWritten && !options.isCompletionReview && fault === ModelFault.ContextFailure) {
             injected = true
             throw new AgentModelProviderError('The controlled provider rejected the context size.', true)
+          }
+          if (!injected && hasWritten && options.isCompletionReview && fault === ModelFault.ReviewContextFailure) {
+            injected = true
+            throw new AgentModelProviderError('The controlled provider rejected the review context size.', true)
+          }
+          if (options.isCompletionReview && options.isContextRecoveryAttempt) {
+            reviewContextRecoveries += 1
           }
 
           const result = await original.apply(this, args)
@@ -105,8 +119,11 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
           if (fault === ModelFault.ReasoningStall || fault === ModelFault.OutputStall) {
             assert.equal(stallRecoveries, 1)
           }
+          if (fault === ModelFault.ReviewContextFailure) {
+            assert.equal(reviewContextRecoveries, 1)
+          }
 
-          return { turn, injected, reviews, rejections, stallRecoveries }
+          return { turn, injected, reviews, rejections, stallRecoveries, reviewContextRecoveries }
         } finally {
           prototype.callAgentModel = original
         }

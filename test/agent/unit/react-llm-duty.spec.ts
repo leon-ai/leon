@@ -1260,6 +1260,72 @@ describe('continuous agent loop', () => {
       .toBe(!['optional', 'default'].includes(scenario))
   })
 
+  it.each(['context', 'truncated'])('recovers a %s completion review without repeating completed tools', async (failure) => {
+    const answer = 'The verified receipt is release-42.'
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName, status: 'success', observation: answer
+    } }))
+    const reviews: Array<{ messages: AgentToolTranscriptMessage[], recovering: boolean }> = []
+    let operationalCalls = 0
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Read the saved receipt and report it.' }],
+      catalog: createCatalog(), executeFunction, loadAgentSkill: async () => null,
+      callModel: async (messages, _tools, options) => {
+        if (!options.isCompletionReview) {
+          operationalCalls += 1
+          return operationalCalls === 1
+            ? { toolCalls: [toolCall('receipt', CALLABLE_TOOL_NAME, { query: 'receipt' })] }
+            : { textContent: answer }
+        }
+
+        reviews.push({ messages: structuredClone(messages), recovering: options.isContextRecoveryAttempt === true })
+        if (reviews.length === 1) {
+          if (failure === 'context') {
+            throw new AgentModelProviderError('The review exceeds native capacity.', true)
+          }
+
+          return { textContent: '{"status":', isTruncated: true }
+        }
+
+        return { textContent: JSON.stringify({ status: 'complete', reason: 'The tool evidence verifies the receipt.' }) }
+      }
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe(answer)
+    expect(executeFunction).toHaveBeenCalledOnce()
+    expect(reviews.map((review) => review.recovering)).toEqual([false, true])
+    expect(reviews[1]!.messages).toEqual(reviews[0]!.messages)
+    expect(reviews[1]!.messages.at(-2)?.content).toBe(answer)
+    expect(JSON.parse(reviews[1]!.messages.at(-1)!.content).completion_review).toBe(true)
+  })
+
+  it('bounds completion review recovery and retains evidence when capacity remains insufficient', async () => {
+    let reviews = 0
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Report the verified receipt.' }],
+      catalog: createCatalog(), initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: 'Verified release-42.'
+      }],
+      executeFunction: vi.fn(), loadAgentSkill: async () => null,
+      callModel: async (_messages, _tools, options) => {
+        if (!options.isCompletionReview) {
+          return { textContent: 'Verified release-42.' }
+        }
+
+        reviews += 1
+        throw new AgentModelProviderError(
+          'The request cannot fit.', !options.isContextRecoveryAttempt, CompletionFailureKind.Context
+        )
+      }
+    })
+
+    expect(reviews).toBe(2)
+    expect(result.intent).toBe('blocked')
+    expect(result.answer).toContain('release-42')
+    expect(result.executionHistory).toHaveLength(1)
+  })
+
   it('does not accept or retry a completion review that outlives the run deadline', async () => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
     const runBudget = new AgentRunBudget(Date.now() + 180_000)
@@ -5055,6 +5121,52 @@ describe('agent automatic compaction', () => {
     expect(transcript).toEqual(before)
   })
 
+  it('retains the proposed answer, review instructions and capability schemas through context reduction', async () => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.LlamaCPP, model: 'local.gguf'
+    })
+    coreMocks.getAgentNativeContextWindowTokens.mockResolvedValueOnce(16_384)
+    const answer = 'The verified receipt is release-42.'
+    const review = JSON.stringify({ completion_review: true, review_instructions: 'Verify the exact receipt against the tool evidence.' })
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Report the verified receipt.' }]
+    for (let index = 0; index < 8; index += 1) {
+      transcript.push(
+        { role: 'assistant', content: '', toolCalls: [toolCall(`receipt-${index}`, CALLABLE_TOOL_NAME, { query: 'receipt' })] },
+        { role: 'tool', toolCallId: `receipt-${index}`, toolName: CALLABLE_TOOL_NAME, content: 'Verified details. '.repeat(2_000) }
+      )
+    }
+    transcript.push({ role: 'assistant', content: answer }, { role: 'user', content: review })
+    const before = JSON.stringify(transcript).length
+    const tools = createCatalog().tools
+    coreMocks.prompt.mockImplementation(async (_history, params) => ({
+      output: params.usagePurpose === InferencePurpose.ContextCompaction
+        ? 'The receipt was verified as release-42.'
+        : JSON.stringify({ status: 'complete', reason: 'The receipt matches.' })
+    }))
+    const duty = new ReActLLMDuty({ input: 'Report the verified receipt.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    await duty['callAgentModel'](transcript, 'Follow the review instructions.', tools, {
+      isRecoveryAttempt: false, isCompletionReview: true,
+      isCompletionReviewRetry: true, isContextRecoveryAttempt: true
+    }, {
+      originalInput: 'Report the verified receipt.', trackedSteps: [],
+      executionHistory: [{ function: callable.qualifiedName, status: 'success', observation: JSON.stringify({
+        message: answer, output_log_path: '/tmp/receipt.log'
+      }) }], loadedToolkitIds: [], activeSkillId: null
+    })
+
+    const [messages, params] = coreMocks.prompt.mock.calls.at(-1)!
+    expect(JSON.stringify(messages).length).toBeLessThan(before)
+    expect(messages).toContainEqual({ role: 'assistant', content: answer })
+    expect(messages).toContainEqual({ role: 'user', content: review })
+    expect(messages.at(-1)).toEqual({ role: 'user', content: review })
+    expect(JSON.stringify(messages)).toContain('/tmp/receipt.log')
+    expect(params.tools).toEqual(tools)
+    expect(params.toolChoice).toBe('none')
+    expect(params.data).toMatchObject({ type: 'object', required: expect.arrayContaining(['reason', 'status']) })
+  })
+
   it('keeps clock and mood changes outside reusable duty rules', () => {
     const persona = Object.assign(Object.create(Persona.prototype), {
       contextInfo: 'Clock one', whoYouAre: 'Owner facts', whatYouDo: 'Profile facts',
@@ -5636,6 +5748,53 @@ describe('model response status', () => {
       isRecoveryAttempt: true, isContextRecoveryAttempt: true
     })
     expect(summarize).toHaveBeenCalledOnce()
+  })
+
+  it.each([undefined, 16_384])('uses native admission for recovery above the estimated target (capacity=%s)', async (capacity) => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.LlamaCPP, model: 'local.gguf'
+    })
+    coreMocks.getAgentNativeContextWindowTokens.mockResolvedValueOnce(capacity)
+    coreMocks.prompt.mockResolvedValueOnce({ output: 'Verified release-42.', usedInputTokens: 6_000 })
+    const duty = new ReActLLMDuty({ input: 'Report the receipt.' })
+    Object.assign(duty, { continuationSummaryFailed: true, writeAgentPromptLog: vi.fn() })
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Report release-42.' }]
+    const request = duty['callAgentModel'](transcript, 'Required instructions. '.repeat(2_000), [], {
+      isRecoveryAttempt: true, isContextRecoveryAttempt: true
+    })
+
+    if (capacity) {
+      await expect(request).resolves.toMatchObject({ textContent: 'Verified release-42.' })
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    } else {
+      await expect(request).rejects.toMatchObject({ failureKind: CompletionFailureKind.Context })
+      expect(coreMocks.prompt).not.toHaveBeenCalled()
+    }
+  })
+
+  it('admits a first review before summarizing already recovered evidence again', async () => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.LlamaCPP, model: 'local.gguf'
+    })
+    coreMocks.getAgentNativeContextWindowTokens.mockResolvedValueOnce(16_384)
+    coreMocks.prompt.mockResolvedValueOnce({
+      output: JSON.stringify({ reason: 'The receipt matches.', status: 'complete', out_of_scope_steps: [] }),
+      usedInputTokens: 6_000
+    })
+    const duty = new ReActLLMDuty({ input: 'Report the verified receipt.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const summarize = vi.spyOn(duty as unknown as {
+      prepareContinuation(): Promise<AgentToolTranscriptMessage[]>
+    }, 'prepareContinuation')
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Report release-42.' }]
+
+    await duty['callAgentModel'](transcript, 'Required instructions. '.repeat(2_000), [], {
+      isRecoveryAttempt: false, isCompletionReview: true, isContextRecoveryAttempt: true
+    })
+
+    expect(summarize).not.toHaveBeenCalled()
+    expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    expect(coreMocks.prompt.mock.calls[0]![0]).toEqual(transcript)
   })
 
   it('retains the prepared prompt estimate when an adapter reports no input usage', async () => {

@@ -1313,7 +1313,11 @@ export class ReActLLMDuty extends LLMDuty {
     const nativeContextWindowTokens = providerName === LLMProviders.LlamaCPP
       ? await LLM_PROVIDER.getAgentNativeContextWindowTokens()
       : undefined
-    const nativeContextAdmission = Boolean(nativeContextWindowTokens) && !options.isContextRecoveryAttempt
+    // Operational recovery does not imply the later review is oversized too.
+    // Count its first request before spending the shared deadline on reduction.
+    const nativeContextAdmission = Boolean(nativeContextWindowTokens) &&
+      (!options.isContextRecoveryAttempt ||
+        (options.isCompletionReview && !options.isCompletionReviewRetry))
     const providerManagesContext = nativeContextAdmission || (
       providerName === LLMProviders.OpenAI &&
       !this.automaticCompactionFailed && !options.hasPendingImages
@@ -1338,9 +1342,14 @@ export class ReActLLMDuty extends LLMDuty {
         : options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
     let hasAttemptedSummary = false
+    // Rejected requests need a fresh reduction even if estimates look small.
+    // Later productive calls retain their evidence until pressure grows again.
+    const requiresContextReduction = options.isContextRecoveryAttempt &&
+      (options.isRecoveryAttempt || options.isCompletionReviewRetry)
     while (
       !providerManagesContext &&
-      preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
+      (preparedContext.estimatedInputTokens > contextCompactionTriggerTokens ||
+        (requiresContextReduction && !hasAttemptedSummary))
     ) {
       executionSignal?.throwIfAborted()
       this.runBudget?.throwIfExpired()
@@ -1388,8 +1397,11 @@ export class ReActLLMDuty extends LLMDuty {
         compactionTriggerTokens: contextCompactionTriggerTokens
       })
     }
+    // The ratio guides compaction; native admission decides whether the final
+    // serialized request fits, including output space and template overhead.
     if (
       !providerManagesContext &&
+      !nativeContextWindowTokens &&
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
     ) {
       LogHelper.warning(
@@ -1439,10 +1451,11 @@ export class ReActLLMDuty extends LLMDuty {
       : undefined
     // Claude's response schema changes its cached system prefix. Keep the
     // first review cacheable, using constrained JSON only to recover a retry.
+    // llama.cpp declares schema support independently of cataloged models.
     const responseSchema = options.isImageInspection && modelCapabilities?.supportsStructuredOutput
       ? AGENT_IMAGE_INSPECTION_SCHEMA
       : options.isCompletionReview &&
-      modelCapabilities?.supportsStructuredOutput &&
+      (modelCapabilities?.supportsStructuredOutput || providerName === LLMProviders.LlamaCPP) &&
       (providerName !== LLMProviders.Anthropic || options.isCompletionReviewRetry)
       ? AGENT_COMPLETION_REVIEW_SCHEMA
       : undefined
