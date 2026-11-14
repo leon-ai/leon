@@ -32,9 +32,12 @@ import { SetupUI } from './setup-ui'
 
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
 const { cpuArchitecture: CPU_ARCH } = SystemHelper.getInformation()
-const LLAMA_SERVER_BINARY_NAME = SystemHelper.isWindows()
-  ? 'llama-server.exe'
-  : 'llama-server'
+const LLAMACPP_BUILD_TARGETS = ['llama-server', 'llama-fit-params']
+const LLAMACPP_BINARY_NAMES = LLAMACPP_BUILD_TARGETS.map((target) =>
+  SystemHelper.isWindows() ? `${target}.exe` : target
+)
+const LLAMA_SERVER_BINARY_NAME = LLAMACPP_BINARY_NAMES[0]
+const LLAMACPP_HEALTH_CHECK_TIMEOUT_MS = 10_000
 const LLAMACPP_SOURCE_DOWNLOAD_MAX_ATTEMPTS = 2
 const LLAMACPP_SOURCE_ARCHIVE_SETTLE_DELAY_MS = 500
 const LLAMACPP_SOURCE_ARCHIVE_SETTLE_POLL_DELAY_MS = 250
@@ -130,14 +133,14 @@ async function isExistingInstallationHealthy(runtimeDirectoryPath) {
     return false
   }
 
-  const binaryPath = getBinaryPath(runtimeDirectoryPath)
-
-  if (!fs.existsSync(binaryPath)) {
-    return false
-  }
-
   try {
-    await execa(binaryPath, ['--version'])
+    // Automatic context sizing needs the fitter as well as the inference server.
+    // Launch both to verify their shared libraries survived installation.
+    for (const binaryName of LLAMACPP_BINARY_NAMES) {
+      await execa(path.join(runtimeDirectoryPath, binaryName), ['--version'], {
+        timeout: LLAMACPP_HEALTH_CHECK_TIMEOUT_MS
+      })
+    }
 
     return true
   } catch {
@@ -349,6 +352,10 @@ async function installPrebuilt(assetName, status, extraData = {}) {
       )
     }
 
+    if (!await isExistingInstallationHealthy(binaryDirectoryPath)) {
+      throw new Error('The llama.cpp runtime is incomplete or cannot start.')
+    }
+
     await writeManifest(
       LLAMACPP_BUILD_MANIFEST_PATH,
       LLAMACPP_BUILD_PATH,
@@ -388,6 +395,7 @@ async function buildFromSource(status) {
         'Ninja',
         `-DCMAKE_MAKE_PROGRAM=${NINJA_BIN_PATH}`,
         '-DGGML_CUDA=ON',
+        '-DLLAMA_BUILD_TOOLS=ON',
         '-DLLAMA_BUILD_SERVER=ON',
         '-DLLAMA_BUILD_TESTS=OFF',
         '-DLLAMA_BUILD_EXAMPLES=OFF',
@@ -398,9 +406,13 @@ async function buildFromSource(status) {
         cwd: LLAMACPP_SOURCE_PATH
       }
     )
-    await execa(CMAKE_BIN_PATH, ['--build', 'build', '--target', 'llama-server', '-j'], {
-      cwd: LLAMACPP_SOURCE_PATH
-    })
+    await execa(
+      CMAKE_BIN_PATH,
+      ['--build', 'build', '--target', ...LLAMACPP_BUILD_TARGETS, '-j'],
+      {
+        cwd: LLAMACPP_SOURCE_PATH
+      }
+    )
 
     if (
       !fs.existsSync(getBinaryPath(LLAMACPP_SOURCE_BUILD_PATH))
@@ -412,6 +424,11 @@ async function buildFromSource(status) {
 
     // Retain only the runtime payload after a successful source build.
     await pruneSourceTree()
+
+    if (!await isExistingInstallationHealthy(LLAMACPP_SOURCE_BUILD_PATH)) {
+      throw new Error('The llama.cpp runtime is incomplete or cannot start.')
+    }
+
     await writeManifest(
       LLAMACPP_SOURCE_MANIFEST_PATH,
       LLAMACPP_SOURCE_PATH,
@@ -466,7 +483,7 @@ export default async function setupLlamaCPP() {
     hasGPU = await SystemHelper.hasGPU(llama)
     graphicsComputeAPI = await SystemHelper.getGraphicsComputeAPI(llama)
   } catch (error) {
-      status.pause()
+    status.pause()
     SetupUI.warning(`Failed to inspect GPU support for llama.cpp setup: ${error}`)
   }
 
