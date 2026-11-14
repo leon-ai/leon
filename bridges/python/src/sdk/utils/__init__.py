@@ -265,7 +265,8 @@ def format_eta(eta_str: str) -> str:
 def extract_archive(
     archive_path: str,
     target_path: str,
-    strip_components: Optional[int] = 0
+    strip_components: Optional[int] = 0,
+    preserve_metadata: bool = False,
 ) -> None:
     """Extract archives using native commands, with a ZIP fallback on minimal hosts.
     
@@ -275,6 +276,7 @@ def extract_archive(
         archive_path: The path to the archive file
         target_path: The path to extract to
         strip_components: Number of leading path components to strip (for tar archives)
+        preserve_metadata: Require native extraction to preserve bundle modes and links
         
     Example:
         extract_archive('archive.zip', 'output/dir')
@@ -302,6 +304,8 @@ def extract_archive(
                         capture_output=True
                     )
             except FileNotFoundError:
+                if preserve_metadata:
+                    raise
                 from .archive import extract_zip_archive
 
                 extract_zip_archive(archive_path, target_path)

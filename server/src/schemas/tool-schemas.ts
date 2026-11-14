@@ -228,12 +228,25 @@ const toolManifestObject = Type.Object(
           minLength: 1,
           description: 'Platform identifier for a downloadable binary.'
         }),
-        Type.String({
-          minLength: 1,
-          description: 'Download URL for the platform-specific binary.'
-        }),
+        Type.Union([
+          Type.String({
+            minLength: 1,
+            description: 'Download URL for the platform-specific binary.'
+          }),
+          Type.Object({
+            url: Type.String({ minLength: 1 }),
+            executable: Type.Optional(Type.String({
+              minLength: 1,
+              description: 'Relative archive entrypoint. Preserves the entire extracted bundle.'
+            })),
+            sha256: Type.Optional(Type.String({
+              pattern: '^[a-fA-F0-9]{64}$',
+              description: 'Expected SHA-256 of the downloaded asset, verified before extraction.'
+            }))
+          }, { additionalProperties: false })
+        ]),
         {
-          description: 'Map of platform identifiers to binary download URLs.'
+          description: 'Map of platform identifiers to managed binary sources.'
         }
       )
     ),

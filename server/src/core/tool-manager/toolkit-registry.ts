@@ -11,6 +11,7 @@ import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ConnectionStatus } from '@/core/connections/connection-store'
 import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
+import type { ToolBinary } from '@@/bridges/runtime/contracts/tool-binary'
 import type { ToolTimeoutPolicy } from '@@/bridges/runtime/contracts/tool-runtime-types'
 import { ToolConcurrency, type ToolCompletionReview } from '@/types'
 import type {
@@ -46,7 +47,7 @@ interface ToolkitToolDefinition {
   concurrency?: ToolConcurrency
   progressive_guidance?: string
   icon_name?: string
-  binaries?: Record<string, string>
+  binaries?: Record<string, ToolBinary>
   resources?: Record<string, string[]>
   connection?: ToolConnectionSchema
   functions: Record<

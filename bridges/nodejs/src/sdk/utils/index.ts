@@ -185,6 +185,7 @@ export async function extractArchive(
   targetPath: string,
   options?: {
     stripComponents?: number
+    preserveMetadata?: boolean
   }
 ): Promise<void> {
   const stripComponents = options?.stripComponents ?? 0
@@ -210,7 +211,7 @@ export async function extractArchive(
           })
         }
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        if (options?.preserveMetadata || (error as NodeJS.ErrnoException).code !== 'ENOENT') {
           throw error
         }
 

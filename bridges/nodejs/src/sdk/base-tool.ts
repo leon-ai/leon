@@ -8,11 +8,16 @@ import { ToolRuntimePhase } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { spawn, execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { resolveToolBinaryPath } from '@@/bridges/runtime/nodejs/tool-binary'
+import type { ToolBinary } from '@@/bridges/runtime/contracts/tool-binary'
+import {
+  normalizeToolBinaryEntrypoint,
+  resolveToolBinaryInstallationPath,
+  resolveToolBinaryPath
+} from '@@/bridges/runtime/nodejs/tool-binary'
 import { DownloadTracker, type DownloadFile } from './utils/download'
 
 import {
@@ -921,9 +926,9 @@ export abstract class Tool {
     // Get tool name without "Tool" suffix for config lookup
     const toolConfigName = this.toolName.toLowerCase().replace('tool', '')
     const config = ToolkitConfig.load(this.toolkit, toolConfigName)
-    const binaryUrl = ToolkitConfig.getBinaryUrl(config)
+    const binary = ToolkitConfig.getBinary(config)
 
-    if (!binaryUrl) {
+    if (!binary) {
       await this.report('bridges.tools.no_binary_url', {
         binary_name: binaryName
       })
@@ -931,11 +936,18 @@ export abstract class Tool {
     }
 
     const binaryPath = resolveToolBinaryPath(
-      LEON_TOOLKITS_PATH, this.toolkit, binaryUrl, isWindows()
+      LEON_TOOLKITS_PATH, this.toolkit, binary, isWindows()
     )
-    const binsPath = path.dirname(binaryPath)
-    const executable = path.basename(binaryPath)
-    const binaryExists = fs.existsSync(binaryPath)
+    const installationPath = resolveToolBinaryInstallationPath(
+      LEON_TOOLKITS_PATH, this.toolkit, binary, isWindows()
+    )
+    const binsPath = path.dirname(installationPath)
+    const executable = path.basename(installationPath)
+    const binaryExists = fs.existsSync(binaryPath) && fs.statSync(binaryPath).isFile()
+
+    if (!binaryExists && fs.existsSync(installationPath)) {
+      throw new Error(`Managed binary installation is incomplete: ${installationPath}`)
+    }
 
     // Reusing an executable needs no preparation or repeated permission changes.
     if (binaryExists) {
@@ -966,13 +978,18 @@ export abstract class Tool {
 
       // Ensure binary is available before returning path
       if (!binaryExists) {
-        await this.downloadBinaryOnDemand(binaryName, binaryUrl, executable)
+        await this.downloadBinaryOnDemand(binaryName, binary, executable)
       } else if (!isWindows()) {
         await this.report('bridges.tools.applying_permissions', {
           binary_name: binaryName
         })
         fs.chmodSync(binaryPath, 0o755)
       }
+
+      if (!fs.statSync(binaryPath).isFile()) {
+        throw new Error(`Managed binary entrypoint is not a file: ${binaryPath}`)
+      }
+      fs.accessSync(binaryPath, isWindows() ? fs.constants.F_OK : fs.constants.X_OK)
 
       await this.report('bridges.tools.binary_ready', {
         binary_name: binaryName
@@ -1433,7 +1450,7 @@ export abstract class Tool {
    */
   private async downloadBinaryOnDemand(
     binaryName: string,
-    binaryUrl: string,
+    binary: ToolBinary,
     executable: string
   ): Promise<void> {
     const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
@@ -1441,16 +1458,19 @@ export abstract class Tool {
 
     try {
       const binaryPath = path.join(binsPath, executable)
-      const stagedBinaryPath = path.join(stagingPath, executable)
+      const stagedInstallationPath = path.join(stagingPath, executable)
+      const entrypoint = typeof binary !== 'string' ? binary.executable : undefined
+      const stagedBinaryPath = entrypoint !== undefined
+        ? path.join(stagedInstallationPath, normalizeToolBinaryEntrypoint(entrypoint))
+        : stagedInstallationPath
       fs.mkdirSync(stagingPath, { recursive: true })
 
       await this.report('bridges.tools.binary_not_found', {
         binary_name: binaryName
       })
 
-      // Publish only a complete executable. Parallel workers must never observe
-      // an archive download or extraction in progress as an installed binary.
-      await this.downloadBinary(binaryUrl, stagedBinaryPath, binaryName)
+      // Publish only complete installations, including dependent bundle files.
+      await this.downloadBinary(binary, stagedInstallationPath, binaryName)
 
       await this.report('bridges.tools.binary_downloaded', {
         binary_name: binaryName
@@ -1465,13 +1485,13 @@ export abstract class Tool {
       }
 
       // Remove quarantine attribute on macOS to prevent Gatekeeper blocking
-      if (isMacOS()) {
+      if (isMacOS() && entrypoint === undefined) {
         await this.removeQuarantineAttribute(stagedBinaryPath)
       }
 
       if (!fs.existsSync(binaryPath)) {
         try {
-          fs.renameSync(stagedBinaryPath, binaryPath)
+          fs.renameSync(stagedInstallationPath, binaryPath)
         } catch (error) {
           // Windows can reject a rename when another worker published first.
           if (!fs.existsSync(binaryPath)) {
@@ -1480,7 +1500,10 @@ export abstract class Tool {
         }
       }
 
-      await this.deleteOlderBinaryVersions(binsPath, executable)
+      // Bundles may still be used by another worker; retain their versioned roots.
+      if (typeof binary === 'string') {
+        await this.deleteOlderBinaryVersions(binsPath, executable)
+      }
     } catch (error) {
       await this.report('bridges.tools.download_failed', {
         binary_name: binaryName,
@@ -1515,16 +1538,24 @@ export abstract class Tool {
    * If the downloaded file is an archive, it will be extracted automatically
    */
   private async downloadBinary(
-    url: string,
+    binary: ToolBinary,
     outputPath: string,
     binaryName: string
   ): Promise<void> {
+    const url = typeof binary === 'string' ? binary : binary.url
+    const entrypoint = typeof binary !== 'string' ? binary.executable : undefined
+    const checksum = typeof binary !== 'string' ? binary.sha256 : undefined
+
     try {
       await this.report('bridges.tools.downloading_from_url')
 
       // Determine if the URL points to an archive
       const urlPath = new URL(url).pathname
       const isArchiveDownload = this.isArchive(urlPath)
+
+      if (entrypoint !== undefined && !isArchiveDownload) {
+        throw new Error('A bundle executable entrypoint requires an archive URL')
+      }
 
       // If it's an archive, download to a temporary path with proper extension
       let downloadPath = outputPath
@@ -1543,6 +1574,21 @@ export abstract class Tool {
 
       await this.downloadFile(url, downloadPath)
 
+      if (checksum !== undefined) {
+        if (!/^[a-fA-F0-9]{64}$/.test(checksum)) {
+          throw new Error('Invalid binary SHA-256 declaration')
+        }
+
+        const hash = createHash('sha256')
+        for await (const chunk of fs.createReadStream(downloadPath)) {
+          hash.update(chunk)
+        }
+
+        if (hash.digest('hex') !== checksum.toLowerCase()) {
+          throw new Error('Downloaded binary SHA-256 does not match its declaration')
+        }
+      }
+
       // If it's an archive, extract it
       if (isArchiveDownload) {
         await this.report('bridges.tools.extracting_archive', {
@@ -1553,7 +1599,26 @@ export abstract class Tool {
         const tempExtractPath = outputPath + '.extracted'
 
         // Try extracting without strip first to see the structure
-        await extractArchive(downloadPath, tempExtractPath)
+        await extractArchive(downloadPath, tempExtractPath, {
+          preserveMetadata: entrypoint !== undefined
+        })
+
+        if (entrypoint !== undefined) {
+          const entryPath = path.join(tempExtractPath, normalizeToolBinaryEntrypoint(entrypoint))
+          const relative = path.relative(fs.realpathSync(tempExtractPath), fs.realpathSync(entryPath))
+
+          if (
+            relative === '..' || relative.startsWith(`..${path.sep}`) ||
+            path.isAbsolute(relative) || !fs.statSync(entryPath).isFile()
+          ) {
+            throw new Error('Bundle executable must be a file inside the extracted archive')
+          }
+
+          fs.renameSync(tempExtractPath, outputPath)
+          fs.rmSync(downloadPath, { force: true })
+          await this.report('bridges.tools.archive_extracted', { binary_path: outputPath })
+          return
+        }
 
         // Find the binary in the extracted directory (recursively if needed)
         const files: string[] = []
