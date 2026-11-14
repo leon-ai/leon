@@ -46,6 +46,7 @@ export async function downloadLocalLLM(selected) {
     repository: selected.repository,
     revision: selected.revision,
     sha256: selected.checksum,
+    kvCacheType: selected.kvCacheType,
     ...(selected.contextPlan ? {
       contextWindowTokens: selected.contextPlan.contextTokens,
       estimatedMemoryMiB: selected.contextPlan.estimatedMiB,

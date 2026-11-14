@@ -34,6 +34,8 @@ llm:
       # Context is fitted to available memory and the model's native limit.
       # Set a fixed capacity to override automatic sizing.
       # context_size: 32768
+      # Q8 KV cache is the default. Q4 saves context memory at some accuracy cost.
+      # kv_cache_type: q4_0
       # Automatic sizing reserves 10% of RAM (at least 2 GiB) and device memory
       # (at least 1 GiB), plus a bounded host prompt cache. Override the reserve:
       # memory_reserve_mib: 4096

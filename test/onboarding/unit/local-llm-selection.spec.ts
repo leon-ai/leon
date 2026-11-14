@@ -14,7 +14,8 @@ const fixture = await vi.hoisted(async () => {
   return {
     root: await fs.mkdtemp(path.join(os.tmpdir(), 'leon-model-selection-')),
     run: vi.fn(), get: vi.fn(), read: vi.fn(), fit: vi.fn(),
-    budget: { hostBudgetMiB: 12_000, cacheMiB: 1_000, unifiedMemory: true }
+    budget: { hostBudgetMiB: 12_000, cacheMiB: 1_000, unifiedMemory: true },
+    settings: {} as { context_size?: number, kv_cache_type?: 'q4_0' | 'q8_0' }
   }
 })
 
@@ -22,10 +23,11 @@ vi.mock('@/constants', () => ({
   LLM_DIR_PATH: path.join(fixture.root, 'models'),
   LLMFIT_INSTALL_PATH: path.join(fixture.root, 'bin'),
   TMP_PATH: path.join(fixture.root, 'tmp'),
-  MINIMUM_LOCAL_CONTEXT_TOKENS: 4_096
+  MINIMUM_LOCAL_CONTEXT_TOKENS: 4_096,
+  LLAMACPP_DEFAULT_KV_CACHE_TYPE: 'q8_0'
 }))
 vi.mock('@/config', () => ({
-  CONFIG_MANAGER: { getConfig: (): object => ({ llm: { providers: {} } }) }
+  CONFIG_MANAGER: { getConfig: (): object => ({ llm: { providers: { llamacpp: fixture.settings } } }) }
 }))
 vi.mock('@/helpers/runtime-helper', () => ({ RuntimeHelper: { runBinary: fixture.run } }))
 vi.mock('@/helpers/system-helper', () => ({ SystemHelper: {
@@ -40,13 +42,16 @@ vi.mock('@/core/llm-manager/llm-providers/llamacpp-context', () => ({
   LlamaCPPCapacityError: class extends Error {},
   getLlamaCPPHostMemoryBudget: (): object => fixture.budget,
   getLlamaCPPServerBinaryPath: (): string => '/fixture/llama-server',
-  getLlamaCPPModelArguments: (model: string): string[] => ['--model', model],
+  getLlamaCPPModelArguments: (model: string, cacheType: string): string[] => [
+    '--model', model, '--cache-type-k', cacheType, '--cache-type-v', cacheType
+  ],
   resolveLlamaCPPContextPlan: fixture.fit
 }))
 
 beforeEach(() => {
   fixture.budget.hostBudgetMiB = 12_000
   fixture.budget.unifiedMemory = true
+  fixture.settings = {}
   fixture.get.mockReset().mockImplementation(async (url: string, options?: { responseType?: string }) =>
     options?.responseType === 'arraybuffer' ? { data: Buffer.from('GGUF') } : { data: {
     sha: 'pinned-revision',

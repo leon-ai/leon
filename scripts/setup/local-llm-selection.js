@@ -4,7 +4,10 @@ import { createHash } from 'node:crypto'
 
 import axios from 'axios'
 
-import { LLM_DIR_PATH, LLMFIT_INSTALL_PATH, TMP_PATH, MINIMUM_LOCAL_CONTEXT_TOKENS } from '@/constants'
+import {
+  LLM_DIR_PATH, LLMFIT_INSTALL_PATH, TMP_PATH,
+  MINIMUM_LOCAL_CONTEXT_TOKENS, LLAMACPP_DEFAULT_KV_CACHE_TYPE
+} from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
@@ -152,14 +155,15 @@ async function inspectCandidate(candidate, directory, binary, settings, readGguf
   }
   await fs.promises.truncate(modelPath, candidate.sizeBytes)
 
+  const kvCacheType = settings?.kv_cache_type ?? LLAMACPP_DEFAULT_KV_CACHE_TYPE
   const contextPlan = await resolveLlamaCPPContextPlan(binary,
-    [...getLlamaCPPModelArguments(modelPath), '--gpu-layers', 'all'],
+    [...getLlamaCPPModelArguments(modelPath, kvCacheType), '--gpu-layers', 'all'],
     settings?.memory_reserve_mib, settings?.context_size)
   // Compare baseline decode speed at one common context. Catalog KV estimates
   // must not apply fictitious offload penalties to a native-verified placement.
   const estimate = await runLLMFit([
     'plan', candidate.modelId, '--context', String(MINIMUM_LOCAL_CONTEXT_TOKENS),
-    '--quant', candidate.precision, '--kv-quant', 'q8_0'
+    '--quant', candidate.precision, '--kv-quant', kvCacheType
   ])
   const estimatedTPS = estimate.run_paths?.find((entry) =>
     entry.path === (hardware.hasGPU ? 'gpu' : 'cpu_only'))?.estimated_tps
@@ -167,7 +171,7 @@ async function inspectCandidate(candidate, directory, binary, settings, readGguf
     throw new Error(`Missing throughput estimate for ${candidate.fileName}.`)
   }
 
-  return { ...candidate, maximumContextTokens: Math.min(maximumContextTokens,
+  return { ...candidate, kvCacheType, maximumContextTokens: Math.min(maximumContextTokens,
     settings?.context_size ?? maximumContextTokens), contextPlan, estimatedTPS }
 }
 

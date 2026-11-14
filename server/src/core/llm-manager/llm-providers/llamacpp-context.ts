@@ -5,11 +5,17 @@ import {
   LLAMACPP_BUILD_PATH, LLAMACPP_BUILD_MANIFEST_PATH,
   LLAMACPP_PATH, LLAMACPP_ROOT_MANIFEST_PATH,
   LLAMACPP_SOURCE_BUILD_PATH, LLAMACPP_SOURCE_PATH, LLAMACPP_SOURCE_MANIFEST_PATH,
-  MINIMUM_LOCAL_CONTEXT_TOKENS
+  MINIMUM_LOCAL_CONTEXT_TOKENS, LLAMACPP_DEFAULT_KV_CACHE_TYPE
 } from '@/constants'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CPUArchitectures } from '@/types'
+import type { LeonConfigSchema } from '@/schemas/core-schemas'
+
+/**
+ * Owner-selected precision shared by KV memory estimates and inference.
+ */
+export type LlamaCPPKVCacheType = NonNullable<LeonConfigSchema['llm']['providers']['llamacpp']['kv_cache_type']>
 
 const BYTES_PER_MIB = 1_024 * 1_024
 const MIB_PER_GIB = 1_024
@@ -55,9 +61,12 @@ export function getLlamaCPPServerBinaryPath(): string {
 /**
  * Keep setup estimates aligned with the native inference allocation settings.
  */
-export function getLlamaCPPModelArguments(modelPath: string): string[] {
+export function getLlamaCPPModelArguments(
+  modelPath: string,
+  kvCacheType: LlamaCPPKVCacheType = LLAMACPP_DEFAULT_KV_CACHE_TYPE
+): string[] {
   return ['--model', modelPath, '--flash-attn', 'on',
-    '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0']
+    '--cache-type-k', kvCacheType, '--cache-type-v', kvCacheType]
 }
 
 enum MemoryKind {

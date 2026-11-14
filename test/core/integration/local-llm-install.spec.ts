@@ -22,7 +22,8 @@ vi.mock('@/constants', () => ({
   LLM_DIR_PATH: fixture.root,
   LLM_MANIFEST_PATH: path.join(fixture.root, 'manifest.json'),
   LLAMACPP_RELEASE_VERSION: 'fixture-runtime',
-  MINIMUM_LOCAL_CONTEXT_TOKENS: 4_096
+  MINIMUM_LOCAL_CONTEXT_TOKENS: 4_096,
+  LLAMACPP_DEFAULT_KV_CACHE_TYPE: 'q8_0'
 }))
 vi.mock('@/config', () => ({ CONFIG_MANAGER: {
   getConfig: (): object => ({ llm: fixture.config }), setValue: fixture.setValue
@@ -71,7 +72,7 @@ function selected(fileName: string): Record<string, unknown> {
     sizeBytes: weights.length, downloadURL: endpoint,
     checksum: createHash('sha256').update(weights).digest('hex'),
     repository: 'publisher/fixture', revision: 'pinned-revision',
-    estimatedTPS: 25, score: 90,
+    estimatedTPS: 25, score: 90, kvCacheType: 'q4_0',
     contextPlan: { contextTokens: 65_536, estimatedMiB: 8_000,
       hostBudgetMiB: 12_000, memoryBudgetMiB: 12_000 }
   }
@@ -93,6 +94,7 @@ describe('managed model downloads', () => {
     const metadata = JSON.parse(await fs.readFile(`${installed}.manifest.json`, 'utf8'))
     expect(metadata.revision).toBe('pinned-revision')
     expect(metadata.contextWindowTokens).toBe(65_536)
+    expect(metadata.kvCacheType).toBe('q4_0')
   })
 
   it('retains working weights when a replacement fails checksum verification', async () => {

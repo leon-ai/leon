@@ -20,7 +20,7 @@ import {
   LLAMACPP_MAX_OUTPUT_TOKENS
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
-import { getLlamaCPPServerBinaryPath, getLlamaCPPModelArguments, resolveLlamaCPPContextPlan } from './llamacpp-context'
+import { getLlamaCPPServerBinaryPath, getLlamaCPPModelArguments, resolveLlamaCPPContextPlan, type LlamaCPPKVCacheType } from './llamacpp-context'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { recordInferenceUsage, getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -168,6 +168,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   private readonly configuredBaseURL: string
   private readonly contextSize: number | undefined
   private readonly memoryReserveMiB: number | undefined
+  private readonly kvCacheType: LlamaCPPKVCacheType | undefined
 
   constructor(target: ResolvedLLMTarget) {
     const baseURL = CONFIG_MANAGER.getProviderBaseURL('llamacpp') || DEFAULT_LLAMACPP_BASE_URL
@@ -204,6 +205,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     this.configuredBaseURL = baseURL
     this.contextSize = CONFIG_MANAGER.getConfig().llm.providers?.llamacpp?.context_size
     this.memoryReserveMiB = CONFIG_MANAGER.getConfig().llm.providers?.llamacpp?.memory_reserve_mib
+    this.kvCacheType = CONFIG_MANAGER.getConfig().llm.providers?.llamacpp?.kv_cache_type
     LlamaCPPLLMProvider.instanceCount += 1
   }
 
@@ -789,7 +791,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       this.modelPath,
       this.configuredBaseURL,
       this.contextSize,
-      this.memoryReserveMiB
+      this.memoryReserveMiB,
+      this.kvCacheType
     )
     LlamaCPPLLMProvider.serverReadyPromise = startupPromise
 
@@ -807,7 +810,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     modelPath: string,
     baseURL: string,
     contextSize: number | undefined,
-    memoryReserveMiB: number | undefined
+    memoryReserveMiB: number | undefined,
+    kvCacheType: LlamaCPPKVCacheType | undefined
   ): Promise<void> {
     this.contextWindowTokens = undefined
     this.configuredBaseURL = baseURL
@@ -854,7 +858,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     this.writeServerLogLine(
       `Starting llama-server with model "${modelPath}".`
     )
-    const modelArguments = getLlamaCPPModelArguments(modelPath)
+    const modelArguments = getLlamaCPPModelArguments(modelPath, kvCacheType)
     const contextPlan = contextSize === undefined
       ? await resolveLlamaCPPContextPlan(binaryPath, modelArguments, memoryReserveMiB)
       : undefined
