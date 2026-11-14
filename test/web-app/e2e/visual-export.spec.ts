@@ -59,8 +59,8 @@ test('exports complete Markdown tables and diagrams locally on demand', async ({
   page.on('request', (request) => requests.push(request.url()))
   await page.goto(SESSION_URL)
   const table = page.locator('.exportable-visual').filter({ has: page.getByRole('table') })
-  const diagram = page.locator('.exportable-visual').filter({ has: page.getByRole('button', { name: 'Enlarge diagram' }) })
-  await expect(diagram.locator('svg').first()).toBeVisible()
+  const diagram = page.locator('.markdown-code').filter({ has: page.getByRole('button', { name: 'Enlarge diagram' }) })
+  await expect(diagram.locator('.markdown-diagram > svg')).toBeVisible()
   expect(requests.some((url) => url.includes('/capture-image-'))).toBe(false)
   const width = (await table.getByRole('table').boundingBox())!.width
   expect(width).toBeGreaterThan(560)

@@ -36,11 +36,12 @@ let cacheCharacters = 0
 /**
  * Loads only completed diagrams' parsers, retaining bounded, sanitized SVGs.
  */
-export default function MarkdownMermaid({ text, incomplete, active, onReady }: {
+export default function MarkdownMermaid({ text, incomplete, active, onReady, actionsContainer }: {
   text: string
   incomplete: boolean
   active: boolean
   onReady?: (ready: boolean) => void
+  actionsContainer?: HTMLElement | null | undefined
 }) {
   const theme = useTheme()
   const id = useId().replaceAll(':', '')
@@ -147,7 +148,7 @@ export default function MarkdownMermaid({ text, incomplete, active, onReady }: {
     return <div className="markdown-diagram-loading"><Loader size="sm" label="Drawing diagram…" /></div>
   }
 
-  return <ExportableVisual><VisualPreview title="Diagram" label="Enlarge diagram" svg={result.svg} fullWidth>
+  return <ExportableVisual actionsContainer={actionsContainer} disabled={!active}><VisualPreview title="Diagram" label="Enlarge diagram" svg={result.svg} fullWidth>
     {drawing}
   </VisualPreview></ExportableVisual>
 }

@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 448 512"><path fill="#3096b4" d="M386.2128906 512H65.9689941C30.2457923 512 .4691314 483.583374.0055999 447.8631897-.4653673 411.5692139 28.8142662 382 65 382h253v-59H61.5019531C27.5353622 323 0 295.4646301 0 261.4980469V64.0839844C0 28.1390915 29.1390915-1 65.0839844-1l315.9470215-1e-7c35.7232056 0 65.4998779 28.4166203 65.9633789 64.1368179C447.4653625 99.4307709 418.18573 129 382 129H125v64h258.8085938C419.2605286 193 448 221.7394714 448 257.1914062v193.0214844C448 484.3369751 420.3369751 512 386.2128906 512" data-iconColor="Spray"/></svg>

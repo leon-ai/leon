@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 
 import Fastify, { type FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
@@ -15,6 +16,8 @@ import { LEON_PROFILE_NAME } from '@/leon-roots'
 
 const fixture = vi.hoisted(() => ({ root: '', authEnabled: true, initialize: vi.fn() }))
 const DOCUMENT = '<!doctype html><html><head><title>Leon</title></head><body><div id="root"></div></body></html>'
+const ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></svg>'
+const ICON_VERSION = createHash('sha256').update(ICON).digest('hex')
 let app: FastifyInstance
 
 vi.mock('@/constants', () => ({
@@ -59,6 +62,12 @@ beforeEach(async () => {
   await fs.writeFile(path.join(legacy, 'legacy.js'), 'export const legacy = true')
   await fs.writeFile(path.join(assets, 'index.html'), DOCUMENT)
   await fs.writeFile(path.join(assets, 'app.js'), 'export const ready = true')
+  const icons = path.join(assets, 'img/file-icons')
+  await fs.mkdir(path.join(icons, ICON_VERSION), { recursive: true })
+  await fs.writeFile(path.join(icons, ICON_VERSION, 'example.svg'), ICON)
+  await fs.writeFile(path.join(icons, 'example.svg'), ICON)
+  await fs.mkdir(path.join(icons, 'draft'))
+  await fs.writeFile(path.join(icons, 'draft', 'example.svg'), ICON)
   for (const name of ['alice', 'bob']) {
     const directory = path.join(fixture.root, name)
     await fs.mkdir(directory)
@@ -149,4 +158,27 @@ it('keeps assets independent of identity and does not turn missing assets into H
   expect(asset.body).toBe('export const ready = true')
   expect(asset.body).not.toContain(PROFILE_AUTH_BOOTSTRAP_ID)
   expect((await app.inject('/web-app/missing.js')).statusCode).toBe(404)
+})
+
+it('caches content-versioned artwork without making mutable assets or private documents immutable', async () => {
+  const url = `/web-app/img/file-icons/${ICON_VERSION}/example.svg`
+  const icon = await app.inject({ url, headers: { cookie: cookie('alice') } })
+  expect(icon.statusCode).toBe(200)
+  expect(icon.body).toBe(ICON)
+  expect(icon.headers['cache-control']).toBe('public, max-age=31536000, immutable')
+  expect(icon.headers['content-type']).toContain('image/svg+xml')
+  const conditional = await app.inject({ url, headers: { 'if-none-match': icon.headers['etag'] as string } })
+  expect(conditional.statusCode).toBe(304)
+  expect(conditional.headers['cache-control']).toBe(icon.headers['cache-control'])
+
+  for (const mutable of ['/web-app/img/file-icons/example.svg', '/web-app/img/file-icons/draft/example.svg', '/web-app/app.js']) {
+    const response = await app.inject(mutable)
+    expect(response.statusCode).toBe(200)
+    expect(response.headers['cache-control']).not.toContain('immutable')
+  }
+  const missing = await app.inject(`/web-app/img/file-icons/${ICON_VERSION}/missing.svg`)
+  expect(missing.statusCode).toBe(404)
+  expect(missing.headers['cache-control'] ?? '').not.toContain('immutable')
+  expect((await app.inject('/web-app/')).headers['cache-control']).toBe('private, no-store')
+  expect(fixture.initialize).not.toHaveBeenCalled()
 })

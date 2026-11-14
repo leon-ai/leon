@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#ab7967" d="m255.9595032 216.0984344 200.2527771 49.7150116C491.0614014 252.2106476 512 234.8670654 512 216.0984344v-79.9650879c0-44.079567-114.6522522-79.9164886-256.0404968-79.9164886C114.587471 56.2168541 0 92.0537796 0 136.1333466v79.9650879c0 44.0957794 114.5793686 79.8841095 255.9514008 79.8841095zM0 295.9825439v79.9164734c0 44.1119995 114.587471 79.8841248 255.9595032 79.8841248l-.0081024-79.8922119C114.5793686 375.8909302 0 340.0945129 0 295.9825439m456.1960754 49.7636109L255.9514007 295.982544v79.9083862l200.2446747 49.771698C491.0613708 411.9950562 512 394.7162476 512 375.882843v-79.9002991c.0161743 18.8334046-20.9386292 36.1122132-55.8039246 49.7636109" data-iconColor="CakePHP"/></svg>

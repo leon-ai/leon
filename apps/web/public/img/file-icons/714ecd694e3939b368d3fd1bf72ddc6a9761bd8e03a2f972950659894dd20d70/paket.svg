@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="#ffd54f" d="M14.507 9.405 12 10.855 5.039 6.828 7.55 5.393zm4.454-2.577-2.456 1.421-6.944-4.005 1.934-1.105c.112-.064.232-.105.355-.124.218-.034.445.003.654.124zm-7.435 16.133c.141.076.303.119.474.119.173 0 .336-.044.478-.121.356-.058.701-.18 1.017-.36l7.001-4.001c.618-.357 1.06-.897 1.299-1.514.133-.342.202-.707.205-1.084V8c0-.478-.113-.931-.314-1.334-.022-.071-.052-.14-.091-.207-.046-.079-.1-.149-.162-.21-.031-.043-.064-.086-.097-.127-.23-.286-.512-.528-.831-.715l-7.009-4.005c-.61-.352-1.3-.465-1.954-.364-.363.057-.715.179-1.037.363L7.306 3.229c-.21.041-.406.15-.553.316L3.504 5.402c-.383.221-.699.513-.941.85-.06.06-.114.13-.159.207-.039.068-.07.138-.092.21-.04.08-.076.163-.108.246-.132.343-.201.708-.204 1.078V16c.001.71.248 1.363.664 1.878.23.286.512.528.831.715l7.009 4.005c.324.187.67.307 1.022.362zM11 12.587v7.991l-6.495-3.711c-.111-.065-.207-.148-.285-.245C4.081 16.45 4 16.236 4 16V8.538zm2 7.991v-7.991l7-4.049V16c-.001.121-.025.246-.07.362-.08.206-.225.384-.426.5z" data-iconColor="Paket"/></svg>

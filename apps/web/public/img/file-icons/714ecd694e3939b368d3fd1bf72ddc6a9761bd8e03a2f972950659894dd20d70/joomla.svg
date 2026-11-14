@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><path fill="#89ddff" d="M7.091 10.978c-.51 1.706-.093 3.63 1.254 4.977l5.023 5.018 2.227-2.228-5.023-5.018c-.72-.721-.722-1.897.004-2.623.724-.724 1.896-.724 2.619-.001l.173.174 2.229-2.228-.173-.173c-1.271-1.271-3.054-1.715-4.684-1.333-.234-1.435-1.479-2.53-2.981-2.531-1.668 0-3.019 1.353-3.02 3.021 0 1.439 1.005 2.642 2.352 2.947zm4.181 2.919 2.229 2.228 5.022-5.018c.726-.726 1.896-.724 2.617-.004.723.723.723 1.896-.001 2.62l-.172.172 2.227 2.229.174-.174c1.332-1.334 1.756-3.232 1.27-4.925 1.48-.195 2.622-1.462 2.622-2.995.001-1.669-1.352-3.021-3.02-3.021-1.527 0-2.789 1.133-2.992 2.603-1.699-.499-3.611-.077-4.953 1.264l-.435.434-4.589 4.585zm13.421 7.653c.398-1.639-.044-3.442-1.325-4.723l-5.016-5.021-2.229 2.227 5.016 5.021c.726.726.725 1.895.004 2.617-.723.722-1.897.722-2.62-.001l-.171-.171-2.227 2.229.171.171c1.357 1.356 3.299 1.771 5.012 1.244.279 1.38 1.499 2.418 2.961 2.418 1.667 0 3.02-1.351 3.02-3.02 0-1.524-1.128-2.785-2.596-2.991m-4.253-2.668-2.227-2.229-5.018 5.021c-.72.721-1.896.723-2.622-.003-.724-.725-.724-1.896-.001-2.62l.172-.171-2.229-2.227-.17.17c-1.296 1.295-1.732 3.123-1.311 4.778-1.332.314-2.323 1.512-2.323 2.94 0 1.668 1.352 3.02 3.021 3.02 1.435-.001 2.636-1.001 2.944-2.343 1.647.409 3.461-.029 4.748-1.316z" data-iconColor="Joomla"/></svg>

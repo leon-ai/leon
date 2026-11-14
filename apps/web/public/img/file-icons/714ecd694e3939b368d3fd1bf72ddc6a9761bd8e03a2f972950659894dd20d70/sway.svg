@@ -1,0 +1,21 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2025 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE. --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#00e676" data-iconColor="Sway" viewBox="0 0 32 32"><defs><mask id="a"><path fill="#fff" d="M4 6v22h19a2.4142 2.4142 157.5 0 0 1.7071-.70711l2.5858-2.5858a2.4142 2.4142 112.5 0 0 .70711-1.7071v-19h-22a2 2 135 0 0-2 2z"/><path fill="#000" d="m18 8-6.6894 7.2444c-.17157.1858-.43972.5057-.65702.63291-.2236.1309-.45696.15652-.68073.05932-.23004-.099928-.43204-.46918-.51663-.70751-.60211-1.6963-1.0403-3.4887-1.415-5.2685-.22755-1.0808.50132-1.9606 1.6059-1.9606zm-8 15.436c-.80024.85547-1.9973.75499-2-.41642v-4.0195c-.018558-.47017.52963-.98746 1-1h6zM16.045 16h-2.8201L20 8.765c.37315-.42082 1.4376-.75967 2-.76497h2l-6.4855 7.3306c-.37319.42083-.9071.66398-1.4695.66926z"/></mask></defs><g mask="url(#a)"><path d="M4 6v22h19a2.4142 2.4142 157.5 0 0 1.7071-.70711l2.5858-2.5858a2.4142 2.4142 112.5 0 0 .70711-1.7071v-19h-22a2 2 135 0 0-2 2z"/><path fill="#000" d="m18 8-6.6894 7.2444c-.17157.1858-.43972.5057-.65702.63291-.2236.1309-.45696.15652-.68073.05932-.23004-.099928-.43204-.46918-.51663-.70751-.60211-1.6963-1.0403-3.4887-1.415-5.2685-.22755-1.0808.50132-1.9606 1.6059-1.9606zm-8 15.436c-.80024.85547-1.9973.75499-2-.41642v-4.0195c-.018558-.47017.52963-.98746 1-1h6zM16.045 16h-2.8201L20 8.765c.37315-.42082 1.4376-.75967 2-.76497h2l-6.4855 7.3306c-.37319.42083-.9071.66398-1.4695.66926z"/></g></svg>

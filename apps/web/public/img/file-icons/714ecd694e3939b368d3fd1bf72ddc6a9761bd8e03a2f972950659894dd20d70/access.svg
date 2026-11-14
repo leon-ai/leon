@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path fill="#d52a29" d="M15 11.591V4.082a1.414 1.414 0 0 0-1.11-1.314 9.84 9.84 0 0 0-4.622-.348V1h-.951L1 2.306V13.7L8.277 15h.991v-1.753a9.885 9.885 0 0 0 4.6-.339A1.42 1.42 0 0 0 15 11.591m-9.172-1-.309-1.219-1.463-.042-.287 1.154-.932-.068 1.41-5.136 1.111-.08 1.565 5.481Zm3.44-7.677a9.8 9.8 0 0 1 4.281.238 1.285 1.285 0 0 1 .975.783 1.08 1.08 0 0 1-.756.687 9.412 9.412 0 0 1-4.5.314zm0 5.144a12.4 12.4 0 0 0 3.267-.008 3.966 3.966 0 0 0 1.987-.724c-.032.7.049 1.4-.044 2.1a2.131 2.131 0 0 1-1.136.591 11.169 11.169 0 0 1-4.074.156V8.059Zm5.206 3.972a3.1 3.1 0 0 1-1.783.723 11.425 11.425 0 0 1-3.429.013l.006-2.1a12.357 12.357 0 0 0 3.261-.008 3.978 3.978 0 0 0 1.993-.724c-.033.695.053 1.403-.047 2.097Zm0-5.208a2.181 2.181 0 0 1-1.144.589 11.144 11.144 0 0 1-4.063.151V5.454a12.471 12.471 0 0 0 3.258-.007 3.991 3.991 0 0 0 2-.726c-.038.7.052 1.409-.05 2.102ZM4.255 8.451s.4-1.506.506-2.279c.139.771.364 1.528.545 2.285Z" data-iconColor="Access"/></svg>

@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#ffca28" d="M512 341.3069458c0 70.6560059-40.1978149 128-92 128v-264.25c0-33.1523438-17.1593628-63.6638184-46.625-86.625-66.8639526-51.1365356-171.5027466-49.1187134-234.75 0-29.4656372 22.9611816-46.625 53.4726563-46.625 86.625v264.25c-51.8021851 0-92-57.3439941-92-128 0-55.1999512 24.5648193-102.2960815 60-120.25v-16c0-44.2694702 23.1846313-84.0631714 58.875-111.875 70.125-55.4624634 192.4287109-63.0533447 274.25 0 35.6903687 27.8118286 58.875 67.6055298 58.875 111.875v16c35.4351807 17.9539185 60 65.0500488 60 120.25m-124 2.666687-8 21.333313-4-68-8 52-8-16-4-56-20 76-4-16-12-120-12 104-8 32-16-108-16 92-8 24-4-165.21875-24 185.21875-24-168-12 144-8-16-8-96-4 96-12 28-8-96-8 76-12-20v56l-12-45v-115c-4-4-12-8-20-8v252c8 0 16-4 20-12v-56l4 4 12 40 4-48 12 60v-76l8 20 12 56v-76l8 8 12 68 12-92 26.4627075 103.678833L236 405.3069458l8-24 8 100 24-100 8 84 20-88 20 96 4-72 12-24 4 92 20-88 12 40 4-36 8 16v56c4 8 12 12 20 12v-252c-8 0-16 4-20 8z" data-iconColor="Audacity"/></svg>

@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><path fill="#2196f3" d="m13.951 15.861 1.917-3.34c.143-.25.057-.571-.193-.716l-1.364-.78c-.249-.144-.571-.057-.714.192l-6.316 11c-.144.25-.057.57.193.713l1.363.784c.25.143.572.056.716-.192zm12.855-1.002h-4.602c.541 1.015 1.044 1.97 1.397 2.646.244.467.438.836.507.96.071.131.123.267.157.405h2.541c.261 0 .474-.212.474-.473v-3.064c0-.261-.213-.473-.474-.473zm-11.187 0-2.303 4.011h6.249c-.453-.895-1.054-2.176-1.862-4.011zm-5.204 0H5.117c-.261 0-.473.212-.473.473v3.064c0 .261.212.473.473.473h2.995zm-2.023 9.456-1.363-.782c-.25-.143-.481-.026-.514.26l-.236 2.053c-.033.286.135.388.373.226l1.761-1.201c.239-.161.228-.412-.021-.556m14.886-5.394c-.008-.013-.018-.032-.028-.051-.127-.234-.444-.844-.861-1.635-.005-.011-.01-.02-.015-.03-.031-.061-.064-.122-.097-.185-.024-.045-.048-.09-.073-.137-.02-.04-.041-.079-.062-.119-.037-.07-.075-.14-.112-.212-.012-.023-.023-.045-.035-.067-.042-.081-.085-.162-.129-.244-.012-.024-.024-.047-.037-.071-.96-1.816-2.166-4.052-2.91-5.227-1.303-2.06-3.043-5.493-3.529-5.249-.68.339 1.426 4.697 2.122 6.335s3.417 7.913 3.962 8.187c.547.273.757.121 1.121-.029.365-.152 1.017-.656.684-1.264zm1.554 3.233-.649-1.246c-.147-.282-.493-.396-.769-.256l-.783.403c-.276.143-.362.477-.193.746l.822 1.298c.17.268.528.355.794.195l.559-.336c.267-.16.366-.522.22-.804zm-.2 1.805c-.205.196-.691.621-.102 1.447.586.828 1.897.865 2.07 1.414 0 0 .411-4.204-1.968-2.862z" data-iconColor="XCode"/></svg>

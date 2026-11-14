@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#ffca28" d="M21.412109 150.62109C9.654676 150.62109 0 160.27577 0 172.0332v172.55469C0 356.34532 9.6546757 366 21.412109 366h469.17578c11.75743 0 21.41207-9.65468 21.41211-21.41211V172.0332c0-11.75743-9.65468-21.41211-21.41211-21.41211zm329.1543 40.76563 45.4414 45.44336 45.44336-45.44336 15.89649 15.89844-45.44141 45.44336 44.35937 44.36132-15.89453 15.89649-44.36132-44.36133-44.36329 44.36133-15.89648-15.89649 44.36133-44.36132-45.44336-45.44336zm-103.15821 1.39453h22.71289v84.98047l31.06055-30.21875 15.67774 16.11523-58.29297 56.71094-55.36524-56.63672 16.07813-15.7168 28.1289 28.7754zm-196.90039 3.00781 60.624998 59.8711 61.75196-59.35352v118.39453h-23.07813v-64.20312l-38.89258 37.38086-37.328122-36.86524v63.6875H50.507809z" data-iconColor="MDX"/></svg>

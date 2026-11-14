@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#e69e3c" d="M127.711113 477.5468445c-170.2814331-98.1691284-170.2814941-344.92453-.000061-443.093689S512 59.6616783 512 256 297.9925537 575.7160034 127.711113 477.5468445m93.4927749-169.9588623v-61.5297241h61.7808533c17.0086975-.0000153 17.0086975-29.8252563 0-29.8252411h-61.7808533v-74.5631104h134.2135925c19.7897644 0 19.7897644-29.8252487 0-29.8252487H206.2912598c-8.2360077 0-14.9126129 6.6766129-14.9126129 14.9126205v180.8307037C123 328 137 423 206.2912598 425.0097046 275 425 290 327 221.2038879 307.5879822m-29.8588714 83.5825195c-19.838623-11.4371948-19.838623-40.1853943 0-51.6225891s44.7715302 2.9369202 44.7715302 25.8112793c-1e-7 22.8743896-24.9329072 37.2484741-44.7715302 25.8113098" data-iconColor="Fiddle"/></svg>

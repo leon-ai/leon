@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 1280 1280"><g fill="#ff5d01" fill-rule="evenodd" clip-rule="evenodd" data-iconColor="Astro"><path d="M815.039 94.6439c9.719 12.0651 14.675 28.3461 24.587 60.9091l216.544 711.348c-80.063-41.533-167.098-71.488-258.889-87.649L656.29 302.798c-2.307-7.796-9.468-13.144-17.597-13.144-8.151 0-15.325 5.376-17.613 13.199L481.795 779.011c-92.216 16.089-179.649 46.098-260.054 87.782l217.606-711.405h.001c9.943-32.506 14.914-48.759 24.634-60.8027 8.58-10.6322 19.741-18.8895 32.418-23.9851 14.36-5.7718 31.356-5.7718 65.349-5.7718h155.425c34.038 0 51.056 0 65.429 5.7839 12.689 5.1061 23.856 13.38 32.436 24.0316"/><path d="M840.951 900.754c-35.698 30.525-106.949 51.343-189.022 51.343-100.732 0-185.162-31.36-207.566-73.536-8.009 24.171-9.805 51.835-9.805 69.507 0 0-5.277 86.772 55.078 147.132 0-31.34 25.406-56.74 56.745-56.74 53.716 0 53.655 46.86 53.606 84.88-.001 1.14-.003 2.27-.003 3.39 0 57.71 35.271 107.18 85.432 128.04-7.492-15.41-11.695-32.72-11.695-51 0-55.04 32.313-75.54 69.867-99.36 29.881-18.95 63.08-40 85.96-82.24 11.938-22.04 18.717-47.277 18.717-74.102 0-16.495-2.563-32.392-7.314-47.314"/><path d="M840.951 900.754c-35.698 30.525-106.949 51.343-189.022 51.343-100.732 0-185.162-31.36-207.566-73.536-8.009 24.171-9.805 51.835-9.805 69.507 0 0-5.277 86.772 55.078 147.132 0-31.34 25.406-56.74 56.745-56.74 53.716 0 53.655 46.86 53.606 84.88-.001 1.14-.003 2.27-.003 3.39 0 57.71 35.271 107.18 85.432 128.04-7.492-15.41-11.695-32.72-11.695-51 0-55.04 32.313-75.54 69.867-99.36 29.881-18.95 63.08-40 85.96-82.24 11.938-22.04 18.717-47.277 18.717-74.102 0-16.495-2.563-32.392-7.314-47.314"/></g></svg>

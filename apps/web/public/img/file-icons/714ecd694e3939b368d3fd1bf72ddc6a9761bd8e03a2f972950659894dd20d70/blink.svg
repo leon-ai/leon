@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256"><g fill="#f9a825" data-iconColor="Blink"><path d="M134.3 11c64.1 1.8 114.5 55.2 112.7 119.3S191.8 244.8 127.7 243c-64-1.8-114.4-55-112.7-119C16.7 59.9 70 9.3 134.1 11zm-.6 12C76.3 21.5 28.5 66.9 27.1 124.4 25.6 181.8 71 229.6 128.4 231c57.4 1.5 105.2-43.9 106.6-101.3C236.6 72.2 191.2 24.5 133.7 23c.1 0 0 0 0 0" transform="matrix(.90185 0 0 .90185 9.8555 13.463)"/><path d="M137.9 93.403c-4.1485 3.9681-2.5252 12.806 3.878 19.57s15.241 8.8381 19.209 4.7798c3.9681-4.0583 2.7056-12.987-3.7878-19.751-6.4933-6.7639-15.422-8.7479-19.57-4.7798zm52.217-25.162c8.2068 8.5676 14.43 18.758 18.398 29.851 0 0 2.7056 7.3952-5.862 7.3952H181.73s-6.6737-.54111-6.9442 5.1405c-.45093 7.0344-.27056 12.987-.27056 12.987.27056 4.0583 1.8037 8.0265 4.3289 11.183l21.554 22.727c3.5172 3.2467 3.9681 8.5676 1.0822 12.355-10.912 18.578-28.408 32.286-49.061 38.509-6.3129 1.8939-6.9442-3.2466-6.7639-6.7639 0-2.2546 2.6154-52.397 2.6154-52.397.72148-5.4111-.99204-10.912-4.7798-14.881-6.7639-7.2148-11.003-11.814-11.003-11.814s-4.7798-4.7798-11.634-11.904c-3.7878-3.878-9.0185-5.862-14.43-5.5013h-52.397c-3.427 0-8.6578-.81166-6.4031-7.0344 7.305-20.292 21.915-37.066 41.124-46.896 3.878-2.7055 9.1989-1.9841 12.265 1.7135l21.554 22.727c3.0663 2.7055 6.9442 4.3289 11.003 4.7798 0 0 5.862.45092 12.987.36074 5.5915 0 5.5013-6.7639 5.5013-6.7639s.90185-13.888 1.1724-20.923c-.27056-2.9761 1.8939-5.5915 4.7798-5.862.99203-.09018 1.8939.09019 2.7957.45092 11.003 4.6896 21.013 11.634 29.22 20.292z"/></g></svg>

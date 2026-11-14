@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#d8563a" d="M41 0h430c22.6436768 0 41 18.3563232 41 41v430c0 22.6436768-18.3563232 41-41 41H41c-22.6436768 0-41-18.3563232-41-41V41C0 18.3563232 18.3563232 0 41 0m292.0846252 174.6738586c-.9084473-15.9739838-.9715576-32.9874268-.3688049-50.1603317l-161.9146423.0000076c12.0299377 21.7817841 10.8443298 24.801712 12.1672974 62.2738647l.0000153 129.395401c-.6912994 48.1025696-2.9300385 56.0940857-12.1673126 71.3036804h165.6029053c.9147034-19.3880615 2.5233459-40.3373413 4.7947388-62.7004395-13.6465759 19.916626-19.5477905 30.6125488-65.2822266 30.6125488h-39.4643707v-83.7234802h34.3007965c39.3824463-.676178 45.529541 11.0032959 53.8486328 16.9660034-1.5389709-21.7702026-1.5925293-43.5312805 0-65.2822113-16.2548218 14.6798401-26.6840515 15.8444977-53.8486328 16.597168h-34.3007965v-83.3546753h43.1526337c25.5111082.2997896 40.1260374 4.472397 53.4797666 18.0724641" data-iconColor="Edge"/></svg>

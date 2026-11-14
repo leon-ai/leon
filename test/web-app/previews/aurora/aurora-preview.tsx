@@ -26,7 +26,14 @@ import documentURL from '../../../fixtures/documents/attention-is-all-you-need.p
 import './aurora-preview.sass'
 import { ConnectionsPreview } from './connection-preview'
 
-type GalleryKind = 'component' | 'widget' | 'connection' | 'generated' | 'answer' | 'feed'
+const COLLECTIONS = [
+  { value: 'component', label: 'Components' }, { value: 'widget', label: 'Widgets' },
+  { value: 'connection', label: 'Connections' }, { value: 'generated', label: 'Generated UI' },
+  { value: 'answer', label: 'Answer preview' }, { value: 'feed', label: 'Feed' },
+  { value: 'artifacts', label: 'Artifacts' }, { value: 'markdown', label: 'Markdown' }
+] as const
+
+type GalleryKind = typeof COLLECTIONS[number]['value']
 type DemoOutcome = 'success' | 'failure' | 'pending'
 
 const DOWNLOAD_ETA_EXAMPLES = [
@@ -40,6 +47,8 @@ const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, 
 const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
 const FeedPreview = lazy(() => import('./feed-preview'))
+const ArtifactsPreview = lazy(() => import('./artifacts-preview'))
+const MarkdownPreview = lazy(() => import('./markdown-preview'))
 const CHOICES = [
   { value: 'quiet', label: 'A quiet morning', description: 'A little room to think.' },
   { value: 'creative', label: 'Something creative', description: 'Try an idea and see where it goes.' },
@@ -323,6 +332,9 @@ function App() {
   const [theme, setTheme] = useState<Theme>(getCurrentTheme)
   const [narrow, setNarrow] = useState(false)
   const results = searchIndex(SEARCH_INDEX, query).filter(({ item }) => item.kind === kind)
+  const searchable = kind === 'component' || kind === 'widget' || kind === 'generated'
+  const content = kind === 'feed' ? <FeedPreview /> : kind === 'artifacts' ? <ArtifactsPreview />
+    : kind === 'markdown' ? <MarkdownPreview /> : null
 
   return <ToastProvider><VisualPreviewProvider><main className="aurora-gallery">
     <header className="aurora-gallery-header">
@@ -340,17 +352,17 @@ function App() {
     </header>
     <div className="gallery-toolbar">
       <nav aria-label="Aurora collection" className="aurora-actions">
-        {(['component', 'widget', 'connection', 'generated', 'answer', 'feed'] as const).map((value) => <Button key={value}
+        {COLLECTIONS.map(({ value, label }) => <Button key={value}
           ariaPressed={kind === value} variant={kind === value ? 'secondary' : 'ghost'}
-          onClick={() => setKind(value)}>{value === 'component' ? 'Components' : value === 'widget' ? 'Widgets' : value === 'connection' ? 'Connections' : value === 'generated' ? 'Generated UI' : value === 'feed' ? 'Feed' : 'Answer preview'}</Button>)}
+          onClick={() => setKind(value)}>{label}</Button>)}
       </nav>
-      {kind !== 'answer' && kind !== 'connection' && kind !== 'feed' && <AppInput ariaLabel="Find a component or widget" type="search" iconName="search"
+      {searchable && <AppInput ariaLabel="Find a component or widget" type="search" iconName="search"
         placeholder="Find something…" value={query} onChange={(event) => setQuery(event.target.value)} />}
     </div>
     <p className="gallery-notice">Interactive local examples. Nothing here is sent to Leon or an AI provider.</p>
     {kind === 'widget' && <p className="gallery-notice">Copy a query into a session to try it with Leon. He chooses the presentation; the result may differ from these examples.</p>}
-    {kind === 'feed' ? <div className={`feed-example${narrow ? ' gallery-narrow' : ''}`}>
-      <Suspense fallback={<Loader size="sm" label="Opening feed examples…" />}><FeedPreview /></Suspense>
+    {content ? <div className={`preview-content${narrow ? ' gallery-narrow' : ''}`}>
+      <Suspense fallback={<Loader size="sm" label="Opening examples…" />}>{content}</Suspense>
     </div> : kind === 'connection' ? <div className={`connections-example${narrow ? ' gallery-narrow' : ''}`}><ConnectionsPreview /></div> : kind === 'answer' ? <section aria-label="Visual answer preview" className={`answer-example${narrow ? ' gallery-narrow' : ''}`}>
       <p>A slow Sunday sounds lovely. Here’s a little inspiration for the morning.</p>
       <Artifacts />

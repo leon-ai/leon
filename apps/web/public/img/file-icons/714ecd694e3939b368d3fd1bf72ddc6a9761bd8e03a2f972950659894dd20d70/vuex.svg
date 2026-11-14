@@ -1,0 +1,31 @@
+<!--
+  - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  -
+  -->
+
+<svg  version="1.1" viewBox="0 0 16 16" width="16px" height="16px" xmlns="http://www.w3.org/2000/svg">
+  <g fill="#41b883" data-iconColor="Vuex" transform="matrix(.8043 0 0 .8043 1.4852 1.5495)">
+    <path d="m.2 15.99 6.32-12.75 1.58 3.11v3.27l-3.14 6.37zm15.8.01-6.32-12.75-1.58 3.11v3.27l3.13 6.37z"/>
+    <path d="m.2.04 3.95 7.98 2.37-4.78-1.58-3.2zm15.8 0-3.95 7.98-2.37-4.78 1.58-3.2z"/>
+  </g>
+</svg>

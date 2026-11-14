@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 14"><path fill="#26a2c1" d="M14.59 2.257A2.291 2.291 0 0 0 12.579.989c-.769-.015-1.4.445-1.284.751a4.954 4.954 0 0 0 .261.547c.13.2.357.044.439 0a1.214 1.214 0 0 1 .79-.146 1.187 1.187 0 0 1 .892.736A2.071 2.071 0 0 1 10.21 4.86a5.525 5.525 0 0 0-5.437-.809c-.988.35-1.448.7-1.057 1.509a17.146 17.146 0 0 0 .872 1.677c.817 1.451 2.612-.67 2.612-.67-1.335 2.133-2.481 1.618-2.921.875a11.8 11.8 0 0 1-.707-1.451C.188 7.288 1.1 12.969 1.1 12.969l1.682.007c.426-2.107 1.963-2.02 2.224.007l1.284.007c1.133-4.112 4.009.015 4.009.015l1.675.007c-.467-2.807.94-3.69 1.826-5.33s1.744-3.66.79-5.425m-5.21 5.5a.921.921 0 0 1-.529-1.181s.206.073.549.19a.361.361 0 0 0-.055.255.392.392 0 0 0 .426.357.406.406 0 0 0 .35-.357q.206.077.432.153a.945.945 0 0 1-1.173.581Z" data-iconColor="Gradle"/></svg>

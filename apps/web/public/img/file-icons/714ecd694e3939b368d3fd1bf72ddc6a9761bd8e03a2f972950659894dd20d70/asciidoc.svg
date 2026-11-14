@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="#f44336" d="M164.74 23.425c-1.585-.01125-3.1996.29044-4.7608.93647-2.4094.99696-4.3208 2.6712-5.6202 4.7056-.53792.7509-1.0007 1.5743-1.3698 2.4662l-45.966 111.09h-44.325c-6.7585 0-12.2 5.4416-12.2 12.2 0 6.7585 5.4416 12.199 12.2 12.199h34.229l-.0055.014h26.406l.006-.014h26.424c6.7586 0 12.199-5.4401 12.199-12.199 0-6.7586-5.4401-12.2-12.199-12.2h-16.33l31.143-75.263 80.655 194.92c2.5841 6.245 9.6922 9.1916 15.937 6.6076 6.245-2.5841 9.1917-9.6922 6.6076-15.937l-91.853-221.98c-1.938-4.6837-6.4216-7.5125-11.176-7.544zM43.68 188.635c-6.7585 0-12.199 5.4416-12.199 12.2 0 6.7586 5.4401 12.2 12.199 12.2h34.21l-16.752 40.487c-2.5841 6.2451.36407 13.35 6.609 15.934 6.2451 2.5841 13.35-.36112 15.934-6.6061l20.614-49.816h26.445c6.7585 0 12.199-5.4416 12.199-12.2 0-6.7585-5.4402-12.2-12.199-12.2z" data-iconColor="Asciidoc" transform="matrix(.079038 0 0 .079038 .13689 .38864)"/></svg>

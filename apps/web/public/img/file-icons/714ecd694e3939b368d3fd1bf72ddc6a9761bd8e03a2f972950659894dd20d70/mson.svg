@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><g fill="#fbc02d" data-iconColor="MSON"><path d="M7.62 19.85v-7.7h2.264l2.266 2.831 2.264-2.831h2.265v7.7h-2.265v-4.416l-2.264 2.831-2.266-2.831v4.416z"/><path d="m21.775 19.85-3.397-3.737h2.264V12.15h2.265v3.963h2.264z"/><path d="M2 15.042a2.345 2.345 0 0 0 1.464-.484 2.221 2.221 0 0 0 .752-1.269 14.257 14.257 0 0 0 .2-2.75q.011-1.948.07-2.566a4.891 4.891 0 0 1 .39-1.573 2.826 2.826 0 0 1 .705-.951 2.846 2.846 0 0 1 1.076-.542A6.317 6.317 0 0 1 8.1 4.789h.654V6.62h-.362a2.184 2.184 0 0 0-1.61.437 3.176 3.176 0 0 0-.4 1.954 33.682 33.682 0 0 1-.128 3.861A4.423 4.423 0 0 1 5.54 14.8 4.267 4.267 0 0 1 3.948 16a3.558 3.558 0 0 1 1.861 1.639 8.278 8.278 0 0 1 .577 3.611q0 2.275.047 2.709a1.64 1.64 0 0 0 .471 1.1 2.465 2.465 0 0 0 1.487.315h.362v1.834H8.1a5.283 5.283 0 0 1-1.656-.187 2.775 2.775 0 0 1-1.237-.869 3.132 3.132 0 0 1-.636-1.523 22.584 22.584 0 0 1-.154-3.021 15.385 15.385 0 0 0-.2-2.9 2.25 2.25 0 0 0-.752-1.271A2.325 2.325 0 0 0 2 16.947Z"/><path d="M30 16.944a2.325 2.325 0 0 0-1.464.49 2.25 2.25 0 0 0-.752 1.271 15.386 15.386 0 0 0-.2 2.9 22.585 22.585 0 0 1-.158 3.021 3.132 3.132 0 0 1-.636 1.523 2.775 2.775 0 0 1-1.237.869 5.283 5.283 0 0 1-1.656.187h-.654v-1.83h.362a2.465 2.465 0 0 0 1.487-.315 1.64 1.64 0 0 0 .473-1.108q.047-.432.047-2.709a8.278 8.278 0 0 1 .577-3.611A3.558 3.558 0 0 1 28.051 16a4.267 4.267 0 0 1-1.588-1.2 4.423 4.423 0 0 1-.717-1.924 33.682 33.682 0 0 1-.128-3.861 3.176 3.176 0 0 0-.4-1.954 2.184 2.184 0 0 0-1.61-.437h-.362V4.789h.654a6.317 6.317 0 0 1 1.439.117 2.846 2.846 0 0 1 1.073.543 2.826 2.826 0 0 1 .705.951 4.891 4.891 0 0 1 .39 1.575q.058.618.07 2.566a14.257 14.257 0 0 0 .2 2.753 2.221 2.221 0 0 0 .752 1.266 2.345 2.345 0 0 0 1.464.484Z"/></g></svg>

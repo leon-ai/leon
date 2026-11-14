@@ -1,0 +1,1038 @@
+{
+  "abap": {
+    "fileName": "code.abp",
+    "label": "ABAP"
+  },
+  "actionscript-3": {
+    "fileName": "code.as",
+    "label": "ActionScript"
+  },
+  "actionscript": {
+    "fileName": "code.as",
+    "label": "ActionScript"
+  },
+  "as3": {
+    "fileName": "code.as",
+    "label": "ActionScript"
+  },
+  "ada": {
+    "fileName": "code.ada",
+    "label": "Ada"
+  },
+  "ahk": {
+    "fileName": "code.ahk",
+    "label": "AutoHotkey"
+  },
+  "ahk1": {
+    "fileName": "code.ahk",
+    "label": "AutoHotkey"
+  },
+  "ahk2": {
+    "fileName": "code.ahk2",
+    "label": "AutoHotkey2"
+  },
+  "apache": {
+    "fileName": "apache.conf",
+    "label": "Apache Conf"
+  },
+  "apex": {
+    "fileName": "code.cls",
+    "label": "Apex"
+  },
+  "apl": {
+    "fileName": "code.apl",
+    "label": "APL"
+  },
+  "applescript": {
+    "fileName": "code.applescript",
+    "label": "AppleScript"
+  },
+  "asciidoc": {
+    "fileName": "code.ad",
+    "label": "AsciiDoc"
+  },
+  "adoc": {
+    "fileName": "code.ad",
+    "label": "AsciiDoc"
+  },
+  "asm": {
+    "fileName": "code.asm",
+    "label": "Assembly"
+  },
+  "astro": {
+    "fileName": "code.astro",
+    "label": "Astro"
+  },
+  "awk": {
+    "fileName": "code.awk",
+    "label": "AWK"
+  },
+  "ballerina": {
+    "fileName": "code.bal",
+    "label": "Ballerina"
+  },
+  "bat": {
+    "fileName": "code.bat",
+    "label": "Batch File"
+  },
+  "batch": {
+    "fileName": "code.bat",
+    "label": "Batch File"
+  },
+  "cmd": {
+    "fileName": "code.bat",
+    "label": "Batch File"
+  },
+  "beancount": {
+    "fileName": "code.bean",
+    "label": "Beancount"
+  },
+  "bibtex": {
+    "fileName": "code.cbx",
+    "label": "BibTeX"
+  },
+  "bicep": {
+    "fileName": "code.bicep",
+    "label": "Bicep"
+  },
+  "blade": {
+    "fileName": "code.blade",
+    "label": "Blade"
+  },
+  "bsl": {
+    "fileName": "code.bsl",
+    "label": "1C (Enterprise)"
+  },
+  "1c": {
+    "fileName": "code.bsl",
+    "label": "1C (Enterprise)"
+  },
+  "c": {
+    "fileName": "code.c",
+    "label": "C"
+  },
+  "c3": {
+    "fileName": "code.c3",
+    "label": "C3"
+  },
+  "cadence": {
+    "fileName": "code.cdc",
+    "label": "Cadence"
+  },
+  "cdc": {
+    "fileName": "code.cdc",
+    "label": "Cadence"
+  },
+  "cairo": {
+    "fileName": "code.cairo",
+    "label": "Cairo"
+  },
+  "chapel": {
+    "fileName": "code.chpl",
+    "label": "Chapel"
+  },
+  "chpl": {
+    "fileName": "code.chpl",
+    "label": "Chapel"
+  },
+  "clojure": {
+    "fileName": "code.cljs",
+    "label": "Clojure"
+  },
+  "clj": {
+    "fileName": "code.cljs",
+    "label": "Clojure"
+  },
+  "cmake": {
+    "fileName": "code.cmake",
+    "label": "CMake"
+  },
+  "cobol": {
+    "fileName": "code.cob",
+    "label": "COBOL"
+  },
+  "codeowners": {
+    "fileName": "codeowners",
+    "label": "CODEOWNERS"
+  },
+  "codeql": {
+    "fileName": "code.ql",
+    "label": "CodeQL"
+  },
+  "ql": {
+    "fileName": "code.ql",
+    "label": "CodeQL"
+  },
+  "coffee": {
+    "fileName": "code.coffee",
+    "label": "CoffeeScript"
+  },
+  "coffeescript": {
+    "fileName": "code.coffee",
+    "label": "CoffeeScript"
+  },
+  "common-lisp": {
+    "fileName": "code.cl",
+    "label": "Common Lisp"
+  },
+  "lisp": {
+    "fileName": "code.cl",
+    "label": "Common Lisp"
+  },
+  "coq": {
+    "fileName": "code.coq",
+    "label": "Rocq"
+  },
+  "cpp": {
+    "fileName": "code.cpp",
+    "label": "C++"
+  },
+  "c++": {
+    "fileName": "code.cpp",
+    "label": "C++"
+  },
+  "crystal": {
+    "fileName": "code.cr",
+    "label": "Crystal"
+  },
+  "csharp": {
+    "fileName": "code.csx",
+    "label": "C#"
+  },
+  "c#": {
+    "fileName": "code.csx",
+    "label": "C#"
+  },
+  "cs": {
+    "fileName": "code.csx",
+    "label": "C#"
+  },
+  "css": {
+    "fileName": "code.css",
+    "label": "CSS"
+  },
+  "csv": {
+    "fileName": "code.csv",
+    "label": "CSV"
+  },
+  "cue": {
+    "fileName": "code.cue",
+    "label": "CUE"
+  },
+  "cypher": {
+    "fileName": "code.cypher",
+    "label": "Cypher"
+  },
+  "cql": {
+    "fileName": "code.cypher",
+    "label": "Cypher"
+  },
+  "d": {
+    "fileName": "code.d",
+    "label": "D"
+  },
+  "dart": {
+    "fileName": "code.dart",
+    "label": "Dart"
+  },
+  "desktop": {
+    "fileName": "code.desktop",
+    "label": "Desktop"
+  },
+  "diff": {
+    "fileName": "code.diff",
+    "label": "Diff"
+  },
+  "docker": {
+    "fileName": "Dockerfile",
+    "label": "Dockerfile"
+  },
+  "dockerfile": {
+    "fileName": "Dockerfile",
+    "label": "Dockerfile"
+  },
+  "edge": {
+    "fileName": "code.edge",
+    "label": "Edge"
+  },
+  "elixir": {
+    "fileName": "code.ex",
+    "label": "Elixir"
+  },
+  "elm": {
+    "fileName": "code.elm",
+    "label": "Elm"
+  },
+  "emacs-lisp": {
+    "fileName": "code.el",
+    "label": "Emacs Lisp"
+  },
+  "elisp": {
+    "fileName": "code.el",
+    "label": "Emacs Lisp"
+  },
+  "erb": {
+    "fileName": "code.erb",
+    "label": "ERB"
+  },
+  "erlang": {
+    "fileName": "code.erc",
+    "label": "Erlang"
+  },
+  "erl": {
+    "fileName": "code.erc",
+    "label": "Erlang"
+  },
+  "fish": {
+    "fileName": "code.fish",
+    "label": "Fish"
+  },
+  "fsharp": {
+    "fileName": "code.fs",
+    "label": "F#"
+  },
+  "f#": {
+    "fileName": "code.fs",
+    "label": "F#"
+  },
+  "fs": {
+    "fileName": "code.fs",
+    "label": "F#"
+  },
+  "git-commit": {
+    "fileName": "COMMIT_EDITMSG",
+    "label": "Git Commit Message"
+  },
+  "gleam": {
+    "fileName": "code.gleam",
+    "label": "Gleam"
+  },
+  "glsl": {
+    "fileName": "code.glsl",
+    "label": "GLSL"
+  },
+  "gn": {
+    "fileName": "code.gni",
+    "label": "GN"
+  },
+  "gnuplot": {
+    "fileName": "code.gp",
+    "label": "Gnuplot"
+  },
+  "go": {
+    "fileName": "code.go",
+    "label": "Go"
+  },
+  "graphql": {
+    "fileName": "code.gql",
+    "label": "GraphQL"
+  },
+  "gql": {
+    "fileName": "code.gql",
+    "label": "GraphQL"
+  },
+  "groovy": {
+    "fileName": "code.gy",
+    "label": "Groovy"
+  },
+  "hack": {
+    "fileName": "code.hhconfig",
+    "label": "Hack"
+  },
+  "haml": {
+    "fileName": "code.haml",
+    "label": "Ruby Haml"
+  },
+  "handlebars": {
+    "fileName": "code.handlebars",
+    "label": "Handlebars"
+  },
+  "hbs": {
+    "fileName": "code.handlebars",
+    "label": "Handlebars"
+  },
+  "haskell": {
+    "fileName": "code.haskell",
+    "label": "Haskell"
+  },
+  "hs": {
+    "fileName": "code.haskell",
+    "label": "Haskell"
+  },
+  "haxe": {
+    "fileName": "code.haxe",
+    "label": "Haxe"
+  },
+  "hcl": {
+    "fileName": "code.hcl",
+    "label": "HashiCorp HCL"
+  },
+  "hjson": {
+    "fileName": "code.hjson",
+    "label": "Hjson"
+  },
+  "hlsl": {
+    "fileName": "code.hlsl",
+    "label": "HLSL"
+  },
+  "html": {
+    "fileName": "code.html",
+    "label": "HTML"
+  },
+  "http": {
+    "fileName": "code.http",
+    "label": "HTTP"
+  },
+  "hurl": {
+    "fileName": "code.hurl",
+    "label": "Hurl"
+  },
+  "hxml": {
+    "fileName": "code.hxml",
+    "label": "HXML"
+  },
+  "hy": {
+    "fileName": "code.hy",
+    "label": "Hy"
+  },
+  "imba": {
+    "fileName": "code.imba",
+    "label": "Imba"
+  },
+  "ini": {
+    "fileName": "code.properties",
+    "label": "INI"
+  },
+  "properties": {
+    "fileName": "code.properties",
+    "label": "INI"
+  },
+  "java": {
+    "fileName": "code.java",
+    "label": "Java"
+  },
+  "javascript": {
+    "fileName": "code.js",
+    "label": "JavaScript"
+  },
+  "js": {
+    "fileName": "code.js",
+    "label": "JavaScript"
+  },
+  "cjs": {
+    "fileName": "code.js",
+    "label": "JavaScript"
+  },
+  "mjs": {
+    "fileName": "code.js",
+    "label": "JavaScript"
+  },
+  "jinja": {
+    "fileName": "code.jinja",
+    "label": "Jinja"
+  },
+  "jison": {
+    "fileName": "code.jison",
+    "label": "Jison"
+  },
+  "json": {
+    "fileName": "code.json",
+    "label": "JSON"
+  },
+  "json5": {
+    "fileName": "code.json5",
+    "label": "JSON5"
+  },
+  "jsonc": {
+    "fileName": "code.jsonc",
+    "label": "JSON with Comments"
+  },
+  "jsonl": {
+    "fileName": "code.jsonl",
+    "label": "JSON Lines"
+  },
+  "jsonnet": {
+    "fileName": "code.jsonnet",
+    "label": "Jsonnet"
+  },
+  "jsx": {
+    "fileName": "code.jsx",
+    "label": "JSX"
+  },
+  "julia": {
+    "fileName": "code.julia",
+    "label": "Julia"
+  },
+  "jl": {
+    "fileName": "code.julia",
+    "label": "Julia"
+  },
+  "just": {
+    "fileName": "justfile",
+    "label": "Just"
+  },
+  "justfile": {
+    "fileName": "justfile",
+    "label": "Just"
+  },
+  "kdl": {
+    "fileName": "code.kdl",
+    "label": "KDL"
+  },
+  "kotlin": {
+    "fileName": "code.kt",
+    "label": "Kotlin"
+  },
+  "kt": {
+    "fileName": "code.kt",
+    "label": "Kotlin"
+  },
+  "kts": {
+    "fileName": "code.kt",
+    "label": "Kotlin"
+  },
+  "kusto": {
+    "fileName": "code.csl",
+    "label": "Kusto"
+  },
+  "kql": {
+    "fileName": "code.csl",
+    "label": "Kusto"
+  },
+  "lean": {
+    "fileName": "code.lean",
+    "label": "Lean 4"
+  },
+  "lean4": {
+    "fileName": "code.lean",
+    "label": "Lean 4"
+  },
+  "less": {
+    "fileName": "code.less",
+    "label": "Less"
+  },
+  "liquid": {
+    "fileName": "code.liquid",
+    "label": "Liquid"
+  },
+  "llvm": {
+    "fileName": "code.ll",
+    "label": "LLVM IR"
+  },
+  "log": {
+    "fileName": "code.log",
+    "label": "Log file"
+  },
+  "lua": {
+    "fileName": "code.lua",
+    "label": "Lua"
+  },
+  "luau": {
+    "fileName": "code.luau",
+    "label": "Luau"
+  },
+  "make": {
+    "fileName": "Makefile",
+    "label": "Makefile"
+  },
+  "makefile": {
+    "fileName": "Makefile",
+    "label": "Makefile"
+  },
+  "markdown": {
+    "fileName": "code.md",
+    "label": "Markdown"
+  },
+  "md": {
+    "fileName": "code.md",
+    "label": "Markdown"
+  },
+  "marko": {
+    "fileName": "code.marko",
+    "label": "Marko"
+  },
+  "matlab": {
+    "fileName": "code.matlab",
+    "label": "MATLAB"
+  },
+  "mdc": {
+    "fileName": "code.mdc",
+    "label": "MDC"
+  },
+  "mdx": {
+    "fileName": "code.mdx",
+    "label": "MDX"
+  },
+  "mermaid": {
+    "fileName": "code.mermaid",
+    "label": "Mermaid"
+  },
+  "mmd": {
+    "fileName": "code.mermaid",
+    "label": "Mermaid"
+  },
+  "nextflow": {
+    "fileName": "code.nf",
+    "label": "Nextflow"
+  },
+  "nf": {
+    "fileName": "code.nf",
+    "label": "Nextflow"
+  },
+  "nginx": {
+    "fileName": "code.nginx",
+    "label": "Nginx"
+  },
+  "nim": {
+    "fileName": "code.nim",
+    "label": "Nim"
+  },
+  "nix": {
+    "fileName": "code.nix",
+    "label": "Nix"
+  },
+  "nsis": {
+    "fileName": "code.nsis",
+    "label": "NSIS"
+  },
+  "nushell": {
+    "fileName": "code.nushell",
+    "label": "nushell"
+  },
+  "nu": {
+    "fileName": "code.nushell",
+    "label": "nushell"
+  },
+  "objective-c": {
+    "fileName": "code.mm",
+    "label": "Objective-C"
+  },
+  "objc": {
+    "fileName": "code.mm",
+    "label": "Objective-C"
+  },
+  "ocaml": {
+    "fileName": "code.ocaml",
+    "label": "OCaml"
+  },
+  "odin": {
+    "fileName": "code.odin",
+    "label": "Odin"
+  },
+  "openscad": {
+    "fileName": "code.scad",
+    "label": "OpenSCAD"
+  },
+  "scad": {
+    "fileName": "code.scad",
+    "label": "OpenSCAD"
+  },
+  "org": {
+    "fileName": "code.org",
+    "label": "Org Markup"
+  },
+  "pascal": {
+    "fileName": "code.pas",
+    "label": "Pascal"
+  },
+  "perl": {
+    "fileName": "code.perl",
+    "label": "Perl"
+  },
+  "php": {
+    "fileName": "code.php",
+    "label": "PHP"
+  },
+  "pkl": {
+    "fileName": "PklProject.deps.json",
+    "label": "Pkl"
+  },
+  "plsql": {
+    "fileName": "code.plsql",
+    "label": "PL/SQL"
+  },
+  "po": {
+    "fileName": "code.po",
+    "label": "Gettext PO"
+  },
+  "pot": {
+    "fileName": "code.po",
+    "label": "Gettext PO"
+  },
+  "potx": {
+    "fileName": "code.po",
+    "label": "Gettext PO"
+  },
+  "postcss": {
+    "fileName": "code.pcss",
+    "label": "PostCSS"
+  },
+  "powershell": {
+    "fileName": "code.powershell",
+    "label": "PowerShell"
+  },
+  "ps": {
+    "fileName": "code.powershell",
+    "label": "PowerShell"
+  },
+  "ps1": {
+    "fileName": "code.powershell",
+    "label": "PowerShell"
+  },
+  "pwsh": {
+    "fileName": "code.powershell",
+    "label": "PowerShell"
+  },
+  "prisma": {
+    "fileName": "code.prisma",
+    "label": "Prisma"
+  },
+  "prolog": {
+    "fileName": "code.pro",
+    "label": "Prolog"
+  },
+  "proto": {
+    "fileName": "code.proto",
+    "label": "Protocol Buffer 3"
+  },
+  "protobuf": {
+    "fileName": "code.proto",
+    "label": "Protocol Buffer 3"
+  },
+  "pug": {
+    "fileName": "code.pug",
+    "label": "Pug"
+  },
+  "jade": {
+    "fileName": "code.pug",
+    "label": "Pug"
+  },
+  "puppet": {
+    "fileName": "code.puppet",
+    "label": "Puppet"
+  },
+  "purescript": {
+    "fileName": "code.purescript",
+    "label": "PureScript"
+  },
+  "python": {
+    "fileName": "code.py",
+    "label": "Python"
+  },
+  "py": {
+    "fileName": "code.py",
+    "label": "Python"
+  },
+  "qml": {
+    "fileName": "code.qml",
+    "label": "QML"
+  },
+  "qmldir": {
+    "fileName": "code.qmldir",
+    "label": "QML Directory"
+  },
+  "r": {
+    "fileName": "code.r",
+    "label": "R"
+  },
+  "racket": {
+    "fileName": "code.rkt",
+    "label": "Racket"
+  },
+  "razor": {
+    "fileName": "code.cshtml",
+    "label": "ASP.NET Razor"
+  },
+  "rbs": {
+    "fileName": "code.rbs",
+    "label": "RBS"
+  },
+  "ruby-signature": {
+    "fileName": "code.rbs",
+    "label": "RBS"
+  },
+  "reg": {
+    "fileName": "code.reg",
+    "label": "Windows Registry Script"
+  },
+  "regexp": {
+    "fileName": "code.regex",
+    "label": "RegExp"
+  },
+  "regex": {
+    "fileName": "code.regex",
+    "label": "RegExp"
+  },
+  "ron": {
+    "fileName": "code.ron",
+    "label": "RON"
+  },
+  "rst": {
+    "fileName": "code.rst",
+    "label": "reStructuredText"
+  },
+  "ruby": {
+    "fileName": "code.rb",
+    "label": "Ruby"
+  },
+  "rb": {
+    "fileName": "code.rb",
+    "label": "Ruby"
+  },
+  "rust": {
+    "fileName": "code.rs",
+    "label": "Rust"
+  },
+  "rs": {
+    "fileName": "code.rs",
+    "label": "Rust"
+  },
+  "sas": {
+    "fileName": "code.sas",
+    "label": "SAS"
+  },
+  "sass": {
+    "fileName": "code.sass",
+    "label": "Sass"
+  },
+  "scala": {
+    "fileName": "code.scala",
+    "label": "Scala"
+  },
+  "scheme": {
+    "fileName": "code.scheme",
+    "label": "Scheme"
+  },
+  "scss": {
+    "fileName": "code.scss",
+    "label": "SCSS"
+  },
+  "sdbl": {
+    "fileName": "code.sdbl",
+    "label": "1C (Query)"
+  },
+  "1c-query": {
+    "fileName": "code.sdbl",
+    "label": "1C (Query)"
+  },
+  "shellscript": {
+    "fileName": "code.sh",
+    "label": "Shell"
+  },
+  "bash": {
+    "fileName": "code.sh",
+    "label": "Shell"
+  },
+  "sh": {
+    "fileName": "code.sh",
+    "label": "Shell"
+  },
+  "shell": {
+    "fileName": "code.sh",
+    "label": "Shell"
+  },
+  "zsh": {
+    "fileName": "code.sh",
+    "label": "Shell"
+  },
+  "smithy": {
+    "fileName": "code.smithy",
+    "label": "Smithy"
+  },
+  "solidity": {
+    "fileName": "code.sol",
+    "label": "Solidity"
+  },
+  "soy": {
+    "fileName": "code.soy",
+    "label": "Closure Templates"
+  },
+  "closure-templates": {
+    "fileName": "code.soy",
+    "label": "Closure Templates"
+  },
+  "sparql": {
+    "fileName": "code.rq",
+    "label": "SPARQL"
+  },
+  "sql": {
+    "fileName": "code.sql",
+    "label": "SQL"
+  },
+  "stata": {
+    "fileName": "code.stata",
+    "label": "Stata"
+  },
+  "stylus": {
+    "fileName": "code.styl",
+    "label": "Stylus"
+  },
+  "styl": {
+    "fileName": "code.styl",
+    "label": "Stylus"
+  },
+  "svelte": {
+    "fileName": "code.svelte-kit",
+    "label": "Svelte"
+  },
+  "swift": {
+    "fileName": "code.swift",
+    "label": "Swift"
+  },
+  "systemd": {
+    "fileName": ".service",
+    "label": "Systemd Units"
+  },
+  "tcl": {
+    "fileName": "code.tcl",
+    "label": "Tcl"
+  },
+  "terraform": {
+    "fileName": "code.tf",
+    "label": "Terraform"
+  },
+  "tf": {
+    "fileName": "code.tf",
+    "label": "Terraform"
+  },
+  "tfvars": {
+    "fileName": "code.tf",
+    "label": "Terraform"
+  },
+  "tex": {
+    "fileName": "code.tex",
+    "label": "TeX"
+  },
+  "toml": {
+    "fileName": "code.toml",
+    "label": "TOML"
+  },
+  "tsv": {
+    "fileName": "code.tsv",
+    "label": "TSV"
+  },
+  "tsx": {
+    "fileName": "code.tsx",
+    "label": "TSX"
+  },
+  "twig": {
+    "fileName": "code.twig",
+    "label": "Twig"
+  },
+  "typescript": {
+    "fileName": "code.ts",
+    "label": "TypeScript"
+  },
+  "ts": {
+    "fileName": "code.ts",
+    "label": "TypeScript"
+  },
+  "cts": {
+    "fileName": "code.ts",
+    "label": "TypeScript"
+  },
+  "mts": {
+    "fileName": "code.ts",
+    "label": "TypeScript"
+  },
+  "typst": {
+    "fileName": "typst.toml",
+    "label": "Typst"
+  },
+  "typ": {
+    "fileName": "typst.toml",
+    "label": "Typst"
+  },
+  "v": {
+    "fileName": "code.v",
+    "label": "V"
+  },
+  "vala": {
+    "fileName": "code.vala",
+    "label": "Vala"
+  },
+  "vb": {
+    "fileName": "code.vb",
+    "label": "Visual Basic"
+  },
+  "verilog": {
+    "fileName": "code.veo",
+    "label": "Verilog"
+  },
+  "vhdl": {
+    "fileName": "code.vhdl",
+    "label": "VHDL"
+  },
+  "viml": {
+    "fileName": "code.vim",
+    "label": "Vim Script"
+  },
+  "vim": {
+    "fileName": "code.vim",
+    "label": "Vim Script"
+  },
+  "vimscript": {
+    "fileName": "code.vim",
+    "label": "Vim Script"
+  },
+  "vue": {
+    "fileName": "code.vue",
+    "label": "Vue"
+  },
+  "vyper": {
+    "fileName": "code.vy",
+    "label": "Vyper"
+  },
+  "vy": {
+    "fileName": "code.vy",
+    "label": "Vyper"
+  },
+  "wasm": {
+    "fileName": "code.wat",
+    "label": "WebAssembly"
+  },
+  "wenyan": {
+    "fileName": "code.wy",
+    "label": "Wenyan"
+  },
+  "文言": {
+    "fileName": "code.wy",
+    "label": "Wenyan"
+  },
+  "wgsl": {
+    "fileName": "code.wgsl",
+    "label": "WGSL"
+  },
+  "wikitext": {
+    "fileName": "code.mediawiki",
+    "label": "Wikitext"
+  },
+  "mediawiki": {
+    "fileName": "code.mediawiki",
+    "label": "Wikitext"
+  },
+  "wiki": {
+    "fileName": "code.mediawiki",
+    "label": "Wikitext"
+  },
+  "xml": {
+    "fileName": "code.xml",
+    "label": "XML"
+  },
+  "xsl": {
+    "fileName": "code.xsl",
+    "label": "XSL"
+  },
+  "yaml": {
+    "fileName": "code.yml",
+    "label": "YAML"
+  },
+  "yml": {
+    "fileName": "code.yml",
+    "label": "YAML"
+  },
+  "zig": {
+    "fileName": "code.zig",
+    "label": "Zig"
+  }
+}

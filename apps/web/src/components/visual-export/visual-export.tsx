@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '@/components/button'
 import { CopyButton } from '@/components/copy-button'
 import { useToast } from '@/components/toast'
@@ -100,11 +101,12 @@ export function VisualExportActions({ capture, disabled = false }: VisualExportA
 /**
  * Makes a single visual exportable without including its action toolbar.
  */
-export function ExportableVisual({ children, disabled = false, contentSelector, canvasImages }: {
+export function ExportableVisual({ children, disabled = false, contentSelector, canvasImages, actionsContainer }: {
   children: ReactNode
   disabled?: boolean
   contentSelector?: string
   canvasImages?: (element: HTMLElement) => Promise<ReadonlyMap<HTMLCanvasElement, string>>
+  actionsContainer?: HTMLElement | null | undefined
 }) {
   const element = useRef<HTMLDivElement>(null)
 
@@ -119,8 +121,12 @@ export function ExportableVisual({ children, disabled = false, contentSelector, 
     return captureImage(target, VISUAL_FONT_CSS, images ? () => images : undefined)
   }
 
+  // A surrounding code header may own the toolbar; capture still targets only
+  // the visual, and other callers retain their ordinary inline action row.
+  const actions = <VisualExportActions capture={capture} disabled={disabled} />
+
   return <div className="exportable-visual">
-    <VisualExportActions capture={capture} disabled={disabled} />
+    {actionsContainer ? createPortal(actions, actionsContainer) : actions}
     <div className="visual-export-content" ref={element}>{children}</div>
   </div>
 }

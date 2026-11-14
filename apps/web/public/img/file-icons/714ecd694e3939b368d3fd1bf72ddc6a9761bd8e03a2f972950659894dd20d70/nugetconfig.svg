@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#ab7967" d="M219.0230103 70.4013443h152.1773376C448.9618835 70.4013443 512 133.4394684 512 211.200943v152.1770782c0 77.7615356-63.0381165 140.7996521-140.7996521 140.7996521H219.0230103c-77.7614746 0-140.7995605-63.0381165-140.7995605-140.7996521V211.200943c-1e-7-77.7614746 63.0380858-140.7995987 140.7995605-140.7995987M99.5571442 57.6008949c0-38.1775055-41.6132317-62.1679955-74.7240448-43.0792427s-33.1107979 67.0697327.0000095 86.1584854 74.7240353-4.901741 74.7240353-43.0792427M241.7779236 196.978363c0-40.3776093-43.9901428-65.7506256-78.992218-45.5618134s-35.0020523 70.9348297.0000153 91.1236267 78.9922027-5.184204 78.9922027-45.5618133m206.2221985 166.3997498c0-69.8232727-76.0916443-113.6997528-136.6362-78.7881165s-60.5445557 122.6646118 0 157.5762634 136.6362-8.9648437 136.6362-78.7881469" data-iconColor="NuGet Config"/></svg>

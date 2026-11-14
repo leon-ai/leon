@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><defs><linearGradient id="a" x1="12.356" x2="12.356" y1="21.559" y2="2.9492" gradientUnits="userSpaceOnUse"><stop data-iconColor="SWC" offset="0" stop-color="#791223"/><stop data-iconColor="SWC" offset="1" stop-color="#d92f3c"/></linearGradient></defs><path fill="url(#a)" d="M6 3c-.47 0-.88016.21078-1.1602.55078l-1.3789 1.6797c-.29.34-.46094.76953-.46094 1.2695v12.5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-12.5c0-.5-.17094-.92953-.46094-1.2695l-1.3887-1.6797c-.27-.34-.68039-.55078-1.1504-.55078h-12zm-.070312 1h12l.93945 1h-13.75z"/><path fill="#fff" d="M11.053 11.918c-.0026.00022-.005.000726-.0076.000964-.24441.02079-.47583.0531-.67679.10995-.31749.09511-.60339.23173-.85594.41138-.24533.18493-.46811.413-.67015.68248-.19482.27475-.39097.59143-.58579.95072-.06938.13102-.13367.24353-.20095.36494v.000964c-.000058.000104-.0019-.000106-.0019 0l-.76778 1.3716-.0029-.000964c-.13625.25352-.2644.48528-.38105.68627-.12267.21135-.2589.39045-.41043.5384s-.32462.26103-.51944.34029c-.04122.01565-.09247.02403-.13839.03602-.000295.000077-.000653-.000077-.000946 0h-.56588v1.383h.56679v-.000964c.24547-.02079.47693-.05287.67868-.10995.31749-.09511.60339-.23173.85594-.41138.24533-.18493.46906-.413.6711-.68247.19482-.27475.39002-.59143.58484-.95072.06923-.13074.13477-.24382.2019-.36493l.0038.000964.0019-.0028.02085-.03792h1.4493v.000964h.64456v-1.3792h-.18958v-.000963h-1.1337c.1259-.23326.24681-.45168.35546-.63887.12267-.21135.2589-.39045.41043-.5384.15153-.14794.32462-.26103.51944-.34029.04037-.01533.09127-.02356.1365-.03507h.56873v-.0019h-.000964v-1.3811h-.5602v-.000964z"/></svg>

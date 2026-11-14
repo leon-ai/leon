@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="#00bfa5" fill-rule="evenodd" d="m19.308 17.864-9.2184 2.6562c-.2816.08125-.55154-.15605-.49232-.4328l3.2931-15.366c.06164-.28734.46928-.33297.59794-.066875l6.0975 12.615c.11501.238-.01617.5186-.2779.5939zm1.5807-.62645-7.0601-14.607v-.000315c-.17706-.36516-.54656-.60609-.96534-.62844-.4296-.024375-.81456.1775-1.0317.5211l-7.657 12.083c-.2372.3766-.23255.84095.013472 1.213l3.7429 5.6488c.22309.3372.60959.53235 1.0113.53235.11387 0 .22837-.0156.34097-.0481l10.865-3.1306c.33282-.09595.60497-.3253.74738-.6294.14195-.3042.13969-.65235-.0064-.9545z" data-iconColor="Prisma Config" transform="translate(-.5)"/></svg>

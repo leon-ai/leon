@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#e72f52" d="M464.4281921 5.4559383H47.5713348C21.4070969 5.4559383 0 26.8630333 0 53.0272636v112.1009216h115.6247406V146.808834c0-14.2097321 11.5228195-25.728157 25.7325439-25.728157H370.646698c14.2096252 0 25.7281494 11.518425 25.7281494 25.728157v18.3193512h115.6247559V53.0272636c0-26.1642303-21.4071656-47.5713253-47.5714112-47.5713253m-68.052948 359.7352238c0 14.2097473-11.5183716 25.7325745-25.7281494 25.7325745H141.3577576c-14.2097244 0-25.7326126-11.5228271-25.7326126-25.7325745v-18.3149719H.0004033v112.0965271c0 26.1686401 21.4070988 47.5713501 47.5713348 47.5713501h416.8569946c26.1642151 0 47.5712585-21.40271 47.5712585-47.5713501V346.8761902H396.3752441zM.0030917 313.8141174h115.6247406V198.1893921H.0030917zm396.3704129 0h115.6247559V198.1893921H396.3735046z" data-iconColor="OpenStack"/></svg>

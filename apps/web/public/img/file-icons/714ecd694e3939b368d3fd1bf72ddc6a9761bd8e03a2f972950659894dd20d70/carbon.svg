@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="16" height="16" viewBox="0 0 280 280"><defs><mask id="a"><path d="M0 1400V0h2800v2800H0zm1583 859c145-38 276-146 340-279 38-79 67-175 67-222v-28h-209l-10 38c-5 20-13 51-17 67-9 44-68 146-101 176-15 15-53 40-83 55-50 26-64 29-155 29-92 0-104-3-154-30-119-66-194-198-220-388-14-101-14-452 0-554 25-187 93-314 204-381 55-33 67-37 150-40 106-5 156 7 222 51 79 52 125 135 157 280l6 27h213l-6-49c-14-118-103-282-198-365-89-78-231-126-369-126-136 0-240 35-351 117-125 92-219 281-248 496-14 101-14 432-1 534 35 258 173 475 354 558 42 19 104 39 139 44 69 11 211 5 270-10"/><circle cx="1400" cy="1400" r="1400" fill="#fff"/></mask></defs><g fill="#7e57c2" data-iconColor="Carbon" mask="url(#a)" transform="translate(0,280) scale(0.1,-0.1)"><path d="M0 1400V0h2800v2800H0zm1583 859c145-38 276-146 340-279 38-79 67-175 67-222v-28h-209l-10 38c-5 20-13 51-17 67-9 44-68 146-101 176-15 15-53 40-83 55-50 26-64 29-155 29-92 0-104-3-154-30-119-66-194-198-220-388-14-101-14-452 0-554 25-187 93-314 204-381 55-33 67-37 150-40 106-5 156 7 222 51 79 52 125 135 157 280l6 27h213l-6-49c-14-118-103-282-198-365-89-78-231-126-369-126-136 0-240 35-351 117-125 92-219 281-248 496-14 101-14 432-1 534 35 258 173 475 354 558 42 19 104 39 139 44 69 11 211 5 270-10"/><path d="M0 1400V0h2800v2800H0zm1583 859c145-38 276-146 340-279 38-79 67-175 67-222v-28h-209l-10 38c-5 20-13 51-17 67-9 44-68 146-101 176-15 15-53 40-83 55-50 26-64 29-155 29-92 0-104-3-154-30-119-66-194-198-220-388-14-101-14-452 0-554 25-187 93-314 204-381 55-33 67-37 150-40 106-5 156 7 222 51 79 52 125 135 157 280l6 27h213l-6-49c-14-118-103-282-198-365-89-78-231-126-369-126-136 0-240 35-351 117-125 92-219 281-248 496-14 101-14 432-1 534 35 258 173 475 354 558 42 19 104 39 139 44 69 11 211 5 270-10"/></g></svg>

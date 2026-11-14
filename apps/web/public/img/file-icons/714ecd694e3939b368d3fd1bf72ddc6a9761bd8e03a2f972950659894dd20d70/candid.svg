@@ -1,0 +1,42 @@
+<!--
+  - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  -
+  -->
+
+<svg  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="svg8" version="1.1"
+     viewBox="0 0 10.583 10.583" height="16px" width="16px">
+  <g transform="translate(24.963 -27.198)" fill="#b4318b" data-iconColor="Candid">
+    <g transform="matrix(.07754 0 0 .07754 -27.502 20.904)">
+      <g transform="translate(15.823 28.158) scale(.82216)">
+        <g transform="matrix(1.00067 0 0 1.00067 2.387 -.15)">
+          <path transform="scale(.26458)"
+                d="M407.857 736.338v119.14c104.036-.076 185.864-52.16 237.055-115.853-51.229-29.482-58.675-33.863-106.33-61.355-11.895 12.235-54.983 57.932-130.725 58.068z"/>
+          <path transform="scale(.26458)"
+                d="M238.164 613.764 133.7 674.916c45.55 106.18 151.038 180.57 273.932 180.57.076 0 .15-.008.226-.008v-119.14c-.112 0-.217.012-.33.012-80.63 0-146.004-52.93-169.363-122.586z"/>
+          <path transform="scale(.26458)"
+                d="M407.63 259.797c-164.554 0-297.95 133.347-297.95 297.844 0 41.646 8.578 81.28 24.02 117.275l104.464-61.152c-5.979-17.83-9.344-36.698-9.344-56.121 0-95.311 77.128-178.71 178.707-178.71 75.952 0 119.142 45.565 131.055 58.08 47.655-27.687 55.101-31.996 106.33-61.357-51.229-63.74-133.137-115.86-237.281-115.86Z"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

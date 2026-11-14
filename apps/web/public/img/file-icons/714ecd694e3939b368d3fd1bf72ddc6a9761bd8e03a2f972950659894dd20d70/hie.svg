@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#8f4d8b" d="M0 386.7279358 87.1529541 256 0 125.2720718h65.3639603L152.516922 256 65.3639603 386.7279358zm87.1529541 0L174.3059082 256 87.1529541 125.2720718h65.3639679l174.3029022 261.4558716H261.455841l-54.4679565-81.7034607-54.4709625 81.7034607H87.1529541zm395.7950745-130.7394409L512 212.4135284l-145.2539062-.0030823v43.578064zm-58.1010132 65.3639526 29.0489807-43.5749512-87.1499023-.0030823v43.5779724zm29.0489807 65.3638916 29.0519714-43.5749817-116.2019043-.0030518v43.5779724zm-148.8638916-65.3518677 43.5749817 65.3634644.0030518-174.3178711-43.5778503-.0007629zm43.5782165-127.0927429.0007019-43.5749817-43.5788269-.003067v43.5779724z" data-iconColor="Haskell IDE Config"/></svg>

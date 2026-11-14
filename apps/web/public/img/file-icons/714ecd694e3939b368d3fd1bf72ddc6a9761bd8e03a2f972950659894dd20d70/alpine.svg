@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#0c597f" d="M384.0214844 34.2768898H127.978508L0 255.9999084 127.978508 477.723114h256.0429688L512 255.9999084zM147.1620636 295.4020996l38.8415833-38.8828735v53.9402161c-13.6286469-.2927857-26.6828461-6.542511-38.8415833-15.0573426m152.6052704 10.5734863c-23.7467957-24.4812622-54.3271942-55.1417084-87.5346832-88.1777344l-88.9374542 87.9747314C109.2761688 315.6438599 85.875 308.75 67.474205 295.3641663l145.119606-143.4794159c45.9142151 48.2947998 93.569458 96.1930847 143.0358276 143.6788788C331.7724915 312.664978 310.25 313.875 299.767334 305.9755859m84.8146057 0-71.3183899-71.0779419-7.1147766 7.1147919-33.2984924-32.9348145 40.4304199-40.4402924c43.1062317 43.4316711 85.4614258 86.1768494 127.1635132 126.9263C419.875 310.3125 397.0625 315.375 384.5819397 305.9755859" data-iconColor="Alpine Linux"/></svg>

@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><path fill="gray" d="M4.681 16.27c0 4.473 2.6 8.342 6.371 10.171L5.661 11.668c-.628 1.407-.98 2.962-.98 4.602m18.935-.571c0-1.397-.503-2.365-.932-3.118-.573-.932-1.109-1.719-1.109-2.652 0-1.039.785-2.006 1.898-2.006.048 0 .097.007.145.01-2.01-1.842-4.689-2.968-7.632-2.968-3.95 0-7.424 2.027-9.444 5.096.266.008.515.014.727.014 1.183 0 3.013-.145 3.013-.145.608-.034.68.859.071.932 0 0-.611.071-1.293.108l4.117 12.243 2.474-7.418-1.762-4.825c-.609-.037-1.185-.108-1.185-.108-.61-.037-.537-.966.073-.932 0 0 1.865.145 2.976.145 1.182 0 3.014-.145 3.014-.145.607-.034.679.859.07.932 0 0-.611.071-1.292.108l4.085 12.15 1.128-3.766c.573-1.47.861-2.686.861-3.655zm-7.432 1.56-3.393 9.856c1.012.297 2.082.459 3.194.459 1.315 0 2.579-.228 3.754-.642-.03-.048-.058-.099-.081-.154zm9.72-6.413c.05.361.078.747.078 1.164 0 1.146-.215 2.435-.861 4.049l-3.453 9.981c3.36-1.958 5.619-5.598 5.619-9.769 0-1.967-.502-3.814-1.384-5.425z" data-iconColor="Wordpress Distignore" data-themed="true"/></svg>

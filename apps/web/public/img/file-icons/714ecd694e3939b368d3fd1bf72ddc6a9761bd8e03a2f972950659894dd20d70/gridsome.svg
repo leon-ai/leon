@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2" clip-rule="evenodd" viewBox="0 0 24 24"><g fill="#00a672" data-iconColor="Gridsome"><path d="M22 12c0-5.519-4.481-10-10-10S2 6.481 2 12s4.481 10 10 10 10-4.481 10-10"/><path fill="#fff" fill-rule="nonzero" d="M14.514 12.068c0-.663.543-1.2 1.212-1.2l1.765-.001c.669 0 1.228.538 1.228 1.201s-.559 1.2-1.228 1.2h-1.765c-.669 0-1.212-.537-1.212-1.2m-3.703.002c0-.664.539-1.203 1.202-1.203.664 0 1.203.539 1.203 1.203 0 .663-.539 1.202-1.203 1.202-.663 0-1.202-.539-1.202-1.202"/><path fill="#fff" d="M13.183 6.453c.027.647-.476 1.194-1.123 1.22-2.793.116-4.498 2.305-4.415 4.384.026.647-.467 1.192-1.114 1.218s-1.216-.496-1.242-1.143c-.136-3.387 2.693-6.736 6.674-6.801.647-.027 1.193.476 1.22 1.122"/><path fill="#fff" d="M5.285 12.006c.016 4.092 3.374 6.796 6.77 6.713 4.009-.143 6.905-3.625 6.664-6.733-.056-.646-.629-1.146-1.275-1.115-.647.031-1.147.58-1.115 1.227.09 1.889-1.652 4.202-4.331 4.277-2.129.052-4.26-1.619-4.353-4.22-.025.603-.5 1.095-1.114 1.12-.647.026-1.216-.496-1.242-1.143-.002-.042-.003-.084-.004-.126"/></g></svg>

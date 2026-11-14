@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#044699" d="M149.30275 277.61924H52.298542C15.268581 276.14436-.528512 257.84143.01346 248.00395c.52288551-9.49103 18.528129-24.27356 58.281704-28.56756h165.78866l.00037 31.02168h-74.78144zm74.78144-27.16117h73.90771v-31.02168h25.44154l70.90353-71.5109h105.25806l-85.86915 102.96083L512 364.12604l-106.25576-.00004-84.30623-84.80504h-96.77755zm-76.16766-44.23217v-58.30041h149.78735l.28802 71.62696h-73.90808V206.2259zm145.93531 87.75136V364.126H149.59077l-.28802-86.50676h75.7364v16.35801z" data-iconColor="KerboScript"/></svg>

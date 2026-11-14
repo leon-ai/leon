@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><path fill="#90a4ae" d="M6.802 20.283c0 1.23-.857 2.237-1.904 2.237s-1.905-1.006-1.905-2.237v-7.321c0-1.23.857-2.237 1.905-2.237s1.904 1.007 1.904 2.237zm22.205 0c0 1.23-.857 2.237-1.905 2.237s-1.905-1.006-1.905-2.237v-7.321c0-1.23.857-2.237 1.905-2.237s1.905 1.007 1.905 2.237zM20.164 3.649l1.222-2.193c.1-.179.07-.388-.065-.463s-.329.009-.428.188l-1.25 2.244c-1.115-.439-2.364-.684-3.684-.684-1.33 0-2.588.25-3.71.695l-1.256-2.254c-.1-.179-.293-.264-.428-.188s-.165.284-.065.463l1.228 2.204c-2.555 1.2-4.276 3.453-4.276 6.035 0 .262.019.521.053.776h16.909c.035-.255.053-.513.053-.776 0-2.59-1.732-4.849-4.301-6.046zm-8.067 3.828c-.411 0-.744-.333-.744-.744s.333-.744.744-.744.744.333.744.744-.333.744-.744.744m7.764 0c-.411 0-.744-.333-.744-.744s.333-.744.744-.744.744.333.744.744-.333.744-.744.744M7.45 11.211v12.471h.007c.087 1.053 1.056 1.89 2.23 1.89h12.541c1.173 0 2.142-.837 2.23-1.89h.007V11.211H7.451zm7.29 14.299v3.858c0 1.23-.857 2.237-1.905 2.237s-1.904-1.007-1.904-2.237v-3.855zm6.348-.002v3.86c0 1.23-.857 2.237-1.905 2.237s-1.905-1.007-1.905-2.237v-3.86z" data-iconColor="APK"/></svg>

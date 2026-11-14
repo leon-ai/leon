@@ -1,0 +1,22 @@
+<!-- - The MIT License (MIT)
+  -
+  - Copyright (c) 2015-2024 Elior "Mallowigi" Boukhobza
+  -
+  - Permission is hereby granted, free of charge, to any person obtaining a copy
+  - of this software and associated documentation files (the "Software"), to deal
+  - in the Software without restriction, including without limitation the rights
+  - to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  - copies of the Software, and to permit persons to whom the Software is
+  - furnished to do so, subject to the following conditions:
+  -
+  - The above copyright notice and this permission notice shall be included in all
+  - copies or substantial portions of the Software.
+  -
+  - THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  - IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  - FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  - AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  - LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  - OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  - SOFTWARE.
+  - --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path fill="#ffca28" d="m13.38 2 .01.01c-3.22 0-5.83 2.56-5.83 5.74 0 1.05.3 2.04.8 2.89 1.46.93 3.19 1.46 5.04 1.49 1.8-.01 3.54-.56 5.02-1.49.26-.43.46-.89.6-1.37.06-.23.11-.46.14-.7.01-.04.01-.08.02-.12.03-.21.04-.42.04-.64 0-.01 0-.02 0-.02 0-.01 0-.03 0-.04 0-.05 0-.1 0-.15 0-.11-.01-.23-.02-.34 0-.05-.01-.1-.01-.16 0-.01 0-.03-.01-.04-.02-.14-.04-.28-.06-.41-.01-.04-.02-.09-.03-.13-.57-2.58-2.9-4.52-5.7-4.52ZM4.21 8.18c-.43 0-.73.13-.93.26-.05.03-.07.06-.1.08.92.42 1.66.63 2.13.63.3 0 .5-.06.66-.13.03-.02.06-.04.09-.06l.09-.05c-.81-.48-1.48-.73-1.94-.73M6.38 9.6c-1.86.96-1.27 2.03-1.27 2.03C6.85 10.37 6.38 9.6 6.38 9.6m14.43.62c-.41.41-.87.78-1.35 1.12-1.12.78-2.4 1.37-3.79 1.68-.73.16-1.48.25-2.25.26h-.01c-.77 0-1.52-.1-2.25-.26-1.37-.31-2.66-.89-3.78-1.67-.19-.14-.38-.3-.56-.45-.11.17-.25.35-.43.54.13.44.27.89.43 1.34.29.64 1.65 2.66 6.51 3.27.08.01.09.12.02.15-.71.26-2.45.94-4.03.24.26.29.93.75 2.64.94.07.01.09.11.02.14-.45.19-1.57.57-2.66.16 1.08 1.56 2.42 3.04 4.1 4.32 2.72-2.09 4.56-4.69 5.8-7.31-.66.37-1.32.42-1.88.35-.61-.08-1.13-.31-1.43-.47-.08-.03-.04-.15.04-.15 2.06.01 3.38-.94 4.03-1.59l.02-.02.01-.02c.32-.86.58-1.71.83-2.55l-.02.02c0-.01.01-.02.01-.04z" data-iconColor="Bandit"/><path fill="#eee" d="M14.72 4.75c-.98 0-1.77.78-1.77 1.75 0 .96.79 1.75 1.77 1.75s1.77-.78 1.77-1.75c0-.96-.79-1.75-1.77-1.75m-2.76 3.82c-.45 0-.83.36-.83.82 0 .45.36.82.83.82.45 0 .83-.36.83-.82 0-.45-.36-.82-.83-.82"/><path fill="#212121" d="M13.38 3.94c2.13 0 3.86 1.7 3.86 3.8s-1.72 3.8-3.86 3.8c-2.13 0-3.86-1.7-3.86-3.8-.01-2.1 1.72-3.8 3.86-3.8m1.33.81c-.98 0-1.77.78-1.77 1.75 0 .96.79 1.75 1.77 1.75s1.77-.78 1.77-1.75c0-.96-.79-1.75-1.77-1.75m-1.92 4.63c0-.45-.37-.82-.83-.82-.47 0-.83.36-.83.82 0 .45.37.82.83.82.47 0 .83-.37.83-.82"/></svg>
