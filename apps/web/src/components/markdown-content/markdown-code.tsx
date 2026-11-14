@@ -38,6 +38,7 @@ export default function MarkdownCode({ text, language }: MarkdownCodeProps) {
   const { identity } = useContext(MarkdownBlockContext)
   const [diagramReady, setDiagramReady] = useState(false)
   const [view, setView] = useState(DiagramView.Diagram)
+  const [exportActionsContainer, setExportActionsContainer] = useState<HTMLDivElement | null>(null)
   const diagramRequested = useRef(false)
   const diagram = language === 'mermaid'
   const source = !diagram || view === DiagramView.Source
@@ -59,6 +60,7 @@ export default function MarkdownCode({ text, language }: MarkdownCodeProps) {
               onClick={() => setView(source ? DiagramView.Diagram : DiagramView.Source)} />
           </Tooltip>}
           <CopyButton text={text} label="Copy code" size="sm" tone="muted" />
+          {diagram && <div ref={setExportActionsContainer} />}
         </div>
       </div>
       {source && <CodeView text={text} language={language} label="Code block" active={incomplete} fitContent />}
@@ -66,7 +68,8 @@ export default function MarkdownCode({ text, language }: MarkdownCodeProps) {
         {diagramRequested.current && <VisualLayout identity={`${identity}:diagram`} ready={diagramReady}
           estimatedHeight="240px" label="Drawing diagram…">
           <Suspense fallback={null}>
-            <Mermaid text={text} incomplete={incomplete} active={!source && !incomplete} onReady={setDiagramReady} />
+            <Mermaid text={text} incomplete={incomplete} active={!source && !incomplete} onReady={setDiagramReady}
+              actionsContainer={exportActionsContainer} />
           </Suspense>
         </VisualLayout>}
       </div>}
