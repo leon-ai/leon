@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 import { PROFILE_CONFIG_PATH } from '@/leon-roots'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { withAgentScenarioHome } from '../scenario-home'
 
 import { PROVIDER_MATRIX } from './provider-matrix'
 import {
@@ -182,97 +183,100 @@ async function runProviderScenario(
    * Provider choice is read at module-load time, so each provider run needs a
    * fresh process with its own env.
    */
-  const childProcess = execa(
-    'node',
-    [
-      '--import',
-      'tsx',
-      'test/agent/e2e/run-agent-provider-scenario.ts',
-      provider,
-      scenarioId,
-      // SDK imports must not treat the scenario as a native-skill intent path.
-      '--runtime',
-      'tool'
-    ],
-    {
-      cwd: ROOT_DIR,
-      env: {
-        ...process.env,
-        LEON_NODE_ENV: 'testing',
-        LEON_LLM:
-          PROVIDER_MATRIX.find((item) => item.provider === provider)?.llmTarget ||
-          provider,
-        LEON_AGENT_E2E_SOURCE_CONFIG_PATH: PROFILE_CONFIG_PATH,
-        LEON_AGENT_E2E_SOURCE_JQ_PATH: RuntimeHelper.getJQBinPath()
-      },
-      all: true,
-      reject: false,
-      timeout: 300_000
-    }
-  )
-
-  let streamBuffer = ''
-  childProcess.all?.setEncoding('utf8')
-  childProcess.all?.on('data', (chunk: string) => {
-    streamBuffer += chunk
-    const lines = streamBuffer.split('\n')
-    streamBuffer = lines.pop() || ''
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-
-      if (!line.startsWith(PROGRESS_PREFIX)) {
-        continue
+  return withAgentScenarioHome(async (testHome) => {
+    const childProcess = execa(
+      'node',
+      [
+        '--import',
+        'tsx',
+        'test/agent/e2e/run-agent-provider-scenario.ts',
+        provider,
+        scenarioId,
+        // SDK imports must not treat the scenario as a native-skill intent path.
+        '--runtime',
+        'tool'
+      ],
+      {
+        cwd: ROOT_DIR,
+        env: {
+          ...process.env,
+          LEON_NODE_ENV: 'testing',
+          LEON_AGENT_SCENARIO_HOME: testHome,
+          LEON_LLM:
+            PROVIDER_MATRIX.find((item) => item.provider === provider)?.llmTarget ||
+            provider,
+          LEON_AGENT_E2E_SOURCE_CONFIG_PATH: PROFILE_CONFIG_PATH,
+          LEON_AGENT_E2E_SOURCE_JQ_PATH: RuntimeHelper.getJQBinPath()
+        },
+        all: true,
+        reject: false,
+        timeout: 300_000
       }
+    )
 
-      const payload = line.slice(PROGRESS_PREFIX.length)
+    let streamBuffer = ''
+    childProcess.all?.setEncoding('utf8')
+    childProcess.all?.on('data', (chunk: string) => {
+      streamBuffer += chunk
+      const lines = streamBuffer.split('\n')
+      streamBuffer = lines.pop() || ''
 
-      try {
-        const event = JSON.parse(payload) as ProviderProgressEvent
-        console.info(formatProgressEvent(event))
-      } catch {
-        console.info(`[agent:e2e:${provider}] ${payload}`)
+      for (const rawLine of lines) {
+        const line = rawLine.trim()
+
+        if (!line.startsWith(PROGRESS_PREFIX)) {
+          continue
+        }
+
+        const payload = line.slice(PROGRESS_PREFIX.length)
+
+        try {
+          const event = JSON.parse(payload) as ProviderProgressEvent
+          console.info(formatProgressEvent(event))
+        } catch {
+          console.info(`[agent:e2e:${provider}] ${payload}`)
+        }
       }
+    })
+
+    const { stdout, stderr, exitCode } = await childProcess
+
+    const combinedOutput = `${stdout}\n${stderr}`
+    const resultLine = combinedOutput
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith(RESULT_PREFIX))
+      .at(-1)
+
+    if (!resultLine) {
+      throw new Error(
+        `Missing agent result marker for provider "${provider}". Output:\n${combinedOutput}`
+      )
     }
-  })
 
-  const { stdout, stderr, exitCode } = await childProcess
+    const result = JSON.parse(
+      resultLine.slice(RESULT_PREFIX.length)
+    ) as ProviderScenarioResult
 
-  const combinedOutput = `${stdout}\n${stderr}`
-  const resultLine = combinedOutput
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith(RESULT_PREFIX))
-    .at(-1)
-
-  if (!resultLine) {
-    throw new Error(
-      `Missing agent result marker for provider "${provider}". Output:\n${combinedOutput}`
+    const evidenceDirectory = path.join(ROOT_DIR, 'tmp', 'agent-e2e')
+    result.evidencePath = path.join(
+      evidenceDirectory,
+      `${provider}-${scenarioId}-${Date.now()}.json`
     )
-  }
+    // Fixture homes are disposable; retain complete observations for verification.
+    await fs.mkdir(evidenceDirectory, { recursive: true })
+    await fs.writeFile(result.evidencePath, JSON.stringify(result, null, 2), {
+      mode: 0o600
+    })
 
-  const result = JSON.parse(
-    resultLine.slice(RESULT_PREFIX.length)
-  ) as ProviderScenarioResult
+    if (exitCode !== 0 && !result.skipped) {
+      throw new Error(
+        `Provider "${provider}" scenario failed with exit code ${exitCode}. Output:\n${combinedOutput}`
+      )
+    }
 
-  const evidenceDirectory = path.join(ROOT_DIR, 'tmp', 'agent-e2e')
-  result.evidencePath = path.join(
-    evidenceDirectory,
-    `${provider}-${scenarioId}-${Date.now()}.json`
-  )
-  // Fixture homes are disposable; retain complete observations for verification.
-  await fs.mkdir(evidenceDirectory, { recursive: true })
-  await fs.writeFile(result.evidencePath, JSON.stringify(result, null, 2), {
-    mode: 0o600
+    return result
   })
-
-  if (exitCode !== 0 && !result.skipped) {
-    throw new Error(
-      `Provider "${provider}" scenario failed with exit code ${exitCode}. Output:\n${combinedOutput}`
-    )
-  }
-
-  return result
 }
 
 function expectDirectAnswerScenario(result: ProviderScenarioResult): void {

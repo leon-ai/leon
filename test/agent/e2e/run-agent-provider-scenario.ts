@@ -9,6 +9,7 @@ import { createServer } from 'node:net'
 import YAML from 'yaml'
 import { resolveAgentScenario } from '../../../scripts/agent-scenarios'
 import { createCodingFixture, type CodingEvidence } from './coding-fixture'
+import { AGENT_SCENARIO_HOME_PREFIX } from '../scenario-home'
 
 import type { LLMModelReasoning } from '../../../server/src/core/llm-manager/llm-model-catalog'
 import type { AgentResponseTrace, MessageLog } from '../../../server/src/types'
@@ -25,7 +26,6 @@ import {
 
 const RESULT_PREFIX = '__AGENT_RESULT__'
 const PROGRESS_PREFIX = '__AGENT_PROGRESS__'
-const TEST_HOME_PREFIX = 'leon-agent-e2e'
 const TEST_PROFILE_PREFIX = 'agent-e2e'
 const SOURCE_CONFIG_PATH_ENV = 'LEON_AGENT_E2E_SOURCE_CONFIG_PATH'
 const SOURCE_JQ_PATH_ENV = 'LEON_AGENT_E2E_SOURCE_JQ_PATH'
@@ -193,24 +193,6 @@ function getProviderUnavailableReason(value: unknown): string | null {
   return null
 }
 
-async function removeTestHomePath(
-  homePath: string,
-  expectedHomePath: string
-): Promise<void> {
-  const resolvedHomePath = path.resolve(homePath)
-  const resolvedExpectedHomePath = path.resolve(expectedHomePath)
-
-  if (
-    resolvedHomePath !== resolvedExpectedHomePath ||
-    path.dirname(resolvedHomePath) !== os.tmpdir() ||
-    !path.basename(resolvedHomePath).startsWith(`${TEST_HOME_PREFIX}-`)
-  ) {
-    throw new Error(`Refusing to remove non-test Leon home path: ${homePath}`)
-  }
-
-  await fs.rm(resolvedHomePath, { force: true, recursive: true })
-}
-
 async function prepareTestProfilePath(
   directories: string[],
   disabledConfigPath: string
@@ -372,12 +354,9 @@ async function main(): Promise<void> {
     : scenario.id
   const testRunId = `${provider}-${profileScenarioId}-${process.pid}-${Date.now()}`
   const testProfileName = `${TEST_PROFILE_PREFIX}-${testRunId}`
-  const testHomePath = (isRealScenario && process.env['LEON_AGENT_SCENARIO_HOME']) || path.join(
-    os.tmpdir(),
-    `${TEST_HOME_PREFIX}-${testRunId}`
-  )
-  if (path.dirname(path.resolve(testHomePath)) !== os.tmpdir() ||
-      !path.basename(testHomePath).startsWith(`${TEST_HOME_PREFIX}-`)) {
+  const testHomePath = process.env['LEON_AGENT_SCENARIO_HOME']
+  if (!testHomePath || path.dirname(path.resolve(testHomePath)) !== path.resolve(os.tmpdir()) ||
+      !path.basename(testHomePath).startsWith(AGENT_SCENARIO_HOME_PREFIX)) {
     throw new Error('Agent scenarios require an isolated temporary Leon home.')
   }
   const testProfilePath = path.join(
@@ -585,6 +564,40 @@ async function main(): Promise<void> {
     return toolResult
   }
 
+  let scenarioFailed = false
+
+  async function cleanup(): Promise<void> {
+    const workerCleanupStartedAt = performance.now()
+    await TOOL_WORKER_MANAGER.dispose()
+    printProgress({ provider, stage: 'cleanup', message:
+      `Tool worker cleanup: ${Math.round(performance.now() - workerCleanupStartedAt)} ms` })
+    const httpCleanupStartedAt = performance.now()
+    if (HTTP_SERVER.httpServer.listening) {
+      await new Promise<void>((resolve, reject) => {
+        HTTP_SERVER.httpServer.close((error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+
+          resolve()
+        })
+      })
+    }
+    printProgress({ provider, stage: 'cleanup', message:
+      `HTTP cleanup: ${Math.round(performance.now() - httpCleanupStartedAt)} ms` })
+    process.removeListener('SIGINT', stop)
+    process.removeListener('SIGTERM', stop)
+    TOOL_EXECUTOR.executeTool = originalExecuteTool
+    const fileCleanupStartedAt = performance.now()
+    await CONVERSATION_LOGGER.clear()
+    await fs.rm(tempAssetPath, { force: true })
+    await fs.rm(continuationStatePath, { force: true })
+    await fs.rm(historyCompactionStatePath, { force: true })
+    printProgress({ provider, stage: 'cleanup', message:
+      `Fixture file cleanup: ${Math.round(performance.now() - fileCleanupStartedAt)} ms` })
+  }
+
   try {
     const { default: generateProfileToken } = await import(
       '../../../scripts/generate/generate-profile-token.js'
@@ -771,37 +784,18 @@ async function main(): Promise<void> {
         scenarioId: scenario.id
       }
     })
+  } catch (error) {
+    scenarioFailed = true
+    throw error
   } finally {
-    const workerCleanupStartedAt = performance.now()
-    await TOOL_WORKER_MANAGER.dispose()
-    printProgress({ provider, stage: 'cleanup', message:
-      `Tool worker cleanup: ${Math.round(performance.now() - workerCleanupStartedAt)} ms` })
-    const httpCleanupStartedAt = performance.now()
-    if (HTTP_SERVER.httpServer.listening) {
-      await new Promise<void>((resolve, reject) => {
-        HTTP_SERVER.httpServer.close((error) => {
-          if (error) {
-            reject(error)
-            return
-          }
+    await cleanup().catch((error: unknown) => {
+      if (!scenarioFailed) {
+        throw error
+      }
 
-          resolve()
-        })
-      })
-    }
-    printProgress({ provider, stage: 'cleanup', message:
-      `HTTP cleanup: ${Math.round(performance.now() - httpCleanupStartedAt)} ms` })
-    process.removeListener('SIGINT', stop)
-    process.removeListener('SIGTERM', stop)
-    TOOL_EXECUTOR.executeTool = originalExecuteTool
-    const fileCleanupStartedAt = performance.now()
-    await CONVERSATION_LOGGER.clear()
-    await fs.rm(tempAssetPath, { force: true })
-    await fs.rm(continuationStatePath, { force: true })
-    await fs.rm(historyCompactionStatePath, { force: true })
-    await removeTestHomePath(LEON_HOME_PATH, testHomePath)
-    printProgress({ provider, stage: 'cleanup', message:
-      `Fixture file cleanup: ${Math.round(performance.now() - fileCleanupStartedAt)} ms` })
+      // Keep the task failure as the result while retaining shutdown diagnostics.
+      console.error('Scenario cleanup failed:', error)
+    })
   }
 }
 
