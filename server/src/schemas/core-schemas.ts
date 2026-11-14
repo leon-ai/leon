@@ -98,6 +98,9 @@ export const configSchemaObject = strictObject({
       llamacpp: strictObject({
         ...llmProviderWithBaseURLProperties,
         context_size: Type.Optional(Type.Integer({ minimum: 1 })),
+        kv_cache_type: Type.Optional(Type.Union([
+          Type.Literal('q8_0'), Type.Literal('q4_0')
+        ])),
         memory_reserve_mib: Type.Optional(Type.Integer({ minimum: 1 }))
       }),
       sglang: llmProviderWithBaseURL,

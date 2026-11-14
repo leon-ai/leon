@@ -104,6 +104,26 @@ describe('ConfigManager', () => {
     expect(configManager.getConfig().llm.default).toBeNull()
   })
 
+  it('keeps local KV precision optional and validates supported owner overrides', async () => {
+    const manager = await loadConfigManager()
+    const validate = ajv.compile(configSchemaObject)
+    expect(manager.getConfig().llm.providers.llamacpp.kv_cache_type).toBeUndefined()
+
+    for (const precision of ['q4_0', 'q8_0']) {
+      fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+        llm: { providers: { llamacpp: { kv_cache_type: precision } } }
+      }))
+      const config = manager.reload()
+
+      expect(config.llm.providers.llamacpp.kv_cache_type).toBe(precision)
+      expect(validate(config), JSON.stringify(validate.errors)).toBe(true)
+    }
+
+    const invalid = structuredClone(manager.getConfig())
+    Object.assign(invalid.llm.providers.llamacpp, { kv_cache_type: 'unsupported' })
+    expect(validate(invalid)).toBe(false)
+  })
+
   it('defaults to agent routing and preserves explicit modes on reload', async () => {
     const configManager = await loadConfigManager()
     expect(configManager.getConfig().routing.mode).toBe('agent')

@@ -335,7 +335,8 @@ const LLAMACPP_VERSIONS = JSON.parse(
 )
 export const LLAMACPP_RELEASE_VERSION = LLAMACPP_VERSIONS['llama.cpp']
 export const LLAMACPP_MAX_OUTPUT_TOKENS = 32_768
-export const MINIMUM_LOCAL_CONTEXT_TOKENS = 4_096
+export const LLAMACPP_DEFAULT_KV_CACHE_TYPE = 'q8_0'
+export const MINIMUM_LOCAL_CONTEXT_TOKENS = 131_072
 
 /**
  * PyTorch paths and versions.
