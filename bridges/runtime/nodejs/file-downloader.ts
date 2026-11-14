@@ -1,6 +1,11 @@
 import fs from 'node:fs'
+import http from 'node:http'
+import https from 'node:https'
 import path from 'node:path'
 import readline from 'node:readline'
+
+import type { FileHandle } from 'node:fs/promises'
+import type { IncomingMessage } from 'node:http'
 
 const PARALLEL_DOWNLOAD_MIN_BYTES = 128 * 1_024 * 1_024
 const PARALLEL_DOWNLOAD_MIN_RANGE_BYTES = 16 * 1_024 * 1_024
@@ -23,8 +28,10 @@ const DOWNLOAD_PROGRESS_SPINNER_INTERVAL_MS = 80
 const SETUP_DOWNLOAD_PROGRESS_START_EVENT = 'leon:setup-download-progress:start'
 const SETUP_DOWNLOAD_PROGRESS_END_EVENT = 'leon:setup-download-progress:end'
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
-// Fetch decodes compressed bodies; keep lengths and resume offsets in file bytes.
+// Keep lengths and resume offsets in file bytes rather than encoded payload bytes.
 const DOWNLOAD_REQUEST_HEADERS = { 'accept-encoding': 'identity' }
+const DOWNLOAD_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+const DOWNLOAD_MAX_REDIRECTS = 20
 
 export interface DownloadFileOptions {
   signal?: AbortSignal
@@ -521,6 +528,58 @@ export class FileDownloader {
     return ranges
   }
 
+  /**
+   * Follows bounded file redirects while retaining native stream backpressure
+   * and request cancellation throughout the transfer.
+   */
+  private static async requestRemoteFile(
+    fileURL: string,
+    headers: Record<string, string>,
+    signal?: AbortSignal,
+    method = 'GET'
+  ): Promise<IncomingMessage> {
+    let url = new URL(fileURL)
+
+    for (let redirects = 0; ; redirects += 1) {
+      this.throwIfAborted(signal)
+
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        throw new Error(`Unsupported download protocol: ${url.protocol}`)
+      }
+
+      const transport = url.protocol === 'https:' ? https : http
+      const response = await new Promise<IncomingMessage>((resolve, reject) => {
+        const request = transport.get(
+          url,
+          { method, headers, signal },
+          (response) => {
+            // A cancellation can arrive before the caller starts consuming the body.
+            response.once('error', reject)
+            resolve(response)
+          }
+        )
+        request.once('error', reject)
+      })
+      const location = response.headers.location
+
+      if (
+        !DOWNLOAD_REDIRECT_STATUSES.has(response.statusCode ?? 0) ||
+        !location
+      ) {
+        return response
+      }
+
+      // Redirect bodies are irrelevant and may be arbitrarily large or stalled.
+      response.destroy()
+
+      if (redirects >= DOWNLOAD_MAX_REDIRECTS) {
+        throw new Error(`Too many redirects downloading "${fileURL}".`)
+      }
+
+      url = new URL(location, url)
+    }
+  }
+
   private static async probeRemoteFile(
     fileURL: string,
     retryOptions: DownloadInfoRetryOptions,
@@ -535,17 +594,23 @@ export class FileDownloader {
       let fallbackProbe: DownloadProbe | null = null
 
       try {
-        const headResponse = await fetch(fileURL, {
-          method: 'HEAD',
-          headers: DOWNLOAD_REQUEST_HEADERS,
-          ...(signal ? { signal } : {})
-        })
+        const headResponse = await this.requestRemoteFile(
+          fileURL,
+          DOWNLOAD_REQUEST_HEADERS,
+          signal,
+          'HEAD'
+        )
+        headResponse.destroy()
 
-        if (headResponse.ok) {
+        if (
+          headResponse.statusCode &&
+          headResponse.statusCode >= 200 &&
+          headResponse.statusCode < 300
+        ) {
           const acceptRanges =
-            headResponse.headers.get('accept-ranges')?.toLowerCase() === 'bytes'
+            headResponse.headers['accept-ranges']?.toLowerCase() === 'bytes'
           const totalBytes = this.parseContentLength(
-            headResponse.headers.get('content-length')
+            headResponse.headers['content-length'] ?? null
           )
 
           if (acceptRanges) {
@@ -566,31 +631,35 @@ export class FileDownloader {
       }
 
       try {
-        const rangeResponse = await fetch(fileURL, {
-          headers: {
+        const rangeResponse = await this.requestRemoteFile(
+          fileURL,
+          {
             ...DOWNLOAD_REQUEST_HEADERS,
             range: 'bytes=0-0'
           },
-          ...(signal ? { signal } : {})
-        })
+          signal
+        )
+        rangeResponse.destroy()
 
-        if (!rangeResponse.ok) {
+        if (
+          !rangeResponse.statusCode ||
+          rangeResponse.statusCode < 200 ||
+          rangeResponse.statusCode >= 300
+        ) {
           throw new Error(
-            `Failed to fetch download info for "${fileURL}" (HTTP ${rangeResponse.status} ${rangeResponse.statusText})`
+            `Failed to fetch download info for "${fileURL}" (HTTP ${rangeResponse.statusCode} ${rangeResponse.statusMessage})`
           )
         }
 
         const acceptRanges =
-          rangeResponse.status === 206 ||
-          rangeResponse.headers.get('accept-ranges')?.toLowerCase() === 'bytes' ||
-          !!rangeResponse.headers.get('content-range')
+          rangeResponse.statusCode === 206 ||
+          rangeResponse.headers['accept-ranges']?.toLowerCase() === 'bytes' ||
+          !!rangeResponse.headers['content-range']
         const totalBytes =
           this.parseContentRangeTotalBytes(
-            rangeResponse.headers.get('content-range')
+            rangeResponse.headers['content-range'] ?? null
           ) ||
-          this.parseContentLength(rangeResponse.headers.get('content-length'))
-
-        await rangeResponse.body?.cancel().catch(() => {})
+          this.parseContentLength(rangeResponse.headers['content-length'] ?? null)
 
         return {
           totalBytes,
@@ -656,63 +725,55 @@ export class FileDownloader {
         signal,
         inactivityTimeoutMs
       )
-      let response: Response
+      let response: IncomingMessage
 
       try {
-        response = await fetch(fileURL, {
-          headers: { ...DOWNLOAD_REQUEST_HEADERS, ...headers },
-          signal: inactivityController.signal
-        })
+        response = await this.requestRemoteFile(
+          fileURL,
+          { ...DOWNLOAD_REQUEST_HEADERS, ...headers },
+          inactivityController.signal
+        )
       } catch (error) {
         inactivityController.dispose()
+        this.throwIfAborted(inactivityController.signal)
         throw error
       }
 
-      if (!response.ok) {
+      if (
+        !response.statusCode ||
+        response.statusCode < 200 ||
+        response.statusCode >= 300
+      ) {
+        response.destroy()
         inactivityController.dispose()
         throw new Error(
-          `Failed to download "${fileURL}" (HTTP ${response.status} ${response.statusText})`
+          `Failed to download "${fileURL}" (HTTP ${response.statusCode} ${response.statusMessage})`
         )
       }
 
-      if (!response.body) {
+      if (startOffset > 0 && response.statusCode !== 206) {
+        response.destroy()
         inactivityController.dispose()
-        throw new Error(`Failed to download "${fileURL}": empty response body`)
-      }
-
-      if (startOffset > 0 && response.status !== 206) {
         await Promise.all([
           fs.promises.rm(temporaryPath, { force: true })
         ])
         startOffset = 0
         reporter.update(0)
-        await response.body.cancel().catch(() => {})
-        inactivityController.dispose()
         continue
       }
 
-      const fileHandle = await fs.promises.open(
-        temporaryPath,
-        startOffset > 0 ? 'r+' : 'w'
-      )
-      const reader = response.body.getReader()
+      let fileHandle: FileHandle | undefined
       let downloadedBytes = startOffset
       let writePosition = startOffset
 
       try {
-        while (true) {
+        fileHandle = await fs.promises.open(
+          temporaryPath,
+          startOffset > 0 ? 'r+' : 'w'
+        )
+
+        for await (const chunk of response) {
           this.throwIfAborted(signal)
-          const { done, value } = await reader.read()
-
-          if (done) {
-            break
-          }
-
-          if (!value || value.byteLength === 0) {
-            continue
-          }
-
-          const chunk = Buffer.from(value)
           await fileHandle.write(chunk, 0, chunk.length, writePosition)
           inactivityController.refresh()
           writePosition += chunk.length
@@ -723,7 +784,7 @@ export class FileDownloader {
         const expectedBytes =
           probe.totalBytes ??
           (startOffset +
-            (this.parseContentLength(response.headers.get('content-length')) || 0))
+            (this.parseContentLength(response.headers['content-length'] ?? null) || 0))
 
         if (expectedBytes > 0 && downloadedBytes !== expectedBytes) {
           throw new Error(
@@ -734,10 +795,13 @@ export class FileDownloader {
         await fileHandle.sync()
 
         return downloadedBytes
+      } catch (error) {
+        this.throwIfAborted(inactivityController.signal)
+        throw error
       } finally {
-        await reader.cancel().catch(() => {})
-        await fileHandle.close()
+        response.destroy()
         inactivityController.dispose()
+        await fileHandle?.close()
       }
     }
   }
@@ -917,60 +981,39 @@ export class FileDownloader {
             rangeAbortController.signal,
             inactivityTimeoutMs
           )
+          let response: IncomingMessage | undefined
 
           try {
             this.throwIfAborted(rangeAbortController.signal)
-            const response = await fetch(fileURL, {
-              headers: {
+            response = await this.requestRemoteFile(
+              fileURL,
+              {
                 ...DOWNLOAD_REQUEST_HEADERS,
                 range: `bytes=${writePosition}-${range.end}`
               },
-              signal: inactivityController.signal
-            })
+              inactivityController.signal
+            )
 
-            if (response.status !== 206) {
+            if (response.statusCode !== 206) {
               throw new Error(
                 `Server does not support ranged download for "${fileURL}".`
               )
             }
 
-            if (!response.body) {
-              throw new Error(
-                `Failed to download "${fileURL}": empty response body`
-              )
-            }
+            for await (const chunk of response) {
+              this.throwIfAborted(rangeAbortController.signal)
+              await fileHandle.write(chunk, 0, chunk.length, writePosition)
+              inactivityController.refresh()
+              writePosition += chunk.length
+              range.position = writePosition
+              downloadedBytes += chunk.length
+              reporter.update(downloadedBytes)
 
-            const reader = response.body.getReader()
-
-            try {
-              while (true) {
-                this.throwIfAborted(rangeAbortController.signal)
-                const { done, value } = await reader.read()
-
-                if (done) {
-                  break
-                }
-
-                if (!value || value.byteLength === 0) {
-                  continue
-                }
-
-                const chunk = Buffer.from(value)
-                await fileHandle.write(chunk, 0, chunk.length, writePosition)
-                inactivityController.refresh()
-                writePosition += chunk.length
-                range.position = writePosition
-                downloadedBytes += chunk.length
-                reporter.update(downloadedBytes)
-
-                if (writePosition >= nextCheckpointAt) {
-                  this.persistParallelDownloadState(statePath, state)
-                  nextCheckpointAt =
-                    writePosition + PARALLEL_DOWNLOAD_CHECKPOINT_BYTES
-                }
+              if (writePosition >= nextCheckpointAt) {
+                this.persistParallelDownloadState(statePath, state)
+                nextCheckpointAt =
+                  writePosition + PARALLEL_DOWNLOAD_CHECKPOINT_BYTES
               }
-            } finally {
-              await reader.cancel().catch(() => {})
             }
 
             if (writePosition !== range.end + 1) {
@@ -982,14 +1025,18 @@ export class FileDownloader {
             this.persistParallelDownloadState(statePath, state)
             return
           } catch (error) {
+            // Native request aborts wrap their reason; retain stall errors for retries.
+            const downloadError = inactivityController.signal.aborted
+              ? inactivityController.signal.reason
+              : error
             range.position = writePosition
             this.persistParallelDownloadState(statePath, state)
 
             if (
-              this.isAbortError(error) ||
+              this.isAbortError(downloadError) ||
               rangeAbortController.signal.aborted
             ) {
-              throw error
+              throw downloadError
             }
 
             const madeProgress = writePosition > requestStartPosition
@@ -998,12 +1045,12 @@ export class FileDownloader {
               : consecutiveNoProgressFailures + 1
 
             if (consecutiveNoProgressFailures > retryOptions.retries) {
-              throw error
+              throw downloadError
             }
 
             if (!madeProgress) {
               this.warn(
-                `Download connection made no progress; retrying (${consecutiveNoProgressFailures}/${retryOptions.retries}): ${String(error)}`
+                `Download connection made no progress; retrying (${consecutiveNoProgressFailures}/${retryOptions.retries}): ${String(downloadError)}`
               )
             }
             await this.sleep(
@@ -1013,6 +1060,7 @@ export class FileDownloader {
               )
             )
           } finally {
+            response?.destroy()
             inactivityController.dispose()
           }
         }
