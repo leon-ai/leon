@@ -8,7 +8,7 @@ import type {
   OpenAIToolCall,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
-import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
@@ -199,6 +199,27 @@ const CHAT_RESPONSE = {
     }
   }],
   usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120, prompt_cache_hit_tokens: 80 }
+}
+
+/**
+ * Builds an empty response with the provider's explicit completion signal.
+ */
+function createCompletedResponsesStream(): Response {
+  const event = {
+    type: 'response.completed',
+    response: {
+      id: 'resp_completed',
+      created_at: 1,
+      model: 'gpt-6.1-sol',
+      status: 'completed',
+      output: [],
+      usage: { input_tokens: 0, output_tokens: 0 }
+    }
+  }
+
+  return new Response(`data: ${JSON.stringify(event)}\n\n`, {
+    headers: { 'content-type': 'text/event-stream' }
+  })
 }
 
 describe('AISDKRemoteLLMProvider', () => {
@@ -673,6 +694,49 @@ describe('AISDKRemoteLLMProvider', () => {
   })
 
   it.each([
+    [LLMProviders.Groq, 'groq', 'qwen/qwen3.8-27b'],
+    [LLMProviders.Cerebras, 'cerebras', 'qwen-3.8-27b']
+  ] as const)('honors explicit reasoning controls on %s models that can disable thinking', async (providerName, flavor, model) => {
+    const fetch = vi.fn().mockImplementation(async (url) => Response.json(
+      String(url).endsWith('/responses')
+        ? {
+            id: 'resp_reasoning', created_at: 1, model, status: 'completed',
+            output: [{ type: 'message', id: 'message', role: 'assistant',
+              content: [{ type: 'output_text', text: 'Done.', annotations: [] }] }],
+            usage: { input_tokens: 10, output_tokens: 2 }
+          }
+        : {
+            id: 'chat_reasoning', created: 1, model,
+            choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 10, completion_tokens: 2 }
+          }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new AISDKRemoteLLMProvider({
+      name: providerName, providerName, model, flavor,
+      apiKeyEnv: 'TEST_KEY', baseURL: 'https://example.invalid/v1'
+    })
+    const params = { ...createCompletionParams(null), shouldStream: false }
+    const controls = [
+      { reasoningMode: 'off', reasoningEffort: 'high' },
+      { reasoningMode: 'on', disableThinking: true },
+      { reasoningMode: 'on', reasoningEffort: 'none' },
+      { reasoningMode: 'on', reasoningEffort: 'high' },
+      { disableThinking: true }
+    ] as const
+
+    for (const control of controls) {
+      await provider.runChatCompletion('Answer.', { ...params, ...control })
+    }
+
+    expect(fetch.mock.calls.map(([, request]) => {
+      const body = JSON.parse(request.body)
+
+      return body.reasoning?.effort ?? body.reasoning_effort
+    })).toEqual(['none', 'none', 'none', 'high', 'none'])
+  })
+
+  it.each([
     { protocol: 'anthropic', model: 'MiniMax-M3' },
     { protocol: 'openai', model: 'MiniMax-M3' },
     { protocol: 'anthropic', model: 'MiniMax-M3.1-Flash' },
@@ -935,6 +999,36 @@ describe('AISDKRemoteLLMProvider', () => {
       thinking: { type: 'adaptive', display: 'summarized' },
       effort: 'medium',
       temperature: undefined
+    },
+    {
+      model: 'claude-fable-5-2',
+      thinking: {
+        type: 'adaptive',
+        display: 'summarized',
+        block_binding: { prefix_mismatch_behavior: 'drop_block' }
+      },
+      effort: 'medium',
+      temperature: undefined
+    },
+    {
+      model: 'claude-mythos-5-2',
+      thinking: {
+        type: 'adaptive',
+        display: 'summarized',
+        block_binding: { prefix_mismatch_behavior: 'drop_block' }
+      },
+      effort: 'medium',
+      temperature: undefined
+    },
+    {
+      model: 'claude-sonnet-5-5',
+      thinking: {
+        type: 'adaptive',
+        display: 'summarized',
+        block_binding: { prefix_mismatch_behavior: 'drop_block' }
+      },
+      effort: 'medium',
+      temperature: undefined
     }
   ])('uses supported thinking and sampling for $model', async ({
     model,
@@ -976,6 +1070,10 @@ describe('AISDKRemoteLLMProvider', () => {
     const body = JSON.parse(fetch.mock.calls[0]![1].body)
 
     expect(body.thinking).toEqual(thinking)
+    if ('block_binding' in thinking) {
+      expect(new Headers(fetch.mock.calls[0]![1].headers).get('anthropic-beta'))
+        .toContain('thinking-binding-controls-2026-08-01')
+    }
     expect(body.output_config?.effort).toBe(effort)
     expect(body.temperature).toBeUndefined()
   })
@@ -985,6 +1083,9 @@ describe('AISDKRemoteLLMProvider', () => {
     ['claude-opus-5-5', true, 'on'],
     ['claude-opus-5', true, 'high'],
     ['claude-haiku-5-5', true, 'high'],
+    ['claude-fable-5-2', true, 'high'],
+    ['claude-mythos-5-2', true, 'high'],
+    ['claude-sonnet-5-5', true, 'high'],
     ['claude-fable-5-1', true, 'high'],
     ['claude-mythos-5-1', true, 'high'],
     ['claude-opus-4-8', false, 'high'],
@@ -1101,8 +1202,13 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   )
 
-  it.each([LLMProviders.Anthropic, LLMProviders.MiniMax])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
-    const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3.1-Flash'
+  it.each([
+    [LLMProviders.Anthropic, 'claude-opus-5-5'],
+    [LLMProviders.Anthropic, 'claude-fable-5-2'],
+    [LLMProviders.Anthropic, 'claude-mythos-5-2'],
+    [LLMProviders.Anthropic, 'claude-sonnet-5-5'],
+    [LLMProviders.MiniMax, 'MiniMax-M3.1-Flash']
+  ] as const)('preserves %s/%s cache accounting and signed thinking through streamed tool turns', async (providerName, model) => {
     const message = { id: 'msg_claude', type: 'message', role: 'assistant', model,
       content: [], stop_reason: null, stop_sequence: null,
       usage: { input_tokens: 100, output_tokens: 0, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 } }
@@ -1163,7 +1269,8 @@ describe('AISDKRemoteLLMProvider', () => {
     })
   })
 
-  it('replays OpenRouter reasoning details and retains cache usage with stable session routing', async () => {
+  it.each(['anthropic/claude-opus-5.5', 'meta/muse-ember'])(
+    'preserves reasoning and supported controls when finalizing %s tool turns', async (model) => {
     const actual = await vi.importActual<typeof import('@openrouter/ai-sdk-provider')>('@openrouter/ai-sdk-provider')
     openRouterMocks.createOpenRouter.mockImplementationOnce((...args: unknown[]) =>
       actual.createOpenRouter(args[0] as Parameters<typeof actual.createOpenRouter>[0]) as unknown as
@@ -1184,9 +1291,9 @@ describe('AISDKRemoteLLMProvider', () => {
       { headers: { 'content-type': 'text/event-stream' } }
     ))
     vi.stubGlobal('fetch', fetch)
-    const provider = createOpenRouterProvider('anthropic/claude-opus-5.5')
+    const provider = createOpenRouterProvider(model)
     const params = { ...createCompletionParams(null), shouldStream: true, promptCacheKey: 'agent',
-      serviceTier: 'priority' as const }
+      serviceTier: 'priority' as const, tools: [TOOL], toolChoice: 'auto' as const }
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
       await provider.runChatCompletion('Check.', params)
     )
@@ -1196,7 +1303,7 @@ describe('AISDKRemoteLLMProvider', () => {
       { role: 'assistant', content: '', reasoningItems: normalized.reasoningItems,
         toolCalls: [{ id: 'tool_or', type: 'function', function: { name: 'check', arguments: '{}' } }] },
       { role: 'tool', toolCallId: 'tool_or', toolName: 'check', content: 'Checked.' }
-    ], params)
+    ], { ...params, toolChoice: 'none' })
     const body = JSON.parse(fetch.mock.calls[1]![1].body)
     expect(body).toMatchObject({
       provider: { sort: 'throughput' },
@@ -1205,6 +1312,13 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' })
     expect(body.messages[2].reasoning_details).toEqual(reasoningDetails)
+    if (model === 'meta/muse-ember') {
+      expect(body.tools).toBeUndefined()
+      expect(body.tool_choice).toBeUndefined()
+    } else {
+      expect(body.tools).toHaveLength(1)
+      expect(body.tool_choice).toBe('none')
+    }
   })
   it.each([
     { auth_kind: 'api_key', expected: 'https://openrouter.ai/api/v1' },
@@ -1635,6 +1749,95 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   }, 2_000)
 
+  it.each([
+    ['anthropic', 'text'],
+    ['anthropic', 'tool'],
+    ['deepseek', 'text'],
+    ['deepseek', 'tool']
+  ] as const)('rejects unfinished %s streams after provisional %s output', async (flavor, output) => {
+    const anthropic = flavor === 'anthropic'
+    const model = anthropic ? 'claude-sonnet-5-5' : 'deepseek-flash'
+    const events = anthropic
+      ? [
+          {
+            type: 'message_start',
+            message: {
+              id: 'msg_interrupted',
+              type: 'message',
+              role: 'assistant',
+              model,
+              content: [],
+              stop_reason: null,
+              stop_sequence: null,
+              usage: { input_tokens: 10, output_tokens: 0 }
+            }
+          },
+          {
+            type: 'content_block_start',
+            index: 0,
+            content_block: output === 'text'
+              ? { type: 'text', text: '' }
+              : { type: 'tool_use', id: 'call_interrupted', name: 'read_file', input: {} }
+          },
+          {
+            type: 'content_block_delta',
+            index: 0,
+            delta: output === 'text'
+              ? { type: 'text_delta', text: 'Provisional.' }
+              : { type: 'input_json_delta', partial_json: '{"path":"README.md"}' }
+          },
+          { type: 'content_block_stop', index: 0 }
+        ]
+      : [{
+          id: 'chat_interrupted',
+          choices: [{
+            index: 0,
+            delta: output === 'text'
+              ? { content: 'Provisional.' }
+              : {
+                  tool_calls: [{
+                    index: 0,
+                    id: 'call_interrupted',
+                    type: 'function',
+                    function: { name: 'read_file', arguments: '{"path":"README.md"}' }
+                  }]
+                }
+          }]
+        }]
+    const fetch = vi.fn().mockResolvedValue(new Response(
+      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new AISDKRemoteLLMProvider({
+      name: flavor,
+      providerName: anthropic ? LLMProviders.Anthropic : LLMProviders.DeepSeek,
+      model,
+      flavor,
+      apiKeyEnv: 'TEST_KEY',
+      baseURL: 'https://example.invalid/v1'
+    })
+    const onStreamEvent = vi.fn()
+    const onToken = vi.fn()
+    const onToolCall = vi.fn()
+
+    await expect(provider.runChatCompletion('Read the file.', {
+      ...createCompletionParams(null),
+      shouldStream: true,
+      tools: [TOOL],
+      onStreamEvent,
+      onToken,
+      onToolCall
+    })).rejects.toMatchObject({ code: ProviderConnectionErrorCode.Interrupted })
+
+    expect(onStreamEvent).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'finish' }))
+    if (output === 'text') {
+      expect(onToken).toHaveBeenCalledWith('Provisional.')
+    } else {
+      expect(onToolCall).toHaveBeenCalledWith(expect.objectContaining({ id: 'call_interrupted' }))
+    }
+  })
+
   it('finishes an incomplete websocket response even when the adapter leaves it open', async () => {
     const response = {
       id: 'resp_limited', created_at: 1, model: 'gpt-6.1-sol', status: 'incomplete',
@@ -1687,8 +1890,8 @@ describe('AISDKRemoteLLMProvider', () => {
       .mockResolvedValueOnce({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'rotated-token' })
     websocketMocks.fetch
       .mockResolvedValueOnce(Response.json({}, { status: 401 }))
-      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
-      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
+      .mockResolvedValueOnce(createCompletedResponsesStream())
+      .mockResolvedValueOnce(createCompletedResponsesStream())
     const provider = new OpenAILLMProvider({
       provider: LLMProviders.OpenAI,
       model: 'gpt-6.1-sol',
@@ -1781,9 +1984,9 @@ describe('AISDKRemoteLLMProvider', () => {
     websocketMocks.fetch
       .mockImplementationOnce(async () => {
         controller.abort(new Error('Canceled'))
-        return new Response('data: [DONE]\n\n')
+        return createCompletedResponsesStream()
       })
-      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
+      .mockResolvedValueOnce(createCompletedResponsesStream())
 
     await expect(provider.runChatCompletion('Old turn', {
       ...createCompletionParams(null),

@@ -94,7 +94,7 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       baseURL: 'https://api.cerebras.ai/v1',
       fellowAPIKeyEnvs: ['CEREBRAS_API_KEY'],
       apiKeyEnv: 'LEON_CEREBRAS_API_KEY',
-      apiKeyURL: null
+      apiKeyURL: 'https://cloud.cerebras.ai'
     },
     {
       label: 'Celeris',

@@ -10,7 +10,9 @@ const SETUP_PROVIDER_ORDER = [
   LLMProviders.MoonshotAI,
   LLMProviders.MiniMax,
   LLMProviders.Celeris,
-  LLMProviders.HuggingFace
+  LLMProviders.HuggingFace,
+  LLMProviders.Groq,
+  LLMProviders.Cerebras
 ]
 
 export const LLM_MODEL_REASONING_VALUES = [
@@ -41,6 +43,7 @@ export interface LLMModelCatalogEntry {
   label: string
   recommended?: boolean
   supportsForcedToolChoice?: boolean
+  supportsToolChoiceNone?: boolean
   supportsTemperature?: boolean
   supportsPromptCacheOptions?: boolean
   supportsStructuredOutput?: boolean
@@ -144,8 +147,10 @@ const MOONSHOT_KIMI_K3_REASONING = [
 const AUTO_SPEED = ['auto'] as const satisfies readonly LLMModelSpeed[]
 const GLM_53_REASONING = ['auto', 'low', 'high', 'max'] as const satisfies readonly LLMModelReasoning[]
 const MAGNUS_REASONING = ['auto', 'none', 'low', 'medium', 'xhigh'] as const satisfies readonly LLMModelReasoning[]
-const GEMINI_38_REASONING = ['auto', 'low', 'medium', 'high'] as const satisfies readonly LLMModelReasoning[]
-const MUSE_13_REASONING = ['auto', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly LLMModelReasoning[]
+const GEMINI_REASONING = ['auto', 'low', 'medium', 'high'] as const satisfies readonly LLMModelReasoning[]
+const GEMINI_HYDROGEN_REASONING = [...GEMINI_REASONING, 'xhigh'] as const satisfies readonly LLMModelReasoning[]
+const MUSE_REASONING = ['auto', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly LLMModelReasoning[]
+const QWEN_REASONING = ['auto', 'none', 'low', 'medium', 'high'] as const satisfies readonly LLMModelReasoning[]
 const ROUTABLE_SPEED = [
   'auto',
   'normal',
@@ -244,6 +249,34 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     reasoning: MANDATORY_XHIGH_REASONING,
     speed: ROUTABLE_SPEED,
     supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
+   * @see https://openrouter.ai/openai/gpt-6.1-sol-pro
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6.1-sol-pro',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6.1-sol-pro',
+    defaultReasoningEffort: 'medium',
+    supportsTemperature: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
+   * @see https://openrouter.ai/openai/gpt-6.1-terra-pro
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6.1-terra-pro',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6.1-terra-pro',
+    defaultReasoningEffort: 'medium',
+    supportsTemperature: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
     inputMediaTypes: DOCUMENT_INPUTS
   },
   /**
@@ -420,6 +453,36 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: DOCUMENT_INPUTS
   },
   /**
+   * @see https://openrouter.ai/anthropic/claude-fable-5.2
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-fable-5.2',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-fable-5.2',
+    defaultReasoningEffort: 'high',
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
+   * @see https://openrouter.ai/anthropic/claude-sonnet-5.5
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-sonnet-5.5',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-sonnet-5.5',
+    defaultReasoningEffort: 'high',
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/anthropic/claude-fable-5.1
    */
   {
@@ -512,6 +575,32 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: DOCUMENT_INPUTS
   },
   /**
+   * @see https://openrouter.ai/google/gemini-4-carbon
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'google/gemini-4-carbon',
+    contextWindowTokens: 1_048_576,
+    label: 'google/gemini-4-carbon',
+    defaultReasoningEffort: 'medium',
+    reasoning: GEMINI_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: MULTIMODAL_INPUTS
+  },
+  /**
+   * @see https://openrouter.ai/google/gemini-4-hydrogen
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'google/gemini-4-hydrogen',
+    contextWindowTokens: 1_048_576,
+    label: 'google/gemini-4-hydrogen',
+    defaultReasoningEffort: 'medium',
+    reasoning: GEMINI_HYDROGEN_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: MULTIMODAL_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/google/gemini-3.8-flash
    */
   {
@@ -519,7 +608,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     model: 'google/gemini-3.8-flash',
     contextWindowTokens: 1_048_576,
     label: 'google/gemini-3.8-flash',
-    reasoning: GEMINI_38_REASONING,
+    reasoning: GEMINI_REASONING,
     speed: ROUTABLE_SPEED,
     inputMediaTypes: MULTIMODAL_INPUTS
   },
@@ -536,6 +625,21 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: MULTIMODAL_INPUTS
   },
   /**
+   * @see https://openrouter.ai/meta/muse-ember
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'meta/muse-ember',
+    contextWindowTokens: 1_048_576,
+    label: 'meta/muse-ember',
+    supportsForcedToolChoice: false,
+    supportsToolChoiceNone: false,
+    defaultReasoningEffort: 'max',
+    reasoning: MUSE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: MULTIMODAL_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/meta/muse-spark-1.3
    */
   {
@@ -543,7 +647,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     model: 'meta/muse-spark-1.3',
     contextWindowTokens: 1_048_576,
     label: 'meta/muse-spark-1.3',
-    reasoning: MUSE_13_REASONING,
+    reasoning: MUSE_REASONING,
     speed: ROUTABLE_SPEED,
     inputMediaTypes: MULTIMODAL_INPUTS
   },
@@ -607,6 +711,19 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     reasoning: GLM_53_REASONING,
     speed: ROUTABLE_SPEED,
     inputMediaTypes: []
+  },
+  /**
+   * @see https://openrouter.ai/z-ai/glm-5.3-flashx
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'z-ai/glm-5.3-flashx',
+    contextWindowTokens: 1_048_576,
+    label: 'z-ai/glm-5.3-flashx',
+    defaultReasoningEffort: 'max',
+    reasoning: GLM_53_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: VIDEO_INPUTS
   },
   /**
    * @see https://openrouter.ai/z-ai/glm-5.3-flash
@@ -929,6 +1046,57 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: DOCUMENT_INPUTS
   },
   /**
+   * @see https://platform.claude.com/docs/en/models/fable-5-2/overview
+   */
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-fable-5-2',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Fable 5.2',
+    supportsStructuredOutput: true,
+    supportsPerMessageReasoning: true,
+    defaultReasoningEffort: 'high',
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
+   * @see https://platform.claude.com/docs/en/models/mythos-5-2/overview
+   */
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-mythos-5-2',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Mythos 5.2 (verification required)',
+    supportsStructuredOutput: true,
+    supportsPerMessageReasoning: true,
+    defaultReasoningEffort: 'high',
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
+   * @see https://platform.claude.com/docs/en/models/sonnet-5-5/overview
+   */
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-sonnet-5-5',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Sonnet 5.5',
+    supportsStructuredOutput: true,
+    supportsPerMessageReasoning: true,
+    defaultReasoningEffort: 'high',
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
    * @see https://platform.claude.com/docs/en/models/fable-5-1/overview
    */
   {
@@ -1069,6 +1237,19 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   {
     provider: LLMProviders.ZAI,
+    model: 'glm-5.3-flashx',
+    contextWindowTokens: 1_048_576,
+    label: 'GLM-5.3-FlashX',
+    defaultReasoningEffort: 'max',
+    reasoning: GLM_53_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
+   */
+  {
+    provider: LLMProviders.ZAI,
     model: 'glm-5.3-flash',
     contextWindowTokens: 1_048_576,
     label: 'GLM-5.3-Flash',
@@ -1185,6 +1366,21 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: IMAGE_INPUTS
   },
   /**
+   * @see https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart
+   */
+  {
+    provider: LLMProviders.MoonshotAI,
+    model: 'kimi-k3.1-pro-highspeed',
+    contextWindowTokens: 1_048_576,
+    label: 'Kimi K3.1 Pro Highspeed',
+    supportsForcedToolChoice: true,
+    supportsTemperature: false,
+    defaultReasoningEffort: 'max',
+    reasoning: MOONSHOT_KIMI_K3_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
    * @see https://platform.kimi.ai/docs/guide/use-reasoning-effort Model-specific reasoning support.
    */
   {
@@ -1193,6 +1389,79 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     contextWindowTokens: 1_048_576,
     label: 'Kimi K3',
     reasoning: MOONSHOT_KIMI_K3_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+
+  /**
+   * @see https://console.groq.com/docs/model/qwen/qwen3.8-27b
+   */
+  {
+    provider: LLMProviders.Groq,
+    model: 'qwen/qwen3.8-27b',
+    contextWindowTokens: 131_072,
+    label: 'Qwen3.8 27B (preview)',
+    supportsStructuredOutput: true,
+    reasoning: QWEN_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://inference-docs.cerebras.ai/models/qwen-3.8-27b.md
+   */
+  {
+    provider: LLMProviders.Cerebras,
+    model: 'qwen-3.8-27b',
+    // Use the shared free-tier capacity; paid accounts have a larger window.
+    contextWindowTokens: 65_536,
+    label: 'Qwen3.8 27B',
+    supportsStructuredOutput: true,
+    defaultReasoningEffort: 'high',
+    reasoning: QWEN_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: ['image/png', 'image/jpeg']
+  },
+  /**
+   * @see https://router.huggingface.co/v1/models
+   */
+  {
+    provider: LLMProviders.HuggingFace,
+    model: 'moonshotai/Kimi-K3.1-Pro',
+    label: 'Kimi K3.1 Pro',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://router.huggingface.co/v1/models
+   */
+  {
+    provider: LLMProviders.HuggingFace,
+    model: 'deepseek-ai/DeepSeek-V4.1-Flash-1017',
+    label: 'DeepSeek-V4.1-Flash-1017',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://router.huggingface.co/v1/models
+   */
+  {
+    provider: LLMProviders.HuggingFace,
+    model: 'MiniMaxAI/MiniMax-M3.1-Flash',
+    label: 'MiniMax-M3.1-Flash',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://router.huggingface.co/v1/models
+   */
+  {
+    provider: LLMProviders.HuggingFace,
+    model: 'Qwen/Qwen3.8-27B',
+    label: 'Qwen3.8 27B',
+    reasoning: AUTO_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: IMAGE_INPUTS
   },

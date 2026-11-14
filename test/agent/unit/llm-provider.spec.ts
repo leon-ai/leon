@@ -775,7 +775,7 @@ describe('LLMProvider', () => {
     })
   })
 
-  it.each(['unaccepted', 'accepted', 'tool input', 'text'])(
+  it.each(['unaccepted', 'accepted', 'tool input', 'text', 'SDK interruption'])(
     'resumes the original request after interrupted %s without returning partial calls',
     async (stage) => {
       vi.useFakeTimers()
@@ -798,7 +798,9 @@ describe('LLMProvider', () => {
               params.onToken?.('Unfinished draft')
             }
 
-            return Promise.reject(Object.assign(new Error('Disconnected'), { code: 'ECONNRESET' }))
+            return Promise.reject(Object.assign(new Error('Disconnected'), {
+              code: stage === 'SDK interruption' ? ProviderConnectionErrorCode.Interrupted : 'ECONNRESET'
+            }))
           })
           .mockRejectedValueOnce(Object.assign(new Error('Disconnected'), { closeCode: 1_006 }))
           .mockResolvedValue({ data: {

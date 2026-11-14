@@ -41,12 +41,14 @@ describe('LLM model catalog', () => {
       .toBeUndefined()
   })
 
-  it('contains unique provider/model entries with auto defaults', () => {
+  it('exposes every cataloged provider with unique models and supported controls', () => {
     const targetKeys = LLM_MODEL_CATALOG.map(
       (entry) => `${entry.provider}/${entry.model}`
     )
 
     expect(new Set(targetKeys).size).toBe(targetKeys.length)
+    expect(new Set(getPublicModelCatalog().map((provider) => provider.id)))
+      .toEqual(new Set(LLM_MODEL_CATALOG.map((entry) => entry.provider)))
 
     for (const entry of LLM_MODEL_CATALOG) {
       expect(entry.reasoning[0]).toBe('auto')
