@@ -1,0 +1,487 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "openscreen",
+  "toolkit_id": "media_production",
+  "name": "OpenScreen",
+  "version": "2.1.1",
+  "description": "Record a selected desktop display or window, retain editable cursor data and export polished MP4/GIF recordings with automatic focus zoom.",
+  "icon_name": "record-circle-line",
+  "distribution": "built-in",
+  "maintenance": "official",
+  "author": {
+    "name": "Louis Grenard",
+    "github": "louistiti",
+    "email": "louis@getleon.ai"
+  },
+  "concurrency": "serial",
+  "binaries": {
+    "macosx-arm64": {
+      "url": "https://github.com/getopenscreen/openscreen/releases/download/v2.2.2/Openscreen-Mac-arm64-2.2.2.zip",
+      "executable": "Openscreen.app/Contents/MacOS/Openscreen",
+      "sha256": "c21f28f1b6f83ff50cee3f4e902088327e1004083986aaf2e3c7996f6ca7a92b"
+    },
+    "macosx-x86_64": {
+      "url": "https://github.com/getopenscreen/openscreen/releases/download/v2.2.2/Openscreen-Mac-x64-2.2.2.zip",
+      "executable": "Openscreen.app/Contents/MacOS/Openscreen",
+      "sha256": "7ff125b5f37f691a190e3252f9cb5d3264b71ac1df21d39b9d401c9a614ba7b8"
+    },
+    "linux-x86_64": {
+      "url": "https://github.com/getopenscreen/openscreen/releases/download/v2.2.2/Openscreen-Linux-2.2.2.AppImage",
+      "sha256": "6439650cedf119e017ad81fb4382bddf22ae321bd11d446c8dc0de52d72ff773"
+    }
+  },
+  "progressive_guidance": "Use sources then start with exactly one unique windowTitle, displayIndex, or a Wayland systemPicker. No silent whole-screen default. Capture runs on a graphical desktop with owner-granted OS permissions. Managed binaries provision automatically where declared; Windows needs an installed app. Microphone, system audio and camera remain off unless requested. Sessions and project IDs are conversation-owned. Always stop; duration is bounded to 120 seconds by default, maximum 3600. For browser automation, link the exact recorded window to browserTabId at start. If window selection fails, refresh sources and resolve the ambiguity; do not drop browserTabId or switch to a whole display to bypass the failure. Browser Use records timestamped pointer events; stop imports only that tab's events from this conversation and asks upstream to generate cursor motion and zooms. Capture should stay on that tab; a new tab needs its own take or an explicitly supplied combined setPointerTrack. External scripts can supply observed events manually with setPointerTrack. Never invent coordinates, timestamps or clicks. Auto-zoom needs clicks; no regions is a valid outcome to report. First seconds and stopping clicks may remain wide. stop applies configured trimming to linked browser takes and returns optimization status plus a projectId for info, settings, captions, preview and exportRecording. optimizeRecording can repeat that analysis using saved evidence; cuts preserve original footage and existing edits. Its videoPath is raw capture: it has no rendered background, editable cursor or project zooms. Always use exportRecording for delivery and import that composed export into FilmCraft or another editor when further editing is needed. MP4 defaults to source resolution at 60 fps to preserve UI text; choose a smaller quality only when requested or justified by delivery limits. Project IDs persist in this conversation's app storage but active recordings and pointer registration cannot survive worker loss. info returns the current document, zoomRanges, settings and supported settingsContext. New projects use profile tool editor defaults; wallpaper=empty automatically chooses a bundled background. Explicit project settings are preserved until changed. setEditorSettings passes only supplied settings through upstream validation. captions transcribes speech locally and enables captions; the first call downloads a Whisper model. A silent recording has no speech to caption. preview supplies composed ruler-time frames; inspect relevant frames and actual zoom regions before delivery. exportRecording returns zoomRegions and warnings as well as a successful MP4/GIF artifact. autoZoom=false preserves existing project zooms; it does not remove them. Exports use new absolute directories with existing parents. quality/fps apply only to MP4; gifFps/gifSize/gifLoop apply only to GIF. Cancellation stops the app and partial outputs are never delivered as complete. pack accepts only legacy CLI .openscreen files, not the retained editor projects. No provider or second AI loop is used.",
+  "functions": {
+    "sources": {
+      "description": "List display indices, window titles, microphone labels and camera labels from the retained OpenScreen session.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "read_only": true,
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 180000
+      }
+    },
+    "start": {
+      "description": "Start a bounded recording of one explicitly selected window/display and optionally link its browser tab for scripted pointer tracking.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "displayIndex": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "systemPicker": {
+                "type": "boolean",
+                "description": "Linux portal capture; owner must choose the source."
+              },
+              "durationSeconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3600,
+                "default": 120
+              },
+              "microphone": {
+                "type": "boolean",
+                "default": false
+              },
+              "microphoneDevice": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Microphone label from sources; requires microphone=true. Upstream matches a label substring."
+              },
+              "systemAudio": {
+                "type": "boolean",
+                "default": false
+              },
+              "camera": {
+                "type": "boolean",
+                "default": false
+              },
+              "cameraDevice": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Camera label from sources; requires camera=true. Upstream matches a label substring."
+              },
+              "windowTitle": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Unique title or substring from sources. Prefer one window to a whole display."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "browserTabId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Exact browser tab shown in the recorded window; imports this tab's pointer events at stop."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 180000
+      }
+    },
+    "status": {
+      "description": "Check a conversation-owned recording, duration expiry and its finalized projectId or failure.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "read_only": true,
+      "deduplicate_calls": false
+    },
+    "stop": {
+      "description": "Finalize capture, import pointer timing and apply configured silent idle trims. Returns projectId, raw videoPath, zoom count and optimization results; exportRecording renders the edited project.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 3600000
+      },
+      "background": true
+    },
+    "info": {
+      "description": "Read a conversation-owned document, actual zoom regions, current appearance and supported upstream settings.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Conversation-owned projectId from stop or createProject."
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "additionalProperties": false
+      },
+      "read_only": true,
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 180000
+      }
+    },
+    "exportRecording": {
+      "description": "Export an edited project as MP4/GIF, report actual zoom counts and warnings, and attach the completed file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Conversation-owned projectId from stop or createProject."
+          },
+          "outputDirectory": {
+            "type": "string",
+            "description": "Absolute new output directory with existing parent."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "mp4",
+                  "gif"
+                ],
+                "default": "mp4"
+              },
+              "quality": {
+                "type": "string",
+                "enum": [
+                  "medium",
+                  "good",
+                  "source"
+                ],
+                "description": "MP4 resolution: source preserves captured detail (default); good limits height to 1080p; medium to 720p. Upstream controls encoder bitrate."
+              },
+              "fps": {
+                "type": "integer",
+                "enum": [
+                  24,
+                  30,
+                  60
+                ],
+                "description": "MP4 only; defaults to 60. Omit for GIF."
+              },
+              "gifFps": {
+                "type": "integer",
+                "enum": [
+                  15,
+                  20,
+                  25,
+                  30
+                ],
+                "description": "GIF only; defaults to the project setting."
+              },
+              "gifSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "original"
+                ],
+                "description": "GIF only; defaults to the project setting."
+              },
+              "gifLoop": {
+                "type": "boolean",
+                "description": "GIF only; defaults to the project setting."
+              },
+              "autoZoom": {
+                "type": "boolean",
+                "default": true
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "projectId",
+          "outputDirectory"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "background": true,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 3600000
+      }
+    },
+    "pack": {
+      "description": "Copy a CLI-recorded project and its video, webcam and cursor files into a new portable directory. Does not attach a directory or delete source files; editor-saved document projects are unsupported upstream.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute .openscreen project path."
+          },
+          "outputDirectory": {
+            "type": "string",
+            "description": "Absolute new directory with existing parent."
+          }
+        },
+        "required": [
+          "projectPath",
+          "outputDirectory"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 3600000
+      }
+    },
+    "captions": {
+      "description": "Transcribe project speech locally and enable captions. Downloads Whisper on first use; export afterwards to burn captions into video.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Conversation-owned projectId from stop or createProject."
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "background": true,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 3600000
+      }
+    },
+    "setEditorSettings": {
+      "description": "Update only supplied appearance settings through upstream validation. Empty wallpaper chooses a bundled background. Read info for current settings and available choices.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "settings": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": true,
+            "description": "Fields from info.settings: wallpaper, padding, borderRadius, shadowIntensity, backgroundBlur, motionBlurAmount, cursor, camera layout and other upstream settings."
+          }
+        },
+        "required": [
+          "projectId",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 180000
+      }
+    },
+    "setPointerTrack": {
+      "description": "Replace a take's pointer track with observed timestamped actions. Coordinates are fractions of the recorded window. Upstream plans zooms and reports autoZoomsAdded. Requires the same retained session that recorded it.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "events": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10000,
+            "items": {
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "number",
+                  "description": "Epoch milliseconds when the action happened."
+                },
+                "x": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "click": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "at",
+                "x",
+                "y"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "projectId",
+          "events"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 180000
+      }
+    },
+    "createProject": {
+      "description": "Import an explicitly supplied video as a conversation-owned editable project and apply profile editor defaults. Returns a projectId.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoPath": {
+            "type": "string",
+            "description": "Absolute source video path."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "videoPath"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 180000
+      }
+    },
+    "preview": {
+      "description": "Render composed project frames at ruler seconds for visual review, including zooms, cursor, captions and background. Supplies the images to the model.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "atSeconds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "projectId",
+          "atSeconds"
+        ],
+        "additionalProperties": false
+      },
+      "read_only": true,
+      "deduplicate_calls": false,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 180000
+      }
+    },
+    "optimizeRecording": {
+      "description": "Shorten confirmed silent idle footage in a linked browser take using saved input timing, cursor motion and zoom protections. Adds reversible project trims; original footage is preserved.",
+      "progressive_guidance": "stop applies profile trimming settings automatically before preview/export. If duration expiry reports optimization.status=pending, call stop or optimizeRecording under an active tool call before export. optimizeRecording reruns the same analysis for a saved linked take; existing trims are preserved and repeated runs add no duplicate cuts. It skips takes without saved input timing, webcam takes, imported audio and complex timelines. Speech, delivered input, cursor movement, zoom/pan transitions and authored overlays are protected. Low-resolution analysis never changes output quality: cuts remain source-time project edits and the final export renders the original footage once. Results report source-time cuts, removedSeconds and a native checkpoint when edits were added. Inspect info and preview around the cuts before export; preview uses original ruler time, while exported playback skips trimmed spans. No semantic guarantee follows from stillness alone; keep intentional introductions and reading time through settings and final review.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Conversation-owned projectId from a linked browser take."
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "background": true,
+      "timeout": {
+        "idleMs": 120000,
+        "totalMs": 3600000
+      }
+    }
+  }
+}

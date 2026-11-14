@@ -1,0 +1,19 @@
+{
+  "executable_path": "",
+  "editor": {
+    "wallpaper": "",
+    "padding": 24,
+    "borderRadius": 16,
+    "shadowIntensity": 0.35,
+    "backgroundBlur": 0,
+    "motionBlurAmount": 0.2
+  },
+  "trimming": {
+    "enabled": true,
+    "leadInSeconds": 0.75,
+    "minimumIdleSeconds": 4,
+    "keepIdleSeconds": 2,
+    "noiseDb": -60,
+    "analysisWidth": 640
+  }
+}
