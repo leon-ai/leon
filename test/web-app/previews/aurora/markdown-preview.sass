@@ -1,0 +1,37 @@
+.markdown-preview
+  display: grid
+  gap: calc(var(--space-xl) * 2)
+  min-width: 0
+
+.markdown-preview-example
+  display: grid
+  gap: var(--space-xl)
+  min-width: 0
+
+  &:not(:last-child)
+    padding-bottom: var(--space-xl)
+    border-bottom: 1px solid var(--color-border)
+
+.markdown-preview-description
+  display: grid
+  gap: var(--space-xs)
+
+  h2
+    font-weight: var(--font-weight-semi-bold)
+
+  p
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+.markdown-preview-content
+  min-width: 0
+  color: var(--color-text)
+  font-size: var(--font-size-lg)
+  line-height: var(--line-height-xl)
+
+  img
+    max-width: 100%
+    height: auto
+
+  .scroll-container-viewport
+    overscroll-behavior-y: auto

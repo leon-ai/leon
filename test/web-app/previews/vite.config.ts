@@ -3,7 +3,7 @@ import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { auroraSandbox } from '../../../apps/web/vite/aurora-sandbox.ts'
 import { createConnectionPreview } from '../../fixtures/connection-preview.ts'
@@ -16,6 +16,28 @@ const CONNECTIONS = [...globSync('*/*/tool.json', { cwd: TOOLS_ROOT })].flatMap(
 
   return preview ? [preview] : []
 }).sort((left, right) => left.name.localeCompare(right.name))
+
+/**
+ * Keeps real Markdown link artwork available without a Leon server or remote
+ * favicon lookup. Only the example website gets this local branding fixture.
+ */
+function previewFavicons(): Plugin {
+  const favicon = readFileSync(new URL('../../../apps/web/public/img/favicon.png', import.meta.url))
+  const install = (server: ViteDevServer | PreviewServer): void => {
+    server.middlewares.use('/api/v1/favicons', (request, response, next) => {
+      const url = new URL(request.url ?? '/', 'http://preview.local')
+      if (request.method !== 'GET' || url.searchParams.get('origin') !== 'https://getleon.ai') {
+        next()
+        return
+      }
+      response.setHeader('Content-Type', 'image/png')
+      response.setHeader('Cache-Control', 'public, max-age=3600')
+      response.end(favicon)
+    })
+  }
+
+  return { name: 'preview-favicons', configureServer: install, configurePreviewServer: install }
+}
 
 // Design studies use real app components, without profile configuration or API access.
 export default defineConfig({
@@ -37,6 +59,12 @@ export default defineConfig({
       output: {
         codeSplitting: {
           groups: [{
+            // Share parsing across feed and Markdown studies without combining
+            // the renderer and its full parser graph into one large chunk.
+            name: 'markdown-parser',
+            test: /node_modules\/(?:marked|unified|remark-[^/]+|micromark[^/]*|mdast-[^/]+)\//,
+            priority: 16
+          }, {
             // The gallery has fewer shared consumers than the app; retain the
             // same lazy chart boundary without combining its renderer and engine.
             name: 'chart-renderer',
@@ -52,5 +80,5 @@ export default defineConfig({
       }
     }
   },
-  plugins: [auroraSandbox(), react()]
+  plugins: [previewFavicons(), auroraSandbox(), react()]
 })
