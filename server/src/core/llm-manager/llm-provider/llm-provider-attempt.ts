@@ -72,7 +72,6 @@ const STREAM_OUTPUT_EVENTS = new Set([
 ])
 
 const REMOTE_STREAM_IDLE_TIMEOUT_MS = 30_000
-const REMOTE_REASONING_CONTINUATION_TIMEOUT_MS = 90_000
 const REMOTE_REQUEST_ACCEPTANCE_TIMEOUT_MS = 12_000
 const PROVIDER_CANCELLATION_CLEANUP_TIMEOUT_MS = 1_000
 
@@ -133,11 +132,6 @@ export async function runCompletionAttempt(
       ? Math.min(REMOTE_STREAM_IDLE_TIMEOUT_MS, completionParams.timeout)
       : completionParams.timeout
   )
-  const reasoningContinuationTimeout = isRemoteProvider
-    ? completionParams.streamIdleTimeout ?? Math.min(
-        REMOTE_REASONING_CONTINUATION_TIMEOUT_MS, completionParams.timeout
-      )
-    : idleTimeout
   const logAttempt = (outcome: string, error?: unknown): void => {
     if (outcome !== 'started') {
       recordInferenceUsageOutcome(outcome)
@@ -251,11 +245,10 @@ export async function runCompletionAttempt(
     }
   }
   const resetStreamStallTimeout = (
-    delay = isReasoning || isCompacting || pendingHostedTools.size > 0
+    delay = isReasoning || isCompacting || pendingHostedTools.size > 0 ||
+      (isAwaitingContinuation && !isAwaitingReasoningContinuation)
       ? completionParams.timeout
-      : isAwaitingReasoningContinuation
-        ? reasoningContinuationTimeout
-        : isAwaitingContinuation ? completionParams.timeout : idleTimeout,
+      : idleTimeout,
     errorName = STREAM_IDLE_TIMEOUT_ERROR_NAME
   ): void => {
     if (!shouldStreamOutput || !completionParams.timeout) {
@@ -451,8 +444,8 @@ export async function runCompletionAttempt(
       resetStreamStallTimeout()
     } else if (event.type === 'reasoning-end') {
       isReasoning = false
-      // Finishing a reasoning item does not mean the answer or tool arguments
-      // are ready. Give that transition its own bounded silence allowance.
+      // Completed reasoning uses the ordinary idle limit. Another summary's
+      // reasoning-start restores the longer allowance for active computation.
       isAwaitingReasoningContinuation = true
       resetStreamStallTimeout()
     } else if (STREAM_OUTPUT_EVENTS.has(event.type)) {

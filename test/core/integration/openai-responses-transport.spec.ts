@@ -706,6 +706,96 @@ describe('Responses connection lifecycle', () => {
     }
   )
 
+  it('preserves silent reasoning summaries and retries a stalled completed reasoning item', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    const provider = new AISDKRemoteLLMProvider({
+      name: 'Fixture', providerName: LLMProviders.OpenAI, credentials: { api_key: 'fixture' },
+      apiKeyEnv: 'LEON_OPENAI_API_KEY', model: 'gpt-6.1-sol',
+      baseURL: url.slice(0, -'/responses'.length), flavor: 'openai-responses'
+    })
+    const requests: Record<string, unknown>[] = []
+    const onAttempt = vi.fn()
+    const onStreamEvent = vi.fn()
+    const onReasoningToken = vi.fn()
+    const reasoning = {
+      type: 'reasoning', id: 'reasoning', encrypted_content: 'retained-reasoning',
+      summary: [{ type: 'summary_text', text: 'Checking.' }]
+    }
+    let finishReasoning!: () => void
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        requests.push(JSON.parse(data.toString()))
+        const send = (event: Record<string, unknown>): void => {
+          socket.send(JSON.stringify(event))
+        }
+
+        if (requests.length === 1) {
+          send({ type: 'response.created', response: {
+            id: 'thinking', model: 'gpt-6.1-sol', created_at: 1, status: 'in_progress', output: []
+          } })
+          send({ type: 'response.output_item.added', output_index: 0, item: { ...reasoning, summary: [] } })
+          send({ type: 'response.reasoning_summary_text.delta', item_id: reasoning.id,
+            output_index: 0, summary_index: 0, delta: 'Checking.' })
+          send({ type: 'response.reasoning_summary_part.done', item_id: reasoning.id,
+            output_index: 0, summary_index: 0, part: reasoning.summary[0] })
+          finishReasoning = (): void => {
+            send({ type: 'response.output_item.done', output_index: 0, item: reasoning })
+          }
+          return
+        }
+
+        for (const event of [
+          { type: 'response.output_item.added', output_index: 0, item: { ...OUTPUT[0], content: [] } },
+          { type: 'response.output_text.delta', item_id: 'message', output_index: 0, content_index: 0, delta: 'Ready.' },
+          { type: 'response.output_item.done', output_index: 0, item: OUTPUT[0] },
+          { type: 'response.completed', response: { id: 'recovered', output: OUTPUT, usage: { input_tokens: 10, output_tokens: 1 } } }
+        ]) {
+          send(event)
+        }
+      })
+    })
+    const complete = (params: PreparedCompletionParams): ReturnType<typeof runCompletionAttempt> =>
+      runCompletionAttempt(provider, LLMProviders.OpenAI, 'Continue.', params, 'fixture',
+        (retry) => complete({ ...params, ...retry }), vi.fn())
+
+    try {
+      const pending = complete({
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 180_000, temperature: 0, data: null, maxRetries: 1,
+        remoteProviderErrorRetries: 1, retryInterruptedResponse: true,
+        onAttempt, onStreamEvent, onReasoningToken
+      })
+      await vi.waitFor(() => expect(onReasoningToken).toHaveBeenCalledWith('Checking.'))
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(requests).toHaveLength(1)
+      expect(onAttempt).toHaveBeenCalledOnce()
+
+      finishReasoning()
+      await vi.waitFor(() => expect(onStreamEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'reasoning-end' })
+      ))
+      expect(onStreamEvent.mock.calls.filter(([event]) => event.type === 'reasoning-end'))
+        .toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(29_000)
+      expect(requests).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
+
+      expect((await pending)?.output).toBe('Ready.')
+      expect(requests).toHaveLength(2)
+      expect(requests[1]).toEqual(requests[0])
+      expect(onAttempt.mock.calls[1]![0]).toMatchObject({
+        outcome: 'LLMStreamIdleTimeout', reasoningOnly: true, replaySafe: true,
+        retryDecision: 'retry', retryReason: 'reasoning_only_timeout',
+        idleMs: 30_000
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      provider.dispose()
+      vi.useRealTimers()
+    }
+  })
+
   it.each([404, 405, 426, 501])('uses HTTP after an unsupported HTTP %s handshake without retrying the handshake', async (status) => {
     server.removeAllListeners('upgrade')
     let attempts = 0
@@ -719,6 +809,87 @@ describe('Responses connection lifecycle', () => {
     expect(transport.transport).toBe('http')
     expect(attempts).toBe(1)
     expect(LogHelper.debug).toHaveBeenCalledWith(expect.stringContaining(`HTTP ${status}`))
+  })
+
+  it('retries a silent handshake after ten seconds without falling back to HTTP', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    const provider = new AISDKRemoteLLMProvider({
+      name: 'Fixture', providerName: LLMProviders.OpenAI, credentials: { api_key: 'fixture' },
+      apiKeyEnv: 'LEON_OPENAI_API_KEY', model: 'gpt-6.1-sol',
+      baseURL: url.slice(0, -'/responses'.length), flavor: 'openai-responses'
+    })
+    const http = vi.fn()
+    const closed = vi.fn()
+    const received = vi.fn()
+    const onConnectionRetry = vi.fn()
+    const onAttempt = vi.fn()
+    let upgrades = 0
+    server.on('request', http)
+    server.removeAllListeners('upgrade')
+    server.on('upgrade', (request, socket, head) => {
+      upgrades += 1
+      if (upgrades === 1) {
+        // The raw upgrade socket must consume EOF without a WebSocket handler.
+        socket.resume()
+        socket.on('end', () => socket.destroy())
+        socket.on('close', closed)
+        return
+      }
+
+      sockets.handleUpgrade(request, socket, head, (connection) => {
+        sockets.emit('connection', connection, request)
+      })
+    })
+    sockets.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        received(JSON.parse(data.toString()))
+        for (const event of [
+          { type: 'response.output_item.added', output_index: 0, item: { ...OUTPUT[0], content: [] } },
+          { type: 'response.output_text.delta', item_id: 'message', output_index: 0, content_index: 0, delta: 'Ready.' },
+          { type: 'response.output_item.done', output_index: 0, item: OUTPUT[0] },
+          { type: 'response.completed', response: { id: 'recovered', output: OUTPUT, usage: { input_tokens: 10, output_tokens: 1 } } }
+        ]) {
+          socket.send(JSON.stringify(event))
+        }
+      })
+    })
+    const complete = (params: PreparedCompletionParams): ReturnType<typeof runCompletionAttempt> =>
+      runCompletionAttempt(provider, LLMProviders.OpenAI, 'Continue.', params, 'fixture',
+        (retry) => complete({ ...params, ...retry }), vi.fn())
+
+    try {
+      const opening = once(server, 'upgrade')
+      const pending = complete({
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        timeout: 180_000, temperature: 0, data: null, maxRetries: 1,
+        remoteProviderErrorRetries: 1, onConnectionRetry, onAttempt,
+        retryInterruptedResponse: true
+      })
+      await opening
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(upgrades).toBe(1)
+      expect(onConnectionRetry).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.waitFor(() => expect(onAttempt.mock.calls.at(-1)?.[0].outcome).toBe('completed'))
+
+      expect((await pending)?.output).toBe('Ready.')
+      expect(upgrades).toBe(2)
+      expect(received).toHaveBeenCalledOnce()
+      expect(http).not.toHaveBeenCalled()
+      expect(onConnectionRetry).toHaveBeenCalledWith(expect.objectContaining({
+        attempt: 1, delayMs: 0
+      }))
+      expect(onAttempt.mock.calls[1]![0]).toMatchObject({
+        elapsedMs: 10_000, connectionErrorCode: ProviderConnectionErrorCode.Unresponsive,
+        retryDecision: 'retry', retryReason: 'connection_failure'
+      })
+      expect(LogHelper.error).toHaveBeenCalledWith(expect.stringContaining('"transportPhase":"handshake"'))
+      await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce())
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      provider.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it.each(['reset', 400, 429, 503])('preserves a %s opening failure and retries WebSocket on the next request', async (failure) => {
