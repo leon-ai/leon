@@ -156,4 +156,3 @@ export function connectionPreviewView(preview: ConnectionPreview, methodId: stri
 
   return view
 }
-

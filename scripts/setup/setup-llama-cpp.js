@@ -37,6 +37,8 @@ const LLAMACPP_BINARY_NAMES = LLAMACPP_BUILD_TARGETS.map((target) =>
   SystemHelper.isWindows() ? `${target}.exe` : target
 )
 const LLAMA_SERVER_BINARY_NAME = LLAMACPP_BINARY_NAMES[0]
+const LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX = 'bin-win-cuda-12.4-x64.zip'
+const LLAMACPP_DEVICE_LIST_HEADER = 'Available devices:'
 const LLAMACPP_HEALTH_CHECK_TIMEOUT_MS = 10_000
 const LLAMACPP_SOURCE_DOWNLOAD_MAX_ATTEMPTS = 2
 const LLAMACPP_SOURCE_ARCHIVE_SETTLE_DELAY_MS = 500
@@ -128,18 +130,31 @@ function getBinaryPath(directoryPath) {
   return path.join(directoryPath, LLAMA_SERVER_BINARY_NAME)
 }
 
-async function isExistingInstallationHealthy(runtimeDirectoryPath) {
+async function isExistingInstallationHealthy(runtimeDirectoryPath, hasGPU) {
   if (!runtimeDirectoryPath) {
     return false
   }
 
   try {
-    // Automatic context sizing needs the fitter as well as the inference server.
-    // Launch both to verify their shared libraries survived installation.
+    // Dynamically loaded GPU backends can fail while --version still succeeds.
+    // Both inference and context fitting must expose a device on GPU machines.
     for (const binaryName of LLAMACPP_BINARY_NAMES) {
-      await execa(path.join(runtimeDirectoryPath, binaryName), ['--version'], {
-        timeout: LLAMACPP_HEALTH_CHECK_TIMEOUT_MS
-      })
+      const { stdout } = await execa(
+        path.join(runtimeDirectoryPath, binaryName),
+        [hasGPU ? '--list-devices' : '--version'],
+        { timeout: LLAMACPP_HEALTH_CHECK_TIMEOUT_MS }
+      )
+
+      if (hasGPU) {
+        // Only native device rows count; backend-loading logs are not devices.
+        const lines = stdout.split('\n').map((line) => line.trim())
+        const headerIndex = lines.indexOf(LLAMACPP_DEVICE_LIST_HEADER)
+        if (headerIndex < 0 || !lines.slice(headerIndex + 1).some((line) =>
+          line.includes(': ')
+        )) {
+          return false
+        }
+      }
     }
 
     return true
@@ -297,7 +312,7 @@ function getPrebuiltAssetName(graphicsComputeAPI, hasGPU) {
 
   if (SystemHelper.isWindows()) {
     if (hasGPU && graphicsComputeAPI === 'cuda') {
-      return `llama-${LLAMACPP_RELEASE_VERSION}-bin-win-cuda-12.4-x64.zip`
+      return `llama-${LLAMACPP_RELEASE_VERSION}-${LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX}`
     }
 
     if (hasGPU && graphicsComputeAPI === 'vulkan') {
@@ -318,8 +333,16 @@ function getPrebuiltAssetName(graphicsComputeAPI, hasGPU) {
   )
 }
 
-async function installPrebuilt(assetName, status, extraData = {}) {
+async function installPrebuilt(assetName, status, hasGPU, extraData = {}) {
   const archivePath = path.join(LLAMACPP_PATH, assetName)
+  // Upstream packages CUDA DLLs separately, under the same release as the build.
+  const cudaRuntimeAssetName = assetName ===
+    `llama-${LLAMACPP_RELEASE_VERSION}-${LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX}`
+    ? `cudart-llama-${LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX}`
+    : null
+  const cudaRuntimeArchivePath = cudaRuntimeAssetName
+    ? path.join(LLAMACPP_PATH, cudaRuntimeAssetName)
+    : null
 
   try {
     await cleanInstallDirectory()
@@ -352,8 +375,22 @@ async function installPrebuilt(assetName, status, extraData = {}) {
       )
     }
 
-    if (!await isExistingInstallationHealthy(binaryDirectoryPath)) {
-      throw new Error('The llama.cpp runtime is incomplete or cannot start.')
+    if (cudaRuntimeArchivePath) {
+      status.pause()
+      await FileHelper.downloadFile(
+        `${LLAMACPP_RELEASE_BASE_URL}/${cudaRuntimeAssetName}`,
+        cudaRuntimeArchivePath,
+        { cliProgress: true, parallelStreams: 3, skipExisting: false }
+      )
+      status.text = 'Installing llama.cpp CUDA runtime...'
+      status.start()
+      await FileHelper.extractArchive(cudaRuntimeArchivePath, binaryDirectoryPath)
+    }
+
+    if (!await isExistingInstallationHealthy(binaryDirectoryPath, hasGPU)) {
+      throw new Error(hasGPU
+        ? 'I cannot use the detected GPU with my llama.cpp runtime. Check its runtime libraries and graphics driver.'
+        : 'I cannot start my llama.cpp runtime. Check its runtime libraries.')
     }
 
     await writeManifest(
@@ -368,6 +405,9 @@ async function installPrebuilt(assetName, status, extraData = {}) {
     status.succeed(`llama.cpp ${LLAMACPP_RELEASE_VERSION} ready`)
   } finally {
     await removePath(archivePath)
+    if (cudaRuntimeArchivePath) {
+      await removePath(cudaRuntimeArchivePath)
+    }
   }
 }
 
@@ -425,8 +465,8 @@ async function buildFromSource(status) {
     // Retain only the runtime payload after a successful source build.
     await pruneSourceTree()
 
-    if (!await isExistingInstallationHealthy(LLAMACPP_SOURCE_BUILD_PATH)) {
-      throw new Error('The llama.cpp runtime is incomplete or cannot start.')
+    if (!await isExistingInstallationHealthy(LLAMACPP_SOURCE_BUILD_PATH, true)) {
+      throw new Error('I cannot use my CUDA llama.cpp build. Check the CUDA runtime libraries and graphics driver.')
     }
 
     await writeManifest(
@@ -444,8 +484,15 @@ async function buildFromSource(status) {
   }
 }
 
-export default async function setupLlamaCPP() {
+/**
+ * Install a managed runtime and verify it can use the detected local hardware.
+ */
+export default async function setupLlamaCPP(localAICapability = null) {
   const status = createSetupStatus('Setting up llama.cpp...').start()
+  const { hasGPU, graphicsComputeAPI } = localAICapability ?? {
+    hasGPU: await SystemHelper.hasGPU(),
+    graphicsComputeAPI: await SystemHelper.getGraphicsComputeAPI()
+  }
 
   const existingInstallation = readManifest()
   const manifest = existingInstallation?.manifest
@@ -453,7 +500,7 @@ export default async function setupLlamaCPP() {
 
   if (
     manifest?.version === LLAMACPP_RELEASE_VERSION &&
-    (await isExistingInstallationHealthy(runtimeDirectoryPath))
+    (await isExistingInstallationHealthy(runtimeDirectoryPath, hasGPU))
   ) {
     status.succeed(`llama.cpp: ${LLAMACPP_RELEASE_VERSION}`)
 
@@ -466,25 +513,7 @@ export default async function setupLlamaCPP() {
     fs.existsSync(getBinaryPath(runtimeDirectoryPath))
   ) {
     status.pause()
-    SetupUI.warning('The current llama.cpp installation looks corrupted. Reinstalling it.')
-  }
-
-  let hasGPU = false
-  let graphicsComputeAPI = 'cpu'
-
-  try {
-    const { getLlama, LlamaLogLevel } = await Function(
-      'return import("node-llama-cpp")'
-    )()
-    const llama = await getLlama({
-      logLevel: LlamaLogLevel.disabled
-    })
-
-    hasGPU = await SystemHelper.hasGPU(llama)
-    graphicsComputeAPI = await SystemHelper.getGraphicsComputeAPI(llama)
-  } catch (error) {
-    status.pause()
-    SetupUI.warning(`Failed to inspect GPU support for llama.cpp setup: ${error}`)
+    SetupUI.warning('I cannot use my current llama.cpp installation. I will reinstall it with its required runtime libraries.')
   }
 
   if (SystemHelper.isLinux() && CPU_ARCH === CPUArchitectures.ARM64) {
@@ -519,7 +548,7 @@ export default async function setupLlamaCPP() {
       SetupUI.warning(
         'I could not build llama.cpp from source, so I will use the Vulkan binaries instead.'
       )
-      await installPrebuilt(getLinuxVulkanAssetName(), status, {
+      await installPrebuilt(getLinuxVulkanAssetName(), status, hasGPU, {
         fallbackFromSourceBuild: true
       })
 
@@ -529,7 +558,8 @@ export default async function setupLlamaCPP() {
 
   await installPrebuilt(
     getPrebuiltAssetName(graphicsComputeAPI, hasGPU),
-    status
+    status,
+    hasGPU
   )
 
   return true
