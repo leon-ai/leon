@@ -338,6 +338,55 @@ test('bounds long-query text without truncating recalled input', async ({ page, 
   expect(Number(requests.at(-1)!.searchParams.get('characters'))).toBeLessThan(message.length)
 })
 
+for (const theme of ['light', 'dark'] as const) {
+  test(`renders local artwork for selectable and selected model providers (${theme})`, async ({ page, ui }, testInfo) => {
+    const logos = new Map<string, number>()
+    page.on('response', (response) => {
+      const pathname = new URL(response.url()).pathname
+      if (pathname.includes('/img/providers/')) {
+        logos.set(pathname, response.status())
+      }
+    })
+    const model = ui.models.providers[0]!.models[0]!
+    ui.models.providers = [...ui.models.providers, ...[
+      { id: 'groq', label: 'Groq' }, { id: 'cerebras', label: 'Cerebras' }
+    ].map((provider) => ({ ...provider, models: [{ ...model, model: 'fixture-chat', label: 'Fixture chat' }] }))]
+    await page.goto(SESSION_URL)
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    const popup = page.getByRole('dialog', { name: 'Choose a model', exact: true })
+    await page.getByRole('button', { name: /^Choose model, current:/ }).click()
+    for (const provider of ui.models.providers) {
+      const row = popup.getByRole('option', { name: provider.label, exact: true })
+      await expect(row.locator('.llm-provider-icon')).toBeVisible()
+      const pathname = `/web-app/img/providers/${provider.id}.svg`
+      await expect.poll(() => logos.get(pathname)).toBe(200)
+      expect(await page.evaluate(async (url) => {
+        const image = new Image()
+        image.src = url
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = canvas.height = 24
+        const context = canvas.getContext('2d')!
+        context.drawImage(image, 0, 0, 24, 24)
+
+        return context.getImageData(0, 0, 24, 24).data.some((value, index) => index % 4 === 3 && value > 0)
+      }, pathname)).toBe(true)
+    }
+    await popup.screenshot({ path: testInfo.outputPath(`provider-logos-${theme}.png`) })
+    for (const provider of ui.models.providers.slice(1)) {
+      await popup.getByRole('option', { name: provider.label, exact: true }).click()
+      await popup.getByRole('option', { name: 'Fixture chat', exact: true }).click()
+      const selected = page.getByRole('button', { name: `Choose model, current: ${provider.label}, Fixture chat`, exact: true })
+      await expect(selected).toBeVisible()
+      await expect(selected.locator('.llm-provider-icon')).toHaveCSS('mask-image', new RegExp(`/img/providers/${provider.id}\\.svg`))
+      await selected.click()
+    }
+    await page.keyboard.press('Escape')
+  })
+}
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`quickly returns to drafting after scrolling to the bottom with ${reducedMotion} motion`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion })

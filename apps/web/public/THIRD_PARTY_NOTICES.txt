@@ -513,6 +513,11 @@ anthropic.svg, openrouter.svg, deepseek.svg, zai.svg, moonshotai.svg, minimax.sv
   minimax.svg presents the original waveform as a cutout in a filled badge.
   Copyright (c) 2023 LobeHub. MIT license reproduced below.
 
+groq.svg, cerebras.svg:
+  Unmodified monochrome marks from LobeHub's static SVG collection.
+  Source: https://github.com/lobehub/lobe-icons/tree/55746b0b082258211121c70bd26e6878fd3bd292/packages/static-svg/icons
+  Copyright (c) 2023 LobeHub. MIT license reproduced below.
+
 openai.svg:
   Source: installed remixicon/icons/Logos/openai-fill.svg
   Copyright (c) 2017-2026 Remix Design. Remix Icon License v1.0.
