@@ -201,6 +201,27 @@ const CHAT_RESPONSE = {
   usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120, prompt_cache_hit_tokens: 80 }
 }
 
+/**
+ * Builds an empty response with the provider's explicit completion signal.
+ */
+function createCompletedResponsesStream(): Response {
+  const event = {
+    type: 'response.completed',
+    response: {
+      id: 'resp_completed',
+      created_at: 1,
+      model: 'gpt-6.1-sol',
+      status: 'completed',
+      output: [],
+      usage: { input_tokens: 0, output_tokens: 0 }
+    }
+  }
+
+  return new Response(`data: ${JSON.stringify(event)}\n\n`, {
+    headers: { 'content-type': 'text/event-stream' }
+  })
+}
+
 describe('AISDKRemoteLLMProvider', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -1687,8 +1708,8 @@ describe('AISDKRemoteLLMProvider', () => {
       .mockResolvedValueOnce({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'rotated-token' })
     websocketMocks.fetch
       .mockResolvedValueOnce(Response.json({}, { status: 401 }))
-      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
-      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
+      .mockResolvedValueOnce(createCompletedResponsesStream())
+      .mockResolvedValueOnce(createCompletedResponsesStream())
     const provider = new OpenAILLMProvider({
       provider: LLMProviders.OpenAI,
       model: 'gpt-6.1-sol',
@@ -1781,9 +1802,9 @@ describe('AISDKRemoteLLMProvider', () => {
     websocketMocks.fetch
       .mockImplementationOnce(async () => {
         controller.abort(new Error('Canceled'))
-        return new Response('data: [DONE]\n\n')
+        return createCompletedResponsesStream()
       })
-      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
+      .mockResolvedValueOnce(createCompletedResponsesStream())
 
     await expect(provider.runChatCompletion('Old turn', {
       ...createCompletionParams(null),
