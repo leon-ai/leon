@@ -116,11 +116,8 @@ async function isPortAvailable(host: string, port: number): Promise<boolean> {
 }
 
 function resolveModelPath(modelPath: string): string {
-  const normalizedModelPath = modelPath.trim()
-
-  return path.isAbsolute(normalizedModelPath)
-    ? normalizedModelPath
-    : path.resolve(CODEBASE_PATH, normalizedModelPath)
+  // Normalize absolute paths too, so readiness compares native separators.
+  return path.resolve(CODEBASE_PATH, modelPath.trim())
 }
 
 function configureStructuredRequestThinking(

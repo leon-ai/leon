@@ -227,6 +227,42 @@ describe('AISDKRemoteLLMProvider', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each([
+    {
+      platform: 'Windows', resolve: path.win32.resolve,
+      configured: 'E:/models/archive/../example.gguf', loaded: 'E:\\models\\example.gguf'
+    },
+    {
+      platform: 'POSIX', resolve: path.posix.resolve,
+      configured: '/models/archive/../example.gguf', loaded: '/models/example.gguf'
+    }
+  ])('recognizes equivalent absolute model paths on $platform', async ({ resolve, configured, loaded }) => {
+    vi.spyOn(path, 'resolve').mockImplementation(resolve)
+    const log = vi.spyOn(LlamaCPPLLMProvider as unknown as {
+      writeServerLogLine(line: string): void
+    }, 'writeServerLogLine').mockImplementation(() => undefined)
+    vi.spyOn(axios, 'get').mockImplementation(async (url) => ({
+      data: String(url).endsWith('/props')
+        ? { model_path: loaded, default_generation_settings: { n_ctx: 16_384 } }
+        : { data: [{ id: loaded }] }
+    }))
+    vi.spyOn(axios, 'post').mockResolvedValue({ data: { input_tokens: 100 } })
+    const provider = new LlamaCPPLLMProvider({
+      ...TARGET, provider: LLMProviders.LlamaCPP, model: configured
+    })
+
+    try {
+      await provider.boot()
+
+      expect(provider.isServerReady()).toBe(true)
+      expect(provider.modelName).toBe(loaded)
+      expect(provider.nativeContextWindowTokens).toBe(16_384)
+    } finally {
+      provider.dispose()
+      log.mockRestore()
+    }
+  })
+
   it.each([false, true])('preserves llama.cpp schemas, explicit thinking controls and native output capacity (stream=%s)', async (shouldStream) => {
     const model = path.resolve('local-model')
     const log = vi.spyOn(LlamaCPPLLMProvider as unknown as {
