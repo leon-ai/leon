@@ -36,6 +36,8 @@ import type { SearchQuery } from '@/helpers/search-helper'
 import { MAXIMUM_SESSION_SEARCH_EXCERPT_CHARACTERS } from './session-search-contract'
 import type { SessionSearchMatch } from './session-search-contract'
 import type { Artifact } from '@/core/artifacts/artifact-types'
+import { initializeWorkspaces } from '@@/scripts/setup/migrations/2026111512294097-add-workspaces.js'
+import { WorkspaceRepository } from './workspace-repository'
 import {
   auroraSubmissionText, isAuroraSubmission, normalizeAuroraSubmission,
   type AnswerPart, type AuroraValues
@@ -160,6 +162,7 @@ function parseArchiveCursor(
  */
 export class ConversationRepository {
   private readonly db: Database
+  public readonly workspaces: WorkspaceRepository
 
   public constructor(sessionsPath: string) {
     fs.mkdirSync(sessionsPath, { recursive: true })
@@ -169,10 +172,12 @@ export class ConversationRepository {
         rankSearchFields([normalizeSearchText(title)], JSON.parse(query) as SearchQuery)
       )
       initializeConversationArchive(this.db, sessionsPath)
+      initializeWorkspaces(this.db)
     } catch (error) {
       this.db.close()
       throw error
     }
+    this.workspaces = new WorkspaceRepository(this.db)
   }
 
   /**
