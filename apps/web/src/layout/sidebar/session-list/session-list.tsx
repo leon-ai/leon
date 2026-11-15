@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useLayoutEffect,
   useEffect,
   useRef,
@@ -46,6 +47,7 @@ export function SessionList({
   const [now, setNow] = useState(Date.now)
   const sessions = query.sessions
   const hasSessions = sessions.length > 0
+  const getSessionKey = useCallback((index: number) => sessions[index]?.id ?? index, [sessions])
 
   useEffect(() => {
     if (collapsed || !hasSessions) {
@@ -77,7 +79,7 @@ export function SessionList({
 
   const rowVirtualizer = useVirtualizer({
     count: sessions.length,
-    getItemKey: (index) => sessions[index]?.id ?? index,
+    getItemKey: getSessionKey,
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => SESSION_ITEM_ESTIMATED_HEIGHT,
     overscan: SESSION_LIST_OVERSCAN,
