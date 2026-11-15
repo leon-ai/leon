@@ -10,35 +10,15 @@ import { LogHelper } from '@/helpers/log-helper'
 import { ToolExecutionOrigin } from '@/types'
 import dayjs from 'dayjs'
 
+import { AmbientSeason, AmbientSolarPhase, getAmbientClock } from './ambient-clock'
+
+export { AmbientSeason, AmbientSolarPhase } from './ambient-clock'
+
 export const AMBIENT_WEATHER_REFRESH_INTERVAL_MS = 60 * 60 * 1_000
 
 const AMBIENT_WEATHER_RETRY_INTERVAL_MS = 10 * 60 * 1_000
-const SUNRISE_START_HOUR = 6
-const MORNING_START_HOUR = 8
-const NOON_START_HOUR = 11
-const AFTERNOON_START_HOUR = 14
-const SUNSET_START_HOUR = 17
-const BLUE_HOUR_START_HOUR = 19
-const NIGHT_START_HOUR = 20
 const SOLAR_TRANSITION_WINDOW_MS = 30 * 60 * 1_000
 const SOLAR_DATE_FORMAT = 'YYYY-MM-DD'
-
-export enum AmbientSeason {
-  Spring = 'spring',
-  Summer = 'summer',
-  Autumn = 'autumn',
-  Winter = 'winter'
-}
-
-export enum AmbientSolarPhase {
-  Sunrise = 'sunrise',
-  Morning = 'morning',
-  Noon = 'noon',
-  Afternoon = 'afternoon',
-  Sunset = 'sunset',
-  BlueHour = 'blue-hour',
-  Night = 'night'
-}
 
 export enum AmbientWeatherCondition {
   Clear = 'clear',
@@ -172,11 +152,11 @@ export default class AmbientConditionsManager {
     await this.refreshWeatherIfNeeded()
 
     const timeZone = this.weather?.solar?.timeZone ?? DateHelper.getTimeZone()
-    const localDateParts = this.getLocalDateParts(date, timeZone)
+    const clock = getAmbientClock(date, timeZone)
 
     return {
-      season: this.getSeason(localDateParts.month),
-      solarPhase: this.getSolarPhase(date, localDateParts.hour),
+      season: clock.season,
+      solarPhase: this.getSolarPhase(date, clock.solarPhase),
       timeZone,
       weather: this.weather
     }
@@ -355,42 +335,7 @@ export default class AmbientConditionsManager {
     }
   }
 
-  private getLocalDateParts(
-    date: Date,
-    timeZone: string
-  ): { hour: number, month: number } {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      hourCycle: 'h23',
-      month: 'numeric',
-      timeZone
-    }).formatToParts(date)
-    const hour = Number(parts.find((part) => part.type === 'hour')?.value)
-    const month = Number(parts.find((part) => part.type === 'month')?.value)
-
-    return {
-      hour: Number.isInteger(hour) ? hour : date.getHours(),
-      month: Number.isInteger(month) ? month : date.getMonth() + 1
-    }
-  }
-
-  private getSeason(month: number): AmbientSeason {
-    if (month >= 3 && month <= 5) {
-      return AmbientSeason.Spring
-    }
-
-    if (month >= 6 && month <= 8) {
-      return AmbientSeason.Summer
-    }
-
-    if (month >= 9 && month <= 11) {
-      return AmbientSeason.Autumn
-    }
-
-    return AmbientSeason.Winter
-  }
-
-  private getSolarPhase(date: Date, hour: number): AmbientSolarPhase {
+  private getSolarPhase(date: Date, fallback: AmbientSolarPhase): AmbientSolarPhase {
     const solar = this.weather?.solar
     if (solar && dayjs(date).tz(solar.timeZone).format(SOLAR_DATE_FORMAT) === solar.date) {
       const now = date.getTime()
@@ -422,32 +367,7 @@ export default class AmbientConditionsManager {
       return AmbientSolarPhase.BlueHour
     }
 
-    // Keep a stable clock-based scene when today's solar times are unavailable.
-    if (hour >= NIGHT_START_HOUR || hour < SUNRISE_START_HOUR) {
-      return AmbientSolarPhase.Night
-    }
-
-    if (hour < MORNING_START_HOUR) {
-      return AmbientSolarPhase.Sunrise
-    }
-
-    if (hour < NOON_START_HOUR) {
-      return AmbientSolarPhase.Morning
-    }
-
-    if (hour < AFTERNOON_START_HOUR) {
-      return AmbientSolarPhase.Noon
-    }
-
-    if (hour < SUNSET_START_HOUR) {
-      return AmbientSolarPhase.Afternoon
-    }
-
-    if (hour < BLUE_HOUR_START_HOUR) {
-      return AmbientSolarPhase.Sunset
-    }
-
-    return AmbientSolarPhase.BlueHour
+    return fallback
   }
 
   private logWeatherRefreshFailure(message: string): void {
