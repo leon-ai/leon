@@ -56,6 +56,7 @@ const TITLE_REASONING_MODE_OFF_PROVIDERS = [
 
 export interface ConversationSession {
   id: string
+  workspaceId?: string
   title: string
   isTitleGenerated: boolean
   isPinned: boolean
@@ -331,13 +332,22 @@ export class ConversationSessionManager {
     return this.findSession(sessionId)
   }
 
-  public createSession(sessionId?: string): ConversationSession {
+  public createSession(sessionId?: string, workspaceId?: string): ConversationSession {
+    if (workspaceId && !CONVERSATION_REPOSITORY.workspaces.get(workspaceId)) {
+      throw new Error('Workspace not found.')
+    }
     const index = this.ensureReady()
     const existing = sessionId ? this.findSession(sessionId) : null
     if (existing) {
+      if (existing.workspaceId !== workspaceId) {
+        throw new Error('This session already belongs to another context.')
+      }
       return cloneSession(existing)
     }
     const session = createSession(DEFAULT_SESSION_TITLE, sessionId)
+    if (workspaceId) {
+      session.workspaceId = workspaceId
+    }
 
     index.sessions.unshift(session)
     index.activeSessionId = session.id
@@ -498,6 +508,10 @@ export class ConversationSessionManager {
       return
     }
 
+    // Optional metadata can disappear when a workspace is removed.
+    if (!stored.workspaceId) {
+      delete session.workspaceId
+    }
     Object.assign(session, stored)
     this.events.emit('updated', {
       activeSessionId: this.getActiveSessionId(),
@@ -707,6 +721,8 @@ export class ConversationSessionManager {
   private normalizeIndex(index: ConversationSessionIndex): ConversationSessionIndex {
     const sessions = index.sessions.map((session) => ({
       id: session.id,
+      ...(typeof session.workspaceId === 'string' && session.workspaceId
+        ? { workspaceId: session.workspaceId } : {}),
       title: normalizeTitle(session.title || DEFAULT_SESSION_TITLE),
       isTitleGenerated: session.isTitleGenerated === true,
       isPinned: session.isPinned === true,
