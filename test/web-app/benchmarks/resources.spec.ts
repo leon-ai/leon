@@ -6,11 +6,12 @@ import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 const SETTLE_MS = 8_000
 const SAMPLE_MS = 5_000
 const SESSION_COUNT = 600
+const DRAFT_LINE_COUNT = 10
 
-for (const workload of ['idle', 'working', 'tasks', 'rain', 'reduced motion', 'scrolling', 'background'] as const) {
+for (const workload of ['idle', 'draft', 'working', 'tasks', 'rain', 'reduced motion', 'scrolling', 'background'] as const) {
   test(`samples production resources: ${workload}`, async ({ page, ui, browser }, testInfo) => {
     const session = ui.sessions[0]!
-    const shortConversation = workload === 'idle' || workload === 'reduced motion'
+    const shortConversation = workload === 'idle' || workload === 'draft' || workload === 'reduced motion'
     ui.sessions.splice(0, ui.sessions.length, ...Array.from({ length: shortConversation ? 3 : SESSION_COUNT }, (_, index) => ({
       ...session,
       id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
@@ -50,7 +51,15 @@ for (const workload of ['idle', 'working', 'tasks', 'rain', 'reduced motion', 's
     })
     await page.goto(SESSION_URL)
     await page.bringToFront()
-    await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
+    const field = page.getByRole('textbox', { name: 'Message Leon' })
+
+    await expect(field).toBeFocused()
+    if (workload === 'draft') {
+      // A tall composer exercises the rendering area hidden by a single-line draft.
+      await field.fill(Array.from({ length: DRAFT_LINE_COUNT }, (_, index) =>
+        `Draft line ${index + 1}: keep the original text, caret and soft glow aligned while reading.`
+      ).join('\n'))
+    }
     await expect(page.locator('.final-answer').last()).toBeVisible()
     if (workload === 'rain' || workload === 'background') {
       await expect(page.locator('.weather-layer')).toBeVisible()
@@ -78,6 +87,7 @@ for (const workload of ['idle', 'working', 'tasks', 'rain', 'reduced motion', 's
       viewport: [innerWidth, innerHeight],
       visible: document.visibilityState,
       focused: document.hasFocus(),
+      composerHeight: document.querySelector('.query-input')?.getBoundingClientRect().height,
       animations: document.getAnimations().filter((animation) => animation.playState === 'running').map((animation) => ({
         name: (animation as CSSAnimation).animationName,
         iterations: animation.effect?.getComputedTiming().iterations
