@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 
 import { BorderWave, type BorderWaveBounds } from '@/components/border-wave'
-import { useAnimationVisibility } from '@/hooks/use-animation-visibility'
+import { observeAnimationVisibility } from '@/utils/animation-visibility'
 
 import './session-work-indicator.sass'
 
@@ -17,7 +17,18 @@ const WAVE_REPEAT_PAUSE_MS = 0
 export function SessionWorkIndicator() {
   const indicatorRef = useRef<HTMLSpanElement>(null)
   const [bounds, setBounds] = useState<BorderWaveBounds | null>(null)
-  const isAnimating = useAnimationVisibility()
+  const [isVisible, setIsVisible] = useState(false)
+  const isAnimating = isVisible
+
+  useEffect(() => {
+    const indicator = indicatorRef.current
+
+    if (indicator === null) {
+      return undefined
+    }
+
+    return observeAnimationVisibility(indicator, setIsVisible)
+  }, [])
 
   useEffect(() => {
     const indicator = indicatorRef.current
