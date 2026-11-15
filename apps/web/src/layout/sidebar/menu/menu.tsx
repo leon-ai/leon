@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { MenuItem } from '@/layout/sidebar/menu-item'
-import { Badge } from '@/components/badge'
+import { Status } from '@/components/status'
 
 import './menu.sass'
 
@@ -21,18 +21,18 @@ interface NavigatorWithUserAgentData extends Navigator {
   userAgentData?: NavigatorUserAgentData
 }
 
-function SoonBadge() {
+function SoonStatus() {
   return (
-    <Badge
+    <Status
       variant="secondary"
       label="Soon"
     />
   )
 }
 
-function NewBadge() {
+function NewStatus() {
   return (
-    <Badge
+    <Status
       label="New"
     />
   )
@@ -90,8 +90,8 @@ export function Menu({
   const scrollableItems = (
     <>
       <MenuItem iconName="settings" label="Settings" to="/settings" shortcutKeys={['/']} collapsed={collapsed} />
-      <MenuItem iconName="download-cloud-2" label="Update" badge={NewBadge} collapsed={collapsed} />
-      <MenuItem iconName="book-open" label="Docs" disabled badge={SoonBadge} collapsed={collapsed} />
+      <MenuItem iconName="download-cloud-2" label="Update" status={NewStatus} collapsed={collapsed} />
+      <MenuItem iconName="book-open" label="Docs" disabled status={SoonStatus} collapsed={collapsed} />
     </>
   )
 

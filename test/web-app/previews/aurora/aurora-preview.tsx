@@ -5,7 +5,7 @@ import '@/styles/main.sass'
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  AURORA_CATALOG, ArtifactWidget, Badge, BooleanChoiceWidget, Button, ChoiceWidget,
+  AURORA_CATALOG, ArtifactWidget, Status, BooleanChoiceWidget, Button, ChoiceWidget,
   FormWidget, Input, Loader, PreparationStatus, PreparationWidget, Progress,
   Selection, Range, Surface, Switch, Segmented, Tabs, NumberStepper, SearchSelect,
   DataTableWidget, ComparisonWidget
@@ -15,7 +15,7 @@ import { CopyButton } from '@/components/copy-button'
 import { Input as AppInput } from '@/components/input'
 import { FileIcon, Icon } from '@/components/icon'
 import { VisualPreview, VisualPreviewProvider } from '@/components/visual-preview/visual-preview'
-import { ToastProvider } from '@/components/toast'
+import { ToastProvider, useToast } from '@/components/toast'
 import { createSearchIndex, searchIndex } from '@/utils/search'
 import { applyTheme, getCurrentTheme, type Theme } from '@/theme'
 import { AURORA_QUERY_EXAMPLES, AURORA_GENERATED_SPEC, AURORA_CALCULATOR_SPEC, AURORA_LIGHT_SPEC, AURORA_MEMORY_SPEC, AURORA_PRESENTATION_SPEC } from '../../../fixtures/aurora'
@@ -43,6 +43,11 @@ const DOWNLOAD_ETA_EXAMPLES = [
   { label: 'Minute boundary', value: 59_999 }
 ] as const
 const DOWNLOAD_PREVIEW_EXTRA_FILES = 12
+const FEEDBACK_EXAMPLES = [
+  { type: 'success', label: 'Success' },
+  { type: 'error', label: 'Error' },
+  { type: 'warning', label: 'Warning' }
+] as const
 const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, entry.description])
 const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
@@ -64,6 +69,23 @@ function Artifacts() {
     renderFileIcon={(filename) => <FileIcon fileName={filename} />}
     renderImagePreview={(item, image) => <VisualPreview title={item.filename} fullWidth>{image}</VisualPreview>}
   />
+}
+
+function StatusDemo() {
+  const { showToast } = useToast()
+
+  return <div className="demo-stack">
+    <div className="aurora-actions">
+      <Status label="New" /><Status label="Soon" variant="secondary" />
+      <Status label="Connected" variant="success" /><Status label="Failed" variant="error" />
+      <Status label="Action needed" variant="warning" />
+    </div>
+    <div className="aurora-actions">
+      {FEEDBACK_EXAMPLES.map(({ type, label }) => <Button key={type} variant="secondary" onClick={() => showToast({
+        type, title: `${label} feedback`, description: 'This is a local toast preview. Nothing is sent.'
+      })}>{label} toast</Button>)}
+    </div>
+  </div>
 }
 
 function QueryExample({ id }: { id: string }) {
@@ -272,12 +294,8 @@ function Example({ id }: { id: string }) {
   switch (id) {
     case 'button':
       return <ButtonDemo />
-    case 'badge':
-      return <div className="aurora-actions">
-        <Badge label="New" /><Badge label="Soon" variant="secondary" />
-        <Badge label="Connected" variant="success" /><Badge label="Failed" variant="error" />
-        <Badge label="Action needed" variant="warning" />
-      </div>
+    case 'status':
+      return <StatusDemo />
     case 'input':
       return <div className="demo-stack"><Input ariaLabel="A small idea" placeholder="What’s on your mind?" />
         <Input ariaLabel="A longer note" multiline rows={3} placeholder="A little more room…" /></div>

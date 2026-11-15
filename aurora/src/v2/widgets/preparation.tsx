@@ -2,7 +2,7 @@ import { Button } from '../components/button/button'
 import { Progress } from '../components/progress'
 import { Surface } from '../components/surface'
 import { ScrollContainer } from '../components/scroll-container'
-import { Badge, type BadgeVariant } from '../components/badge/badge'
+import { Status, type StatusVariant } from '../components/status/status'
 import { PreparationStatus } from '../contracts/preparation'
 import { DurationFormat, formatDuration } from '../utils/format-duration'
 import type { DownloadStatus, FileDownloadProgress } from '../../../../bridges/runtime/contracts/download-progress'
@@ -13,7 +13,7 @@ import './preparation.sass'
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 const BYTES_PER_UNIT = 1_024
 const ETA_RESOLUTION_MS = 1_000
-const DOWNLOAD_BADGES: Record<Exclude<DownloadStatus, 'downloading'>, { label: string, variant: BadgeVariant }> = {
+const DOWNLOAD_STATUSES: Record<Exclude<DownloadStatus, 'downloading'>, { label: string, variant: StatusVariant }> = {
   queued: { label: 'Queued', variant: 'secondary' },
   complete: { label: 'Ready', variant: 'success' },
   failed: { label: 'Failed', variant: 'error' },
@@ -55,7 +55,7 @@ export function PreparationWidget({ title, status, detail, completed, total, dow
               {...(file.totalBytes !== null && file.totalBytes > 0
                 ? { value: file.downloadedBytes, max: file.totalBytes } : {})} /> : <div className="aurora-download-heading">
               <span className="aurora-download-name">{file.fileName}</span>
-              <Badge {...DOWNLOAD_BADGES[file.status]} />
+              <Status {...DOWNLOAD_STATUSES[file.status]} />
             </div>}
             {file.status !== 'queued' && <p className="aurora-feedback">
               {formatDownloadSize(file.downloadedBytes)}{file.totalBytes !== null ? ` / ${formatDownloadSize(file.totalBytes)}` : ''}

@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../components/button/button'
-import { Badge, type BadgeProps } from '../components/badge/badge'
+import { Status, type StatusProps } from '../components/status/status'
 import { Input } from '../components/input/input'
 import { Surface } from '../components/surface'
 import { Collapse } from '../components/collapse/collapse'
@@ -63,7 +63,7 @@ export function ConnectionSetupWidget({ title, description, view, busy, loading,
   const notice = view?.notice && (view.state.step !== Step.Installation || !primary) ? view.notice : undefined
   const hasBody = expanded || view?.details || links.length > 0 || error || notice
   const hasFooter = primary || footerActions.length > 0 || !view
-  const badge: BadgeProps | undefined = connected ? { label: 'Connected', variant: 'success' }
+  const statusProps: StatusProps | undefined = connected ? { label: 'Connected', variant: 'success' }
     : error ? { label: 'Request failed', variant: 'error' }
       : view?.state.step === Step.Disabled ? { label: 'Disabled', variant: 'secondary' }
         : notice ? { label: 'Not connected', variant: 'warning' } : undefined
@@ -150,8 +150,8 @@ export function ConnectionSetupWidget({ title, description, view, busy, loading,
         <h3>{name}</h3>
         {toolDescription && <p>{toolDescription}</p>}
       </div>
-      {badge && <div className="aurora-connection-status" role={connected ? 'status' : undefined}>
-        <Badge {...badge} />
+      {statusProps && <div className="aurora-connection-status" role={connected ? 'status' : undefined}>
+        <Status {...statusProps} />
         {connected && view?.status && view.status !== 'Connected' && <p className="aurora-feedback">{view.status}</p>}
       </div>}
     </header>} footer={hasFooter && <>

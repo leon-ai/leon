@@ -43,7 +43,7 @@ function renderShortcutHint(
 interface MenuItemBaseProps {
   iconName: string
   label: string
-  badge?: ComponentType
+  status?: ComponentType
   shortcutKeys?: MenuItemShortcutKey[]
   collapsed?: boolean
   disabled?: boolean
@@ -71,7 +71,7 @@ export function MenuItem({
   label,
   to,
   href,
-  badge: Badge,
+  status: Status,
   shortcutKeys,
   collapsed = false,
   disabled = false,
@@ -110,7 +110,7 @@ export function MenuItem({
           })}
         </span>
       )}
-      {Badge && <Badge />}
+      {Status && <Status />}
     </>
   )
 
