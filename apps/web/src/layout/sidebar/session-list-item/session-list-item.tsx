@@ -1,9 +1,9 @@
 import { Icon } from '@/components/icon'
 import {
+  memo,
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent
 } from 'react'
 import { Link } from '@tanstack/react-router'
@@ -37,14 +37,15 @@ interface SessionListItemProps {
   status: SessionStatus
   onDelete: (sessionId: string) => void
   onRename: (sessionId: string, title: string) => void
-  onPin: (sessionId: string) => void
+  onPin: (sessionId: string, isPinned: boolean) => void
   title: string
   timestamp: number
   relativeTime: string
-  style?: CSSProperties
+  height: number
+  offset: number
 }
 
-export function SessionListItem({
+export const SessionListItem = memo(function SessionListItem({
   id,
   isPinned,
   isUnread,
@@ -55,7 +56,8 @@ export function SessionListItem({
   title,
   timestamp,
   relativeTime,
-  style
+  height,
+  offset
 }: SessionListItemProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const titleAnimationFrameRef = useRef<number | null>(null)
@@ -284,7 +286,7 @@ export function SessionListItem({
         'session-list-item-wip': isWorking,
         'session-list-item-unread': showUnread
       })}
-      style={style}
+      style={{ height: `${height}px`, transform: `translateY(${offset}px)` }}
       onMouseEnter={startTitleScroll}
       onMouseLeave={stopTitleScroll}
     >
@@ -381,7 +383,7 @@ export function SessionListItem({
               label: 'Rename',
               onSelect: startEditing
             },
-            { ...pinDropdownItem, onSelect: () => onPin(id) },
+            { ...pinDropdownItem, onSelect: () => onPin(id, isPinned) },
             {
               iconName: 'delete-bin',
               label: 'Delete',
@@ -418,4 +420,4 @@ export function SessionListItem({
       />
     </li>
   )
-}
+})

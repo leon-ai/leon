@@ -48,6 +48,7 @@ export function SessionList({
   const sessions = query.sessions
   const hasSessions = sessions.length > 0
   const getSessionKey = useCallback((index: number) => sessions[index]?.id ?? index, [sessions])
+  const { mutate } = mutation
 
   useEffect(() => {
     if (collapsed || !hasSessions) {
@@ -133,7 +134,7 @@ export function SessionList({
     }
   }
 
-  function renameSession(sessionId: string, nextTitle: string): void {
+  const renameSession = useCallback((sessionId: string, nextTitle: string): void => {
     const title = nextTitle.trim()
     const session = sessions.find((currentSession) =>
       currentSession.id === sessionId
@@ -147,18 +148,22 @@ export function SessionList({
       return
     }
 
-    mutation.mutate({ id: sessionId, changes: { title } })
-  }
+    mutate({ id: sessionId, changes: { title } })
+  }, [mutate, sessions])
 
-  function deleteSession(sessionId: string): void {
-    mutation.mutate({ id: sessionId }, {
+  const pinSession = useCallback((sessionId: string, isPinned: boolean): void => {
+    mutate({ id: sessionId, changes: { is_pinned: !isPinned } })
+  }, [mutate])
+
+  const deleteSession = useCallback((sessionId: string): void => {
+    mutate({ id: sessionId }, {
       onSuccess: () => {
         if (sessionId === viewedSessionId) {
           void navigate({ to: '/' })
         }
       }
     })
-  }
+  }, [mutate, navigate, viewedSessionId])
 
   useLayoutEffect(() => {
     const virtualList = virtualListRef.current
@@ -254,11 +259,9 @@ export function SessionList({
               relativeTime={formatRelativeDate(session.lastMessageAt ?? session.createdAt, now, 'compact')}
               onDelete={deleteSession}
               onRename={renameSession}
-              onPin={(id) => mutation.mutate({ id, changes: { is_pinned: !session.isPinned } })}
-              style={{
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`
-              }}
+              onPin={pinSession}
+              height={virtualRow.size}
+              offset={virtualRow.start - rowVirtualizer.options.scrollMargin}
             />
           )
         })}
