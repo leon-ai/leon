@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { observeElementOffset, useVirtualizer } from '@tanstack/react-virtual'
 
 import type { FeedToolCall } from '@/data/feed'
@@ -15,11 +15,12 @@ function VirtualToolCalls({ toolCalls }: { toolCalls: FeedToolCall[] }) {
   const listRef = useRef<HTMLDivElement>(null)
   const [gap, setGap] = useState(0)
   const [scrollMargin, setScrollMargin] = useState(0)
+  const getToolKey = useCallback((index: number) => toolCalls[index]!.id, [toolCalls])
   const virtualizer = useVirtualizer({
     count: toolCalls.length,
     getScrollElement: () => listRef.current?.closest<HTMLElement>('.app-main') ?? null,
     estimateSize: () => TOOL_CALL_ESTIMATED_HEIGHT_PX,
-    getItemKey: (index) => toolCalls[index]!.id,
+    getItemKey: getToolKey,
     gap, scrollMargin,
     overscan: 5,
     // Only the feed may reposition the shared scroller. Seed this observer
