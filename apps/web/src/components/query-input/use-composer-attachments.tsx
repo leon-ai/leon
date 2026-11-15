@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 
 import { useToast } from '@/components/toast'
 import { AttachmentUploadState, type AttachmentUploadListener, type AttachmentUploadProgress, type OwnerAttachmentDraft } from '@/data/owner-attachments'
 import {
   OWNER_ATTACHMENT_MAX_COUNT, getOwnerAttachmentFormat, getOwnerAttachmentSizeLimit
 } from '../../../../../server/src/core/owner-attachment-contract'
-const MAXIMUM_ATTACHMENT_ENTRIES = 2_000
+import { AttachmentDropZone, AttachmentDropPhase } from './attachment-drop-zone'
+import { MAXIMUM_ATTACHMENT_ENTRIES, getDroppedAttachmentEntries, readDroppedAttachmentFiles } from './dropped-attachment-files'
 
 const MAXIMUM_DISPLAYED_ISSUES = 5
 
@@ -15,9 +17,12 @@ export type ComposerAttachment = OwnerAttachmentDraft
  * Keeps local files and object URLs within one composer's lifetime. Native file
  * drags are scoped to the main body so the sidebar never becomes a drop target.
  */
-export function useComposerAttachments(disabled: boolean) {
+export function useComposerAttachments(container: RefObject<HTMLDivElement | null>, disabled: boolean) {
   const [items, setItems] = useState<ComposerAttachment[]>([])
   const itemsRef = useRef(items)
+  const [dropPhase, setDropPhase] = useState(AttachmentDropPhase.Idle)
+  const [droppedCount, setDroppedCount] = useState(0)
+  const [reading, setReading] = useState(false)
   const [uploads, setUploads] = useState<Record<string, AttachmentUploadProgress>>({})
   const { showToast } = useToast()
 
@@ -28,6 +33,7 @@ export function useComposerAttachments(disabled: boolean) {
     itemsRef.current = []
     setItems([])
     setUploads({})
+    setDropPhase(AttachmentDropPhase.Idle)
   }, [])
 
   useEffect(() => () => {
@@ -96,6 +102,118 @@ export function useComposerAttachments(disabled: boolean) {
     return next.length - previousCount
   }, [disabled, reportIssues])
 
+  useEffect(() => {
+    const target = container.current?.closest<HTMLElement>('.app-main')
+    setReading(false)
+    if (!target || disabled) {
+      setDropPhase(AttachmentDropPhase.Idle)
+      return undefined
+    }
+    let depth = 0
+    let feedbackVersion = 0
+    const readers = new Set<AbortController>()
+    const isFileDrag = (event: DragEvent): boolean => Boolean(event.dataTransfer?.types.includes('Files'))
+    const cancelHover = (): void => {
+      depth = 0
+      // Native dragend follows a successful drop too. Let its acceptance
+      // feedback finish while cancellation immediately removes hover feedback.
+      setDropPhase((current) => current === AttachmentDropPhase.Dropped || current === AttachmentDropPhase.Reading
+        ? current : AttachmentDropPhase.Idle)
+    }
+    const enter = (event: DragEvent): void => {
+      if (isFileDrag(event)) {
+        event.preventDefault()
+        depth += 1
+        feedbackVersion += 1
+        setDropPhase(AttachmentDropPhase.Hovering)
+      }
+    }
+    const over = (event: DragEvent): void => {
+      if (isFileDrag(event)) {
+        event.preventDefault()
+        event.dataTransfer!.dropEffect = 'copy'
+      }
+    }
+    const leave = (event: DragEvent): void => {
+      if (isFileDrag(event)) {
+        depth = Math.max(0, depth - 1)
+        if (!depth) {
+          cancelHover()
+        }
+      }
+    }
+    const drop = (event: DragEvent): void => {
+      if (isFileDrag(event)) {
+        event.preventDefault()
+        depth = 0
+        const version = ++feedbackVersion
+        const entries = getDroppedAttachmentEntries(event.dataTransfer!)
+        if (entries.some((entry) => entry.isDirectory)) {
+          const controller = new AbortController()
+          readers.add(controller)
+          setReading(true)
+          setDropPhase(AttachmentDropPhase.Reading)
+          void (async () => {
+            const issues = new Set<string>()
+            let count = 0
+            try {
+              for await (const file of readDroppedAttachmentFiles(entries, controller.signal, (issue) => issues.add(issue))) {
+                if (itemsRef.current.length >= OWNER_ATTACHMENT_MAX_COUNT) {
+                  issues.add(`I can attach up to ${OWNER_ATTACHMENT_MAX_COUNT} files per message.`)
+                  break
+                }
+                count += add([file], issues)
+              }
+              if (!controller.signal.aborted) {
+                reportIssues(issues)
+                if (feedbackVersion === version) {
+                  setDroppedCount(count)
+                  setDropPhase(count ? AttachmentDropPhase.Dropped : AttachmentDropPhase.Idle)
+                }
+              }
+            } finally {
+              readers.delete(controller)
+              if (!controller.signal.aborted) {
+                setReading(readers.size > 0)
+              }
+            }
+          })()
+          return
+        }
+        const count = add(event.dataTransfer!.files)
+        setDroppedCount(count)
+        setDropPhase(count ? AttachmentDropPhase.Dropped : AttachmentDropPhase.Idle)
+      } else {
+        cancelHover()
+      }
+    }
+    const outsideDrop = (event: DragEvent): void => {
+      if (!(event.target instanceof Node) || !target.contains(event.target)) {
+        cancelHover()
+      }
+    }
+    target.addEventListener('dragenter', enter)
+    target.addEventListener('dragover', over)
+    target.addEventListener('dragleave', leave)
+    target.addEventListener('drop', drop)
+    window.addEventListener('drop', outsideDrop)
+    window.addEventListener('dragend', cancelHover)
+    window.addEventListener('blur', cancelHover)
+
+    return () => {
+      for (const reader of readers) {
+        reader.abort()
+      }
+      target.removeEventListener('dragenter', enter)
+      target.removeEventListener('dragover', over)
+      target.removeEventListener('dragleave', leave)
+      target.removeEventListener('drop', drop)
+      window.removeEventListener('drop', outsideDrop)
+      window.removeEventListener('dragend', cancelHover)
+      window.removeEventListener('blur', cancelHover)
+    }
+  }, [add, container, disabled, reportIssues])
+
   function remove(id: string): void {
     const item = itemsRef.current.find((entry) => entry.id === id)
     if (item) {
@@ -123,6 +241,12 @@ export function useComposerAttachments(disabled: boolean) {
   }
 
   return {
-    items, uploads, updateUpload, queueUploads, add, clear, remove
+    items, uploads, reading, updateUpload, queueUploads, add, clear, remove,
+    dropZone: dropPhase !== AttachmentDropPhase.Idle ? createPortal(
+      <AttachmentDropZone phase={dropPhase} count={droppedCount} onExited={() => {
+        setDropPhase((current) => current === AttachmentDropPhase.Dropped ? AttachmentDropPhase.Idle : current)
+      }} />,
+      container.current!.closest('.app-main')!
+    ) : null
   }
 }

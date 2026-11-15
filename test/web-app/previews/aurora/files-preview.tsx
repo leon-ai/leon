@@ -2,8 +2,10 @@ import type { ArtifactItem } from '../../../../aurora/src/v2/widgets/artifacts'
 import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
 import { FileIcon } from '@/components/icon'
 import { getPublicAssetPath } from '@/config'
-import { AttachmentPreviews } from '@/components/query-input/attachment-previews'
+import { AttachmentPreviews, AttachmentDropZone } from '@/components/query-input/attachment-previews'
 import { useState } from 'react'
+import { Button } from '@/components/button'
+import { AttachmentDropPhase } from '@/components/query-input/attachment-drop-zone'
 import { AttachmentUploadState, type AttachmentUploadProgress } from '@/data/owner-attachments'
 
 import './files-preview.sass'
@@ -60,6 +62,7 @@ const UPLOAD_PROGRESS: Record<string, AttachmentUploadProgress> = Object.fromEnt
  * exercising the real file components with local fixtures.
  */
 export default function FilesPreview() {
+  const [dropPhase, setDropPhase] = useState(AttachmentDropPhase.Hovering)
   const [attachments, setAttachments] = useState([
     { id: 'photo', filename: 'Sunday pancakes.jpeg', mediaType: 'image/jpeg', url: image },
     { id: 'pdf', filename: 'Attention is all you need.pdf', mediaType: 'application/pdf', url: pdf },
@@ -91,7 +94,10 @@ export default function FilesPreview() {
         <p>Files you share with Leon.</p>
       </header>
       <AttachmentPreviews items={attachments} onRemove={(id) => setAttachments((items) => items.filter((item) => item.id !== id))} />
-
+      <div className="files-preview-drop"><AttachmentDropZone phase={dropPhase} count={3}
+        onExited={() => setDropPhase(AttachmentDropPhase.Hovering)} /></div>
+      <div><Button disabled={dropPhase === AttachmentDropPhase.Dropped}
+        onClick={() => setDropPhase(AttachmentDropPhase.Dropped)}>Replay drop animation</Button></div>
     </section>
     <section className="demo-stack" aria-label="Upload progress preview">
       <header className="files-preview-heading"><h2>Upload progress</h2></header>

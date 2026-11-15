@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, JSHandle } from '@playwright/test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -19,6 +19,52 @@ async function pasteFiles(page: Page, files: { name: string, type: string, size?
     }
     element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }))
   }, files)
+}
+
+async function fileTransfer(page: Page, name: string): Promise<JSHandle<DataTransfer>> {
+  return page.evaluateHandle((filename) => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['notes'], filename, { type: 'text/plain' }))
+    return transfer
+  }, name)
+}
+
+async function folderTransfer(page: Page, options: { files?: number, rejected?: number, delayed?: boolean, directories?: number } = {}): Promise<JSHandle<DataTransfer>> {
+  return page.evaluateHandle((settings) => {
+    const file = (name: string): object => ({
+      isFile: true, isDirectory: false,
+      file: (resolve: (value: File) => void): void => {
+        const finish = (): void => resolve(new File(['notes'], name, { type: 'text/plain' }))
+        if (settings.delayed) {
+          Reflect.set(window, 'finishFolderRead', finish)
+        } else {
+          queueMicrotask(finish)
+        }
+      }
+    })
+    const directory = (pages: object[][]): object => ({
+      isDirectory: true, isFile: false,
+      createReader: (): { readEntries: (resolve: (entries: object[]) => void) => void } => {
+        let pageIndex = 0
+        return { readEntries: (resolve: (entries: object[]) => void): void => {
+          queueMicrotask(() => resolve(pages[pageIndex++] ?? []))
+        } }
+      }
+    })
+    const root = directory([
+      Array.from({ length: settings.rejected ?? 0 }, (_, index) => file(`Rejected-${index}.png`)),
+      [directory([[
+        ...Array.from({ length: settings.directories ?? 0 }, () => directory([])),
+        ...Array.from({ length: settings.files ?? 2 }, (_, index) => file(`Nested-${index}.txt`))
+      ]])]
+    ].filter((entries) => entries.length))
+    const transfer = new DataTransfer()
+    transfer.items.add(new File([''], 'Folder'))
+    Object.defineProperty(transfer, 'items', { value: [
+      { kind: 'file', webkitGetAsEntry: (): object => root }
+    ] })
+    return transfer
+  }, options)
 }
 
 for (const theme of ['light', 'dark']) {
@@ -168,6 +214,43 @@ test('uploads selected disk files without exposing their source paths', async ({
   await expect(page.getByRole('form', { name: 'Send a message to Leon' }).getByRole('list', { name: 'Attached files' })).toHaveCount(0)
 })
 
+test('drains folder pages and subfolders, reports skipped files once and respects the remaining attachment slots', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
+  const transfer = await folderTransfer(page, { rejected: 100, files: 30 })
+  const main = page.getByRole('main')
+  await main.dispatchEvent('dragenter', { dataTransfer: transfer })
+  await main.dispatchEvent('drop', { dataTransfer: transfer })
+  await expect(page.getByRole('list', { name: 'Attached files' }).getByRole('listitem')).toHaveCount(20)
+  await expect(page.getByRole('button', { name: 'Remove Nested-18.txt', exact: true })).toBeVisible()
+  await expect(page.locator('.toast-warning')).toHaveCount(1)
+  await expect(page.locator('.toast-warning')).toContainText('up to 20 files')
+  await expect(page.getByRole('status').filter({ hasText: 'I’m reading the folder' })).toHaveCount(0)
+  expect(ui.uploads).toHaveLength(0)
+  await transfer.dispose()
+})
+
+test('bounds folder traversal and discards pending reads when leaving the session', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const main = page.getByRole('main')
+  const large = await folderTransfer(page, { directories: 2_001 })
+  await main.dispatchEvent('drop', { dataTransfer: large })
+  await expect(page.locator('.toast-warning')).toContainText('Please choose a smaller folder')
+  await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  const delayed = await folderTransfer(page, { files: 1, delayed: true })
+  await main.dispatchEvent('drop', { dataTransfer: delayed })
+  await expect(page.getByRole('status').filter({ hasText: 'I’m reading the folder' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Message Leon' }).fill('Keep drafting while reading')
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
+  await page.getByRole('link', { name: 'New session', exact: true }).click()
+  await page.evaluate(() => Reflect.get(window, 'finishFolderRead')())
+  await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  await expect(page.getByRole('status').filter({ hasText: 'I’m reading the folder' })).toHaveCount(0)
+  expect(ui.uploads).toHaveLength(0)
+  await large.dispose()
+  await delayed.dispose()
+})
+
 test('pastes files without interrupting text input and can remove and reselect a file', async ({ page, ui }) => {
   await page.addInitScript(() => {
     const create = URL.createObjectURL.bind(URL)
@@ -204,6 +287,99 @@ test('pastes files without interrupting text input and can remove and reselect a
   await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => (Reflect.get(window, 'attachmentPreviewUrls') as Set<string>).size)).toBe(0)
 })
+
+test('shows a stable drop zone throughout the main body and excludes the sidebar and text drags', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const data = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['notes'], 'Dropped.txt', { type: 'text/plain' }))
+    return transfer
+  })
+  const main = page.getByRole('main')
+  await main.dispatchEvent('dragenter', { dataTransfer: data })
+  const zone = page.getByRole('status').filter({ hasText: 'Drop files to attach' })
+  await expect(zone).toBeVisible()
+  const nested = page.getByRole('textbox', { name: 'Message Leon' })
+  await nested.dispatchEvent('dragenter', { dataTransfer: data })
+  await nested.dispatchEvent('dragleave', { dataTransfer: data })
+  await expect(zone).toBeVisible()
+  await main.dispatchEvent('drop', { dataTransfer: data })
+  await expect(zone).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Remove Dropped.txt' })).toBeVisible()
+  await page.locator('.sidebar').dispatchEvent('dragenter', { dataTransfer: data })
+  await page.locator('.sidebar').dispatchEvent('drop', { dataTransfer: data })
+  await expect(zone).toHaveCount(0)
+  await expect(page.getByRole('list', { name: 'Attached files' }).getByRole('listitem')).toHaveCount(1)
+  await main.dispatchEvent('dragenter', { dataTransfer: data })
+  await main.dispatchEvent('dragleave', { dataTransfer: data })
+  await expect(zone).toHaveCount(0)
+  const text = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer()
+    transfer.setData('text/plain', 'A selected paragraph')
+    return transfer
+  })
+  await main.dispatchEvent('dragenter', { dataTransfer: text })
+  await expect(zone).toHaveCount(0)
+  await data.dispose()
+  await text.dispose()
+  expect(ui.uploads).toHaveLength(0)
+})
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`blurs the feed, accepts files immediately and releases interrupted drop feedback (${reducedMotion})`, async ({ page, ui }, testInfo) => {
+    await page.addInitScript((theme) => localStorage.setItem('leon.web-app.theme', theme), reducedMotion === 'reduce' ? 'light' : 'dark')
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const main = page.getByRole('main')
+    const transfer = await fileTransfer(page, 'First.txt')
+    const next = await fileTransfer(page, 'Second.txt')
+    const zone = page.getByRole('status').filter({ hasText: 'Drop files to attach' })
+    const feedback = page.getByRole('status').filter({ hasText: 'I’ve attached 1 file' })
+    await main.dispatchEvent('dragenter', { dataTransfer: transfer })
+    await expect(zone).toBeVisible()
+    await finishFiniteAnimations(zone)
+    const backdrop = await zone.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return { blur: style.backdropFilter, background: style.backgroundColor }
+    })
+    expect(backdrop.blur).toContain('blur(')
+    expect(backdrop.background).toMatch(/rgba\(.+, 0\.\d+\)/)
+    await page.screenshot({ path: testInfo.outputPath(`drop-hover-${reducedMotion}.png`) })
+    await main.dispatchEvent('drop', { dataTransfer: transfer })
+    await expect(page.getByRole('button', { name: 'Remove First.txt', exact: true })).toBeVisible()
+    if (reducedMotion === 'no-preference') {
+      await expect(feedback).toBeVisible()
+      await page.evaluate(() => window.dispatchEvent(new DragEvent('dragend')))
+      await expect(feedback).toBeVisible()
+      // Reopening must invalidate the preceding close rather than let its
+      // animation completion remove the new drag's overlay.
+      await main.dispatchEvent('dragenter', { dataTransfer: next })
+      await expect(zone).toBeVisible()
+      await finishFiniteAnimations(zone)
+      await expect(zone).toBeVisible()
+    } else {
+      await expect(feedback).toHaveCount(0)
+      await main.dispatchEvent('dragenter', { dataTransfer: next })
+      await expect(zone).toBeVisible()
+      expect(await zone.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0)
+    }
+    await main.dispatchEvent('drop', { dataTransfer: next })
+    await expect(page.getByRole('button', { name: 'Remove Second.txt', exact: true })).toBeVisible()
+    await expect(feedback).toHaveCount(0)
+    await expect(zone).toHaveCount(0)
+    const rejected = await fileTransfer(page, 'Rejected.png')
+    await main.dispatchEvent('dragenter', { dataTransfer: rejected })
+    await expect(zone).toBeVisible()
+    await main.dispatchEvent('drop', { dataTransfer: rejected })
+    await expect(feedback).toHaveCount(0)
+    await expect(zone).toHaveCount(0)
+    await expect(page.getByRole('list', { name: 'Attached files' }).getByRole('listitem')).toHaveCount(2)
+    await transfer.dispose()
+    await next.dispose()
+    await rejected.dispose()
+    expect(ui.uploads).toHaveLength(0)
+  })
+}
 
 test('bounds attachments at twenty and rejects unsafe filenames, mismatched types, empty and oversized files before uploading', async ({ page, ui }) => {
   await page.goto(SESSION_URL)

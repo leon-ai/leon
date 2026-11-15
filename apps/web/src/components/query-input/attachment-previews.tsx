@@ -3,6 +3,8 @@ import { ArtifactFile } from '@/components/artifact-attachments/artifact-files'
 import { Progress } from '../../../../../aurora/src/v2/components/progress'
 import { AttachmentUploadState, type AttachmentUploadProgress } from '@/data/owner-attachments'
 
+export { AttachmentDropZone } from './attachment-drop-zone'
+
 import './attachment-previews.sass'
 
 export interface AttachmentPreview {

@@ -68,7 +68,7 @@ export function QueryInput({
   const containerRef = useRef<HTMLDivElement>(null)
   const attachmentsRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const attachments = useComposerAttachments(disabled || loading || submitting)
+  const attachments = useComposerAttachments(containerRef, disabled || loading || submitting)
   const caretRestorationRef = useRef<number | undefined>(undefined)
   const [settledRestoration, setSettledRestoration] = useState<number | undefined>(undefined)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -90,7 +90,7 @@ export function QueryInput({
   const historySelectionRef = useRef(false)
   const normalizedQuery = query.trim()
   const busy = loading || submitting
-  const submitDisabled = disabled || busy || !canSubmit || normalizedQuery.length === 0 && attachments.items.length === 0
+  const submitDisabled = disabled || busy || attachments.reading || !canSubmit || normalizedQuery.length === 0 && attachments.items.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
 
   useLayoutEffect(() => {
@@ -416,6 +416,7 @@ export function QueryInput({
   return (
     <VisualPreviewProvider>
       <div ref={containerRef} className="query-input-container">
+        {attachments.dropZone}
         <div className="query-input-glow" aria-hidden="true" />
         <div className="query-input-particles" aria-hidden="true">
           {Array.from({ length: PARTICLE_COUNT }, (_, index) => (

@@ -116,6 +116,7 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     const attachments = files.getByRole('region', { name: 'Attachments preview', exact: true })
     await expect(artifacts.getByRole('heading', { name: 'Artifacts', level: 2, exact: true })).toBeVisible()
     await expect(attachments.getByRole('heading', { name: 'Attachments', level: 2, exact: true })).toBeVisible()
+    await expect(attachments).toContainText('Drop files to attach')
     await expect(attachments.getByRole('list', { name: 'Attached files' }).getByRole('listitem')).toHaveCount(5)
     await expect(attachments.getByRole('button', { name: 'Remove Notes.txt' })).toBeVisible()
     await expect(attachments.getByRole('link')).toHaveCount(0)
