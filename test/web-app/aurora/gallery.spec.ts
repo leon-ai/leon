@@ -334,8 +334,8 @@ for (const theme of ['light', 'dark'] as const) {
           getComputedStyle(button.querySelector('.loader-indicator')!).color)).toBe(true)
         await page.getByRole('button', { name: 'Finish authorization', exact: true }).click()
       }
-      await expect(card.locator('header .badge-success')).toHaveText('Connected')
-      await expect(card.locator('header .badge-success .badge-dot')).toBeVisible()
+      await expect(card.locator('header .status-success')).toHaveText('Connected')
+      await expect(card.locator('header .status-success .status-dot')).toBeVisible()
       await expect(card.getByRole('button', { name: 'Connected', exact: true })).toHaveCount(0)
       await card.screenshot({ path: testInfo.outputPath(`${connection.provider}-connected-${theme}.png`) })
       const continuation = card.getByRole('button', { name: 'Continue', exact: true })
@@ -350,11 +350,11 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(continuation).toHaveCount(0)
       await state.selectOption('failed')
       await expect(card.getByRole('alert')).toContainText('I couldn’t complete this step')
-      await expect(card.locator('header .badge-error .badge-dot')).toBeVisible()
+      await expect(card.locator('header .status-error .status-dot')).toBeVisible()
       if (connection.methods['oauth']) {
         await state.selectOption('cancelled')
         await expect(card.getByRole('status')).toContainText('Authorization was cancelled')
-        await expect(card.locator('header .badge-warning .badge-dot')).toBeVisible()
+        await expect(card.locator('header .status-warning .status-dot')).toBeVisible()
       }
       if (connection.methods['api_key'] && connection.methods['oauth']) {
         await page.getByRole('combobox', { name: 'Preview configuration' }).selectOption('fallback')
@@ -362,7 +362,7 @@ for (const theme of ['light', 'dark'] as const) {
         const token = card.getByLabel('Access token', { exact: true })
         await token.fill('preview-only-token')
         await token.press('Enter')
-        await expect(card.locator('header .badge-success')).toHaveText('Connected')
+        await expect(card.locator('header .status-success')).toHaveText('Connected')
       }
     }
     await chooser.selectOption('music_audio.spotify')
@@ -374,7 +374,7 @@ for (const theme of ['light', 'dark'] as const) {
     await spotify.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
     await expect(spotify.getByRole('button', { name: 'Connecting…', exact: true })).toBeDisabled()
     await page.getByRole('button', { name: 'Finish authorization', exact: true }).click()
-    await expect(spotify.locator('header .badge-success')).toHaveText('Connected')
+    await expect(spotify.locator('header .status-success')).toHaveText('Connected')
     await page.getByRole('combobox', { name: 'Preview configuration' }).selectOption('ready')
     await expect(spotify.locator('input')).toHaveCount(0)
     await expect(spotify.getByRole('button', { name: 'Set up manually', exact: true })).toHaveCount(0)
@@ -470,18 +470,32 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     await expect(saving).toHaveCSS('cursor', 'wait')
     await expect(saving).toHaveCSS('color', primaryColor)
     await expect(saving.locator('.loader-indicator')).toHaveCSS('color', primaryColor)
-    const badges = page.getByRole('region', { name: 'Badges', exact: true })
+    const statuses = page.getByRole('region', { name: 'Status', exact: true })
     for (const variant of ['primary', 'secondary', 'success', 'error', 'warning']) {
-      const badge = badges.locator(`.badge-${variant}`)
-      await expect(badge).toBeVisible()
-      await expect(badge.locator('.badge-dot')).toHaveCount(variant === 'secondary' ? 0 : 1)
+      const status = statuses.locator(`.status-${variant}`)
+      await expect(status).toBeVisible()
+      await expect(status.locator('.status-dot')).toHaveCount(variant === 'secondary' ? 0 : 1)
       if (variant !== 'secondary') {
-        expect(await badge.evaluate((element) => getComputedStyle(element).color ===
-          getComputedStyle(element.querySelector('.badge-dot')!).backgroundColor)).toBe(true)
+        expect(await status.evaluate((element) => getComputedStyle(element).color ===
+          getComputedStyle(element.querySelector('.status-dot')!).backgroundColor)).toBe(true)
       }
     }
     for (const label of ['New', 'Soon']) {
-      await expect(badges.getByText(label, { exact: true })).toHaveCSS('width', '56px')
+      await expect(statuses.getByText(label, { exact: true })).toHaveCSS('width', '56px')
+    }
+    await statuses.screenshot({ path: testInfo.outputPath(`statuses-${theme}.png`) })
+    for (const [variant, label] of [['success', 'Success'], ['error', 'Error'], ['warning', 'Warning']] as const) {
+      await statuses.getByRole('button', { name: `${label} toast`, exact: true }).click()
+      const toast = page.locator(`.toast-${variant}`)
+      await expect(toast).toBeVisible()
+      const status = statuses.locator(`.status-${variant}`)
+      const color = await status.evaluate((element) => getComputedStyle(element).color)
+      const background = await status.evaluate((element) => getComputedStyle(element).backgroundColor)
+      await expect(toast.locator('.toast-icon')).toHaveCSS('color', color)
+      await expect(toast.locator('.toast-icon')).toHaveCSS('background-color', background)
+      await toast.screenshot({ path: testInfo.outputPath(`toast-${variant}-${theme}.png`) })
+      await toast.getByRole('button', { name: 'Close notification', exact: true }).click()
+      await expect(toast).toHaveCount(0)
     }
     await page.getByRole('button', { name: 'Pin', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Pinned', exact: true })).toHaveAttribute('aria-pressed', 'true')

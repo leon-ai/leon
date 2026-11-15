@@ -1,4 +1,4 @@
-.badge
+.status
   display: inline-flex
   align-items: center
   justify-content: center
@@ -15,7 +15,7 @@
   white-space: nowrap
   transition: opacity var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
-  .badge-dot
+  .status-dot
     display: inline-block
     flex: 0 0 4px
     width: 4px
@@ -23,18 +23,18 @@
     border-radius: var(--border-radius-pill)
     background-color: currentColor
 
-  &.badge-secondary
+  &.status-secondary
     background-color: var(--color-surface)
     color: var(--color-text-secondary)
 
-  &.badge-success
-    background-color: var(--color-success-soft)
-    color: var(--color-success)
+  &.status-success
+    background-color: var(--color-status-success-soft)
+    color: var(--color-status-success)
 
-  &.badge-error
-    background-color: var(--color-danger-soft)
-    color: var(--color-danger)
+  &.status-error
+    background-color: var(--color-status-error-soft)
+    color: var(--color-status-error)
 
-  &.badge-warning
-    background-color: var(--color-warning-soft)
-    color: var(--color-warning)
+  &.status-warning
+    background-color: var(--color-status-warning-soft)
+    color: var(--color-status-warning)

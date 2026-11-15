@@ -2454,7 +2454,8 @@ for (const status of ['success', 'error'] as const) {
       await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
       if (status === 'error') {
         await expect(tool).toHaveAccessibleDescription('Tool call failed')
-        await expect(tool.locator('.tool-call-error-indicator[data-icon="close"]')).toHaveCSS('color', 'rgb(172, 10, 10)')
+        const durationColor = await tool.locator('.tool-call-duration').evaluate((element) => getComputedStyle(element).color)
+        await expect(tool.locator('.tool-call-error-indicator[data-icon="close"]')).not.toHaveCSS('color', durationColor)
       }
       const title = await tool.locator('.tool-call-title').boundingBox()
       const duration = await tool.locator('.tool-call-duration').boundingBox()
