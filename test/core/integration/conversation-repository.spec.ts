@@ -74,6 +74,12 @@ describe('profile conversation archive', () => {
     expect(repository.listSessions({ workspaceId: first.id, query: 'Cinematic', cursor: searchPage.nextCursor! }).items).toHaveLength(40)
     expect(repository.listSessions({ workspaceId: second.id, query: 'Cinematic' }).items).toEqual([])
     expect(repository.listSessions({ workspaceId: first.id, query: 'Cinematic', limit: 100 }).items).toHaveLength(85)
+    const scoped = await searchConversationSessions({ sessionsPath: path.join(directory, 'owner', 'sessions'),
+      query: 'Cinematic', workspaceId: second.id, includeCurrentSession: true })
+    expect(scoped.searchedSessions).toBe(0)
+    const related = await searchConversationSessions({ sessionsPath: path.join(directory, 'owner', 'sessions'),
+      query: 'Cinematic', workspaceId: first.id, includeCurrentSession: true })
+    expect(related.searchedSessions).toBe(85)
     close(repository)
     repository = open()
     expect(repository.workspaces.get(first.id)?.brief).toBe('Build my assistant')

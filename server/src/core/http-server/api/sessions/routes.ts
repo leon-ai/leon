@@ -94,7 +94,8 @@ const archiveSearchBodySchema = Type.Object({
   topK: Type.Optional(Type.Number()),
   contextWindow: Type.Optional(Type.Number()),
   includeCurrentSession: Type.Optional(Type.Boolean()),
-  currentSessionId: Type.Optional(Type.String())
+  currentSessionId: Type.Optional(Type.String()),
+  workspaceId: Type.Optional(Type.String({ format: 'uuid' }))
 }, { additionalProperties: false })
 const archiveReadQuerySchema = Type.Object({
   offset: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER - 1 })),
