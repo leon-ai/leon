@@ -94,7 +94,7 @@ Vibes fait entrer un peu du monde extérieur dans l’application, avec des ambi
 
 J’ai simplement demandé à Leon « Montre comment rechercher des sessions en enregistrant un nouveau tutoriel ». Voici la vidéo qu’il a créée.
 
-https://github.com/user-attachments/assets/691db2ef-825c-4ce2-8aa3-45050dc0f571
+https://github.com/user-attachments/assets/90d0880a-7e87-4063-a5bb-09d400da6bc0
 
 Quelques aperçus du travail en cours, avec des exemples de conversations et de configuration. Cliquez sur une capture pour la voir de plus près.
 
