@@ -13,8 +13,8 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, 
     .query-input-glow
       opacity: .6
 
-    .query-input-glow::before
-      animation: query-input-glow-breathe 5s ease-in-out .75s infinite
+  &.query-input-active .query-input-glow::before
+    animation: query-input-glow-breathe 5s ease-in-out .75s 1
 
   .query-input-glow
     position: absolute
@@ -53,9 +53,13 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, 
   color: var(--color-accent)
   opacity: 0
   animation: query-input-particle-drift ease-in-out infinite
+  animation-play-state: paused
 
   &:nth-child(n + #{list.length($particles) * .5 + 1})
     color: var(--color-accent-pink)
+
+.query-input-visible .query-input-particle
+  animation-play-state: running
 
 // Stagger stable paths so particles remain sparse without a JavaScript frame loop.
 @each $left, $drift, $rise, $duration, $delay in $particles
