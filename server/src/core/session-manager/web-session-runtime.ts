@@ -6,6 +6,8 @@ import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtim
 import { LogHelper } from '@/helpers/log-helper'
 import { finishAuroraAnswer, publishAnswerParts } from '@/core/aurora/answer-presentation'
 import type { AnswerPart } from '@@/aurora/src/v2/contracts/answer'
+import type { Artifact } from '@/core/artifacts/artifact-types'
+import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
 
 import { CONVERSATION_SESSION_MANAGER } from './index'
 import { CONVERSATION_REPOSITORY } from './conversation-repository'
@@ -30,8 +32,8 @@ export class WebSessionRuntime {
   /**
    * Acknowledges durable input once; retries with the same ID never repeat work.
    */
-  public submit(sessionId: string, id: string, query: string): ConversationCommand {
-    const accepted = CONVERSATION_REPOSITORY.acceptCommand(sessionId, id, query)
+  public submit(sessionId: string, id: string, query: string, attachments: Artifact[] = []): ConversationCommand {
+    const accepted = CONVERSATION_REPOSITORY.acceptCommand(sessionId, id, query, attachments)
     this.dispatchAccepted(accepted)
 
     return accepted.command
@@ -102,14 +104,17 @@ export class WebSessionRuntime {
     let consumed = false
     try {
       controller.signal.throwIfAborted()
-      const queued = CONVERSATION_SESSION_MANAGER.queueAgentMessage(sessionId, async () => ({
-        role: 'user', content: query
-      }))
+      const attachmentIds = CONVERSATION_REPOSITORY.readMessage(sessionId, id)?.artifacts?.map((file) => file.id) ?? []
+      const queued = CONVERSATION_SESSION_MANAGER.queueAgentMessage(sessionId, async () => {
+        const prepared = await prepareStoredOwnerAttachments(query, sessionId, attachmentIds)
+
+        return { role: 'user', content: prepared.query, files: prepared.files }
+      })
       consumed = queued ? await queued : false
       if (!consumed) {
         controller.signal.throwIfAborted()
         await CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, () =>
-          runAgent({ query, session_id: sessionId, request_id: id, signal: controller.signal })
+          runAgent({ query, session_id: sessionId, request_id: id, signal: controller.signal, attachment_ids: attachmentIds })
         )
       }
     } catch (error) {

@@ -16,13 +16,16 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
 import { LLM_DIR_PATH } from '@/constants'
 import { listInstalledLLMModels } from '@/core/llm-manager/llm-routing'
+import { resolveOwnerAttachments } from '@/core/stored-owner-attachments'
+import { OWNER_ATTACHMENT_MAX_COUNT } from '@/core/owner-attachment-contract'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 const MAXIMUM_STREAM_BACKLOG_BYTES = 1_024 * 1_024
 const sessionParams = Type.Object({ session_id: Type.String() })
 const sendBody = Type.Object({
   id: Type.String({ format: 'uuid' }),
-  query: Type.String({ minLength: 1, maxLength: 100_000 })
+  query: Type.String({ maxLength: 100_000 }),
+  attachments: Type.Optional(Type.Array(Type.String({ format: 'uuid' }), { maxItems: OWNER_ATTACHMENT_MAX_COUNT, uniqueItems: true }))
 })
 const modelBody = Type.Object({
   provider: Type.String(),
@@ -162,12 +165,14 @@ export const webSessionRoutes: FastifyPluginAsync<APIOptions> = async (fastify, 
         return reply.code(404).send({ message: 'Session not found.' })
       }
       const query = request.body.query.trim()
-      if (!query) {
+      if (!query && !request.body.attachments?.length) {
         return reply.code(400).send({ message: 'A message is required.' })
       }
 
       try {
-        return reply.code(202).send({ command: WEB_SESSION_RUNTIME.submit(sessionId, request.body.id, query) })
+        const attachments = await resolveOwnerAttachments(sessionId, request.body.attachments ?? [])
+
+        return reply.code(202).send({ command: WEB_SESSION_RUNTIME.submit(sessionId, request.body.id, query, attachments) })
       } catch (error) {
         return reply.code(409).send({ message: String(error) })
       }

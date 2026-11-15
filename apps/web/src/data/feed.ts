@@ -168,6 +168,7 @@ export type LeonFeedActivity =
   | FeedCompactionActivity
 
 export interface OwnerFeedEntry {
+  artifacts?: Artifact[]
   sentAt?: number | undefined
   id: string
   role: 'owner'

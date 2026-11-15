@@ -9,6 +9,7 @@ interface VisualSelection {
   content: ReactNode
   opener: HTMLButtonElement | null
   svg?: string | undefined
+  interactive?: boolean | undefined
 }
 
 const VisualContext = createContext<((selection: VisualSelection) => void) | null>(null)
@@ -48,9 +49,10 @@ export function VisualPreviewProvider({ children }: { children: ReactNode }) {
           release()
           setSelection(null)
         }}>
-        <div className="visual-dialog-content" role="button" tabIndex={0} aria-label="Zoom out"
-          onClick={close} onKeyDown={(event) => {
-            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+        <div className="visual-dialog-content" role={selection.interactive ? undefined : 'button'}
+          tabIndex={selection.interactive ? undefined : 0} aria-label={selection.interactive ? undefined : 'Zoom out'}
+          onClick={selection.interactive ? undefined : close} onKeyDown={(event) => {
+            if (!selection.interactive && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
               event.preventDefault()
               close()
             }
@@ -63,16 +65,18 @@ export function VisualPreviewProvider({ children }: { children: ReactNode }) {
 /**
  * Offers the same keyboard-accessible enlargement for trusted images and diagrams.
  */
-export function VisualPreview({ title, label, svg, fullWidth = false, children }: {
+export function VisualPreview({ title, label, svg, fullWidth = false, preview, interactive = false, children }: {
   title: string
   label?: string
   svg?: string
   fullWidth?: boolean
+  preview?: ReactNode
+  interactive?: boolean
   children: ReactNode
 }) {
   const show = useContext(VisualContext)
   const ref = useRef<HTMLButtonElement>(null)
 
   return <button ref={ref} type="button" className={clsx('visual-preview', { 'visual-preview-full-width': fullWidth })} aria-label={label ?? `Enlarge ${title}`}
-    onClick={() => show?.({ title, content: children, svg, opener: ref.current })}>{children}</button>
+    onClick={() => show?.({ title, content: children, svg, interactive, opener: ref.current })}>{preview ?? children}</button>
 }

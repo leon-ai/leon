@@ -4,6 +4,7 @@ import type { ConversationPage, ConversationRecord, ConversationTool, ModelCatal
 import { getToolOutputFormat, getToolResultData, toToolContent, toToolDisplayContent, toToolInput } from '../../../apps/web/src/utils/tool-content'
 import path from 'node:path'
 import { hasToolChanges } from '../../../apps/web/src/utils/tool-changes'
+import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
 import type { ToolCallContents } from '../../../server/src/core/session-manager/tool-content-contract'
 import type { ConversationSession } from '../../../apps/web/src/data/sessions'
 import type { AmbientConditions } from '../../../apps/web/src/data/ambient-conditions'
@@ -51,6 +52,7 @@ export function toolContentsFixture(tool: ConversationTool, complete = false): T
 }
 
 interface UIFixture {
+  uploads: Artifact[]
   models: ModelCatalog
   sessions: ConversationSession[]
   history: Map<string, ConversationRecord[]>
@@ -96,6 +98,7 @@ export const test = base.extend<{ ui: UIFixture }>({
     }))
     const history = new Map<string, ConversationRecord[]>(sessions.map((session) => [session.id, []]))
     const modelSelections = new Map<string, ModelSelection>()
+    const uploads = new Map<string, { attachment: Artifact, buffer: Buffer }>()
     for (let index = 0; index < HISTORY_TURNS; index++) {
       history.get(SESSION_ID)!.push({
         who: 'owner', messageId: `question-${index}`, message: `Saved question ${index}`,
@@ -124,6 +127,7 @@ export const test = base.extend<{ ui: UIFixture }>({
 
     const ui: UIFixture = {
       models: structuredClone(catalog),
+      uploads: [],
       sessions, history, historyRequests: [], requests: [], completedRequests: [],
       authenticated: true, profile: 'ui-tests', failure: undefined,
       ambient: { mood: 'default', season: 'autumn', solarPhase: 'afternoon', timeZone: 'UTC', weather: null },
@@ -181,12 +185,48 @@ export const test = base.extend<{ ui: UIFixture }>({
         await json(route, ui.models)
         return
       }
+      if (parts[2] === 'artifacts' && parts[4]) {
+        const upload = uploads.get(parts[4])
+        if (upload) {
+          await route.fulfill({ contentType: upload.attachment.mime_type, body: upload.buffer })
+          return
+        }
+      }
+      if (parts[2] === 'sessions' && parts.length === 3 && request.method() === 'POST') {
+        const input = request.postDataJSON() as { id: string }
+        let created = sessions.find((candidate) => candidate.id === input.id)
+        if (!created) {
+          created = { ...sessions[0]!, id: input.id, title: 'New session', messageCount: 0 }
+          sessions.push(created)
+          history.set(input.id, [])
+        }
+        await json(route, { session: created })
+        return
+      }
       if (parts.at(-1) === 'page') {
         const query = url.searchParams.get('query')?.toLowerCase() ?? ''
         await json(route, { sessions: sessions.filter((session) => session.title.toLowerCase().includes(query)), next_cursor: null, event_cursor: 0 })
         return
       }
       const session = sessions.find((candidate) => candidate.id === parts[3])
+      if (session && request.method() === 'POST' && parts.at(-1) === 'attachments') {
+        const buffer = request.postDataBuffer()!
+        const id = url.searchParams.get('upload_id') ?? crypto.randomUUID()
+        const existing = uploads.get(id)
+        if (existing) {
+          await json(route, { attachment: existing.attachment }, 201)
+          return
+        }
+        const attachment: Artifact = {
+          id, session_id: session.id, filename: url.searchParams.get('filename')!,
+          mime_type: url.searchParams.get('media_type')!, size_bytes: buffer.length,
+          created_at: Date.now(), source: 'owner-attachment', url: `/api/v1/artifacts/${session.id}/${id}`
+        }
+        ui.uploads.push(attachment)
+        uploads.set(id, { attachment, buffer })
+        await json(route, { attachment }, 201)
+        return
+      }
       if (session && request.method() === 'PATCH' && parts[4] === 'model') {
         const input = request.postDataJSON() as {
           provider: string
@@ -265,10 +305,11 @@ export const test = base.extend<{ ui: UIFixture }>({
         return
       }
       if (session && request.method() === 'POST' && parts.at(-1) === 'messages') {
-        const input = request.postDataJSON() as { id: string, query: string }
+        const input = request.postDataJSON() as { id: string, query: string, attachments?: string[] }
         const records = history.get(session.id)!
         if (!records.some((record) => record.messageId === input.id)) {
-          records.push({ who: 'owner', messageId: input.id, message: input.query, sentAt: Date.now(), isAddedToHistory: true }, {
+          records.push({ who: 'owner', messageId: input.id, message: input.query, sentAt: Date.now(), isAddedToHistory: true,
+            ...(input.attachments?.length ? { artifacts: input.attachments.map((id) => uploads.get(id)!.attachment) } : {}) }, {
             who: 'leon', messageId: `${input.id}:leon`, message: `Completed ${input.query}`,
             sentAt: Date.now() + 1, isAddedToHistory: true
           })

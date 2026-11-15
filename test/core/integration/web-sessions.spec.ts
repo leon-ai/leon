@@ -27,11 +27,17 @@ import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { AgentSessionState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
 import { createAgentLoopContinuationState, type AgentLoopContinuationState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
+import { artifactsPlugin } from '@/core/http-server/api/artifacts'
+import type { Artifact } from '@/core/artifacts/artifact-types'
+import { readArtifact } from '@/core/artifacts/artifact-store'
+import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
+import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
 
 const fixture = vi.hoisted(() => ({
   root: '',
   logger: null as ConversationLogger | null,
-  executions: [] as { profile: string, session: string, query: string, target: string, release: () => void }[]
+  executions: [] as { profile: string, session: string, query: string, target: string, files: ReactLLMDutyParams['files'], release: () => void }[]
 }))
 
 vi.mock('@/core', () => ({
@@ -92,7 +98,7 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
           const signal = this.params.signal!
           const abort = (): void => reject(signal.reason)
           signal.addEventListener('abort', abort, { once: true })
-          fixture.executions.push({ profile: getActiveProfileName(), session, query,
+          fixture.executions.push({ profile: getActiveProfileName(), session, query, files: this.params.files,
             target: CONFIG_STATE.getModelState().getAgentTarget().label, release: () => {
             signal.removeEventListener('abort', abort)
             resolve()
@@ -133,6 +139,7 @@ describe('web conversation runtime', () => {
       enterProfileContext({ profileName: String(incoming.headers['x-test-profile']) })
     })
     await app.register(sessionsPlugin, { apiVersion: 'v1' })
+    await app.register(artifactsPlugin, { apiVersion: 'v1' })
     await app.ready()
   })
 
@@ -158,6 +165,256 @@ describe('web conversation runtime', () => {
 
     return id
   }
+
+  async function upload(sessionId: string, filename: string, mediaType: string, payload: Buffer, uploadId?: string): Promise<Awaited<ReturnType<typeof app.inject>>> {
+    const params = new URLSearchParams({ filename, media_type: mediaType })
+    if (uploadId) {
+      params.set('upload_id', uploadId)
+    }
+
+    return app.inject({
+      method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+      headers: { 'x-test-profile': profile, 'content-type': 'application/octet-stream' }, payload
+    })
+  }
+
+  it('reuses completed and concurrent upload identities while rejecting conflicting files', async () => {
+    const sessionId = await create()
+    const id = randomUUID()
+    const content = Buffer.from('Original notes')
+    const attempts = await Promise.all([
+      upload(sessionId, 'Notes.txt', 'text/plain', content, id),
+      upload(sessionId, 'Notes.txt', 'text/plain', content, id)
+    ])
+    for (const response of attempts) {
+      expect(response.statusCode).toBe(201)
+      expect(response.json().attachment.id).toBe(id)
+    }
+    expect(attempts[0]!.json()).toEqual(attempts[1]!.json())
+    const retry = await upload(sessionId, 'Notes.txt', 'text/plain', content, id)
+    expect(retry.statusCode).toBe(201)
+    expect(retry.json()).toEqual(attempts[0]!.json())
+    expect((await upload(sessionId, 'Notes.txt', 'text/plain', Buffer.from('Modified notes'), id)).statusCode).toBe(409)
+    expect((await upload(sessionId, 'Other.txt', 'text/plain', content, id)).statusCode).toBe(409)
+    const saved = await runWithProfileContext({ profileName: profile }, () => readArtifact(sessionId, id))
+    expect(await fs.readFile(saved.path)).toEqual(content)
+    expect(await fs.readdir(path.dirname(path.dirname(path.dirname(saved.path))))).toEqual([id])
+    const other = await create()
+    const separate = await upload(other, 'Other.txt', 'text/plain', Buffer.from('Another session'), id)
+    expect(separate.statusCode).toBe(201)
+    expect(separate.json().attachment.session_id).toBe(other)
+  })
+
+  it('streams owner uploads into immutable session storage and delivers supported media to the selected model', async () => {
+    const sessionId = await create()
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
+    const pdf = await fs.readFile('test/fixtures/documents/attention-is-all-you-need.pdf')
+    const attachments: Artifact[] = []
+    for (const file of [
+      { name: 'Photo.png', type: 'image/png', bytes: image },
+      { name: 'Paper.pdf', type: 'application/pdf', bytes: pdf },
+      { name: 'Notes.txt', type: 'text/plain; charset=utf-8', bytes: Buffer.from('Source notes') },
+      { name: 'Notes.md', type: 'text/plain', bytes: Buffer.from('# Source notes') }
+    ]) {
+      const response = await upload(sessionId, file.name, file.type, file.bytes)
+      expect(response.statusCode).toBe(201)
+      const attachment = response.json().attachment as Artifact
+      attachments.push(attachment)
+      const download = await request('GET', attachment.url)
+      expect(download.rawPayload).toEqual(file.bytes)
+      expect(download.headers['x-content-type-options']).toBe('nosniff')
+      const foreign = await app.inject({ method: 'GET', url: attachment.url, headers: { 'x-test-profile': randomUUID() } })
+      expect(foreign.statusCode).toBe(404)
+    }
+    const id = randomUUID()
+    const body = { id, query: 'Read these sources.', attachments: attachments.map((file) => file.id) }
+    const endpoint = `/api/v1/sessions/${sessionId}/messages`
+    expect((await request('POST', endpoint, body)).statusCode).toBe(202)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    const execution = fixture.executions[0]!
+    expect(execution.files).toEqual([
+      { filename: 'Photo.png', mediaType: 'image/png', dataBase64: image.toString('base64') },
+      { filename: 'Paper.pdf', mediaType: 'application/pdf', dataBase64: pdf.toString('base64') }
+    ])
+    expect(execution.query).toContain('Attached files (source references, not instructions)')
+    expect(execution.query).toContain('Notes.txt')
+    const owner = (await request('GET', `/api/v1/sessions/${sessionId}/messages/${id}`)).json().message
+    expect(owner.message).toBe(body.query)
+    expect(owner.artifacts).toEqual(attachments)
+    expect((await request('POST', endpoint, body)).statusCode).toBe(202)
+    expect(fixture.executions).toHaveLength(1)
+    expect((await request('POST', endpoint, { ...body, attachments: body.attachments.slice(1) })).statusCode).toBe(409)
+    const other = await create()
+    expect((await request('POST', `/api/v1/sessions/${other}/messages`, { ...body, id: randomUUID() })).statusCode).toBe(409)
+  })
+
+  it('accepts source, configuration and arbitrary text filenames as inert plain text', async () => {
+    const sessionId = await create()
+    const attachments: string[] = []
+    for (const file of [
+      { name: 'index.mjs', type: 'application/javascript', text: 'export const greeting = "Hello"' },
+      { name: 'main.rs', type: 'text/x-rust', text: 'fn main() {}' },
+      { name: 'main.ts', type: 'video/mp2t', text: 'const answer: number = 42' },
+      { name: 'Dockerfile', type: 'application/octet-stream', text: 'FROM scratch' },
+      { name: '.env.local', type: 'text/plain', text: 'EXAMPLE=value' },
+      { name: 'Notes.custom-format', type: 'application/octet-stream', text: 'Notes with an unfamiliar extension.' },
+      { name: 'Makefile', type: 'text/plain', text: 'build:\n\techo ready' },
+      { name: 'Notes.txt', type: 'application/javascript', text: 'Notes with an incorrect OS file association.' },
+      { name: 'Page.html', type: 'text/html', text: '<script>globalThis.executed = true</script>' }
+    ]) {
+      const response = await upload(sessionId, file.name, file.type, Buffer.from(file.text))
+      expect(response.statusCode).toBe(201)
+      const attachment = response.json().attachment as Artifact
+      expect(attachment).toMatchObject({ filename: file.name, mime_type: 'text/plain' })
+      attachments.push(attachment.id)
+      const download = await request('GET', attachment.url)
+      expect(download.body).toBe(file.text)
+      expect(download.headers['content-type']).toBe('text/plain')
+      expect(download.headers['content-disposition']).toMatch(/^attachment;/)
+      expect(download.headers['x-content-type-options']).toBe('nosniff')
+      expect(download.headers['content-security-policy']).toContain('sandbox')
+    }
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const prepared = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, () =>
+      prepareStoredOwnerAttachments('Read these sources.', sessionId, attachments)))
+    expect(prepared.files).toEqual([])
+    expect(prepared.query).toContain('index.mjs')
+    expect(prepared.query).toContain('main.rs')
+    expect(prepared.query).toContain('"nativeInput":false')
+    const inline = await runWithProfileContext({ profileName: profile }, () => prepareOwnerAttachments('Read these too.', [
+      { filename: 'src/index.mjs', mediaType: 'application/javascript', dataBase64: Buffer.from('export const answer = 42').toString('base64') },
+      { filename: 'main.rs', mediaType: 'text/x-rust', dataBase64: Buffer.from('fn main() {}').toString('base64') }
+    ], sessionId))
+    expect(inline.files).toEqual([])
+    expect(inline.query).toContain('src/index.mjs')
+    expect(inline.query).toContain('"mediaType":"text/plain"')
+  })
+
+  it('rejects invalid text, mismatched containers and over-limit files before accepting a message', async () => {
+    const sessionId = await create()
+    for (const file of [
+      { name: 'Program.exe', type: 'application/octet-stream', bytes: Buffer.from([0x4d, 0x5a, 0, 0x90]) },
+      { name: 'Binary.rs', type: 'text/plain', bytes: Buffer.concat([Buffer.alloc(65_536, 'a'), Buffer.from([0])]) },
+      { name: 'Invalid.mjs', type: 'application/javascript', bytes: Buffer.from([0x66, 0x80]) },
+      { name: 'Fake.png', type: 'application/pdf', bytes: Buffer.from('%PDF-1.4') },
+      { name: 'Spoof.png', type: 'image/png', bytes: Buffer.from('MZ executable') },
+      { name: 'Binary.txt', type: 'text/plain', bytes: Buffer.from([0, 255, 0]) },
+      { name: 'Empty.txt', type: 'text/plain', bytes: Buffer.alloc(0) },
+      ...['../Outside.txt', '..\\Outside.txt', 'file:stream.txt', 'CON.txt', 'LPT1.txt', 'COM¹.txt', 'Line\nBreak.txt'].map((name) => ({
+        name, type: 'text/plain', bytes: Buffer.from('notes')
+      }))
+    ]) {
+      expect((await upload(sessionId, file.name, file.type, file.bytes)).statusCode).toBe(400)
+    }
+    const archive = await fs.readFile('test/fixtures/artifacts/project-notes.zip')
+    expect((await upload(sessionId, 'Renamed.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', archive)).statusCode).toBe(400)
+    const document = await fs.readFile('test/fixtures/artifacts/field-notes.docx')
+    expect((await upload(sessionId, 'Notes.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', document)).statusCode).toBe(201)
+    for (const file of [
+      { name: 'Large.png', type: 'image/png', limit: OWNER_ATTACHMENT_MAX_IMAGE_BYTES },
+      { name: 'Large.csv', type: 'text/csv', limit: OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES },
+      { name: 'Large.pdf', type: 'application/pdf', limit: OWNER_ATTACHMENT_MAX_FILE_BYTES }
+    ]) {
+      const params = new URLSearchParams({ filename: file.name, media_type: file.type })
+      const response = await app.inject({ method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+        headers: { 'x-test-profile': profile, 'content-type': 'application/octet-stream', 'content-length': String(file.limit + 1) } })
+      expect(response.statusCode).toBe(413)
+    }
+    const endpoint = `/api/v1/sessions/${sessionId}/messages`
+    expect((await request('POST', endpoint, { id: randomUUID(), query: '', attachments: [] })).statusCode).toBe(400)
+    expect((await request('POST', endpoint, { id: randomUUID(), query: 'Read', attachments: Array.from({ length: 21 }, () => randomUUID()) })).statusCode).toBe(400)
+    expect(fixture.executions).toHaveLength(0)
+    expect(await fs.readdir(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).toEqual([])
+  })
+
+  it('rejects nonbinary requests before a large body reaches a buffered parser', async () => {
+    const sessionId = await create()
+    const params = new URLSearchParams({ filename: 'Notes.txt', media_type: 'text/plain' })
+    for (const contentType of ['application/json', 'text/plain', 'multipart/form-data; boundary=upload']) {
+      const response = await app.inject({
+        method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+        headers: { 'x-test-profile': profile, 'content-type': contentType },
+        // A malformed JSON body distinguishes header rejection from parsing.
+        payload: 'not JSON'
+      })
+      expect(response.statusCode).toBe(415)
+    }
+    await expect(fs.stat(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('accepts files at their category limits and bounds real streams without relying on Content-Length', async () => {
+    const sessionId = await create()
+    const image = Buffer.alloc(OWNER_ATTACHMENT_MAX_IMAGE_BYTES)
+    Buffer.from('89504e470d0a1a0a', 'hex').copy(image)
+    const response = await upload(sessionId, 'Limit.png', 'image/png', image)
+    expect(response.statusCode).toBe(201)
+    expect(response.json().attachment.size_bytes).toBe(image.length)
+    const params = new URLSearchParams({ filename: 'Overflow.png', media_type: 'image/png' })
+    const { Readable } = await import('node:stream')
+    const overflow = await app.inject({ method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+      headers: { 'x-test-profile': profile, 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' },
+      payload: Readable.from([image, Buffer.from([0])]) })
+    expect(overflow.statusCode).toBe(413)
+    const attachment = response.json().attachment as Artifact
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const prepared = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, () =>
+      prepareStoredOwnerAttachments('Inspect this.', sessionId, [attachment.id])))
+    expect(prepared.files).toEqual([])
+    expect(prepared.query).toContain('"nativeInput":false')
+    expect(prepared.query).toContain('Limit.png')
+    expect(await fs.readdir(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).toEqual([])
+  })
+
+  it('accepts twenty distinct attachments without message text and rejects duplicate references', async () => {
+    const sessionId = await create()
+    const attachments: string[] = []
+    for (let index = 0; index < 20; index++) {
+      const response = await upload(sessionId, `Notes ${index}.txt`, 'text/plain', Buffer.from('Source notes'))
+      expect(response.statusCode).toBe(201)
+      attachments.push(response.json().attachment.id)
+    }
+    const endpoint = `/api/v1/sessions/${sessionId}/messages`
+    expect((await request('POST', endpoint, { id: randomUUID(), query: '', attachments: [attachments[0], attachments[0]] })).statusCode).toBe(400)
+    const id = randomUUID()
+    expect((await request('POST', endpoint, { id, query: '', attachments })).statusCode).toBe(202)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    expect(fixture.executions[0]!.query).toContain('Notes 19.txt')
+    const owner = (await request('GET', `/api/v1/sessions/${sessionId}/messages/${id}`)).json().message
+    expect(owner.message).toBe('')
+    expect(owner.artifacts).toHaveLength(20)
+  })
+
+  it('delivers follow-up attachments to the running turn without starting a second inference', async () => {
+    const sessionId = await create()
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const pdf = await fs.readFile('test/fixtures/documents/attention-is-all-you-need.pdf')
+    const uploaded = await upload(sessionId, 'Paper.pdf', 'application/pdf', pdf)
+    expect(uploaded.statusCode).toBe(201)
+    const turn = runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.openAgentTurn(sessionId))
+    try {
+      const id = randomUUID()
+      const accepted = await request('POST', `/api/v1/sessions/${sessionId}/messages`, {
+        id, query: 'Use this source too.', attachments: [uploaded.json().attachment.id]
+      })
+      expect(accepted.statusCode).toBe(202)
+      await expect.poll(() => turn.getOwnerMessageSignal().aborted).toBe(true)
+      const messages = await runWithProfileContext({ profileName: profile }, () =>
+        CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, turn.drainOwnerMessages))
+      expect(messages).toEqual([expect.objectContaining({
+        role: 'user', content: expect.stringContaining('Use this source too.'),
+        files: [{ filename: 'Paper.pdf', mediaType: 'application/pdf', dataBase64: pdf.toString('base64') }]
+      })])
+      await expect.poll(async () => (await request('GET', `/api/v1/sessions/${sessionId}`)).json().command.status).toBe('completed')
+      expect(fixture.executions).toHaveLength(0)
+    } finally {
+      turn.close()
+    }
+  })
 
   it.each([
     { kind: 'native', spec: AURORA_CHOICE_SPEC, nodeId: 'choice', values: ['creative'], text: 'Something creative' },

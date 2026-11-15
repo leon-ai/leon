@@ -17,6 +17,7 @@ import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
 import { queryHistoryKey } from './query-history'
 import { recordSessionCompletion } from './session-read-state'
 import { prefetchAnswerRendering } from '@/components/aurora-answer/preload'
+import { assertSendMessageActive, releaseSendMessageFiles, uploadOwnerAttachments, type SendMessageInput } from './owner-attachments'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
 const MAXIMUM_CONCURRENT_CONVERSATION_PREFETCHES = 2
@@ -214,45 +215,75 @@ export function useConversation(sessionId: string): UseInfiniteQueryResult<Cache
 /**
  * Adds input immediately; a stable ID is retained on retry after uncertain delivery.
  */
-export function useSendMessage(sessionId: string): UseMutationResult<{ command: ConversationCommand }, Error, { id: string, query: string }> {
+export function useSendMessage(sessionId: string): UseMutationResult<{ command: ConversationCommand }, Error, SendMessageInput> {
   const profile = useProfile()
   const key = conversationQueryOptions(profile, sessionId).queryKey
   const { showToast } = useToast()
+  const isCurrentProfile = (): boolean => queryClient.getQueryData<{ profile_name: string | null }>(PROFILE_AUTH_QUERY_KEY)?.profile_name === profile
 
   return useMutation({
     meta: { errorTitle: 'Message delivery was not confirmed', profile },
-    mutationFn: (input: { id: string, query: string }) => requestAPI<{ command: ConversationCommand }>(`sessions/${encodeURIComponent(sessionId)}/messages`, {
-      method: 'POST', body: JSON.stringify(input)
-    }),
+    gcTime: 0,
+    mutationFn: async (input: SendMessageInput) => {
+      assertSendMessageActive(profile, input.signal)
+      const attachments = await uploadOwnerAttachments(profile, sessionId, input.attachments ?? [], input.onUploadProgress, input.signal)
+      assertSendMessageActive(profile, input.signal)
+      if (attachments.length) {
+        queryClient.setQueryData<CachedConversation>(key, (previous) => previous ? {
+          ...previous, pages: previous.pages.map((page) => ({
+            ...page, messages: page.messages.map((message) => message.messageId === input.id
+              ? { ...message, artifacts: attachments } : message)
+          }))
+        } : previous)
+      }
+
+      return requestAPI<{ command: ConversationCommand }>(`sessions/${encodeURIComponent(sessionId)}/messages`, {
+        ...(input.signal ? { signal: input.signal } : {}),
+        method: 'POST', body: JSON.stringify({ id: input.id, query: input.query,
+          ...(attachments.length ? { attachments: attachments.map((file) => file.id) } : {}) })
+      })
+    },
     onMutate: async (input) => {
+      assertSendMessageActive(profile, input.signal)
       prefetchModule(() => import('@/components/markdown-content'))
       await queryClient.cancelQueries({ queryKey: key, exact: true })
+      assertSendMessageActive(profile, input.signal)
       const current = queryClient.getQueryData<CachedConversation>(key)?.pages[0]
       if (current?.newer_cursor) {
         await returnToLatest(profile, sessionId)
       }
+      assertSendMessageActive(profile, input.signal)
       queryClient.setQueryData<CachedConversation>(key, (previous) => {
         if (!previous?.pages[0]) {
           return previous
         }
         const page = previous.pages[0]
         const messages = [...page.messages]
+        const uploading = Boolean(input.attachments?.length)
         if (!messages.some((message) => message.messageId === input.id)) {
           messages.push({ who: 'owner', messageId: input.id, message: input.query, sentAt: Date.now(), isAddedToHistory: true })
           // A running turn can consume this input. Its existing response supplies
           // the continuation; a separate response is created by real events only.
-          if (!page.is_running) {
+          if (!page.is_running && !uploading) {
             messages.push({ who: 'leon', messageId: `${input.id}:leon`, message: '', sentAt: Date.now(), isAddedToHistory: false })
           }
         }
 
-        return { ...previous, pages: [{ ...page, messages, is_running: true }, ...previous.pages.slice(1)] }
+        // File transfer is not an accepted agent turn. Its server event reveals
+        // running controls after upload, validation and command acceptance.
+        return { ...previous, pages: [{ ...page, messages, is_running: page.is_running || !uploading }, ...previous.pages.slice(1)] }
       })
     },
     onError: () => {
-      void queryClient.invalidateQueries({ queryKey: key, exact: true })
+      if (isCurrentProfile()) {
+        void queryClient.invalidateQueries({ queryKey: key, exact: true })
+      }
     },
-    onSuccess: ({ command }) => {
+    onSuccess: ({ command }, input) => {
+      releaseSendMessageFiles(input)
+      if (!isCurrentProfile()) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, sessionId), exact: true })
       if (command.status !== 'accepted') {
         void queryClient.invalidateQueries({ queryKey: key, exact: true })
@@ -263,7 +294,9 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
       }
     },
     onSettled: (): void => {
-      void queryClient.invalidateQueries({ queryKey: [...sessionsQueryKey, profile] })
+      if (isCurrentProfile()) {
+        void queryClient.invalidateQueries({ queryKey: [...sessionsQueryKey, profile] })
+      }
     }
   })
 }

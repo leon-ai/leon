@@ -505,7 +505,8 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
   }
   const metrics = { ...record.agentResponseTrace?.metrics, ...record.llmMetrics }
   const entry: FeedEntry = record.who === 'owner' ? {
-    id: record.messageId, role: 'owner', content: record.message, sentAt: record.sentAt
+    id: record.messageId, role: 'owner', content: record.message, sentAt: record.sentAt,
+    ...(record.artifacts ? { artifacts: record.artifacts } : {})
   } : {
     id: record.messageId,
     role: 'leon',

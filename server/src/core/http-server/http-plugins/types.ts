@@ -22,6 +22,7 @@ export interface HTTPPluginRuntimeConfig {
 export interface HTTPPluginRunAgentInput {
   query: string
   attachments?: AgentModelFile[]
+  attachment_ids?: string[]
   /**
    * Cancels this turn and its active tools; supplied in-process by the plugin.
    */

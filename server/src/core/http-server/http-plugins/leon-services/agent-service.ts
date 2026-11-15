@@ -12,6 +12,7 @@ import { runWithTurnTiming, runTurnPhase, TurnPhase, setTurnTimingSession, getTu
 import { measureOtherProcessingDuration } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-metrics'
 import { isToolPreparationPhase } from '@/core/llm-manager/turn-timing-contract'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
@@ -107,7 +108,9 @@ export async function runAgent(
     input.signal?.throwIfAborted()
     const sessionId = runTurnPhase(TurnPhase.Session, () => resolveSessionId(input))
     setTurnTimingSession(sessionId)
-    const { query, files } = await runTurnPhase(TurnPhase.Attachments, () => prepareOwnerAttachments(input.query.trim(), input.attachments, sessionId))
+    const { query, files } = await runTurnPhase(TurnPhase.Attachments, () => input.attachment_ids?.length
+      ? prepareStoredOwnerAttachments(input.query.trim(), sessionId, input.attachment_ids)
+      : prepareOwnerAttachments(input.query.trim(), input.attachments, sessionId))
     const planSteps = new Map<
       string,
       HTTPPluginAgentTrace['plan_steps'][number]
@@ -165,7 +168,7 @@ export async function runAgent(
         await runTurnPhase(TurnPhase.Owner, () => CONVERSATION_LOGGER.upsert(
           {
             who: 'owner',
-            message: query,
+            message: input.query.trim(),
             isAddedToHistory: true,
             ...(input.request_id ? { messageId: input.request_id } : {})
           },

@@ -13,6 +13,10 @@ import { isTextArtifact } from './artifact-resource'
 export function ArtifactActions({ item }: { item: ArtifactItem }) {
   const image = item.mimeType.startsWith('image/')
   const canCopy = image || isTextArtifact(item)
+  // Local documents have not passed server validation. Keep their previews
+  // escaped; the authenticated stored file supplies the eventual Open action.
+  const canOpen = !image && !item.mimeType.startsWith('video/') && !item.mimeType.startsWith('audio/') &&
+    new URL(item.url, location.href).protocol !== 'blob:'
   const controller = useRef<AbortController | null>(null)
 
   useEffect(() => () => controller.current?.abort(), [item.url])
@@ -28,7 +32,7 @@ export function ArtifactActions({ item }: { item: ArtifactItem }) {
     {canCopy && <CopyButton onCopy={copy} iconName={image ? 'multi-image' : 'file-copy'} tone="muted"
       label={image ? 'Copy image' : 'Copy contents'} errorTitle="I couldn’t copy this file"
       errorDescription="Your browser may not support copying this file, or the file may be too large. Use Download instead." />}
-    {!image && !item.mimeType.startsWith('video/') && !item.mimeType.startsWith('audio/') &&
+    {canOpen &&
       <Button href={item.url} target="_blank" rel="noopener noreferrer" iconName="eye" tone="muted" tooltipMessage="Open" />}
     <Button href={item.downloadUrl ?? item.url} download={getArtifactDownloadFilename(item.filename)} iconName="download" tone="muted" tooltipMessage="Download" />
   </span>

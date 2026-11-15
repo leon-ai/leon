@@ -1105,11 +1105,13 @@ export class ConversationRepository {
    * Atomically accepts a stable command and its owner message before acknowledging.
    * Reusing an ID for different input is rejected rather than executing twice.
    */
-  public acceptCommand(sessionId: string, id: string, query: string): { command: ConversationCommand, created: boolean } {
+  public acceptCommand(sessionId: string, id: string, query: string, attachments: Artifact[] = []): { command: ConversationCommand, created: boolean } {
     return this.db.transaction(() => {
       const existing = this.db.prepare('SELECT * FROM conversation_commands WHERE id = ?').get(id)
       if (existing) {
-        if (existing['session_id'] !== sessionId || existing['query'] !== query) {
+        const previousAttachments = this.readMessage(sessionId, id)?.artifacts ?? []
+        if (existing['session_id'] !== sessionId || existing['query'] !== query ||
+          JSON.stringify(previousAttachments.map((file) => file.id)) !== JSON.stringify(attachments.map((file) => file.id))) {
           throw new Error('This message ID was already used for different input.')
         }
 
@@ -1120,7 +1122,8 @@ export class ConversationRepository {
       this.db.prepare(`INSERT INTO conversation_commands(id, session_id, query, status, created_at, updated_at)
         VALUES (?, ?, ?, 'accepted', ?, ?)`).run(id, sessionId, query, createdAt, createdAt)
       this.upsertMessage(sessionId, {
-        who: 'owner', message: query, messageId: id, isAddedToHistory: true
+        who: 'owner', message: query, messageId: id, isAddedToHistory: true,
+        ...(attachments.length ? { artifacts: attachments } : {})
       }, { sentAt: createdAt })
 
       return {

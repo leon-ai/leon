@@ -1,0 +1,142 @@
+.attachment-drop-zone
+  position: fixed
+  inset: var(--space-lg)
+  left: calc(var(--active-sidebar-width, 0px) + var(--space-lg))
+  z-index: 10
+  display: grid
+  place-items: center
+  border: 2px dashed var(--color-accent)
+  border-radius: var(--border-radius-xl)
+  background: var(--color-overlay-soft)
+  -webkit-backdrop-filter: blur(12px)
+  backdrop-filter: blur(12px)
+  color: var(--color-text)
+  opacity: 1
+  pointer-events: none
+  transition: opacity .18s var(--transition-timing-main)
+
+.attachment-drop-content
+  display: grid
+  justify-items: center
+  gap: var(--space-sm)
+  text-align: center
+
+  > strong
+    font-size: var(--font-size-xl)
+
+  > span
+    color: var(--color-text-secondary)
+
+.attachment-drop-art
+  position: relative
+  width: 184px
+  height: 160px
+  perspective: 500px
+
+.attachment-drop-folder-back,
+.attachment-drop-folder-front
+  position: absolute
+  left: 24px
+  bottom: 16px
+  box-sizing: border-box
+  width: 136px
+  height: 88px
+  border: 2px solid var(--color-accent)
+  border-radius: var(--border-radius-md)
+
+.attachment-drop-folder-back
+  background: var(--color-accent-muted)
+
+  &::before
+    position: absolute
+    top: -14px
+    left: -2px
+    width: 56px
+    height: 16px
+    border: 2px solid var(--color-accent)
+    border-bottom: 0
+    border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0
+    background: var(--color-accent)
+    content: ''
+
+.attachment-drop-paper
+  position: absolute
+  top: 24px
+  left: 66px
+  display: grid
+  place-items: center
+  box-sizing: border-box
+  width: 52px
+  height: 68px
+  border: 2px solid currentColor
+  border-radius: var(--border-radius-sm)
+  background: var(--color-surface-elevated)
+  color: var(--color-text)
+  transform: translate(var(--drop-paper-x), -12px) rotate(var(--drop-paper-rotation))
+  transition: transform .32s var(--transition-timing-main), opacity .24s var(--transition-timing-main)
+
+  > .app-icon
+    width: 28px
+    height: 28px
+
+.attachment-drop-paper-image
+  --drop-paper-x: -40px
+  --drop-paper-rotation: -18deg
+
+.attachment-drop-paper-text
+  --drop-paper-x: 0px
+  --drop-paper-rotation: 0deg
+
+.attachment-drop-paper-code
+  --drop-paper-x: 40px
+  --drop-paper-rotation: 18deg
+
+.attachment-drop-folder-front
+  display: grid
+  place-items: center
+  height: 76px
+  background: var(--color-accent)
+  color: var(--color-accent-contrast)
+  transform: rotateX(-28deg)
+  transform-origin: center bottom
+  transition: transform .32s var(--transition-timing-main)
+
+  > .app-icon
+    width: 32px
+    height: 32px
+    opacity: 0
+    transform: scale(.6)
+    transition: opacity .16s .12s, transform .24s var(--transition-timing-main) .12s
+
+.attachment-drop-zone-dropped
+  opacity: 0
+  transition-delay: .24s
+
+  .attachment-drop-paper
+    opacity: 0
+    transform: translate(0, 56px) rotate(0deg) scale(.7)
+
+  .attachment-drop-folder-front
+    transform: rotateX(0deg)
+
+    > .app-icon
+      opacity: 1
+      transform: scale(1)
+
+@starting-style
+  .attachment-drop-zone:not(.attachment-drop-zone-dropped)
+    opacity: 0
+
+    .attachment-drop-paper
+      opacity: 0
+      transform: translate(0, 56px) rotate(0deg) scale(.7)
+
+    .attachment-drop-folder-front
+      transform: rotateX(0deg)
+
+@media (prefers-reduced-motion: reduce)
+  .attachment-drop-zone,
+  .attachment-drop-paper,
+  .attachment-drop-folder-front,
+  .attachment-drop-folder-front > .app-icon
+    transition: none

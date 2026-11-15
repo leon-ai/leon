@@ -61,3 +61,109 @@
   small
     display: block
     color: var(--color-text-secondary)
+
+// Compact cards retain the same media and actions while reserving a square
+// thumbnail. Focus reveals actions just as hover does, without changing layout.
+.aurora-artifact-compact
+  position: relative
+  box-sizing: border-box
+  width: 100%
+  height: 100%
+  margin: 0
+
+  > .aurora-artifact-preview,
+  > .aurora-artifact-media,
+  > .aurora-artifact-placeholder
+    width: 100%
+    height: 100%
+
+  > .aurora-artifact-preview > *,
+  > .aurora-artifact-media > *
+    height: 100%
+
+  .aurora-artifact-preview img,
+  .aurora-artifact-media video
+    width: 100%
+    height: 100%
+    max-height: none
+    object-fit: cover
+
+  .aurora-artifact-placeholder
+    display: grid
+    place-items: center
+    box-sizing: border-box
+    width: 100%
+    height: 100%
+
+    > *
+      width: 40px
+      height: 40px
+
+  figcaption
+    position: absolute
+    inset: auto 0 0
+    gap: var(--space-xs)
+    padding: var(--space-xs)
+    background: var(--color-query-surface)
+    font-size: var(--font-size-xs)
+    line-height: var(--line-height-xs)
+    opacity: 0
+    pointer-events: none
+
+    > .aurora-artifact-icon
+      display: none
+
+  .aurora-artifact-name
+    flex: 1 0 100%
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+
+  &.aurora-artifact-document .aurora-artifact-placeholder
+    padding-bottom: 48px
+
+  &:hover figcaption,
+  &:focus-within figcaption,
+  &.aurora-artifact-document figcaption
+    opacity: 1
+    pointer-events: auto
+
+@media (hover: none)
+  .aurora-artifact-compact figcaption
+    opacity: 1
+    pointer-events: auto
+
+// Owner attachments keep a single filename row visible without artifact actions
+// or size details, including during uploads.
+.aurora-artifact-compact.aurora-artifact-preview-only
+  figcaption
+    inset: auto auto var(--space-sm) var(--space-sm)
+    z-index: 2
+    box-sizing: border-box
+    flex-wrap: nowrap
+    width: max-content
+    max-width: calc(100% - var(--space-sm) * 2)
+    padding: 0 1px
+    border-radius: var(--border-radius-sm)
+    background: var(--color-background)
+    opacity: 1
+    pointer-events: none
+
+    > .aurora-artifact-icon
+      display: flex
+      align-items: center
+      justify-content: center
+      width: 20px
+      height: 20px
+
+      > *
+        width: 100%
+        height: 100%
+
+    > .aurora-artifact-name
+      flex: 1
+      min-width: 0
+      color: var(--color-text)
+
+  &.aurora-artifact-document .aurora-artifact-placeholder
+    padding-bottom: 0

@@ -2,6 +2,11 @@ import type { ArtifactItem } from '../../../../aurora/src/v2/widgets/artifacts'
 import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
 import { FileIcon } from '@/components/icon'
 import { getPublicAssetPath } from '@/config'
+import { AttachmentPreviews, AttachmentDropZone } from '@/components/query-input/attachment-previews'
+import { useState } from 'react'
+import { Button } from '@/components/button'
+import { AttachmentDropPhase } from '@/components/query-input/attachment-drop-zone'
+import { AttachmentUploadState, type AttachmentUploadProgress } from '@/data/owner-attachments'
 
 import './files-preview.sass'
 
@@ -44,12 +49,28 @@ const GROUPS: { title: string, description: string, items: ArtifactItem[] }[] = 
   ] }
 ]
 const FILE_NAMES = ['README.md', 'package.json', 'Dockerfile', '.gitignore', 'main.rs', 'Program.cs', 'main.kt', 'Main.java']
+const UPLOAD_STATES = Object.values(AttachmentUploadState)
+const UPLOAD_ITEMS = UPLOAD_STATES.map((state) => ({
+  id: state, filename: `${state}.jpeg`, mediaType: 'image/jpeg', url: image
+}))
+const UPLOAD_PROGRESS: Record<string, AttachmentUploadProgress> = Object.fromEntries(UPLOAD_STATES.map((state) => [state, {
+  state, loaded: state === AttachmentUploadState.Uploading ? 420 : 1_000, total: 1_000
+}]))
 
 /**
  * Keeps generated artifacts distinct from owner-provided attachments while
  * exercising the real file components with local fixtures.
  */
 export default function FilesPreview() {
+  const [dropPhase, setDropPhase] = useState(AttachmentDropPhase.Hovering)
+  const [attachments, setAttachments] = useState([
+    { id: 'photo', filename: 'Sunday pancakes.jpeg', mediaType: 'image/jpeg', url: image },
+    { id: 'pdf', filename: 'Attention is all you need.pdf', mediaType: 'application/pdf', url: pdf },
+    { id: 'text', filename: 'Notes.txt', mediaType: 'text/plain', url: text },
+    { id: 'video', filename: 'A quiet moment.webm', mediaType: 'video/webm', url: video },
+    { id: 'audio', filename: 'A soft note.wav', mediaType: 'audio/wav', url: audio }
+  ])
+
   return <section className="files-preview" aria-label="Files preview">
     <section className="demo-stack" aria-label="Artifacts preview">
       <header className="files-preview-heading">
@@ -72,7 +93,15 @@ export default function FilesPreview() {
         <h2>Attachments</h2>
         <p>Files you share with Leon.</p>
       </header>
-      <p>Attachment and drop-zone previews will be added here.</p>
+      <AttachmentPreviews items={attachments} onRemove={(id) => setAttachments((items) => items.filter((item) => item.id !== id))} />
+      <div className="files-preview-drop"><AttachmentDropZone phase={dropPhase} count={3}
+        onExited={() => setDropPhase(AttachmentDropPhase.Hovering)} /></div>
+      <div><Button disabled={dropPhase === AttachmentDropPhase.Dropped}
+        onClick={() => setDropPhase(AttachmentDropPhase.Dropped)}>Replay drop animation</Button></div>
+    </section>
+    <section className="demo-stack" aria-label="Upload progress preview">
+      <header className="files-preview-heading"><h2>Upload progress</h2></header>
+      <AttachmentPreviews items={UPLOAD_ITEMS} uploads={UPLOAD_PROGRESS} />
     </section>
   </section>
 }
