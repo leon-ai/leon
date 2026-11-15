@@ -93,7 +93,7 @@ Vibes 把窗外的世界带进应用，让背景氛围随着季节、一天中�
 
 我只是让 Leon「录制一个新教程，演示如何搜索会话」。下面就是它录好的视频。
 
-https://github.com/user-attachments/assets/691db2ef-825c-4ce2-8aa3-45050dc0f571
+https://github.com/user-attachments/assets/90d0880a-7e87-4063-a5bb-09d400da6bc0
 
 下面是一些开发中的界面预览，使用了示例对话和配置页面。点击截图可以查看大图。
 

@@ -93,7 +93,7 @@ Vibes brings a little of the world outside into the app, with ambient scenes tha
 
 I asked Leon to “Show how to search sessions by recording a new tutorial”. Here’s the video it made.
 
-https://github.com/user-attachments/assets/691db2ef-825c-4ce2-8aa3-45050dc0f571
+https://github.com/user-attachments/assets/90d0880a-7e87-4063-a5bb-09d400da6bc0
 
 A few previews from the work in progress, using sample conversations and setup screens. Click a screenshot for a closer look.
 
