@@ -71,6 +71,7 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
   const common = explicit ?? getArtwork(COMMON, resolved)
   const requestedAsset = Object.hasOwn(ASSET_ICONS, resolved) ? ASSET_ICONS[resolved] : undefined
   const tool = getArtwork(toolArtwork, resolved)
+  const hasToolArtwork = toolArtwork !== undefined
   const diagramToggle = resolved === 'code-s-slash' && state !== undefined
   const rare = diagramToggle || selected !== undefined && (resolved === 'list-check' || resolved === 'layout-column')
   const isTool = !diagramToggle && !common && !requestedAsset &&
@@ -94,7 +95,9 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
   }, [rare])
 
   useEffect(() => {
-    if (!isTool || toolArtwork !== undefined) {
+    // The shared import can finish between this render and its passive effect.
+    // Use the rendered snapshot so a fallback still subscribes to that completion.
+    if (!isTool || hasToolArtwork) {
       return
     }
 
@@ -108,7 +111,7 @@ export const Icon = memo(function Icon({ name, fallbackName = 'tools', className
     return () => {
       cancelled = true
     }
-  }, [isTool, resolved, fallback])
+  }, [isTool, resolved, fallback, hasToolArtwork])
 
   const shared = {
     className: clsx('app-icon', className),
