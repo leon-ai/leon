@@ -4,7 +4,7 @@ export const ARTIFACT_PREVIEW_BYTES = 16_384
 export const ARTIFACT_TEXT_COPY_BYTES = 1_048_576
 const TEXT_MIME_TYPES = new Set([
   'application/json', 'application/ld+json', 'application/xml',
-  'application/javascript', 'application/typescript', 'application/x-yaml'
+  'application/javascript', 'application/typescript', 'application/x-yaml', 'application/yaml'
 ])
 
 /**
