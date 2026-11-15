@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -82,6 +83,32 @@ function groupEntriesByTurn(entries: FeedEntry[]): FeedTurn[] {
   return turns
 }
 
+// Keep scroll-range updates outside unchanged message content and providers.
+const FeedEntryContent = memo(function FeedEntryContent({ entry, sessionId, latestOwnerMessageId }: {
+  entry: FeedEntry
+  sessionId: string | undefined
+  latestOwnerMessageId: string | undefined
+}) {
+  return (
+    <div className="feed-entry">
+      <Message role={entry.role}>
+        {entry.role === 'owner' ? (
+          <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}
+            attachments={entry.artifacts?.map((file) => ({
+              id: file.id, filename: file.filename, mediaType: file.mime_type, url: file.url
+            }))}>
+            {entry.content}
+          </OwnerMessage>
+        ) : (
+          <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id} latestOwnerMessageId={latestOwnerMessageId}>
+            <LeonMessage entry={entry} />
+          </ConversationDetailsProvider>
+        )}
+      </Message>
+    </div>
+  )
+})
+
 function supportsScrollEnd(element: HTMLElement): boolean {
   return 'onscrollend' in element
 }
@@ -107,7 +134,7 @@ export function Feed({
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
   const fastScroll = useMemo(createFastScrollDriver, [])
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
-  const latestOwnerMessageId = entries.findLast((entry) => entry.role === 'owner')?.id
+  const latestOwnerMessageId = useMemo(() => entries.findLast((entry) => entry.role === 'owner')?.id, [entries])
   const getTurnKey = useCallback((index: number) => turns[index]?.id ?? index, [turns])
   const turnCount = turns.length
   const historyRef = useRef(history)
@@ -516,22 +543,7 @@ export function Feed({
                     style={{ transform: `translateY(${virtualItem.start}px)` }}
                   >
                     {turn.entries.map((entry) => (
-                      <div key={entry.id} className="feed-entry">
-                        <Message role={entry.role}>
-                          {entry.role === 'owner' ? (
-                            <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}
-                              attachments={entry.artifacts?.map((file) => ({
-                                id: file.id, filename: file.filename, mediaType: file.mime_type, url: file.url
-                              }))}>
-                              {entry.content}
-                            </OwnerMessage>
-                          ) : (
-                            <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id} latestOwnerMessageId={latestOwnerMessageId}>
-                              <LeonMessage entry={entry} />
-                            </ConversationDetailsProvider>
-                          )}
-                        </Message>
-                      </div>
+                      <FeedEntryContent key={entry.id} entry={entry} sessionId={sessionId} latestOwnerMessageId={latestOwnerMessageId} />
                     ))}
                   </div>
                 )
