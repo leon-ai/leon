@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+import { observeAnimationVisibility } from '@/utils/animation-visibility'
+
 import type { VibeWeatherCondition } from '@/components/vibes/vibes-scenes'
 import { WEATHER_ANIMATIONS, type WeatherAnimationConfig } from './weather-config'
 
@@ -20,7 +22,6 @@ const PARTICLE_AREA_PX = 3_400
 const PARTICLE_COUNT_MINIMUM = 24
 const PARTICLE_COUNT_MAXIMUM = 180
 const RAIN_PARTICLE_OPACITY_MULTIPLIER = 1.15
-const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SETTLED_SNOWFLAKE_AREA_PX = 14_000
 const SETTLED_SNOWFLAKE_COUNT_MAXIMUM = 24
 const SETTLED_SNOWFLAKE_COUNT_MINIMUM = 8
@@ -273,9 +274,9 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
     const canvasElement = canvas
     const activeAnimation = animation
     const renderingContext = context
-    const motionPreference = window.matchMedia(REDUCED_MOTION_MEDIA_QUERY)
     const random = createSeededRandom(activeAnimation.seed)
     let animationFrame: number | null = null
+    let canAnimate = false
     let glassDroplets: GlassDroplet[] = []
     let height = 0
     let particles: WeatherParticle[] = []
@@ -516,7 +517,7 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
         return
       }
 
-      if (document.hidden || motionPreference.matches) {
+      if (!canAnimate) {
         drawFrame(0, 0)
         return
       }
@@ -579,22 +580,19 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
       startAnimation()
     }
 
-    function handleVisibilityChange(): void {
-      startAnimation()
-    }
-
     const resizeObserver = new ResizeObserver(resizeCanvas)
 
     resizeObserver.observe(canvasElement)
-    motionPreference.addEventListener('change', startAnimation)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+    const unobserve = observeAnimationVisibility(canvasElement, (running) => {
+      canAnimate = running
+      startAnimation()
+    })
     resizeCanvas()
 
     return () => {
+      unobserve()
       stopAnimation()
       resizeObserver.disconnect()
-      motionPreference.removeEventListener('change', startAnimation)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [weather])
 
