@@ -1,5 +1,27 @@
 import { test, expect, SESSION_URL } from './fixtures'
 
+test.describe('ambient recovery', () => {
+  test.use({ timezoneId: 'UTC' })
+
+  for (const [time, initialPhase, nextPhase, nextSeason] of [
+    ['2026-11-15T16:59:00Z', 'afternoon', 'sunset', 'autumn'],
+    ['2026-11-30T23:59:00Z', 'night', 'night', 'winter']
+  ] as const) {
+    test(`keeps local scenery current without ambient data at ${time}`, async ({ page, ui }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.clock.install({ time: new Date(time) })
+      ui.failure = { path: '/api/v1/ambient', status: 503, message: 'Temporary ambient failure' }
+      await page.goto(SESSION_URL)
+      const scene = page.locator('.vibes-frame-active')
+      await expect(scene).toHaveAttribute('data-vibe-scene', `autumn-clear-${initialPhase}`)
+      await expect(page.getByText('Could not load ambient conditions', { exact: true })).toBeVisible()
+      await page.clock.fastForward(60_000)
+      await expect(scene).toHaveAttribute('data-vibe-scene', `${nextSeason}-clear-${nextPhase}`)
+    })
+  }
+
+})
+
 test('uses the ambient season, solar phase and weather in the production scene', async ({ page, ui }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   ui.ambient = {

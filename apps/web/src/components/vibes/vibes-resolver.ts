@@ -1,3 +1,5 @@
+import { getAmbientClock } from '../../../../../server/src/core/ambient-clock'
+
 import {
   DEFAULT_VIBE_LANDSCAPE,
   type VibeLocation,
@@ -305,17 +307,17 @@ export function getVibeSurfaceForWeather(
 }
 
 /**
- * Normalizes partial environmental data against the current default scene.
+ * Fills missing conditions from the local clock until ambient data arrives.
  */
 export function normalizeVibeEnvironment(
   environment: VibeEnvironmentInput = {}
 ): VibeEnvironment {
-  const defaultEnvironment = VIBE_SCENES[DEFAULT_VIBE_SCENE_ID].environment
-  const weather = environment.weather ?? defaultEnvironment.weather
+  const clock = getAmbientClock()
+  const weather = environment.weather ?? VIBE_SCENES[DEFAULT_VIBE_SCENE_ID].environment.weather
 
   return {
-    season: environment.season ?? defaultEnvironment.season,
-    solarPhase: environment.solarPhase ?? defaultEnvironment.solarPhase,
+    season: environment.season ?? clock.season,
+    solarPhase: environment.solarPhase ?? clock.solarPhase,
     surface: environment.surface ?? getVibeSurfaceForWeather(weather),
     weather
   }

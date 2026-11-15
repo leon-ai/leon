@@ -33,6 +33,7 @@ import './vibes.sass'
 
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const VIBE_PRELOAD_IDLE_TIMEOUT_MS = 2_000
+const VIBE_CLOCK_INTERVAL_MS = 60_000
 const preloadedVibeSources = new Set<string>()
 
 
@@ -248,8 +249,9 @@ export function Vibes({
   sceneId
 }: VibesProps) {
   const theme = useTheme()
+  const [fallbackEnvironment, setFallbackEnvironment] = useState(() => normalizeVibeEnvironment())
   const requestedVibe = getRenderedVibe(
-    environment,
+    environment ?? (sceneId === undefined ? fallbackEnvironment : undefined),
     location,
     sceneId,
     theme
@@ -264,6 +266,34 @@ export function Vibes({
   const hasResolvedSceneRef = useRef(hasResolvedScene)
 
   requestedVibeRef.current = requestedVibe
+
+  useEffect(() => {
+    if (hasResolvedScene) {
+      return
+    }
+
+    let interval: number | undefined
+
+    function updateVisibility(): void {
+      window.clearInterval(interval)
+
+      if (!document.hidden) {
+        // Keep startup and failed ambient requests aligned with the local day.
+        setFallbackEnvironment(normalizeVibeEnvironment())
+        interval = window.setInterval(() => {
+          setFallbackEnvironment(normalizeVibeEnvironment())
+        }, VIBE_CLOCK_INTERVAL_MS)
+      }
+    }
+
+    updateVisibility()
+    document.addEventListener('visibilitychange', updateVisibility)
+
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', updateVisibility)
+    }
+  }, [hasResolvedScene])
 
   useLayoutEffect(() => registerThemePreparation(async (nextTheme) => {
     let preparedVibe: RenderedVibe
