@@ -1729,7 +1729,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     if (reducedMotion === 'no-preference') {
       await expect(characters).toHaveCount(Array.from(title).length)
       await expect(characters.first()).toHaveCSS('animation-name', 'streaming-text-character-enter')
-      await expect(characters.last()).toHaveCSS('opacity', '1')
+      await expect(characters.first()).toHaveCSS('opacity', '1')
+      await finishFiniteAnimations(link)
     } else {
       await expect(characters).toHaveCount(0)
       await expect(resting).toHaveText(title)

@@ -358,6 +358,7 @@ export const SessionListItem = memo(function SessionListItem({
               className="session-list-item-title-resting"
               animationId={`${id}-title-resting`}
               animateInitial={false}
+              compact
               text={title}
             />
             <span
@@ -368,7 +369,8 @@ export const SessionListItem = memo(function SessionListItem({
               <StreamingText
                 animationId={`${id}-title-scrolling`}
                 animateInitial={false}
-                  text={title}
+                compact
+                text={title}
               />
             </span>
             <span

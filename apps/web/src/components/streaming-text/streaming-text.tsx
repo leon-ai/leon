@@ -113,7 +113,25 @@ export function useAnimateOnce(animationId: string): boolean {
     !(registry?.historicalIds.some((id) => animationId.startsWith(id)) ?? false)
 }
 
-export function StreamingText({
+/**
+ * Keeps saved text static while live text owns its character reveal lifecycle.
+ */
+export function StreamingText(props: StreamingTextProps) {
+  const registry = useContext(FeedAnimationContext)
+  const isHistorical = registry?.historicalIds.some((id) => props.animationId.startsWith(id)) ?? false
+
+  // Saved prose never animates. Avoid mounting per-leaf animation hooks,
+  // media-query listeners and timers as older virtualized turns enter view.
+  if (isHistorical) {
+    return <span className={props.className}>
+      <span className="streaming-text-characters">{props.text}</span>
+    </span>
+  }
+
+  return <AnimatedStreamingText {...props} />
+}
+
+function AnimatedStreamingText({
   animationId,
   animateInitial = true,
   className,
