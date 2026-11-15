@@ -88,6 +88,7 @@ export function SessionList({
     scrollPaddingEnd: SCROLL_MASK_FADE_DISTANCE_PX,
     scrollMargin
   })
+  const isListScrolling = useCallback(() => rowVirtualizer.isScrolling, [rowVirtualizer])
   const virtualItems = rowVirtualizer.getVirtualItems()
   const lastVisibleIndex = virtualItems.at(-1)?.index ?? -1
   useEffect(() => {
@@ -257,6 +258,7 @@ export function SessionList({
               title={session.title}
               timestamp={session.lastMessageAt ?? session.createdAt}
               relativeTime={formatRelativeDate(session.lastMessageAt ?? session.createdAt, now, 'compact')}
+              isListScrolling={isListScrolling}
               onDelete={deleteSession}
               onRename={renameSession}
               onPin={pinSession}

@@ -34,6 +34,7 @@ interface SessionListItemProps {
   id: string
   isPinned: boolean
   isUnread: boolean
+  isListScrolling: () => boolean
   status: SessionStatus
   onDelete: (sessionId: string) => void
   onRename: (sessionId: string, title: string) => void
@@ -49,6 +50,7 @@ export const SessionListItem = memo(function SessionListItem({
   id,
   isPinned,
   isUnread,
+  isListScrolling,
   status,
   onDelete,
   onRename,
@@ -61,6 +63,7 @@ export const SessionListItem = memo(function SessionListItem({
 }: SessionListItemProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const titleAnimationFrameRef = useRef<number | null>(null)
+  const titleScrollTimerRef = useRef<number | undefined>(undefined)
   const titleAnimationsRef = useRef<Animation[]>([])
   const titleLeftMaskRef = useRef<HTMLSpanElement>(null)
   const titleRightMaskRef = useRef<HTMLSpanElement>(null)
@@ -92,8 +95,11 @@ export const SessionListItem = memo(function SessionListItem({
   }, [editing, title])
 
   useEffect(() => () => {
+    window.clearTimeout(titleScrollTimerRef.current)
+    titleScrollTimerRef.current = undefined
     if (titleAnimationFrameRef.current !== null) {
       window.cancelAnimationFrame(titleAnimationFrameRef.current)
+      titleAnimationFrameRef.current = null
     }
 
     titleAnimationsRef.current.forEach((animation) => animation.cancel())
@@ -104,6 +110,8 @@ export const SessionListItem = memo(function SessionListItem({
   }, [title])
 
   function stopTitleScroll(): void {
+    window.clearTimeout(titleScrollTimerRef.current)
+    titleScrollTimerRef.current = undefined
     if (titleAnimationFrameRef.current !== null) {
       window.cancelAnimationFrame(titleAnimationFrameRef.current)
       titleAnimationFrameRef.current = null
@@ -119,13 +127,25 @@ export const SessionListItem = memo(function SessionListItem({
   function startTitleScroll(): void {
     stopTitleScroll()
 
-    if (window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches) {
+    if (isListScrolling() || document.hidden || window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches) {
       return
     }
 
-    // Measure on the next frame after hover actions have claimed their space.
+    // Scrolling moves rows beneath a stationary pointer. Wait for actual intent
+    // before measuring text, rather than forcing layout for every passing row.
+    titleScrollTimerRef.current = window.setTimeout(() => {
+      titleScrollTimerRef.current = undefined
+      animateTitleScroll()
+    }, TITLE_SCROLL_INITIAL_DELAY_MS)
+  }
+
+  function animateTitleScroll(): void {
     titleAnimationFrameRef.current = window.requestAnimationFrame(() => {
       titleAnimationFrameRef.current = null
+
+      if (isListScrolling() || document.hidden) {
+        return
+      }
 
       const titleText = titleTextRef.current
       const titleViewport = titleViewportRef.current
@@ -175,7 +195,6 @@ export const SessionListItem = memo(function SessionListItem({
         TITLE_SCROLL_RETURN_DURATION_MS
       ) / totalDuration
       const animationOptions: KeyframeAnimationOptions = {
-        delay: TITLE_SCROLL_INITIAL_DELAY_MS,
         duration: totalDuration,
         easing: 'linear',
         fill: 'backwards',
@@ -240,6 +259,13 @@ export const SessionListItem = memo(function SessionListItem({
     })
   }
 
+  function handleTitlePointerMove(): void {
+    if (titleScrollTimerRef.current === undefined && titleAnimationFrameRef.current === null &&
+      titleAnimationsRef.current.length === 0 && !isListScrolling()) {
+      startTitleScroll()
+    }
+  }
+
   function startEditing(): void {
     setDraftTitle(title)
     setEditing(true)
@@ -289,6 +315,9 @@ export const SessionListItem = memo(function SessionListItem({
       style={{ height: `${height}px`, transform: `translateY(${offset}px)` }}
       onMouseEnter={startTitleScroll}
       onMouseLeave={stopTitleScroll}
+      onMouseMove={handleTitlePointerMove}
+      onWheelCapture={stopTitleScroll}
+      onTouchStartCapture={stopTitleScroll}
     >
       {editing ? (
         <Input
@@ -339,7 +368,7 @@ export const SessionListItem = memo(function SessionListItem({
               <StreamingText
                 animationId={`${id}-title-scrolling`}
                 animateInitial={false}
-                text={title}
+                  text={title}
               />
             </span>
             <span
