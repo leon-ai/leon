@@ -934,6 +934,23 @@ class BaseTool(ABC):
     def _command_exists(self, command: str) -> bool:
         return shutil.which(command) is not None
 
+    @staticmethod
+    def _binary_entrypoint(entrypoint: str) -> str:
+        """Validate relative archive paths with either platform's separators."""
+        normalized = entrypoint.replace("\\", "/")
+        segments = normalized.split("/")
+        if (
+            not normalized.strip()
+            or "\0" in normalized
+            or normalized.startswith("/")
+            or re.match(r"^[a-zA-Z]:", normalized)
+            or ".." in segments
+            or all(segment in ("", ".") for segment in segments)
+        ):
+            raise ValueError("Binary executable must be a relative archive path without parent segments")
+
+        return os.path.join(*segments)
+
     def get_binary_path(
         self, binary_name: str, skip_binary_download: bool = False
     ) -> str:
@@ -947,7 +964,8 @@ class BaseTool(ABC):
         # Get tool name without "Tool" suffix for config lookup
         tool_config_name = self.tool_name.lower().replace("tool", "")
         config = ToolkitConfig.load(self.toolkit, tool_config_name)
-        binary_url = ToolkitConfig.get_binary_url(config)
+        binary = ToolkitConfig.get_binary(config)
+        binary_url = binary if isinstance(binary, str) else binary.get("url") if binary else None
 
         if not binary_url:
             self.report("bridges.tools.no_binary_url", {"binary_name": binary_name})
@@ -980,9 +998,26 @@ class BaseTool(ABC):
             ]
             executable = f"{name}-{source}{suffix}"
 
+        entrypoint = binary.get("executable") if isinstance(binary, dict) else None
+        if isinstance(binary, dict):
+            if entrypoint is not None:
+                self._binary_entrypoint(entrypoint)
+            identity = "\0".join((binary_url, entrypoint or "", binary.get("sha256", "")))
+            source = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:SOURCE_HASH_LENGTH]
+            suffix = ".exe" if is_windows() and entrypoint is None else ""
+            name = executable[:-len(suffix)] if suffix else executable
+            executable = f"{name}-{source}{'.bundle' if entrypoint is not None else suffix}"
+
         bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
-        binary_path = os.path.join(bins_path, executable)
-        binary_exists = os.path.exists(binary_path)
+        installation_path = os.path.join(bins_path, executable)
+        binary_path = (
+            os.path.join(installation_path, self._binary_entrypoint(entrypoint))
+            if entrypoint is not None else installation_path
+        )
+        binary_exists = os.path.isfile(binary_path)
+
+        if not binary_exists and os.path.exists(installation_path):
+            raise RuntimeError(f"Managed binary installation is incomplete: {installation_path}")
 
         # Reusing an executable needs no preparation or repeated permission changes.
         if binary_exists and (is_windows() or os.access(binary_path, os.X_OK)):
@@ -999,12 +1034,17 @@ class BaseTool(ABC):
 
         # Ensure binary is available before returning path
         if not binary_exists:
-            self._download_binary_on_demand(binary_name, binary_url, executable)
+            self._download_binary_on_demand(binary_name, binary, executable)
         elif not is_windows():
             self.report(
                 "bridges.tools.applying_permissions", {"binary_name": binary_name}
             )
             os.chmod(binary_path, 0o755)
+
+        if not os.path.isfile(binary_path) or (
+            not is_windows() and not os.access(binary_path, os.X_OK)
+        ):
+            raise RuntimeError(f"Managed binary entrypoint is not executable: {binary_path}")
 
         self.report("bridges.tools.binary_ready", {"binary_name": binary_name})
 
@@ -1251,7 +1291,7 @@ class BaseTool(ABC):
             self.report("bridges.tools.cleanup_warning", {"error": str(e)})
 
     def _download_binary_on_demand(
-        self, binary_name: str, binary_url: str, executable: str
+        self, binary_name: str, binary: Union[str, dict], executable: str
     ) -> None:
         """Download binary on-demand if not found"""
 
@@ -1261,12 +1301,17 @@ class BaseTool(ABC):
 
         try:
             binary_path = os.path.join(bins_path, executable)
-            staged_binary_path = os.path.join(staging_path, executable)
+            staged_installation_path = os.path.join(staging_path, executable)
+            entrypoint = binary.get("executable") if isinstance(binary, dict) else None
+            staged_binary_path = (
+                os.path.join(staged_installation_path, self._binary_entrypoint(entrypoint))
+                if entrypoint is not None else staged_installation_path
+            )
 
             self.report("bridges.tools.binary_not_found", {"binary_name": binary_name})
 
-            # Publish only a complete executable, never an in-progress download.
-            self._download_binary(binary_url, staged_binary_path, binary_name)
+            # Publish only complete installations, including dependent bundle files.
+            self._download_binary(binary, staged_installation_path, binary_name)
 
             self.report("bridges.tools.binary_downloaded", {"binary_name": binary_name})
 
@@ -1278,7 +1323,7 @@ class BaseTool(ABC):
                 os.chmod(staged_binary_path, 0o755)
 
             # Remove quarantine attribute on macOS to prevent Gatekeeper blocking
-            if is_macos():
+            if is_macos() and entrypoint is None:
                 self.report(
                     "bridges.tools.removing_quarantine", {"binary_name": binary_name}
                 )
@@ -1286,14 +1331,16 @@ class BaseTool(ABC):
 
             if not os.path.exists(binary_path):
                 try:
-                    os.replace(staged_binary_path, binary_path)
+                    os.replace(staged_installation_path, binary_path)
                 except OSError:
                     # Windows may reject replacement once another worker has
                     # published and started using the same executable.
                     if not os.path.exists(binary_path):
                         raise
 
-            self._delete_older_binary_versions(bins_path, executable)
+            # Retain bundle versions that other workers may still be using.
+            if isinstance(binary, str):
+                self._delete_older_binary_versions(bins_path, executable)
 
         except Exception as e:
             self.report(
@@ -1347,9 +1394,11 @@ class BaseTool(ABC):
             or basename.endswith(".tgz")
         )
 
-    def _download_binary(self, url: str, output_path: str, binary_name: str) -> None:
-        """Download binary from URL using pypdl (faster parallel downloader)
-        If the downloaded file is an archive, it will be extracted automatically"""
+    def _download_binary(self, binary: Union[str, dict], output_path: str, binary_name: str) -> None:
+        """Download and verify an executable or preserve its complete archive bundle."""
+        url = binary if isinstance(binary, str) else binary["url"]
+        entrypoint = binary.get("executable") if isinstance(binary, dict) else None
+        checksum = binary.get("sha256") if isinstance(binary, dict) else None
 
         try:
             self.report("bridges.tools.downloading_from_url", {})
@@ -1362,6 +1411,8 @@ class BaseTool(ABC):
             # Determine if the URL points to an archive
             parsed_url = urlparse(url)
             is_archive_download = self._is_archive(parsed_url.path)
+            if entrypoint is not None and not is_archive_download:
+                raise ValueError("A bundle executable entrypoint requires an archive URL")
 
             # If it's an archive, download to a temporary path with proper extension
             download_path = output_path
@@ -1386,6 +1437,16 @@ class BaseTool(ABC):
                     "Downloaded binary is empty or was not created properly"
                 )
 
+            if checksum is not None:
+                if not re.fullmatch(r"[a-fA-F0-9]{64}", checksum):
+                    raise ValueError("Invalid binary SHA-256 declaration")
+                digest = hashlib.sha256()
+                with open(download_path, "rb") as downloaded:
+                    for chunk in iter(lambda: downloaded.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                if digest.hexdigest() != checksum.lower():
+                    raise ValueError("Downloaded binary SHA-256 does not match its declaration")
+
             # If it's an archive, extract it
             if is_archive_download:
                 self.report(
@@ -1397,7 +1458,21 @@ class BaseTool(ABC):
                 temp_extract_path = output_path + ".extracted"
 
                 # Try extracting without strip first to see the structure
-                extract_archive(download_path, temp_extract_path)
+                extract_archive(
+                    download_path, temp_extract_path,
+                    preserve_metadata=entrypoint is not None,
+                )
+
+                if entrypoint is not None:
+                    entry_path = os.path.join(temp_extract_path, self._binary_entrypoint(entrypoint))
+                    root = os.path.realpath(temp_extract_path)
+                    target = os.path.realpath(entry_path)
+                    if os.path.commonpath([root, target]) != root or not os.path.isfile(entry_path):
+                        raise ValueError("Bundle executable must be a file inside the extracted archive")
+                    os.rename(temp_extract_path, output_path)
+                    os.remove(download_path)
+                    self.report("bridges.tools.archive_extracted", {"binary_path": output_path})
+                    return
 
                 # Release archives may contain documentation before the executable.
                 expected_name = (
@@ -1425,8 +1500,6 @@ class BaseTool(ABC):
                     )
 
                 # Move the binary to the final output path
-                import shutil
-
                 shutil.move(binary_file_path, output_path)
 
                 # Clean up temporary files

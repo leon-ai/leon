@@ -1,5 +1,6 @@
 import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
 import type { ToolConcurrency } from '@/types'
+import type { ToolBinary } from '@@/bridges/runtime/contracts/tool-binary'
 import {
   LEON_PROFILE_NAME,
   LEON_PROFILES_PATH,
@@ -21,7 +22,7 @@ interface ToolConfig {
   name: string
   description: string
   concurrency?: ToolConcurrency
-  binaries?: Record<string, string>
+  binaries?: Record<string, ToolBinary>
   resources?: Record<string, string[]>
   connection?: ToolConnectionSchema
   functions: Record<
@@ -144,8 +145,15 @@ export class ToolkitConfig {
    * Get binary download URL for current platform with architecture granularity
    */
   static getBinaryUrl(config: ToolConfig): string | undefined {
-    const platformName = getPlatformName()
+    const binary = this.getBinary(config)
 
-    return config.binaries?.[platformName]
+    return typeof binary === 'string' ? binary : binary?.url
+  }
+
+  /**
+   * Gets the current platform's complete managed binary declaration.
+   */
+  static getBinary(config: ToolConfig): ToolBinary | undefined {
+    return config.binaries?.[getPlatformName()]
   }
 }

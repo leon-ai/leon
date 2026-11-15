@@ -30,7 +30,7 @@ const COLLECTIONS = [
   { value: 'component', label: 'Components' }, { value: 'widget', label: 'Widgets' },
   { value: 'connection', label: 'Connections' }, { value: 'generated', label: 'Generated UI' },
   { value: 'answer', label: 'Answer preview' }, { value: 'feed', label: 'Feed' },
-  { value: 'artifacts', label: 'Artifacts' }, { value: 'markdown', label: 'Markdown' }
+  { value: 'files', label: 'Files' }, { value: 'markdown', label: 'Markdown' }
 ] as const
 
 type GalleryKind = typeof COLLECTIONS[number]['value']
@@ -47,7 +47,7 @@ const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, 
 const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
 const FeedPreview = lazy(() => import('./feed-preview'))
-const ArtifactsPreview = lazy(() => import('./artifacts-preview'))
+const FilesPreview = lazy(() => import('./files-preview'))
 const MarkdownPreview = lazy(() => import('./markdown-preview'))
 const CHOICES = [
   { value: 'quiet', label: 'A quiet morning', description: 'A little room to think.' },
@@ -333,7 +333,7 @@ function App() {
   const [narrow, setNarrow] = useState(false)
   const results = searchIndex(SEARCH_INDEX, query).filter(({ item }) => item.kind === kind)
   const searchable = kind === 'component' || kind === 'widget' || kind === 'generated'
-  const content = kind === 'feed' ? <FeedPreview /> : kind === 'artifacts' ? <ArtifactsPreview />
+  const content = kind === 'feed' ? <FeedPreview /> : kind === 'files' ? <FilesPreview />
     : kind === 'markdown' ? <MarkdownPreview /> : null
 
   return <ToastProvider><VisualPreviewProvider><main className="aurora-gallery">

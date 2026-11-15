@@ -26,6 +26,7 @@ const EXPIRED_CONTINUATION_CODES = new Set([
 const MAXIMUM_CONNECTION_AGE_MS = 55 * 60_000
 const KEEP_ALIVE_INTERVAL_MS = 5_000
 const CONNECTION_CHECK_INTERVAL_MS = 1_000
+const CONNECTION_HANDSHAKE_TIMEOUT_MS = 10_000
 const CONNECTION_IDLE_TIMEOUT_MS = 10_000
 const UPLOAD_FRAGMENT_BYTES = 64 * 1_024
 // Leave headroom below the authenticated route's observed 16 MiB boundary.
@@ -481,7 +482,16 @@ export class OpenAIResponsesWebSocket {
     })
 
     return new Promise((resolve, reject) => {
+      // Bound the whole dial, including TCP/TLS setup before an HTTP response.
+      const handshakeTimeout = setTimeout(() => {
+        onError(Object.assign(
+          new Error('The provider WebSocket handshake stopped responding.'),
+          { code: ProviderConnectionErrorCode.Unresponsive }
+        ))
+        socket.terminate()
+      }, CONNECTION_HANDSHAKE_TIMEOUT_MS)
       const cleanup = (): void => {
+        clearTimeout(handshakeTimeout)
         socket.off('open', onOpen)
         socket.off('error', onError)
         socket.off('close', onClose)

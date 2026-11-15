@@ -1333,7 +1333,7 @@ describe('LLMProvider', () => {
     }
   })
 
-  it('allows an answer to arrive during the reasoning continuation allowance', async () => {
+  it('preserves silent reasoning across summary boundaries and accepts output within the idle allowance', async () => {
     vi.useFakeTimers()
 
     try {
@@ -1358,7 +1358,13 @@ describe('LLMProvider', () => {
         timeout: 180_000, retryInterruptedResponse: true
       })
 
+      await vi.advanceTimersByTimeAsync(20_000)
+      params.onStreamEvent?.({ type: 'reasoning-start' })
       await vi.advanceTimersByTimeAsync(60_000)
+      expect(params.signal?.aborted).toBe(false)
+      params.onReasoningToken?.('Verifying the result.')
+      params.onStreamEvent?.({ type: 'reasoning-end' })
+      await vi.advanceTimersByTimeAsync(29_999)
       expect(params.signal?.aborted).toBe(false)
       params.onStreamEvent?.({ type: 'text-start' })
       params.onToken?.('Verified answer.')
@@ -1412,7 +1418,7 @@ describe('LLMProvider', () => {
         retryInterruptedResponse: true, onAttempt, onToken
       })
 
-      await vi.advanceTimersByTimeAsync(89_999)
+      await vi.advanceTimersByTimeAsync(29_999)
       expect(attempts).toHaveLength(1)
       expect(attempts[0]!.signal?.aborted).toBe(false)
       attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
@@ -1423,7 +1429,7 @@ describe('LLMProvider', () => {
       expect(attempts[1]!.signal).not.toBe(attempts[0]!.signal)
       attempts[0]!.onToken?.('Late discarded output.')
       if (!recovers) {
-        await vi.advanceTimersByTimeAsync(90_000)
+        await vi.advanceTimersByTimeAsync(30_000)
       }
       const result = await pending
 
@@ -1432,7 +1438,7 @@ describe('LLMProvider', () => {
       expect(runChatCompletion.mock.calls.every(([prompt]) => prompt === 'Finish the original task.')).toBe(true)
       expect(onToken).not.toHaveBeenCalledWith('Late discarded output.')
       expect(onAttempt.mock.calls[1]![0]).toMatchObject({
-        outcome: 'LLMStreamIdleTimeout', elapsedMs: 90_000,
+        outcome: 'LLMStreamIdleTimeout', elapsedMs: 30_000,
         reasoningOnly: true, replaySafe: true,
         retryDecision: 'retry', retryReason: 'reasoning_only_timeout'
       })
@@ -1447,7 +1453,7 @@ describe('LLMProvider', () => {
     }
   })
 
-  it.each(['text', 'tool arguments', 'tool callback', 'file', 'source', 'hosted tool', 'completed', 'caller opt-out', 'owner cancellation', 'deadline', 'retry budget'])(
+  it.each(['text', 'commentary', 'tool arguments', 'tool callback', 'file', 'source', 'hosted tool', 'completed', 'caller opt-out', 'owner cancellation', 'deadline', 'retry budget'])(
     'does not replay a reasoning timeout blocked by %s', async (blocker) => {
       vi.useFakeTimers()
 
@@ -1456,6 +1462,10 @@ describe('LLMProvider', () => {
         const owner = new AbortController()
         const cancellation = new Error('Owner canceled')
         const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+          if (blocker === 'commentary') {
+            params.onStreamEvent?.({ type: 'text-start', preliminary: true })
+            params.onToken?.('Checking.')
+          }
           params.onStreamEvent?.({ type: 'reasoning-start' })
           params.onReasoningToken?.('Inspecting the evidence.')
           params.onStreamEvent?.({ type: 'reasoning-end' })
@@ -1498,7 +1508,7 @@ describe('LLMProvider', () => {
           owner.abort(cancellation)
           await canceled
         } else {
-          await vi.advanceTimersByTimeAsync(180_001)
+          await vi.advanceTimersByTimeAsync(30_001)
           expect(await pending).toBeNull()
         }
         expect(runChatCompletion).toHaveBeenCalledOnce()

@@ -13,6 +13,8 @@ package.helpers = helpers
 sys.modules['browser_harness'] = package
 sys.modules['browser_harness.helpers'] = helpers
 runtime = types.ModuleType('leon_browser_runtime')
+runtime.click_at_xy = Mock()
+runtime.scroll = Mock()
 exec(compile(Path(sys.argv.pop()).read_text(), 'browser-use-runtime.py', 'exec'), runtime.__dict__)
 
 

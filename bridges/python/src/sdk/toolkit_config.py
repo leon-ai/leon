@@ -198,7 +198,11 @@ class ToolkitConfig:
     @classmethod
     def get_binary_url(cls, config: Dict[str, Any]) -> Optional[str]:
         """Get binary download URL for current platform with architecture granularity"""
-        platform_name = get_platform_name()
-        binaries = config.get("binaries", {})
+        binary = cls.get_binary(config)
 
-        return binaries.get(platform_name)
+        return binary if isinstance(binary, str) else binary.get("url") if binary else None
+
+    @classmethod
+    def get_binary(cls, config: Dict[str, Any]) -> Any:
+        """Get the current platform's complete managed binary declaration."""
+        return config.get("binaries", {}).get(get_platform_name())
