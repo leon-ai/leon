@@ -10,8 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationLogger } from '@/conversation-logger'
 import { POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { sessionsPlugin } from '@/core/http-server/api/sessions'
-import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { CONVERSATION_SESSION_MANAGER, ConversationSessionManager } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
+import { getWorkspaceGrounding } from '@/core/session-manager/workspace-context'
 import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { enterProfileContext, getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import type { ReactLLMDutyParams } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
@@ -123,7 +124,7 @@ describe('web conversation runtime', () => {
   let profile = ''
   let app = Fastify()
 
-  const request = (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown): ReturnType<typeof app.inject> =>
+  const request = (method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: unknown): ReturnType<typeof app.inject> =>
     app.inject({ method, url, headers: { 'x-test-profile': profile }, ...(payload ? { payload } : {}) })
 
   beforeEach(async () => {
@@ -156,6 +157,45 @@ describe('web conversation runtime', () => {
     await app.close()
     await fs.rm(fixture.root, { recursive: true, force: true })
   })
+
+  it('attaches validated context to sessions, refreshes edited briefs and preserves conversations after workspace removal', async () => {
+    const input = { name: 'Leon', brief: 'Build my assistant', resources: [
+      { kind: 'folder', label: 'Source', location: fixture.root },
+      { kind: 'link', label: 'Planning', location: 'https://www.notion.so/' }
+    ] }
+    const created = await request('POST', '/api/v1/workspaces', input)
+    expect(created.statusCode).toBe(200)
+    const workspace = created.json().workspace
+    const id = randomUUID()
+    expect((await request('POST', '/api/v1/sessions?compact=true', { id, workspace_id: workspace.id })).statusCode).toBe(200)
+    await runWithProfileContext({ profileName: profile }, () => {
+      const restored = new ConversationSessionManager()
+      expect(restored.findSession(id)?.workspaceId).toBe(workspace.id)
+      restored.updateSession(id, { title: 'Restored project conversation' })
+      expect(CONVERSATION_REPOSITORY.readSession(id)?.workspaceId).toBe(workspace.id)
+    })
+    const context = (): Record<string, unknown> => runWithProfileContext({ profileName: profile }, () => getWorkspaceGrounding(id))
+    expect(context()).toMatchObject({ id: workspace.id, brief: input.brief, resources: [
+      { location: syncFs.realpathSync(fixture.root) }, { location: 'https://www.notion.so/' }
+    ] })
+    const edited = await request('PUT', `/api/v1/workspaces/${workspace.id}`, { ...input, name: 'Leon at home', brief: 'Keep Leon cozy' })
+    expect(edited.statusCode).toBe(200)
+    expect(context()['brief']).toBe('Keep Leon cozy')
+    expect(context()).toMatchObject({ name: 'Leon at home', brief: 'Keep Leon cozy', resources: [
+      { location: syncFs.realpathSync(fixture.root) }, { location: 'https://www.notion.so/' }
+    ] })
+    expect((await request('POST', '/api/v1/workspaces', { ...input, name: '  ' })).statusCode).toBe(400)
+    const turn = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.openAgentTurn(id))
+    expect((await request('DELETE', `/api/v1/workspaces/${workspace.id}`)).statusCode).toBe(409)
+    turn.close()
+    expect((await request('DELETE', `/api/v1/workspaces/${workspace.id}`)).statusCode).toBe(200)
+    expect((await request('GET', `/api/v1/sessions/${id}`)).json().session).not.toHaveProperty('workspaceId')
+    expect(context()).not.toHaveProperty('brief')
+    const session = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.findSession(id))
+    expect(session).not.toHaveProperty('workspaceId')
+  })
+
+
 
   async function create(): Promise<string> {
     const id = randomUUID()

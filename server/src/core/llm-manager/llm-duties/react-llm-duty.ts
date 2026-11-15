@@ -57,6 +57,7 @@ import { getConnectionRequirements } from '@/core/connections/connection-catalog
 import { CONNECTION_SETUP_TOOL_NAME } from '@/core/connections/connection-tool'
 import { CONFIG_MANAGER } from '@/config'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { getWorkspaceGrounding } from '@/core/session-manager/workspace-context'
 import { getActiveConversationSessionId, runWithConversationResponse } from '@/core/session-manager/session-context'
 import { LLAMACPP_MAX_OUTPUT_TOKENS } from '@/constants'
 
@@ -1081,6 +1082,7 @@ export class ReActLLMDuty extends LLMDuty {
    */
   private async buildAgentGrounding(caller: LLMCaller, query: string): Promise<Record<string, unknown>> {
     const grounding: Record<string, unknown> = {
+      workspace_context: getWorkspaceGrounding(CONVERSATION_SESSION_MANAGER.getCurrentSessionId()),
       local_workspace: [
         `Default local working directory: ${process.cwd()}`,
         'Resolve relative task paths here unless the owner establishes another workspace. For Satellite, inspect that device\'s working directory first.'
