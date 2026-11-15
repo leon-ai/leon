@@ -15,6 +15,7 @@ import type {
 const DEFAULT_DISCOVERY_LIMIT = 5
 
 interface ListSessionsOptions {
+  workspaceId?: string
   query?: string
   limit?: number
   cursor?: string
@@ -22,6 +23,7 @@ interface ListSessionsOptions {
 }
 
 interface SearchSessionsOptions {
+  workspaceId?: string
   role?: SessionSearchRole
   topK?: number
   contextWindow?: number
@@ -65,6 +67,9 @@ export default class SessionsTool extends Tool {
     const query = new URLSearchParams({
       limit: String(options.limit ?? DEFAULT_DISCOVERY_LIMIT)
     })
+    if (options.workspaceId) {
+      query.set('workspace_id', options.workspaceId)
+    }
     if (options.query !== undefined) {
       query.set('query', options.query)
     }
