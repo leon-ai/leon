@@ -29,7 +29,7 @@ export interface BorderWaveOptions {
 }
 
 interface WaveGeometry {
-  paths: Path2D[]
+  path: Path2D
   distance: number
   waveLength: number
   movementMs: number
@@ -91,8 +91,16 @@ function createGeometry(options: BorderWaveOptions): WaveGeometry {
     ? options.durationMs
     : distance / options.speedPxPerSecond * MILLISECONDS_PER_SECOND
 
+  // The opposite bands share paint state and never overlap. Combining their
+  // subpaths halves stroke submissions without changing their geometry or fades.
+  const path = new Path2D()
+
+  for (const wavePath of paths) {
+    path.addPath(wavePath)
+  }
+
   return {
-    paths,
+    path,
     distance,
     waveLength,
     movementMs,
@@ -204,14 +212,12 @@ export function createBorderWaveRenderer(
         smoothStep((1 - progress) / WAVE_FADE_FRACTION)
       paint.clearRect(0, 0, options.bounds.width, options.bounds.height)
 
-      for (const path of geometry.paths) {
-        for (const segment of geometry.segments) {
-          paint.globalAlpha = opacity * segment.opacity
-          // Closed paths wrap both ends of the band across the seam, allowing
-          // its center to traverse the full route without clipping the fade.
-          paint.lineDashOffset = segment.offset - center - geometry.waveLength / 2
-          paint.stroke(path)
-        }
+      for (const segment of geometry.segments) {
+        paint.globalAlpha = opacity * segment.opacity
+        // Canvas restarts the dash pattern for each subpath, keeping the bands
+        // opposite as their tails wrap across the closed perimeter's seam.
+        paint.lineDashOffset = segment.offset - center - geometry.waveLength / 2
+        paint.stroke(geometry.path)
       }
 
       isClear = false
