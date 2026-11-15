@@ -5,16 +5,17 @@ import '@/styles/main.sass'
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  AURORA_CATALOG, ArtifactWidget, Status, BooleanChoiceWidget, Button, ChoiceWidget,
+  AURORA_CATALOG, Status, BooleanChoiceWidget, Button, ChoiceWidget,
   FormWidget, Input, Loader, PreparationStatus, PreparationWidget, Progress,
   Selection, Range, Surface, Switch, Segmented, Tabs, NumberStepper, SearchSelect,
   DataTableWidget, ComparisonWidget
 } from '../../../../aurora/src/v2'
 import { Button as AppButton } from '@/components/button'
+import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
 import { CopyButton } from '@/components/copy-button'
 import { Input as AppInput } from '@/components/input'
-import { FileIcon, Icon } from '@/components/icon'
-import { VisualPreview, VisualPreviewProvider } from '@/components/visual-preview/visual-preview'
+import { Icon } from '@/components/icon'
+import { VisualPreviewProvider } from '@/components/visual-preview/visual-preview'
 import { ToastProvider, useToast } from '@/components/toast'
 import { createSearchIndex, searchIndex } from '@/utils/search'
 import { applyTheme, getCurrentTheme, type Theme } from '@/theme'
@@ -65,10 +66,7 @@ const ARTIFACTS = [
 ]
 
 function Artifacts() {
-  return <ArtifactWidget title="A little inspiration" items={ARTIFACTS}
-    renderFileIcon={(filename) => <FileIcon fileName={filename} />}
-    renderImagePreview={(item, image) => <VisualPreview title={item.filename} fullWidth>{image}</VisualPreview>}
-  />
+  return <ArtifactFiles title="A little inspiration" items={ARTIFACTS} />
 }
 
 function StatusDemo() {
@@ -177,11 +175,11 @@ function PreparationDemo() {
       onCancel={() => setStatus(PreparationStatus.Cancelled)} onRetry={() => setStatus(PreparationStatus.Downloading)} />
     <PreparationWidget title="File downloads" status={status} detail={details[status]} downloads={[
       { id: 'configuration', fileName: 'config.json', status: 'complete',
-        downloadedBytes: 1_024, totalBytes: 1_024, etaMs: null },
+        downloadedBytes: 1_000, totalBytes: 1_000, etaMs: null },
       { id: 'model', fileName: 'model.safetensors', status: status === PreparationStatus.Ready ? 'complete'
         : status === PreparationStatus.Failed ? 'failed' : status === PreparationStatus.Cancelled ? 'cancelled'
           : status === PreparationStatus.Preparing ? 'queued' : 'downloading',
-      downloadedBytes: completed * 1_024 * 1_024, totalBytes: knownSize ? 100 * 1_024 * 1_024 : null, etaMs: knownSize ? etaMs : null,
+      downloadedBytes: completed * 1_000_000, totalBytes: knownSize ? 100 * 1_000_000 : null, etaMs: knownSize ? etaMs : null,
       ...(status === PreparationStatus.Failed ? { error: details[status] } : {}) },
       { id: 'vocabulary', fileName: 'vocabulary.json', status: status === PreparationStatus.Ready ? 'complete'
         : status === PreparationStatus.Cancelled ? 'cancelled' : 'queued',

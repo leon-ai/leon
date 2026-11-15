@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Surface } from '../components/surface'
+import { useNearViewport } from '../hooks/use-near-viewport'
 
 import './artifacts.sass'
 
@@ -21,6 +22,15 @@ export interface ArtifactWidgetProps {
   items: readonly ArtifactItem[]
   renderFileIcon: (filename: string) => ReactNode
   renderImagePreview?: (item: ArtifactItem, image: ReactNode) => ReactNode
+  renderActions?: (item: ArtifactItem) => ReactNode
+  renderDocumentPreview?: (item: ArtifactItem) => ReactNode
+}
+
+function ArtifactVideo({ url, filename }: { url: string, filename: string }) {
+  const { ref, visible } = useNearViewport<HTMLVideoElement>()
+
+  // Metadata loading is viewport-gated; playback always remains owner initiated.
+  return <video ref={ref} src={url} controls playsInline preload={visible ? 'metadata' : 'none'} aria-label={filename} />
 }
 
 function safeResourceURL(value: string): string | undefined {
@@ -37,7 +47,7 @@ function safeResourceURL(value: string): string | undefined {
  * Places host-owned media and document references inside a visual answer.
  * File authorization stays with the host; model-generated paths are not resolved here.
  */
-export function ArtifactWidget({ title, description, items, renderFileIcon, renderImagePreview }: ArtifactWidgetProps) {
+export function ArtifactWidget({ title, description, items, renderFileIcon, renderImagePreview, renderActions, renderDocumentPreview }: ArtifactWidgetProps) {
   return <Surface title={title} {...(description === undefined ? {} : { description })}>
     <div className="aurora-artifacts">
       {items.map((item) => {
@@ -54,14 +64,19 @@ export function ArtifactWidget({ title, description, items, renderFileIcon, rend
         const imageContent = image ? <img src={url} alt={item.filename} loading="lazy" decoding="async" /> : null
 
         return <figure className="aurora-artifact" key={item.id}>
-          {image && (renderImagePreview ? renderImagePreview(item, imageContent) : <a href={url} target="_blank" rel="noreferrer" className="aurora-artifact-image">{imageContent}</a>)}
-          {video && <video src={url} controls preload="none" aria-label={item.filename} />}
+          {image && <div className="aurora-artifact-preview">
+            {renderImagePreview ? renderImagePreview(item, imageContent) : <a href={url} target="_blank" rel="noreferrer" className="aurora-artifact-image">{imageContent}</a>}
+          </div>}
+          {video && <ArtifactVideo url={url} filename={item.filename} />}
           {audio && <audio src={url} controls preload="none" aria-label={item.filename} />}
+          {!image && !video && !audio && renderDocumentPreview?.(item)}
           <figcaption>
             <span className="aurora-artifact-icon" aria-hidden="true">{renderFileIcon(item.filename)}</span>
             <span className="aurora-artifact-name">{item.filename}{item.sizeLabel && <small>{item.sizeLabel}</small>}</span>
-            {!image && !video && !audio && <a href={url} target="_blank" rel="noreferrer">Open</a>}
-            <a href={downloadUrl} download={item.filename}>Download</a>
+            {renderActions ? renderActions(item) : <>
+              {!image && !video && !audio && <a href={url} target="_blank" rel="noreferrer">Open</a>}
+              <a href={downloadUrl} download={item.filename}>Download</a>
+            </>}
           </figcaption>
         </figure>
       })}

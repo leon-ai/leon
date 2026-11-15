@@ -48,7 +48,13 @@ export function VisualPreviewProvider({ children }: { children: ReactNode }) {
           release()
           setSelection(null)
         }}>
-        <div className="visual-dialog-content" tabIndex={0}>{selection.content}</div>
+        <div className="visual-dialog-content" role="button" tabIndex={0} aria-label="Zoom out"
+          onClick={close} onKeyDown={(event) => {
+            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault()
+              close()
+            }
+          }}>{selection.content}</div>
       </Dialog>}
     </VisualContext>
   )

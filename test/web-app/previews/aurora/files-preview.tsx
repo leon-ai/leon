@@ -1,6 +1,7 @@
-import { ArtifactWidget, type ArtifactItem } from '../../../../aurora/src/v2/widgets/artifacts'
+import type { ArtifactItem } from '../../../../aurora/src/v2/widgets/artifacts'
+import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
 import { FileIcon } from '@/components/icon'
-import { VisualPreview } from '@/components/visual-preview/visual-preview'
+import { getPublicAssetPath } from '@/config'
 
 import './files-preview.sass'
 
@@ -18,7 +19,8 @@ import unknown from '../../../fixtures/artifacts/sample.leon?url&no-inline'
 
 const GROUPS: { title: string, description: string, items: ArtifactItem[] }[] = [
   { title: 'Images', description: 'Lazy image loading, enlargement and downloads.', items: [
-    { id: 'photo', filename: 'Sunday pancakes.jpeg', mimeType: 'image/jpeg', url: image }
+    { id: 'photo', filename: 'Sunday pancakes.jpeg', mimeType: 'image/jpeg', url: image },
+    { id: 'vector', filename: 'Leon.svg', mimeType: 'image/svg+xml', url: getPublicAssetPath('img/logo-color.svg') }
   ] },
   { title: 'Video', description: 'A small local clip. Playback starts only when you press play.', items: [
     { id: 'video', filename: 'A quiet moment.webm', mimeType: 'video/webm', url: video, sizeLabel: '3 KB' }
@@ -26,7 +28,7 @@ const GROUPS: { title: string, description: string, items: ArtifactItem[] }[] = 
   { title: 'Audio', description: 'A short, quiet tone with native playback controls.', items: [
     { id: 'audio', filename: 'A soft note.wav', mimeType: 'audio/wav', url: audio, sizeLabel: '32 KB' }
   ] },
-  { title: 'Documents', description: 'PDF and Office files keep the existing open/download presentation.', items: [
+  { title: 'Documents', description: 'PDF and Office files can be opened or downloaded.', items: [
     { id: 'pdf', filename: 'Attention is all you need.pdf', mimeType: 'application/pdf', url: pdf },
     { id: 'document', filename: 'Field notes.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: document, sizeLabel: '1 KB' }
   ] },
@@ -54,9 +56,7 @@ export default function FilesPreview() {
         <h2>Artifacts</h2>
         <p>Files Leon creates or shares with you.</p>
       </header>
-      {GROUPS.map((group) => <ArtifactWidget key={group.title} {...group}
-        renderFileIcon={(filename) => <FileIcon fileName={filename} />}
-        renderImagePreview={(item, content) => <VisualPreview title={item.filename} fullWidth>{content}</VisualPreview>} />)}
+      {GROUPS.map((group) => <ArtifactFiles key={group.title} {...group} />)}
       <section className="demo-stack" aria-label="File icons">
         <h3>File icons</h3>
         <p>File types and special filenames share the same local artwork as code headers.</p>

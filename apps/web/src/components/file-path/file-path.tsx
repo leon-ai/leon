@@ -1,8 +1,8 @@
 import { useMutation } from '@tanstack/react-query'
 
-import { Button } from '@/components/button'
 import { CopyButton } from '@/components/copy-button'
 import { FileIcon } from '@/components/icon'
+import { Loader } from '@/components/loader'
 import { StreamingText } from '@/components/streaming-text'
 import { Tooltip } from '@/components/tooltip'
 import { useToast } from '@/components/toast'
@@ -45,11 +45,16 @@ export function FilePath({ path, complete, animationId }: { path: string, comple
   }
 
   return <span className="file-path-reference">
-    <Tooltip message={`Open on Leon’s host\n${path}`} multiline position="top">
-      <Button className="file-path-open" size="sm" ariaLabel={`Open ${path} on Leon’s host`}
-        icon={<FileIcon fileName={path} />} disabled={request.isPending} loading={request.isPending}
-        onClick={() => request.mutate()}>{label}</Button>
+    <Tooltip message={`Open on Leon’s host\n${path}`} multiline position="top" className="inline-link-tooltip">
+      <button className="file-path-open" type="button" aria-label={`Open ${path} on Leon’s host`}
+        disabled={request.isPending} aria-busy={request.isPending} onClick={() => request.mutate()}>
+        <span className="inline-link" aria-disabled={request.isPending || undefined}>
+          <span className="inline-link-icon" aria-hidden="true">
+            {request.isPending ? <Loader size="xs" /> : <FileIcon fileName={path} />}
+          </span>{label}
+        </span>
+      </button>
     </Tooltip>
-    <CopyButton text={path} label="Copy path" size="sm" />
+    <CopyButton className="file-path-copy" text={path} label="Copy path" size="sm" />
   </span>
 }

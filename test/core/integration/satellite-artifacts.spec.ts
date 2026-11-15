@@ -12,6 +12,8 @@ import { collectSatelliteArtifacts, receiveSatelliteArtifacts } from '@/core/sat
 import * as satelliteArtifacts from '@/core/satellite/satellite-artifacts'
 import { uploadSatelliteDeliverables } from '@/core/satellite/satellite-deliverables'
 import { uploadArtifacts } from '@/core/http-server/api/artifacts/upload'
+import { artifactsPlugin } from '@/core/http-server/api/artifacts'
+import { readArtifact, registerArtifact } from '@/core/artifacts/artifact-store'
 import { toolExecutionsPlugin } from '@/core/http-server/api/tool-executions'
 import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
@@ -48,6 +50,40 @@ afterEach(async () => {
 })
 
 describe('Satellite session artifact integration', () => {
+  it('serves original artifact bytes with whitespace-free download names without renaming stored files', async () => {
+    const root = await temporaryRoot()
+    vi.spyOn(satelliteArtifacts, 'getSatelliteArtifactRoot').mockReturnValue(path.join(root, 'retained'))
+    const source = path.join(root, 'source')
+    const content = Buffer.from('Original file contents.')
+    await fs.writeFile(source, content)
+    const server = Fastify()
+    await server.register(artifactsPlugin, { apiVersion: API_VERSION })
+
+    try {
+      for (const [filename, expected, mimeType, disposition] of [
+        ['My  notes\u00a0你好.pdf', 'My__notes_你好.pdf', 'application/pdf', 'inline'],
+        ['Quiet\u3000shapes.svg', 'Quiet_shapes.svg', 'image/svg+xml', 'attachment'],
+        ['notes.txt', 'notes.txt', 'text/plain', 'attachment']
+      ] as const) {
+        const artifact = await registerArtifact({ session_id: 'download-session',
+          path: source, filename, mime_type: mimeType, source: 'fixture' })
+        const response = await server.inject({ url: `${artifact.url}?download=true` })
+        expect(response.statusCode).toBe(200)
+        expect(response.rawPayload).toEqual(content)
+        expect(response.headers['content-disposition']).toBe(`attachment; filename*=UTF-8''${encodeURIComponent(expected)}`)
+        const original = await readArtifact(artifact.session_id, artifact.id)
+        expect(original.artifact.filename).toBe(filename)
+        expect(path.basename(original.path)).toBe(filename)
+        const range = await server.inject({ url: artifact.url, headers: { range: 'bytes=0-3' } })
+        expect(range.statusCode).toBe(206)
+        expect(range.rawPayload).toEqual(content.subarray(0, 4))
+        expect(range.headers['content-disposition']).toBe(`${disposition}; filename*=UTF-8''${encodeURIComponent(expected)}`)
+      }
+    } finally {
+      await server.close()
+    }
+  })
+
   it('streams large inventories over HTTP and queries them after removing the device files without attaching them', async () => {
     const temporary = await temporaryRoot()
     const device = path.join(temporary, 'device', 'artifacts')

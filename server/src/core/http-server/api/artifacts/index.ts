@@ -5,6 +5,7 @@ import { Type } from '@sinclair/typebox'
 
 import type { APIOptions } from '@/core/http-server/http-server'
 import { readArtifact } from '@/core/artifacts/artifact-store'
+import { getArtifactDownloadFilename } from '@/core/artifacts/artifact-types'
 
 const BYTE_RANGE_PATTERN = /^bytes=(\d*)-(\d*)$/
 const INLINE_MEDIA_TYPES = new Set([
@@ -63,7 +64,7 @@ export const artifactsPlugin: FastifyPluginAsync<APIOptions> = async (
         .header('Accept-Ranges', 'bytes')
         .header(
           'Content-Disposition',
-          `${inline && !request.query.download ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(artifact.filename)}`
+          `${inline && !request.query.download ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(getArtifactDownloadFilename(artifact.filename))}`
         )
       let start = 0
       let end = artifact.size_bytes - 1

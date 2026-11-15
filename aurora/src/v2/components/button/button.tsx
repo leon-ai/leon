@@ -29,6 +29,7 @@ export interface ButtonProps {
   href?: string | undefined
   target?: string | undefined
   rel?: string | undefined
+  download?: string | undefined
   onClick?: () => void
   renderLink?: (props: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target'>) => ReactNode
 }
@@ -55,7 +56,7 @@ export function Button({
   children, className, icon, iconPosition = 'left', ariaLabel, ariaPressed,
   ariaBusy, ariaExpanded, ariaControls, ariaHasPopup, tone = 'default',
   variant = 'ghost', size = 'md', cursorStyle = 'pointer', disabled = false,
-  loading = false, type = 'button', form, href, target, rel, onClick, renderLink
+  loading = false, type = 'button', form, href, target, rel, download, onClick, renderLink
 }: ButtonProps) {
   const isDisabled = disabled || loading
   const isIconOnly = children === undefined
@@ -80,7 +81,7 @@ export function Button({
 
   if (href !== undefined || renderLink !== undefined) {
     const props: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target'> = {
-      ...common, rel, children: content, 'aria-disabled': isDisabled,
+      ...common, rel, download, children: content, 'aria-disabled': isDisabled,
       onClick: (event: MouseEvent<HTMLAnchorElement>) => {
         if (isDisabled) {
           event.preventDefault()

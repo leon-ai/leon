@@ -1,5 +1,6 @@
 import { toSvg } from 'html-to-image'
 import { isBoundedPNG, MAXIMUM_IMAGE_EDGE, MAXIMUM_IMAGE_PIXELS } from './image-contract'
+import { rasterizeImage } from './rasterize-image'
 
 const MAXIMUM_CAPTURE_NODES = 10_000
 const MAXIMUM_SNAPSHOT_CHARACTERS = 16_777_216
@@ -8,25 +9,9 @@ async function rasterize(svg: string, width: number, height: number, pixelRatio:
   const image = new Image()
   image.src = svg
   await image.decode()
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.floor(width * pixelRatio)
-  canvas.height = Math.floor(height * pixelRatio)
   try {
-    canvas.getContext('2d')!.drawImage(image, 0, 0, canvas.width, canvas.height)
-
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob)
-        } else {
-          reject(new Error('I couldn’t encode this image.'))
-        }
-      }, 'image/png')
-    })
+    return await rasterizeImage(image, Math.floor(width * pixelRatio), Math.floor(height * pixelRatio))
   } finally {
-    // Release the backing pixels even if encoding fails or a caller disappears.
-    canvas.width = 0
-    canvas.height = 0
     image.src = ''
   }
 }
