@@ -108,6 +108,7 @@ export function Feed({
   const fastScroll = useMemo(createFastScrollDriver, [])
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const latestOwnerMessageId = entries.findLast((entry) => entry.role === 'owner')?.id
+  const getTurnKey = useCallback((index: number) => turns[index]?.id ?? index, [turns])
   const turnCount = turns.length
   const historyRef = useRef(history)
   const resumeFollowing = useCallback((): void => {
@@ -128,7 +129,7 @@ export function Feed({
     // viewport edge instead of being constrained to the content column.
     getScrollElement: () =>
       feedRef.current?.closest<HTMLElement>('.app-main') ?? null,
-    getItemKey: (index) => turns[index]?.id ?? index,
+    getItemKey: getTurnKey,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
     overscan: FEED_OVERSCAN_COUNT,
     // Manual disclosures grow below their headings. History prepends and new
