@@ -93,7 +93,9 @@ it('extracts, caches, invalidates and renders PDF evidence without a model call'
     { filename: '../../source.pdf', mediaType: 'application/pdf', dataBase64: (await fs.readFile(file)).toString('base64') },
     first.files[0]!
   ], 'session')
-  expect(prepared.files).toEqual(first.files)
+  expect(prepared.files).toEqual([
+    expect.objectContaining({ mediaType: 'application/pdf' }), ...first.files
+  ])
   expect(prepared.query).not.toContain(first.files[0]!.dataBase64)
   expect(await fs.readdir(path.join(directory, 'session', 'attachments'))).toHaveLength(2)
   await expect(prepareOwnerAttachments('Read.', [{ dataBase64: '!', mediaType: 'image/png' }], 'session')).rejects.toThrow('Invalid attachment')

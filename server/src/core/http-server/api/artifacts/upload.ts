@@ -8,6 +8,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
 
 import type { APIOptions } from '@/core/http-server/http-server'
+import { requireBinaryUpload } from '@/core/http-server/binary-upload'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
@@ -33,6 +34,7 @@ export const uploadArtifacts: FastifyPluginAsync<APIOptions> = async (
     `/api/${options.apiVersion}/artifacts/:sessionId`,
     {
       bodyLimit: MAX_GENERATED_ARTIFACT_BYTES,
+      onRequest: requireBinaryUpload,
       schema: {
         querystring: Type.Object({
           filename: Type.String({ minLength: 1, maxLength: 255 }),

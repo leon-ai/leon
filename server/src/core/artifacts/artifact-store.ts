@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
-import type { Artifact } from './artifact-types'
+import { isPortableArtifactFilename, type Artifact } from './artifact-types'
 
 function component(value: string): string {
   if (
@@ -43,6 +43,10 @@ export async function registerArtifact(input: {
   source: string
 }): Promise<Artifact> {
   const filename = component(input.filename)
+
+  if (!isPortableArtifactFilename(filename)) {
+    throw new Error('Invalid artifact filename.')
+  }
 
   if (
     !input.mime_type ||

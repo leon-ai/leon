@@ -27,11 +27,13 @@ import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { AgentSessionState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
 import { createAgentLoopContinuationState, type AgentLoopContinuationState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
+import { artifactsPlugin } from '@/core/http-server/api/artifacts'
+import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
 
 const fixture = vi.hoisted(() => ({
   root: '',
   logger: null as ConversationLogger | null,
-  executions: [] as { profile: string, session: string, query: string, target: string, release: () => void }[]
+  executions: [] as { profile: string, session: string, query: string, target: string, files: ReactLLMDutyParams['files'], release: () => void }[]
 }))
 
 vi.mock('@/core', () => ({
@@ -92,7 +94,7 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
           const signal = this.params.signal!
           const abort = (): void => reject(signal.reason)
           signal.addEventListener('abort', abort, { once: true })
-          fixture.executions.push({ profile: getActiveProfileName(), session, query,
+          fixture.executions.push({ profile: getActiveProfileName(), session, query, files: this.params.files,
             target: CONFIG_STATE.getModelState().getAgentTarget().label, release: () => {
             signal.removeEventListener('abort', abort)
             resolve()
@@ -133,6 +135,7 @@ describe('web conversation runtime', () => {
       enterProfileContext({ profileName: String(incoming.headers['x-test-profile']) })
     })
     await app.register(sessionsPlugin, { apiVersion: 'v1' })
+    await app.register(artifactsPlugin, { apiVersion: 'v1' })
     await app.ready()
   })
 
@@ -158,6 +161,66 @@ describe('web conversation runtime', () => {
 
     return id
   }
+
+  async function upload(sessionId: string, filename: string, mediaType: string, payload: Buffer): Promise<Awaited<ReturnType<typeof app.inject>>> {
+    const params = new URLSearchParams({ filename, media_type: mediaType })
+
+    return app.inject({
+      method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+      headers: { 'x-test-profile': profile, 'content-type': 'application/octet-stream' }, payload
+    })
+  }
+
+  it('rejects invalid text, mismatched containers and over-limit files before accepting a message', async () => {
+    const sessionId = await create()
+    for (const file of [
+      { name: 'Program.exe', type: 'application/octet-stream', bytes: Buffer.from([0x4d, 0x5a, 0, 0x90]) },
+      { name: 'Binary.rs', type: 'text/plain', bytes: Buffer.concat([Buffer.alloc(65_536, 'a'), Buffer.from([0])]) },
+      { name: 'Invalid.mjs', type: 'application/javascript', bytes: Buffer.from([0x66, 0x80]) },
+      { name: 'Fake.png', type: 'application/pdf', bytes: Buffer.from('%PDF-1.4') },
+      { name: 'Spoof.png', type: 'image/png', bytes: Buffer.from('MZ executable') },
+      { name: 'Binary.txt', type: 'text/plain', bytes: Buffer.from([0, 255, 0]) },
+      { name: 'Empty.txt', type: 'text/plain', bytes: Buffer.alloc(0) },
+      ...['../Outside.txt', '..\\Outside.txt', 'file:stream.txt', 'CON.txt', 'LPT1.txt', 'COM¹.txt', 'Line\nBreak.txt'].map((name) => ({
+        name, type: 'text/plain', bytes: Buffer.from('notes')
+      }))
+    ]) {
+      expect((await upload(sessionId, file.name, file.type, file.bytes)).statusCode).toBe(400)
+    }
+    const archive = await fs.readFile('test/fixtures/artifacts/project-notes.zip')
+    expect((await upload(sessionId, 'Renamed.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', archive)).statusCode).toBe(400)
+    const document = await fs.readFile('test/fixtures/artifacts/field-notes.docx')
+    expect((await upload(sessionId, 'Notes.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', document)).statusCode).toBe(201)
+    for (const file of [
+      { name: 'Large.png', type: 'image/png', limit: OWNER_ATTACHMENT_MAX_IMAGE_BYTES },
+      { name: 'Large.csv', type: 'text/csv', limit: OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES },
+      { name: 'Large.pdf', type: 'application/pdf', limit: OWNER_ATTACHMENT_MAX_FILE_BYTES }
+    ]) {
+      const params = new URLSearchParams({ filename: file.name, media_type: file.type })
+      const response = await app.inject({ method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+        headers: { 'x-test-profile': profile, 'content-type': 'application/octet-stream', 'content-length': String(file.limit + 1) } })
+      expect(response.statusCode).toBe(413)
+    }
+    const endpoint = `/api/v1/sessions/${sessionId}/messages`
+    expect((await request('POST', endpoint, { id: randomUUID(), query: '', attachments: [] })).statusCode).toBe(400)
+    expect(fixture.executions).toHaveLength(0)
+    expect(await fs.readdir(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).toEqual([])
+  })
+
+  it('rejects nonbinary requests before a large body reaches a buffered parser', async () => {
+    const sessionId = await create()
+    const params = new URLSearchParams({ filename: 'Notes.txt', media_type: 'text/plain' })
+    for (const contentType of ['application/json', 'text/plain', 'multipart/form-data; boundary=upload']) {
+      const response = await app.inject({
+        method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+        headers: { 'x-test-profile': profile, 'content-type': contentType },
+        // A malformed JSON body distinguishes header rejection from parsing.
+        payload: 'not JSON'
+      })
+      expect(response.statusCode).toBe(415)
+    }
+    await expect(fs.stat(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
 
   it.each([
     { kind: 'native', spec: AURORA_CHOICE_SPEC, nodeId: 'choice', values: ['creative'], text: 'Something creative' },

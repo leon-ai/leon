@@ -139,6 +139,13 @@ describe('Satellite session artifact integration', () => {
       })
       expect(delivery.statusCode).toBe(201)
       expect(attachArtifacts).toHaveBeenCalledExactlyOnceWith('session', [delivery.json().id])
+      const invalid = await server.inject({
+        method: 'POST',
+        url: `/api/${API_VERSION}/artifacts/session?filename=output.txt&mime_type=text%2Fplain`,
+        headers: { 'content-type': 'application/json' }, payload: 'not JSON'
+      })
+      expect(invalid.statusCode).toBe(415)
+      expect(attachArtifacts).toHaveBeenCalledTimes(1)
     } finally {
       await server.close()
     }

@@ -1,4 +1,18 @@
 const DOWNLOAD_WHITESPACE_PATTERN = /\s/gu
+const UNSAFE_FILENAME_CHARACTERS = new Set('<>:"/\\|?*')
+const WINDOWS_DEVICE_NAME_PATTERN = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/iu
+
+/**
+ * Keeps artifact names portable and prevents Windows devices or alternate data
+ * streams from being opened when an authenticated client supplies a filename.
+ */
+export function isPortableArtifactFilename(filename: string): boolean {
+  return Boolean(filename) && filename.length <= 255 &&
+    !filename.endsWith('.') && !filename.endsWith(' ') &&
+    !WINDOWS_DEVICE_NAME_PATTERN.test(filename.split('.', 1)[0]!.trimEnd()) &&
+    !Array.from(filename).some((character) => character.charCodeAt(0) < 32 ||
+      character.charCodeAt(0) === 127 || UNSAFE_FILENAME_CHARACTERS.has(character))
+}
 
 /**
  * Gives downloaded artifacts portable names without renaming stored files
