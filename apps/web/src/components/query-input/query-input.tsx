@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ChangeEvent,
   type KeyboardEvent
 } from 'react'
 
@@ -17,6 +18,11 @@ import { useComposerDraft } from '@/data/composer-draft'
 import { useQueryHistory } from '@/data/query-history'
 
 import { QueryInputFocusWave } from './query-input-focus-wave'
+import { AttachmentPreviews } from './attachment-previews'
+import { useComposerAttachments } from './use-composer-attachments'
+import type { ComposerAttachment } from './use-composer-attachments'
+import type { AttachmentUploadListener } from '@/data/owner-attachments'
+import { VisualPreviewProvider } from '@/components/visual-preview/visual-preview'
 
 import './query-input.sass'
 
@@ -34,10 +40,10 @@ interface QueryInputProps {
   disabled?: boolean
   canSubmit?: boolean
   loading?: boolean
+  failed?: boolean
   maximumLineCount?: number
   placeholder?: string
-  onAddAttachment?: () => void
-  onSubmit?: (query: string) => void
+  onSubmit?: (query: string, attachments: ComposerAttachment[], onUploadProgress: AttachmentUploadListener) => void | Promise<unknown>
   model?: ReturnType<typeof useComposerModel>
   onStop?: () => void
 }
@@ -50,14 +56,19 @@ export function QueryInput({
   disabled = false,
   canSubmit = true,
   loading = false,
+  failed = false,
   maximumLineCount = DEFAULT_MAXIMUM_LINE_COUNT,
   placeholder = DEFAULT_PLACEHOLDER,
-  onAddAttachment,
   onSubmit,
   model,
   onStop
 }: QueryInputProps) {
   const [query, setQuery, draftRestoration] = useComposerDraft(sessionId)
+  const [submitting, setSubmitting] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const attachmentsRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachments = useComposerAttachments(disabled || loading || submitting)
   const caretRestorationRef = useRef<number | undefined>(undefined)
   const [settledRestoration, setSettledRestoration] = useState<number | undefined>(undefined)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -78,7 +89,8 @@ export function QueryInput({
   const historyPendingRef = useRef(false)
   const historySelectionRef = useRef(false)
   const normalizedQuery = query.trim()
-  const submitDisabled = disabled || !canSubmit || normalizedQuery.length === 0
+  const busy = loading || submitting
+  const submitDisabled = disabled || busy || !canSubmit || normalizedQuery.length === 0 && attachments.items.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
 
   useLayoutEffect(() => {
@@ -162,10 +174,11 @@ export function QueryInput({
       Number.parseFloat(textareaStyle.borderBottomWidth)
     const singleLineHeight = lineHeight + verticalPadding + verticalBorder
     const actionRowHeight = Math.max(leadingAction.offsetHeight, actions.offsetHeight)
+    const attachmentHeight = attachmentsRef.current?.offsetHeight ?? 0
     // Leave room for the conversation even on short viewports; longer drafts
     // scroll inside the native textarea instead of covering the entire feed.
     const viewportMaximum = window.innerHeight / 2 -
-      verticalPadding - actionRowHeight - lineHeight
+      verticalPadding - actionRowHeight - lineHeight - attachmentHeight
     const maximumHeight = Math.max(singleLineHeight,
       Math.min(lineHeight * resolvedMaximumLineCount + verticalPadding + verticalBorder, viewportMaximum))
     const horizontalFormPadding =
@@ -197,7 +210,7 @@ export function QueryInput({
     const inlineContentHeight =
       measurementTextarea.scrollHeight + verticalBorder
     const shouldExpand =
-      inlineContentHeight > singleLineHeight + HEIGHT_COMPARISON_TOLERANCE
+      attachmentHeight > 0 || inlineContentHeight > singleLineHeight + HEIGHT_COMPARISON_TOLERANCE
 
     measurementTextarea.style.width = `${
       shouldExpand ? expandedFieldWidth : inlineFieldWidth
@@ -205,7 +218,7 @@ export function QueryInput({
 
     const contentHeight = measurementTextarea.scrollHeight + verticalBorder
     const minimumExpandedHeight =
-      (lineHeight * 2) + verticalPadding + verticalBorder
+      (lineHeight * (attachmentHeight ? 1 : 2)) + verticalPadding + verticalBorder
     const nextHeight = Math.min(
       Math.max(contentHeight, shouldExpand ? minimumExpandedHeight : 0),
       maximumHeight
@@ -228,7 +241,7 @@ export function QueryInput({
 
     setFormHeight(Math.max(
       minimumFormHeight,
-      contentAreaHeight + verticalFormPadding + verticalFormBorder
+      attachmentHeight + contentAreaHeight + verticalFormPadding + verticalFormBorder
     ))
     setIsExpanded(shouldExpand)
     setIsScrollable(
@@ -251,7 +264,7 @@ export function QueryInput({
     }
 
     return undefined
-  }, [query, draftRestoration, settledRestoration, updateTextareaHeight])
+  }, [query, attachments.items, draftRestoration, settledRestoration, updateTextareaHeight])
 
   useEffect(() => () => {
     // An obsolete network response must never replace another session's input.
@@ -307,16 +320,27 @@ export function QueryInput({
     }
   }, [updateTextareaHeight])
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
 
-    if (submitDisabled || loading) {
+    if (submitDisabled || busy) {
       return
     }
 
     resetHistoryNavigation()
-    onSubmit?.(normalizedQuery)
-    setQuery('')
+    setSubmitting(true)
+    attachments.queueUploads()
+    try {
+      await onSubmit?.(normalizedQuery, attachments.items, attachments.updateUpload)
+      setQuery('')
+      attachments.clear()
+      textareaRef.current?.focus({ preventScroll: true })
+    } catch {
+      // The shared mutation cache reports delivery errors. Keep the draft and
+      // files available so the owner can retry without selecting them again.
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   function resetHistoryNavigation(): void {
@@ -326,8 +350,16 @@ export function QueryInput({
     historySelectionRef.current = false
   }
 
+  function handleAttachmentSelection(event: ChangeEvent<HTMLInputElement>): void {
+    if (event.target.files) {
+      attachments.add(event.target.files)
+    }
+    event.target.value = ''
+    textareaRef.current?.focus({ preventScroll: true })
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (event.nativeEvent.isComposing) {
+    if (event.nativeEvent.isComposing || busy) {
       return
     }
 
@@ -382,94 +414,108 @@ export function QueryInput({
   }
 
   return (
-    <div className="query-input-container">
-      <div className="query-input-glow" aria-hidden="true" />
-      <div className="query-input-particles" aria-hidden="true">
-        {Array.from({ length: PARTICLE_COUNT }, (_, index) => (
-          <span key={index} className="query-input-particle" />
-        ))}
-      </div>
-      <form
-        ref={formRef}
-        className={clsx('query-input', {
-          'query-input-expanded': isExpanded,
-          'query-input-restoring': settledRestoration !== draftRestoration
-        })}
-        aria-label="Send a message to Leon"
-        style={formHeight === undefined ? undefined : {
-          height: `${formHeight}px`
-        }}
-        onSubmit={handleSubmit}
-      >
-        <div ref={leadingActionRef} className="query-input-leading-action">
-          <Button
-            className="button-composer query-input-add"
-            iconName="add-large"
-            tooltipMessage="Add attachment"
-            tooltipPosition="top"
-            disabled={disabled || loading}
-            {...(onAddAttachment === undefined ? {} : {
-              onClick: onAddAttachment
-            })}
-          />
+    <VisualPreviewProvider>
+      <div ref={containerRef} className="query-input-container">
+        <div className="query-input-glow" aria-hidden="true" />
+        <div className="query-input-particles" aria-hidden="true">
+          {Array.from({ length: PARTICLE_COUNT }, (_, index) => (
+            <span key={index} className="query-input-particle" />
+          ))}
         </div>
-        <Input
-          ariaLabel="Message Leon"
-          className={clsx('query-input-field', {
-            'query-input-field-scrollable': isScrollable
+        <form
+          ref={formRef}
+          className={clsx('query-input', {
+            'query-input-expanded': isExpanded,
+            'query-input-restoring': settledRestoration !== draftRestoration
           })}
-          fieldRef={textareaRef}
-          variant="embedded"
-          multiline
-          rows={1}
-          name="query"
-          placeholder={placeholder}
-          value={query}
-          autoComplete="off"
-          disabled={disabled || loading}
-          onPointerDown={(event) => {
-            if (event.isTrusted && event.button === 0 && document.activeElement !== event.currentTarget) {
-              playFocusWave()
+          aria-label="Send a message to Leon"
+          style={formHeight === undefined ? undefined : {
+            height: `${formHeight}px`
+          }}
+          onSubmit={handleSubmit}
+          onPaste={(event) => {
+            if (event.clipboardData.files.length) {
+              event.preventDefault()
+              attachments.add(event.clipboardData.files)
             }
           }}
-          onChange={(event) => {
-            resetHistoryNavigation()
-            setQuery(event.target.value)
-          }}
-          onKeyDown={handleKeyDown}
-        />
-        <textarea
-          ref={measurementTextareaRef}
-          className="query-input-measurement"
-          aria-hidden="true"
-          tabIndex={-1}
-          rows={1}
-          value={query}
-          readOnly
-        />
-        <div ref={actionsRef} className="query-input-actions">
-          <ModelSelector disabled={disabled || loading || Boolean(model?.pending)} {...(model ? { binding: model } : {})} />
-          <Button
-            className="button-composer query-input-submit"
-            type={onStop ? 'button' : 'submit'}
-            variant={onStop ? 'danger' : 'primary'}
-            iconName={onStop ? 'stop-mini' : 'send-ins'}
-            iconType={onStop ? 'fill' : 'line'}
-            tooltipMessage={onStop ? 'Stop this turn' : 'Send message'}
-            tooltipPosition="top"
-            disabled={onStop ? disabled : submitDisabled}
-            loading={!onStop && loading}
-            {...(onStop ? { onClick: onStop } : {})}
+        >
+          <input ref={fileInputRef} type="file" multiple hidden
+            aria-label="Choose attachments" disabled={disabled || busy}
+            onChange={handleAttachmentSelection} />
+          {attachments.items.length > 0 && <div ref={attachmentsRef}>
+            <AttachmentPreviews items={attachments.items} uploads={attachments.uploads} disabled={disabled || busy} onRemove={attachments.remove} />
+          </div>}
+          <div ref={leadingActionRef} className="query-input-leading-action">
+            <Button
+              className="button-composer query-input-add"
+              iconName="add-large"
+              tooltipMessage="Add files"
+              tooltipPosition="top"
+              disabled={disabled || busy}
+              onClick={() => fileInputRef.current?.click()}
+            />
+          </div>
+          <Input
+            ariaLabel="Message Leon"
+            className={clsx('query-input-field', {
+              'query-input-field-scrollable': isScrollable
+            })}
+            fieldRef={textareaRef}
+            variant="embedded"
+            multiline
+            rows={1}
+            name="query"
+            placeholder={placeholder}
+            value={query}
+            autoComplete="off"
+            disabled={disabled || loading}
+            readOnly={submitting}
+            onPointerDown={(event) => {
+              if (event.isTrusted && event.button === 0 && document.activeElement !== event.currentTarget) {
+                playFocusWave()
+              }
+            }}
+            onChange={(event) => {
+              resetHistoryNavigation()
+              setQuery(event.target.value)
+            }}
+            onKeyDown={handleKeyDown}
           />
-        </div>
-      </form>
-      {showFocusWave && (
-        <QueryInputFocusWave
-          key={focusWaveKey}
-          formRef={formRef}
-          onComplete={() => setShowFocusWave(false)}
-        />
-      )}
-    </div>
+          <textarea
+            ref={measurementTextareaRef}
+            className="query-input-measurement"
+            aria-hidden="true"
+            tabIndex={-1}
+            rows={1}
+            value={query}
+            readOnly
+          />
+          <div ref={actionsRef} className="query-input-actions">
+            <ModelSelector disabled={disabled || busy || Boolean(model?.pending)} {...(model ? { binding: model } : {})} />
+            <Button
+              className="button-composer query-input-submit"
+              type={onStop ? 'button' : 'submit'}
+              variant={onStop ? 'danger' : 'primary'}
+              iconName={onStop ? 'stop-mini' : 'send-ins'}
+              iconType={onStop ? 'fill' : 'line'}
+              tooltipMessage={onStop ? 'Stop this turn' : 'Send message'}
+              tooltipPosition="top"
+              disabled={onStop ? disabled : submitDisabled}
+              loading={!onStop && busy}
+              {...(onStop ? { onClick: onStop } : {})}
+            />
+          </div>
+        </form>
+        {failed && <Button disabled={disabled || busy} onClick={() => formRef.current?.requestSubmit()}>Retry sending message</Button>}
+        {showFocusWave && (
+          <QueryInputFocusWave
+            key={focusWaveKey}
+            formRef={formRef}
+            onComplete={() => setShowFocusWave(false)}
+          />
+        )}
+      </div>
+    </VisualPreviewProvider>
   )
 }

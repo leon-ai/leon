@@ -518,7 +518,10 @@ export function Feed({
                       <div key={entry.id} className="feed-entry">
                         <Message role={entry.role}>
                           {entry.role === 'owner' ? (
-                            <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}>
+                            <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}
+                              attachments={entry.artifacts?.map((file) => ({
+                                id: file.id, filename: file.filename, mediaType: file.mime_type, url: file.url
+                              }))}>
                               {entry.content}
                             </OwnerMessage>
                           ) : (

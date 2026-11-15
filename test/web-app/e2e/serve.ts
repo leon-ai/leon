@@ -13,7 +13,9 @@ const port = Number(process.env['WEB_APP_TEST_PORT'])
 let server: PreviewServer | undefined
 let closing = false
 const streams = new Map<string, ServerResponse>()
+const uploads = new Map<string, { received: number, complete?: () => void }>()
 const MAXIMUM_TEST_EVENT_CHARACTERS = 1_048_576
+const MAXIMUM_TEST_UPLOAD_BYTES = 2 * 1_024 * 1_024
 const MAXIMUM_STARTUP_JAVASCRIPT_BYTES = 600_000
 
 async function cleanup(): Promise<void> {
@@ -26,6 +28,7 @@ async function cleanup(): Promise<void> {
   }
   await server?.close()
   streams.clear()
+  uploads.clear()
   // Only the directory returned by mkdtemp belongs to this test process.
   await fs.rm(testHome, { recursive: true, force: true })
 }
@@ -155,6 +158,48 @@ try {
                 target.write(`data: ${JSON.stringify(event)}\n\n`)
               }
               response.writeHead(204).end()
+            })
+            return
+          }
+          if (requestPath.startsWith('/__ui/uploads/')) {
+            const id = requestPath.split('/')[3]!
+            if (request.method === 'GET') {
+              response.writeHead(200, { 'Content-Type': 'application/json' })
+              response.end(JSON.stringify({ received: uploads.get(id)?.received ?? 0, ready: Boolean(uploads.get(id)?.complete) }))
+              return
+            }
+            if (requestPath.endsWith('/complete')) {
+              const upload = uploads.get(id)
+              if (!upload?.complete) {
+                response.writeHead(409).end()
+                return
+              }
+              upload.complete()
+              response.writeHead(204).end()
+              return
+            }
+            // A real HTTP sink keeps native browser upload events observable.
+            // Tests explicitly release validation acknowledgement after transfer.
+            const state: { received: number, complete?: () => void } = { received: 0 }
+            uploads.set(id, state)
+            response.once('close', () => uploads.delete(id))
+            request.on('data', (chunk: Buffer) => {
+              state.received += chunk.length
+              if (state.received > MAXIMUM_TEST_UPLOAD_BYTES) {
+                request.destroy()
+              }
+            })
+            request.on('end', () => {
+              state.complete = (): void => {
+                const params = new URL(request.url!, 'http://localhost').searchParams
+                const sessionId = params.get('session_id')!
+                response.writeHead(201, { 'Content-Type': 'application/json' })
+                response.end(JSON.stringify({ attachment: {
+                  id, session_id: sessionId, filename: params.get('filename'), mime_type: params.get('media_type'),
+                  size_bytes: state.received, created_at: Date.now(), source: 'owner-attachment',
+                  url: `/api/v1/artifacts/${sessionId}/${id}`
+                } }))
+              }
             })
             return
           }

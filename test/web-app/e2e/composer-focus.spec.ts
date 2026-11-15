@@ -106,7 +106,7 @@ test('plays on a blurred-to-focused pointer transition, not clicks while already
   await expect(composer).toBeFocused()
   await composer.click()
   expect(await countWaves(page)).toBe(0)
-  await page.getByRole('button', { name: 'Add attachment' }).click()
+  await page.getByRole('button', { name: 'Add files' }).click()
   await composer.click()
   await expect.poll(() => countWaves(page)).toBe(1)
   await expect(page.locator('.query-input-focus-wave')).toHaveCount(0)
@@ -117,7 +117,7 @@ test('plays on a blurred-to-focused pointer transition, not clicks while already
 
 test('plays on keyboard Tab focus but not programmatic focus', async ({ page }) => {
   await page.goto(SESSION_URL)
-  const attachment = page.getByRole('button', { name: 'Add attachment' })
+  const attachment = page.getByRole('button', { name: 'Add files' })
   await attachment.focus()
   await page.getByRole('textbox', { name: 'Message Leon' }).focus()
   expect(await countWaves(page)).toBe(0)
@@ -130,7 +130,7 @@ test('plays on keyboard Tab focus but not programmatic focus', async ({ page }) 
 test('respects reduced motion on deliberate focus', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(SESSION_URL)
-  await page.getByRole('button', { name: 'Add attachment' }).click()
+  await page.getByRole('button', { name: 'Add files' }).click()
   await page.getByRole('textbox', { name: 'Message Leon' }).click()
   expect(await countWaves(page)).toBe(0)
 })

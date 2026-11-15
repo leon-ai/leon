@@ -11,6 +11,8 @@ import { conversationQueryOptions, useSendMessage } from '@/data/conversation-qu
 import type { ConversationSession } from '@/data/sessions'
 import { queryClient } from '@/query-client'
 import { prefetchModule } from '@/utils/prefetch'
+import type { SendMessageInput } from '@/data/owner-attachments'
+import { createSendMessageInput } from '@/data/owner-attachments'
 
 import './new-session-page.sass'
 
@@ -24,7 +26,8 @@ export function NewSessionPage() {
   const send = useSendMessage(sessionId)
   const create = useMutation({
     meta: { errorTitle: 'Could not start the session', profile },
-    mutationFn: async ({ id, query }: { id: string, query: string }) => {
+    gcTime: 0,
+    mutationFn: async (input: SendMessageInput) => {
       prefetchModule(() => import('@/components/markdown-content'))
       await requestAPI<{ session: ConversationSession }>('sessions?compact=true', {
         method: 'POST', body: JSON.stringify({ id: sessionId })
@@ -37,7 +40,7 @@ export function NewSessionPage() {
         })
       }
       await queryClient.fetchInfiniteQuery(conversationQueryOptions(profile, sessionId))
-      await send.mutateAsync({ id, query })
+      await send.mutateAsync(input)
     },
     onSuccess: () => transitionToSession()
   })
@@ -63,7 +66,7 @@ export function NewSessionPage() {
     <div className="new-session-page">
       <div className="new-session-page-composer">
         <QueryInput autoFocus introWave model={model} loading={create.isPending} canSubmit={!model.pending}
-          onSubmit={(query) => create.mutate({ id: crypto.randomUUID(), query })} />
+          onSubmit={(query, attachments, onUploadProgress) => create.mutateAsync(createSendMessageInput(query, attachments, create.isError ? create.variables : undefined, onUploadProgress))} />
         {(create.isError || create.isPaused) && (
           <RequestFeedback error={create.error} paused={create.isPaused}
             onRetry={() => create.variables && create.mutate(create.variables)} />

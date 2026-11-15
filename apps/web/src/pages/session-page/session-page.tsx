@@ -12,6 +12,8 @@ import { useComposerModel } from '@/data/composer-model'
 import { requestAPI } from '@/data/api'
 import { useProfile } from '@/data/profile'
 import { RequestFeedback } from '@/components/request-feedback/request-feedback'
+import type { OwnerAttachmentDraft, AttachmentUploadListener } from '@/data/owner-attachments'
+import { createSendMessageInput } from '@/data/owner-attachments'
 
 import './session-page.sass'
 
@@ -54,8 +56,8 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
     return () => window.clearTimeout(timer)
   }, [isInitialLoading])
 
-  function handleSubmit(query: string): void {
-    send.mutate({ id: crypto.randomUUID(), query })
+  function handleSubmit(query: string, attachments: OwnerAttachmentDraft[], onUploadProgress: AttachmentUploadListener): Promise<unknown> {
+    return send.mutateAsync(createSendMessageInput(query, attachments, send.isError ? send.variables : undefined, onUploadProgress))
   }
 
   function handleReturnToLatest(): void {
@@ -86,9 +88,6 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
       )}
       {conversation.latest?.command?.status === 'interrupted' && (
         <p role="status">This turn was interrupted by a server restart. Your saved work is available below.</p>
-      )}
-      {send.isError && (
-        <Button onClick={() => send.variables && send.mutate(send.variables)}>Retry sending message</Button>
       )}
       <Feed
         key={navigationKey}
@@ -134,6 +133,7 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
           autoFocus
           autoFocusKey={`${navigationKey}:${composerFocusRequest}`}
           model={model}
+          failed={send.isError}
           canSubmit={Boolean(conversation.latest && !model.pending)}
           onSubmit={handleSubmit}
           {...(conversation.latest?.is_running ? {

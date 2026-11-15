@@ -1,0 +1,48 @@
+.attachment-previews
+  display: flex
+  gap: var(--space-sm)
+  margin: 0
+  padding: var(--space-xs) 0 var(--space-sm)
+  overflow-x: auto
+  list-style: none
+
+.attachment-preview
+  position: relative
+  flex: 0 0 128px
+  width: 128px
+  height: 128px
+
+.attachment-upload-status
+  position: absolute
+  inset: 50% var(--space-sm) auto
+  z-index: 1
+  transform: translateY(-50%)
+  padding: var(--space-xs)
+  border-radius: var(--border-radius-sm)
+  background: var(--color-query-surface)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  text-align: center
+
+  .aurora-progress
+    min-width: 0
+
+  .aurora-progress-label
+    min-width: 0
+    gap: var(--space-xs)
+
+    > :first-child
+      min-width: 0
+      overflow: hidden
+      text-overflow: ellipsis
+      white-space: nowrap
+
+    > :last-child
+      flex-shrink: 0
+
+.attachment-preview-remove.button
+  position: absolute
+  top: 0
+  right: 0
+  z-index: 2
+  background: var(--color-query-surface)

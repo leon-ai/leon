@@ -41,7 +41,9 @@
 .final-answer > .bonus-response + .message-metadata
   padding-top: var(--space-md)
 
-.owner-message:hover + .message-metadata,
+.owner-message:hover ~ .message-metadata,
+.owner-message-container > .attachment-previews:hover ~ .message-metadata,
+.owner-message-container > .attachment-previews:focus-within ~ .message-metadata,
 .final-answer:hover > .message-metadata,
 .message-metadata:hover,
 .message-metadata:has(:focus-visible),
