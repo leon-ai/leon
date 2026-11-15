@@ -6,7 +6,7 @@ $particles: ((12%, 74%, -.6s), (22%, 34%, -1.8s), (32%, 62%, -2.4s), (43%, 78%, 
   position: absolute
   z-index: 0
   inset: 0
-  overflow: hidden
+  // The session link owns rounded clipping; avoid a second clip for every frame.
   border-radius: inherit
   color: var(--color-accent)
   pointer-events: none

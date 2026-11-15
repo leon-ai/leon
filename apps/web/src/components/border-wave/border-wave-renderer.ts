@@ -4,6 +4,7 @@ import { observeAnimationVisibility } from '@/utils/animation-visibility'
 const MILLISECONDS_PER_SECOND = 1_000
 const LOOP_FRAME_INTERVAL_MS = MILLISECONDS_PER_SECOND / 30
 const FRAME_TOLERANCE_MS = .5
+const FRAME_WAKE_LEAD_MS = LOOP_FRAME_INTERVAL_MS / 4
 const MAXIMUM_PIXEL_RATIO = 2
 const WAVE_LENGTH_FRACTION = .44
 const SEGMENT_COUNT = 32
@@ -168,6 +169,21 @@ export function createBorderWaveRenderer(
       !options.paused && isVisible
   }
 
+  function scheduleFrame(delayMs = 0): void {
+    if (delayMs <= 0) {
+      frame = window.requestAnimationFrame(render)
+      return
+    }
+
+    wakeTimer = window.setTimeout(() => {
+      wakeTimer = 0
+
+      if (canRun()) {
+        frame = window.requestAnimationFrame(render)
+      }
+    }, delayMs)
+  }
+
   function render(time: number): void {
     frame = 0
 
@@ -184,13 +200,7 @@ export function createBorderWaveRenderer(
 
       if (options.repeat) {
         // One wake-up replaces animation frames throughout the pause.
-        wakeTimer = window.setTimeout(() => {
-          wakeTimer = 0
-
-          if (canRun()) {
-            frame = window.requestAnimationFrame(render)
-          }
-        }, geometry.cycleMs - positionMs)
+        scheduleFrame(geometry.cycleMs - positionMs)
       } else {
         completed = true
         stop()
@@ -224,7 +234,11 @@ export function createBorderWaveRenderer(
       lastDrawTime = time
     }
 
-    frame = window.requestAnimationFrame(render)
+    // Wake before the next paint is due, leaving RAF to align it to the display.
+    // Polling every display frame also makes the browser sample unrelated styles.
+    scheduleFrame(options.repeat
+      ? LOOP_FRAME_INTERVAL_MS - (performance.now() - lastDrawTime) - FRAME_WAKE_LEAD_MS
+      : 0)
   }
 
   function updateActivity(): void {

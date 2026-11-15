@@ -3,6 +3,9 @@ import type { Page, Locator } from '@playwright/test'
 import { test, expect, SESSION_ID, SESSION_URL, OTHER_SESSION_ID } from './fixtures'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 
+const READING_PAUSE_MS = 7_000
+const MAXIMUM_WAVE_PAINTS_PER_SECOND = 32
+
 /**
  * Counts actual canvas paints so a paused status cannot hide a running renderer.
  */
@@ -32,7 +35,7 @@ test('keeps composer particles and the focused caret continuous without changing
   await field.pressSequentially('A quiet draft')
   await expect(surface).toHaveClass(/query-input-active/)
   // A reading pause must retain the particles and caret, while the glow settles.
-  await page.waitForTimeout(7_000)
+  await page.waitForTimeout(READING_PAUSE_MS)
   await expect(surface).not.toHaveClass(/query-input-active/)
   await expect(surface).toHaveClass(/query-input-visible/)
   await expect.poll(() => surface.locator('.query-input-particles').evaluate((element) =>
@@ -81,11 +84,18 @@ test('keeps visible working sessions animated across reading pauses and navigati
   await expect(other.locator('.session-work-indicator')).not.toHaveClass(/session-work-paused/)
   await expect.poll(() => canvasPaints(current.locator('canvas'))).toBeGreaterThan(0)
   await expect.poll(() => canvasPaints(other.locator('canvas'))).toBeGreaterThan(0)
-  await page.waitForTimeout(7_000)
+  const initialPaints = await canvasPaints(current.locator('canvas'))
+
+  await page.waitForTimeout(READING_PAUSE_MS)
+  const readingPaints = await canvasPaints(current.locator('canvas'))
+
+  // Continuous working waves retain their paint budget during a reading pause.
+  expect(readingPaints - initialPaints).toBeLessThanOrEqual(
+    READING_PAUSE_MS / 1_000 * MAXIMUM_WAVE_PAINTS_PER_SECOND
+  )
   await expect.poll(() => current.locator('.session-work-particles').evaluate((element) =>
     element.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length
   )).toBeGreaterThan(0)
-  const readingPaints = await canvasPaints(current.locator('canvas'))
   await expect.poll(() => canvasPaints(current.locator('canvas')), { timeout: 1_000 }).toBeGreaterThan(readingPaints)
   await other.click()
   await expect(current.locator('.session-work-indicator')).not.toHaveClass(/session-work-paused/)
@@ -105,6 +115,12 @@ test('keeps visible working sessions animated across reading pauses and navigati
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(other.locator('.session-work-indicator')).toHaveClass(/session-work-paused/)
   await expect(other).toHaveAccessibleName('Test session 1, Leon is working')
+  const reducedPaints = await canvasPaints(other.locator('canvas'))
+
+  await page.waitForTimeout(200)
+  expect(await canvasPaints(other.locator('canvas'))).toBe(reducedPaints)
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await expect.poll(() => canvasPaints(other.locator('canvas'))).toBeGreaterThan(reducedPaints)
 })
 
 test('budgets weather frames and suspends decoration outside the viewport or foreground', async ({ page, ui }) => {

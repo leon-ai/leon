@@ -84,8 +84,8 @@ $particles: ((8%, -12px, -64px, 12s, -3s), (12%, -16px, -80px, 13s, -6s), (16%, 
   padding: var(--query-input-padding-block) var(--query-input-padding-inline)
   border: var(--query-input-border-width) solid transparent
   border-radius: var(--border-radius-xl)
+  // Both background layers are opaque, so a backdrop blur would be invisible.
   background: linear-gradient(var(--color-query-surface), var(--color-query-surface)) padding-box, var(--gradient-query-border) border-box
-  backdrop-filter: blur(18px)
   overflow: hidden
   transition: height var(--transition-duration-main) var(--transition-timing-main)
 
