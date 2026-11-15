@@ -48,6 +48,33 @@ for (const workload of ['idle', 'draft', 'working', 'tasks', 'rain', 'reduced mo
     await page.addInitScript(() => {
       localStorage.setItem('leon.web-app.theme', 'dark')
       localStorage.setItem('leon.web-app.sidebar-expanded', 'true')
+
+      const sample = {
+        active: false,
+        frameCallbacks: 0,
+        canvases: new Map<HTMLCanvasElement, number[]>()
+      }
+      const requestFrame = window.requestAnimationFrame.bind(window)
+      const clear = CanvasRenderingContext2D.prototype.clearRect
+
+      // Count scheduled callbacks separately from paints: skipped RAF callbacks
+      // still keep a document's animation/style lifecycle active.
+      window.requestAnimationFrame = (callback): number => requestFrame((time) => {
+        if (sample.active) {
+          sample.frameCallbacks++
+        }
+        callback.call(window, time)
+      })
+      CanvasRenderingContext2D.prototype.clearRect = function (...args): void {
+        if (sample.active) {
+          const times = sample.canvases.get(this.canvas) ?? []
+
+          times.push(performance.now())
+          sample.canvases.set(this.canvas, times)
+        }
+        clear.apply(this, args)
+      }
+      Reflect.set(window, 'renderSample', sample)
     })
     await page.goto(SESSION_URL)
     await page.bringToFront()
@@ -65,6 +92,7 @@ for (const workload of ['idle', 'draft', 'working', 'tasks', 'rain', 'reduced mo
       await expect(page.locator('.weather-layer')).toBeVisible()
     }
     await page.waitForTimeout(SETTLE_MS)
+    await expect(field).toBeFocused()
 
     const renderer = await page.context().newCDPSession(page)
 
@@ -87,6 +115,7 @@ for (const workload of ['idle', 'draft', 'working', 'tasks', 'rain', 'reduced mo
       viewport: [innerWidth, innerHeight],
       visible: document.visibilityState,
       focused: document.hasFocus(),
+      focusedElement: document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName,
       composerHeight: document.querySelector('.query-input')?.getBoundingClientRect().height,
       animations: document.getAnimations().filter((animation) => animation.playState === 'running').map((animation) => ({
         name: (animation as CSSAnimation).animationName,
@@ -105,6 +134,9 @@ for (const workload of ['idle', 'draft', 'working', 'tasks', 'rain', 'reduced mo
 
     const processesBefore = await browserSession.send('SystemInfo.getProcessInfo')
     const metricsBefore = await renderer.send('Performance.getMetrics')
+    await page.evaluate(() => {
+      Reflect.get(window, 'renderSample').active = true
+    })
     const started = performance.now()
     if (workload === 'scrolling') {
       // Native wheel input exercises virtualization without a page-side RAF probe.
@@ -124,6 +156,33 @@ for (const workload of ['idle', 'draft', 'working', 'tasks', 'rain', 'reduced mo
     const seconds = (performance.now() - started) / 1_000
     const processesAfter = await browserSession.send('SystemInfo.getProcessInfo')
     const metricsAfter = await renderer.send('Performance.getMetrics')
+    const rendering = await page.evaluate(() => {
+      const sample = Reflect.get(window, 'renderSample') as {
+        active: boolean
+        frameCallbacks: number
+        canvases: Map<HTMLCanvasElement, number[]>
+      }
+
+      sample.active = false
+      const canvases = [...sample.canvases].map(([canvas, times]) => {
+        const intervals = times.slice(1).map((time, index) => time - times[index]!)
+          .sort((a, b) => a - b)
+
+        return {
+          className: canvas.className,
+          paints: times.length,
+          intervalMs: {
+            p50: intervals[Math.floor(intervals.length * .5)] ?? null,
+            p95: intervals[Math.floor(intervals.length * .95)] ?? null,
+            max: intervals.at(-1) ?? null
+          }
+        }
+      })
+
+      // No measured node remains retained after the bounded sample window.
+      sample.canvases.clear()
+      return { frameCallbacks: sample.frameCallbacks, canvases }
+    })
     const cpu: Record<string, number> = {}
     for (const process of processesAfter.processInfo) {
       const before = processesBefore.processInfo.find((entry) => entry.id === process.id)
@@ -141,10 +200,10 @@ for (const workload of ['idle', 'draft', 'working', 'tasks', 'rain', 'reduced mo
       }
     ]))
     const report = {
-      workload, project: testInfo.project.name, seconds, state, cpu, metrics,
+      workload, project: testInfo.project.name, seconds, state, cpu, metrics, rendering,
       historyRecords: ui.history.get(SESSION_ID)?.length,
       gpu: info.gpu,
-      note: 'CPU percentages are process totals in this isolated browser. GPU process CPU is not GPU utilization. No CPU throttling. Values are observations, not CI thresholds.'
+      note: 'CPU percentages are process totals in this isolated browser. GPU process CPU is not GPU utilization. RAF counts are page callbacks and canvas intervals are paint submissions, not GPU presentation times. No CPU throttling. Values are observations, not CI thresholds.'
     }
     const reportPath = testInfo.outputPath('resources.json')
 
