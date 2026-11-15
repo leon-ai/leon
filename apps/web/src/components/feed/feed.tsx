@@ -168,9 +168,16 @@ export function Feed({
     useAnimationFrameWithResizeObserver: false,
     observeElementOffset: (instance, onOffsetChange) =>
       observeElementOffset(instance, (offset, isScrolling) => {
+        // Read geometry before TanStack synchronously commits a new row range.
+        // Reading it afterwards forces layout for the rows that just mounted.
+        const element = instance.scrollElement
+        const distanceFromEnd = element
+          ? Math.max(0, element.scrollHeight - element.clientHeight - offset)
+          : Infinity
+
         onOffsetChange(offset, isScrolling)
         if (inspectingDetailsRef.current && isScrolling &&
-          instance.scrollDirection === 'forward' && instance.isAtEnd(SCROLL_POSITION_TOLERANCE_PX)) {
+          instance.scrollDirection === 'forward' && distanceFromEnd <= SCROLL_POSITION_TOLERANCE_PX) {
           resumeFollowing()
         }
 
@@ -186,7 +193,7 @@ export function Feed({
         // Reuse the virtualizer's observer; only visibility changes enter React.
         // Once revealed, keep the control available until the owner reaches the end.
         const visible = instance.options.count > 0 &&
-          !instance.isAtEnd(SCROLL_TO_BOTTOM_THRESHOLD_PX) &&
+          distanceFromEnd > SCROLL_TO_BOTTOM_THRESHOLD_PX &&
           (scrollToBottomVisibleRef.current ||
             (isScrolling && instance.scrollDirection === 'backward'))
 
@@ -251,7 +258,7 @@ export function Feed({
       scrollToBottomVisibleRef.current = false
       setIsScrollToBottomVisible(false)
     }
-  })
+  }, [isInspectingDetails, totalSize, turnCount, virtualizer])
 
   useLayoutEffect(() => {
     onScrollToBottomVisibilityChange?.(isScrollToBottomVisible)
