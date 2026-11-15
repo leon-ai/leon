@@ -253,16 +253,16 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
     toolLogo: { url: 'https://untrusted.example/assets/logo.svg', mode: LogoMaskMode.Alpha }, status: 'running' })
   ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
   await page.goto(SESSION_URL)
-  await expect(page.getByRole('button', { name: 'Sport', exact: true }).locator('[data-icon="football"]')).not.toHaveAttribute('data-icon-fallback')
+  await expect(page.getByRole('button', { name: 'Sport', exact: true }).locator('.activity-wave-content [data-icon="football"]')).not.toHaveAttribute('data-icon-fallback')
   for (const [label, name, artwork] of [
     ['Cursor', 'cursor', 'soft-b'], ['File', 'file-text', 'soft-b'],
     ['File list', 'file-list-3', 'original'], ['Shell', 'terminal', 'original']
   ]) {
-    await expect(page.getByRole('button', { name: label!, exact: true }).locator(`[data-icon="${name}"]`))
+    await expect(page.getByRole('button', { name: label!, exact: true }).locator(`.activity-wave-content [data-icon="${name}"]`))
       .toHaveAttribute('data-icon-artwork', artwork!)
   }
   for (const label of ['Shell', 'Sport', 'Music', 'Notion', 'Unknown', 'Untrusted']) {
-    const icon = page.getByRole('button', { name: label, exact: true }).locator('.tool-call-tool-icon')
+    const icon = page.getByRole('button', { name: label, exact: true }).locator('.activity-wave-content .tool-call-tool-icon')
     await expect(icon).toBeVisible()
     if (label === 'Music' || label === 'Notion') {
       const name = label === 'Music' ? 'spotify' : 'notion'
@@ -274,25 +274,15 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
       await expect(icon).toHaveAttribute('data-icon-fallback', label === 'Unknown' ? 'global' : 'tools')
     }
     expect(await icon.locator('path').count()).toBeGreaterThan(0)
-    if (label !== 'Sport') {
-      await expect.poll(() => icon.locator('path').first().evaluate((element) => {
-        const style = getComputedStyle(element)
-
-        return style.stroke.startsWith('url(') || style.fill.startsWith('url(')
-      })).toBe(true)
-    }
+    await expect(page.getByRole('button', { name: label, exact: true }).locator('.activity-wave-copy .tool-call-tool-icon')).toBeVisible()
   }
   expect(await page.locator('[onload]').count()).toBe(0)
   for (const label of ['Broken logo', 'External logo']) {
-    const fallback = page.getByRole('button', { name: label, exact: true }).locator('.tool-call-tool-icon')
+    const fallback = page.getByRole('button', { name: label, exact: true }).locator('.activity-wave-content .tool-call-tool-icon')
     await expect(fallback).toHaveAttribute('data-icon', 'mail')
     await expect(fallback).not.toHaveAttribute('data-icon-fallback')
     await expect(fallback.locator('path').first()).toHaveCSS('fill', 'none')
-    await expect.poll(() => fallback.locator('path').first().evaluate((element) => {
-      const style = getComputedStyle(element)
-
-      return style.fill.startsWith('url(') || style.stroke.startsWith('url(')
-    })).toBe(true)
+    await expect(page.getByRole('button', { name: label, exact: true }).locator('.activity-wave-copy [data-icon="mail"]')).toBeVisible()
   }
   for (const theme of ['dark', 'light']) {
     if (theme === 'light') {
@@ -301,20 +291,19 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
     for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await page.emulateMedia({ reducedMotion })
       for (const logo of logos) {
-        const mask = page.getByRole('button', { name: logo.name, exact: true }).locator('.package-icon-mask')
+        const mask = page.getByRole('button', { name: logo.name, exact: true }).locator('.activity-wave-content .package-icon-mask')
         await expect(mask).toHaveAttribute('data-logo-mask', logo.mode)
         await expect.poll(() => mask.locator('img').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
         await expect(mask).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-        const paints = await mask.evaluate((element) => {
-          const icon = getComputedStyle(element)
-          const heading = getComputedStyle(element.closest('.activity-wave')!)
-
-          return { icon: icon.backgroundPosition, heading: heading.backgroundPosition, image: icon.backgroundImage }
-        })
+        const heading = page.getByRole('button', { name: logo.name, exact: true }).locator('.activity-wave')
+        const copy = heading.locator('.activity-wave-copy .package-icon-mask')
         if (reducedMotion === 'no-preference') {
-          expect(paints.icon).toBe(paints.heading)
+          await expect(copy).toHaveAttribute('data-logo-mask', logo.mode)
+          await expect(copy).toHaveCSS('mask-image', await mask.evaluate((element) => getComputedStyle(element).maskImage))
+          await expect(heading.locator('.activity-wave-band')).toBeVisible()
+        } else {
+          await expect(copy).toHaveCount(0)
         }
-        expect(paints.image === 'none').toBe(reducedMotion === 'reduce')
       }
       await page.screenshot({ path: testInfo.outputPath(`tool-logos-${theme}-${reducedMotion}.png`) })
       if (reducedMotion === 'reduce') {
@@ -2220,7 +2209,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(badge).toHaveCSS('opacity', '0')
     const reservedWidth = (await badge.boundingBox())!.width
     expect(reservedWidth).toBeGreaterThan(0)
-    const titleBounds = await tool.locator('.tool-call-title').boundingBox()
+    const titleBounds = await tool.locator('.activity-wave-content .tool-call-title').boundingBox()
     const chevron = tool.locator('.tool-call-chevron')
     const chevronBounds = await chevron.boundingBox()
     expect(await timestamp.evaluate((element) => {
@@ -2244,7 +2233,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await tool.hover()
     await expect(badge).toHaveCSS('opacity', '1')
     expect((await badge.boundingBox())!.width).toBe(reservedWidth)
-    const hoveredTitle = (await tool.locator('.tool-call-title').boundingBox())!
+    const hoveredTitle = (await tool.locator('.activity-wave-content .tool-call-title').boundingBox())!
     const hoveredChevron = (await chevron.boundingBox())!
     expect(hoveredTitle.x).toBe(titleBounds!.x)
     expect(hoveredTitle.width).toBe(titleBounds!.width)
@@ -2280,7 +2269,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await timestamp.click()
     await expect(tool).toHaveAttribute('aria-expanded', 'true')
     const thought = work.getByRole('region', { name: 'Leon’s thinking', exact: true })
-    await thought.getByRole('button').locator('.process-group-title').click()
+    await thought.getByRole('button').locator('.activity-wave-content .process-group-title').click()
     await expect(thought.locator('.thinking-message-details')).toBeVisible()
     await page.getByRole('textbox', { name: 'Message Leon' }).focus()
     await page.getByRole('textbox', { name: 'Message Leon' }).hover()
@@ -2458,7 +2447,7 @@ for (const status of ['success', 'error'] as const) {
         const durationColor = await tool.locator('.tool-call-duration').evaluate((element) => getComputedStyle(element).color)
         await expect(tool.locator('.tool-call-error-indicator[data-icon="close"]')).not.toHaveCSS('color', durationColor)
       }
-      const title = await tool.locator('.tool-call-title').boundingBox()
+      const title = await tool.locator('.activity-wave-content .tool-call-title').boundingBox()
       const duration = await tool.locator('.tool-call-duration').boundingBox()
       expect(title).not.toBeNull()
       expect(duration).not.toBeNull()
@@ -2492,7 +2481,7 @@ test('preserves sub-second tool totals in milliseconds after reloading', async (
   await work.getByRole('button', { name: 'Worked for 400ms', exact: true }).click()
   await expect(work.getByRole('button', { name: 'Used 2 tools for 210ms', exact: true })).toBeVisible()
   await work.getByRole('button', { name: 'Used 2 tools for 210ms', exact: true }).click()
-  await expect(work.locator('.tool-call-title')).toHaveText(['Run', 'Run'])
+  await expect(work.locator('.activity-wave-content .tool-call-title')).toHaveText(['Run', 'Run'])
   await expect(work.getByText('test.lookup.run', { exact: true })).toHaveCount(0)
 })
 
@@ -2656,12 +2645,12 @@ for (const retryCount of [0, 1, 4]) {
       await expect(retries).toHaveCount(0)
     } else {
       const label = `Retried ${retryCount} ${retryCount === 1 ? 'time' : 'times'}`
-      await expect(retries.locator('.process-group-title')).toHaveText(label)
+      await expect(retries.locator('.activity-wave-content .process-group-title')).toHaveText(label)
       await expect(retries.locator('[data-icon="refresh"]')).toHaveCount(1)
       await expect(retries.getByRole('button')).toHaveCount(0)
       await page.reload()
       await work.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
-      await expect(retries.locator('.process-group-title')).toHaveText(label)
+      await expect(retries.locator('.activity-wave-content .process-group-title')).toHaveText(label)
     }
   })
 }
@@ -2689,7 +2678,7 @@ test('shows retries from the final live trace without refreshing history', async
   })
   await page.goto(SESSION_URL)
   await page.getByRole('button', { name: 'Worked for 12s', exact: true }).click()
-  await expect(page.getByRole('region', { name: 'Leon’s retries' }).locator('.process-group-title')).toHaveText('Retried 2 times')
+  await expect(page.getByRole('region', { name: 'Leon’s retries' }).locator('.activity-wave-content .process-group-title')).toHaveText('Retried 2 times')
   await expect(page.getByRole('region', { name: 'Leon’s other processing' })).toHaveText('Other processing for 3s')
   expect(ui.completedRequests.filter((url) => url.pathname.endsWith(SESSION_ID))).toHaveLength(1)
 })
@@ -2713,7 +2702,7 @@ test('accounts for tool selection and intermediate model requests alongside exec
   await work.getByRole('button', { name: 'Worked for 11s', exact: true }).click()
   await expect(work.getByRole('button', { name: 'Used 1 tool for 5s', exact: true })).toBeVisible()
   await work.getByRole('button', { name: 'Processed for 6s', exact: true }).click()
-  await expect(work.getByRole('region', { name: 'Leon’s inference', exact: true }).locator('.process-group-title')).toHaveText(['Processed tool request in 4s', 'Generated answer in 2s'])
+  await expect(work.getByRole('region', { name: 'Leon’s inference', exact: true }).locator('.activity-wave-content .process-group-title')).toHaveText(['Processed tool request in 4s', 'Generated answer in 2s'])
 })
 
 test('keeps thoughts separate and closes completed work with categorized model requests', async ({ page, ui }) => {
