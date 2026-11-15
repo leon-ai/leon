@@ -1,10 +1,8 @@
 .file-path-reference
   display: inline-flex
-  align-items: center
+  align-items: baseline
   max-width: 100%
-  vertical-align: middle
-  border-radius: var(--border-radius-sm)
-  background: var(--color-surface)
+  vertical-align: baseline
 
   > .tooltip:first-child
     flex: 0 1 auto
@@ -12,14 +10,23 @@
 
   > .tooltip:last-child
     flex: 0 0 auto
+    align-self: center
 
   .file-path-open
-    min-width: 0
+    // The native button owns activation; its inline label owns link geometry.
+    display: inline
     max-width: 100%
-    font-family: var(--font-family-code)
-    font-weight: var(--font-weight-regular)
-    color: var(--color-text)
+    padding: 0
+    vertical-align: baseline
+    text-align: inherit
+    overflow-wrap: anywhere
+
+    &:disabled
+      cursor: wait
+
+  .file-path-copy.button
+    font-size: var(--font-size-sm)
+    line-height: var(--line-height-sm)
 
 .file-path-pending
-  font-family: var(--font-family-code)
   overflow-wrap: anywhere

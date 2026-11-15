@@ -51,7 +51,7 @@ export function createMarkdownPreviewExamples(imageURL: string): MarkdownPreview
         'Automatic URL: https://getleon.ai', '', 'Autolink: <https://getleon.ai>', '',
         '[Email example](mailto:hello@example.com)', '',
         '[Jump to the local note](#local-note)', '', '<div id="local-note">A local note, scoped to this example.</div>', '',
-        'A copyable host file: [FILE_PATH]test/fixtures/artifacts/notes.txt[/FILE_PATH]', '',
+        'A [web link](https://getleon.ai) and a copyable host file: [FILE_PATH]test/fixtures/artifacts/notes.txt[/FILE_PATH]', '',
         '[leon]: https://getleon.ai "A reference title"'
       ].join('\n')
     },

@@ -21,7 +21,7 @@ for (const [theme, reducedMotion] of [['dark', 'no-preference'], ['light', 'redu
       await route.fulfill({ json: { success: true } })
     })
     const answer = ui.history.get(SESSION_ID)!.at(-1)!
-    answer.message = `Read [FILE_PATH]${PATH}[/FILE_PATH].\n\nAlso check \`[FILE_PATH]${WINDOWS_PATH}[/FILE_PATH]\`.\n\nDraft: [FILE_PATH]${MARKDOWN_PATH}[/FILE_PATH] and [FILE_PATH]${OTHER_MARKDOWN_PATH}[/FILE_PATH].\n\n\`\`\`text\n[FILE_PATH]/example/literal.txt[/FILE_PATH]\n\`\`\``
+    answer.message = `Read [Reference](https://getleon.ai) and [FILE_PATH]${PATH}[/FILE_PATH].\n\nAlso check \`[FILE_PATH]${WINDOWS_PATH}[/FILE_PATH]\`.\n\nDraft: [FILE_PATH]${MARKDOWN_PATH}[/FILE_PATH] and [FILE_PATH]${OTHER_MARKDOWN_PATH}[/FILE_PATH].\n\n\`\`\`text\n[FILE_PATH]/example/literal.txt[/FILE_PATH]\n\`\`\``
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     if (theme === 'light') {
@@ -29,7 +29,34 @@ for (const [theme, reducedMotion] of [['dark', 'no-preference'], ['light', 'redu
     }
     const body = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
     const open = body.getByRole('button', { name: `Open ${PATH} on Leon’s host`, exact: true })
+    const presentation = open.locator('.inline-link')
+    const reference = body.getByRole('link', { name: 'Reference', exact: true })
     await expect(open).toBeVisible()
+    const typography = await presentation.evaluate((element) => {
+      const tokens = getComputedStyle(document.documentElement)
+      const paragraph = getComputedStyle(element.closest('p')!)
+
+      return { weight: tokens.getPropertyValue('--font-weight-semi-bold').trim(),
+        size: tokens.getPropertyValue('--font-size-sm').trim(), lineHeight: tokens.getPropertyValue('--line-height-sm').trim(),
+        feedSize: paragraph.fontSize, feedLineHeight: paragraph.lineHeight, feedFamily: paragraph.fontFamily,
+        color: getComputedStyle(element).color }
+    })
+    await expect(presentation).toHaveCSS('font-size', typography.feedSize)
+    await expect(presentation).toHaveCSS('line-height', typography.feedLineHeight)
+    await expect(presentation).toHaveCSS('font-family', typography.feedFamily)
+    await expect(presentation).toHaveCSS('font-weight', typography.weight)
+    for (const property of ['padding', 'border-width', 'border-radius', 'vertical-align']) {
+      await expect(presentation).toHaveCSS(property, await reference.evaluate((element, property) =>
+        getComputedStyle(element).getPropertyValue(property), property))
+    }
+    const icon = open.locator('.inline-link-icon')
+    const favicon = reference.locator('.inline-link-icon')
+    expect((await icon.boundingBox())!.width).toBe((await favicon.boundingBox())!.width)
+    expect((await icon.boundingBox())!.height).toBe((await favicon.boundingBox())!.height)
+    expect((await presentation.boundingBox())!.height).toBe((await reference.boundingBox())!.height)
+    const copy = body.getByRole('button', { name: 'Copy path', exact: true }).first()
+    await expect(copy).toHaveCSS('font-size', typography.size)
+    await expect(copy).toHaveCSS('line-height', typography.lineHeight)
     await expect(body.getByRole('button', { name: `Open ${WINDOWS_PATH} on Leon’s host`, exact: true })).toBeVisible()
     await expect(body.getByRole('button', { name: `Open ${MARKDOWN_PATH} on Leon’s host`, exact: true })).toBeVisible()
     await expect(body.getByRole('button', { name: `Open ${OTHER_MARKDOWN_PATH} on Leon’s host`, exact: true })).toBeVisible()
@@ -37,11 +64,19 @@ for (const [theme, reducedMotion] of [['dark', 'no-preference'], ['light', 'redu
     await expect(body.getByText('[FILE_PATH]/example/literal.txt[/FILE_PATH]', { exact: true })).toBeVisible()
     expect(requests).toEqual([])
     await open.hover()
+    await expect(presentation).toHaveCSS('color', typography.color)
+    await presentation.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)))
+    await expect(presentation).toHaveCSS('color', typography.color)
     await expect(page.getByRole('tooltip').filter({ hasText: PATH })).toContainText('Open on Leon’s host')
     await body.getByRole('button', { name: 'Copy path', exact: true }).first().click()
     await expect(page.locator('html')).toHaveAttribute('data-copied-path', PATH)
     expect(requests).toEqual([])
-    await open.click()
+    if (theme === 'light') {
+      await open.focus()
+      await page.keyboard.press('Enter')
+    } else {
+      await open.click()
+    }
     await expect(page.getByText('I opened the path on my host', { exact: true })).toBeVisible()
     expect(requests).toEqual([PATH])
     await page.reload()
@@ -50,6 +85,10 @@ for (const [theme, reducedMotion] of [['dark', 'no-preference'], ['light', 'redu
     await page.setViewportSize({ width: 390, height: 844 })
     await finishFiniteAnimations(page.locator('body'))
     await expect(open).toBeVisible()
+    const pathBounds = (await open.boundingBox())!
+    const copyBounds = (await copy.boundingBox())!
+    expect(copyBounds.x).toBeGreaterThanOrEqual(pathBounds.x + pathBounds.width)
+    expect(Math.abs(copyBounds.y + copyBounds.height / 2 - pathBounds.y - pathBounds.height / 2)).toBeLessThanOrEqual(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await page.screenshot({ path: testInfo.outputPath(`file-paths-${theme}.png`), fullPage: true })
   })
@@ -69,6 +108,9 @@ test('keeps streamed path fragments inert until their closing delimiter arrives'
   await ui.emit([{ ...event, sequence: 2, type: 'text_stream', data: {
     kind: 'answer', generationId: 'paths', token: `PATH]${PATH}[/FI` } }])
   await expect(body).toContainText(PATH)
+  const pendingPath = body.locator('.file-path-pending')
+  await expect(pendingPath).toHaveCSS('font-family', await pendingPath.evaluate((element) =>
+    getComputedStyle(element.parentElement!).fontFamily))
   await expect(body).not.toContainText('[/FI')
   await expect(body.getByRole('button', { name: 'Copy path', exact: true })).toHaveCount(0)
   await ui.emit([{ ...event, sequence: 3, type: 'text_stream', data: {
@@ -91,6 +133,7 @@ test('reports a rejected host open once without automatically replaying it', asy
   await open.click()
   const route = await pending.promise
   await expect(open).toBeDisabled()
+  await expect(open.locator('.inline-link-icon .loader')).toBeVisible()
   await route.fulfill({ status: 404, json: { success: false, error: 'Path does not exist' } })
   await expect(page.locator('.toast-error')).toHaveCount(1)
   await expect(page.getByText('This path is no longer available on my host. You can still copy it.', { exact: true })).toBeVisible()

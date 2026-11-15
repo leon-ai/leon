@@ -16,7 +16,7 @@ export const MarkdownLink: NonNullable<Components['a']> = function MarkdownLink(
   const { isAnimating } = useContext(StreamdownContext)
   const { content } = useContext(MarkdownBlockContext)
   if (href?.startsWith('#')) {
-    return <a className="markdown-link" href={href} aria-label={node?.properties['ariaLabel'] as string | undefined}>{children}</a>
+    return <a className="markdown-link inline-link" href={href} aria-label={node?.properties['ariaLabel'] as string | undefined}>{children}</a>
   }
 
   let url: URL | undefined
@@ -48,13 +48,13 @@ export const MarkdownLink: NonNullable<Components['a']> = function MarkdownLink(
   return (
     <Tooltip message={url.href}
       position="top" multiline blurOnClick={false}
-      disabled={unfinished} className="markdown-link-tooltip">
-      <a className="markdown-link" href={unfinished ? undefined : url.href} aria-description={title}
+      disabled={unfinished} className="inline-link-tooltip">
+      <a className="markdown-link inline-link" href={unfinished ? undefined : url.href} aria-description={title}
         aria-disabled={unfinished || undefined}
         onMouseEnter={retryFavicon}
         onFocus={retryFavicon}
         target={web ? '_blank' : undefined} rel="noopener noreferrer" referrerPolicy="no-referrer">
-        {web && <span className="markdown-link-icon" aria-hidden="true">
+        {web && <span className="markdown-link-icon inline-link-icon" aria-hidden="true">
           {!loaded && <Icon name="global-line" />}
           {favicon && <img src={`/api/v1/favicons?origin=${encodeURIComponent(url.origin)}`}
             width={14} height={14} alt="" loading="lazy" decoding="async"
