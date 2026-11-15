@@ -1,4 +1,5 @@
 import { THEME_CHANGE_EVENT } from '@/theme'
+import { observeAnimationVisibility } from '@/utils/animation-visibility'
 
 const MILLISECONDS_PER_SECOND = 1_000
 const LOOP_FRAME_INTERVAL_MS = MILLISECONDS_PER_SECOND / 30
@@ -9,7 +10,6 @@ const SEGMENT_COUNT = 32
 const WAVE_CORE_FRACTION = .4
 const WAVE_FADE_FRACTION = .35
 const PEAK_OPACITY = 1
-const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 export interface BorderWaveBounds {
   width: number
@@ -29,7 +29,7 @@ export interface BorderWaveOptions {
 }
 
 interface WaveGeometry {
-  paths: Path2D[]
+  path: Path2D
   distance: number
   waveLength: number
   movementMs: number
@@ -91,8 +91,16 @@ function createGeometry(options: BorderWaveOptions): WaveGeometry {
     ? options.durationMs
     : distance / options.speedPxPerSecond * MILLISECONDS_PER_SECOND
 
+  // The opposite bands share paint state and never overlap. Combining their
+  // subpaths halves stroke submissions without changing their geometry or fades.
+  const path = new Path2D()
+
+  for (const wavePath of paths) {
+    path.addPath(wavePath)
+  }
+
   return {
-    paths,
+    path,
     distance,
     waveLength,
     movementMs,
@@ -123,11 +131,9 @@ export function createBorderWaveRenderer(
   }
 
   const paint = context
-  const motionPreference = window.matchMedia(REDUCED_MOTION_MEDIA_QUERY)
   let options: BorderWaveOptions | null = null
   let geometry: WaveGeometry | null = null
-  let intersectionObserver: IntersectionObserver | null = null
-  let isVisible = true
+  let isVisible = false
   let disposed = false
   let completed = false
   let frame = 0
@@ -159,8 +165,7 @@ export function createBorderWaveRenderer(
 
   function canRun(): boolean {
     return !disposed && !completed && options !== null &&
-      !options.paused && !document.hidden && !motionPreference.matches &&
-      isVisible
+      !options.paused && isVisible
   }
 
   function render(time: number): void {
@@ -207,14 +212,12 @@ export function createBorderWaveRenderer(
         smoothStep((1 - progress) / WAVE_FADE_FRACTION)
       paint.clearRect(0, 0, options.bounds.width, options.bounds.height)
 
-      for (const path of geometry.paths) {
-        for (const segment of geometry.segments) {
-          paint.globalAlpha = opacity * segment.opacity
-          // Closed paths wrap both ends of the band across the seam, allowing
-          // its center to traverse the full route without clipping the fade.
-          paint.lineDashOffset = segment.offset - center - geometry.waveLength / 2
-          paint.stroke(path)
-        }
+      for (const segment of geometry.segments) {
+        paint.globalAlpha = opacity * segment.opacity
+        // Canvas restarts the dash pattern for each subpath, keeping the bands
+        // opposite as their tails wrap across the closed perimeter's seam.
+        paint.lineDashOffset = segment.offset - center - geometry.waveLength / 2
+        paint.stroke(geometry.path)
       }
 
       isClear = false
@@ -287,19 +290,13 @@ export function createBorderWaveRenderer(
       isClear = true
     }
 
-    if (next.repeat && intersectionObserver === null) {
-      intersectionObserver = new IntersectionObserver(([entry]) => {
-        isVisible = entry?.isIntersecting ?? false
-        updateActivity()
-      })
-      intersectionObserver.observe(canvas)
-    }
-
     updateActivity()
   }
 
-  document.addEventListener('visibilitychange', updateActivity)
-  motionPreference.addEventListener('change', updateActivity)
+  const unobserve = observeAnimationVisibility(canvas, (running) => {
+    isVisible = running
+    updateActivity()
+  })
   window.addEventListener(THEME_CHANGE_EVENT, updateColor)
 
   return {
@@ -307,9 +304,7 @@ export function createBorderWaveRenderer(
     dispose: (): void => {
       disposed = true
       stop()
-      intersectionObserver?.disconnect()
-      document.removeEventListener('visibilitychange', updateActivity)
-      motionPreference.removeEventListener('change', updateActivity)
+      unobserve()
       window.removeEventListener(THEME_CHANGE_EVENT, updateColor)
     }
   }

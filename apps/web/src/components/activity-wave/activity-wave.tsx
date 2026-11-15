@@ -1,13 +1,11 @@
-import { useId, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { clsx } from 'clsx'
+
+import { observeAnimationVisibility } from '@/utils/animation-visibility'
 
 import './activity-wave.sass'
 
 const ACTIVITY_WAVE_SPEED_PX_PER_SECOND = 120
-const ACTIVITY_WAVE_ANIMATION_NAME = 'activity-wave'
-const MILLISECONDS_PER_SECOND = 1_000
-const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 
 interface ActivityWaveProps {
   active: boolean
@@ -15,179 +13,111 @@ interface ActivityWaveProps {
   className?: string
 }
 
-interface ActivityWaveMetrics {
-  bounds: DOMRect
-  durationSeconds: number
-  highlightWidth: number
-  travelFraction: number
-}
-
 /**
- * Maps the heading's sweep into SVG paint coordinates using its animation clock.
+ * Copies already-rendered artwork without mounting another component tree. SVG
+ * fragment references receive private IDs so the visual copy cannot shadow the
+ * real content's definitions or accessible labels.
  */
-function animateSvgStrokes(
-  heading: HTMLSpanElement,
-  metrics: ActivityWaveMetrics,
-  style: CSSStyleDeclaration,
-  waveId: string
-): (() => void) | undefined {
-  const strokes = heading.querySelectorAll<SVGGraphicsElement>(
-    'svg [stroke="currentColor"], svg [fill="currentColor"]'
-  )
+function copyContent(source: HTMLElement, target: HTMLElement, copyId: string): void {
+  const fragment = document.createDocumentFragment()
+  const ids = new Map<string, string>()
 
-  if (strokes.length === 0) {
-    return undefined
+  fragment.append(...[...source.childNodes].map((node) => node.cloneNode(true)))
+  for (const [index, element] of fragment.querySelectorAll('[id]').entries()) {
+    const id = element.getAttribute('id')!
+    const replacement = `${copyId}-${index}`
+
+    ids.set(id, replacement)
+    element.setAttribute('id', replacement)
   }
 
-  const waveAnimation = heading.getAnimations().find((animation) =>
-    (animation as CSSAnimation).animationName === ACTIVITY_WAVE_ANIMATION_NAME
-  )
+  if (ids.size > 0) {
+    for (const element of fragment.querySelectorAll('*')) {
+      for (const attribute of [...element.attributes]) {
+        let value = attribute.value
 
-  if (waveAnimation === undefined) {
-    return undefined
+        for (const [id, replacement] of ids) {
+          if (value === `#${id}`) {
+            value = `#${replacement}`
+          } else {
+            for (const quote of ['', '"', '\'']) {
+              value = value.replaceAll(
+                `url(${quote}#${id}${quote})`,
+                `url(${quote}#${replacement}${quote})`
+              )
+            }
+          }
+        }
+        if (value !== attribute.value) {
+          element.setAttributeNS(attribute.namespaceURI, attribute.name, value)
+        }
+      }
+    }
   }
+  // Generated text paints the cached glyphs without duplicating the real label
+  // in DOM text consumers. The original text remains selectable and accessible.
+  const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT)
+  const labels: Text[] = []
 
-  const cleanupTasks: Array<() => void> = []
-  const highlights: Array<{
-    animation: SVGAnimateTransformElement
-    gradientId: string
-    stroke: SVGGraphicsElement
-  }> = []
-  const stops = [
-    ['0%', 'var(--color-text-secondary)'],
-    [
-      style.getPropertyValue('--activity-wave-highlight-start'),
-      'var(--activity-wave-highlight-color)'
-    ],
-    [
-      style.getPropertyValue('--activity-wave-highlight-end'),
-      'var(--activity-wave-highlight-color)'
-    ],
-    ['100%', 'var(--color-text-secondary)']
-  ] as const
-  let cancelled = false
-
-  for (const [index, stroke] of strokes.entries()) {
-    const svg = stroke.ownerSVGElement
-    const transform = stroke.getScreenCTM()
-
-    if (
-      svg === null ||
-      transform === null ||
-      transform.a * transform.d === transform.b * transform.c
-    ) {
+  while (walker.nextNode()) {
+    labels.push(walker.currentNode as Text)
+  }
+  for (const label of labels) {
+    if (label.parentElement instanceof SVGElement) {
       continue
     }
 
-    // Inverting each stroke's matrix preserves alignment through icon transforms.
-    const inverse = transform.inverse()
-    const start = new DOMPoint(
-      metrics.bounds.left - metrics.highlightWidth,
-      metrics.bounds.top
-    ).matrixTransform(inverse)
-    const end = new DOMPoint(
-      metrics.bounds.left,
-      metrics.bounds.top
-    ).matrixTransform(inverse)
-    const distance = metrics.bounds.width + metrics.highlightWidth
-    const translation = `${inverse.a * distance} ${inverse.b * distance}`
-    const gradientId = `${waveId}-stroke-${index}`
-    const defs = document.createElementNS(SVG_NAMESPACE, 'defs')
-    const gradient = document.createElementNS(SVG_NAMESPACE, 'linearGradient')
-    const animation = document.createElementNS(SVG_NAMESPACE, 'animateTransform')
-    const previousStroke = stroke.style.stroke
-    const previousFill = stroke.style.fill
+    const visualLabel = document.createElement('span')
 
-    gradient.id = gradientId
-    gradient.setAttribute('gradientUnits', 'userSpaceOnUse')
-    gradient.setAttribute('x1', String(start.x))
-    gradient.setAttribute('y1', String(start.y))
-    gradient.setAttribute('x2', String(end.x))
-    gradient.setAttribute('y2', String(end.y))
-
-    for (const [offset, color] of stops) {
-      const stop = document.createElementNS(SVG_NAMESPACE, 'stop')
-
-      stop.setAttribute('offset', offset)
-      stop.setAttribute('stop-color', color)
-      gradient.appendChild(stop)
-    }
-
-    animation.setAttribute('attributeName', 'gradientTransform')
-    animation.setAttribute('type', 'translate')
-    animation.setAttribute('values', `0 0;${translation};${translation}`)
-    animation.setAttribute('keyTimes', `0;${metrics.travelFraction};1`)
-    animation.setAttribute('dur', `${metrics.durationSeconds}s`)
-    animation.setAttribute('repeatCount', 'indefinite')
-    animation.setAttribute('begin', 'indefinite')
-    gradient.appendChild(animation)
-    defs.appendChild(gradient)
-    svg.appendChild(defs)
-    highlights.push({ animation, gradientId, stroke })
-    cleanupTasks.push(() => {
-      stroke.style.stroke = previousStroke
-      stroke.style.fill = previousFill
-      defs.remove()
-    })
+    visualLabel.className = 'activity-wave-text'
+    visualLabel.setAttribute('data-activity-wave-text', label.data)
+    label.replaceWith(visualLabel)
   }
-
-  function cleanup(): void {
-    cancelled = true
-    cleanupTasks.forEach((task) => task())
-  }
-
-  // The CSS clock is ready before sampling its phase, including after a resize.
-  void waveAnimation.ready.then(() => {
-    if (cancelled) {
-      return
-    }
-
-    const elapsedSeconds = Number(waveAnimation.currentTime ?? 0) /
-      MILLISECONDS_PER_SECOND
-    const offset = -(elapsedSeconds % metrics.durationSeconds)
-
-    for (const { animation, gradientId, stroke } of highlights) {
-      animation.beginElementAt(offset)
-      if (stroke.getAttribute('stroke') === 'currentColor') {
-        stroke.style.stroke = `url(#${gradientId})`
-      }
-      if (stroke.getAttribute('fill') === 'currentColor') {
-        stroke.style.fill = `url(#${gradientId})`
-      }
-    }
-  }).catch(cleanup)
-
-  return cleanup
+  target.replaceChildren(fragment)
 }
 
 /**
- * Highlights an active heading at a consistent speed across its rendered width.
+ * Highlights an active heading with cached glyphs inside a moving, feathered
+ * window. Counter-moving the visual copy keeps its text fixed in place while
+ * the browser composites the sweep without per-frame SVG gradient layout.
  */
 export function ActivityWave({
   active,
   children,
   className
 }: ActivityWaveProps) {
-  const waveId = useId()
+  const copyId = useId()
   const headingRef = useRef<HTMLSpanElement>(null)
+  const contentRef = useRef<HTMLSpanElement>(null)
+  const copyRef = useRef<HTMLSpanElement>(null)
+  const [visible, setVisible] = useState(false)
+  const animating = active && visible
+
+  useEffect(() => {
+    const heading = headingRef.current
+
+    if (heading === null || !active) {
+      return undefined
+    }
+
+    return observeAnimationVisibility(heading, setVisible)
+  }, [active])
 
   useLayoutEffect(() => {
     const heading = headingRef.current
+    const content = contentRef.current
+    const copy = copyRef.current
 
-    if (!active || heading === null) {
+    if (!animating || heading === null || content === null || copy === null) {
       return undefined
     }
 
     const observedHeading = heading
-    const reducedMotion = window.matchMedia(REDUCED_MOTION_MEDIA_QUERY)
-    let cleanupSvgStrokes: (() => void) | undefined
+    const source = content
+    const visualCopy = copy
 
-    function updateWaveDuration(): void {
-      cleanupSvgStrokes?.()
-      cleanupSvgStrokes = undefined
-
-      const bounds = observedHeading.getBoundingClientRect()
-      const width = bounds.width
+    function update(): void {
+      const { width } = observedHeading.getBoundingClientRect()
       const style = window.getComputedStyle(observedHeading)
       const highlightWidth = Number.parseFloat(
         style.getPropertyValue('--activity-wave-highlight-width')
@@ -196,70 +126,53 @@ export function ActivityWave({
         style.getPropertyValue('--activity-wave-travel-fraction')
       )
 
-      if (
-        width <= 0 ||
-        !Number.isFinite(highlightWidth) ||
-        !Number.isFinite(travelFraction) ||
-        travelFraction <= 0
-      ) {
+      if (width <= 0 || !Number.isFinite(highlightWidth) ||
+        !Number.isFinite(travelFraction) || travelFraction <= 0) {
         return
       }
 
-      // Include the band's offscreen travel and preserve the pause after its pass.
       const durationSeconds = (width + highlightWidth) /
         ACTIVITY_WAVE_SPEED_PX_PER_SECOND / travelFraction
 
-      // Pixel coordinates let a masked leading icon inherit the exact text sweep.
+      // The native content owns React updates, selection and accessibility.
+      // Clone only its visual nodes, without mounting duplicate component effects.
+      copyContent(source, visualCopy, copyId)
       observedHeading.style.setProperty('--activity-wave-width', `${width}px`)
-      observedHeading.style.setProperty(
-        '--activity-wave-duration',
-        `${durationSeconds}s`
-      )
-
-      if (!reducedMotion.matches) {
-        cleanupSvgStrokes = animateSvgStrokes(observedHeading, {
-          bounds,
-          durationSeconds,
-          highlightWidth,
-          travelFraction
-        }, style, waveId)
-      }
+      observedHeading.style.setProperty('--activity-wave-duration', `${durationSeconds}s`)
     }
 
-    updateWaveDuration()
+    update()
 
-    const resizeObserver = new ResizeObserver(updateWaveDuration)
+    const resizeObserver = new ResizeObserver(update)
+    const contentObserver = new MutationObserver(update)
+
     resizeObserver.observe(observedHeading)
-    // An SVG fallback and its lazily loaded paths can change without resizing.
-    const iconObserver = observedHeading.querySelector('.package-icon-mask')
-      ? new MutationObserver((records) => {
-        if (records.some((record) => record.type === 'attributes' || [...record.addedNodes].some((node) =>
-          node instanceof Element && node.matches('svg.app-icon, path')
-        ))) {
-          updateWaveDuration()
-        }
-      }) : undefined
-    iconObserver?.observe(observedHeading, {
-      childList: true, subtree: true, attributes: true, attributeFilter: ['d', 'fill', 'stroke']
+    // Labels and lazy icon fallbacks can change without changing the heading width.
+    // Observe only React-owned content so rebuilding the copy cannot observe itself.
+    contentObserver.observe(source, {
+      childList: true, subtree: true, characterData: true, attributes: true
     })
-    reducedMotion.addEventListener('change', updateWaveDuration)
 
     return () => {
       resizeObserver.disconnect()
-      iconObserver?.disconnect()
-      reducedMotion.removeEventListener('change', updateWaveDuration)
-      cleanupSvgStrokes?.()
+      contentObserver.disconnect()
+      visualCopy.replaceChildren()
     }
-  }, [active, waveId])
+  }, [animating, copyId])
 
   return (
     <span
       ref={headingRef}
       className={clsx('activity-wave', className, {
-        'activity-wave-active': active
+        'activity-wave-active': animating
       })}
     >
-      {children}
+      <span ref={contentRef} className="activity-wave-content">{children}</span>
+      {animating && (
+        <span className="activity-wave-band" aria-hidden="true" inert>
+          <span ref={copyRef} className={clsx(className, 'activity-wave-copy')} />
+        </span>
+      )}
     </span>
   )
 }

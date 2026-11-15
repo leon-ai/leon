@@ -165,7 +165,7 @@ for (const legacy of [false, true]) {
       if (await toggle.getAttribute('aria-expanded') === 'false') {
         await toggle.click()
       }
-      await expect(call.locator('.package-icon-mask')).toHaveAttribute('data-logo-mask', LogoMaskMode.Alpha)
+      await expect(call.locator('.activity-wave-content .package-icon-mask')).toHaveAttribute('data-logo-mask', LogoMaskMode.Alpha)
     }
     await revealTool()
     const preview = call.getByRole('region', { name: 'Tool output', exact: true })
@@ -1153,8 +1153,9 @@ for (const withPlan of [false, true]) {
     }])
     await emit()
     await expect(status).toHaveClass(/process-group-active/)
-    await expect(status.locator('.process-group-title')).toHaveText('Compacting history...')
-    await expect(status.locator('.activity-wave-active')).toHaveCount(1)
+    await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('Compacting history...')
+    await status.scrollIntoViewIfNeeded()
+    await expect(status.locator('.activity-wave-active')).toHaveCount(withPlan ? 0 : 1)
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible()
     await expect(page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()).toHaveText(answer.message)
     await expect(page.locator('.leon-message-work')).toHaveCount(withPlan ? 1 : 0)
@@ -1163,7 +1164,7 @@ for (const withPlan of [false, true]) {
     ui.history.get(SESSION_ID)!.push(saved)
     await page.reload()
     await expect(status).toHaveClass(/process-group-active/)
-    await expect(status.locator('.process-group-title')).toHaveText('Compacting history...')
+    await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('Compacting history...')
 
     activity.durationMs = 8_679
     activity.outcome = 'completed'
@@ -1171,10 +1172,10 @@ for (const withPlan of [false, true]) {
     saved.widget = structuredClone(widget)
     await emit()
     await expect(status).not.toHaveClass(/process-group-active/)
-    await expect(status.locator('.process-group-title')).toHaveText('Compacted history in 9s')
+    await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('Compacted history in 9s')
     await expect(status.locator('.activity-wave-active')).toHaveCount(0)
     await page.reload()
-    await expect(status.locator('.process-group-title')).toHaveText('Compacted history in 9s')
+    await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('Compacted history in 9s')
     await expect(status.locator('.activity-timestamp')).toHaveCount(1)
     await expect(page.locator('.leon-message-work')).toHaveCount(withPlan ? 1 : 0)
     await expect(page.locator('.leon-message').filter({ has: status }).locator('.final-answer')).toHaveCount(0)
@@ -1192,10 +1193,10 @@ for (const withPlan of [false, true]) {
     widget.fallbackText = 'History compaction failed'
     saved.widget = structuredClone(widget)
     await emit()
-    await expect(status.locator('.process-group-title')).toHaveText('History compaction failed after 435ms')
+    await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('History compaction failed after 435ms')
     await expect(status).not.toHaveClass(/process-group-active/)
     await page.reload()
-    await expect(status.locator('.process-group-title')).toHaveText('History compaction failed after 435ms')
+    await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('History compaction failed after 435ms')
   })
 }
 
@@ -1219,9 +1220,9 @@ test('updates and restores legacy compaction from its checkbox without inventing
   }] } }] } }
   await ui.emit([{ type: 'widget', sequence: 1, session_id: SESSION_ID, turn_id: null,
     response_id: 'saved-compaction', created_at: Date.now(), data: { widget } }])
-  await expect(status.locator('.process-group-title')).toHaveText('Compacted history')
+  await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('Compacted history')
   await page.reload()
-  await expect(status.locator('.process-group-title')).toHaveText('Compacted history')
+  await expect(status.locator('.activity-wave-content .process-group-title')).toHaveText('Compacted history')
   await expect(status).not.toHaveClass(/process-group-active/)
   await expect(status.locator('.activity-timestamp')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
@@ -1316,7 +1317,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
           response_id: `${input.id}:leon`, created_at: startedAt + offset + 1 }])
       }
       const root = page.locator('.feed-turn').filter({ has: page.getByText(owner.message, { exact: true }) })
-      await expect(root.locator('.tool-call-title')).toHaveText('Read first source')
+      await expect(root.locator('.activity-wave-content .tool-call-title')).toHaveText('Read first source')
       await sendFollowup('Also inspect the second source.', 400)
       const middle = page.locator('.feed-turn').filter({ has: page.getByText('Also inspect the second source.', { exact: true }) })
       const secondCall = { id: 'source-two', name: firstCall.name, toolCallTitle: 'Read second source',
@@ -1324,8 +1325,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       saved.agentResponseTrace!.toolCalls.push(secondCall)
       await emit('tool_call', { tool_call: { id: secondCall.id, name: secondCall.name, tool_call_title: secondCall.toolCallTitle,
         status: secondCall.status, started_at: secondCall.startedAt, ...(withPlan ? { plan_step_id: step.id } : {}) } }, 500)
-      await expect(middle.locator('.tool-call-title')).toHaveText('Read second source')
-      await expect(root.locator('.tool-call-title')).toHaveText('Read first source')
+      await expect(middle.locator('.activity-wave-content .tool-call-title')).toHaveText('Read second source')
+      await expect(root.locator('.activity-wave-content .tool-call-title')).toHaveText('Read first source')
       await expect(middle.locator('.leon-message')).toHaveCount(1)
       saved.agentResponseTrace!.toolCalls[0] = { ...firstCall, status: 'success', durationMs: 600, commandOutput: 'Finished first source' }
       await emit('tool_call', { tool_call: { id: firstCall.id, name: firstCall.name,
@@ -1364,7 +1365,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         startedAt: startedAt + 1_000, durationMs: 0, outcome: 'started' as const,
         ...(withPlan ? { planStepId: step.id } : {}) }
       await emit('inference_activity', { activity: review }, 1_000)
-      await expect(tail.getByRole('region', { name: 'Leon’s inference', exact: true }).locator('.process-group-title')).toHaveText('Reviewing...')
+      await expect(tail.getByRole('region', { name: 'Leon’s inference', exact: true }).locator('.activity-wave-content .process-group-title')).toHaveText('Reviewing...')
       await expect(tail.locator('.tool-call')).toHaveCount(0)
       const completedReview = { ...review, outcome: 'completed' as const, durationMs: 300 }
       saved.agentResponseTrace!.timings = [completedReview]
@@ -1390,9 +1391,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         await expect(tail.getByRole('region', { name: 'Leon’s final answer', exact: true })).toHaveText(saved.message)
         await page.locator('.app-main').evaluate((element) => element.scrollTo({ top: 0 }))
         await openTools(root)
-        await expect(root.locator('.tool-call-title')).toHaveText('Read first source')
+        await expect(root.locator('.activity-wave-content .tool-call-title')).toHaveText('Read first source')
         await openTools(middle)
-        await expect(middle.locator('.tool-call-title')).toHaveText('Read second source')
+        await expect(middle.locator('.activity-wave-content .tool-call-title')).toHaveText('Read second source')
         await expect(root.locator('.leon-message-work')).toHaveCount(0)
         await expect(middle.locator('.leon-message-work')).toHaveCount(0)
       }
@@ -1435,7 +1436,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await plan.getByRole('button', { name: first.label, exact: true }).click()
     await plan.getByRole('button', { name: 'Used 2 tools for 200ms', exact: true }).click()
     const thought = plan.getByRole('region', { name: 'Leon’s thinking', exact: true })
-    await thought.getByRole('button').locator('.process-group-title').click()
+    await thought.getByRole('button').locator('.activity-wave-content .process-group-title').click()
     await expect(thought.locator('.thinking-message-details p')).toHaveCount(2)
     await expect(thought.locator('strong')).toHaveText(['Compare source details', 'Check the conclusion'])
     await expect(thought.locator('.thinking-message-details p').first())
@@ -1636,7 +1637,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
           .map((animation) => animation.finished))
       })
       const prepared = plans.first().getByRole('region', { name: 'Leon’s inference', exact: true })
-      expect(await prepared.locator('.process-group-title').evaluate((element) =>
+      expect(await prepared.locator('.activity-wave-content .process-group-title').evaluate((element) =>
         getComputedStyle(element).color === getComputedStyle(element.closest('.leon-message')!).color
       )).toBe(false)
       const screenshotPath = testInfo.outputPath(`running-plan-${theme}.png`)
@@ -1666,7 +1667,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const review = { ...request, id: 'review-request', goal: TurnPhase.Review,
       startedAt: startedAt + 210, planStepId: null }
     await emit('inference_activity', { activity: review }, 210)
-    await expect(response.getByRole('region', { name: 'Leon’s inference', exact: true }).last().locator('.process-group-title')).toHaveText('Reviewing...')
+    await expect(response.getByRole('region', { name: 'Leon’s inference', exact: true }).last().locator('.activity-wave-content .process-group-title')).toHaveText('Reviewing...')
     await emit('inference_activity', { activity: { ...review, outcome: 'completed', durationMs: 10 } }, 220)
     const saved: ConversationRecord = { who: 'leon', messageId: responseId, message: 'Checked and ready.',
       sentAt: startedAt + 230, isAddedToHistory: true, agentResponseTrace: {
@@ -1705,9 +1706,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       }
       await plans.first().getByRole('button', { name: 'Used 2 tools for 180ms', exact: true }).click()
       await plans.last().getByRole('button', { name: 'Used 1 tool for 40ms', exact: true }).click()
-      await expect(plans.first().locator('.tool-call-title')).toHaveText(['Read the source', 'Read another source'])
+      await expect(plans.first().locator('.activity-wave-content .tool-call-title')).toHaveText(['Read the source', 'Read another source'])
       await expect(plans.last().getByRole('region', { name: 'Leon’s thinking', exact: true })).toBeVisible()
-      await expect(plans.last().locator('.tool-call-title')).toHaveText(['Check the result'])
+      await expect(plans.last().locator('.activity-wave-content .tool-call-title')).toHaveText(['Check the result'])
       await expect(response.locator('.leon-message-summary .streaming-text-characters')).toHaveText('A separate update.')
       await expect(response.getByRole('region', { name: 'Leon’s processing', exact: true })).toContainText('Processed for 10ms')
     }
@@ -1732,7 +1733,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         ...(title === undefined ? {} : { tool_call_title: title })
       } })
       await expect(group).toContainText('Preparing tool calls...')
-      await expect(group.locator('.activity-wave-active')).toHaveCount(1)
+      await expect(group.locator('.activity-wave-active')).toHaveCount(reducedMotion === 'reduce' ? 0 : 1)
       await expect(group.locator('.tool-call')).toHaveCount(0)
       await expect(group.getByRole('button')).toHaveCount(0)
       await expect(group.getByText(tool.name, { exact: true })).toHaveCount(0)
@@ -1745,14 +1746,14 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     } })
     const row = group.locator('.tool-call').filter({ has: page.getByText('Check tomorrow’s weather', { exact: true }) })
     await expect(row).toHaveCount(1)
-    await expect(row.locator('.tool-call-title')).toHaveText('Check tomorrow’s weather')
-    await expect(row.locator('.activity-wave-active')).toHaveCount(1)
+    await expect(row.locator('.activity-wave-content .tool-call-title')).toHaveText('Check tomorrow’s weather')
+    await expect(row.locator('.activity-wave-active')).toHaveCount(reducedMotion === 'reduce' ? 0 : 1)
     await expect(row.locator('.tool-call-duration, .tool-call-error-indicator')).toHaveCount(0)
     expect(await originalGroup!.evaluate((element) => element.isConnected)).toBe(true)
     const originalRow = await row.elementHandle()
     await emit('tool_call', { tool_call: { ...tool, status: 'running' } })
-    await expect(row.locator('.tool-call-title')).toHaveText('Check tomorrow’s weather')
-    await expect(row.locator('.activity-wave-active')).toHaveCount(1)
+    await expect(row.locator('.activity-wave-content .tool-call-title')).toHaveText('Check tomorrow’s weather')
+    await expect(row.locator('.activity-wave-active')).toHaveCount(reducedMotion === 'reduce' ? 0 : 1)
     await expect(row.locator('.tool-call-duration, .tool-call-error-indicator')).toHaveCount(0)
     expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
 
@@ -1760,7 +1761,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await emit('tool_call', { tool_call: {
       id: 'untitled-execution', name: tool.name, status: 'running'
     } })
-    await expect(group.locator('.tool-call-title')).toHaveText(['Check tomorrow’s weather', 'Get Weather'])
+    await expect(group.locator('.activity-wave-content .tool-call-title')).toHaveText(['Check tomorrow’s weather', 'Get Weather'])
     await expect(group.getByText(tool.name, { exact: true })).toHaveCount(0)
 
     await emit('tool_call', { tool_call: {
@@ -1789,7 +1790,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(step.locator('.tool-call')).toHaveCount(0)
     await expect(step.getByRole('button', { name: 'Preparing tool calls...', exact: true })).toHaveCount(0)
     await emit('tool_call', { tool_call: { ...nested, tool_call_title: 'Compare tomorrow’s forecasts' } })
-    await expect(step.locator('.tool-call-title')).toHaveText('Compare tomorrow’s forecasts')
+    await expect(step.locator('.activity-wave-content .tool-call-title')).toHaveText('Compare tomorrow’s forecasts')
 
     await originalRow?.dispose()
     await originalGroup?.dispose()
@@ -1817,13 +1818,14 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(processing).toHaveCount(0)
     await expect(review).toHaveCount(1)
     await expect(review.getByRole('button')).toHaveCount(0)
-    await expect(review.locator('.process-group-title')).toHaveText('Reviewing...')
-    await expect(review.locator('[data-icon="search-eye"]')).toBeVisible()
+    await expect(review.locator('.activity-wave-content .process-group-title')).toHaveText('Reviewing...')
+    await expect(review.locator('.activity-wave-content [data-icon="search-eye"]')).toBeVisible()
     await expect(page.getByRole('region', { name: 'Leon’s work', exact: true })).toHaveCount(0)
     await expect(page.getByText('Thinking...', { exact: true })).toHaveCount(0)
     await emit('metrics', { metrics: { durationMs: 500 } })
-    await expect(review.locator('.process-group-title')).toHaveText('Reviewing...')
-    await expect(review.locator('.activity-wave')).toHaveClass(/activity-wave-active/)
+    await expect(review.locator('.activity-wave-content .process-group-title')).toHaveText('Reviewing...')
+    await expect(review).toHaveClass(/process-group-active/)
+    await expect(review.locator('.activity-wave-active')).toHaveCount(reducedMotion === 'reduce' ? 0 : 1)
 
     ui.sessions[0]!.status = 'wip' as SessionStatus
     ui.history.get(SESSION_ID)!.push({
@@ -1833,7 +1835,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       agentResponseTrace: { id: responseId, planSteps: [], toolCalls: [], timings: [{ ...activity, kind: 'inference' }] }
     })
     await page.reload()
-    await expect(review.locator('.process-group-title')).toHaveText('Reviewing...')
+    await expect(review.locator('.activity-wave-content .process-group-title')).toHaveText('Reviewing...')
     const finished = { ...activity, durationMs: 3_000, outcome: 'completed' }
     await emit('inference_activity', { activity: finished })
     await expect(review).toHaveCount(0)
@@ -1852,7 +1854,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.reload()
     await work.getByRole('button', { name: 'Worked for 5s', exact: true }).click()
     await processing.getByRole('button', { name: 'Processed for 3s', exact: true }).click()
-    await expect(review.locator('.process-group-title')).toHaveText('Reviewed for 3s')
+    await expect(review.locator('.activity-wave-content .process-group-title')).toHaveText('Reviewed for 3s')
     await expect(review.locator('.activity-wave-active')).toHaveCount(0)
   })
 
@@ -1915,7 +1917,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
     const review = { ...request, id: 'ddd', goal: TurnPhase.Review, startedAt: startedAt + sequence + 1 }
     await emit('inference_activity', { activity: review })
-    await expect(inference.locator('.process-group-title')).toHaveText('Reviewing...')
+    await expect(inference.locator('.activity-wave-content .process-group-title')).toHaveText('Reviewing...')
     await expect(waiting).toHaveCount(0)
     await emit('inference_activity', { activity: { ...review, outcome: 'completed', durationMs: 100 } })
     await expect(waiting).toBeVisible()
@@ -2311,15 +2313,15 @@ test('shows remote connection and discovery as runtime activities and replays th
   const processing = page.getByRole('region', { name: 'Leon’s processing', exact: true })
   await emit('turn_status', { status: 'accepted' })
   await emit('inference_activity', { activity: connection })
-  await expect(runtime.locator('.process-group-title')).toHaveText('Connecting to Notion...')
-  await expect(runtime.locator('[data-icon="plug"]')).toBeVisible()
+  await expect(runtime.locator('.activity-wave-content .process-group-title')).toHaveText('Connecting to Notion...')
+  await expect(runtime.locator('.activity-wave-content [data-icon="plug"]')).toBeVisible()
   await expect(processing).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(0)
   const completedConnection = { ...connection, outcome: 'completed', durationMs: 1_000 }
   await emit('inference_activity', { activity: completedConnection })
   await emit('inference_activity', { activity: discovery })
-  await expect(runtime.locator('.process-group-title')).toHaveText('Loading Notion tools...')
-  await expect(runtime.locator('[data-icon="stack"]')).toBeVisible()
+  await expect(runtime.locator('.activity-wave-content .process-group-title')).toHaveText('Loading Notion tools...')
+  await expect(runtime.locator('.activity-wave-content [data-icon="stack"]')).toBeVisible()
   const completedDiscovery = { ...discovery, outcome: 'completed', durationMs: 600 }
   await emit('inference_activity', { activity: completedDiscovery })
   const timings = [completedConnection, completedDiscovery]
@@ -2333,7 +2335,7 @@ test('shows remote connection and discovery as runtime activities and replays th
   await page.reload()
   await work.getByRole('button', { name: 'Worked for 2s', exact: true }).click()
   await processing.getByRole('button', { name: /^Processed for / }).click()
-  await expect(runtime.locator('.process-group-title')).toHaveText(['Connected to Notion in 1s', 'Loaded Notion tools in 600ms'])
+  await expect(runtime.locator('.activity-wave-content .process-group-title')).toHaveText(['Connected to Notion in 1s', 'Loaded Notion tools in 600ms'])
   await expect(processing.getByRole('region', { name: 'Leon’s inference', exact: true })).toHaveCount(0)
   await expect(runtime.locator('.activity-wave-active')).toHaveCount(0)
 })
@@ -2351,7 +2353,7 @@ test('replaces one standalone processing row in place and retains completed requ
     id: 'ddd', goal: TurnPhase.Request, startedAt, durationMs: 0, outcome: 'started'
   } })
   const initialWorkingLabel = await page.getByRole('region', { name: 'Leon’s work', exact: true })
-    .locator('.process-group-title').innerText()
+    .locator('.activity-wave-content .process-group-title').innerText()
   const phases = [
     [TurnPhase.Request, initialWorkingLabel, undefined],
     [TurnPhase.Request, initialWorkingLabel, undefined],
@@ -2387,9 +2389,9 @@ test('replaces one standalone processing row in place and retains completed requ
     const live = icon ? request : page.getByRole('region', { name: 'Leon’s work', exact: true })
     await expect(live).toHaveCount(1)
     await expect(live.getByRole('button')).toHaveCount(0)
-    await expect(live.locator('.process-group-title')).toHaveText(label)
+    await expect(live.locator('.activity-wave-content .process-group-title')).toHaveText(label)
     if (icon) {
-      await expect(live.locator(`[data-icon="${resolveIconName(icon)}"]`)).toBeVisible()
+      await expect(live.locator(`.activity-wave-content [data-icon="${resolveIconName(icon)}"]`)).toBeVisible()
     } else {
       await expect(live.locator('.process-group-indicator, svg')).toHaveCount(0)
     }
@@ -2402,7 +2404,7 @@ test('replaces one standalone processing row in place and retains completed requ
       // A delayed completion must not replace the newer running phase.
       await emit('inference_activity', { activity: previous })
       await expect(live).toHaveCount(1)
-      await expect(live.locator('.process-group-title')).toHaveText(label)
+      await expect(live.locator('.activity-wave-content .process-group-title')).toHaveText(label)
     }
 
     const position = await live.boundingBox()
@@ -2410,7 +2412,7 @@ test('replaces one standalone processing row in place and retains completed requ
     await emit('inference_activity', { activity: timings[index]! })
     const waiting = page.getByRole('region', { name: 'Leon’s work', exact: true })
     await expect(waiting).toBeVisible()
-    await expect(waiting.locator('.process-group-title')).toHaveText(initialWorkingLabel)
+    await expect(waiting.locator('.activity-wave-content .process-group-title')).toHaveText(initialWorkingLabel)
     await expect(waiting.locator('.process-group-indicator, i, svg')).toHaveCount(0)
     expect(await originalRow!.evaluate((element) => element.isConnected)).toBe(true)
     expect(Math.abs((await waiting.boundingBox())!.y - position!.y)).toBeLessThan(2)

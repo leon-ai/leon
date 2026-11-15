@@ -11,6 +11,7 @@ import {
 } from 'react'
 
 import { Button } from '@/components/button'
+import { observeAnimationVisibility } from '@/utils/animation-visibility'
 import { Input } from '@/components/input'
 import { ModelSelector } from '@/components/model-selector'
 import type { useComposerModel } from '@/data/composer-model'
@@ -29,6 +30,7 @@ import './query-input.sass'
 const DEFAULT_PLACEHOLDER = 'Don’t be shy'
 const DEFAULT_MAXIMUM_LINE_COUNT = 12
 const PARTICLE_COUNT = 14
+const DECORATION_ACTIVITY_MS = 6_000
 const HEIGHT_COMPARISON_TOLERANCE = 1
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
@@ -93,6 +95,54 @@ export function QueryInput({
   const busy = loading || submitting
   const submitDisabled = disabled || busy || attachments.reading || !canSubmit || normalizedQuery.length === 0 && attachments.items.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
+
+  useEffect(() => {
+    const container = containerRef.current
+
+    if (container === null) {
+      return undefined
+    }
+
+    const surface = container
+    let canAnimate = false
+    let idleTimer = 0
+
+    function settle(): void {
+      window.clearTimeout(idleTimer)
+      surface.classList.remove('query-input-active')
+    }
+
+    function activate(): void {
+      if (!canAnimate) {
+        return
+      }
+
+      window.clearTimeout(idleTimer)
+      surface.classList.add('query-input-active')
+      idleTimer = window.setTimeout(settle, DECORATION_ACTIVITY_MS)
+    }
+
+    const unobserve = observeAnimationVisibility(surface, (running) => {
+      canAnimate = running
+      surface.classList.toggle('query-input-visible', running)
+      if (!running) {
+        settle()
+      }
+    })
+
+    // The blurred glow pulses around input; visible particles keep their rhythm.
+    surface.addEventListener('input', activate)
+    surface.addEventListener('focusin', activate)
+    surface.addEventListener('pointerdown', activate)
+
+    return () => {
+      unobserve()
+      settle()
+      surface.removeEventListener('input', activate)
+      surface.removeEventListener('focusin', activate)
+      surface.removeEventListener('pointerdown', activate)
+    }
+  }, [])
 
   useEffect(() => () => submissionRef.current?.abort(), [])
 

@@ -31,11 +31,11 @@ function AuthenticatedAppLayout({ previewOnly = false }: { previewOnly?: boolean
     location.pathname === VIBES_PREVIEW_PATH
     ? getVibesPreviewConfiguration(parseVibesPreviewSearch(location.search))
     : undefined
-  const { data: ambientConditions } = useAmbientConditions(
+  const { data: ambientConditions, isError: isAmbientUnavailable } = useAmbientConditions(
     previewConfiguration === undefined
   )
   const vibeEnvironment = previewConfiguration?.environment ??
-    (ambientConditions === undefined
+    (ambientConditions === undefined || isAmbientUnavailable
       ? undefined
       : {
           season: ambientConditions.season,

@@ -1,9 +1,9 @@
 import { Icon } from '@/components/icon'
 import {
+  memo,
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent
 } from 'react'
 import { Link } from '@tanstack/react-router'
@@ -34,20 +34,23 @@ interface SessionListItemProps {
   id: string
   isPinned: boolean
   isUnread: boolean
+  isListScrolling: () => boolean
   status: SessionStatus
   onDelete: (sessionId: string) => void
   onRename: (sessionId: string, title: string) => void
-  onPin: (sessionId: string) => void
+  onPin: (sessionId: string, isPinned: boolean) => void
   title: string
   timestamp: number
   relativeTime: string
-  style?: CSSProperties
+  height: number
+  offset: number
 }
 
-export function SessionListItem({
+export const SessionListItem = memo(function SessionListItem({
   id,
   isPinned,
   isUnread,
+  isListScrolling,
   status,
   onDelete,
   onRename,
@@ -55,10 +58,12 @@ export function SessionListItem({
   title,
   timestamp,
   relativeTime,
-  style
+  height,
+  offset
 }: SessionListItemProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const titleAnimationFrameRef = useRef<number | null>(null)
+  const titleScrollTimerRef = useRef<number | undefined>(undefined)
   const titleAnimationsRef = useRef<Animation[]>([])
   const titleLeftMaskRef = useRef<HTMLSpanElement>(null)
   const titleRightMaskRef = useRef<HTMLSpanElement>(null)
@@ -90,8 +95,11 @@ export function SessionListItem({
   }, [editing, title])
 
   useEffect(() => () => {
+    window.clearTimeout(titleScrollTimerRef.current)
+    titleScrollTimerRef.current = undefined
     if (titleAnimationFrameRef.current !== null) {
       window.cancelAnimationFrame(titleAnimationFrameRef.current)
+      titleAnimationFrameRef.current = null
     }
 
     titleAnimationsRef.current.forEach((animation) => animation.cancel())
@@ -102,6 +110,8 @@ export function SessionListItem({
   }, [title])
 
   function stopTitleScroll(): void {
+    window.clearTimeout(titleScrollTimerRef.current)
+    titleScrollTimerRef.current = undefined
     if (titleAnimationFrameRef.current !== null) {
       window.cancelAnimationFrame(titleAnimationFrameRef.current)
       titleAnimationFrameRef.current = null
@@ -117,13 +127,25 @@ export function SessionListItem({
   function startTitleScroll(): void {
     stopTitleScroll()
 
-    if (window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches) {
+    if (isListScrolling() || document.hidden || window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches) {
       return
     }
 
-    // Measure on the next frame after hover actions have claimed their space.
+    // Scrolling moves rows beneath a stationary pointer. Wait for actual intent
+    // before measuring text, rather than forcing layout for every passing row.
+    titleScrollTimerRef.current = window.setTimeout(() => {
+      titleScrollTimerRef.current = undefined
+      animateTitleScroll()
+    }, TITLE_SCROLL_INITIAL_DELAY_MS)
+  }
+
+  function animateTitleScroll(): void {
     titleAnimationFrameRef.current = window.requestAnimationFrame(() => {
       titleAnimationFrameRef.current = null
+
+      if (isListScrolling() || document.hidden) {
+        return
+      }
 
       const titleText = titleTextRef.current
       const titleViewport = titleViewportRef.current
@@ -173,7 +195,6 @@ export function SessionListItem({
         TITLE_SCROLL_RETURN_DURATION_MS
       ) / totalDuration
       const animationOptions: KeyframeAnimationOptions = {
-        delay: TITLE_SCROLL_INITIAL_DELAY_MS,
         duration: totalDuration,
         easing: 'linear',
         fill: 'backwards',
@@ -238,6 +259,13 @@ export function SessionListItem({
     })
   }
 
+  function handleTitlePointerMove(): void {
+    if (titleScrollTimerRef.current === undefined && titleAnimationFrameRef.current === null &&
+      titleAnimationsRef.current.length === 0 && !isListScrolling()) {
+      startTitleScroll()
+    }
+  }
+
   function startEditing(): void {
     setDraftTitle(title)
     setEditing(true)
@@ -284,9 +312,12 @@ export function SessionListItem({
         'session-list-item-wip': isWorking,
         'session-list-item-unread': showUnread
       })}
-      style={style}
+      style={{ height: `${height}px`, transform: `translateY(${offset}px)` }}
       onMouseEnter={startTitleScroll}
       onMouseLeave={stopTitleScroll}
+      onMouseMove={handleTitlePointerMove}
+      onWheelCapture={stopTitleScroll}
+      onTouchStartCapture={stopTitleScroll}
     >
       {editing ? (
         <Input
@@ -327,6 +358,7 @@ export function SessionListItem({
               className="session-list-item-title-resting"
               animationId={`${id}-title-resting`}
               animateInitial={false}
+              compact
               text={title}
             />
             <span
@@ -337,6 +369,7 @@ export function SessionListItem({
               <StreamingText
                 animationId={`${id}-title-scrolling`}
                 animateInitial={false}
+                compact
                 text={title}
               />
             </span>
@@ -381,7 +414,7 @@ export function SessionListItem({
               label: 'Rename',
               onSelect: startEditing
             },
-            { ...pinDropdownItem, onSelect: () => onPin(id) },
+            { ...pinDropdownItem, onSelect: () => onPin(id, isPinned) },
             {
               iconName: 'delete-bin',
               label: 'Delete',
@@ -418,4 +451,4 @@ export function SessionListItem({
       />
     </li>
   )
-}
+})

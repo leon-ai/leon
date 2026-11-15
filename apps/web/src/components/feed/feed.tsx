@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -82,6 +83,32 @@ function groupEntriesByTurn(entries: FeedEntry[]): FeedTurn[] {
   return turns
 }
 
+// Keep scroll-range updates outside unchanged message content and providers.
+const FeedEntryContent = memo(function FeedEntryContent({ entry, sessionId, latestOwnerMessageId }: {
+  entry: FeedEntry
+  sessionId: string | undefined
+  latestOwnerMessageId: string | undefined
+}) {
+  return (
+    <div className="feed-entry">
+      <Message role={entry.role}>
+        {entry.role === 'owner' ? (
+          <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}
+            attachments={entry.artifacts?.map((file) => ({
+              id: file.id, filename: file.filename, mediaType: file.mime_type, url: file.url
+            }))}>
+            {entry.content}
+          </OwnerMessage>
+        ) : (
+          <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id} latestOwnerMessageId={latestOwnerMessageId}>
+            <LeonMessage entry={entry} />
+          </ConversationDetailsProvider>
+        )}
+      </Message>
+    </div>
+  )
+})
+
 function supportsScrollEnd(element: HTMLElement): boolean {
   return 'onscrollend' in element
 }
@@ -107,7 +134,8 @@ export function Feed({
   const [isScrollToBottomVisible, setIsScrollToBottomVisible] = useState(false)
   const fastScroll = useMemo(createFastScrollDriver, [])
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
-  const latestOwnerMessageId = entries.findLast((entry) => entry.role === 'owner')?.id
+  const latestOwnerMessageId = useMemo(() => entries.findLast((entry) => entry.role === 'owner')?.id, [entries])
+  const getTurnKey = useCallback((index: number) => turns[index]?.id ?? index, [turns])
   const turnCount = turns.length
   const historyRef = useRef(history)
   const resumeFollowing = useCallback((): void => {
@@ -128,7 +156,7 @@ export function Feed({
     // viewport edge instead of being constrained to the content column.
     getScrollElement: () =>
       feedRef.current?.closest<HTMLElement>('.app-main') ?? null,
-    getItemKey: (index) => turns[index]?.id ?? index,
+    getItemKey: getTurnKey,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
     overscan: FEED_OVERSCAN_COUNT,
     // Manual disclosures grow below their headings. History prepends and new
@@ -140,9 +168,16 @@ export function Feed({
     useAnimationFrameWithResizeObserver: false,
     observeElementOffset: (instance, onOffsetChange) =>
       observeElementOffset(instance, (offset, isScrolling) => {
+        // Read geometry before TanStack synchronously commits a new row range.
+        // Reading it afterwards forces layout for the rows that just mounted.
+        const element = instance.scrollElement
+        const distanceFromEnd = element
+          ? Math.max(0, element.scrollHeight - element.clientHeight - offset)
+          : Infinity
+
         onOffsetChange(offset, isScrolling)
         if (inspectingDetailsRef.current && isScrolling &&
-          instance.scrollDirection === 'forward' && instance.isAtEnd(SCROLL_POSITION_TOLERANCE_PX)) {
+          instance.scrollDirection === 'forward' && distanceFromEnd <= SCROLL_POSITION_TOLERANCE_PX) {
           resumeFollowing()
         }
 
@@ -158,7 +193,7 @@ export function Feed({
         // Reuse the virtualizer's observer; only visibility changes enter React.
         // Once revealed, keep the control available until the owner reaches the end.
         const visible = instance.options.count > 0 &&
-          !instance.isAtEnd(SCROLL_TO_BOTTOM_THRESHOLD_PX) &&
+          distanceFromEnd > SCROLL_TO_BOTTOM_THRESHOLD_PX &&
           (scrollToBottomVisibleRef.current ||
             (isScrolling && instance.scrollDirection === 'backward'))
 
@@ -223,7 +258,7 @@ export function Feed({
       scrollToBottomVisibleRef.current = false
       setIsScrollToBottomVisible(false)
     }
-  })
+  }, [isInspectingDetails, totalSize, turnCount, virtualizer])
 
   useLayoutEffect(() => {
     onScrollToBottomVisibilityChange?.(isScrollToBottomVisible)
@@ -515,22 +550,7 @@ export function Feed({
                     style={{ transform: `translateY(${virtualItem.start}px)` }}
                   >
                     {turn.entries.map((entry) => (
-                      <div key={entry.id} className="feed-entry">
-                        <Message role={entry.role}>
-                          {entry.role === 'owner' ? (
-                            <OwnerMessage animationId={`${entry.id}:owner`} timestamp={entry.sentAt}
-                              attachments={entry.artifacts?.map((file) => ({
-                                id: file.id, filename: file.filename, mediaType: file.mime_type, url: file.url
-                              }))}>
-                              {entry.content}
-                            </OwnerMessage>
-                          ) : (
-                            <ConversationDetailsProvider sessionId={sessionId} messageId={entry.responseId ?? entry.id} latestOwnerMessageId={latestOwnerMessageId}>
-                              <LeonMessage entry={entry} />
-                            </ConversationDetailsProvider>
-                          )}
-                        </Message>
-                      </div>
+                      <FeedEntryContent key={entry.id} entry={entry} sessionId={sessionId} latestOwnerMessageId={latestOwnerMessageId} />
                     ))}
                   </div>
                 )

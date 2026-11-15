@@ -6,50 +6,59 @@ $activity-wave-travel-fraction: .9
   --activity-wave-highlight-end: 65%
   --activity-wave-travel-fraction: #{$activity-wave-travel-fraction}
   --activity-wave-duration: 5s
+  position: relative
 
-@supports (background-clip: text) or (-webkit-background-clip: text)
-  .activity-wave.activity-wave-active
-    // A solid base fill keeps every glyph readable outside the moving highlight.
-    color: transparent
-    background-color: var(--color-text-secondary)
-    background-image: linear-gradient(90deg, var(--color-text-secondary), var(--activity-wave-highlight-color) var(--activity-wave-highlight-start), var(--activity-wave-highlight-color) var(--activity-wave-highlight-end), var(--color-text-secondary))
-    background-position: calc(0px - var(--activity-wave-highlight-width)) 0
-    background-repeat: no-repeat
-    background-size: var(--activity-wave-highlight-width) 100%
-    -webkit-background-clip: text
-    background-clip: text
-    animation: activity-wave var(--activity-wave-duration) linear infinite
+.activity-wave-content
+  // Preserve the original flex children and native text selection.
+  display: contents
 
-    // Keep SVG strokes readable before their synchronized gradient is ready.
-    svg
-      color: var(--color-text-secondary)
+.activity-wave.activity-wave-active
+  color: var(--color-text-secondary)
 
-    // Masked artwork shares the heading's paint and native animation clock.
-    .app-icon-mask
-      background-color: inherit
-      background-image: inherit
-      background-position: inherit
-      background-repeat: inherit
-      background-size: inherit
+.activity-wave-band
+  position: absolute
+  top: 0
+  left: 0
+  width: var(--activity-wave-highlight-width)
+  height: 100%
+  overflow: hidden
+  pointer-events: none
+  user-select: none
+  mask-image: linear-gradient(90deg, transparent, #000 var(--activity-wave-highlight-start), #000 var(--activity-wave-highlight-end), transparent)
+  animation: activity-wave var(--activity-wave-duration) linear infinite
+  will-change: transform
+
+.activity-wave .activity-wave-copy
+  position: absolute
+  top: 0
+  left: 0
+  width: var(--activity-wave-width)
+  height: 100%
+  color: var(--activity-wave-highlight-color)
+  animation: activity-wave-content var(--activity-wave-duration) linear infinite
+  will-change: transform
+
+  // Local icon colors must follow the copied text's highlight paint.
+  svg, .app-icon-mask
+    color: inherit
+
+.activity-wave-text::before
+  content: attr(data-activity-wave-text)
 
 @keyframes activity-wave
   0%
-    background-position: calc(0px - var(--activity-wave-highlight-width)) 0
+    transform: translateX(calc(0px - var(--activity-wave-highlight-width)))
 
-  #{$activity-wave-travel-fraction * 100%}
-    background-position: var(--activity-wave-width, calc(100% + var(--activity-wave-highlight-width))) 0
+  #{$activity-wave-travel-fraction * 100%}, 100%
+    transform: translateX(var(--activity-wave-width))
 
-  100%
-    background-position: var(--activity-wave-width, calc(100% + var(--activity-wave-highlight-width))) 0
+@keyframes activity-wave-content
+  0%
+    transform: translateX(var(--activity-wave-highlight-width))
+
+  #{$activity-wave-travel-fraction * 100%}, 100%
+    transform: translateX(calc(0px - var(--activity-wave-width)))
 
 @media (prefers-reduced-motion: reduce)
-  .activity-wave.activity-wave-active
-    animation: none
-    background: none
-    color: inherit
-
-    svg
-      color: inherit
-
-    .app-icon-mask
-      background: currentColor
+  .activity-wave-band
+    display: none
