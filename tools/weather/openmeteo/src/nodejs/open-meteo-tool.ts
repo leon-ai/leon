@@ -1,12 +1,13 @@
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
-import { Network, NetworkError } from '@sdk/network'
+import { NetworkError } from '@sdk/network'
+
+import { OpenMeteoNetwork } from './lib/open-meteo-network'
 
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
 
 const DEFAULT_FORECAST_DAYS = 1
-const REQUEST_TIMEOUT_MS = 8_000
 
 /**
  * Include hourly series only when the requested forecast needs intraday detail.
@@ -221,8 +222,8 @@ function formatCurrentConditions(
 export default class OpenMeteoTool extends Tool {
   private static readonly TOOLKIT = 'weather'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
-  private readonly geocodingNetwork: Network
-  private readonly weatherNetwork: Network
+  private readonly geocodingNetwork: OpenMeteoNetwork
+  private readonly weatherNetwork: OpenMeteoNetwork
 
   constructor() {
     super()
@@ -235,10 +236,8 @@ export default class OpenMeteoTool extends Tool {
     this.settings = toolSettings
     this.requiredSettings = REQUIRED_SETTINGS
     this.checkRequiredSettings(this.toolName)
-    this.geocodingNetwork = new Network({
-      baseURL: 'https://geocoding-api.open-meteo.com'
-    })
-    this.weatherNetwork = new Network({ baseURL: 'https://api.open-meteo.com' })
+    this.geocodingNetwork = new OpenMeteoNetwork('https://geocoding-api.open-meteo.com')
+    this.weatherNetwork = new OpenMeteoNetwork('https://api.open-meteo.com')
   }
 
   get toolName(): string {
@@ -271,7 +270,10 @@ export default class OpenMeteoTool extends Tool {
     }
 
     try {
-      const geocoding = await this.geocode(location.trim())
+      // Geocoding and forecast recovery consume the same host-owned budget.
+      const deadline = performance.now() + (this.executionContext?.timeout?.totalMs ?? Infinity)
+      const signal = this.executionContext?.signal
+      const geocoding = await this.geocode(location.trim(), deadline, signal)
       if (!geocoding) {
         return { success: false, error: 'Location not found.' }
       }
@@ -280,7 +282,9 @@ export default class OpenMeteoTool extends Tool {
         geocoding.longitude,
         startDate,
         endDate,
-        detail
+        detail,
+        deadline,
+        signal
       )
       if (!weather.daily?.time?.length ||
           (detail === WeatherDetail.Hourly && !weather.hourly?.time?.length)) {
@@ -328,7 +332,7 @@ export default class OpenMeteoTool extends Tool {
     }
   }
 
-  private async geocode(location: string): Promise<{
+  private async geocode(location: string, deadline: number, signal?: AbortSignal): Promise<{
     latitude: number
     longitude: number
     displayName: string
@@ -340,13 +344,11 @@ export default class OpenMeteoTool extends Tool {
       format: 'json'
     }).toString()
 
-    const response = await this.geocodingNetwork.request<GeocodingResponse>({
-      url: `/v1/search?${queryParams}`,
-      method: 'GET',
-      timeoutMs: REQUEST_TIMEOUT_MS
-    })
+    const response = await this.geocodingNetwork.get<GeocodingResponse>(
+      `/v1/search?${queryParams}`, deadline, signal
+    )
 
-    const results = response.data.results
+    const results = response.results
     if (!results || results.length === 0) {
       return null
     }
@@ -364,9 +366,11 @@ export default class OpenMeteoTool extends Tool {
   private async fetchWeather(
     latitude: number,
     longitude: number,
-    startDate?: string,
-    endDate?: string,
-    detail: WeatherDetail = WeatherDetail.Summary
+    startDate: string | undefined,
+    endDate: string | undefined,
+    detail: WeatherDetail,
+    deadline: number,
+    signal?: AbortSignal
   ): Promise<WeatherResponse> {
     const normalizedDateRange = normalizeWeatherDateRange(startDate, endDate)
     const queryParams = new URLSearchParams({
@@ -389,12 +393,8 @@ export default class OpenMeteoTool extends Tool {
       queryParams.set('current', CURRENT_WEATHER_VARIABLES.join(','))
     }
 
-    const response = await this.weatherNetwork.request<WeatherResponse>({
-      url: `/v1/forecast?${queryParams.toString()}`,
-      method: 'GET',
-      timeoutMs: REQUEST_TIMEOUT_MS
-    })
-
-    return response.data
+    return this.weatherNetwork.get<WeatherResponse>(
+      `/v1/forecast?${queryParams.toString()}`, deadline, signal
+    )
   }
 }

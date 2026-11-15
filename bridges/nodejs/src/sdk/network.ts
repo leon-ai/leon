@@ -1,4 +1,5 @@
 import dns from 'node:dns'
+import { isIP } from 'node:net'
 
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
@@ -38,6 +39,17 @@ interface NetworkRequestOptions {
    * Omitted preserves the client default.
    */
   timeoutMs?: number
+
+  /**
+   * Connect to a resolved IP while retaining the URL hostname for HTTPS.
+   * Redirects are disabled for pinned requests; configured proxies keep owning DNS.
+   */
+  connectAddress?: string
+
+  /**
+   * Host-owned cancellation for an in-flight request.
+   */
+  signal?: AbortSignal
 
   /**
    * Optional files for multipart/form-data requests (parity with Python SDK).
@@ -123,6 +135,16 @@ export class Network {
     options: NetworkRequestOptions
   ): Promise<NetworkResponse<ResponseData>> {
     try {
+      const address = options.connectAddress
+      const family = address ? isIP(address) : 0
+      const hostname = address
+        ? new URL(this.axios.getUri({ url: options.url })).hostname
+        : undefined
+
+      if (address && !family) {
+        throw new Error('The connection address must be an IP address.')
+      }
+
       const response = await this.axios.request({
         url: options.url,
         method: options.method.toLowerCase(),
@@ -130,6 +152,19 @@ export class Network {
         data: options.data as never,
         responseType: options.responseType,
         timeout: options.timeoutMs,
+        signal: options.signal,
+        ...(address ? {
+          // Only override origin resolution, never the configured proxy's address.
+          lookup: async (host: string): Promise<dns.LookupAddress> => {
+            return host === hostname
+              ? { address, family }
+              : dns.promises.lookup(host)
+          },
+          maxRedirects: 0,
+          // A pooled socket might still point at the server we are avoiding.
+          httpAgent: false,
+          httpsAgent: false
+        } : {}),
         headers: {
           'User-Agent': `Leon Personal Assistant ${LEON_VERSION} - Node.js Bridge ${NODEJS_BRIDGE_VERSION}`,
           ...options.headers
