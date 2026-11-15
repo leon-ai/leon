@@ -45,6 +45,28 @@ test.describe('ambient recovery', () => {
     await expect(scene).toHaveAttribute('data-vibe-scene', 'autumn-clear-afternoon')
   })
 
+  test('retries failed artwork without navigation or another ambient update', async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.clock.install({ time: new Date('2026-11-15T12:00:00Z') })
+    await page.addInitScript(() => localStorage.setItem('leon.web-app.theme', 'dark'))
+    ui.ambient = { ...ui.ambient, season: 'winter', solarPhase: 'sunset' }
+    let requests = 0
+    await page.route('**/winter/clear/sunset.webp', async (route) => {
+      requests += 1
+      if (requests === 1) {
+        await route.fulfill({ status: 503, body: '' })
+      } else {
+        await route.continue()
+      }
+    })
+    await page.goto(SESSION_URL)
+    await expect.poll(() => requests).toBe(1)
+    const scene = page.locator('.vibes-frame-active')
+    await expect(scene).toHaveAttribute('data-vibe-scene', 'autumn-clear-noon')
+    await page.clock.fastForward(5_000)
+    await expect(scene).toHaveAttribute('data-vibe-scene', 'winter-clear-sunset')
+    expect(requests).toBe(2)
+  })
 })
 
 test('uses the ambient season, solar phase and weather in the production scene', async ({ page, ui }) => {

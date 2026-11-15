@@ -34,6 +34,8 @@ import './vibes.sass'
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const VIBE_PRELOAD_IDLE_TIMEOUT_MS = 2_000
 const VIBE_CLOCK_INTERVAL_MS = 60_000
+const VIBE_IMAGE_RETRY_DELAY_MS = 5_000
+const VIBE_IMAGE_MAXIMUM_ATTEMPTS = 3
 const preloadedVibeSources = new Set<string>()
 
 
@@ -338,6 +340,9 @@ export function Vibes({
     }
 
     let isCancelled = false
+    let isLoading = false
+    let attempts = 0
+    let retryTimer: number | undefined
 
     const activateScene = () => {
       if (
@@ -362,12 +367,45 @@ export function Vibes({
       setActiveVibe(nextVibe)
     }
 
-    void loadImage(nextVibe.assetSrc, 'high').then(activateScene, () => {
-      // Keep the current complete scene if the replacement cannot be decoded.
-    })
+    function loadRequestedScene(): void {
+      if (isCancelled || isLoading || document.hidden ||
+        activeVibeRef.current.assetSrc === nextVibe.assetSrc) {
+        return
+      }
+
+      window.clearTimeout(retryTimer)
+      isLoading = true
+      attempts += 1
+
+      void loadImage(nextVibe.assetSrc, 'high').then(() => {
+        isLoading = false
+        activateScene()
+      }, () => {
+        isLoading = false
+        // Retain complete artwork during transient failures, but do not leave
+        // the page stuck on an obsolete scene after one failed download.
+        if (!isCancelled && attempts < VIBE_IMAGE_MAXIMUM_ATTEMPTS) {
+          retryTimer = window.setTimeout(loadRequestedScene, VIBE_IMAGE_RETRY_DELAY_MS)
+        }
+      })
+    }
+
+    function resumeLoading(): void {
+      if (!document.hidden) {
+        attempts = 0
+        loadRequestedScene()
+      }
+    }
+
+    loadRequestedScene()
+    window.addEventListener('online', resumeLoading)
+    document.addEventListener('visibilitychange', resumeLoading)
 
     return () => {
       isCancelled = true
+      window.clearTimeout(retryTimer)
+      window.removeEventListener('online', resumeLoading)
+      document.removeEventListener('visibilitychange', resumeLoading)
     }
   }, [animateTransitions, hasResolvedScene, requestedVibe.assetSrc])
 
