@@ -6,6 +6,7 @@ import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import migrate from '@@/scripts/setup/migrations/2026110704012858-queue-temporary-location-backfill'
 import travelLocation from './travel-location.scenario'
+import { waitForAmbientWeather } from '../../scenario-fixture'
 
 const OWNER_EVIDENCE = 'I am staying in Lyon, France, for a week.'
 
@@ -13,7 +14,7 @@ const scenario: RealAgentScenario = {
   prepareProfile: travelLocation.prepareProfile!,
   toolResult: travelLocation.toolResult!,
   async run({ profilePath, runTurn }) {
-    const { MEMORY_MANAGER, POST_TURN_MAINTENANCE_QUEUE, AMBIENT_CONDITIONS_MANAGER } = await import('@/core')
+    const { MEMORY_MANAGER, POST_TURN_MAINTENANCE_QUEUE } = await import('@/core')
     const record = await MEMORY_MANAGER.remember({
       scope: 'temporary', kind: 'note', content: OWNER_EVIDENCE,
       sourceType: 'explicit_user', sourceRef: 'scenario:original-owner-evidence',
@@ -45,8 +46,8 @@ const scenario: RealAgentScenario = {
       const after = db.prepare('SELECT * FROM memory_items WHERE id = ?').get(record.id)!
       assert.deepEqual({ ...after, metadata_json: before['metadata_json'] }, before)
       assert.equal(JSON.parse(String(after['metadata_json'])).evidence, OWNER_EVIDENCE)
-      const ambient = await AMBIENT_CONDITIONS_MANAGER.getSnapshot()
-      assert.ok(ambient.weather?.location.toLowerCase().includes('lyon'))
+      const weather = await waitForAmbientWeather()
+      assert.ok(weather.location.toLowerCase().includes('lyon'))
       const turn = await runTurn('What is the weather like where I am staying?')
       const calls = turn.toolCalls.filter((call) => call.toolkitId === 'weather' && call.functionName === 'getWeather')
       assert.ok(calls.length > 0, turn.output)

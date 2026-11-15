@@ -1,6 +1,11 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 
-import AmbientConditionsManager, { AmbientWeatherCondition, type AmbientWeatherSnapshot } from '@/core/ambient-conditions-manager'
+import AmbientConditionsManager, {
+  AMBIENT_WEATHER_REFRESH_INTERVAL_MS,
+  AmbientWeatherCondition,
+  type AmbientConditionsSnapshot,
+  type AmbientWeatherSnapshot
+} from '@/core/ambient-conditions-manager'
 
 const fixture = vi.hoisted(() => ({
   cache: null as { locationQuery: string | null, weather: AmbientWeatherSnapshot | null } | null,
@@ -56,6 +61,7 @@ beforeEach(() => {
   fixture.city = 'Test town'
   fixture.execute.mockClear()
   fixture.weather.data.timezone = 'Europe/Paris'
+  fixture.weather.data.current.weatherCode = 0
   fixture.weather.data.daily = {
     time: ['2026-10-30'], sunrise: ['2026-10-30T07:00'], sunset: ['2026-10-30T19:00']
   }
@@ -68,6 +74,25 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/**
+ * Observe a completed background refresh through its persisted cache and snapshot.
+ */
+async function getRefreshedSnapshot(
+  manager: AmbientConditionsManager,
+  date?: Date
+): Promise<AmbientConditionsSnapshot> {
+  const previousCache = fixture.cache
+
+  return vi.waitFor(async () => {
+    const snapshot = await manager.getSnapshot(date)
+
+    expect(fixture.cache).not.toBe(previousCache)
+    expect(snapshot.weather).not.toBeNull()
+
+    return snapshot
+  })
+}
+
 it.each([
   ['2026-10-30T04:00:00Z', 'night'],
   ['2026-10-30T05:45:00Z', 'sunrise'],
@@ -79,7 +104,7 @@ it.each([
   ['2026-10-30T19:30:00Z', 'night']
 ])('derives %s from the weather location solar events as %s', async (timestamp, phase) => {
   const manager = new AmbientConditionsManager()
-  const snapshot = await manager.getSnapshot(new Date(timestamp))
+  const snapshot = await getRefreshedSnapshot(manager, new Date(timestamp))
   expect(snapshot.solarPhase).toBe(phase)
   expect(snapshot.timeZone).toBe('Europe/Paris')
   expect(snapshot.weather?.solar).toEqual({
@@ -109,7 +134,7 @@ it.each(['missing', 'polar', 'invalid-zone', 'invalid-time', 'reversed', 'wrong-
       data.daily.time = ['2026-10-29']
     }
     const manager = new AmbientConditionsManager()
-    const snapshot = await manager.getSnapshot()
+    const snapshot = await getRefreshedSnapshot(manager)
     expect(snapshot.weather?.temperatureC).toBe(20)
     expect(snapshot.weather?.solar).toBeNull()
     expect(snapshot.solarPhase).toBe('noon')
@@ -121,23 +146,23 @@ it.each(['missing', 'polar', 'invalid-zone', 'invalid-time', 'reversed', 'wrong-
 
 it('refreshes Vibes for current temporary context and returns home when it expires or is ended', async () => {
   const manager = new AmbientConditionsManager()
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
 
   fixture.location = { city: 'Lyon', country: 'France', expiresAt: Date.now() + 60_000 }
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
   expect(fixture.cache?.locationQuery).toBe('Lyon, France')
   expect(fixture.execute.mock.calls[1]?.[0].parsedInput.location).toBe('Lyon, France')
 
   vi.advanceTimersByTime(60_000)
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
   expect(fixture.cache?.locationQuery).toBe('Test town')
 
   fixture.location = { city: 'Nantes', country: 'France', expiresAt: Date.now() + 60_000 }
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
   expect(fixture.cache?.locationQuery).toBe('Nantes, France')
 
   fixture.location = null
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
   expect(fixture.cache?.locationQuery).toBe('Test town')
   expect(fixture.execute).toHaveBeenCalledTimes(5)
 })
@@ -158,7 +183,7 @@ it('discards weather when current-location evidence changes during the request',
   const manager = new AmbientConditionsManager()
 
   expect((await manager.getSnapshot()).weather).toBeNull()
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
   expect(fixture.cache?.locationQuery).toBe('Lyon, France')
 })
 
@@ -170,20 +195,20 @@ it('refreshes cached weather when solar availability has not been checked', asyn
       observationTime: '2026-10-30T12:00', weatherCode: 0
     }
   }
-  const snapshot = await new AmbientConditionsManager().getSnapshot()
+  const snapshot = await getRefreshedSnapshot(new AmbientConditionsManager())
   expect(snapshot.weather?.solar?.date).toBe('2026-10-30')
   expect(fixture.execute).toHaveBeenCalledTimes(1)
 })
 
-it('refreshes the solar date at local midnight even while cached weather is less than an hour old', async () => {
-  vi.setSystemTime(new Date('2026-10-30T22:45:00Z'))
+it('refreshes the solar date at local midnight even while cached weather is fresh', async () => {
+  vi.setSystemTime(new Date('2026-10-30T22:55:00Z'))
   const manager = new AmbientConditionsManager()
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
   vi.setSystemTime(new Date('2026-10-30T23:05:00Z'))
   fixture.weather.data.daily = {
     time: ['2026-10-31'], sunrise: ['2026-10-31T07:01'], sunset: ['2026-10-31T18:59']
   }
-  const snapshot = await manager.getSnapshot()
+  const snapshot = await getRefreshedSnapshot(manager)
   expect(snapshot.weather?.solar?.date).toBe('2026-10-31')
   expect(fixture.execute).toHaveBeenCalledTimes(2)
 })
@@ -191,11 +216,11 @@ it('refreshes the solar date at local midnight even while cached weather is less
 it('does not use yesterday solar events when a weather refresh fails', async () => {
   vi.setSystemTime(new Date('2026-10-30T22:45:00Z'))
   const manager = new AmbientConditionsManager()
-  await manager.getSnapshot()
+  await getRefreshedSnapshot(manager)
   vi.setSystemTime(new Date('2026-10-31T12:00:00Z'))
   fixture.execute.mockRejectedValue(new Error('Weather temporarily unavailable'))
   const snapshot = await manager.getSnapshot()
-  expect(snapshot.weather?.solar?.date).toBe('2026-10-30')
+  expect(snapshot.weather).toBeNull()
   expect(snapshot.solarPhase).toBe('noon')
 })
 
@@ -209,7 +234,45 @@ it.each([
   fixture.weather.data.daily = {
     time: [date], sunrise: [`${date}T07:00`], sunset: [`${date}T19:00`]
   }
-  const snapshot = await new AmbientConditionsManager().getSnapshot()
+  const snapshot = await getRefreshedSnapshot(new AmbientConditionsManager())
   expect(snapshot.solarPhase).toBe('sunrise')
   expect(snapshot.weather?.solar?.sunrise).toBe(Date.parse(instant))
+})
+
+it('returns snapshots and coalesces refreshes while weather is unavailable', async () => {
+  let complete!: (value: object) => void
+  fixture.execute.mockImplementationOnce(() => new Promise((resolve) => {
+    complete = resolve
+  }))
+  const manager = new AmbientConditionsManager()
+
+  expect((await manager.getSnapshot()).weather).toBeNull()
+  expect((await manager.getSnapshot()).weather).toBeNull()
+  expect(fixture.execute).toHaveBeenCalledTimes(1)
+
+  complete({ status: 'success', data: { output: { result: fixture.weather } } })
+  const snapshot = await getRefreshedSnapshot(manager)
+
+  expect(snapshot.weather?.weatherCode).toBe(0)
+  expect(fixture.execute).toHaveBeenCalledTimes(1)
+})
+
+it('expires cached precipitation while retaining valid solar times and throttling failed refreshes', async () => {
+  fixture.weather.data.current.weatherCode = 61
+  const manager = new AmbientConditionsManager()
+  const initial = await getRefreshedSnapshot(manager)
+  expect(initial.weather?.condition).toBe(AmbientWeatherCondition.Rain)
+  vi.advanceTimersByTime(AMBIENT_WEATHER_REFRESH_INTERVAL_MS)
+  fixture.execute.mockRejectedValue(new Error('Weather temporarily unavailable'))
+
+  const snapshot = await manager.getSnapshot()
+
+  expect(snapshot.weather).toBeNull()
+  expect(snapshot.timeZone).toBe('Europe/Paris')
+  expect(snapshot.solarPhase).toBe('noon')
+  expect((await manager.getSnapshot()).weather).toBeNull()
+  expect(fixture.execute).toHaveBeenCalledTimes(2)
+
+  // Restarting must apply the same expiry to the persisted cache.
+  expect((await new AmbientConditionsManager().getSnapshot()).weather).toBeNull()
 })

@@ -89,7 +89,8 @@ export function useAmbientConditions(
     meta: { errorTitle: 'Could not load ambient conditions' },
     queryFn: ({ signal }) => fetchAmbientConditions(signal),
     enabled: enabled && Boolean(profile),
-    refetchInterval: (query) => query.state.status === 'error'
+    // Empty weather also means a background refresh may still be running.
+    refetchInterval: (query) => query.state.status === 'error' || !query.state.data?.weather
       ? AMBIENT_CONDITIONS_RETRY_INTERVAL_MS
       : AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS,
     refetchIntervalInBackground: false,

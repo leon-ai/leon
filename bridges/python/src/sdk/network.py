@@ -13,14 +13,20 @@ class NetworkOptions(TypedDict, total=False):
 
 class NetworkResponse(TypedDict):
     data: Any
+    # Zero means the transport failed before receiving an HTTP response.
     status_code: int
     options: Dict[str, Any]
 
 
 class NetworkError(Exception):
-    def __init__(self, response: NetworkResponse) -> None:
+    """Report HTTP failures or the original cause when no response was received."""
+
+    def __init__(
+        self, response: NetworkResponse, cause: Optional[Exception] = None
+    ) -> None:
         self.response = response
-        super().__init__(f"[NetworkError]: {response['status_code']}")
+        detail = str(cause) if cause is not None else str(response['status_code'])
+        super().__init__(f"[NetworkError]: {detail}")
 
     @staticmethod
     def _format_error_data(data: Any) -> str:
@@ -38,6 +44,8 @@ class NetworkRequestOptions(TypedDict, total=False):
     method: Union[Literal['GET'], Literal['POST'], Literal['PUT'], Literal['PATCH'], Literal['DELETE']]
     data: Dict[str, Any]
     headers: Dict[str, str]
+    # Requests uses seconds; the SDK exposes milliseconds in both bridges.
+    timeout_ms: int
     files: Dict[str, Any]
     use_json: bool
     response_type: Optional[Union[Literal['json'], Literal['text'], Literal['arraybuffer'], Literal['bytes']]]
@@ -66,6 +74,9 @@ class Network:
                     **headers
                 }
             }
+
+            if options.get('timeout_ms') is not None:
+                request_kwargs['timeout'] = options['timeout_ms'] / 1_000
 
             # If files are provided or JSON is explicitly disabled, send form data
             if files or not use_json:
@@ -109,7 +120,8 @@ class Network:
                 )
                 raise NetworkError(network_response)
         except requests.exceptions.RequestException as error:
-            status_code = 500
+            # Transport failures have no HTTP status; preserve their actual cause.
+            status_code = 0
             raw_data: Any = ''
 
             if error.response is not None:
@@ -130,11 +142,12 @@ class Network:
                 response_payload['status_code'],
                 options.get('method'),
                 options.get('url'),
+                str(error),
                 NetworkError._format_error_data(response_payload['data']),
                 file=sys.stderr
             )
 
-            raise NetworkError(response_payload) from error
+            raise NetworkError(response_payload, error) from error
 
     def is_network_error(self, error: Exception) -> bool:
         return isinstance(error, NetworkError)

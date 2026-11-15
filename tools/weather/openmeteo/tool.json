@@ -3,7 +3,7 @@
   "tool_id": "openmeteo",
   "toolkit_id": "weather",
   "name": "Open-Meteo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fetch current conditions and daily/hourly forecasts using Open-Meteo without an API key.",
   "distribution": "built-in",
   "maintenance": "official",
@@ -60,7 +60,11 @@
         ],
         "additionalProperties": false
       },
-      "completion_review": "optional"
+      "completion_review": "optional",
+      "timeout": {
+        "idleMs": 20000,
+        "totalMs": 20000
+      }
     }
   }
 }

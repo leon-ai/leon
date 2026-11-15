@@ -34,6 +34,12 @@ interface NetworkRequestOptions {
   headers?: Record<string, string>
 
   /**
+   * HTTP inactivity timeout in milliseconds. The host owns overall execution limits.
+   * Omitted preserves the client default.
+   */
+  timeoutMs?: number
+
+  /**
    * Optional files for multipart/form-data requests (parity with Python SDK).
    */
   files?: Record<string, unknown>
@@ -62,7 +68,7 @@ interface NetworkResponse<ResponseData> {
   data: ResponseData
 
   /**
-   * HTTP status code from the server response.
+   * HTTP status code from the server response, or 0 when no response was received.
    */
   statusCode: number
 
@@ -84,11 +90,14 @@ const formatErrorData = (data: unknown): string => {
   }
 }
 
+/**
+ * Reports an HTTP failure or the original cause when no response was received.
+ */
 export class NetworkError<ResponseErrorData = unknown> extends Error {
   public readonly response: NetworkResponse<ResponseErrorData>
 
-  constructor(response: NetworkResponse<ResponseErrorData>) {
-    super(`[NetworkError]: ${response.statusCode}`)
+  constructor(response: NetworkResponse<ResponseErrorData>, cause?: Error) {
+    super(`[NetworkError]: ${cause?.message ?? response.statusCode}`, { cause })
     this.response = response
     Object.setPrototypeOf(this, NetworkError.prototype)
   }
@@ -120,6 +129,7 @@ export class Network {
         // For parity, we accept any data type here (including FormData)
         data: options.data as never,
         responseType: options.responseType,
+        timeout: options.timeoutMs,
         headers: {
           'User-Agent': `Leon Personal Assistant ${LEON_VERSION} - Node.js Bridge ${NODEJS_BRIDGE_VERSION}`,
           ...options.headers
@@ -156,12 +166,13 @@ export class Network {
         }
       }
     } catch (error) {
-      let statusCode = 500
+      // Transport failures have no HTTP status; preserve their actual cause.
+      let statusCode = 0
       let dataRawText = ''
 
       if (axios.isAxiosError(error)) {
         dataRawText = error?.response?.data ?? ''
-        statusCode = error?.response?.status ?? 500
+        statusCode = error?.response?.status ?? 0
       }
 
       let data: ResponseErrorData
@@ -185,10 +196,14 @@ export class Network {
         response.statusCode,
         options.method,
         options.url,
+        error instanceof Error ? error.message : String(error),
         formatErrorData(response.data)
       )
 
-      throw new NetworkError<ResponseErrorData>(response)
+      throw new NetworkError<ResponseErrorData>(
+        response,
+        statusCode === 0 && error instanceof Error ? error : undefined
+      )
     }
   }
 

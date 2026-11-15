@@ -3,6 +3,26 @@ import { test, expect, SESSION_URL } from './fixtures'
 test.describe('ambient recovery', () => {
   test.use({ timezoneId: 'UTC' })
 
+  test('picks up background weather and clears precipitation when it expires', async ({ page, ui }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.clock.install({ time: new Date('2026-11-15T12:00:00Z') })
+    await page.goto(SESSION_URL)
+    const scene = page.locator('.vibes-frame-active')
+    await expect(scene).toHaveClass(/vibes-weather-clear/)
+
+    ui.ambient.weather = {
+      condition: 'rain', description: 'Rain', temperatureC: 20, feelsLikeC: 19,
+      weatherCode: 61, location: 'Test town', observationTime: '2026-11-15T12:00', fetchedAt: Date.now()
+    }
+    await page.clock.fastForward(60_000)
+    await expect(scene).toHaveClass(/vibes-weather-rain/)
+
+    ui.ambient.weather = null
+    await page.clock.fastForward(10 * 60 * 1_000)
+    await expect(scene).toHaveClass(/vibes-weather-clear/)
+    await expect(scene.locator('canvas.weather-layer')).toHaveCount(0)
+  })
+
   for (const [time, initialPhase, nextPhase, nextSeason] of [
     ['2026-11-15T16:59:00Z', 'afternoon', 'sunset', 'autumn'],
     ['2026-11-30T23:59:00Z', 'night', 'night', 'winter']
