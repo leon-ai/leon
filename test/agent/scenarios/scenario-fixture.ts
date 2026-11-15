@@ -1,12 +1,36 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { setTimeout } from 'node:timers/promises'
 
 import assert from 'node:assert/strict'
 import type { RealAgentScenario, RealScenarioTurn } from '../e2e/run-agent-provider-scenario'
 import type { ToolExecutionInput, ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
+import type { AmbientWeatherSnapshot } from '@/core/ambient-conditions-manager'
+
+const AMBIENT_WEATHER_WAIT_MS = 5_000
+const AMBIENT_WEATHER_POLL_INTERVAL_MS = 50
 
 export type ScenarioContext = Parameters<RealAgentScenario['run']>[0]
+
+/**
+ * Observe weather published by the asynchronous ambient refresh in isolated scenarios.
+ */
+export async function waitForAmbientWeather(): Promise<AmbientWeatherSnapshot> {
+  const { AMBIENT_CONDITIONS_MANAGER } = await import('@/core')
+  const signal = AbortSignal.timeout(AMBIENT_WEATHER_WAIT_MS)
+
+  while (!signal.aborted) {
+    const snapshot = await AMBIENT_CONDITIONS_MANAGER.getSnapshot()
+    if (snapshot.weather) {
+      return snapshot.weather
+    }
+
+    await setTimeout(AMBIENT_WEATHER_POLL_INTERVAL_MS, undefined, { signal })
+  }
+
+  throw new Error('Ambient weather was not published.')
+}
 
 /**
  * Complete an owner turn through the ordinary asynchronous maintenance lifecycle.

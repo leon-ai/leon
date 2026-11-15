@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
 
 const DEFAULT_FORECAST_DAYS = 1
+const REQUEST_TIMEOUT_MS = 8_000
 
 /**
  * Include hourly series only when the requested forecast needs intraday detail.
@@ -341,7 +342,8 @@ export default class OpenMeteoTool extends Tool {
 
     const response = await this.geocodingNetwork.request<GeocodingResponse>({
       url: `/v1/search?${queryParams}`,
-      method: 'GET'
+      method: 'GET',
+      timeoutMs: REQUEST_TIMEOUT_MS
     })
 
     const results = response.data.results
@@ -389,7 +391,8 @@ export default class OpenMeteoTool extends Tool {
 
     const response = await this.weatherNetwork.request<WeatherResponse>({
       url: `/v1/forecast?${queryParams.toString()}`,
-      method: 'GET'
+      method: 'GET',
+      timeoutMs: REQUEST_TIMEOUT_MS
     })
 
     return response.data

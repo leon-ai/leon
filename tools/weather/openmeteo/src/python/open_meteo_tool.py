@@ -10,6 +10,7 @@ REQUIRED_SETTINGS = []
 
 
 DEFAULT_FORECAST_DAYS = 1
+REQUEST_TIMEOUT_MS = 8_000
 
 
 class WeatherDetail(str, Enum):
@@ -237,6 +238,7 @@ class OpenMeteoTool(BaseTool):
             {
                 "url": f"/v1/search?{query_params}",
                 "method": "GET",
+                "timeout_ms": REQUEST_TIMEOUT_MS,
             }
         )
 
@@ -295,6 +297,7 @@ class OpenMeteoTool(BaseTool):
             {
                 "url": f"/v1/forecast?{query_params}",
                 "method": "GET",
+                "timeout_ms": REQUEST_TIMEOUT_MS,
             }
         )
 

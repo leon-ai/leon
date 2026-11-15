@@ -14,7 +14,7 @@ import { AmbientSeason, AmbientSolarPhase, getAmbientClock } from './ambient-clo
 
 export { AmbientSeason, AmbientSolarPhase } from './ambient-clock'
 
-export const AMBIENT_WEATHER_REFRESH_INTERVAL_MS = 60 * 60 * 1_000
+export const AMBIENT_WEATHER_REFRESH_INTERVAL_MS = 15 * 60 * 1_000
 
 const AMBIENT_WEATHER_RETRY_INTERVAL_MS = 10 * 60 * 1_000
 const SOLAR_TRANSITION_WINDOW_MS = 30 * 60 * 1_000
@@ -146,19 +146,25 @@ export default class AmbientConditionsManager {
   }
 
   /**
-   * Return current local conditions, refreshing stale weather when appropriate.
+   * Return local conditions without waiting for an external weather refresh.
    */
   public async getSnapshot(date = new Date()): Promise<AmbientConditionsSnapshot> {
     await this.refreshWeatherIfNeeded()
 
     const timeZone = this.weather?.solar?.timeZone ?? DateHelper.getTimeZone()
     const clock = getAmbientClock(date, timeZone)
+    // Keep today's solar times usable, but never present expired precipitation
+    // as current while the service is slow or unavailable.
+    const weather = this.weather &&
+      Date.now() - this.weather.fetchedAt < AMBIENT_WEATHER_REFRESH_INTERVAL_MS
+      ? this.weather
+      : null
 
     return {
       season: clock.season,
       solarPhase: this.getSolarPhase(date, clock.solarPhase),
       timeZone,
-      weather: this.weather
+      weather
     }
   }
 
@@ -213,13 +219,12 @@ export default class AmbientConditionsManager {
     }
 
     if (!this.pendingWeatherRefresh) {
+      // Readers share one bounded refresh without waiting on the weather service.
       this.pendingWeatherRefresh = this.refreshWeather(locationQuery)
         .finally(() => {
           this.pendingWeatherRefresh = null
         })
     }
-
-    await this.pendingWeatherRefresh
   }
 
   private async refreshWeather(locationQuery: string): Promise<void> {

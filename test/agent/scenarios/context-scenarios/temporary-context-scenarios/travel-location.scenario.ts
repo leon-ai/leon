@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import SQLite from 'better-sqlite3'
 import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
+import { waitForAmbientWeather } from '../../scenario-fixture'
 
 const HOME_CITY = 'Shenzhen'
 const TEMPORARY_CITY = 'Lyon'
@@ -82,9 +83,8 @@ const scenario: RealAgentScenario = {
       }
       assert.ok(metadata.evidence && OWNER_STATEMENT.includes(metadata.evidence))
       assert.equal(metadata.currentLocation?.city.toLowerCase(), TEMPORARY_CITY.toLowerCase())
-      const { AMBIENT_CONDITIONS_MANAGER } = await import('@/core')
-      const ambient = await AMBIENT_CONDITIONS_MANAGER.getSnapshot()
-      assert.ok(ambient.weather?.location.toLowerCase().includes(TEMPORARY_CITY.toLowerCase()),
+      const weather = await waitForAmbientWeather()
+      assert.ok(weather.location.toLowerCase().includes(TEMPORARY_CITY.toLowerCase()),
         'Vibes must use the same saved current-location fact.')
 
       // A current stay must survive newer inferred facts even when the owner
