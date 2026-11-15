@@ -27,7 +27,7 @@ function observePreviewRequests(page: Page, baseURL: string, favicons = false): 
 test('keeps file artwork and download actions available when a document icon cannot load', async ({ page }) => {
   await page.route('**/img/file-icons/*/pdf.svg', (route) => route.fulfill({ status: 404 }))
   await page.goto('/aurora.html')
-  await page.getByRole('button', { name: 'Artifacts', exact: true }).click()
+  await page.getByRole('button', { name: 'Files', exact: true }).click()
   const document = page.getByRole('region', { name: 'Artifacts preview', exact: true })
     .locator('figure').filter({ hasText: 'Attention is all you need.pdf' })
   await document.scrollIntoViewIfNeeded()
@@ -38,16 +38,25 @@ test('keeps file artwork and download actions available when a document icon can
 })
 
 for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preference']] as const) {
-  test(`previews real local artifact formats with manual media playback and downloads (${theme})`, async ({ page }, testInfo) => {
+  test(`separates artifacts and attachments while previewing local media and downloads (${theme})`, async ({ page }, testInfo) => {
     const observed = observePreviewRequests(page, testInfo.project.use.baseURL!)
     await page.emulateMedia({ reducedMotion })
     await page.goto('/aurora.html')
     if (theme === 'light') {
       await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
     }
-    expect(observed.paths.some((url) => url.includes('/artifacts-preview-'))).toBe(false)
-    await page.getByRole('button', { name: 'Artifacts', exact: true }).click()
-    const artifacts = page.getByRole('region', { name: 'Artifacts preview', exact: true })
+    expect(observed.paths.some((url) => url.includes('/files-preview-'))).toBe(false)
+    const tab = page.getByRole('button', { name: 'Files', exact: true })
+    await tab.click()
+    await expect(tab).toHaveAttribute('aria-pressed', 'true')
+    const files = page.getByRole('region', { name: 'Files preview', exact: true })
+    const artifacts = files.getByRole('region', { name: 'Artifacts preview', exact: true })
+    const attachments = files.getByRole('region', { name: 'Attachments preview', exact: true })
+    await expect(artifacts.getByRole('heading', { name: 'Artifacts', level: 2, exact: true })).toBeVisible()
+    await expect(attachments.getByRole('heading', { name: 'Attachments', level: 2, exact: true })).toBeVisible()
+    await expect(attachments).toContainText('Attachment and drop-zone previews will be added here.')
+    await expect(attachments.getByRole('button')).toHaveCount(0)
+    await expect(files.locator('input[type="file"]')).toHaveCount(0)
     await expect(artifacts.locator('figure')).toHaveCount(11)
     const fileIcons = artifacts.getByRole('region', { name: 'File icons', exact: true })
     for (const [filename, asset] of [['README.md', 'readme'], ['package.json', 'npm'], ['Dockerfile', 'docker'], ['.gitignore', 'gitignore'], ['main.rs', 'rust'], ['Program.cs', 'csharp'], ['main.kt', 'kotlin'], ['Main.java', 'java']] as const) {
@@ -101,13 +110,13 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
       expect(download.suggestedFilename()).toBe(filename)
       expect(await download.failure()).toBeNull()
     }
-    await artifacts.screenshot({ path: testInfo.outputPath(`artifacts-${theme}.png`) })
+    await files.screenshot({ path: testInfo.outputPath(`files-${theme}.png`) })
     await page.getByRole('button', { name: 'Narrow preview', exact: true }).click()
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await artifacts.screenshot({ path: testInfo.outputPath(`artifacts-${theme}-narrow.png`) })
+    await files.screenshot({ path: testInfo.outputPath(`files-${theme}-narrow.png`) })
     await page.getByRole('button', { name: 'Components', exact: true }).click()
-    await expect(artifacts).toHaveCount(0)
+    await expect(files).toHaveCount(0)
     expect(observed.unexpected).toEqual([])
     expect(observed.errors).toEqual([])
   })

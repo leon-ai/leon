@@ -1,0 +1,19 @@
+.files-preview
+  display: grid
+  gap: calc(var(--space-xl) * 2)
+  min-width: 0
+
+  > section + section
+    padding-top: var(--space-xl)
+    border-top: 1px solid var(--color-border)
+
+.files-preview-heading
+  display: grid
+  gap: var(--space-xs)
+
+  h2
+    font-size: var(--font-size-xl)
+    font-weight: var(--font-weight-semi-bold)
+
+  p
+    color: var(--color-text-secondary)
