@@ -17,7 +17,7 @@ const LIFETIME_FADE_DELAY_MINIMUM_SECONDS = 1.8
 const LIFETIME_FADE_DURATION_MAXIMUM_SECONDS = .9
 const LIFETIME_FADE_DURATION_MINIMUM_SECONDS = .45
 const LIFETIME_FADE_THRESHOLD = .2
-const MAXIMUM_FRAME_DELTA_SECONDS = .04
+const MAXIMUM_FRAME_DELTA_SECONDS = .1
 const PARTICLE_AREA_PX = 3_400
 const PARTICLE_COUNT_MINIMUM = 24
 const PARTICLE_COUNT_MAXIMUM = 180
@@ -26,7 +26,7 @@ const SETTLED_SNOWFLAKE_AREA_PX = 14_000
 const SETTLED_SNOWFLAKE_COUNT_MAXIMUM = 24
 const SETTLED_SNOWFLAKE_COUNT_MINIMUM = 8
 const SPAWN_FADE_DURATION_SECONDS = .22
-const TARGET_FRAME_DURATION_MS = 1_000 / 30
+const TARGET_FRAME_DURATION_MS = 1_000 / 15
 
 
 enum ParticleFadeMode {
@@ -276,6 +276,7 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
     const renderingContext = context
     const random = createSeededRandom(activeAnimation.seed)
     let animationFrame: number | null = null
+    let wakeTimer = 0
     let canAnimate = false
     let glassDroplets: GlassDroplet[] = []
     let height = 0
@@ -476,33 +477,24 @@ export function WeatherLayer({ weather }: WeatherLayerProps) {
     }
 
     function render(time: number): void {
-      if (previousTime === 0) {
-        previousTime = time
-        drawFrame(0, time / 1_000)
-        animationFrame = window.requestAnimationFrame(render)
-        return
-      }
-
-      const elapsedTime = time - previousTime
-
-      if (elapsedTime < TARGET_FRAME_DURATION_MS) {
-        animationFrame = window.requestAnimationFrame(render)
-        return
-      }
-
-      const deltaSeconds = Math.min(
-        elapsedTime / 1_000,
+      animationFrame = null
+      const deltaSeconds = previousTime === 0 ? 0 : Math.min(
+        (time - previousTime) / 1_000,
         MAXIMUM_FRAME_DELTA_SECONDS
       )
 
-      // Preserve the fractional remainder so browser timing jitter does not
-      // accidentally lower the effective frame rate below the target.
-      previousTime = time - elapsedTime % TARGET_FRAME_DURATION_MS
+      // Use actual elapsed time at this cadence, without replaying hidden time.
+      previousTime = time
       drawFrame(deltaSeconds, time / 1_000)
-      animationFrame = window.requestAnimationFrame(render)
+      wakeTimer = window.setTimeout(() => {
+        wakeTimer = 0
+        animationFrame = window.requestAnimationFrame(render)
+      }, TARGET_FRAME_DURATION_MS)
     }
 
     function stopAnimation(): void {
+      window.clearTimeout(wakeTimer)
+      wakeTimer = 0
       if (animationFrame !== null) {
         window.cancelAnimationFrame(animationFrame)
         animationFrame = null
