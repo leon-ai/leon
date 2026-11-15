@@ -515,6 +515,196 @@ test('retries an upload with the same identity after its acknowledgement is lost
   expect(references).toEqual([stored!.id])
 })
 
+test('releases uploaded File objects after sending while the composer stays mounted', async ({ page, ui }) => {
+  await page.addInitScript(() => {
+    const send = XMLHttpRequest.prototype.send
+    XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null): void {
+      if (body instanceof File) {
+        Reflect.set(window, 'uploadedFileReference', new WeakRef(body))
+      }
+      send.call(this, body)
+    }
+  })
+  await page.goto(SESSION_URL)
+  await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page.getByRole('form', { name: 'Send a message to Leon' }).getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  expect(ui.uploads).toHaveLength(1)
+  const memory = await page.context().newCDPSession(page)
+  try {
+    await expect.poll(async () => {
+      await memory.send('HeapProfiler.collectGarbage')
+      return page.evaluate(() => {
+        const reference = Reflect.get(window, 'uploadedFileReference') as WeakRef<File> | undefined
+        return Boolean(reference) && reference!.deref() === undefined
+      })
+    }).toBe(true)
+  } finally {
+    await memory.detach()
+  }
+})
+
+for (const change of ['session', 'profile'] as const) {
+  test(`cancels the active upload and queued files when the ${change} changes`, async ({ page, ui }) => {
+    await page.addInitScript(() => {
+      const NativeEventSource = window.EventSource
+      window.EventSource = class extends NativeEventSource {
+        constructor(url: string | URL, options?: EventSourceInit) {
+          super(url, options)
+          Reflect.set(window, 'conversationEventSource', this)
+        }
+      }
+    })
+    await page.goto(SESSION_URL)
+    let attempts = 0
+    let commands = 0
+    await page.route('**/sessions/*/attachments?**', async (route) => {
+      attempts += 1
+      const url = new URL(route.request().url())
+      url.pathname = `/__ui/uploads/${crypto.randomUUID()}`
+      await route.continue({ url: url.toString() })
+    })
+    await page.route('**/sessions/*/messages', async (route) => {
+      commands += 1
+      await route.abort()
+    })
+    await page.getByLabel('Choose attachments', { exact: true }).setInputFiles([
+      { ...TEXT, buffer: Buffer.alloc(256 * 1_024, 'a') }, { ...TEXT, name: 'Second.txt' }
+    ])
+    const network = await page.context().newCDPSession(page)
+    await network.send('Network.emulateNetworkConditions', {
+      offline: false, latency: 0, downloadThroughput: 10 * 1_024 * 1_024, uploadThroughput: 32 * 1_024
+    })
+    try {
+      await page.getByRole('button', { name: 'Send message', exact: true }).click()
+      const progress = page.getByRole('progressbar', { name: 'Uploading', exact: true })
+      await expect.poll(async () => Number(await progress.getAttribute('value'))).toBeGreaterThan(0)
+      const cancelled = page.waitForEvent('requestfailed', (request) => request.url().includes('/attachments?') || request.url().includes('/__ui/uploads/'))
+      if (change === 'session') {
+        await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+      } else {
+        ui.profile = 'another-owner'
+        const auth = page.waitForResponse((response) => response.url().endsWith('/profile-auth'))
+        await page.evaluate(() => (Reflect.get(window, 'conversationEventSource') as EventSource).dispatchEvent(new Event('error')))
+        await auth
+      }
+      expect((await cancelled).failure()?.errorText).toContain('ERR_ABORTED')
+      await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+      await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeVisible()
+      expect(attempts).toBe(1)
+      expect(commands).toBe(0)
+    } finally {
+      await network.detach()
+    }
+  })
+}
+
+for (const landing of ['session', 'new'] as const) {
+  test(`does not resume an offline ${landing} submission after leaving its composer`, async ({ page, context, ui }) => {
+    await page.goto(SESSION_URL)
+    if (landing === 'new') {
+      await page.getByRole('link', { name: 'New session', exact: true }).click()
+    }
+    await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
+    // Load the preview route before taking the browser offline; asset-loading
+    // failures would exercise lazy rendering instead of a paused submission.
+    await expect(page.getByRole('figure', { name: TEXT.name, exact: true })).toContainText(TEXT.buffer.toString())
+    await context.setOffline(true)
+    try {
+      await page.getByRole('button', { name: 'Send message', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'Remove Notes.txt', exact: true })).toBeDisabled()
+      await page.getByRole('link', { name: 'Test session 1', exact: true }).click()
+      await expect(page).toHaveURL(/session\/00000000-0000-4000-8000-000000000001$/)
+      await context.setOffline(false)
+      await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeVisible()
+      await page.getByRole('link', { name: 'Test session 0', exact: true }).click()
+      await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeVisible()
+      expect(ui.uploads).toHaveLength(0)
+      expect(ui.sessions).toHaveLength(3)
+      expect(ui.requests.filter((url) => url.pathname.endsWith('/attachments'))).toHaveLength(0)
+    } finally {
+      await context.setOffline(false)
+    }
+  })
+}
+
+test('renews the idle deadline only for advancing upload bytes and keeps a stalled draft retryable', async ({ page, ui }) => {
+  await page.addInitScript(() => {
+    const send = XMLHttpRequest.prototype.send
+    XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null): void {
+      if (body instanceof File) {
+        // Hold the native transport before it emits bytes, then drive its public
+        // upload events to exercise stalls without a minute-long test delay.
+        Reflect.set(window, 'stalledUpload', this)
+        return
+      }
+      send.call(this, body)
+    }
+    Reflect.set(window, 'restoreUploadTransport', () => {
+      XMLHttpRequest.prototype.send = send
+    })
+  })
+  await page.goto(SESSION_URL)
+  await page.clock.install()
+  await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  const status = page.getByRole('group', { name: 'Upload status for Notes.txt', exact: true })
+  await expect(status.getByRole('progressbar', { name: 'Uploading', exact: true })).toBeVisible()
+  for (const loaded of [1, 2, 3]) {
+    await page.clock.fastForward(59_000)
+    await expect(page.getByText('Upload failed', { exact: true })).toHaveCount(0)
+    await page.evaluate((value) => {
+      const request = Reflect.get(window, 'stalledUpload') as XMLHttpRequest
+      request.upload.dispatchEvent(new ProgressEvent('progress', { loaded: value, total: 18, lengthComputable: true }))
+    }, loaded)
+  }
+  // Repeated zero-advance events must not keep a stalled request alive.
+  await page.clock.fastForward(59_000)
+  await page.evaluate(() => {
+    const request = Reflect.get(window, 'stalledUpload') as XMLHttpRequest
+    request.upload.dispatchEvent(new ProgressEvent('progress', { loaded: 3, total: 18, lengthComputable: true }))
+  })
+  await page.clock.fastForward(2_000)
+  await expect(page.getByText('Upload failed', { exact: true })).toBeVisible()
+  await expect(page.locator('.toast-error')).toContainText('stopped making progress')
+  expect(ui.uploads).toHaveLength(0)
+  await page.evaluate(() => Reflect.get(window, 'restoreUploadTransport')())
+  await page.getByRole('button', { name: 'Retry sending message', exact: true }).click()
+  await expect(page.getByRole('form', { name: 'Send a message to Leon' }).getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  expect(ui.uploads).toHaveLength(1)
+})
+
+test('times out missing server acceptance after transfer and allows a successful retry', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  await page.clock.install()
+  const ids = [crypto.randomUUID(), crypto.randomUUID()]
+  let attempts = 0
+  await page.route('**/sessions/*/attachments?**', async (route) => {
+    const url = new URL(route.request().url())
+    url.searchParams.set('session_id', ui.sessions[0]!.id)
+    url.pathname = `/__ui/uploads/${ids[attempts++]}`
+    await route.continue({ url: url.toString() })
+  })
+  await page.route('**/sessions/*/messages', async (route) => {
+    const body = route.request().postDataJSON() as { id: string }
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ command: { id: body.id, status: 'accepted' } }) })
+  })
+  await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page.getByText('Processing', { exact: true })).toBeVisible()
+  await expect.poll(async () => (await (await page.request.get(`/__ui/uploads/${ids[0]}`)).json()).ready).toBe(true)
+  await page.clock.fastForward(120_001)
+  await expect(page.getByText('Upload failed', { exact: true })).toBeVisible()
+  await expect(page.locator('.toast-error')).toContainText('did not receive confirmation')
+  await page.getByRole('button', { name: 'Retry sending message', exact: true }).click()
+  await expect.poll(async () => (await (await page.request.get(`/__ui/uploads/${ids[1]}`)).json()).ready).toBe(true)
+  expect((await page.request.post(`/__ui/uploads/${ids[1]}/complete`)).status()).toBe(204)
+  await expect(page.getByRole('form', { name: 'Send a message to Leon' }).getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  await page.clock.fastForward(180_000)
+  await expect(page.getByText('Upload failed', { exact: true })).toHaveCount(0)
+  expect(attempts).toBe(2)
+})
+
 test('measures per-file progress over a slow connection and waits for server acceptance', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   const ids = [crypto.randomUUID(), crypto.randomUUID()]

@@ -3,6 +3,9 @@ import { APIError, ConnectionError } from './request-errors'
 
 export { APIError } from './request-errors'
 
+const UPLOAD_IDLE_TIMEOUT_MS = 60_000
+const UPLOAD_RESPONSE_TIMEOUT_MS = 120_000
+
 interface APIRequestOptions extends RequestInit {
   onUploadProgress?: (loaded: number, total?: number) => void
 }
@@ -14,8 +17,11 @@ interface APIRequestOptions extends RequestInit {
 function uploadRequest(url: string, options: APIRequestOptions, headers: Headers): Promise<Response> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    let lastLoaded = 0
     const abort = (): void => request.abort()
     const cleanup = (): void => {
+      clearTimeout(timeout)
       options.signal?.removeEventListener('abort', abort)
       request.upload.onprogress = null
       request.upload.onload = null
@@ -27,6 +33,16 @@ function uploadRequest(url: string, options: APIRequestOptions, headers: Headers
       cleanup()
       reject(error)
     }
+    const waitForProgress = (duration: number, message: string): void => {
+      clearTimeout(timeout)
+      timeout = setTimeout(() => {
+        // Detach abort handling first so a timeout remains a retryable failure,
+        // rather than being mistaken for the owner's silent cancellation.
+        fail(new DOMException(message, 'TimeoutError'))
+        request.abort()
+      }, duration)
+    }
+
     if (options.signal?.aborted) {
       reject(options.signal.reason ?? new DOMException('The upload was cancelled.', 'AbortError'))
       return
@@ -37,8 +53,17 @@ function uploadRequest(url: string, options: APIRequestOptions, headers: Headers
     }
     const size = options.body.size
 
-    request.upload.onprogress = (event): void => options.onUploadProgress?.(event.loaded, event.lengthComputable ? event.total : size)
-    request.upload.onload = (): void => options.onUploadProgress?.(size, size)
+    request.upload.onprogress = (event): void => {
+      if (event.loaded > lastLoaded) {
+        lastLoaded = event.loaded
+        waitForProgress(UPLOAD_IDLE_TIMEOUT_MS, 'This upload stopped making progress. Please retry it.')
+      }
+      options.onUploadProgress?.(event.loaded, event.lengthComputable ? event.total : size)
+    }
+    request.upload.onload = (): void => {
+      options.onUploadProgress?.(size, size)
+      waitForProgress(UPLOAD_RESPONSE_TIMEOUT_MS, 'I did not receive confirmation for this upload. Please retry it.')
+    }
     request.onload = (): void => {
       try {
         const response = new Response(request.responseText || null, { status: request.status, statusText: request.statusText })
@@ -58,6 +83,7 @@ function uploadRequest(url: string, options: APIRequestOptions, headers: Headers
     options.signal?.addEventListener('abort', abort, { once: true })
     try {
       options.signal?.throwIfAborted()
+      waitForProgress(UPLOAD_IDLE_TIMEOUT_MS, 'This upload stopped making progress. Please retry it.')
       request.send(options.body)
     } catch (error) {
       fail(error instanceof Error ? error : new ConnectionError())
@@ -83,7 +109,7 @@ export async function requestAPI<T>(path: string, options: APIRequestOptions = {
       headers
     })
   } catch (error) {
-    if (options.signal?.aborted || error instanceof Error && error.name === 'AbortError') {
+    if (options.signal?.aborted || error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
       throw error
     }
     throw new ConnectionError()

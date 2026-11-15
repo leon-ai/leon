@@ -17,7 +17,7 @@ import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
 import { queryHistoryKey } from './query-history'
 import { recordSessionCompletion } from './session-read-state'
 import { prefetchAnswerRendering } from '@/components/aurora-answer/preload'
-import { uploadOwnerAttachments, type SendMessageInput } from './owner-attachments'
+import { assertSendMessageActive, releaseSendMessageFiles, uploadOwnerAttachments, type SendMessageInput } from './owner-attachments'
 
 const MAXIMUM_CACHED_CONVERSATIONS = 5
 const MAXIMUM_CONCURRENT_CONVERSATION_PREFETCHES = 2
@@ -219,12 +219,15 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
   const profile = useProfile()
   const key = conversationQueryOptions(profile, sessionId).queryKey
   const { showToast } = useToast()
+  const isCurrentProfile = (): boolean => queryClient.getQueryData<{ profile_name: string | null }>(PROFILE_AUTH_QUERY_KEY)?.profile_name === profile
 
   return useMutation({
     meta: { errorTitle: 'Message delivery was not confirmed', profile },
     gcTime: 0,
     mutationFn: async (input: SendMessageInput) => {
-      const attachments = await uploadOwnerAttachments(profile, sessionId, input.attachments ?? [], input.onUploadProgress)
+      assertSendMessageActive(profile, input.signal)
+      const attachments = await uploadOwnerAttachments(profile, sessionId, input.attachments ?? [], input.onUploadProgress, input.signal)
+      assertSendMessageActive(profile, input.signal)
       if (attachments.length) {
         queryClient.setQueryData<CachedConversation>(key, (previous) => previous ? {
           ...previous, pages: previous.pages.map((page) => ({
@@ -235,17 +238,21 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
       }
 
       return requestAPI<{ command: ConversationCommand }>(`sessions/${encodeURIComponent(sessionId)}/messages`, {
+        ...(input.signal ? { signal: input.signal } : {}),
         method: 'POST', body: JSON.stringify({ id: input.id, query: input.query,
           ...(attachments.length ? { attachments: attachments.map((file) => file.id) } : {}) })
       })
     },
     onMutate: async (input) => {
+      assertSendMessageActive(profile, input.signal)
       prefetchModule(() => import('@/components/markdown-content'))
       await queryClient.cancelQueries({ queryKey: key, exact: true })
+      assertSendMessageActive(profile, input.signal)
       const current = queryClient.getQueryData<CachedConversation>(key)?.pages[0]
       if (current?.newer_cursor) {
         await returnToLatest(profile, sessionId)
       }
+      assertSendMessageActive(profile, input.signal)
       queryClient.setQueryData<CachedConversation>(key, (previous) => {
         if (!previous?.pages[0]) {
           return previous
@@ -268,9 +275,15 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
       })
     },
     onError: () => {
-      void queryClient.invalidateQueries({ queryKey: key, exact: true })
+      if (isCurrentProfile()) {
+        void queryClient.invalidateQueries({ queryKey: key, exact: true })
+      }
     },
-    onSuccess: ({ command }) => {
+    onSuccess: ({ command }, input) => {
+      releaseSendMessageFiles(input)
+      if (!isCurrentProfile()) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, sessionId), exact: true })
       if (command.status !== 'accepted') {
         void queryClient.invalidateQueries({ queryKey: key, exact: true })
@@ -281,7 +294,9 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
       }
     },
     onSettled: (): void => {
-      void queryClient.invalidateQueries({ queryKey: [...sessionsQueryKey, profile] })
+      if (isCurrentProfile()) {
+        void queryClient.invalidateQueries({ queryKey: [...sessionsQueryKey, profile] })
+      }
     }
   })
 }

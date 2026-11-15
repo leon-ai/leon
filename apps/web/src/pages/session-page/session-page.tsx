@@ -56,8 +56,8 @@ function SessionContent({ sessionId, navigationKey }: { sessionId: string, navig
     return () => window.clearTimeout(timer)
   }, [isInitialLoading])
 
-  function handleSubmit(query: string, attachments: OwnerAttachmentDraft[], onUploadProgress: AttachmentUploadListener): Promise<unknown> {
-    return send.mutateAsync(createSendMessageInput(query, attachments, send.isError ? send.variables : undefined, onUploadProgress))
+  function handleSubmit(query: string, attachments: OwnerAttachmentDraft[], onUploadProgress: AttachmentUploadListener, signal: AbortSignal): Promise<unknown> {
+    return send.mutateAsync(createSendMessageInput(query, attachments, send.isError ? send.variables : undefined, onUploadProgress, signal))
   }
 
   function handleReturnToLatest(): void {

@@ -43,7 +43,7 @@ interface QueryInputProps {
   failed?: boolean
   maximumLineCount?: number
   placeholder?: string
-  onSubmit?: (query: string, attachments: ComposerAttachment[], onUploadProgress: AttachmentUploadListener) => void | Promise<unknown>
+  onSubmit?: (query: string, attachments: ComposerAttachment[], onUploadProgress: AttachmentUploadListener, signal: AbortSignal) => void | Promise<unknown>
   model?: ReturnType<typeof useComposerModel>
   onStop?: () => void
 }
@@ -68,6 +68,7 @@ export function QueryInput({
   const containerRef = useRef<HTMLDivElement>(null)
   const attachmentsRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const submissionRef = useRef<AbortController | undefined>(undefined)
   const attachments = useComposerAttachments(containerRef, disabled || loading || submitting)
   const caretRestorationRef = useRef<number | undefined>(undefined)
   const [settledRestoration, setSettledRestoration] = useState<number | undefined>(undefined)
@@ -92,6 +93,8 @@ export function QueryInput({
   const busy = loading || submitting
   const submitDisabled = disabled || busy || attachments.reading || !canSubmit || normalizedQuery.length === 0 && attachments.items.length === 0
   const resolvedMaximumLineCount = Math.max(1, maximumLineCount)
+
+  useEffect(() => () => submissionRef.current?.abort(), [])
 
   useLayoutEffect(() => {
     if (autoFocus && !disabled && !loading) {
@@ -330,8 +333,11 @@ export function QueryInput({
     resetHistoryNavigation()
     setSubmitting(true)
     attachments.queueUploads()
+    const submission = new AbortController()
+    submissionRef.current = submission
     try {
-      await onSubmit?.(normalizedQuery, attachments.items, attachments.updateUpload)
+      await onSubmit?.(normalizedQuery, attachments.items, attachments.updateUpload, submission.signal)
+      submission.signal.throwIfAborted()
       setQuery('')
       attachments.clear()
       textareaRef.current?.focus({ preventScroll: true })
@@ -339,7 +345,9 @@ export function QueryInput({
       // The shared mutation cache reports delivery errors. Keep the draft and
       // files available so the owner can retry without selecting them again.
     } finally {
-      setSubmitting(false)
+      if (!submission.signal.aborted) {
+        setSubmitting(false)
+      }
     }
   }
 
