@@ -566,7 +566,7 @@ async function main() {
   await verifyPendingBuilds(environment)
   // Postinstall already builds both apps and the server.
   await smokeTestStart(environment, logPath)
-  console.log('Fresh installation, build, weather, and OCR verification passed.')
+  console.log('Fresh installation, build, shell, and OCR verification passed.')
 }
 
 main().catch((error) => {
