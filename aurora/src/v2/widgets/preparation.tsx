@@ -5,25 +5,18 @@ import { ScrollContainer } from '../components/scroll-container'
 import { Status, type StatusVariant } from '../components/status/status'
 import { PreparationStatus } from '../contracts/preparation'
 import { DurationFormat, formatDuration } from '../utils/format-duration'
+import { formatBytes } from '../utils/format-bytes'
 import type { DownloadStatus, FileDownloadProgress } from '../../../../bridges/runtime/contracts/download-progress'
 export { PreparationStatus } from '../contracts/preparation'
 
 import './preparation.sass'
 
-const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
-const BYTES_PER_UNIT = 1_024
 const ETA_RESOLUTION_MS = 1_000
 const DOWNLOAD_STATUSES: Record<Exclude<DownloadStatus, 'downloading'>, { label: string, variant: StatusVariant }> = {
   queued: { label: 'Queued', variant: 'secondary' },
   complete: { label: 'Ready', variant: 'success' },
   failed: { label: 'Failed', variant: 'error' },
   cancelled: { label: 'Cancelled', variant: 'secondary' }
-}
-
-function formatDownloadSize(bytes: number): string {
-  const unit = Math.min(BYTE_UNITS.length - 1, Math.max(0, Math.floor(Math.log(bytes || 1) / Math.log(BYTES_PER_UNIT))))
-
-  return `${Number((bytes / BYTES_PER_UNIT ** unit).toFixed(2))} ${BYTE_UNITS[unit]}`
 }
 
 export interface PreparationWidgetProps {
@@ -58,7 +51,7 @@ export function PreparationWidget({ title, status, detail, completed, total, dow
               <Status {...DOWNLOAD_STATUSES[file.status]} />
             </div>}
             {file.status !== 'queued' && <p className="aurora-feedback">
-              {formatDownloadSize(file.downloadedBytes)}{file.totalBytes !== null ? ` / ${formatDownloadSize(file.totalBytes)}` : ''}
+              {formatBytes(file.downloadedBytes)}{file.totalBytes !== null ? ` / ${formatBytes(file.totalBytes)}` : ''}
               {file.status === 'downloading' && file.etaMs !== null && file.etaMs > 0
                 ? ` · ETA ${formatDuration(
                   Math.ceil(file.etaMs / ETA_RESOLUTION_MS) * ETA_RESOLUTION_MS,

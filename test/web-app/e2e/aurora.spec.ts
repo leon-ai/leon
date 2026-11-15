@@ -597,6 +597,72 @@ test('places retained files once, between native text inside the final answer', 
   expect(file!.y).toBeLessThan(closing!.y)
 })
 
+test('previews authenticated text and SVG artifacts without executing their content', async ({ page, ui }) => {
+  const files = [
+    { id: 'notes', filename: 'Notes.txt', mime_type: 'text/plain' },
+    { id: 'vector', filename: 'Diagram.svg', mime_type: 'image/svg+xml' },
+    { id: 'document', filename: 'Document.pdf', mime_type: 'application/pdf' }
+  ]
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.artifacts = files.map((file) => ({ ...file, session_id: SESSION_ID,
+    url: `/api/v1/artifacts/${SESSION_ID}/${file.id}`, size_bytes: 256, created_at: Date.now(), source: 'fixture' }))
+  answer.artifacts.push({ ...answer.artifacts[0]!, id: 'remote', url: 'https://untrusted.example/notes.txt' })
+  let textRequests = 0
+  await page.route('**/api/v1/artifacts/**', async (route) => {
+    if (route.request().url().endsWith('/notes')) {
+      textRequests += 1
+      expect(route.request().headers()['range']).toBe('bytes=0-16384')
+      await route.fulfill({ contentType: 'text/plain', body: 'A few saved notes.\n<script>window.artifactExecuted = true</script>' })
+    } else {
+      await route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60" onload="window.artifactExecuted = true"><rect width="120" height="60" fill="blue"/></svg>' })
+    }
+  })
+  await page.goto(SESSION_URL)
+  const response = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  const text = response.getByRole('region', { name: 'Preview of Notes.txt', exact: true })
+  await text.scrollIntoViewIfNeeded()
+  await expect(text).toContainText('A few saved notes.')
+  await expect(text).toContainText('<script>window.artifactExecuted = true</script>')
+  expect(textRequests).toBe(1)
+  await expect(response.getByRole('figure')).toHaveCount(3)
+  const vector = response.getByRole('button', { name: 'Enlarge Diagram.svg', exact: true })
+  await vector.click()
+  const dialog = page.getByRole('dialog', { name: 'Diagram.svg', exact: true })
+  await expect.poll(() => dialog.getByRole('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(120)
+  await dialog.getByRole('button', { name: 'Zoom out', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await expect(dialog).toHaveCount(0)
+  await expect(vector).toBeFocused()
+  expect(await page.evaluate(() => Reflect.get(window, 'artifactExecuted'))).toBeUndefined()
+  await expect(response.locator('iframe, script')).toHaveCount(0)
+})
+
+test('shows decimal artifact sizes while preserving visible filenames', async ({ page, ui }) => {
+  const sizes = [
+    ['Empty file.bin', 0, '0 B'],
+    ['Small file.bin', 999, '999 B'],
+    ['One kilobyte.bin', 1_000, '1 KB'],
+    ['One megabyte.bin', 1_000_000, '1 MB'],
+    ['Discord recording.mp4', 8_700_928, '8.7 MB'],
+    ['One gigabyte.bin', 1_000_000_000, '1 GB'],
+    ['One terabyte.bin', 1_000_000_000_000, '1 TB']
+  ] as const
+  ui.history.get(SESSION_ID)!.at(-1)!.artifacts = sizes.map(([filename, size_bytes], index) => ({
+    id: String(index), session_id: SESSION_ID, filename, size_bytes,
+    mime_type: 'application/octet-stream', created_at: Date.now(), source: 'fixture',
+    url: `/api/v1/artifacts/${SESSION_ID}/${index}`
+  }))
+  await page.goto(SESSION_URL)
+  const response = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  for (const [filename, , size] of sizes) {
+    const file = response.getByRole('figure').filter({ hasText: filename })
+    await expect(file.locator('.aurora-artifact-name small')).toHaveText(size)
+    await expect(file.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('download', filename.replaceAll(' ', '_'))
+    await expect(file.getByRole('link', { name: 'Open', exact: true }).locator('.app-icon')).toHaveAttribute('data-icon', 'eye')
+    await expect(file.getByRole('button', { name: /share/i })).toHaveCount(0)
+  }
+})
+
 for (const form of [false, true]) {
   test(`keeps ${form ? 'form details' : 'choices'} readable when the optional renderer cannot load`, async ({ page, ui }) => {
     const history = ui.history.get(SESSION_ID)!

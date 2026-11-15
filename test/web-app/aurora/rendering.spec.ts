@@ -31,10 +31,72 @@ test('keeps file artwork and download actions available when a document icon can
   const document = page.getByRole('region', { name: 'Artifacts preview', exact: true })
     .locator('figure').filter({ hasText: 'Attention is all you need.pdf' })
   await document.scrollIntoViewIfNeeded()
-  await expect(document.locator('svg.app-icon')).toBeVisible()
+  await expect(document.locator('.aurora-artifact-icon svg.app-icon')).toBeVisible()
   await expect(document.locator('img[data-file-icon]')).toHaveCount(0)
   await expect(document.getByRole('link', { name: 'Open', exact: true })).toBeVisible()
   await expect(document.getByRole('link', { name: 'Download', exact: true })).toBeVisible()
+})
+
+test('copies real image and text data while keeping binary files out of unsupported clipboard formats', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/aurora.html')
+  await page.getByRole('button', { name: 'Files', exact: true }).click()
+  const files = page.getByRole('region', { name: 'Artifacts preview', exact: true })
+  const text = files.locator('figure').filter({ hasText: 'Notes.txt' })
+  await text.getByRole('button', { name: 'Copy contents', exact: true }).click()
+  await expect(text.getByRole('button', { name: 'Copied', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('A little room for ideas')
+
+  for (const filename of ['Sunday pancakes.jpeg', 'Leon.svg']) {
+    const image = files.locator('figure').filter({ hasText: filename })
+    await image.getByRole('button', { name: 'Copy image', exact: true }).click()
+    await expect(image.getByRole('button', { name: 'Copied', exact: true })).toBeVisible()
+    const copied = await page.evaluate(async () => {
+      const [item] = await navigator.clipboard.read()
+      const blob = await item!.getType('image/png')
+      const bitmap = await createImageBitmap(blob)
+      const dimensions = { width: bitmap.width, height: bitmap.height, type: blob.type }
+      bitmap.close()
+
+      return dimensions
+    })
+    expect(copied.type).toBe('image/png')
+    expect(copied.width).toBeGreaterThan(0)
+    expect(copied.height).toBeGreaterThan(0)
+  }
+  for (const filename of ['Attention is all you need.pdf', 'A soft note.wav', 'Project notes.zip']) {
+    const file = files.locator('figure').filter({ hasText: filename })
+    await expect(file.getByRole('button', { name: /^Copy/ })).toHaveCount(0)
+    await expect(file.getByRole('link', { name: 'Download', exact: true })).toBeVisible()
+  }
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.clipboard, 'write', { configurable: true, value: async () => {
+      throw new DOMException('Clipboard access denied', 'NotAllowedError')
+    } })
+  })
+  await text.getByRole('button', { name: 'Copy contents', exact: true }).click()
+  await expect(page.getByText('I couldn’t copy this file', { exact: true })).toBeVisible()
+  await expect(text.getByRole('button', { name: 'Copied', exact: true })).toHaveCount(0)
+})
+
+test('bounds text excerpts even when the server ignores byte ranges', async ({ page }) => {
+  const ranges: (string | undefined)[] = []
+  await page.route('**/notes-*.txt', async (route) => {
+    ranges.push(route.request().headers()['range'])
+    // A server that ignores Range must still not make an unbounded preview.
+    await route.fulfill({ contentType: 'text/plain', body: `A small start\n${'x'.repeat(65_536)}\nHidden tail` })
+  })
+  await page.goto('/aurora.html')
+  await page.getByRole('button', { name: 'Files', exact: true }).click()
+  const files = page.getByRole('region', { name: 'Artifacts preview', exact: true })
+  const notes = files.locator('figure').filter({ hasText: 'Notes.txt' })
+  await notes.scrollIntoViewIfNeeded()
+  const preview = notes.getByRole('region', { name: 'Preview of Notes.txt', exact: true })
+  await expect(preview).toContainText('A small start')
+  await expect(preview).not.toContainText('Hidden tail')
+  expect((await preview.textContent())!.length).toBeLessThan(16_500)
+  expect(ranges).toEqual(['bytes=0-16384'])
 })
 
 for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preference']] as const) {
@@ -57,7 +119,7 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     await expect(attachments).toContainText('Attachment and drop-zone previews will be added here.')
     await expect(attachments.getByRole('button')).toHaveCount(0)
     await expect(files.locator('input[type="file"]')).toHaveCount(0)
-    await expect(artifacts.locator('figure')).toHaveCount(11)
+    await expect(artifacts.locator('figure')).toHaveCount(12)
     const fileIcons = artifacts.getByRole('region', { name: 'File icons', exact: true })
     for (const [filename, asset] of [['README.md', 'readme'], ['package.json', 'npm'], ['Dockerfile', 'docker'], ['.gitignore', 'gitignore'], ['main.rs', 'rust'], ['Program.cs', 'csharp'], ['main.kt', 'kotlin'], ['Main.java', 'java']] as const) {
       const icon = fileIcons.getByRole('img', { name: filename, exact: true })
@@ -74,18 +136,26 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     const video = artifacts.locator('video')
     const audio = artifacts.locator('audio')
     for (const media of [video, audio]) {
-      await expect(media).toHaveAttribute('preload', 'none')
       await expect(media).toHaveAttribute('controls', '')
       await expect(media).not.toHaveAttribute('autoplay')
       const source = await media.getAttribute('src')
-      expect(observed.paths).not.toContain(source)
+      if (media === audio) {
+        await expect(media).toHaveAttribute('preload', 'none')
+        expect(observed.paths).not.toContain(source)
+      }
     }
+    await video.scrollIntoViewIfNeeded()
+    await expect(video).toHaveAttribute('preload', 'metadata')
+    await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2)
+    expect(await video.evaluate((element: HTMLVideoElement) => element.paused)).toBe(true)
     const photo = artifacts.getByRole('img', { name: 'Sunday pancakes.jpeg', exact: true })
     await expect.poll(() => photo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+    await expect(photo).toHaveCSS('object-fit', 'cover')
     await artifacts.getByRole('button', { name: 'Enlarge Sunday pancakes.jpeg', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Sunday pancakes.jpeg', exact: true })
     await expect(dialog.getByRole('img')).toBeVisible()
-    await page.keyboard.press('Escape')
+    await expect(dialog.getByRole('img')).toHaveCSS('object-fit', 'fill')
+    await dialog.getByRole('img').click()
     await expect(dialog).toHaveCount(0)
     for (const media of [video, audio]) {
       await media.evaluate(async (element: HTMLMediaElement) => {
@@ -98,7 +168,7 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     for (const filename of ['Attention is all you need.pdf', 'Field notes.docx', 'Notes.txt', 'Moments.csv', 'Moments.json', 'Greeting.py', 'Project notes.zip', 'Sample.leon']) {
       const file = artifacts.locator('figure').filter({ hasText: filename })
       await expect(file.getByRole('link', { name: 'Open', exact: true })).toBeVisible()
-      await expect(file.locator('.app-icon')).toBeVisible()
+      await expect(file.locator('.aurora-artifact-icon .app-icon')).toBeVisible()
       if (filename.endsWith('.pdf') || filename.endsWith('.docx') || filename.endsWith('.txt') || filename.endsWith('.csv')) {
         const artwork = file.locator('img[data-file-icon]')
         await artwork.scrollIntoViewIfNeeded()
@@ -107,7 +177,7 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
       const downloadEvent = page.waitForEvent('download')
       await file.getByRole('link', { name: 'Download', exact: true }).click()
       const download = await downloadEvent
-      expect(download.suggestedFilename()).toBe(filename)
+      expect(download.suggestedFilename()).toBe(filename.replaceAll(' ', '_'))
       expect(await download.failure()).toBeNull()
     }
     await files.screenshot({ path: testInfo.outputPath(`files-${theme}.png`) })

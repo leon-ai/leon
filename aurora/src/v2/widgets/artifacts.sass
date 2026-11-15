@@ -10,12 +10,18 @@
   border-radius: var(--border-radius-md)
   background-color: var(--color-background)
 
-  img,
-  video
+  > video,
+  > .aurora-artifact-preview img
     display: block
     width: 100%
     max-height: 360px
+    object-fit: cover
+
+  > video
     object-fit: contain
+
+  > .aurora-artifact-preview > *
+    width: 100%
 
   audio
     display: block
@@ -30,7 +36,7 @@
     font-size: var(--font-size-sm)
     line-height: var(--line-height-sm)
 
-    a
+    > a
       padding: var(--space-xs)
       color: var(--color-text-secondary)
       text-decoration: none

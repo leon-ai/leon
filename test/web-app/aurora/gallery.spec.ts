@@ -891,5 +891,5 @@ test('embeds artifacts in answer order with image enlargement and a local docume
   await expect(dialog).toHaveCount(0)
   const download = page.waitForEvent('download')
   await answer.locator('figure').filter({ hasText: 'Attention is all you need.pdf' }).getByRole('link', { name: 'Download', exact: true }).click()
-  expect((await download).suggestedFilename()).toBe('Attention is all you need.pdf')
+  expect((await download).suggestedFilename()).toBe('Attention_is_all_you_need.pdf')
 })
