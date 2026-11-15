@@ -1996,13 +1996,13 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(JSON.stringify(options['prompt'])).toContain('local document extraction/OCR')
     expect(JSON.stringify(options['prompt'])).not.toContain('aW1hZ2U=')
   })
-  it('preserves owner image parts alongside the request without an auxiliary call', () => {
-    const provider = createOpenRouterProvider()
+  it.each(['image/png', 'application/pdf'])('preserves owner %s parts alongside the request without an auxiliary call', (mediaType) => {
+    const provider = createOpenRouterProvider('openai/gpt-6.1-sol')
     const options = provider.buildCallOptions([{ role: 'user', content: 'Read this page.',
-      files: [{ dataBase64: 'aW1hZ2U=', mediaType: 'image/png', filename: 'page.png' }] }], createCompletionParams(null))
+      files: [{ dataBase64: 'aW1hZ2U=', mediaType, filename: 'source' }] }], createCompletionParams(null))
     expect(options['prompt']).toContainEqual({ role: 'user', content: [
       { type: 'text', text: 'Read this page.' },
-      { type: 'file', data: { type: 'data', data: 'aW1hZ2U=' }, mediaType: 'image/png', filename: 'page.png' }
+      { type: 'file', data: { type: 'data', data: 'aW1hZ2U=' }, mediaType, filename: 'source' }
     ] })
     expect(openRouterMocks.languageModel.doGenerate).not.toHaveBeenCalled()
   })

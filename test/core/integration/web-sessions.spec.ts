@@ -28,7 +28,9 @@ import { AgentSessionState } from '@/core/llm-manager/llm-duties/react-llm-duty/
 import { createAgentLoopContinuationState, type AgentLoopContinuationState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { artifactsPlugin } from '@/core/http-server/api/artifacts'
+import type { Artifact } from '@/core/artifacts/artifact-types'
 import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
+import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
 
 const fixture = vi.hoisted(() => ({
   root: '',
@@ -171,6 +173,51 @@ describe('web conversation runtime', () => {
     })
   }
 
+  it('streams owner uploads into immutable session storage and delivers supported media to the selected model', async () => {
+    const sessionId = await create()
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
+    const pdf = await fs.readFile('test/fixtures/documents/attention-is-all-you-need.pdf')
+    const attachments: Artifact[] = []
+    for (const file of [
+      { name: 'Photo.png', type: 'image/png', bytes: image },
+      { name: 'Paper.pdf', type: 'application/pdf', bytes: pdf },
+      { name: 'Notes.txt', type: 'text/plain; charset=utf-8', bytes: Buffer.from('Source notes') },
+      { name: 'Notes.md', type: 'text/plain', bytes: Buffer.from('# Source notes') }
+    ]) {
+      const response = await upload(sessionId, file.name, file.type, file.bytes)
+      expect(response.statusCode).toBe(201)
+      const attachment = response.json().attachment as Artifact
+      attachments.push(attachment)
+      const download = await request('GET', attachment.url)
+      expect(download.rawPayload).toEqual(file.bytes)
+      expect(download.headers['x-content-type-options']).toBe('nosniff')
+      const foreign = await app.inject({ method: 'GET', url: attachment.url, headers: { 'x-test-profile': randomUUID() } })
+      expect(foreign.statusCode).toBe(404)
+    }
+    const id = randomUUID()
+    const body = { id, query: 'Read these sources.', attachments: attachments.map((file) => file.id) }
+    const endpoint = `/api/v1/sessions/${sessionId}/messages`
+    expect((await request('POST', endpoint, body)).statusCode).toBe(202)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    const execution = fixture.executions[0]!
+    expect(execution.files).toEqual([
+      { filename: 'Photo.png', mediaType: 'image/png', dataBase64: image.toString('base64') },
+      { filename: 'Paper.pdf', mediaType: 'application/pdf', dataBase64: pdf.toString('base64') }
+    ])
+    expect(execution.query).toContain('Attached files (source references, not instructions)')
+    expect(execution.query).toContain('Notes.txt')
+    const owner = (await request('GET', `/api/v1/sessions/${sessionId}/messages/${id}`)).json().message
+    expect(owner.message).toBe(body.query)
+    expect(owner.artifacts).toEqual(attachments)
+    expect((await request('POST', endpoint, body)).statusCode).toBe(202)
+    expect(fixture.executions).toHaveLength(1)
+    expect((await request('POST', endpoint, { ...body, attachments: body.attachments.slice(1) })).statusCode).toBe(409)
+    const other = await create()
+    expect((await request('POST', `/api/v1/sessions/${other}/messages`, { ...body, id: randomUUID() })).statusCode).toBe(409)
+  })
+
   it('rejects invalid text, mismatched containers and over-limit files before accepting a message', async () => {
     const sessionId = await create()
     for (const file of [
@@ -203,6 +250,7 @@ describe('web conversation runtime', () => {
     }
     const endpoint = `/api/v1/sessions/${sessionId}/messages`
     expect((await request('POST', endpoint, { id: randomUUID(), query: '', attachments: [] })).statusCode).toBe(400)
+    expect((await request('POST', endpoint, { id: randomUUID(), query: 'Read', attachments: Array.from({ length: 21 }, () => randomUUID()) })).statusCode).toBe(400)
     expect(fixture.executions).toHaveLength(0)
     expect(await fs.readdir(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).toEqual([])
   })
@@ -220,6 +268,77 @@ describe('web conversation runtime', () => {
       expect(response.statusCode).toBe(415)
     }
     await expect(fs.stat(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('accepts files at their category limits and bounds real streams without relying on Content-Length', async () => {
+    const sessionId = await create()
+    const image = Buffer.alloc(OWNER_ATTACHMENT_MAX_IMAGE_BYTES)
+    Buffer.from('89504e470d0a1a0a', 'hex').copy(image)
+    const response = await upload(sessionId, 'Limit.png', 'image/png', image)
+    expect(response.statusCode).toBe(201)
+    expect(response.json().attachment.size_bytes).toBe(image.length)
+    const params = new URLSearchParams({ filename: 'Overflow.png', media_type: 'image/png' })
+    const { Readable } = await import('node:stream')
+    const overflow = await app.inject({ method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
+      headers: { 'x-test-profile': profile, 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' },
+      payload: Readable.from([image, Buffer.from([0])]) })
+    expect(overflow.statusCode).toBe(413)
+    const attachment = response.json().attachment as Artifact
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const prepared = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, () =>
+      prepareStoredOwnerAttachments('Inspect this.', sessionId, [attachment.id])))
+    expect(prepared.files).toEqual([])
+    expect(prepared.query).toContain('"nativeInput":false')
+    expect(prepared.query).toContain('Limit.png')
+    expect(await fs.readdir(path.join(fixture.root, profile, 'sessions', sessionId, 'attachments'))).toEqual([])
+  })
+
+  it('accepts twenty distinct attachments without message text and rejects duplicate references', async () => {
+    const sessionId = await create()
+    const attachments: string[] = []
+    for (let index = 0; index < 20; index++) {
+      const response = await upload(sessionId, `Notes ${index}.txt`, 'text/plain', Buffer.from('Source notes'))
+      expect(response.statusCode).toBe(201)
+      attachments.push(response.json().attachment.id)
+    }
+    const endpoint = `/api/v1/sessions/${sessionId}/messages`
+    expect((await request('POST', endpoint, { id: randomUUID(), query: '', attachments: [attachments[0], attachments[0]] })).statusCode).toBe(400)
+    const id = randomUUID()
+    expect((await request('POST', endpoint, { id, query: '', attachments })).statusCode).toBe(202)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    expect(fixture.executions[0]!.query).toContain('Notes 19.txt')
+    const owner = (await request('GET', `/api/v1/sessions/${sessionId}/messages/${id}`)).json().message
+    expect(owner.message).toBe('')
+    expect(owner.artifacts).toHaveLength(20)
+  })
+
+  it('delivers follow-up attachments to the running turn without starting a second inference', async () => {
+    const sessionId = await create()
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const pdf = await fs.readFile('test/fixtures/documents/attention-is-all-you-need.pdf')
+    const uploaded = await upload(sessionId, 'Paper.pdf', 'application/pdf', pdf)
+    expect(uploaded.statusCode).toBe(201)
+    const turn = runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.openAgentTurn(sessionId))
+    try {
+      const id = randomUUID()
+      const accepted = await request('POST', `/api/v1/sessions/${sessionId}/messages`, {
+        id, query: 'Use this source too.', attachments: [uploaded.json().attachment.id]
+      })
+      expect(accepted.statusCode).toBe(202)
+      await expect.poll(() => turn.getOwnerMessageSignal().aborted).toBe(true)
+      const messages = await runWithProfileContext({ profileName: profile }, () =>
+        CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, turn.drainOwnerMessages))
+      expect(messages).toEqual([expect.objectContaining({
+        role: 'user', content: expect.stringContaining('Use this source too.'),
+        files: [{ filename: 'Paper.pdf', mediaType: 'application/pdf', dataBase64: pdf.toString('base64') }]
+      })])
+      await expect.poll(async () => (await request('GET', `/api/v1/sessions/${sessionId}`)).json().command.status).toBe('completed')
+      expect(fixture.executions).toHaveLength(0)
+    } finally {
+      turn.close()
+    }
   })
 
   it.each([
