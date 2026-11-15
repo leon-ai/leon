@@ -3,6 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
+import { MAXIMUM_PINNED_SESSIONS } from '@/constants'
 import type { MessageLog } from '@/types'
 import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
@@ -363,6 +364,12 @@ export class ConversationSessionManager {
     input: SessionUpdateInput
   ): ConversationSession {
     const session = this.requireSession(sessionId)
+
+    // Validate before changing any metadata so a rejected pin is atomic.
+    if (input.isPinned === true && !session.isPinned &&
+      CONVERSATION_REPOSITORY.getPinnedSessionCount() >= MAXIMUM_PINNED_SESSIONS) {
+      throw Object.assign(new Error(`You can pin up to ${MAXIMUM_PINNED_SESSIONS} sessions.`), { statusCode: 409 })
+    }
 
     if (typeof input.title === 'string') {
       const nextTitle = normalizeTitle(input.title)

@@ -90,6 +90,27 @@ describe('profile conversation archive', () => {
     expect(repository.listRecents({ limit: 100 }).items).toHaveLength(87)
   })
 
+  it('orders explicit and inherited workspace pins consistently across pages and restarts', () => {
+    let repository = open()
+    const inherited = repository.workspaces.create({ name: 'Leon', brief: '', resources: [] })
+    const explicit = repository.workspaces.create({ name: 'Videos', brief: '', resources: [] })
+    repository.saveSession({ ...session('child', 1), workspaceId: inherited.id, isPinned: true })
+    repository.saveSession(session('recent', Date.now() + 1_000))
+    repository.workspaces.setPinned(explicit.id, true)
+    const first = repository.listRecents({ limit: 1 })
+    const second = repository.listRecents({ limit: 1, cursor: first.nextCursor! })
+    expect([first.items[0]!.value.id, second.items[0]!.value.id].sort()).toEqual([explicit.id, inherited.id].sort())
+    expect(repository.workspaces.list().find((item) => item.id === inherited.id)).toMatchObject({ isPinned: true, isExplicitlyPinned: false })
+    repository.workspaces.setPinned(inherited.id, true)
+    repository.saveSession({ ...session('child', 1), workspaceId: inherited.id, isPinned: false })
+    close(repository)
+    repository = open()
+    expect(repository.workspaces.list().find((item) => item.id === inherited.id)).toMatchObject({ isPinned: true, isExplicitlyPinned: true })
+    repository.workspaces.setPinned(inherited.id, false)
+    expect(repository.workspaces.list().find((item) => item.id === inherited.id)?.isPinned).toBe(false)
+    expect(repository.getPinnedSessionCount()).toBe(0)
+    expect(open('other-owner').workspaces.list()).toEqual([])
+  })
 
   it('persists late preparation outcomes only on the originating accepted call without changing answer metadata', () => {
     const repository = open()

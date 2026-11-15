@@ -141,6 +141,17 @@ export const workspaceRoutes: FastifyPluginAsync<APIOptions> = async (fastify, o
       return reply.code(400).send({ message: String(error) })
     }
   })
+  fastify.patch<{ Params: Static<typeof paramsSchema>, Body: { is_pinned: boolean } }>(`${base}/:workspace_id`, {
+    schema: { params: paramsSchema, body: Type.Object({ is_pinned: Type.Boolean() }, { additionalProperties: false }) }
+  }, async (request, reply) => {
+    if (!CONVERSATION_REPOSITORY.workspaces.get(request.params.workspace_id)) {
+      return reply.code(404).send({ message: 'Workspace not found.' })
+    }
+    const workspace = CONVERSATION_REPOSITORY.workspaces.setPinned(request.params.workspace_id, request.body.is_pinned)
+    changed()
+
+    return { workspace }
+  })
   fastify.delete<{ Params: Static<typeof paramsSchema> }>(`${base}/:workspace_id`, {
     schema: { params: paramsSchema }
   }, async (request, reply) => {

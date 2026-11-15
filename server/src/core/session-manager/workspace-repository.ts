@@ -71,6 +71,21 @@ export class WorkspaceRepository {
   }
 
   /**
+   * Pins the workspace independently of pins inherited from its conversations.
+   */
+  public setPinned(id: string, isPinned: boolean): Workspace {
+    const current = this.get(id)
+    if (!current) {
+      throw new Error('Workspace not found.')
+    }
+    const workspace = { ...current, isPinned, updatedAt: Date.now() }
+    this.db.prepare('UPDATE workspaces SET payload = ? WHERE id = ?')
+      .run(JSON.stringify(workspace), id)
+
+    return workspace
+  }
+
+  /**
    * Detaches conversations and removes the registration in one transaction.
    * External folders and conversation history remain independently owned.
    */

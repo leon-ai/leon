@@ -225,6 +225,13 @@ export class ConversationRepository {
   }
 
   /**
+   * Counts pins across the profile, including conversations in closed workspaces.
+   */
+  public getPinnedSessionCount(): number {
+    return Number(this.db.prepare('SELECT count(*) AS count FROM conversation_sessions WHERE pinned = 1').get()?.['count'] ?? 0)
+  }
+
+  /**
    * Keeps the legacy default selection separate from each client's viewed session.
    */
   public saveActiveSession(sessionId: string): void {

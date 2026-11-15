@@ -195,6 +195,25 @@ describe('web conversation runtime', () => {
     expect(session).not.toHaveProperty('workspaceId')
   })
 
+  it('limits pinned conversations across workspaces while preserving existing pins and rejected metadata', async () => {
+    const workspace = (await request('POST', '/api/v1/workspaces', { name: 'Leon', brief: '', resources: [] })).json().workspace
+    expect((await request('PATCH', `/api/v1/workspaces/${workspace.id}`, { is_pinned: true })).statusCode).toBe(200)
+    const ids: string[] = []
+    for (let index = 0; index < 17; index++) {
+      const id = randomUUID()
+      ids.push(id)
+      await request('POST', '/api/v1/sessions?compact=true', { id, ...(index % 2 ? { workspace_id: workspace.id } : {}) })
+      const pinned = await request('PATCH', `/api/v1/sessions/${id}?compact=true`, { is_pinned: true, title: 'Pinned title' })
+      expect(pinned.statusCode).toBe(index < 16 ? 200 : 409)
+    }
+    const rejected = await request('GET', `/api/v1/sessions/${ids[16]}`)
+    expect(rejected.json().session).toMatchObject({ isPinned: false, title: 'New session' })
+    expect((await request('PATCH', `/api/v1/sessions/${ids[0]}?compact=true`, { is_pinned: true })).statusCode).toBe(200)
+    await request('PATCH', `/api/v1/sessions/${ids[0]}?compact=true`, { is_pinned: false })
+    expect((await request('PATCH', `/api/v1/sessions/${ids[16]}?compact=true`, { is_pinned: true })).statusCode).toBe(200)
+    await request('PATCH', `/api/v1/workspaces/${workspace.id}`, { is_pinned: false })
+    expect((await request('GET', '/api/v1/workspaces')).json().workspaces[0]).toMatchObject({ isPinned: true, isExplicitlyPinned: false })
+  })
 
 
   async function create(): Promise<string> {
