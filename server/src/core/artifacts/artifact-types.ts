@@ -1,3 +1,13 @@
+const DOWNLOAD_WHITESPACE_PATTERN = /\s/gu
+
+/**
+ * Gives downloaded artifacts portable names without renaming stored files
+ * or changing their owner-visible titles. Shared by HTTP and browser actions.
+ */
+export function getArtifactDownloadFilename(filename: string): string {
+  return filename.replaceAll(DOWNLOAD_WHITESPACE_PATTERN, '_')
+}
+
 /**
  * Portable artifact metadata. Paths and provider URLs never cross the client boundary.
  */
