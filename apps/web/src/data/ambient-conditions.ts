@@ -7,6 +7,7 @@ import { LEON_SERVER_URL } from '@/config'
 import { useProfile } from './profile'
 
 const AMBIENT_CONDITIONS_API_PATH = '/api/v1/ambient'
+const AMBIENT_CONDITIONS_RETRY_INTERVAL_MS = 60_000
 const AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS = 10 * 60 * 1_000
 export const AMBIENT_CONDITIONS_QUERY_KEY = ['ambient-conditions'] as const
 
@@ -88,7 +89,9 @@ export function useAmbientConditions(
     meta: { errorTitle: 'Could not load ambient conditions' },
     queryFn: ({ signal }) => fetchAmbientConditions(signal),
     enabled: enabled && Boolean(profile),
-    refetchInterval: AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS,
+    refetchInterval: (query) => query.state.status === 'error'
+      ? AMBIENT_CONDITIONS_RETRY_INTERVAL_MS
+      : AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     staleTime: AMBIENT_CONDITIONS_REFRESH_INTERVAL_MS
   })
