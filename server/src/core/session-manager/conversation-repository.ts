@@ -87,6 +87,8 @@ export interface ConversationWriteOptions {
 }
 
 interface SessionCursor {
+  workspaceId?: string
+  catalog?: 'recents'
   pinned: number
   activity: number
   id: string
@@ -250,6 +252,53 @@ export class ConversationRepository {
   }
 
   /**
+   * Pages projects and ungrouped conversations together before any client-side
+   * expansion, so a large project never disappears behind a session page limit.
+   */
+  public listRecents(options: { limit?: number, cursor?: string } = {}): ConversationPage<{
+    kind: 'workspace' | 'session'
+    value: import('@@/bridges/runtime/contracts/workspace').WorkspaceSummary | ConversationSession
+  }> {
+    const limit = pageSize(options.limit)
+    const cursor = parseSessionCursor(options.cursor)
+    if (cursor && cursor.catalog !== 'recents') {
+      throw new Error('The cursor belongs to another list.')
+    }
+
+    const rows = this.db.prepare(`WITH recents AS (
+      SELECT 'workspace' AS kind, w.id, w.payload, max(coalesce(json_extract(w.payload, '$.isPinned'), 0), coalesce(max(s.pinned), 0)) AS pinned,
+        coalesce(max(s.activity_at), json_extract(w.payload, '$.createdAt')) AS activity_at,
+        count(s.id) AS session_count
+      FROM workspaces w LEFT JOIN conversation_sessions s
+        ON json_extract(s.payload, '$.workspaceId') = w.id GROUP BY w.id
+      UNION ALL
+      SELECT 'session', s.id, s.payload, s.pinned, s.activity_at, 0
+      FROM conversation_sessions s WHERE json_extract(s.payload, '$.workspaceId') IS NULL
+        OR NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.id = json_extract(s.payload, '$.workspaceId'))
+    ) SELECT * FROM recents
+      ${cursor ? 'WHERE (pinned, activity_at, id) < (?, ?, ?)' : ''}
+      ORDER BY pinned DESC, activity_at DESC, id DESC LIMIT ?`)
+      .all(...(cursor ? [cursor.pinned, cursor.activity, cursor.id] : []), limit + 1)
+    const selected = rows.slice(0, limit)
+    const last = selected.at(-1)
+
+    return {
+      items: selected.map((row) => ({
+        kind: row['kind'] as 'workspace' | 'session',
+        value: { ...JSON.parse(String(row['payload'])),
+          ...(row['kind'] === 'workspace' ? {
+            isExplicitlyPinned: JSON.parse(String(row['payload'])).isPinned === true,
+            isPinned: Boolean(row['pinned']),
+            sessionCount: Number(row['session_count']), lastActivityAt: Number(row['activity_at'])
+          } : {}) }
+      })),
+      nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({
+        catalog: 'recents', pinned: last['pinned'], activity: last['activity_at'], id: last['id']
+      })).toString('base64url') : null
+    }
+  }
+
+  /**
    * Removes owned history and its search entries in the same transaction.
    */
   public deleteSession(sessionId: string): void {
@@ -266,13 +315,18 @@ export class ConversationRepository {
     limit?: number
     cursor?: string
     query?: string
+    workspaceId?: string
   } = {}): SessionPage {
     const limit = pageSize(options.limit)
     const cursor = parseSessionCursor(options.cursor)
+    if (cursor && (cursor.workspaceId !== options.workspaceId || cursor.catalog)) {
+      throw new Error('The cursor belongs to another workspace or list.')
+    }
+
     const query = options.query?.trim() ?? ''
     const prepared = prepareSearchQuery(query)
     if (prepared.compact) {
-      return this.db.transaction(() => this.searchSessionPage(query, prepared, limit, cursor))()
+      return this.db.transaction(() => this.searchSessionPage(query, prepared, limit, cursor, options.workspaceId))()
     }
     if (cursor?.rank !== undefined || cursor?.search !== undefined ||
       cursor?.phrase !== undefined || cursor?.score !== undefined || cursor?.source !== undefined) {
@@ -280,6 +334,11 @@ export class ConversationRepository {
     }
     const filters: string[] = []
     const values: unknown[] = []
+
+    if (options.workspaceId) {
+      filters.push('json_extract(payload, \'$.workspaceId\') = ?')
+      values.push(options.workspaceId)
+    }
 
     if (cursor) {
       filters.push('(pinned, activity_at, id) < (?, ?, ?)')
@@ -295,6 +354,7 @@ export class ConversationRepository {
     return {
       items: selected.map((row) => JSON.parse(String(row['payload'])) as ConversationSession),
       nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({
+        ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
         pinned: last['pinned'], activity: last['activity_at'], id: last['id']
       })).toString('base64url') : null
     }
@@ -308,7 +368,8 @@ export class ConversationRepository {
     query: string,
     prepared: SearchQuery,
     limit: number,
-    cursor: SessionCursor | null
+    cursor: SessionCursor | null,
+    workspaceId?: string
   ): SessionPage {
     const encodedQuery = JSON.stringify(prepared)
     // FTS operators remain literal input; prefixes preserve partial-word searching.
@@ -316,7 +377,8 @@ export class ConversationRepository {
       .map((term) => `"${term.replaceAll('"', '""')}"*`)
     const match = [...new Set(words)].join(' AND ')
     const phrase = words.join(' + ')
-    const search = createHash('sha256').update(encodedQuery).update(match).update(phrase).digest('hex')
+    const search = createHash('sha256').update(encodedQuery).update(match).update(phrase)
+      .update(workspaceId ?? '').digest('hex')
     if (cursor && (
       cursor.search !== search || !Number.isInteger(cursor.rank) ||
       cursor.rank! < SearchRank.Exact || cursor.rank! > SearchRank.None ||
@@ -337,6 +399,7 @@ export class ConversationRepository {
     const bindings: Record<string, string | number> = {
       query: encodedQuery, noMatch: SearchRank.None, limit: limit + 1,
       phraseMatch: ContentMatchRank.Phrase, termMatch: ContentMatchRank.Terms,
+      ...(workspaceId ? { workspaceId } : {}),
       ...(match ? { match, phrase } : {}),
       ...(cursor ? { rank: cursor.rank!, activity: cursor.activity, id: cursor.id,
         cursorPhrase: cursor.phrase!, score: cursorScore! } : {})
@@ -369,6 +432,7 @@ export class ConversationRepository {
         JOIN title_ranks t ON t.id = s.id
         LEFT JOIN content_matches c ON c.session_id = s.id
         WHERE (t.search_rank < @noMatch OR c.message_rowid IS NOT NULL)
+          ${workspaceId ? 'AND json_extract(s.payload, \'$.workspaceId\') = @workspaceId' : ''}
       )
       SELECT r.*, s.payload FROM ranked_sessions r JOIN conversation_sessions s ON s.id = r.id
       ${cursor ? `WHERE ((r.search_rank, r.phrase_rank, r.content_score) > (@rank, @cursorPhrase, @score)
@@ -414,7 +478,7 @@ export class ConversationRepository {
       nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({
         pinned: last['pinned'], activity: last['activity_at'], id: last['id'],
         rank: last['search_rank'], phrase: last['phrase_rank'], score: last['content_score'],
-        source: last['message_rowid'], search
+        source: last['message_rowid'], search, ...(workspaceId ? { workspaceId } : {})
       })).toString('base64url') : null
     }
   }

@@ -71,7 +71,8 @@ const sessionParamsSchema = Type.Object({
 const pageQuerySchema = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
   cursor: Type.Optional(Type.String({ maxLength: 512 })),
-  query: Type.Optional(Type.String({ maxLength: 256 }))
+  query: Type.Optional(Type.String({ maxLength: 256 })),
+  workspace_id: Type.Optional(Type.String({ format: 'uuid' }))
 })
 
 const historyQuerySchema = Type.Object({
@@ -198,7 +199,8 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
         CONVERSATION_SESSION_MANAGER.ensureReady()
       }
       try {
-        const page = CONVERSATION_REPOSITORY.listSessions(request.query)
+        const page = CONVERSATION_REPOSITORY.listSessions({ ...request.query,
+          ...(request.query.workspace_id ? { workspaceId: request.query.workspace_id } : {}) })
 
         return reply.send({
           success: true,

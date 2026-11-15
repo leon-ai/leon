@@ -51,6 +51,40 @@ describe('profile conversation archive', () => {
     directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-conversation-archive-'))
   })
 
+  it('pages workspaces beside standalone sessions, scopes child search and detaches without losing history', async () => {
+    let repository = open()
+    const first = repository.workspaces.create({ name: 'Leon', brief: 'Build my assistant', resources: [] })
+    const second = repository.workspaces.create({ name: 'Videos', brief: 'Warm films', resources: [] })
+    expect(first.color).toBe('default')
+    expect(second.color).toBe('default')
+    for (let index = 0; index < 85; index++) {
+      const entry = { ...session(`project-${index}`, index + 1), workspaceId: first.id }
+      repository.saveSession(entry)
+      repository.upsertMessage(entry.id, { who: 'owner', messageId: `message-${index}`, message: 'Cinematic assistant', isAddedToHistory: true })
+    }
+    repository.saveSession(session('standalone', 90))
+    const root = repository.listRecents({ limit: 2 })
+    const remaining = repository.listRecents({ limit: 2, cursor: root.nextCursor! })
+    expect([...root.items, ...remaining.items].map((item) => item.value.id).sort()).toEqual([first.id, second.id, 'standalone'].sort())
+    expect(repository.listSessions({ workspaceId: first.id, limit: 100 }).items).toHaveLength(85)
+    const childPage = repository.listSessions({ workspaceId: first.id, limit: 40 })
+    expect(repository.listSessions({ workspaceId: first.id, cursor: childPage.nextCursor! }).items).toHaveLength(40)
+    expect(() => repository.listSessions({ workspaceId: second.id, cursor: childPage.nextCursor! })).toThrow('cursor')
+    const searchPage = repository.listSessions({ workspaceId: first.id, query: 'Cinematic', limit: 40 })
+    expect(repository.listSessions({ workspaceId: first.id, query: 'Cinematic', cursor: searchPage.nextCursor! }).items).toHaveLength(40)
+    expect(repository.listSessions({ workspaceId: second.id, query: 'Cinematic' }).items).toEqual([])
+    expect(repository.listSessions({ workspaceId: first.id, query: 'Cinematic', limit: 100 }).items).toHaveLength(85)
+    close(repository)
+    repository = open()
+    expect(repository.workspaces.get(first.id)?.brief).toBe('Build my assistant')
+    expect(open('other-owner').workspaces.list()).toEqual([])
+    expect(repository.workspaces.remove(first.id)).toHaveLength(85)
+    expect(repository.readSession('project-0')).not.toHaveProperty('workspaceId')
+    expect(repository.readMessage('project-0', 'message-0')?.message).toBe('Cinematic assistant')
+    expect(repository.listRecents({ limit: 100 }).items).toHaveLength(87)
+  })
+
+
   it('persists late preparation outcomes only on the originating accepted call without changing answer metadata', () => {
     const repository = open()
     repository.saveSession(session('chat'))
