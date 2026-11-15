@@ -1,9 +1,9 @@
 import { MAX_GENERATED_ARTIFACT_BYTES, API_VERSION } from '@/constants'
 import fs from 'node:fs/promises'
-import { createWriteStream } from 'node:fs'
+import { createReadStream, createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
@@ -32,10 +32,26 @@ function directory(sessionId: string, id: string): string {
   )
 }
 
+async function contentDigest(filename: string): Promise<string> {
+  const digest = createHash('sha256')
+  for await (const chunk of createReadStream(filename)) {
+    digest.update(chunk)
+  }
+
+  return digest.digest('hex')
+}
+
 /**
- * Copies a completed output into immutable session storage before exposing it.
+ * Signals reuse of an immutable artifact ID for different metadata or bytes.
+ */
+export class ArtifactConflictError extends Error {}
+
+/**
+ * Publishes completed outputs atomically. A caller-provided ID can be retried,
+ * including concurrently, only when its metadata and content remain identical.
  */
 export async function registerArtifact(input: {
+  id?: string
   session_id: string
   path: string
   filename: string
@@ -56,9 +72,10 @@ export async function registerArtifact(input: {
     throw new Error('Invalid artifact media type.')
   }
 
-  const source = await fs.open(input.path, 'r')
-  const id = randomUUID()
+  const id = component(input.id ?? randomUUID())
   const target = directory(input.session_id, id)
+  const source = await fs.open(input.path, 'r')
+  let temporary: string | undefined
 
   try {
     const stat = await source.stat()
@@ -67,12 +84,14 @@ export async function registerArtifact(input: {
       throw new Error('Artifact must be a regular file within the size limit.')
     }
 
-    await fs.mkdir(path.join(target, 'content'), {
+    await fs.mkdir(path.dirname(target), {
       recursive: true,
       mode: 0o700
     })
+    temporary = await fs.mkdtemp(path.join(path.dirname(target), '.register-'))
+    await fs.mkdir(path.join(temporary, 'content'), { mode: 0o700 })
     // Read from the opened handle, so replacing the source path cannot change the file.
-    const destination = path.join(target, 'content', filename)
+    const destination = path.join(temporary, 'content', filename)
 
     if (stat.size) {
       await pipeline(
@@ -109,17 +128,43 @@ export async function registerArtifact(input: {
     }
 
     await fs.writeFile(
-      path.join(target, 'metadata.json'),
+      path.join(temporary, 'metadata.json'),
       JSON.stringify(artifact),
       { flag: 'wx', mode: 0o600 }
     )
 
-    return artifact
-  } catch (error) {
-    await fs.rm(target, { recursive: true, force: true })
-    throw error
+    try {
+      await fs.rename(temporary, target)
+      return artifact
+    } catch (error) {
+      if (!input.id) {
+        throw error
+      }
+      // A complete directory is the publication boundary. A concurrent winner
+      // is never removed or overwritten by this attempt's failure or cleanup.
+      const existing = await readArtifact(input.session_id, id).catch(() => undefined)
+      if (!existing) {
+        throw error
+      }
+      const saved = existing.artifact
+      if (saved.filename !== filename || saved.mime_type !== input.mime_type ||
+        saved.source !== input.source || saved.size_bytes !== stat.size) {
+        throw new ArtifactConflictError('This upload ID already belongs to another file.')
+      }
+      const [previousDigest, nextDigest] = await Promise.all([
+        contentDigest(existing.path), contentDigest(destination)
+      ])
+      if (previousDigest !== nextDigest) {
+        throw new ArtifactConflictError('This upload ID already belongs to different file contents.')
+      }
+
+      return saved
+    }
   } finally {
     await source.close()
+    if (temporary) {
+      await fs.rm(temporary, { recursive: true, force: true })
+    }
   }
 }
 

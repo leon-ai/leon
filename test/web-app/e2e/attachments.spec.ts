@@ -1,6 +1,7 @@
 import type { Page, JSHandle } from '@playwright/test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
 
 import { test, expect, SESSION_URL, finishFiniteAnimations } from './fixtures'
 
@@ -478,6 +479,40 @@ test('marks a failed upload per file and retries without uploading completed fil
   await page.getByRole('button', { name: 'Retry sending message', exact: true }).click()
   await expect(files).toHaveCount(0)
   expect(ui.uploads.map((file) => file.filename)).toEqual(['Notes.txt', 'Second.txt'])
+})
+
+test('retries an upload with the same identity after its acknowledgement is lost', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
+  let stored: Artifact | undefined
+  let attempts = 0
+  await page.route('**/sessions/*/attachments?**', async (route) => {
+    const params = new URL(route.request().url()).searchParams
+    attempts += 1
+    if (!stored) {
+      stored = {
+        id: params.get('upload_id')!, session_id: ui.sessions[0]!.id,
+        filename: TEXT.name, mime_type: TEXT.mimeType, size_bytes: TEXT.buffer.length,
+        created_at: Date.now(), source: 'owner-attachment', url: '/unavailable-preview'
+      }
+      await route.abort('connectionreset')
+      return
+    }
+    expect(params.get('upload_id')).toBe(stored.id)
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ attachment: stored }) })
+  })
+  let references: string[] | undefined
+  await page.route('**/sessions/*/messages', async (route) => {
+    const body = route.request().postDataJSON() as { id: string, attachments: string[] }
+    references = body.attachments
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ command: { id: body.id, status: 'accepted' } }) })
+  })
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page.getByText('Upload failed', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Retry sending message', exact: true }).click()
+  await expect(page.getByRole('form', { name: 'Send a message to Leon' }).getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  expect(attempts).toBe(2)
+  expect(references).toEqual([stored!.id])
 })
 
 test('measures per-file progress over a slow connection and waits for server acceptance', async ({ page, ui }) => {

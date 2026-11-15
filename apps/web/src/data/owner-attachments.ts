@@ -57,7 +57,7 @@ export async function uploadOwnerAttachments(profile: string, sessionId: string,
     const receipts = uploadedFiles.get(draft.file) ?? new Map<string, Artifact>()
     let attachment = receipts.get(scope)
     if (!attachment) {
-      const params = new URLSearchParams({ filename: draft.filename, media_type: draft.mediaType })
+      const params = new URLSearchParams({ filename: draft.filename, media_type: draft.mediaType, upload_id: draft.id })
       onProgress?.(draft.id, { state: AttachmentUploadState.Uploading, loaded: 0, total: draft.file.size })
       try {
         const result = await requestAPI<{ attachment: Artifact }>(`sessions/${encodeURIComponent(sessionId)}/attachments?${params}`, {

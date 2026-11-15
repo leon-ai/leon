@@ -8,7 +8,7 @@ import type { APIOptions } from '@/core/http-server/http-server'
 import { requireBinaryUpload } from '@/core/http-server/binary-upload'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { registerArtifact } from '@/core/artifacts/artifact-store'
+import { ArtifactConflictError, registerArtifact } from '@/core/artifacts/artifact-store'
 import type { Artifact } from '@/core/artifacts/artifact-types'
 import { validateOwnerAttachmentContent } from '@/core/owner-attachment-validation'
 import {
@@ -23,7 +23,7 @@ export const ownerAttachmentRoutes: FastifyPluginAsync<APIOptions> = async (fast
   fastify.addContentTypeParser('application/octet-stream', (_request, payload, done) => done(null, payload))
   fastify.post<{
     Params: { session_id: string }
-    Querystring: { filename: string, media_type: string }
+    Querystring: { filename: string, media_type: string, upload_id?: string }
     Body: Readable
   }>(`/api/${options.apiVersion}/sessions/:session_id/attachments`, {
     bodyLimit: OWNER_ATTACHMENT_MAX_FILE_BYTES,
@@ -32,7 +32,8 @@ export const ownerAttachmentRoutes: FastifyPluginAsync<APIOptions> = async (fast
       params: Type.Object({ session_id: Type.String({ format: 'uuid' }) }),
       querystring: Type.Object({
         filename: Type.String({ minLength: 1, maxLength: 255 }),
-        media_type: Type.String({ minLength: 1, maxLength: 255 })
+        media_type: Type.String({ minLength: 1, maxLength: 255 }),
+        upload_id: Type.Optional(Type.String({ format: 'uuid' }))
       })
     }
   }, async (request, reply) => {
@@ -80,6 +81,7 @@ export const ownerAttachmentRoutes: FastifyPluginAsync<APIOptions> = async (fast
         throw new Error('This session was deleted before the upload completed.')
       }
       attachment = await registerArtifact({
+        ...(request.query.upload_id ? { id: request.query.upload_id } : {}),
         session_id: sessionId, path: destination, filename,
         mime_type: format.mediaType, source: OWNER_ATTACHMENT_SOURCE
       })
@@ -90,7 +92,7 @@ export const ownerAttachmentRoutes: FastifyPluginAsync<APIOptions> = async (fast
       await fs.rm(temporary, { recursive: true, force: true })
     }
     if (failure) {
-      return reply.code(bytes > limit ? 413 : 400).send({
+      return reply.code(failure instanceof ArtifactConflictError ? 409 : bytes > limit ? 413 : 400).send({
         message: failure instanceof Error ? failure.message : 'I could not upload this file.'
       })
     }

@@ -29,6 +29,7 @@ import { createAgentLoopContinuationState, type AgentLoopContinuationState } fro
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { artifactsPlugin } from '@/core/http-server/api/artifacts'
 import type { Artifact } from '@/core/artifacts/artifact-types'
+import { readArtifact } from '@/core/artifacts/artifact-store'
 import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
 import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
@@ -165,14 +166,44 @@ describe('web conversation runtime', () => {
     return id
   }
 
-  async function upload(sessionId: string, filename: string, mediaType: string, payload: Buffer): Promise<Awaited<ReturnType<typeof app.inject>>> {
+  async function upload(sessionId: string, filename: string, mediaType: string, payload: Buffer, uploadId?: string): Promise<Awaited<ReturnType<typeof app.inject>>> {
     const params = new URLSearchParams({ filename, media_type: mediaType })
+    if (uploadId) {
+      params.set('upload_id', uploadId)
+    }
 
     return app.inject({
       method: 'POST', url: `/api/v1/sessions/${sessionId}/attachments?${params}`,
       headers: { 'x-test-profile': profile, 'content-type': 'application/octet-stream' }, payload
     })
   }
+
+  it('reuses completed and concurrent upload identities while rejecting conflicting files', async () => {
+    const sessionId = await create()
+    const id = randomUUID()
+    const content = Buffer.from('Original notes')
+    const attempts = await Promise.all([
+      upload(sessionId, 'Notes.txt', 'text/plain', content, id),
+      upload(sessionId, 'Notes.txt', 'text/plain', content, id)
+    ])
+    for (const response of attempts) {
+      expect(response.statusCode).toBe(201)
+      expect(response.json().attachment.id).toBe(id)
+    }
+    expect(attempts[0]!.json()).toEqual(attempts[1]!.json())
+    const retry = await upload(sessionId, 'Notes.txt', 'text/plain', content, id)
+    expect(retry.statusCode).toBe(201)
+    expect(retry.json()).toEqual(attempts[0]!.json())
+    expect((await upload(sessionId, 'Notes.txt', 'text/plain', Buffer.from('Modified notes'), id)).statusCode).toBe(409)
+    expect((await upload(sessionId, 'Other.txt', 'text/plain', content, id)).statusCode).toBe(409)
+    const saved = await runWithProfileContext({ profileName: profile }, () => readArtifact(sessionId, id))
+    expect(await fs.readFile(saved.path)).toEqual(content)
+    expect(await fs.readdir(path.dirname(path.dirname(path.dirname(saved.path))))).toEqual([id])
+    const other = await create()
+    const separate = await upload(other, 'Other.txt', 'text/plain', Buffer.from('Another session'), id)
+    expect(separate.statusCode).toBe(201)
+    expect(separate.json().attachment.session_id).toBe(other)
+  })
 
   it('streams owner uploads into immutable session storage and delivers supported media to the selected model', async () => {
     const sessionId = await create()

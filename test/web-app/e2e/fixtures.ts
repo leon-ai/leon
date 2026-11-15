@@ -211,7 +211,12 @@ export const test = base.extend<{ ui: UIFixture }>({
       const session = sessions.find((candidate) => candidate.id === parts[3])
       if (session && request.method() === 'POST' && parts.at(-1) === 'attachments') {
         const buffer = request.postDataBuffer()!
-        const id = crypto.randomUUID()
+        const id = url.searchParams.get('upload_id') ?? crypto.randomUUID()
+        const existing = uploads.get(id)
+        if (existing) {
+          await json(route, { attachment: existing.attachment }, 201)
+          return
+        }
         const attachment: Artifact = {
           id, session_id: session.id, filename: url.searchParams.get('filename')!,
           mime_type: url.searchParams.get('media_type')!, size_bytes: buffer.length,
