@@ -31,6 +31,7 @@ import { artifactsPlugin } from '@/core/http-server/api/artifacts'
 import type { Artifact } from '@/core/artifacts/artifact-types'
 import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
 import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
 
 const fixture = vi.hoisted(() => ({
   root: '',
@@ -216,6 +217,49 @@ describe('web conversation runtime', () => {
     expect((await request('POST', endpoint, { ...body, attachments: body.attachments.slice(1) })).statusCode).toBe(409)
     const other = await create()
     expect((await request('POST', `/api/v1/sessions/${other}/messages`, { ...body, id: randomUUID() })).statusCode).toBe(409)
+  })
+
+  it('accepts source, configuration and arbitrary text filenames as inert plain text', async () => {
+    const sessionId = await create()
+    const attachments: string[] = []
+    for (const file of [
+      { name: 'index.mjs', type: 'application/javascript', text: 'export const greeting = "Hello"' },
+      { name: 'main.rs', type: 'text/x-rust', text: 'fn main() {}' },
+      { name: 'main.ts', type: 'video/mp2t', text: 'const answer: number = 42' },
+      { name: 'Dockerfile', type: 'application/octet-stream', text: 'FROM scratch' },
+      { name: '.env.local', type: 'text/plain', text: 'EXAMPLE=value' },
+      { name: 'Notes.custom-format', type: 'application/octet-stream', text: 'Notes with an unfamiliar extension.' },
+      { name: 'Makefile', type: 'text/plain', text: 'build:\n\techo ready' },
+      { name: 'Notes.txt', type: 'application/javascript', text: 'Notes with an incorrect OS file association.' },
+      { name: 'Page.html', type: 'text/html', text: '<script>globalThis.executed = true</script>' }
+    ]) {
+      const response = await upload(sessionId, file.name, file.type, Buffer.from(file.text))
+      expect(response.statusCode).toBe(201)
+      const attachment = response.json().attachment as Artifact
+      expect(attachment).toMatchObject({ filename: file.name, mime_type: 'text/plain' })
+      attachments.push(attachment.id)
+      const download = await request('GET', attachment.url)
+      expect(download.body).toBe(file.text)
+      expect(download.headers['content-type']).toBe('text/plain')
+      expect(download.headers['content-disposition']).toMatch(/^attachment;/)
+      expect(download.headers['x-content-type-options']).toBe('nosniff')
+      expect(download.headers['content-security-policy']).toContain('sandbox')
+    }
+    await runWithProfileContext({ profileName: profile }, () =>
+      CONVERSATION_SESSION_MANAGER.setSessionModelFromProvider(sessionId, 'openai', 'gpt-6.1-sol'))
+    const prepared = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, () =>
+      prepareStoredOwnerAttachments('Read these sources.', sessionId, attachments)))
+    expect(prepared.files).toEqual([])
+    expect(prepared.query).toContain('index.mjs')
+    expect(prepared.query).toContain('main.rs')
+    expect(prepared.query).toContain('"nativeInput":false')
+    const inline = await runWithProfileContext({ profileName: profile }, () => prepareOwnerAttachments('Read these too.', [
+      { filename: 'src/index.mjs', mediaType: 'application/javascript', dataBase64: Buffer.from('export const answer = 42').toString('base64') },
+      { filename: 'main.rs', mediaType: 'text/x-rust', dataBase64: Buffer.from('fn main() {}').toString('base64') }
+    ], sessionId))
+    expect(inline.files).toEqual([])
+    expect(inline.query).toContain('src/index.mjs')
+    expect(inline.query).toContain('"mediaType":"text/plain"')
   })
 
   it('rejects invalid text, mismatched containers and over-limit files before accepting a message', async () => {

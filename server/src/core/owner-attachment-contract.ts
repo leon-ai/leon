@@ -11,18 +11,13 @@ export const OWNER_ATTACHMENT_TEXT_MEDIA_TYPES = new Set([
 ])
 const MEDIA_TYPE_ALIASES: Record<string, readonly string[]> = {
   'application/rtf': ['text/rtf'],
-  'application/xml': ['text/xml'],
-  'application/yaml': ['text/yaml', 'application/x-yaml', 'text/plain'],
-  'application/json': ['text/json', 'text/plain'],
-  'text/markdown': ['text/plain'],
-  'text/csv': ['application/vnd.ms-excel', 'text/plain'],
-  'text/tab-separated-values': ['text/plain'],
   'audio/wav': ['audio/x-wav', 'audio/wave'],
   'audio/flac': ['audio/x-flac'],
   'audio/mp4': ['audio/x-m4a']
 }
 
-// Recognized formats share filename, MIME and size validation across clients.
+// Recognized containers retain their MIME and category limits. Other filenames
+// are text candidates whose actual encoding is checked by the upload validator.
 export const OWNER_ATTACHMENT_FORMATS = [
   { mediaType: 'image/png', extensions: ['.png'] },
   { mediaType: 'image/jpeg', extensions: ['.jpg', '.jpeg'] },
@@ -57,8 +52,12 @@ export const OWNER_ATTACHMENT_FORMATS = [
   { mediaType: 'video/quicktime', extensions: ['.mov'] }
 ] satisfies { mediaType: string, extensions: string[], spreadsheet?: boolean }[]
 
+const TEXT_ATTACHMENT_FORMAT = OWNER_ATTACHMENT_FORMATS.find((format) => format.mediaType === 'text/plain')!
+
 /**
- * Resolves permitted filename and MIME pairs before server-side content checks.
+ * Resolves known containers while accepting arbitrary text filenames, including
+ * source code and extensionless configuration. Unknown types are stored as plain
+ * text only after server-side encoding validation, never as their claimed MIME.
  */
 export function getOwnerAttachmentFormat(filename: string, mediaType: string): typeof OWNER_ATTACHMENT_FORMATS[number] | undefined {
   if (!isPortableArtifactFilename(filename)) {
@@ -66,8 +65,8 @@ export function getOwnerAttachmentFormat(filename: string, mediaType: string): t
   }
   const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase()
   const format = OWNER_ATTACHMENT_FORMATS.find((candidate) => candidate.extensions.includes(extension))
-  if (!format) {
-    return undefined
+  if (!format || OWNER_ATTACHMENT_TEXT_MEDIA_TYPES.has(format.mediaType)) {
+    return format ?? TEXT_ATTACHMENT_FORMAT
   }
   const normalizedType = mediaType.split(';', 1)[0]!.trim().toLowerCase()
   if (normalizedType && normalizedType !== 'application/octet-stream' &&

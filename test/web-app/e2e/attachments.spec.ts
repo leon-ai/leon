@@ -144,6 +144,39 @@ for (const theme of ['light', 'dark']) {
   })
 }
 
+test('selects, pastes and drops source and configuration files as text previews', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const chooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Add files', exact: true }).click()
+  const chooser = await chooserPromise
+  await expect(page.getByLabel('Choose attachments', { exact: true })).not.toHaveAttribute('accept')
+  const sources = [
+    { name: 'index.mjs', mimeType: 'application/javascript', text: 'export const greeting = "Hello"' },
+    { name: 'main.rs', mimeType: 'text/x-rust', text: 'fn main() {}' },
+    { name: 'main.ts', mimeType: 'video/mp2t', text: 'const answer: number = 42' },
+    { name: 'Dockerfile', mimeType: '', text: 'FROM scratch' },
+    { name: '.env.local', mimeType: 'text/plain', text: 'EXAMPLE=value' },
+    { name: 'Page.html', mimeType: 'text/html', text: '<script>globalThis.attachmentExecuted = true</script>' }
+  ]
+  await chooser.setFiles(sources.map(({ text, ...file }) => ({ ...file, buffer: Buffer.from(text) })))
+  const files = page.getByRole('form', { name: 'Send a message to Leon' }).getByRole('list', { name: 'Attached files' })
+  for (const file of sources) {
+    const preview = files.getByRole('figure', { name: file.name, exact: true })
+    await expect(preview).toBeVisible()
+    await expect(preview).toContainText(file.text)
+  }
+  await pasteFiles(page, [{ name: 'Notes.custom-format', type: 'application/octet-stream' }])
+  const transfer = await fileTransfer(page, 'Makefile')
+  await page.getByRole('main').dispatchEvent('drop', { dataTransfer: transfer })
+  await expect(files.getByRole('listitem')).toHaveCount(8)
+  expect(await page.evaluate(() => Reflect.get(window, 'attachmentExecuted'))).toBeUndefined()
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(files).toHaveCount(0)
+  expect(ui.uploads.map((file) => file.filename)).toEqual([...sources.map((file) => file.name), 'Notes.custom-format', 'Makefile'])
+  expect(ui.uploads.every((file) => file.mime_type === 'text/plain')).toBe(true)
+  await transfer.dispose()
+})
+
 test('shares video first-frame previews and native media dialogs with artifacts', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   await page.getByLabel('Choose attachments', { exact: true }).setInputFiles([
