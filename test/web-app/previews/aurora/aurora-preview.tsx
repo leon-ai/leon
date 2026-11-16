@@ -12,6 +12,7 @@ import {
 } from '../../../../aurora/src/v2'
 import { SidebarUpdateButton } from '@/layout/sidebar/sidebar-update-button'
 import { Button as AppButton } from '@/components/button'
+import { Callout } from '@/components/callout/callout'
 import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
 import { CopyButton } from '@/components/copy-button'
 import { InputDropdown } from '@/components/input-dropdown/input-dropdown'
@@ -319,6 +320,12 @@ function Example({ id }: { id: string }) {
       return <ButtonDemo />
     case 'status':
       return <StatusDemo />
+    case 'callout':
+      return <div className="demo-stack">
+        <Callout>I use your workspace brief and relevant folder content to keep help grounded in what you are working on.</Callout>
+        <Callout variant="warning">This folder is unavailable. I can use it again when it is reconnected.</Callout>
+        <Callout variant="danger">Removing this connection stops my access until you reconnect it.</Callout>
+      </div>
     case 'input':
       return <div className="demo-stack"><Input ariaLabel="A small idea" placeholder="What’s on your mind?" />
         <Input ariaLabel="A longer note" multiline placeholder="A little more room…" /><InputDropdownDemo /></div>

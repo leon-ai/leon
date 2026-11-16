@@ -1,0 +1,36 @@
+.callout
+  display: flex
+  align-items: center
+  gap: var(--space-md)
+  box-sizing: border-box
+  width: 100%
+  padding: var(--space-lg)
+  border-radius: var(--border-radius-md)
+  background-color: var(--color-background)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+.callout-icon
+  display: inline-flex
+  flex: 0 0 auto
+  font-size: var(--font-size-xl)
+  line-height: 1
+
+.callout-content
+  min-width: 0
+  overflow-wrap: anywhere
+
+  > :first-child
+    margin-top: 0
+
+  > :last-child
+    margin-bottom: 0
+
+.callout-warning
+  background-color: var(--color-status-warning-soft)
+  color: var(--color-status-warning)
+
+.callout-danger
+  background-color: var(--color-status-error-soft)
+  color: var(--color-status-error)
