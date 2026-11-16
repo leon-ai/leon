@@ -4,7 +4,7 @@ import type { ElementHandle, Locator } from '@playwright/test'
 import type { ConversationEvent, ConversationRecord } from '../../../apps/web/src/data/conversation'
 import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
-import { test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
@@ -295,7 +295,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 
     for (const theme of ['light', 'dark']) {
       await page.setViewportSize({ width: 1_512, height: 982 })
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await page.setViewportSize({ width: theme === 'light' ? 390 : 1_512, height: 982 })
@@ -398,7 +398,7 @@ test('shares lazy file artwork across languages, themes and session navigation',
   const python = answer.getByRole('img', { name: 'Python', exact: true })
   const sources: string[] = []
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await setFixtureTheme(page, theme)
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
     sources.push((await python.getAttribute('src'))!)
@@ -480,7 +480,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(code).toHaveCSS('overscroll-behavior-y', 'auto')
 
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await expect(code.locator('..')).toHaveCSS('background-color', theme === 'light' ? 'rgb(245, 245, 247)' : 'rgb(10, 10, 10)')
       const visuals = await answer.evaluate((element) => {
@@ -614,7 +614,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     }, svgUrl)).toBe(false)
     for (const theme of ['light', 'dark']) {
       await page.setViewportSize({ width: 1_512, height: 982 })
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await expect(preview.locator('svg')).toBeVisible()
       const toggle = block.getByRole('button', { name: 'View diagram code', exact: true })
@@ -932,7 +932,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(page.getByRole('button', { name: 'Worked for 6s', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Stop this turn', exact: true })).toHaveCount(0)
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(footer.locator('.bonus-response-icon')).toHaveCSS('background-image', new RegExp(`logo-for-${theme === 'light' ? 'light' : 'dark'}-bg\\.svg`))
       await expect(footer).toHaveCSS('font-size', await footer.evaluate((element) => getComputedStyle(element).getPropertyValue('--font-size-sm').trim()))
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
@@ -1028,7 +1028,7 @@ for (const kind of ['skill', 'experience'] as const) {
       const dialog = page.getByRole('dialog', { name, exact: true })
       const complete = dialog.getByRole('region', { name: 'SKILL.md', exact: true })
       for (const theme of ['light', 'dark']) {
-        await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+        await setFixtureTheme(page, theme)
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
         await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
         if (reducedMotion === 'reduce') {
@@ -1629,7 +1629,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       expect(geometry.dot.delay).toBe('1.6s')
     }
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await page.evaluate(async () => {

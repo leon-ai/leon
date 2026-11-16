@@ -1,4 +1,4 @@
-import { test as base, expect, type Locator, type Response, type Route } from '@playwright/test'
+import { test as base, expect, type Locator, type Response, type Route, type Page } from '@playwright/test'
 
 import type { ConversationPage, ConversationRecord, ConversationTool, ModelCatalog, ModelSelection, ConversationNotification } from '../../../apps/web/src/data/conversation'
 import { getToolOutputFormat, getToolResultData, toToolContent, toToolDisplayContent, toToolInput } from '../../../apps/web/src/utils/tool-content'
@@ -18,6 +18,18 @@ export const SESSION_ID = '00000000-0000-4000-8000-000000000000'
 export const OTHER_SESSION_ID = '00000000-0000-4000-8000-000000000001'
 export const SESSION_URL = `session/${SESSION_ID}`
 export const LATEST_ANSWER = `Saved answer ${HISTORY_TURNS - 1}`
+
+/**
+ * Supplies a palette to feature fixtures without leaving their current page.
+ * Theme control persistence and transitions have separate settings coverage.
+ */
+export async function setFixtureTheme(page: Page, theme: string): Promise<void> {
+  await page.evaluate((value) => {
+    document.documentElement.dataset['theme'] = value
+    localStorage.setItem('leon.web-app.theme', value)
+    window.dispatchEvent(new CustomEvent('leon:web-app-theme-change', { detail: value }))
+  }, theme)
+}
 
 /**
  * Lets finite entrance/disclosure motion settle before the next user action,
@@ -253,6 +265,17 @@ export const test = base.extend<{ ui: UIFixture }>({
         return
       }
       const session = sessions.find((candidate) => candidate.id === parts[3])
+      if (session && request.method() === 'PATCH' && parts.length === 4) {
+        const changes = request.postDataJSON() as { title?: string, is_pinned?: boolean }
+        if (changes.title !== undefined) {
+          session.title = changes.title
+        }
+        if (changes.is_pinned !== undefined) {
+          session.isPinned = changes.is_pinned
+        }
+        await json(route, { session })
+        return
+      }
       if (session && request.method() === 'POST' && parts.at(-1) === 'attachments') {
         const buffer = request.postDataBuffer()!
         const id = url.searchParams.get('upload_id') ?? crypto.randomUUID()

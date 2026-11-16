@@ -13,17 +13,15 @@ import { useTheme } from '@/hooks/use-theme'
 import { loadImage } from '@/utils/load-image'
 import {
   getStoredSidebarExpanded,
-  getStoredSoundsEnabled,
   saveSidebarExpanded,
-  saveSoundsEnabled,
-  registerThemePreparation,
-  toggleTheme
+  registerThemePreparation
 } from '@/theme'
 
 import { Logo } from './logo'
 import { Menu } from './menu'
 import { SessionList } from './session-list'
 import { SidebarFooter } from './sidebar-footer'
+import { SidebarUpdateButton } from './sidebar-update-button'
 
 const DARK_THEME_LOGO_SRC = getPublicAssetPath('img/logo-for-dark-bg-text.svg')
 const LIGHT_THEME_LOGO_SRC = getPublicAssetPath(
@@ -92,9 +90,7 @@ export function Sidebar() {
   const navigate = useNavigate()
   const sidebarScrollAreaRef = useRef<HTMLDivElement>(null)
   const searchReturnFocusRef = useRef<HTMLElement | null>(null)
-  const [soundsEnabled, setSoundsEnabled] = useState(getStoredSoundsEnabled)
   const theme = useTheme()
-  const requestedTheme = useTheme({ includeRequested: true })
   const [sidebarExpanded, setSidebarExpanded] = useState(getStoredSidebarExpanded)
   const [sidebarContentCollapsed, setSidebarContentCollapsed] = useState(
     () => !getStoredSidebarExpanded()
@@ -111,11 +107,6 @@ export function Sidebar() {
       'high'
     )
   }), [])
-
-  function updateSoundsEnabled(nextSoundsEnabled: boolean): void {
-    setSoundsEnabled(nextSoundsEnabled)
-    saveSoundsEnabled(nextSoundsEnabled)
-  }
 
   function updateSidebarExpanded(nextSidebarExpanded: boolean): void {
     if (nextSidebarExpanded) {
@@ -254,19 +245,7 @@ export function Sidebar() {
           </div>
         </div>
         <div className="sidebar-controls">
-          <Button
-            iconName={soundsEnabled ? 'volume-up' : 'volume-mute'}
-            tone="muted"
-            tooltipMessage={soundsEnabled ? 'Mute sounds' : 'Unmute sounds'}
-            onClick={() => updateSoundsEnabled(!soundsEnabled)}
-          />
-          <Button
-            className="sidebar-theme-toggle"
-            iconName={requestedTheme === 'dark' ? 'moon' : 'sun'}
-            tone="muted"
-            tooltipMessage={requestedTheme === 'dark' ? 'Apply light theme' : 'Apply dark theme'}
-            onClick={toggleTheme}
-          />
+          <SidebarUpdateButton available />
           <Button
             iconName={sidebarExpanded ? 'sidebar-fold' : 'sidebar-unfold'}
             tone="muted"
@@ -277,7 +256,6 @@ export function Sidebar() {
       </header>
       <Menu
         collapsed={sidebarContentCollapsed}
-        variant="fixed"
         onSearchSessions={openSearchSessionsDialog}
         onSearchIntent={() => prefetchModule(loadSearchSessions)}
       />
@@ -289,7 +267,6 @@ export function Sidebar() {
         onScroll={handleSidebarScroll}
       >
         <div className="sidebar-scroll-area-mask" aria-hidden="true" />
-        <Menu collapsed={sidebarContentCollapsed} variant="scrollable" />
         <SessionList
           collapsed={sidebarContentCollapsed}
           scrollElementRef={sidebarScrollAreaRef}

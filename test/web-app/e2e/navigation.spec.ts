@@ -5,7 +5,7 @@ import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
-import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
 test('warms session intent and search code without navigating, consuming state, or fetching older history', async ({ page, ui }) => {
   const resources: string[] = []
@@ -85,6 +85,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+    await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    await page.getByRole('link', { name: 'Appearance', exact: true }).click()
     const mute = page.getByRole('button', { name: 'Mute sounds', exact: true })
     const unmute = page.getByRole('button', { name: 'Unmute sounds', exact: true })
     const initial = await mute.locator('animate[attributeName="d"]').first().getAttribute('from')
@@ -175,7 +177,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     ` })
     for (const theme of ['light', 'dark']) {
       await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
-      await expect(page.locator(`.sidebar-controls [data-icon-state="${theme === 'light' ? 'sun' : 'moon'}"]`)).toBeVisible()
+      await expect(page.locator(`.sidebar-theme-toggle [data-icon-state="${theme === 'light' ? 'sun' : 'moon'}"]`)).toBeVisible()
       if (theme === 'light') {
         const pending = await logo.promise
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
@@ -286,7 +288,7 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
   }
   for (const theme of ['dark', 'light']) {
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
     }
     for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await page.emulateMedia({ reducedMotion })
@@ -992,7 +994,7 @@ for (const { theme, reducedMotion, width } of [
     await page.goto(SESSION_URL)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     }
     const historyReads = ui.historyRequests.length
@@ -1246,7 +1248,7 @@ for (const pinned of [false, true]) {
     await expect(dot).toBeVisible()
 
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await composer.focus()
       await composer.hover()
@@ -1308,7 +1310,7 @@ test('distinguishes the selected session from concurrent WIP rows in both themes
   const other = page.getByRole('link', { name: /Test session 1/ })
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await setFixtureTheme(page, theme)
     await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
     await composer.hover()
     const colors = await selected.evaluate((element) => {
@@ -1353,7 +1355,7 @@ test('drafts immediately while history loads and opens the latest messages at th
   await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('width', '20px')
   await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('height', '20px')
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await setFixtureTheme(page, theme)
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
     await expect.poll(() => loading.evaluate((element) => {
@@ -1404,7 +1406,7 @@ test('keeps owner text directly selectable with its bubble selection colors and 
   await owner.hover()
   await expect(page.getByRole('tooltip')).toHaveCount(0)
   for (const theme of ['light', 'dark']) {
-    await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+    await setFixtureTheme(page, theme)
     const selected = await owner.evaluate((element) => {
       const textNode = element.firstChild!
       const range = document.createRange()
@@ -1446,7 +1448,7 @@ for (const { theme, motion, width } of [
     ])
     await page.goto(SESSION_URL)
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     }
     await page.setViewportSize({ width, height: 982 })
@@ -2047,7 +2049,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       getComputedStyle(element, '::before').animationName
     )).toBe(reducedMotion === 'reduce' ? 'none' : 'loader-indicator-pulse')
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await expect(loading.locator('.loader-indicator')).toHaveCSS('color', 'rgb(28, 117, 219)')
@@ -2441,7 +2443,7 @@ for (const status of ['success', 'error'] as const) {
     await expect(tool.locator('[data-icon="check"], [data-icon="check"]')).toHaveCount(0)
 
     for (const theme of ['dark', 'light']) {
-      await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+      await setFixtureTheme(page, theme)
       if (status === 'error') {
         await expect(tool).toHaveAccessibleDescription('Tool call failed')
         const durationColor = await tool.locator('.tool-call-duration').evaluate((element) => getComputedStyle(element).color)

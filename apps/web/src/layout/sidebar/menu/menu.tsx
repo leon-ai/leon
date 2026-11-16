@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 
 import { MenuItem } from '@/layout/sidebar/menu-item'
-import { Status } from '@/components/status'
 
 import './menu.sass'
 
@@ -21,23 +20,6 @@ interface NavigatorWithUserAgentData extends Navigator {
   userAgentData?: NavigatorUserAgentData
 }
 
-function SoonStatus() {
-  return (
-    <Status
-      variant="secondary"
-      label="Soon"
-    />
-  )
-}
-
-function NewStatus() {
-  return (
-    <Status
-      label="New"
-    />
-  )
-}
-
 function getPlatform(): string | undefined {
   if (NAVIGATOR_USER_AGENT_DATA_KEY in navigator) {
     return (navigator as NavigatorWithUserAgentData).userAgentData?.platform
@@ -50,14 +32,12 @@ interface MenuProps {
   collapsed?: boolean
   onSearchSessions?: () => void
   onSearchIntent?: () => void
-  variant?: 'fixed' | 'scrollable'
 }
 
 export function Menu({
   collapsed = false,
   onSearchSessions,
-  onSearchIntent,
-  variant = 'fixed'
+  onSearchIntent
 }: MenuProps) {
   const [modifierKey, setModifierKey] = useState<string | typeof MACOS_MODIFIER_KEY>(
     MACOS_MODIFIER_KEY
@@ -74,8 +54,8 @@ export function Menu({
     }
   }, [])
 
-  const fixedItems = (
-    <>
+  return (
+    <nav className="menu menu-fixed" aria-label="Main menu">
       <MenuItem iconName="edit-box" label="New session" to="/" shortcutKeys={[modifierKey, 'Shift', 'O']} collapsed={collapsed} />
       <MenuItem
         iconName="search"
@@ -85,19 +65,7 @@ export function Menu({
         onIntent={onSearchIntent}
         {...(onSearchSessions === undefined ? {} : { onClick: onSearchSessions })}
       />
-    </>
-  )
-  const scrollableItems = (
-    <>
-      <MenuItem iconName="settings" label="Settings" to="/settings" shortcutKeys={['/']} collapsed={collapsed} />
-      <MenuItem iconName="download-cloud-2" label="Update" status={NewStatus} collapsed={collapsed} />
-      <MenuItem iconName="book-open" label="Docs" disabled status={SoonStatus} collapsed={collapsed} />
-    </>
-  )
-
-  return (
-    <nav className={`menu menu-${variant}`} aria-label={variant === 'fixed' ? 'Main menu' : 'More menu'}>
-      {variant === 'fixed' ? fixedItems : scrollableItems}
+      <MenuItem iconName="inbox-2" label="Inbox" collapsed={collapsed} />
     </nav>
   )
 }

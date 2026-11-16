@@ -5,8 +5,7 @@ import { Icon } from '@/components/icon'
 import { Button } from '@/components/button'
 import { ScrollList } from '@/components/scroll-list'
 import { Loader } from '@/components/loader'
-import { useTheme } from '@/hooks/use-theme'
-import { saveTheme } from '@/theme'
+import { AppearanceSettings } from './appearance-settings'
 import { useProfile } from '@/data/profile'
 import { NotFoundPage } from '@/pages/not-found-page'
 import './settings-page.sass'
@@ -22,7 +21,6 @@ export function SettingsPage() {
   const params = useParams({ strict: false })
   const sectionId = params.section ?? 'tools'
   const section = SETTINGS_SECTIONS.find((entry) => entry.id === sectionId)
-  const theme = useTheme({ includeRequested: true })
   const profile = useProfile()
   if (!section) {
     return <NotFoundPage />
@@ -43,11 +41,7 @@ export function SettingsPage() {
         <header><h2 id="settings-section-title">{section.label}</h2><p>{section.description}</p></header>
         {sectionId === 'tools' ? <Suspense fallback={<Loader size="md" label="Getting your tools ready…" />}><ToolsConnections key={profile} /></Suspense> :
           sectionId === 'skills' ? <Suspense fallback={<Loader size="md" label="Getting your skills ready…" />}><SkillsSettings key={profile} /></Suspense> :
-          sectionId === 'appearance' ? <div className="settings-theme" role="group" aria-label="Theme">
-            {(['light', 'dark'] as const).map((value) => <Button key={value} ariaPressed={theme === value}
-              variant={theme === value ? 'secondary' : 'ghost'} iconName={value === 'light' ? 'sun' : 'moon'}
-              onClick={() => saveTheme(value)}>{value === 'light' ? 'Light' : 'Dark'}</Button>)}
-          </div> : <p className="settings-placeholder">This section is being prepared. Your current preferences haven’t changed.</p>}
+          sectionId === 'appearance' ? <AppearanceSettings /> : <p className="settings-placeholder">This section is being prepared. Your current preferences haven’t changed.</p>}
       </section>
     </div>
   </div>

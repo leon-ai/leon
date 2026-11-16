@@ -1,5 +1,5 @@
 import type { Route } from '@playwright/test'
-import { test, expect, SESSION_ID, SESSION_URL } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_ID, SESSION_URL } from './fixtures'
 import { AURORA_FORM_SPEC, AURORA_GENERATED_SPEC, AURORA_CALCULATOR_SPEC, AURORA_PRESENTATION_SPEC, AURORA_RETIRED_RESULTS_SPEC, auroraParts } from '../../fixtures/aurora'
 import type { ConversationRecord } from '../../../apps/web/src/data/conversation'
 import { PreparationStatus } from '../../../aurora/src/v2/contracts/preparation'
@@ -297,7 +297,7 @@ test('keeps non-chart interactions local and preserves their frame through theme
   await frame.getByRole('slider', { name: 'Monthly saving' }).fill('900')
   await expect(frame.locator('#yearly')).toHaveText('¥10800')
   const original = await page.locator('iframe').elementHandle()
-  await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+  await setFixtureTheme(page, 'light')
   await expect(frame.locator('html')).toHaveAttribute('data-theme', 'light')
   expect(await page.locator('iframe').evaluate((element, previous) => element === previous, original)).toBe(true)
   await expect(frame.locator('#yearly')).toHaveText('¥10800')
