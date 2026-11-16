@@ -355,10 +355,12 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
         }
         const workspace = row.workspace
         const open = expanded.has(row.id)
+        const hasUnread = Object.values(readState.workspaces).includes(row.id)
+          || groups[row.id]?.sessions.some((session) => Object.hasOwn(readState.unread, session.id))
 
         return <SessionListItem key={row.id} id={row.id} rowKind="workspace" title={workspace.name}
-          workspaceColor={workspace.color} expanded={open} isPinned={workspace.isPinned === true} isExplicitlyPinned={workspace.isExplicitlyPinned === true} isUnread={false}
-          status={workspace.runningSessionCount ? SessionStatus.Wip : SessionStatus.Idle}
+          workspaceColor={workspace.color} expanded={open} isPinned={workspace.isPinned === true} isExplicitlyPinned={workspace.isExplicitlyPinned === true} isUnread={Boolean(hasUnread)}
+          status={!open && workspace.runningSessionCount ? SessionStatus.Wip : SessionStatus.Idle}
           timestamp={workspace.lastActivityAt} relativeTime="" isListScrolling={isListScrolling}
           onPin={pinWorkspace} onToggle={toggleWorkspace} onNewSession={newWorkspaceSession} onEdit={editWorkspace}
           onDelete={deleteWorkspace} height={virtualRow.size} offset={offset} />

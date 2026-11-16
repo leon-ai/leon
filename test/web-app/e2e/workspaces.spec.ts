@@ -173,6 +173,76 @@ test('plays only live turn completion and keeps routine actions, replay and mute
   expect(await count()).toBe(1)
 })
 
+test('matches workspace row geometry and keeps collapsed unread results', async ({ page, ui }) => {
+  await page.addInitScript(() => localStorage.setItem('leon.web-app.accent', 'violet'))
+  const workspaceId = '10000000-0000-4000-8000-000000000000'
+  ui.workspaces.push({ id: workspaceId, name: 'Hearthlight', brief: 'Cozy films', color: 'amber', resources: [], createdAt: 1, updatedAt: 1 })
+  const other = ui.sessions[1]!
+  other.workspaceId = workspaceId
+  await page.goto(SESSION_URL)
+  const expand = page.getByRole('button', { name: 'Expand Hearthlight', exact: true })
+  const row = page.locator('.workspace-row')
+  const options = row.getByRole('button', { name: 'Hearthlight options', exact: true })
+  await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+  await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '0')
+  await row.hover()
+  await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
+  await options.click()
+  await expect(page.getByRole('menuitem')).toHaveText(['Edit', 'Pin', 'Delete'])
+  await page.keyboard.press('Escape')
+  await ui.emit([{ sequence: 5, type: 'turn_status', session_id: other.id, turn_id: 'film', response_id: 'answer', created_at: 1,
+    data: { status: 'completed', workspace_id: workspaceId } }])
+  await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+  await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+  await expect(row.getByLabel('Unread results')).toBeVisible()
+  const accent = await page.locator('.sidebar-update-button .app-icon').evaluate((icon) => getComputedStyle(icon).color)
+  const workspaceColor = await row.locator('.workspace-row-icon').evaluate((icon) => getComputedStyle(icon).color)
+  await expect(row.getByLabel('Unread results')).toHaveCSS('background-color', accent)
+  expect(accent).not.toBe(workspaceColor)
+  await expand.click()
+  const child = page.locator(`a[data-session-id="${other.id}"]`)
+  await expect(child).toBeVisible()
+  const flat = page.locator(`a[data-session-id="${SESSION_ID}"]`)
+  const unselected = page.locator(`a[data-session-id="${ui.sessions[2]!.id}"]`)
+  await unselected.hover()
+  const hoverColor = await unselected.evaluate((element) => getComputedStyle(element).backgroundColor)
+  await row.hover()
+  await expect(row.locator('.session-list-item-link')).toHaveCSS('background-color', hoverColor)
+  const geometry = await row.evaluate((element, ids) => {
+    const root = element.querySelector('.session-list-item-link')!
+    const child = document.querySelector(`a[data-session-id="${ids.child}"]`)!
+    const flat = document.querySelector(`a[data-session-id="${ids.flat}"]`)!
+    return {
+      rootWidth: root.getBoundingClientRect().width, childWidth: child.getBoundingClientRect().width,
+      flatWidth: flat.getBoundingClientRect().width,
+      rootTextX: root.querySelector('.session-list-item-title')!.getBoundingClientRect().x,
+      childTextX: child.querySelector('.session-list-item-title')!.getBoundingClientRect().x,
+      radius: getComputedStyle(root).borderRadius, flatRadius: getComputedStyle(flat).borderRadius,
+      lineHeight: getComputedStyle(root.querySelector('.session-list-item-title')!).lineHeight,
+      flatLineHeight: getComputedStyle(flat.querySelector('.session-list-item-title')!).lineHeight
+    }
+  }, { child: other.id, flat: SESSION_ID })
+  expect(geometry.childWidth).toBe(geometry.flatWidth)
+  expect(geometry.rootWidth).toBe(geometry.flatWidth)
+  expect(geometry.childTextX).toBe(geometry.rootTextX)
+  expect(geometry.radius).toBe(geometry.flatRadius)
+  expect(geometry.lineHeight).toBe(geometry.flatLineHeight)
+  await child.hover()
+  await child.locator('..').getByRole('button', { name: 'Session options', exact: true }).click()
+  await expect(page.getByRole('menuitem', { name: 'Move to workspace…', exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Collapse Hearthlight', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Message Leon' }).focus()
+  await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+  await expect(row.getByLabel('Unread results')).toBeVisible()
+  await expand.click()
+  await child.click()
+  await expect(page.locator('.session-page-workspace')).toHaveCount(0)
+  await expect(page.locator('.workspace-selector')).toHaveCount(0)
+  await expect(row.getByLabel('Unread results')).toHaveCount(0)
+  await expect(flat).toBeVisible()
+})
+
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`collapses Recents, reveals creation actions and aligns row controls (${reducedMotion})`, async ({ page, ui }) => {
     ui.workspaces.push({ id: '10000000-0000-4000-8000-000000000000', name: 'Leon', brief: '', color: 'default', resources: [], createdAt: 1, updatedAt: 1 })
@@ -396,6 +466,23 @@ test('keeps a tall workspace editor scrollable and folder popups independently d
   expect(ui.workspaces[0]!.resources[0]).toEqual({ kind: WorkspaceResourceKind.Link, label: 'Planning', location: 'https://example.com/' })
 })
 
+
+test('shows progress on the closed workspace or its open running conversation', async ({ page, ui }) => {
+  const workspaceId = crypto.randomUUID()
+  ui.workspaces.push({ id: workspaceId, name: 'Leon', color: 'default', brief: '', resources: [], createdAt: 1, updatedAt: 1 })
+  const running = ui.sessions[1]!
+  running.workspaceId = workspaceId
+  running.status = 'wip' as typeof running.status
+  await page.goto(SESSION_URL)
+  const workspace = page.locator('.workspace-row')
+  await expect(workspace).toHaveClass(/session-list-item-wip/)
+  await workspace.getByRole('button', { name: 'Expand Leon', exact: true }).click()
+  const child = page.locator(`a[data-session-id="${running.id}"]`).locator('..')
+  await expect(child).toHaveClass(/session-list-item-wip/)
+  await expect(workspace).not.toHaveClass(/session-list-item-wip/)
+  await workspace.getByRole('button', { name: 'Collapse Leon', exact: true }).click()
+  await expect(workspace).toHaveClass(/session-list-item-wip/)
+})
 
 test('explains a folder API mismatch and keeps attachment unavailable without directory metadata', async ({ page, ui }) => {
   void ui
