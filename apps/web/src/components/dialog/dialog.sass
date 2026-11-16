@@ -1,12 +1,13 @@
 .dialog-overlay
+  --dialog-top-offset: min(112px, 12dvh)
   position: fixed
   inset: 0
   z-index: 105
   display: flex
-  align-items: flex-start
+  align-items: center
   justify-content: center
   box-sizing: border-box
-  padding: min(112px, 12dvh) var(--space-lg) var(--space-lg)
+  padding: var(--space-lg)
   background-color: rgba(0, 0, 0, .2)
   backdrop-filter: blur(2px)
   opacity: 0
@@ -22,9 +23,13 @@
   box-sizing: border-box
   padding: var(--space-lg)
 
+  > .dialog
+    translate: none
+
 .dialog
   display: flex
   flex-direction: column
+  box-sizing: border-box
   max-height: 100%
   overflow: hidden
   background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
@@ -34,6 +39,9 @@
   opacity: 0
   scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
   scrollbar-width: thin
+  // Translate percentages follow this dialog's height. Keep the original top
+  // offset until the available vertical space requires a higher position.
+  translate: 0 min(0px, calc(var(--dialog-top-offset) - (100dvh - 100%) / 2))
   transition: opacity var(--transition-duration-main) var(--transition-timing-main)
 
 .dialog-open

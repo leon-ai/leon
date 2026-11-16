@@ -69,6 +69,46 @@ for (const motion of ['normal', 'reduced', 'zero duration'] as const) {
   })
 }
 
+for (const motion of ['no-preference', 'reduce'] as const) {
+  test(`keeps short dialogs at the top and lifts tall editors as the viewport changes (${motion})`, async ({ page, ui }) => {
+    void ui
+    await page.emulateMedia({ reducedMotion: motion })
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+    const search = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+    await expect(search.getByRole('combobox', { name: 'Search sessions', exact: true })).toBeFocused()
+    expect((await search.boundingBox())!.y).toBeCloseTo(112, 0)
+    await page.keyboard.press('Escape')
+    await expect(search).toHaveCount(0)
+
+    const session = page.getByRole('listitem').filter({ has: page.locator(`a[data-session-id="${SESSION_ID}"]`) })
+    await session.hover()
+    await session.getByRole('button', { name: 'Session options', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
+    const confirmation = page.getByRole('alertdialog')
+    await expect(confirmation).toBeVisible()
+    expect((await confirmation.boundingBox())!.y).toBeCloseTo(112, 0)
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(confirmation).toHaveCount(0)
+
+    await page.locator('.session-list-heading').hover()
+    await page.locator('.sidebar').getByRole('button', { name: 'New workspace', exact: true }).click()
+    const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+    await editor.getByRole('button', { name: 'Add folder', exact: true }).click()
+    await editor.getByRole('button', { name: 'Add folder', exact: true }).click()
+    for (const height of [982, 700, 982]) {
+      await page.setViewportSize({ width: 1_512, height })
+      const bounds = (await editor.boundingBox())!
+      const topOffset = Math.min(112, height * 0.12)
+      expect(bounds.y).toBeCloseTo(Math.min(topOffset, (height - bounds.height) / 2), 0)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(height - 16)
+      if (height === 700) {
+        expect(bounds.y).toBeLessThan(topOffset)
+      }
+    }
+  })
+}
+
 for (const { theme, motion, width } of [
   { theme: 'dark', motion: 'no-preference', width: 1_512 },
   { theme: 'light', motion: 'reduce', width: 1_100 }
@@ -589,7 +629,9 @@ test('keeps a tall workspace editor scrollable and folder popups independently d
   await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
   const editor = page.getByRole('dialog', { name: 'Edit workspace', exact: true })
   const bounds = (await editor.boundingBox())!
-  expect(bounds.y + bounds.height).toBeLessThanOrEqual(550)
+  expect(bounds.y).toBeGreaterThanOrEqual(16)
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(550 - 16)
+  expect(Math.abs(bounds.y - (550 - bounds.y - bounds.height))).toBeLessThanOrEqual(1)
   const body = editor.locator('.dialog-body')
   expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
   const brief = editor.getByRole('textbox', { name: 'Workspace brief', exact: true })
