@@ -5,7 +5,8 @@
   display: flex
   align-items: flex-start
   justify-content: center
-  padding-top: 112px
+  box-sizing: border-box
+  padding: min(112px, 12dvh) var(--space-lg) var(--space-lg)
   background-color: rgba(0, 0, 0, .2)
   backdrop-filter: blur(2px)
   opacity: 0
@@ -22,6 +23,9 @@
   padding: var(--space-lg)
 
 .dialog
+  display: flex
+  flex-direction: column
+  max-height: 100%
   overflow: hidden
   background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
   border: 1px solid transparent
@@ -52,6 +56,7 @@
     opacity: 0
 
 .dialog-header
+  flex: 0 0 auto
   display: flex
   align-items: center
   justify-content: space-between
@@ -72,6 +77,9 @@
   line-height: var(--line-height-xl)
 
 .dialog-body
+  min-height: 0
+  overflow-y: auto
+  overscroll-behavior: contain
   padding: var(--space-lg) var(--space-xl) var(--space-lg)
   color: var(--color-text-secondary)
   font-size: var(--font-size-md)
@@ -99,6 +107,7 @@
   margin: 0
 
 .dialog-footer
+  flex: 0 0 auto
   display: flex
   justify-content: flex-end
   gap: var(--space-lg)
