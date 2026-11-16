@@ -28,7 +28,8 @@ const MORPH_TARGETS: Readonly<Record<string, readonly [string, string]>> = {
   'volume-up': ['sound', 'on'], 'volume-mute': ['sound', 'off'],
   'sidebar-fold': ['sidebar', 'fold'], 'sidebar-unfold': ['sidebar', 'unfold'],
   'send-ins': ['composer', 'send'], 'stop-mini': ['composer', 'stop'],
-  pushpin: ['pin', 'pinned'], unpin: ['pin', 'unpinned']
+  pushpin: ['pin', 'pinned'], unpin: ['pin', 'unpinned'],
+  folder: ['folder', 'closed'], 'folder-open': ['folder', 'open']
 }
 let toolArtwork: Readonly<Record<string, IconDefinition>> | undefined
 let toolArtworkRequest: Promise<void> | undefined
