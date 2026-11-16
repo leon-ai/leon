@@ -604,6 +604,7 @@ for (const landing of ['session', 'new'] as const) {
     await page.goto(SESSION_URL)
     if (landing === 'new') {
       await page.getByRole('link', { name: 'New session', exact: true }).click()
+      await expect(page.locator('.new-session-page')).toBeVisible()
     }
     await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
     // Load the preview route before taking the browser offline; asset-loading

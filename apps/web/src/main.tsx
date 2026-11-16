@@ -11,11 +11,13 @@ import { RouterProvider } from '@tanstack/react-router'
 import { ToastProvider } from './components/toast'
 import { queryClient } from './query-client'
 import { router } from './router'
-import { applyStoredTheme } from './theme'
+import { applyStoredTheme, getStoredAccent } from './theme'
 import { RequestErrorToasts } from './data/request-error-toasts'
 import { initializeProfileAuthentication } from './data/profile-query'
+import { SoundActivation } from './components/sound-activation/sound-activation'
 
 applyStoredTheme()
+document.documentElement.dataset['accent'] = getStoredAccent()
 initializeProfileAuthentication(queryClient)
 
 const rootElement = document.querySelector('#root')
@@ -29,6 +31,7 @@ createRoot(rootElement).render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <RequestErrorToasts />
+        <SoundActivation />
         <RouterProvider router={router} />
       </ToastProvider>
     </QueryClientProvider>

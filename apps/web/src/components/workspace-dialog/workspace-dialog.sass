@@ -1,0 +1,90 @@
+.workspace-editor
+  display: grid
+  gap: var(--space-lg)
+
+  label
+    color: var(--color-text)
+    display: grid
+    gap: var(--space-sm)
+
+  fieldset
+    min-width: 0
+    margin: 0
+    padding: 0
+    border: 0
+
+  legend
+    color: var(--color-text)
+    margin-bottom: var(--space-sm)
+
+.workspace-color-options
+  display: flex
+  flex-wrap: wrap
+  gap: var(--space-xs)
+
+.workspace-color-dot
+  display: block
+  width: 18px
+  height: 18px
+  border-radius: 50%
+  background: var(--workspace-color)
+
+.workspace-color[aria-pressed='true']
+  outline: 2px solid var(--color-text)
+  outline-offset: -2px
+
+.workspace-selector
+  max-width: 100%
+  margin-bottom: var(--space-xs)
+  color: var(--workspace-color, var(--color-text-secondary))
+
+  .button
+    max-width: 100%
+
+  .button-label
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+
+  .app-icon
+    color: var(--workspace-color, var(--color-text-secondary))
+
+@media (max-width: 480px)
+  .workspace-dialog > .dialog-footer
+    display: grid
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+    gap: var(--space-sm)
+
+    .button-danger
+      grid-column: 1 / -1
+      justify-self: start
+
+.workspace-selector .button-icon
+  font-size: var(--font-size-xl)
+
+.workspace-selector-menu
+  display: flex
+  flex: 1
+  flex-direction: column
+  min-height: 0
+
+  > .input
+    flex: 0 0 auto
+    padding: var(--space-xs)
+    box-sizing: border-box
+
+.workspace-selector-list
+  position: relative
+  flex: 1
+  min-height: 0
+  overflow-y: auto
+
+.workspace-selector-rows
+  position: relative
+
+  .dropdown-item
+    position: absolute
+    inset: 0 0 auto
+
+.workspace-choice-icon
+  color: var(--workspace-color)

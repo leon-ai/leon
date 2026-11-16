@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-11-10T23:05:31+08:00
+- Generated at: 2026-11-15T20:57:07+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -12,6 +12,7 @@
 - Native tools keep their SDK workers. Owner-installed HTTP MCP servers have profile-local tool manifests and bounded discovered schemas; Core owns their lazy transports, encrypted OAuth and cancellation, routing results through the ordinary execution/logging lifecycle. Bundled MCP catalog entries alone are not installed or callable, and remote writes are never automatically replayed.
 - Tool catalogs derive from canonical tools/<toolkit>/<tool>/tool.json definitions for native and MCP sources. Native skills use skill.json; Agent Skills retain SKILL.md discovery with optional format-specific skill.json package metadata. Built-in distribution, optional extension installation, profile availability and maintenance provenance are independent; owner-facing documentation and local assets load only on demand and never enter model prompts. Previous tool IDs retain installed identity and authorization without rewriting history.
 - The agent searches bounded local catalog metadata on demand before declaring a service unavailable. Catalog discovery is read-only; trusted setup cards require explicit owner actions to add, enable and authorize tools while respecting profile policy.
+- Workspaces are profile-owned briefs, colors and resource references stored beside conversation metadata. Session membership is optional. The active brief and references refresh as agent grounding each turn; histories remain separate, and deleting a workspace detaches its sessions without deleting resources. Local folder retrieval owns persistent incremental indexes in its tool.
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
 - Browser conversations use profile-scoped HTTP commands and durable SSE replay; Socket.IO remains available for other clients. Browser and legacy owner-agent entry points share turn orchestration.

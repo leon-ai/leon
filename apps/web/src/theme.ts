@@ -1,4 +1,5 @@
 import { flushSync } from 'react-dom'
+import { ACCENT_COLORS, type AccentColor } from '../../../bridges/runtime/contracts/workspace'
 
 const DEFAULT_THEME = 'dark'
 const DEFAULT_SIDEBAR_EXPANDED = true
@@ -6,6 +7,7 @@ const DEFAULT_SOUNDS_ENABLED = true
 const SIDEBAR_EXPANDED_STORAGE_KEY = 'leon.web-app.sidebar-expanded'
 const SOUNDS_ENABLED_STORAGE_KEY = 'leon.web-app.sounds-enabled'
 const THEME_STORAGE_KEY = 'leon.web-app.theme'
+const ACCENT_STORAGE_KEY = 'leon.web-app.accent'
 const THEMES = ['dark', 'light'] as const
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 export const THEME_TRANSITION_ATTRIBUTE = 'data-theme-transition'
@@ -220,6 +222,23 @@ export function getStoredSoundsEnabled(): boolean {
 
 export function saveSoundsEnabled(soundsEnabled: boolean): void {
   saveBoolean(SOUNDS_ENABLED_STORAGE_KEY, soundsEnabled)
+}
+
+/**
+ * Reads only supported palette identities, keeping arbitrary CSS out of storage.
+ */
+export function getStoredAccent(): AccentColor {
+  const value = window.localStorage.getItem(ACCENT_STORAGE_KEY)
+
+  return ACCENT_COLORS.find((color) => color.id === value)?.id ?? 'blue'
+}
+
+/**
+ * Applies one shared accent palette to settings and workspace controls.
+ */
+export function saveAccent(color: AccentColor): void {
+  window.localStorage.setItem(ACCENT_STORAGE_KEY, color)
+  document.documentElement.dataset['accent'] = color
 }
 
 export function getStoredSidebarExpanded(): boolean {

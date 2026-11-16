@@ -14,6 +14,7 @@
   --button-background: var(--color-surface)
   --button-border-gradient: var(--gradient-secondary-button-border)
   --button-border-width: 1px
+  position: relative
   display: inline-flex
   align-items: center
   justify-content: center
@@ -25,7 +26,7 @@
   background-color: var(--button-background)
   box-shadow: inset 0 0 0 transparent
   color: var(--color-text-secondary)
-  font-weight: var(--font-weight-semi-bold)
+  font-weight: var(--font-weight-regular)
   text-decoration: none
   cursor: pointer
   transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), box-shadow var(--transition-duration-main) var(--transition-timing-main)
@@ -34,8 +35,21 @@
     box-shadow: var(--shadow-control-pressed)
 
   &:not(.button-ghost)
-    // The opaque padding layer keeps translucent states from revealing the border gradient.
-    background: linear-gradient(var(--button-background), var(--button-background)) padding-box, linear-gradient(var(--color-surface), var(--color-surface)) padding-box, var(--button-border-gradient) border-box
+    // The fill keeps its geometry while the independent border fades between states.
+    background: linear-gradient(var(--button-background), var(--button-background)) border-box, linear-gradient(var(--color-surface), var(--color-surface)) border-box
+
+    &::before
+      position: absolute
+      inset: -1px
+      padding: 1px
+      border-radius: inherit
+      background: var(--button-border-gradient)
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)
+      mask-composite: exclude
+      opacity: 1
+      pointer-events: none
+      content: ''
+      transition: opacity var(--transition-duration-main) var(--transition-timing-main)
 
   &.button-ghost
     --button-background: transparent
@@ -153,11 +167,24 @@
       color: var(--color-text-disabled)
       cursor: not-allowed !important
 
-    &.button-secondary
-      --button-border-gradient: linear-gradient(var(--color-border), var(--color-border))
+    &::before
+      opacity: 0
 
-    &.button-primary,
-    &.button-danger
-      // Extend both fill layers to the edge so translucent fills have no seam.
-      --button-border-gradient: none
-      background-clip: border-box
+  &.button-compact.button-icon-only
+    flex: 0 0 auto
+    width: 24px
+    height: 24px
+    min-height: 24px
+    padding: 1px
+
+  &.button-color-feedback
+    &:hover:not(:disabled):not([aria-disabled='true']),
+    &:active:not(:disabled):not([aria-disabled='true'])
+      --button-background: transparent
+      box-shadow: none
+      color: var(--color-text)
+
+@media (prefers-reduced-motion: reduce)
+  .button,
+  .button::before
+    transition: none

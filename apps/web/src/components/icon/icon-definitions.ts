@@ -33,6 +33,11 @@ export function circle(x: number, y: number, radius: number): string {
 
 // Redraws are explicit exceptions. Unlisted names retain the original SVG geometry.
 export const SOFT_ICON_NAMES: ReadonlySet<string> = new Set([
+  'folder',
+  'folder-add',
+  'folder-open',
+  'corner-left-up',
+  'inbox-2',
   'alert',
   'computer',
   'cursor',
@@ -71,6 +76,17 @@ export const SOFT_ICON_NAMES: ReadonlySet<string> = new Set([
 
 // Original paths come from the installed Remix Icon SVGs; see THIRD_PARTY_NOTICES.txt.
 export const COMMON_ICONS = {
+  'arrow-drop-right': paths({ d: 'M12.1717 12.0005L9.34326 9.17203L10.7575 7.75781L15.0001 12.0005L10.7575 16.2431L9.34326 14.8289L12.1717 12.0005Z', fill: true }),
+  'arrow-drop-down': paths({ d: 'M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z', fill: true }),
+  'corner-left-up': paths('m5 10 6-6 6 6', 'M11 4v12a2 2 0 0 0 2 2h6'),
+  'folder': paths('M3 17V6a2 2 0 0 1 2-2h4c1 0 1.5 2 3 2h6a2 2 0 0 1 2 2v3',
+    'M5 11h13a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z'),
+  'folder-open': paths('M3.5 17 2.2 6.4C2.05 5.1 2.8 4 4.1 4h3.4c1.1 0 1.7 2 3.2 2h6c1.1 0 2 .9 2.15 2l.4 3',
+    'M7 11h13c1.1 0 2 0.9 1.5 2L20 18c-.3 1.1-.9 2-2 2H5c-1.1 0-1.8-.9-1.5-2L5 13c.3-1.1.9-2 2-2Z'),
+  'folder-add': paths('M3 17V6a2 2 0 0 1 2-2h4c1 0 1.5 2 3 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3',
+    { d: 'M8 13h8m-4-4v8', part: 'folder-plus' }),
+  'inbox-2': paths('M3 13 5 5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Z',
+    { d: 'M3 13h5a4 4 0 0 0 8 0h5', part: 'inbox-tray' }),
   'multi-image': paths('M4 8h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z',
     'M7 8V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3',
     'm3 18 8.5-5 5.5 5', circle(7, 12, 1)),
@@ -183,6 +199,7 @@ export const TOOL_ICON_NAMES = new Set([
 
 // Status variants stay separate from the default outline action artwork.
 export const ICON_VARIANT_ARTWORK: Readonly<Record<string, IconDefinition>> = {
+  'pushpin-fill': paths({ d: 'M22.3126 10.1753L20.8984 11.5895L20.1913 10.8824L15.9486 15.125L15.2415 18.6606L13.8273 20.0748L9.58466 15.8321L4.63492 20.7819L3.2207 19.3677L8.17045 14.4179L3.92781 10.1753L5.34202 8.76107L8.87756 8.05396L13.1202 3.81132L12.4131 3.10422L13.8273 1.69L22.3126 10.1753Z', fill: true }),
   'unpin-fill': paths({ d: 'M20.9711 17.1715 19.5568 18.5858 16.0223 15.0513 15.9486 15.125 15.2415 18.6605 13.8273 20.0747 9.58466 15.8321 4.63492 20.7818 3.2207 19.3676 8.17045 14.4179 3.92781 10.1752 5.34202 8.76101 8.87756 8.0539 8.95127 7.98019 5.4147 4.44362 6.82892 3.02941 20.9711 17.1715ZM18.8508 12.2228 20.1913 10.8823 20.8984 11.5894 22.3126 10.1752 13.8273 1.68994 12.4131 3.10416 13.1202 3.81126 11.7797 5.15176 18.8508 12.2228Z', fill: true }),
   'flashlight-line': paths({ d: 'M13 9H21L11 24V15H4L13 0V9ZM11 11V7.22063L7.53238 13H13V17.3944L17.263 11H11Z', fill: true })
 }

@@ -1,4 +1,4 @@
-import { test as base, expect, type Locator, type Response, type Route } from '@playwright/test'
+import { test as base, expect, type Locator, type Response, type Route, type Page } from '@playwright/test'
 
 import type { ConversationPage, ConversationRecord, ConversationTool, ModelCatalog, ModelSelection, ConversationNotification } from '../../../apps/web/src/data/conversation'
 import { getToolOutputFormat, getToolResultData, toToolContent, toToolDisplayContent, toToolInput } from '../../../apps/web/src/utils/tool-content'
@@ -7,6 +7,7 @@ import { hasToolChanges } from '../../../apps/web/src/utils/tool-changes'
 import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
 import type { ToolCallContents } from '../../../server/src/core/session-manager/tool-content-contract'
 import type { ConversationSession } from '../../../apps/web/src/data/sessions'
+import type { Workspace, WorkspaceSummary } from '../../../bridges/runtime/contracts/workspace'
 import type { AmbientConditions } from '../../../apps/web/src/data/ambient-conditions'
 
 const SESSION_COUNT = 3
@@ -17,6 +18,18 @@ export const SESSION_ID = '00000000-0000-4000-8000-000000000000'
 export const OTHER_SESSION_ID = '00000000-0000-4000-8000-000000000001'
 export const SESSION_URL = `session/${SESSION_ID}`
 export const LATEST_ANSWER = `Saved answer ${HISTORY_TURNS - 1}`
+
+/**
+ * Supplies a palette to feature fixtures without leaving their current page.
+ * Theme control persistence and transitions have separate settings coverage.
+ */
+export async function setFixtureTheme(page: Page, theme: string): Promise<void> {
+  await page.evaluate((value) => {
+    document.documentElement.dataset['theme'] = value
+    localStorage.setItem('leon.web-app.theme', value)
+    window.dispatchEvent(new CustomEvent('leon:web-app-theme-change', { detail: value }))
+  }, theme)
+}
 
 /**
  * Lets finite entrance/disclosure motion settle before the next user action,
@@ -55,6 +68,7 @@ interface UIFixture {
   uploads: Artifact[]
   models: ModelCatalog
   sessions: ConversationSession[]
+  workspaces: Workspace[]
   history: Map<string, ConversationRecord[]>
   historyRequests: URL[]
   requests: URL[]
@@ -128,7 +142,7 @@ export const test = base.extend<{ ui: UIFixture }>({
     const ui: UIFixture = {
       models: structuredClone(catalog),
       uploads: [],
-      sessions, history, historyRequests: [], requests: [], completedRequests: [],
+      sessions, workspaces: [], history, historyRequests: [], requests: [], completedRequests: [],
       authenticated: true, profile: 'ui-tests', failure: undefined,
       ambient: { mood: 'default', season: 'autumn', solarPhase: 'afternoon', timeZone: 'UTC', weather: null },
       holdHistory: (): (() => void) => holdRequest('history'),
@@ -181,6 +195,43 @@ export const test = base.extend<{ ui: UIFixture }>({
         await json(route, { success: true, ambient: ui.ambient })
         return
       }
+      if (parts[2] === 'workspaces') {
+        const summarize = (workspace: Workspace): WorkspaceSummary => {
+          const children = sessions.filter((session) => session.workspaceId === workspace.id)
+
+          return { ...workspace, isExplicitlyPinned: workspace.isPinned === true,
+            isPinned: workspace.isPinned === true || children.some((session) => session.isPinned), sessionCount: children.length,
+            runningSessionCount: children.filter((session) => session.status === 'wip').length,
+            lastActivityAt: Math.max(workspace.createdAt, ...children.map((session) => session.lastMessageAt ?? session.createdAt)) }
+        }
+        if (request.method() === 'GET') {
+          await json(route, parts[3] === 'recents' ? {
+            items: [...ui.workspaces.map((workspace) => ({ kind: 'workspace', value: summarize(workspace) })),
+              ...sessions.filter((session) => !session.workspaceId).map((session) => ({ kind: 'session', value: session }))],
+            next_cursor: null
+          } : { workspaces: ui.workspaces.map(summarize) })
+        } else if (request.method() === 'DELETE') {
+          ui.workspaces = ui.workspaces.filter((workspace) => workspace.id !== parts[3])
+          for (const session of sessions) {
+            if (session.workspaceId === parts[3]) {
+              delete session.workspaceId
+            }
+          }
+          await json(route, { success: true })
+        } else if (request.method() === 'PATCH') {
+          const workspace = ui.workspaces.find((item) => item.id === parts[3])!
+          workspace.isPinned = (request.postDataJSON() as { is_pinned: boolean }).is_pinned
+          await json(route, { workspace })
+        } else {
+          const input = request.postDataJSON() as Omit<Workspace, 'color'> & { color?: Workspace['color'] }
+          const existing = ui.workspaces.find((workspace) => workspace.id === parts[3])
+          const workspace = { color: 'default' as const, ...existing, ...input,
+            id: existing?.id ?? crypto.randomUUID(), createdAt: existing?.createdAt ?? Date.now(), updatedAt: Date.now() }
+          ui.workspaces = [...ui.workspaces.filter((item) => item.id !== workspace.id), workspace]
+          await json(route, { workspace })
+        }
+        return
+      }
       if (parts.at(-1) === 'models') {
         await json(route, ui.models)
         return
@@ -193,10 +244,14 @@ export const test = base.extend<{ ui: UIFixture }>({
         }
       }
       if (parts[2] === 'sessions' && parts.length === 3 && request.method() === 'POST') {
-        const input = request.postDataJSON() as { id: string }
+        const input = request.postDataJSON() as { id: string, workspace_id?: string }
         let created = sessions.find((candidate) => candidate.id === input.id)
         if (!created) {
           created = { ...sessions[0]!, id: input.id, title: 'New session', messageCount: 0 }
+          delete created.workspaceId
+          if (input.workspace_id) {
+            created.workspaceId = input.workspace_id
+          }
           sessions.push(created)
           history.set(input.id, [])
         }
@@ -205,10 +260,22 @@ export const test = base.extend<{ ui: UIFixture }>({
       }
       if (parts.at(-1) === 'page') {
         const query = url.searchParams.get('query')?.toLowerCase() ?? ''
-        await json(route, { sessions: sessions.filter((session) => session.title.toLowerCase().includes(query)), next_cursor: null, event_cursor: 0 })
+        await json(route, { sessions: sessions.filter((session) => session.title.toLowerCase().includes(query)
+          && (!url.searchParams.has('workspace_id') || session.workspaceId === url.searchParams.get('workspace_id'))), next_cursor: null, event_cursor: 0 })
         return
       }
       const session = sessions.find((candidate) => candidate.id === parts[3])
+      if (session && request.method() === 'PATCH' && parts.length === 4) {
+        const changes = request.postDataJSON() as { title?: string, is_pinned?: boolean }
+        if (changes.title !== undefined) {
+          session.title = changes.title
+        }
+        if (changes.is_pinned !== undefined) {
+          session.isPinned = changes.is_pinned
+        }
+        await json(route, { session })
+        return
+      }
       if (session && request.method() === 'POST' && parts.at(-1) === 'attachments') {
         const buffer = request.postDataBuffer()!
         const id = url.searchParams.get('upload_id') ?? crypto.randomUUID()

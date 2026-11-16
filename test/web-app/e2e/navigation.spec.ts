@@ -5,7 +5,7 @@ import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
-import { test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_ID, OTHER_SESSION_ID, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
 test('warms session intent and search code without navigating, consuming state, or fetching older history', async ({ page, ui }) => {
   const resources: string[] = []
@@ -85,6 +85,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
+    await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    await page.getByRole('link', { name: 'Appearance', exact: true }).click()
     const mute = page.getByRole('button', { name: 'Mute sounds', exact: true })
     const unmute = page.getByRole('button', { name: 'Unmute sounds', exact: true })
     const initial = await mute.locator('animate[attributeName="d"]').first().getAttribute('from')
@@ -175,7 +177,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     ` })
     for (const theme of ['light', 'dark']) {
       await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
-      await expect(page.locator(`.sidebar-controls [data-icon-state="${theme === 'light' ? 'sun' : 'moon'}"]`)).toBeVisible()
+      await expect(page.locator(`.sidebar-theme-toggle [data-icon-state="${theme === 'light' ? 'sun' : 'moon'}"]`)).toBeVisible()
       if (theme === 'light') {
         const pending = await logo.promise
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
@@ -286,7 +288,7 @@ test('resolves dynamic SVG artwork locally and highlights running tools with saf
   }
   for (const theme of ['dark', 'light']) {
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
     }
     for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await page.emulateMedia({ reducedMotion })
@@ -992,7 +994,7 @@ for (const { theme, reducedMotion, width } of [
     await page.goto(SESSION_URL)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     }
     const historyReads = ui.historyRequests.length
@@ -1084,7 +1086,7 @@ test('opens and navigates session action menus with arrows, boundaries and nativ
   const rename = menu.getByRole('menuitem', { name: 'Rename', exact: true })
   await expect(rename).toBeFocused()
   await rename.press('ArrowDown')
-  await expect(menu.getByRole('menuitem', { name: 'Pin session', exact: true })).toBeFocused()
+  await expect(menu.getByRole('menuitem', { name: 'Pin', exact: true })).toBeFocused()
   await page.keyboard.press('End')
   await expect(menu.getByRole('menuitem', { name: 'Delete', exact: true })).toBeFocused()
   await page.keyboard.press('ArrowDown')
@@ -1214,14 +1216,11 @@ for (const pinned of [false, true]) {
     await expect(otherLink).toHaveAccessibleName('Test session 1, Unread response')
     await composer.hover()
     await expect(dot).toBeVisible()
-    await expect(options).toHaveCSS('opacity', '1')
+    await expect(options).toBeHidden()
     await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '0')
     const dotBounds = (await dot.boundingBox())!
     const timeBounds = (await row.locator('time').boundingBox())!
     expect(timeBounds.x + timeBounds.width).toBeLessThan(dotBounds.x)
-    const optionsBounds = (await options.boundingBox())!
-    expect(Math.abs(dotBounds.x + dotBounds.width / 2 - optionsBounds.x - optionsBounds.width / 2)).toBeLessThanOrEqual(1)
-    expect(Math.abs(dotBounds.y + dotBounds.height / 2 - optionsBounds.y - optionsBounds.height / 2)).toBeLessThanOrEqual(1)
     if (pinned) {
       const pinBounds = (await row.locator('.session-list-item-pinned-icon').boundingBox())!
       expect(pinBounds.x + pinBounds.width).toBeLessThan(dotBounds.x)
@@ -1232,6 +1231,9 @@ for (const pinned of [false, true]) {
     await expect(dot).not.toBeVisible()
     await expect(row.locator('time')).toBeHidden()
     await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
+    const optionsBounds = (await options.boundingBox())!
+    expect(Math.abs(dotBounds.x + dotBounds.width / 2 - optionsBounds.x - optionsBounds.width / 2)).toBeLessThanOrEqual(1)
+    expect(Math.abs(dotBounds.y + dotBounds.height / 2 - optionsBounds.y - optionsBounds.height / 2)).toBeLessThanOrEqual(1)
     await composer.hover()
     await expect(dot).toBeVisible()
     await expect(row.locator('time')).toBeVisible()
@@ -1246,7 +1248,7 @@ for (const pinned of [false, true]) {
     await expect(dot).toBeVisible()
 
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await composer.focus()
       await composer.hover()
@@ -1308,7 +1310,7 @@ test('distinguishes the selected session from concurrent WIP rows in both themes
   const other = page.getByRole('link', { name: /Test session 1/ })
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await setFixtureTheme(page, theme)
     await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
     await composer.hover()
     const colors = await selected.evaluate((element) => {
@@ -1353,7 +1355,7 @@ test('drafts immediately while history loads and opens the latest messages at th
   await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('width', '20px')
   await expect(loading.locator('.loader-md .loader-indicator')).toHaveCSS('height', '20px')
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+    await setFixtureTheme(page, theme)
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
     await expect.poll(() => loading.evaluate((element) => {
@@ -1404,7 +1406,7 @@ test('keeps owner text directly selectable with its bubble selection colors and 
   await owner.hover()
   await expect(page.getByRole('tooltip')).toHaveCount(0)
   for (const theme of ['light', 'dark']) {
-    await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+    await setFixtureTheme(page, theme)
     const selected = await owner.evaluate((element) => {
       const textNode = element.firstChild!
       const range = document.createRange()
@@ -1446,7 +1448,7 @@ for (const { theme, motion, width } of [
     ])
     await page.goto(SESSION_URL)
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     }
     await page.setViewportSize({ width, height: 982 })
@@ -1783,7 +1785,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     } else {
       await expect(characters).toHaveCount(0)
     }
-    await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Pin', exact: true }).click()
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', OTHER_SESSION_ID)
     if (reducedMotion === 'no-preference') {
       await expect.poll(() => character!.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
@@ -1797,7 +1799,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     }
     await otherRow.hover()
     await otherRow.getByRole('button', { name: 'Session options', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Unpin session', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Unpin', exact: true }).click()
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', SESSION_ID)
     await expect(characters).toHaveCount(0)
     await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
@@ -2047,7 +2049,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       getComputedStyle(element, '::before').animationName
     )).toBe(reducedMotion === 'reduce' ? 'none' : 'loader-indicator-pulse')
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition')
       await expect(loading.locator('.loader-indicator')).toHaveCSS('color', 'rgb(28, 117, 219)')
@@ -2301,6 +2303,38 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+test('updates a session title only when the committed text changes', async ({ page, ui }) => {
+  const updates: unknown[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && new URL(request.url()).pathname === `/api/v1/sessions/${SESSION_ID}`) {
+      updates.push(request.postDataJSON())
+    }
+  })
+  await page.goto(SESSION_URL)
+  const title = ui.sessions[0]!.title
+  const link = page.getByRole('link', { name: title, exact: true })
+  const input = page.getByRole('textbox', { name: 'Session title', exact: true })
+  await link.dblclick()
+  await expect(input).toBeFocused()
+  await input.press('Enter')
+  await expect(input).toHaveCount(0)
+  await link.dblclick()
+  await input.fill(`  ${title}  `)
+  await page.getByRole('textbox', { name: 'Message Leon' }).click()
+  await expect(input).toHaveCount(0)
+  await link.dblclick()
+  await input.fill('A draft label')
+  await input.fill(title)
+  await input.press('Enter')
+  await expect(input).toHaveCount(0)
+  expect(updates).toEqual([])
+  await link.dblclick()
+  await input.fill('A new session label')
+  await input.press('Enter')
+  await expect(page.getByRole('link', { name: 'A new session label', exact: true })).toBeVisible()
+  expect(updates).toEqual([{ title: 'A new session label' }])
+})
+
 test('confirms session management actions once and only after the server accepts them', async ({ page, ui }) => {
   const now = new Date('2026-11-08T10:00:00+08:00')
   await page.clock.setFixedTime(now)
@@ -2328,7 +2362,7 @@ test('confirms session management actions once and only after the server accepts
       await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
       await page.getByRole('alertdialog').getByRole('button', { name: 'Delete session', exact: true }).click()
     } else {
-      const item = page.getByRole('menuitem', { name: action === 'pinned' ? 'Pin session' : 'Unpin session', exact: true })
+      const item = page.getByRole('menuitem', { name: action === 'pinned' ? 'Pin' : 'Unpin', exact: true })
       if (action === 'unpinned') {
         const status = row.locator('.session-list-item-pinned-icon')
         await expect(status).toHaveAttribute('data-icon-variant', 'fill')
@@ -2377,7 +2411,7 @@ test('reports a rejected session action once without confirming success', async 
   const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Test session 0', exact: true }) })
   await row.hover()
   await row.getByRole('button', { name: 'Session options', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Pin', exact: true }).click()
   await expect(page.locator('.toast-error .toast-title')).toHaveText(['Session could not be updated'])
   await expect(page.locator('.toast')).toHaveCount(1)
   await expect(row).not.toHaveClass(/session-list-item-pinned/)
@@ -2441,7 +2475,7 @@ for (const status of ['success', 'error'] as const) {
     await expect(tool.locator('[data-icon="check"], [data-icon="check"]')).toHaveCount(0)
 
     for (const theme of ['dark', 'light']) {
-      await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+      await setFixtureTheme(page, theme)
       if (status === 'error') {
         await expect(tool).toHaveAccessibleDescription('Tool call failed')
         const durationColor = await tool.locator('.tool-call-duration').evaluate((element) => getComputedStyle(element).color)

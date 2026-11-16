@@ -8,6 +8,7 @@ __pycache__/
 **/.venv/
 **/.last-skill-deps-sync
 **/.last-source-deps-sync
+**/.zvec-grep/
 skills/**/reports/*
 test/coverage/
 test/web-app/results/

@@ -32,55 +32,50 @@
     .session-list-item-title
       z-index: 1
 
-  .session-list-item-actions
+  .session-list-item-trailing
     position: absolute
     top: 50%
-    right: var(--space-sm)
+    right: 12px
     display: inline-flex
+    align-items: center
+    transform: translateY(-50%)
+
+  .session-list-item-actions
+    display: none
+    align-items: center
     opacity: 0
     pointer-events: none
-    transform: translateY(-50%)
 
   .session-list-item-pinned-icon
-    position: absolute
-    top: 50%
-    right: 18px
     width: 16px
     height: 16px
+    margin-inline: 4px
     color: var(--color-text-tertiary)
     font-size: var(--font-size-md)
-    line-height: 16px
-    transform: translateY(-50%)
 
   .session-list-item-unread-dot
-    position: absolute
-    top: 50%
-    right: 21px
     width: 6px
     height: 6px
+    margin-inline: 9px
     border-radius: 50%
     background-color: var(--color-accent)
     pointer-events: none
-    transform: translateY(-50%)
 
-  &.session-list-item-unread
-    .session-list-item-link
-      padding-right: 44px
+  &.session-list-item-unread .session-list-item-link
+    padding-right: 44px
 
-    &.session-list-item-pinned
-      .session-list-item-link
-        padding-right: 64px
-
-      .session-list-item-pinned-icon
-        right: 44px
+  &.session-list-item-unread.session-list-item-pinned .session-list-item-link
+    padding-right: 68px
 
   &:hover,
-  &:has(:focus-visible)
+  &:focus-within,
+  &:has(.session-list-item-actions [aria-expanded='true'])
     .session-list-item-link:where(:not([aria-disabled='true']))
       padding-right: 44px
       background-color: var(--color-surface-hover)
 
     .session-list-item-actions
+      display: inline-flex
       opacity: 1
       pointer-events: auto
 
@@ -88,8 +83,11 @@
     .session-list-item-time
       display: none
 
-    .session-list-item-pinned-icon
-      right: 44px
+    &.workspace-row .session-list-item-link
+      padding-right: 68px
+
+    &.workspace-row.session-list-item-pinned .session-list-item-link
+      padding-right: 92px
 
   .session-list-item-link
     @include list-row.interactions
@@ -114,7 +112,7 @@
     &:has(:focus-visible)
       .session-list-item-link,
       .session-list-item-input .input-field
-        padding-right: 64px
+        padding-right: 68px
 
   &.session-list-item-editing
     .session-list-item-actions,
@@ -204,3 +202,40 @@
 @media (prefers-reduced-motion: reduce)
   .session-list-item .session-list-item-pinned-icon
     transition: none
+
+// Child rows keep their complete hover surface; only their content is indented.
+.session-list-item[data-workspace-id],
+.session-list-item.workspace-row
+  --sidebar-row-title-inset: calc(var(--space-sm) + 20px + var(--space-sm))
+
+  .session-list-item-input .input-field
+    padding-left: calc(var(--sidebar-row-title-inset) - 1px)
+
+.session-list-item[data-workspace-id] .session-list-item-link
+  padding-left: var(--sidebar-row-title-inset)
+
+.session-list-item.workspace-row
+  .workspace-row-toggle
+    gap: var(--space-sm)
+    border: 0
+    font: inherit
+    text-align: left
+    cursor: pointer
+
+  .workspace-row-icon
+    flex: 0 0 20px
+    width: 20px
+    height: 20px
+    color: var(--workspace-color)
+
+.workspace-row-toggle
+  background: transparent
+
+@media (hover: none)
+  .session-list-item .session-list-item-actions
+    display: inline-flex
+    opacity: 1
+    pointer-events: auto
+
+  .session-list-item .session-list-item-time
+    display: none

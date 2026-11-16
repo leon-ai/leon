@@ -17,6 +17,7 @@ export enum SessionStatus {
 
 export interface ConversationSession {
   id: string
+  workspaceId?: string
   title: string
   isTitleGenerated: boolean
   isPinned: boolean
@@ -47,16 +48,19 @@ export const SESSION_PAGE_SIZE = 40
 /**
  * Shares indexed pagination between the sidebar and session search.
  */
-export function sessionsQueryOptions(profile: string, query = ''): UseInfiniteQueryOptions<
+export function sessionsQueryOptions(profile: string, query = '', workspaceId?: string): UseInfiniteQueryOptions<
   SessionsPage, Error, InfiniteData<SessionsPage>, string[], string | null
 > {
   return infiniteQueryOptions({
-    queryKey: [...sessionsQueryKey, profile, query],
+    queryKey: [...sessionsQueryKey, profile, query, workspaceId ?? ''],
     meta: { errorTitle: query ? 'Could not search sessions' : 'Could not load sessions', profile },
     enabled: Boolean(profile),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams({ limit: String(SESSION_PAGE_SIZE), query })
+      if (workspaceId) {
+        params.set('workspace_id', workspaceId)
+      }
       if (pageParam) {
         params.set('cursor', pageParam)
       }
@@ -70,11 +74,11 @@ export function sessionsQueryOptions(profile: string, query = ''): UseInfiniteQu
 /**
  * Fetches pages only as the owner approaches the end of a virtualized list.
  */
-export function useSessions(profile: string, query = ''): UseInfiniteQueryResult<InfiniteData<SessionsPage>, Error> & {
+export function useSessions(profile: string, query = '', workspaceId?: string): UseInfiniteQueryResult<InfiniteData<SessionsPage>, Error> & {
   sessions: ConversationSession[]
   searchMatches: Record<string, SessionSearchMatch>
 } {
-  const result = useInfiniteQuery(sessionsQueryOptions(profile, query))
+  const result = useInfiniteQuery(sessionsQueryOptions(profile, query, workspaceId))
   const { sessions, searchMatches } = useMemo(() => {
     const unique = new Map<string, ConversationSession>()
     const matches = new Map<string, SessionSearchMatch>()
@@ -115,8 +119,7 @@ export function useSessionMutation(profile: string): UseMutationResult<
       if (queryClient.getQueryData<ProfileAuthentication>(PROFILE_AUTH_QUERY_KEY)?.profile_name !== profile) {
         return
       }
-      const action = !changes ? 'deleted'
-        : changes.title !== undefined ? 'renamed'
+      const action = !changes ? 'deleted' : changes.title !== undefined ? 'renamed'
           : changes.is_pinned ? 'pinned' : 'unpinned'
 
       if (!changes) {
@@ -128,6 +131,9 @@ export function useSessionMutation(profile: string): UseMutationResult<
         description: changes?.title ?? `I've ${action} the session.`
       })
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
+    onSettled: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: [...sessionsQueryKey, profile] }),
+      queryClient.invalidateQueries({ queryKey: ['workspaces', profile] })
+    ])
   })
 }

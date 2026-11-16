@@ -596,3 +596,5 @@ export const INSTANCE_ID = fs.existsSync(LEON_FILE_PATH)
   : null
 export const IS_GITHUB_ACTIONS = process.env['GITHUB_ACTIONS'] !== undefined
 export const IS_GITPOD = process.env['GITPOD_WORKSPACE_URL'] !== undefined
+
+export const MAXIMUM_PINNED_SESSIONS = 16

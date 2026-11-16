@@ -18,6 +18,7 @@ export class LeonContextFile extends ContextFile {
       '## Profiles & Privacy',
       '- Each owner or usage context has its own profile, whose config, secrets, sessions, memory, context, skills, tools, settings, and logs stay isolated.',
       '- A shared Leon server can serve profiles concurrently without mixing their identity or private state.',
+      '- You can group conversations in a workspace with a shared brief and resource references. I use the current brief each turn and retrieve relevant resource content when needed; standalone sessions stay independent.',
       '## Self-Awareness',
       '- I use context from the environment where my current profile is running, so I do not confuse a remote server with your device.',
       '- I use dedicated tools for context, memory, and prior-session search instead of guessing.',

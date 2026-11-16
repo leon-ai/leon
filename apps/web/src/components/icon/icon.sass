@@ -20,7 +20,12 @@
 .icon-part-gear, .icon-part-page
   transform-origin: 12px 12px
 
+.icon-part-folder-plus
+  transform-origin: 12px 13px
+
 .menu-item:is(:hover, :focus-visible):not(:disabled):not([aria-disabled='true'])
+  .icon-part-inbox-tray
+    animation: icon-inbox-settle var(--transition-duration-sidebar) var(--transition-timing-main)
   .icon-part-pencil
     animation: icon-write var(--transition-duration-sidebar) var(--transition-timing-main)
 
@@ -39,6 +44,12 @@
 
   .icon-part-page
     animation: icon-page var(--transition-duration-sidebar) var(--transition-timing-main)
+
+@keyframes icon-inbox-settle
+  0%, 100%
+    transform: translateY(0)
+  45%
+    transform: translateY(1.5px)
 
 @keyframes icon-write
   0%, 100%

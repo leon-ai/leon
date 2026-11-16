@@ -73,12 +73,19 @@ export function Dialog({
       return undefined
     }
 
-    const focusable = (): HTMLElement[] => Array.from(overlayRef.current?.querySelectorAll<HTMLElement>(
+    // Input popups live in a portal to escape the scrolling body's clipping.
+    const ownedPopups = (): HTMLElement[] => Array.from(overlayRef.current?.querySelectorAll<HTMLElement>('[aria-controls]') ?? [])
+      .flatMap((control) => {
+        const popup = document.getElementById(control.getAttribute('aria-controls') ?? '')
+
+        return popup?.classList.contains('dropdown-content-open') ? [popup] : []
+      })
+    const focusable = (): HTMLElement[] => [overlayRef.current, ...ownedPopups()].flatMap((root) => Array.from(root?.querySelectorAll<HTMLElement>(
       'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]'
-    ) ?? []).filter((element) => element.getClientRects().length > 0 && !element.closest('[inert]'))
+    ) ?? [])).filter((element) => element.getClientRects().length > 0 && !element.closest('[inert]'))
     const focusFrame = requestAnimationFrame(() => {
       // Content updates must not steal focus from an active dialog control.
-      if (!overlayRef.current?.contains(document.activeElement)) {
+      if (!overlayRef.current?.contains(document.activeElement) && !ownedPopups().some((popup) => popup.contains(document.activeElement))) {
         focusable()[0]?.focus({ preventScroll: true })
       }
     })
@@ -91,6 +98,9 @@ export function Dialog({
       }
 
       if (event.key === 'Escape') {
+        if (ownedPopups().length > 0) {
+          return
+        }
         onClose()
       } else if (event.key === 'Tab') {
         const elements = focusable()

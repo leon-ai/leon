@@ -2,6 +2,25 @@
   padding: var(--space-sm)
   transition: opacity var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
+  .session-list-heading
+    display: flex
+    align-items: center
+    gap: 0
+    margin-bottom: var(--space-sm)
+    padding-right: var(--space-sm)
+
+    .session-list-title
+      flex: 1
+      margin: 0
+
+  .workspace-more
+    position: absolute
+    inset: 0 0 auto
+    display: flex
+    align-items: center
+    box-sizing: border-box
+    padding-left: calc(var(--space-sm) + 20px + var(--space-sm))
+
   .session-list-title
     margin: 0 0 var(--space-sm)
     padding: 0 var(--space-sm)
@@ -36,3 +55,52 @@
 
     .session-list-mask
       transition: none
+
+.session-list-heading-actions
+  display: flex
+  gap: 0
+  visibility: hidden
+  opacity: 0
+
+.session-list-disclosure
+  display: flex
+  align-items: center
+  gap: var(--space-xs)
+  width: 100%
+  padding: 0
+  border: 0
+  background: transparent
+  color: inherit
+  font: inherit
+  text-align: left
+  cursor: pointer
+
+  .app-icon
+    visibility: hidden
+    font-size: var(--font-size-xl)
+    translate: 0 1px
+    rotate: 0deg
+    transition: rotate var(--transition-duration-main) var(--transition-timing-main)
+
+  &[aria-expanded='true'] .app-icon
+    rotate: 90deg
+
+.session-list-heading:hover,
+.session-list-heading:focus-within
+  .session-list-heading-actions,
+  .session-list-disclosure .app-icon
+    visibility: visible
+    opacity: 1
+
+@media (hover: none)
+  .session-list-heading .session-list-heading-actions
+    visibility: visible
+    opacity: 1
+
+.session-list-items[hidden],
+.session-list-mask[hidden]
+  display: none
+
+@media (prefers-reduced-motion: reduce)
+  .session-list-disclosure .app-icon
+    transition: none

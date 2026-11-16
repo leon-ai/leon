@@ -15,6 +15,7 @@ import { Dropdown } from '@/components/dropdown'
 import { Input } from '@/components/input'
 import { StreamingText } from '@/components/streaming-text'
 import { SessionStatus } from '@/data/sessions'
+import type { WorkspaceColor } from '../../../../../../bridges/runtime/contracts/workspace'
 import { canPrefetch } from '@/utils/prefetch'
 
 import { SessionWorkIndicator } from './session-work-indicator'
@@ -32,13 +33,21 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 
 interface SessionListItemProps {
   id: string
+  workspaceId?: string | undefined
+  rowKind?: 'session' | 'workspace'
+  workspaceColor?: WorkspaceColor
+  expanded?: boolean
+  onToggle?: (id: string) => void
+  onNewSession?: (id: string) => void
+  onEdit?: (id: string) => void
+  isExplicitlyPinned?: boolean
   isPinned: boolean
   isUnread: boolean
   isListScrolling: () => boolean
   status: SessionStatus
   onDelete: (sessionId: string) => void
-  onRename: (sessionId: string, title: string) => void
-  onPin: (sessionId: string, isPinned: boolean) => void
+  onRename?: (sessionId: string, title: string) => void
+  onPin?: (sessionId: string, isPinned: boolean) => void
   title: string
   timestamp: number
   relativeTime: string
@@ -48,7 +57,15 @@ interface SessionListItemProps {
 
 export const SessionListItem = memo(function SessionListItem({
   id,
+  workspaceId,
+  rowKind = 'session',
+  workspaceColor,
+  expanded = false,
+  onToggle,
+  onNewSession,
+  onEdit,
   isPinned,
+  isExplicitlyPinned = false,
   isUnread,
   isListScrolling,
   status,
@@ -72,16 +89,18 @@ export const SessionListItem = memo(function SessionListItem({
   const [editing, setEditing] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [draftTitle, setDraftTitle] = useState(title)
+  const isWorkspace = rowKind === 'workspace'
   const isWorking = status === SessionStatus.Wip
   const showUnread = isUnread && !isWorking
-  const pinDropdownItem = isPinned
+  const actionPinned = isWorkspace ? isExplicitlyPinned : isPinned
+  const pinDropdownItem = actionPinned
     ? {
         iconName: 'unpin',
-        label: 'Unpin session'
+        label: 'Unpin'
       }
     : {
         iconName: 'pushpin',
-        label: 'Pin session'
+        label: 'Pin'
       }
 
   useEffect(() => {
@@ -279,8 +298,8 @@ export const SessionListItem = memo(function SessionListItem({
   function commitEditing(): void {
     const titleToCommit = draftTitle.trim()
 
-    if (titleToCommit.length > 0) {
-      onRename(id, titleToCommit)
+    if (titleToCommit.length > 0 && titleToCommit !== title.trim()) {
+      onRename?.(id, titleToCommit)
     }
 
     setEditing(false)
@@ -304,51 +323,8 @@ export const SessionListItem = memo(function SessionListItem({
     setDeleteDialogOpen(false)
   }
 
-  return (
-    <li
-      className={clsx('session-list-item list-item-slot', {
-        'session-list-item-editing': editing,
-        'session-list-item-pinned': isPinned,
-        'session-list-item-wip': isWorking,
-        'session-list-item-unread': showUnread
-      })}
-      style={{ height: `${height}px`, transform: `translateY(${offset}px)` }}
-      onMouseEnter={startTitleScroll}
-      onMouseLeave={stopTitleScroll}
-      onMouseMove={handleTitlePointerMove}
-      onWheelCapture={stopTitleScroll}
-      onTouchStartCapture={stopTitleScroll}
-    >
-      {editing ? (
-        <Input
-          ariaLabel="Session title"
-          className="session-list-item-input"
-          fieldRef={(element) => {
-            inputRef.current = element instanceof HTMLInputElement ? element : null
-          }}
-          value={draftTitle}
-          onBlur={commitEditing}
-          onChange={(event) => setDraftTitle(event.target.value)}
-          onKeyDown={handleInputKeyDown}
-        />
-      ) : (
-        <Link
-          preload={canPrefetch() ? 'intent' : false}
-          to="/session/$sessionId"
-          params={{ sessionId: id }}
-          className="session-list-item-link"
-          data-session-id={id}
-          aria-label={isWorking ? `${title}, Leon is working` : showUnread ? `${title}, Unread response` : title}
-          activeProps={{
-            className: clsx('session-list-item-link', 'session-list-item-active')
-          }}
-          onDoubleClick={(event) => {
-            event.preventDefault()
-            startEditing()
-          }}
-          onFocus={startTitleScroll}
-          onBlur={stopTitleScroll}
-        >
+  const rowContents = <>
+    {isWorkspace && <Icon className="workspace-row-icon" name={expanded ? 'folder-open-line' : 'folder-line'} morph />}
           {isWorking && <SessionWorkIndicator />}
           <span
             ref={titleViewportRef}
@@ -398,43 +374,108 @@ export const SessionListItem = memo(function SessionListItem({
               {relativeTime}
             </time>
           )}
+  </>
+
+  return (
+    <li
+      data-workspace-id={workspaceId}
+      data-workspace-color={workspaceColor}
+      className={clsx('session-list-item list-item-slot', {
+        'workspace-row': isWorkspace,
+        'session-list-item-editing': editing,
+        'session-list-item-pinned': isPinned,
+        'session-list-item-wip': isWorking,
+        'session-list-item-unread': showUnread
+      })}
+      style={{ height: `${height}px`, transform: `translateY(${offset}px)` }}
+      onMouseEnter={startTitleScroll}
+      onMouseLeave={stopTitleScroll}
+      onMouseMove={handleTitlePointerMove}
+      onWheelCapture={stopTitleScroll}
+      onTouchStartCapture={stopTitleScroll}
+    >
+      {editing ? (
+        <Input
+          ariaLabel="Session title"
+          className="session-list-item-input"
+          fieldRef={(element) => {
+            inputRef.current = element instanceof HTMLInputElement ? element : null
+          }}
+          value={draftTitle}
+          onBlur={commitEditing}
+          onChange={(event) => setDraftTitle(event.target.value)}
+          onKeyDown={handleInputKeyDown}
+        />
+      ) : isWorkspace ? (
+        <button type="button" className="session-list-item-link workspace-row-toggle"
+          aria-expanded={expanded} data-navigation-id={id}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${title}`}
+          onClick={() => onToggle?.(id)}
+          onFocus={startTitleScroll} onBlur={stopTitleScroll}>
+          {rowContents}
+        </button>
+      ) : (
+        <Link
+          preload={canPrefetch() ? 'intent' : false}
+          to="/session/$sessionId"
+          params={{ sessionId: id }}
+          className="session-list-item-link"
+          data-session-id={id}
+          aria-label={isWorking ? `${title}, Leon is working` : showUnread ? `${title}, Unread response` : title}
+          activeProps={{
+            className: clsx('session-list-item-link', 'session-list-item-active')
+          }}
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            startEditing()
+          }}
+          onFocus={startTitleScroll}
+          onBlur={stopTitleScroll}
+        >
+          {rowContents}
         </Link>
       )}
-      {isPinned && (
-        <Icon name="unpin-fill" className="session-list-item-pinned-icon" />
-      )}
-      {showUnread && (
-        <span className="session-list-item-unread-dot" aria-hidden="true" />
-      )}
-      <div className="session-list-item-actions">
-        <Dropdown
-          items={[
-            {
-              iconName: 'edit',
-              label: 'Rename',
-              onSelect: startEditing
-            },
-            { ...pinDropdownItem, onSelect: () => onPin(id, isPinned) },
-            {
-              iconName: 'delete-bin',
-              label: 'Delete',
-              onSelect: () => setDeleteDialogOpen(true),
-              variant: 'danger'
-            }
-          ]}
-        >
-          <Button
-            iconName="more-2"
-            tone="muted"
-            ariaLabel="Session options"
-          />
-        </Dropdown>
+      <div className="session-list-item-trailing">
+        {isPinned && (
+          <Icon name="pushpin-fill" className="session-list-item-pinned-icon" />
+        )}
+        {showUnread && (
+          <span className="session-list-item-unread-dot" {...(isWorkspace ? { role: 'img', 'aria-label': 'Unread results' } : { 'aria-hidden': true })} />
+        )}
+        <div className="session-list-item-actions">
+          {isWorkspace && <Button compact feedback="color" tone="muted" iconName="edit-box" ariaLabel={`New session in ${title}`}
+            onClick={() => onNewSession?.(id)} />}
+          <Dropdown
+            items={isWorkspace ? [
+              { iconName: 'edit', label: 'Edit', onSelect: () => onEdit?.(id) },
+              { ...pinDropdownItem, onSelect: () => onPin?.(id, actionPinned) },
+              { iconName: 'delete-bin', label: 'Delete', variant: 'danger', onSelect: () => setDeleteDialogOpen(true) }
+            ] : [
+              {
+                iconName: 'edit',
+                label: 'Rename',
+                onSelect: startEditing
+              },
+              { ...pinDropdownItem, onSelect: () => onPin?.(id, isPinned) },
+              {
+                iconName: 'delete-bin',
+                label: 'Delete',
+                onSelect: () => setDeleteDialogOpen(true),
+                variant: 'danger'
+              }
+            ]}
+          >
+            {(open, contentId) => <Button compact feedback="color" iconName="more-2" tone="muted"
+              ariaExpanded={open} ariaControls={open ? contentId : undefined} ariaHasPopup="menu"
+              ariaLabel={isWorkspace ? `${title} options` : 'Session options'} /> }
+          </Dropdown>
+        </div>
       </div>
       <Dialog
         open={deleteDialogOpen}
         role="alertdialog"
-        title="You sure?"
-        description="This action cannot be undone. This will permanently delete the session."
+        title={isWorkspace ? 'Delete workspace?' : 'You sure?'}
+        description={isWorkspace ? 'Your conversations will return to Recents. Your resources and their files will stay where they are.' : 'This action cannot be undone. This will permanently delete the session.'}
         actions={[
           {
             label: 'Cancel',
@@ -442,7 +483,7 @@ export const SessionListItem = memo(function SessionListItem({
             onClick: () => setDeleteDialogOpen(false)
           },
           {
-            label: 'Delete session',
+            label: isWorkspace ? 'Delete workspace' : 'Delete session',
             variant: 'danger',
             onClick: confirmDelete
           }

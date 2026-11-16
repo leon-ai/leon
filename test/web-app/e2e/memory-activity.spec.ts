@@ -1,4 +1,4 @@
-import { test, expect, SESSION_ID, SESSION_URL } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_ID, SESSION_URL } from './fixtures'
 import type { ConversationRecord } from '../../../apps/web/src/data/conversation'
 import { MemoryActivityAction } from '../../../server/src/core/llm-manager/memory-activity-contract'
 
@@ -56,7 +56,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     for (const theme of ['light', 'dark']) {
       await page.keyboard.press('Escape')
       await expect(dialog).toHaveCount(0)
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      await setFixtureTheme(page, theme)
       await outcome.getByRole('button', { name: 'View details', exact: true }).click()
       await expect(dialog.getByText('memory.json', { exact: true })).toHaveCount(1)
       const layout = await dialog.locator('.activity-details-toolbar-document').evaluate((element) => {

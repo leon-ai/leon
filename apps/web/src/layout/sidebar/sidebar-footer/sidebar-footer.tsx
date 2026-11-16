@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import { Tooltip } from '@/components/tooltip'
 import { getPublicAssetPath } from '@/config'
 import { useAmbientConditions } from '@/data/ambient-conditions'
+import { Link } from '@tanstack/react-router'
 
 import './sidebar-footer.sass'
 
@@ -54,6 +55,11 @@ export function SidebarFooter({
         </span>
       </a>
       <div className="sidebar-footer-status">
+        <Tooltip message="Settings" position="right">
+          <Link to="/settings" className="sidebar-footer-settings" aria-label="Settings">
+            <Icon name="settings-line" />
+          </Link>
+        </Tooltip>
         <span className="sidebar-footer-status-label">
           {LEON_VERSION}
         </span>

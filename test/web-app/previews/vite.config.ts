@@ -75,7 +75,6 @@ export default defineConfig({
         }
       },
       input: {
-        icons: fileURLToPath(new URL('./icons.html', import.meta.url)),
         aurora: fileURLToPath(new URL('./aurora.html', import.meta.url))
       }
     }

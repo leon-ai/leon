@@ -1,4 +1,4 @@
-import { test, expect, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
 for (const { theme, reducedMotion, width } of [
   { theme: 'dark', reducedMotion: 'no-preference', width: 1_512 },
@@ -11,7 +11,7 @@ for (const { theme, reducedMotion, width } of [
     await expect(pageContent).toBeVisible()
     await expect(page.getByRole('navigation', { name: 'Main menu' })).toBeVisible()
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     }
     await page.setViewportSize({ width, height: 982 })

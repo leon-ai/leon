@@ -1,0 +1,25 @@
+// One palette supplies workspace identities and owner-selected application accents.
+// Light variants retain enough contrast for small icons on light surfaces.
+$palette: ('blue', #1C75DB, #1C75DB), ('pink', #ED297A, #C62067), ('green', #49B86B, #237A41), ('violet', #AB73FF, #7842BD), ('orange', #F19B50, #AD5815), ('rouge', #E56868, #B13245), ('yellow', #EACB64, #896915), ('teal', #52B8AA, #22786D), ('cyan', #65BBD3, #22758E), ('rose', #D98DA9, #9E4567), ('amber', #DFA55D, #93611E), ('lime', #A6BF65, #617C29)
+
+@each $name, $dark, $light in $palette
+  :root,
+  [data-theme='dark']
+    --color-palette-#{$name}: #{$dark}
+
+  [data-theme='light']
+    --color-palette-#{$name}: #{$light}
+
+  [data-workspace-color='#{$name}']
+    --workspace-color: var(--color-palette-#{$name})
+
+  :root[data-accent='#{$name}']
+    --color-accent: var(--color-palette-#{$name})
+    --color-accent-hover: color-mix(in srgb, var(--color-accent) 88%, var(--color-text))
+    --color-accent-soft: color-mix(in srgb, var(--color-accent) 20%, transparent)
+    --color-accent-muted: color-mix(in srgb, var(--color-accent) 30%, transparent)
+    --color-primary-button-active: color-mix(in srgb, var(--color-accent) 85%, #000)
+    --color-primary-button-disabled: color-mix(in srgb, var(--color-accent) 40%, transparent)
+
+[data-workspace-color='default']
+  --workspace-color: var(--color-text)
