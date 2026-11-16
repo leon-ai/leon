@@ -204,3 +204,40 @@
 @media (prefers-reduced-motion: reduce)
   .session-list-item .session-list-item-pinned-icon
     transition: none
+
+// Child rows keep their complete hover surface; only their content is indented.
+.session-list-item[data-workspace-id],
+.session-list-item.workspace-row
+  --sidebar-row-title-inset: calc(var(--space-sm) + 20px + var(--space-sm))
+
+  .session-list-item-input .input-field
+    padding-left: calc(var(--sidebar-row-title-inset) - 1px)
+
+.session-list-item[data-workspace-id] .session-list-item-link
+  padding-left: var(--sidebar-row-title-inset)
+
+.session-list-item.workspace-row
+  .workspace-row-toggle
+    gap: var(--space-sm)
+    border: 0
+    font: inherit
+    text-align: left
+    cursor: pointer
+
+  .workspace-row-icon
+    flex: 0 0 20px
+    width: 20px
+    height: 20px
+    color: var(--workspace-color)
+
+.workspace-row-toggle
+  background: transparent
+
+@media (hover: none)
+  .session-list-item .session-list-item-actions
+    display: inline-flex
+    opacity: 1
+    pointer-events: auto
+
+  .session-list-item .session-list-item-time
+    display: none
