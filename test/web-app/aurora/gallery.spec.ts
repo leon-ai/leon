@@ -470,6 +470,7 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     await expect(saving).toHaveCSS('color', primaryColor)
     await expect(saving.locator('.loader-indicator')).toHaveCSS('color', primaryColor)
     const availability = buttons.getByRole('button', { name: 'Ready when you are', exact: true })
+    await expect(availability).toHaveCSS('color', theme === 'light' ? 'rgba(245, 245, 247, 0.66)' : 'rgba(245, 245, 247, 0.33)')
     const disabledBounds = (await availability.boundingBox())!
     await buttons.getByRole('button', { name: 'Toggle availability', exact: true }).click()
     await expect(availability).toBeEnabled()
