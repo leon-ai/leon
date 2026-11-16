@@ -113,6 +113,31 @@ for (const { theme, motion, width } of [
     }
     await sidebar.getByRole('button', { name: 'New workspace', exact: true }).click()
     const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+    const callout = editor.getByRole('complementary')
+    await expect(callout).toContainText('I use this context to keep my help focused.')
+    await expect(callout.locator('br')).toHaveCount(0)
+    await expect(callout.locator('[data-icon="lightbulb"]')).toBeVisible()
+    const inputBackground = await editor.getByRole('textbox', { name: 'Workspace name' })
+      .evaluate((element) => getComputedStyle(element).backgroundColor)
+    await expect(callout).toHaveCSS('background-color', inputBackground)
+    const formBounds = (await editor.locator('form').boundingBox())!
+    const calloutBounds = (await callout.boundingBox())!
+    expect(calloutBounds.width).toBe(formBounds.width)
+    expect(calloutBounds.y).toBe(formBounds.y)
+    for (const previewWidth of [width, 390, 320]) {
+      await page.setViewportSize({ width: previewWidth, height: 844 })
+      const lines = await callout.locator('.callout-content').evaluate((element) =>
+        element.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(element).lineHeight))
+      if (previewWidth === width) {
+        expect(lines).toBe(2)
+      }
+      const content = callout.locator('.callout-content')
+      expect(await content.evaluate((element) => element.scrollHeight <= element.clientHeight
+        && element.scrollWidth <= element.clientWidth)).toBe(true)
+    }
+    await page.setViewportSize({ width, height: 982 })
+    const save = editor.getByRole('button', { name: 'Save workspace', exact: true })
+    await expect(save).toBeDisabled()
     await editor.getByRole('textbox', { name: 'Workspace name' }).fill('Leon')
     await editor.getByRole('textbox', { name: 'Workspace brief' }).fill('I am building my open-source AI assistant.')
     const pink = editor.getByRole('button', { name: 'Leon pink', exact: true })

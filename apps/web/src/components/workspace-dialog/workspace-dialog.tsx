@@ -3,6 +3,7 @@ import { useId, useState, type FormEvent } from 'react'
 import { Dialog } from '@/components/dialog'
 import { Input } from '@/components/input'
 import { Button } from '@/components/button'
+import { Callout } from '@/components/callout/callout'
 import { FolderPicker } from '@/components/folder-picker/folder-picker'
 import { useProfile } from '@/data/profile'
 import { useWorkspaceMutation, type Workspace } from '@/data/workspaces'
@@ -61,6 +62,7 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
       <Button variant="primary" type="submit" form={formId} loading={mutation.isPending} disabled={!name.trim()}>Save workspace</Button>
     </>}>
     <form className="workspace-editor" id={formId} onSubmit={submit}>
+      {!workspace && <Callout>Workspaces group related sessions, a brief and folders. I use this context to keep my help focused.</Callout>}
       <label>Workspace name<Input autoFocus ariaLabel="Workspace name" placeholder="What you are working on..." required
         maxLength={WORKSPACE_LIMITS.name} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <label>Workspace brief<Input multiline ariaLabel="Workspace brief" placeholder="What you are trying to achieve, goals, links, context..."
