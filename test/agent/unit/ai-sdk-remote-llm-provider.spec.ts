@@ -676,6 +676,7 @@ describe('AISDKRemoteLLMProvider', () => {
     [LLMProviders.ZAI, 'zai', 'glm-5.3'],
     [LLMProviders.MiniMax, 'openai-compatible', 'MiniMax-M3'],
     [LLMProviders.Celeris, 'openai-compatible', 'celeris-1-magnus'],
+    [LLMProviders.AtlasCloud, 'openai-compatible', 'deepseek-ai/deepseek-v4-flash'],
     [LLMProviders.SGLang, 'openai-compatible', 'local-model'],
     [LLMProviders.LlamaCPP, 'openai-compatible', 'local-model'],
     [LLMProviders.Cerebras, 'cerebras', 'gpt-oss-120b'],

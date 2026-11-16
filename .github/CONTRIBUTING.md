@@ -180,7 +180,7 @@ Use these namespaces for changes confined to one component.
 - `bridge/python` or `bridge/nodejs` covers the corresponding bridge and SDK.
 - `tool/<name>` covers one tool, such as `tool/browser-use` or `tool/tool_executions`.
 - `skill/<name>` covers one native or agent skill, such as `skill/timer_skill` or `skill/coding`.
-- `provider/<name>` covers one provider integration. Accepted names are `llamacpp`, `sglang`, `openrouter`, `zai`, `deepseek`, `minimax`, `openai`, `anthropic`, `moonshotai`, `huggingface`, `cerebras`, `groq` and `celeris`.
+- `provider/<name>` covers one provider integration. Accepted names are `llamacpp`, `sglang`, `openrouter`, `zai`, `deepseek`, `minimax`, `openai`, `anthropic`, `moonshotai`, `huggingface`, `cerebras`, `groq`, `celeris` and `atlascloud`.
 
 Use `tools` for shared tool infrastructure and `tool/<name>` for an individual tool. Likewise, use `llm` for shared model infrastructure and `provider/<name>` for a provider-specific change.
 
