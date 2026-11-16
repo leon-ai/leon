@@ -189,6 +189,11 @@ export function ModelSelector({ disabled = false, binding }: ModelSelectorProps)
             type="button"
             className="button button-ghost button-md button-composer model-selector-trigger"
             disabled={disabled}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'mouse' && !disabled && panel !== SelectorPanel.Closed) {
+                setPanel(SelectorPanel.Models)
+              }
+            }}
             aria-label={`Choose model, current: ${choice.provider.label}, ${choice.model.label}`}
             aria-haspopup="dialog"
             aria-expanded={open}
@@ -206,6 +211,11 @@ export function ModelSelector({ disabled = false, binding }: ModelSelectorProps)
         disabled={disabled}
         open={panel === SelectorPanel.Settings}
         onOpenChange={(open) => changePanel(SelectorPanel.Settings, open)}
+        onPointerEnter={() => {
+          if (!disabled && panel !== SelectorPanel.Closed) {
+            setPanel(SelectorPanel.Settings)
+          }
+        }}
         onChange={(next) => {
           binding?.update(choice, { ...settings, ...next })
           setSettingsByModel((current) => ({

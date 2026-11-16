@@ -83,10 +83,11 @@ interface ModelSettingsSelectorProps {
   disabled?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
+  onPointerEnter?: () => void
   onChange: (settings: Partial<ModelSettings>) => void
 }
 
-interface ModelSettingsMenuProps extends Omit<ModelSettingsSelectorProps, 'onOpenChange'> {
+interface ModelSettingsMenuProps extends Omit<ModelSettingsSelectorProps, 'onOpenChange' | 'onPointerEnter'> {
   reasoningOptions: SettingsOption<ModelReasoning>[]
   speedOptions: SettingsOption<ModelSpeed>[]
 }
@@ -226,6 +227,7 @@ export function ModelSettingsSelector({
   disabled = false,
   open,
   onOpenChange,
+  onPointerEnter,
   onChange
 }: ModelSettingsSelectorProps) {
   const policy = SERVICE_TIER_POLICIES[provider.id]
@@ -281,6 +283,11 @@ export function ModelSettingsSelector({
           type="button"
           className="button button-ghost button-md button-composer model-settings-trigger"
           disabled={disabled}
+          onPointerEnter={(event) => {
+            if (event.pointerType === 'mouse') {
+              onPointerEnter?.()
+            }
+          }}
           title={'Model settings · ' + description}
           aria-label={'Model settings, ' + description}
           aria-haspopup="dialog"

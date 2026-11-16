@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 
-import { test, expect, SESSION_URL, SESSION_ID, OTHER_SESSION_ID, LATEST_ANSWER } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_URL, SESSION_ID, OTHER_SESSION_ID, LATEST_ANSWER } from './fixtures'
 
 async function countWaves(page: Page): Promise<number> {
   return page.evaluate(() => Reflect.get(window, 'composerWaveCount') as number)
@@ -353,7 +353,7 @@ for (const theme of ['light', 'dark'] as const) {
     ].map((provider) => ({ ...provider, models: [{ ...model, model: 'fixture-chat', label: 'Fixture chat' }] }))]
     await page.goto(SESSION_URL)
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
     }
     const popup = page.getByRole('dialog', { name: 'Choose a model', exact: true })
     await page.getByRole('button', { name: /^Choose model, current:/ }).click()
@@ -697,3 +697,28 @@ test('restores a pointer-opened session menu without an outline', async ({ page 
   await expect(trigger).toBeFocused()
   await expect(trigger).toHaveCSS('outline-style', 'none')
 })
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`switches model and reasoning popups on hover only while a selector is open (${reducedMotion})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const model = page.getByRole('button', { name: /^Choose model, current:/ })
+    const settings = page.getByRole('button', { name: /^Model settings,/ })
+    const modelsPopup = page.getByRole('dialog', { name: 'Choose a model', exact: true })
+    const settingsPopup = page.getByRole('dialog', { name: 'Model settings', exact: true })
+    await settings.hover()
+    await expect(settingsPopup).toBeHidden()
+    await model.click()
+    await expect(modelsPopup).toBeVisible()
+    await settings.hover()
+    await expect(settingsPopup).toBeVisible()
+    await expect(modelsPopup).toBeHidden()
+    await model.hover()
+    await expect(modelsPopup).toBeVisible()
+    await expect(settingsPopup).toBeHidden()
+    await page.keyboard.press('Escape')
+    await expect(modelsPopup).toBeHidden()
+    await settings.hover()
+    await expect(settingsPopup).toBeHidden()
+  })
+}
