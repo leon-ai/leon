@@ -526,7 +526,9 @@ test('keeps a tall workspace editor scrollable and folder popups independently d
   ui.workspaces.push({ id: workspaceId, name: 'Leon', color: 'default', brief: '', createdAt: 1, updatedAt: 1,
     resources: [
       { kind: WorkspaceResourceKind.Link, label: 'Planning', location: 'https://example.com/' },
-      ...Array.from({ length: 12 }, (_, index) => ({ kind: WorkspaceResourceKind.Folder, label: `Notes ${index}`, location: `/notes/${index}` }))
+      ...['/home/owner/', '/home/owner/Projects/Leon/', '/home/owner/Projects/Notes/'].map((location, index) => ({
+        kind: WorkspaceResourceKind.Folder, label: `Notes ${index}`, location
+      }))
     ] })
   await mockFolders(page)
   await page.setViewportSize({ width: 1_100, height: 550 })
