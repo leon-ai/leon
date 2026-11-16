@@ -62,6 +62,7 @@ export const SessionListItem = memo(function SessionListItem({
   workspaceColor,
   expanded = false,
   onToggle,
+  onNewSession,
   onEdit,
   isPinned,
   isExplicitlyPinned = false,
@@ -442,6 +443,8 @@ export const SessionListItem = memo(function SessionListItem({
           <span className="session-list-item-unread-dot" {...(isWorkspace ? { role: 'img', 'aria-label': 'Unread results' } : { 'aria-hidden': true })} />
         )}
         <div className="session-list-item-actions">
+          {isWorkspace && <Button compact feedback="color" tone="muted" iconName="edit-box" ariaLabel={`New session in ${title}`}
+            onClick={() => onNewSession?.(id)} />}
           <Dropdown
             items={isWorkspace ? [
               { iconName: 'edit', label: 'Edit', onSelect: () => onEdit?.(id) },

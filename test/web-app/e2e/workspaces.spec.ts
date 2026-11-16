@@ -173,6 +173,87 @@ test('plays only live turn completion and keeps routine actions, replay and mute
   expect(await count()).toBe(1)
 })
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`collapses Recents, reveals creation actions and aligns row controls (${reducedMotion})`, async ({ page, ui }) => {
+    ui.workspaces.push({ id: '10000000-0000-4000-8000-000000000000', name: 'Leon', brief: '', color: 'default', resources: [], createdAt: 1, updatedAt: 1 })
+    ui.sessions[0]!.isPinned = true
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(SESSION_URL)
+    const heading = page.locator('.session-list-heading')
+    const actions = heading.locator('.session-list-heading-actions')
+    const recents = heading.getByRole('button', { name: 'Recents', exact: true })
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    await expect(actions).toHaveCSS('visibility', 'hidden')
+    await recents.hover()
+    await expect(actions).toHaveCSS('visibility', 'visible')
+    await expect(recents.locator('.app-icon')).toHaveCSS('rotate', '90deg')
+    await expect(recents.locator('.app-icon')).toHaveCSS('translate', '0px 1px')
+    await recents.click()
+    if (reducedMotion === 'no-preference') {
+      const halfway = await recents.locator('.app-icon').evaluate((icon) => {
+        const transition = icon.getAnimations().find((animation) =>
+          animation instanceof CSSTransition && animation.transitionProperty === 'rotate')
+        if (!transition?.effect) {
+          return null
+        }
+        transition.pause()
+        transition.currentTime = Number(transition.effect.getComputedTiming().duration) / 2
+        const angle = Number.parseFloat(getComputedStyle(icon).rotate)
+        transition.finish()
+
+        return angle
+      })
+      expect(halfway).toBeGreaterThan(0)
+      expect(halfway).toBeLessThan(90)
+    }
+    await expect(recents).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.locator('.session-list-items')).toBeHidden()
+    await expect(recents.locator('.app-icon')).toHaveCSS('rotate', '0deg')
+    await page.reload()
+    await expect(recents).toHaveAttribute('aria-expanded', 'false')
+    await recents.focus()
+    await recents.press('Enter')
+    await expect(page.locator('.session-list-items')).toBeVisible()
+    const row = page.locator('.workspace-row')
+    await row.hover()
+    const create = row.getByRole('button', { name: 'New session in Leon', exact: true })
+    await expect(create).toBeVisible()
+    const close = page.getByRole('button', { name: 'Close sidebar', exact: true })
+    const options = row.getByRole('button', { name: 'Leon options', exact: true })
+    const center = async (locator: typeof close): Promise<number> => locator.locator('.app-icon').evaluate((icon) => {
+      const bounds = icon.getBoundingClientRect()
+      return bounds.x + bounds.width / 2
+    })
+    expect(Math.abs(await center(options) - await center(close))).toBeLessThanOrEqual(1)
+    await options.hover()
+    await expect(options).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await recents.hover()
+    const newSession = heading.getByRole('button', { name: 'New session', exact: true })
+    await newSession.hover()
+    await expect(newSession).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    const geometry = async (button: typeof newSession): Promise<unknown> => button.evaluate((element) => {
+      const style = getComputedStyle(element)
+
+      return { width: style.width, height: style.height, padding: style.padding,
+        iconSize: getComputedStyle(element.querySelector('.app-icon')!).fontSize }
+    })
+    const metadataGeometry = await geometry(page.getByRole('button', { name: 'Turn info', exact: true }).last())
+    for (const name of ['New session', 'New workspace']) {
+      expect(await geometry(heading.getByRole('button', { name, exact: true }))).toEqual(metadataGeometry)
+    }
+    expect(Math.abs(await center(newSession) - await center(close))).toBeLessThanOrEqual(1)
+    const flat = page.locator(`a[data-session-id="${SESSION_ID}"]`).locator('..')
+    await page.getByRole('textbox', { name: 'Message Leon' }).hover()
+    const pin = flat.locator('.session-list-item-pinned-icon')
+    await expect(pin).toHaveAttribute('data-icon', 'pushpin')
+    const bounds = (await pin.boundingBox())!
+    expect(Math.abs(bounds.x + bounds.width / 2 - await center(close))).toBeLessThanOrEqual(1)
+    await row.hover()
+    await create.click()
+    await expect(page).toHaveURL(/workspace=/)
+  })
+}
+
 test('pins a workspace directly and inherits its conversations’ pins independently', async ({ page, ui }) => {
   const workspaceId = '10000000-0000-4000-8000-000000000000'
   ui.workspaces.push({ id: workspaceId, name: 'Leon', brief: '', color: 'pink', resources: [], createdAt: 1, updatedAt: 1 })

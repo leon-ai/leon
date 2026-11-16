@@ -1216,14 +1216,11 @@ for (const pinned of [false, true]) {
     await expect(otherLink).toHaveAccessibleName('Test session 1, Unread response')
     await composer.hover()
     await expect(dot).toBeVisible()
-    await expect(options).toHaveCSS('opacity', '1')
+    await expect(options).toBeHidden()
     await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '0')
     const dotBounds = (await dot.boundingBox())!
     const timeBounds = (await row.locator('time').boundingBox())!
     expect(timeBounds.x + timeBounds.width).toBeLessThan(dotBounds.x)
-    const optionsBounds = (await options.boundingBox())!
-    expect(Math.abs(dotBounds.x + dotBounds.width / 2 - optionsBounds.x - optionsBounds.width / 2)).toBeLessThanOrEqual(1)
-    expect(Math.abs(dotBounds.y + dotBounds.height / 2 - optionsBounds.y - optionsBounds.height / 2)).toBeLessThanOrEqual(1)
     if (pinned) {
       const pinBounds = (await row.locator('.session-list-item-pinned-icon').boundingBox())!
       expect(pinBounds.x + pinBounds.width).toBeLessThan(dotBounds.x)
@@ -1234,6 +1231,9 @@ for (const pinned of [false, true]) {
     await expect(dot).not.toBeVisible()
     await expect(row.locator('time')).toBeHidden()
     await expect(row.locator('.session-list-item-actions')).toHaveCSS('opacity', '1')
+    const optionsBounds = (await options.boundingBox())!
+    expect(Math.abs(dotBounds.x + dotBounds.width / 2 - optionsBounds.x - optionsBounds.width / 2)).toBeLessThanOrEqual(1)
+    expect(Math.abs(dotBounds.y + dotBounds.height / 2 - optionsBounds.y - optionsBounds.height / 2)).toBeLessThanOrEqual(1)
     await composer.hover()
     await expect(dot).toBeVisible()
     await expect(row.locator('time')).toBeVisible()
