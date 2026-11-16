@@ -29,9 +29,28 @@
   border-radius: 50%
   background: var(--workspace-color)
 
-.workspace-color[aria-pressed='true']
-  outline: 2px solid var(--color-text)
+.workspace-color
+  outline: 2px solid transparent
   outline-offset: -2px
+
+  &[aria-pressed='true']
+    outline-color: var(--color-text)
+
+.workspace-folder-list
+  display: grid
+  gap: var(--space-sm)
+
+.workspace-folder-row
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+
+  > .dropdown-trigger
+    flex: 1
+    min-width: 0
+
+.workspace-add-folder
+  justify-self: start
 
 .workspace-selector
   max-width: 100%

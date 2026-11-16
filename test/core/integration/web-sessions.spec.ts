@@ -197,6 +197,27 @@ describe('web conversation runtime', () => {
     expect(session).not.toHaveProperty('workspaceId')
   })
 
+  it('limits workspace folders independently of links on creation and editing', async () => {
+    const resources = ['source', 'notes', 'media'].map((name) => ({
+      kind: 'folder', label: name, location: path.join(fixture.root, name)
+    }))
+    const input = { name: 'Leon', brief: '', resources: [
+      ...resources, { kind: 'link', label: 'Planning', location: 'https://example.com/' }
+    ] }
+    const created = await request('POST', '/api/v1/workspaces', input)
+    expect(created.statusCode).toBe(200)
+    const workspace = created.json().workspace
+    expect(workspace.resources).toHaveLength(4)
+
+    const overflow = { ...input, resources: [...input.resources, {
+      kind: 'folder', label: 'Extra', location: path.join(fixture.root, 'extra')
+    }] }
+    expect((await request('POST', '/api/v1/workspaces', overflow)).statusCode).toBe(400)
+    expect((await request('PUT', `/api/v1/workspaces/${workspace.id}`, overflow)).statusCode).toBe(400)
+    expect((await request('PUT', `/api/v1/workspaces/${workspace.id}`, input)).statusCode).toBe(200)
+    expect((await request('GET', '/api/v1/workspaces')).json().workspaces[0].resources).toHaveLength(4)
+  })
+
   it('limits pinned conversations across workspaces while preserving existing pins and rejected metadata', async () => {
     const workspace = (await request('POST', '/api/v1/workspaces', { name: 'Leon', brief: '', resources: [] })).json().workspace
     expect((await request('PATCH', `/api/v1/workspaces/${workspace.id}`, { is_pinned: true })).statusCode).toBe(200)

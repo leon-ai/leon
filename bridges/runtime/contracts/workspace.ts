@@ -34,6 +34,7 @@ export const WORKSPACE_LIMITS = {
   name: 80,
   brief: 4_000,
   resources: 24,
+  folders: 3,
   resourceLabel: 120,
   resourceLocation: 2_048
 } as const

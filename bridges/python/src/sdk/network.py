@@ -2,6 +2,8 @@ import json
 import requests
 import socket
 import sys
+from ipaddress import ip_address
+from urllib.parse import urlsplit
 from typing import Any, Dict, TypedDict, Union, Literal, Optional
 
 from ..constants import LEON_VERSION, PYTHON_BRIDGE_VERSION
@@ -46,9 +48,43 @@ class NetworkRequestOptions(TypedDict, total=False):
     headers: Dict[str, str]
     # Requests uses seconds; the SDK exposes milliseconds in both bridges.
     timeout_ms: int
+    # Preserve the URL's Host, SNI and certificate hostname when selecting a peer.
+    connect_address: str
     files: Dict[str, Any]
     use_json: bool
     response_type: Optional[Union[Literal['json'], Literal['text'], Literal['arraybuffer'], Literal['bytes']]]
+
+
+class _AddressAdapter(requests.adapters.HTTPAdapter):
+    """Select a direct peer without changing HTTPS identity or proxy routing."""
+
+    def __init__(self, address: str) -> None:
+        self.address = str(ip_address(address))
+        super().__init__()
+
+    def get_connection_with_tls_context(
+        self, request, verify, proxies=None, cert=None
+    ):
+        # A proxy owns origin resolution; preserve its routing policy.
+        if requests.utils.select_proxy(request.url, proxies):
+            return super().get_connection_with_tls_context(
+                request, verify, proxies, cert
+            )
+
+        host_params, pool_kwargs = self.build_connection_pool_key_attributes(
+            request, verify, cert
+        )
+        hostname = host_params["host"]
+        host_params["host"] = self.address
+        request.headers["Host"] = urlsplit(request.url).netloc
+        if host_params["scheme"] == "https":
+            pool_kwargs["server_hostname"] = hostname
+            pool_kwargs["assert_hostname"] = hostname
+
+        return self.poolmanager.connection_from_host(
+            **host_params, pool_kwargs=pool_kwargs
+        )
+
 
 class Network:
     def __init__(self, options: NetworkOptions = {'base_url': None}) -> None:
@@ -86,11 +122,18 @@ class Network:
             else:
                 request_kwargs['json'] = data
 
-            response = requests.request(
-                method,
-                url,
-                **request_kwargs
-            )
+            address = options.get('connect_address')
+            if address:
+                # A separate session prevents reuse of a connection to a failed peer.
+                with requests.Session() as session:
+                    adapter = _AddressAdapter(address)
+                    session.mount('https://', adapter)
+                    session.mount('http://', adapter)
+                    response = session.request(
+                        method, url, allow_redirects=False, **request_kwargs
+                    )
+            else:
+                response = requests.request(method, url, **request_kwargs)
 
             parsed_data: Any
             if response_type in ['arraybuffer', 'bytes']:
@@ -107,7 +150,7 @@ class Network:
                 'options': {**self.options, **options}
             }
 
-            if response.ok:
+            if response.ok and not (address and response.is_redirect):
                 return network_response
             else:
                 print(

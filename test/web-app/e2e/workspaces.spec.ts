@@ -21,6 +21,94 @@ async function mockFolders(page: Page): Promise<void> {
   })
 }
 
+for (const motion of ['normal', 'reduced', 'zero duration'] as const) {
+  test(`closes workspace editors through the shared dialog lifecycle (${motion})`, async ({ page, ui }) => {
+    void ui
+    await page.emulateMedia({ reducedMotion: motion === 'reduced' ? 'reduce' : 'no-preference' })
+    await page.goto('./')
+    // A longer transition lets us inspect the fade without a wall-clock race.
+    await page.addStyleTag({ content: `.dialog-overlay, .dialog { transition-duration: ${motion === 'zero duration' ? '0s' : '2s'}; }` })
+
+    for (const entry of ['sidebar', 'composer'] as const) {
+      if (entry === 'sidebar') {
+        await page.locator('.session-list-heading').hover()
+        await page.locator('.sidebar').getByRole('button', { name: 'New workspace', exact: true }).click()
+      } else {
+        await page.getByRole('button', { name: 'Attach workspace', exact: true }).click()
+        await page.getByRole('menuitem', { name: 'New workspace', exact: true }).click()
+      }
+      const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+      const overlay = page.locator('.dialog-overlay').filter({ has: editor })
+      await finishFiniteAnimations(overlay)
+      if (entry === 'sidebar') {
+        await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
+      } else {
+        await editor.press('Escape')
+      }
+      if (motion === 'normal') {
+        const opacity = await overlay.evaluate((element) => {
+          const transition = element.getAnimations().find((animation) =>
+            animation instanceof CSSTransition && animation.transitionProperty === 'opacity')
+          if (!transition?.effect) {
+            return null
+          }
+          transition.pause()
+          transition.currentTime = Number(transition.effect.getComputedTiming().duration) / 2
+          const opacity = Number(getComputedStyle(element).opacity)
+          transition.finish()
+
+          return opacity
+        })
+        expect(opacity).not.toBeNull()
+        expect(opacity).toBeGreaterThan(0)
+        expect(opacity).toBeLessThan(1)
+      }
+      await expect(editor).toHaveCount(0)
+      await expect(overlay).toHaveCount(0)
+    }
+  })
+}
+
+for (const motion of ['no-preference', 'reduce'] as const) {
+  test(`keeps short dialogs at the top and lifts tall editors as the viewport changes (${motion})`, async ({ page, ui }) => {
+    void ui
+    await page.emulateMedia({ reducedMotion: motion })
+    await page.goto(SESSION_URL)
+    await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+    const search = page.getByRole('dialog', { name: 'Search sessions', exact: true })
+    await expect(search.getByRole('combobox', { name: 'Search sessions', exact: true })).toBeFocused()
+    expect((await search.boundingBox())!.y).toBeCloseTo(112, 0)
+    await page.keyboard.press('Escape')
+    await expect(search).toHaveCount(0)
+
+    const session = page.getByRole('listitem').filter({ has: page.locator(`a[data-session-id="${SESSION_ID}"]`) })
+    await session.hover()
+    await session.getByRole('button', { name: 'Session options', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
+    const confirmation = page.getByRole('alertdialog')
+    await expect(confirmation).toBeVisible()
+    expect((await confirmation.boundingBox())!.y).toBeCloseTo(112, 0)
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(confirmation).toHaveCount(0)
+
+    await page.locator('.session-list-heading').hover()
+    await page.locator('.sidebar').getByRole('button', { name: 'New workspace', exact: true }).click()
+    const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+    await editor.getByRole('button', { name: 'Add folder', exact: true }).click()
+    await editor.getByRole('button', { name: 'Add folder', exact: true }).click()
+    for (const height of [982, 700, 982]) {
+      await page.setViewportSize({ width: 1_512, height })
+      const bounds = (await editor.boundingBox())!
+      const topOffset = Math.min(112, height * 0.12)
+      expect(bounds.y).toBeCloseTo(Math.min(topOffset, (height - bounds.height) / 2), 0)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(height - 16)
+      if (height === 700) {
+        expect(bounds.y).toBeLessThan(topOffset)
+      }
+    }
+  })
+}
+
 for (const { theme, motion, width } of [
   { theme: 'dark', motion: 'no-preference', width: 1_512 },
   { theme: 'light', motion: 'reduce', width: 1_100 }
@@ -65,9 +153,55 @@ for (const { theme, motion, width } of [
     }
     await sidebar.getByRole('button', { name: 'New workspace', exact: true }).click()
     const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+    const callout = editor.getByRole('complementary')
+    await expect(callout).toContainText('I use this context to keep my help focused.')
+    await expect(callout.locator('br')).toHaveCount(0)
+    await expect(callout.locator('[data-icon="lightbulb"]')).toBeVisible()
+    const inputBackground = await editor.getByRole('textbox', { name: 'Workspace name' })
+      .evaluate((element) => getComputedStyle(element).backgroundColor)
+    await expect(callout).toHaveCSS('background-color', inputBackground)
+    const formBounds = (await editor.locator('form').boundingBox())!
+    const calloutBounds = (await callout.boundingBox())!
+    expect(calloutBounds.width).toBe(formBounds.width)
+    expect(calloutBounds.y).toBe(formBounds.y)
+    for (const previewWidth of [width, 390, 320]) {
+      await page.setViewportSize({ width: previewWidth, height: 844 })
+      const lines = await callout.locator('.callout-content').evaluate((element) =>
+        element.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(element).lineHeight))
+      if (previewWidth === width) {
+        expect(lines).toBe(2)
+      }
+      const content = callout.locator('.callout-content')
+      expect(await content.evaluate((element) => element.scrollHeight <= element.clientHeight
+        && element.scrollWidth <= element.clientWidth)).toBe(true)
+    }
+    await page.setViewportSize({ width, height: 982 })
+    const save = editor.getByRole('button', { name: 'Save workspace', exact: true })
+    await expect(save).toBeDisabled()
     await editor.getByRole('textbox', { name: 'Workspace name' }).fill('Leon')
     await editor.getByRole('textbox', { name: 'Workspace brief' }).fill('I am building my open-source AI assistant.')
-    await editor.getByRole('button', { name: 'Leon pink', exact: true }).click()
+    const pink = editor.getByRole('button', { name: 'Leon pink', exact: true })
+    await pink.click()
+    if (motion === 'no-preference') {
+      const ring = await pink.evaluate((element) => {
+        const transition = element.getAnimations().find((animation) =>
+          animation instanceof CSSTransition && animation.transitionProperty === 'outline-color')
+        if (!transition?.effect) {
+          return null
+        }
+        transition.pause()
+        transition.currentTime = Number(transition.effect.getComputedTiming().duration) / 2
+        const color = getComputedStyle(element).outlineColor
+        transition.finish()
+
+        return { color, target: getComputedStyle(element).color }
+      })
+      expect(ring).not.toBeNull()
+      expect(ring!.color).not.toBe(ring!.target)
+      expect(ring!.color).not.toBe('rgba(0, 0, 0, 0)')
+    } else {
+      await expect(pink).toHaveCSS('transition-duration', '0s')
+    }
     const folder = editor.getByRole('textbox', { name: 'Folder', exact: true })
     await folder.click()
     const browser = page.getByRole('dialog', { name: 'Folder', exact: true })
@@ -76,11 +210,12 @@ for (const { theme, motion, width } of [
     await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
     await expect(browser).toBeHidden()
     await expect(folder).toHaveValue('/home/owner/Projects/Leon/')
-    await expect(editor.getByRole('button', { name: /^Remove folder / })).toHaveCount(0)
-    await folder.click()
-    await browser.getByRole('button', { name: '..', exact: true }).click()
-    await browser.getByRole('button', { name: 'Notes', exact: true }).click()
-    await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+    await editor.getByRole('button', { name: 'Add folder', exact: true }).click()
+    await editor.getByRole('textbox', { name: 'Folder 2', exact: true }).click()
+    const secondBrowser = page.getByRole('dialog', { name: 'Folder 2', exact: true })
+    await secondBrowser.getByRole('button', { name: 'Projects', exact: true }).click()
+    await secondBrowser.getByRole('button', { name: 'Notes', exact: true }).click()
+    await secondBrowser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
     await editor.getByRole('button', { name: 'Save workspace', exact: true }).click()
     await expect(editor).toHaveCount(0)
     await expect.poll(() => ui.workspaces.length).toBe(1)
@@ -122,6 +257,7 @@ for (const { theme, motion, width } of [
     await page.setViewportSize({ width, height: 982 })
     await edit.getByRole('button', { name: 'Remove workspace', exact: true }).click()
     await page.getByRole('dialog', { name: 'Remove workspace?', exact: true }).getByRole('button', { name: 'Remove workspace', exact: true }).click()
+    await expect(edit).toHaveCount(0)
     await expect(sidebar.getByRole('button', { name: 'Collapse Leon', exact: true })).toHaveCount(0)
     await expect(sidebar.locator(`a[data-session-id="${created.id}"]`)).toBeVisible()
     expect(ui.sessions.find((session) => session.id === created.id)).not.toHaveProperty('workspaceId')
@@ -132,6 +268,55 @@ for (const { theme, motion, width } of [
     await expect(page.locator('html')).toHaveAttribute('data-accent', 'violet')
   })
 }
+
+test('edits separate workspace folders, caps new rows and preserves attachments after removal', async ({ page, ui }) => {
+  await mockFolders(page)
+  await page.goto('./')
+  await page.locator('.session-list-heading').hover()
+  await page.locator('.sidebar').getByRole('button', { name: 'New workspace', exact: true }).click()
+  const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+  await editor.getByRole('textbox', { name: 'Workspace name', exact: true }).fill('Leon')
+  const add = editor.getByRole('button', { name: 'Add folder', exact: true })
+  await expect(editor.getByRole('group', { name: 'Folders', exact: true }).getByRole('textbox')).toHaveCount(1)
+  await add.click()
+  await add.click()
+  await expect(add).toHaveCount(0)
+
+  for (const [index, name] of ['Leon', 'Notes'].entries()) {
+    const label = index === 0 ? 'Folder' : `Folder ${index + 1}`
+    await editor.getByRole('textbox', { name: label, exact: true }).click()
+    const browser = page.getByRole('dialog', { name: label, exact: true })
+    await browser.getByRole('button', { name: 'Projects', exact: true }).click()
+    await browser.getByRole('button', { name, exact: true }).click()
+    await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+  }
+  await editor.getByRole('textbox', { name: 'Folder 3', exact: true }).click()
+  const browser = page.getByRole('dialog', { name: 'Folder 3', exact: true })
+  await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+  await editor.getByRole('button', { name: 'Save workspace', exact: true }).click()
+  await expect(editor).toHaveCount(0)
+  expect(ui.workspaces[0]!.resources.map((resource) => resource.location)).toEqual([
+    '/home/owner/Projects/Leon/', '/home/owner/Projects/Notes/', '/home/owner/'
+  ])
+
+  await page.locator('.workspace-row').hover()
+  await page.getByRole('button', { name: 'Leon options', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
+  const edit = page.getByRole('dialog', { name: 'Edit workspace', exact: true })
+  await expect(edit.getByRole('textbox', { name: 'Folder 2', exact: true })).toHaveValue('/home/owner/Projects/Notes/')
+  await edit.getByRole('button', { name: 'Remove folder 1', exact: true }).click()
+  await expect(edit.getByRole('textbox', { name: 'Folder', exact: true })).toHaveValue('/home/owner/Projects/Notes/')
+  await expect(edit.getByRole('button', { name: 'Add folder', exact: true })).toBeEnabled()
+  await edit.getByRole('textbox', { name: 'Folder 2', exact: true }).click()
+  const editBrowser = page.getByRole('dialog', { name: 'Folder 2', exact: true })
+  await editBrowser.getByRole('button', { name: 'Projects', exact: true }).click()
+  await editBrowser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+  await edit.getByRole('button', { name: 'Save workspace', exact: true }).click()
+  await expect(edit).toHaveCount(0)
+  expect(ui.workspaces[0]!.resources.map((resource) => resource.location)).toEqual([
+    '/home/owner/Projects/Notes/', '/home/owner/Projects/'
+  ])
+})
 
 test('plays only live turn completion and keeps routine actions, replay and muted events silent', async ({ page, ui }) => {
   await page.addInitScript(() => {
@@ -431,7 +616,9 @@ test('keeps a tall workspace editor scrollable and folder popups independently d
   ui.workspaces.push({ id: workspaceId, name: 'Leon', color: 'default', brief: '', createdAt: 1, updatedAt: 1,
     resources: [
       { kind: WorkspaceResourceKind.Link, label: 'Planning', location: 'https://example.com/' },
-      ...Array.from({ length: 12 }, (_, index) => ({ kind: WorkspaceResourceKind.Folder, label: `Notes ${index}`, location: `/notes/${index}` }))
+      ...['/home/owner/', '/home/owner/Projects/Leon/', '/home/owner/Projects/Notes/'].map((location, index) => ({
+        kind: WorkspaceResourceKind.Folder, label: `Notes ${index}`, location
+      }))
     ] })
   await mockFolders(page)
   await page.setViewportSize({ width: 1_100, height: 550 })
@@ -442,7 +629,9 @@ test('keeps a tall workspace editor scrollable and folder popups independently d
   await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
   const editor = page.getByRole('dialog', { name: 'Edit workspace', exact: true })
   const bounds = (await editor.boundingBox())!
-  expect(bounds.y + bounds.height).toBeLessThanOrEqual(550)
+  expect(bounds.y).toBeGreaterThanOrEqual(16)
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(550 - 16)
+  expect(Math.abs(bounds.y - (550 - bounds.y - bounds.height))).toBeLessThanOrEqual(1)
   const body = editor.locator('.dialog-body')
   expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
   const brief = editor.getByRole('textbox', { name: 'Workspace brief', exact: true })

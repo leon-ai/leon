@@ -1,4 +1,4 @@
-# Exercise cold installations and live DeepSeek weather/OCR turns on all three OSes.
+# Exercise cold installations and live DeepSeek local shell/OCR turns on all three OSes.
 # Linux also verifies interactive setup; Windows/macOS install without prompts.
 # Do not restore dependency/profile caches or repeat the discovery/regression suites.
 name: Fresh installation

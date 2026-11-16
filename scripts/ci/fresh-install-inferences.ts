@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -25,25 +26,30 @@ import { updateDotEnvVariable } from '../setup/setup-dotenv'
 
 const CONNECTION_TIMEOUT = 120_000
 const INFERENCE_TIMEOUT = 10 * 60 * 1_000
+// A fresh challenge verifies actual command output rather than a memorized answer.
+const SHELL_TEXT = randomUUID()
 const OCR_TEXT = 'LEON AI 42'
 const OCR_PATH = fileURLToPath(new URL('./fixtures/ocr.png', import.meta.url))
 const SCENARIOS = [
   {
-    name: 'weather',
-    input: 'What is the weather like in Shenzhen?',
-    functionName: 'weather.openmeteo.getWeather'
+    name: 'shell',
+    input: `Run this quick command using the shell tool and reply only with its output: python -c "import hashlib; print(hashlib.sha256(b'${SHELL_TEXT}').hexdigest())"`,
+    functionName: 'operating_system_control.shell.executeCommand',
+    expectedOutput: createHash('sha256').update(SHELL_TEXT).digest('hex')
   },
   {
     name: 'ocr',
     input: `Read the text in this image using OCR: ${OCR_PATH}`,
-    functionName: 'file_system.file.readImage'
+    functionName: 'file_system.file.readImage',
+    expectedOutput: OCR_TEXT
   }
 ] as const
 
 interface Scenario {
-  name: 'weather' | 'ocr'
+  name: 'shell' | 'ocr'
   input: string
   functionName: string
+  expectedOutput: string
 }
 
 /**
@@ -68,17 +74,25 @@ export function verifyInference(scenario: Scenario, payload: LeonClientInterface
   ))
   assert(call, `Missing successful tool call: ${scenario.functionName}`)
   // The bridge wraps the SDK method's return value in result.
-  const envelope = call.output as { result?: { success?: boolean, data?: Record<string, unknown> } } | undefined
+  const envelope = call.output as {
+    result?: {
+      success?: boolean
+      data?: Record<string, unknown>
+      commandSucceeded?: boolean
+      returncode?: number
+      stdout?: string
+    }
+  } | undefined
   const output = envelope?.result
   assert.equal(output?.success, true, 'Tool reported failure')
   if (scenario.name === 'ocr') {
-    assert.equal(normalizeOcrText(String(output?.data?.['text'])), OCR_TEXT, 'Incorrect OCR extraction')
-    assert(normalizeOcrText(payload['answer']).includes(OCR_TEXT), 'Answer did not include the extracted text')
+    assert.equal(normalizeOcrText(String(output?.data?.['text'])), scenario.expectedOutput, 'Incorrect OCR extraction')
+    assert(normalizeOcrText(payload['answer']).includes(scenario.expectedOutput), 'Answer did not include the extracted text')
   } else {
-    assert(String(output?.data?.['location']).toLowerCase().includes('shenzhen'), 'Wrong weather location')
-    const current = output?.data?.['current'] as { temperatureC?: unknown } | undefined
-    const temperature = current?.temperatureC
-    assert(typeof temperature === 'string' && temperature.trim() && Number.isFinite(Number(temperature)), 'Missing weather temperature')
+    assert.equal(output?.commandSucceeded, true, 'Shell command did not succeed')
+    assert.equal(output?.returncode, 0, 'Shell command exited unsuccessfully')
+    assert.equal(output?.stdout?.trim(), scenario.expectedOutput, 'Incorrect shell output')
+    assert(payload['answer'].includes(scenario.expectedOutput), 'Answer did not include the command output')
   }
 }
 
@@ -183,7 +197,7 @@ async function main(): Promise<void> {
       socket.connect()
     })
     for (const scenario of SCENARIOS) await runInference(socket, scenario)
-    console.log('Weather and OCR inference checks passed.')
+    console.log('Shell and OCR inference checks passed.')
   } finally {
     socket.disconnect()
   }

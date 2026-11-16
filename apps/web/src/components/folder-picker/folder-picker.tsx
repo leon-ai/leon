@@ -9,6 +9,13 @@ import { useProfile } from '@/data/profile'
 
 const FOLDER_LOADING_DELAY_MS = 300
 
+interface FolderPickerProps {
+  onAttach: (path: string) => void
+  disabled?: boolean
+  initialPath?: string
+  label?: string
+}
+
 interface FolderListing {
   success: boolean
   directory?: string
@@ -20,10 +27,10 @@ interface FolderListing {
 /**
  * Browses host folders without exposing files or attaching a folder implicitly.
  */
-export function FolderPicker({ onAttach, disabled = false }: { onAttach: (path: string) => void, disabled?: boolean }) {
+export function FolderPicker({ onAttach, disabled = false, initialPath, label = 'Folder' }: FolderPickerProps) {
   const profile = useProfile()
   const input = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
-  const [requestedPath, setRequestedPath] = useState<string | null>(null)
+  const [requestedPath, setRequestedPath] = useState<string | null>(initialPath ?? null)
   const value = requestedPath ?? '~/'
   const [browsing, setBrowsing] = useState(false)
   const listing = useQuery({
@@ -43,7 +50,7 @@ export function FolderPicker({ onAttach, disabled = false }: { onAttach: (path: 
     }
   })
 
-  return <InputDropdown fieldRef={input} label="Folder" value={requestedPath ?? listing.data?.directory ?? value} placeholder="Browse folders…" disabled={disabled}
+  return <InputDropdown fieldRef={input} label={label} value={requestedPath ?? listing.data?.directory ?? value} placeholder="Browse folders…" disabled={disabled}
     onChange={setRequestedPath} content={(close, open) => <FolderResults open={open} onOpenChange={setBrowsing}
       path={value} listing={listing} onNavigate={(path) => {
         setRequestedPath(path)

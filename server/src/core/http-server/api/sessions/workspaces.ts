@@ -39,6 +39,9 @@ function normalizeName(name: string): string {
 }
 
 async function normalizeInput(input: WorkspaceInput): Promise<WorkspaceInput> {
+  if (input.resources.filter((resource) => resource.kind === WorkspaceResourceKind.Folder).length > WORKSPACE_LIMITS.folders) {
+    throw new Error(`I can attach up to ${WORKSPACE_LIMITS.folders} folders to a workspace.`)
+  }
 
   return { ...input, name: normalizeName(input.name), brief: input.brief.trim(),
     resources: await Promise.all(input.resources.map(async (resource) => {

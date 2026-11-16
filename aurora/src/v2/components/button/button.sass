@@ -29,7 +29,7 @@
   font-weight: var(--font-weight-regular)
   text-decoration: none
   cursor: pointer
-  transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), box-shadow var(--transition-duration-main) var(--transition-timing-main)
+  transition: color var(--transition-duration-main) var(--transition-timing-main), --button-background var(--transition-duration-main) var(--transition-timing-main), border-color var(--transition-duration-main) var(--transition-timing-main), box-shadow var(--transition-duration-main) var(--transition-timing-main), outline-color var(--transition-duration-main) var(--transition-timing-main)
 
   &:active:not(:disabled):not([aria-disabled='true'])
     box-shadow: var(--shadow-control-pressed)
@@ -164,7 +164,12 @@
   &:disabled,
   &[aria-disabled='true']
     &:not([aria-busy='true'])
-      color: var(--color-text-disabled)
+      &:not(.button-primary)
+        color: var(--color-text-disabled)
+
+      &.button-primary
+        color: var(--color-primary-button-text-disabled)
+
       cursor: not-allowed !important
 
     &::before

@@ -470,6 +470,7 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     await expect(saving).toHaveCSS('color', primaryColor)
     await expect(saving.locator('.loader-indicator')).toHaveCSS('color', primaryColor)
     const availability = buttons.getByRole('button', { name: 'Ready when you are', exact: true })
+    await expect(availability).toHaveCSS('color', theme === 'light' ? 'rgba(245, 245, 247, 0.66)' : 'rgba(245, 245, 247, 0.33)')
     const disabledBounds = (await availability.boundingBox())!
     await buttons.getByRole('button', { name: 'Toggle availability', exact: true }).click()
     await expect(availability).toBeEnabled()
@@ -528,6 +529,23 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     expect(smallBounds.height).toBeLessThan(regularBounds.height)
     expect(smallBounds.width).toBeLessThan(regularBounds.width)
     await statuses.screenshot({ path: testInfo.outputPath(`statuses-${theme}.png`) })
+    const callouts = page.getByRole('region', { name: 'Callouts', exact: true })
+    await expect(callouts.getByRole('complementary')).toHaveCount(3)
+    for (const [variant, icon, statusVariant] of [
+      ['info', 'lightbulb', null], ['warning', 'error-warning', 'warning'], ['danger', 'hand', 'error']
+    ] as const) {
+      const callout = callouts.locator(`.callout-${variant}`)
+      await expect(callout.locator(`[data-icon="${icon}"] path`).first()).toBeVisible()
+      await expect(callout).toHaveCSS('font-size', '14px')
+      if (statusVariant) {
+        const colors = await statuses.locator(`.status-${statusVariant}`).evaluate((element) => ({
+          color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor
+        }))
+        await expect(callout).toHaveCSS('color', colors.color)
+        await expect(callout).toHaveCSS('background-color', colors.background)
+      }
+    }
+    await callouts.screenshot({ path: testInfo.outputPath(`callouts-${theme}.png`) })
     for (const [variant, label] of [['success', 'Success'], ['error', 'Error'], ['warning', 'Warning']] as const) {
       await statuses.getByRole('button', { name: `${label} toast`, exact: true }).click()
       const toast = page.locator(`.toast-${variant}`)
