@@ -29,9 +29,12 @@
   border-radius: 50%
   background: var(--workspace-color)
 
-.workspace-color[aria-pressed='true']
-  outline: 2px solid var(--color-text)
+.workspace-color
+  outline: 2px solid transparent
   outline-offset: -2px
+
+  &[aria-pressed='true']
+    outline-color: var(--color-text)
 
 .workspace-selector
   max-width: 100%

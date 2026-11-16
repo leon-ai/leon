@@ -115,7 +115,28 @@ for (const { theme, motion, width } of [
     const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
     await editor.getByRole('textbox', { name: 'Workspace name' }).fill('Leon')
     await editor.getByRole('textbox', { name: 'Workspace brief' }).fill('I am building my open-source AI assistant.')
-    await editor.getByRole('button', { name: 'Leon pink', exact: true }).click()
+    const pink = editor.getByRole('button', { name: 'Leon pink', exact: true })
+    await pink.click()
+    if (motion === 'no-preference') {
+      const ring = await pink.evaluate((element) => {
+        const transition = element.getAnimations().find((animation) =>
+          animation instanceof CSSTransition && animation.transitionProperty === 'outline-color')
+        if (!transition?.effect) {
+          return null
+        }
+        transition.pause()
+        transition.currentTime = Number(transition.effect.getComputedTiming().duration) / 2
+        const color = getComputedStyle(element).outlineColor
+        transition.finish()
+
+        return { color, target: getComputedStyle(element).color }
+      })
+      expect(ring).not.toBeNull()
+      expect(ring!.color).not.toBe(ring!.target)
+      expect(ring!.color).not.toBe('rgba(0, 0, 0, 0)')
+    } else {
+      await expect(pink).toHaveCSS('transition-duration', '0s')
+    }
     const folder = editor.getByRole('textbox', { name: 'Folder', exact: true })
     await folder.click()
     const browser = page.getByRole('dialog', { name: 'Folder', exact: true })
