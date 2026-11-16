@@ -99,17 +99,19 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
     if (item.kind === 'session') {
       return [{ kind: 'session', id: item.value.id, session: item.value }]
     }
-    const children = expanded.has(item.value.id) ? groups[item.value.id] : undefined
+    // Known-empty groups need no provisional row that appears and disappears.
+    const hasSessions = item.value.sessionCount > 0
+    const children = expanded.has(item.value.id) && hasSessions ? groups[item.value.id] : undefined
 
     return [
       { kind: 'workspace', id: item.value.id, workspace: item.value },
       ...(children?.sessions.map((session): NavigationRow => ({ kind: 'session', id: session.id, session })) ?? []),
-      ...(expanded.has(item.value.id) && (!children || children.hasNextPage || children.isError)
+      ...(expanded.has(item.value.id) && hasSessions && (!children || children.hasNextPage || children.isError)
         ? [{ kind: 'more' as const, id: `more:${item.value.id}`, workspaceId: item.value.id }] : [])
     ]
   }), [query.items, expanded, groups, recentsExpanded])
   const openWorkspaces = useMemo(() => query.items.filter((item) =>
-    recentsExpanded && item.kind === 'workspace' && expanded.has(item.value.id)), [query.items, expanded, recentsExpanded])
+    recentsExpanded && item.kind === 'workspace' && item.value.sessionCount > 0 && expanded.has(item.value.id)), [query.items, expanded, recentsExpanded])
   const getItemKey = useCallback((index: number) => rows[index]?.id ?? index, [rows])
   const rowVirtualizer = useVirtualizer({ count: rows.length, getItemKey,
     getScrollElement: () => scrollElementRef.current, estimateSize: () => ROW_HEIGHT, overscan: OVERSCAN,

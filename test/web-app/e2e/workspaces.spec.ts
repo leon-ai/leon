@@ -244,6 +244,40 @@ test('matches workspace row geometry and keeps collapsed unread results', async 
 })
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`discloses workspaces for mouse and keyboard without double-click renaming (${reducedMotion})`, async ({ page, ui }) => {
+    ui.workspaces.push({ id: '10000000-0000-4000-8000-000000000000', name: 'Hearthlight', brief: 'Films', color: 'amber', resources: [], createdAt: 1, updatedAt: 1 })
+    await page.emulateMedia({ reducedMotion })
+    const response = Promise.withResolvers<void>()
+    let childRequests = 0
+    await page.route((url) => url.pathname.endsWith('/sessions/page') && url.searchParams.has('workspace_id'), async (route) => {
+      childRequests++
+      await response.promise
+      await route.fulfill({ json: { sessions: [], next_cursor: null, event_cursor: 0 } })
+    })
+    try {
+      await page.goto(SESSION_URL)
+      const list = page.locator('.session-list-items')
+      const height = (await list.boundingBox())!.height
+      const expand = page.getByRole('button', { name: 'Expand Hearthlight', exact: true })
+      await expand.click()
+      const collapse = page.getByRole('button', { name: 'Collapse Hearthlight', exact: true })
+      await expect(collapse).toBeVisible()
+      expect((await list.boundingBox())!.height).toBe(height)
+      await expect(page.getByRole('button', { name: 'Loading conversations…', exact: true })).toHaveCount(0)
+      expect(childRequests).toBe(0)
+      await collapse.focus()
+      await collapse.press('Enter')
+      await expect(expand).toBeVisible()
+      await expand.dblclick()
+      await expect(expand).toBeVisible()
+      await expect(page.getByRole('textbox', { name: 'Workspace name', exact: true })).toHaveCount(0)
+    } finally {
+      response.resolve()
+    }
+  })
+}
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`collapses Recents, reveals creation actions and aligns row controls (${reducedMotion})`, async ({ page, ui }) => {
     ui.workspaces.push({ id: '10000000-0000-4000-8000-000000000000', name: 'Leon', brief: '', color: 'default', resources: [], createdAt: 1, updatedAt: 1 })
     ui.sessions[0]!.isPinned = true
