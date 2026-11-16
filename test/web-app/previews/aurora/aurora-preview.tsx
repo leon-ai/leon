@@ -10,9 +10,11 @@ import {
   Selection, Range, Surface, Switch, Segmented, Tabs, NumberStepper, SearchSelect,
   DataTableWidget, ComparisonWidget
 } from '../../../../aurora/src/v2'
+import { SidebarUpdateButton } from '@/layout/sidebar/sidebar-update-button'
 import { Button as AppButton } from '@/components/button'
 import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
 import { CopyButton } from '@/components/copy-button'
+import { InputDropdown } from '@/components/input-dropdown/input-dropdown'
 import { Input as AppInput } from '@/components/input'
 import { Icon } from '@/components/icon'
 import { VisualPreviewProvider } from '@/components/visual-preview/visual-preview'
@@ -31,7 +33,7 @@ const COLLECTIONS = [
   { value: 'component', label: 'Components' }, { value: 'widget', label: 'Widgets' },
   { value: 'connection', label: 'Connections' }, { value: 'generated', label: 'Generated UI' },
   { value: 'answer', label: 'Answer preview' }, { value: 'feed', label: 'Feed' },
-  { value: 'files', label: 'Files' }, { value: 'markdown', label: 'Markdown' }
+  { value: 'icons', label: 'Icons' }, { value: 'sounds', label: 'Sounds' }, { value: 'files', label: 'Files' }, { value: 'markdown', label: 'Markdown' }
 ] as const
 
 type GalleryKind = typeof COLLECTIONS[number]['value']
@@ -53,6 +55,8 @@ const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, 
 const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
 const FeedPreview = lazy(() => import('./feed-preview'))
+const SoundsPreview = lazy(() => import('./sounds-preview'))
+const IconsPreview = lazy(() => import('./icons-preview'))
 const FilesPreview = lazy(() => import('./files-preview'))
 const MarkdownPreview = lazy(() => import('./markdown-preview'))
 const CHOICES = [
@@ -77,6 +81,7 @@ function StatusDemo() {
       <Status label="New" /><Status label="Soon" variant="secondary" />
       <Status label="Connected" variant="success" /><Status label="Failed" variant="error" />
       <Status label="Action needed" variant="warning" />
+      <Status label="Small" size="sm" />
     </div>
     <div className="aurora-actions">
       {FEEDBACK_EXAMPLES.map(({ type, label }) => <Button key={type} variant="secondary" onClick={() => showToast({
@@ -212,6 +217,7 @@ function PreparationDemo() {
 
 function ButtonDemo() {
   const [selected, setSelected] = useState(false)
+  const [disabled, setDisabled] = useState(true)
 
   return <div className="demo-stack">
     <div className="aurora-actions">
@@ -223,8 +229,27 @@ function ButtonDemo() {
       <Button ariaPressed={selected} icon={<Icon name="pushpin-line" selected={selected} morph />}
         onClick={() => setSelected((value) => !value)}>{selected ? 'Pinned' : 'Pin'}</Button>
       <CopyButton text="A little more than words." label="Copy example" />
+      <AppButton compact feedback="color" iconName="more-2" ariaLabel="Compact action" />
+      <SidebarUpdateButton available /><SidebarUpdateButton />
+    </div>
+    <div className="aurora-actions">
+      <Button variant="primary" disabled={disabled}>Ready when you are</Button>
+      <Button variant="secondary" onClick={() => setDisabled((value) => !value)}>Toggle availability</Button>
     </div>
   </div>
+}
+
+function InputDropdownDemo() {
+  const [value, setValue] = useState('Ideas')
+
+  return <InputDropdown label="Browse suggestions" value={value} onChange={setValue}
+    content={(close) => <>
+      <div className="input-dropdown-list">{['Ideas', 'Notes', 'Projects'].map((name) => <button key={name}
+        type="button" className="dropdown-item" onClick={() => setValue(name)}>
+        <Icon name="folder-line" className="dropdown-item-icon" /><span>{name}</span>
+      </button>)}</div>
+      <footer className="input-dropdown-footer"><Button variant="secondary" onClick={close}>Keep this choice</Button></footer>
+    </>} />
 }
 
 function SelectionDemo() {
@@ -296,7 +321,7 @@ function Example({ id }: { id: string }) {
       return <StatusDemo />
     case 'input':
       return <div className="demo-stack"><Input ariaLabel="A small idea" placeholder="What’s on your mind?" />
-        <Input ariaLabel="A longer note" multiline rows={3} placeholder="A little more room…" /></div>
+        <Input ariaLabel="A longer note" multiline placeholder="A little more room…" /><InputDropdownDemo /></div>
     case 'selection':
       return <SelectionDemo />
     case 'range':
@@ -350,7 +375,7 @@ function App() {
   const results = searchIndex(SEARCH_INDEX, query).filter(({ item }) => item.kind === kind)
   const searchable = kind === 'component' || kind === 'widget' || kind === 'generated'
   const content = kind === 'feed' ? <FeedPreview /> : kind === 'files' ? <FilesPreview />
-    : kind === 'markdown' ? <MarkdownPreview /> : null
+    : kind === 'markdown' ? <MarkdownPreview /> : kind === 'icons' ? <IconsPreview /> : kind === 'sounds' ? <SoundsPreview /> : null
 
   return <ToastProvider><VisualPreviewProvider><main className="aurora-gallery">
     <header className="aurora-gallery-header">

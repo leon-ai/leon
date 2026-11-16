@@ -1,0 +1,53 @@
+.aurora-icons-preview
+  display: grid
+  gap: var(--space-lg)
+
+  .icons-grid
+    display: grid
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr))
+    gap: var(--space-sm)
+    margin: 0
+    padding: 0
+    list-style: none
+
+    li
+      display: flex
+      align-items: center
+      justify-content: center
+      flex-direction: column
+      gap: var(--space-md)
+      min-width: 0
+      padding: var(--space-lg) var(--space-sm)
+      border: 1px solid var(--color-border)
+      border-radius: var(--border-radius-md)
+      background: var(--color-surface)
+      text-align: center
+      overflow-wrap: anywhere
+
+    .app-icon,
+    img
+      width: var(--preview-icon-size)
+      height: var(--preview-icon-size)
+
+    span
+      color: var(--color-text-secondary)
+      font-size: var(--font-size-sm)
+
+  .icons-menu-gestures
+    display: grid
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))
+    gap: var(--space-sm)
+
+  .icons-state-endpoints
+    display: flex
+    gap: var(--space-lg)
+    margin: var(--space-lg) 0
+
+    > span
+      display: grid
+      justify-items: center
+      gap: var(--space-sm)
+
+    .app-icon
+      width: 32px
+      height: 32px
