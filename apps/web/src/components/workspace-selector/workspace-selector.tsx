@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-import { Dropdown } from '@/components/dropdown'
+import { Dropdown, DropdownItem } from '@/components/dropdown'
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import { Icon } from '@/components/icon'
@@ -99,27 +99,26 @@ function WorkspaceMenu({ open, workspaces, value, onChoose, onCreate }: {
         setQuery(event.target.value)
         setFocused(null)
       }} />
-    <button type="button" className="dropdown-item" role="menuitem" onClick={onCreate}>
-      <Icon name="folder-add-line" className="dropdown-item-icon" /><span>New workspace</span>
-    </button>
+    <DropdownItem icon={<Icon name="folder-add-line" className="dropdown-item-icon" />} onClick={onCreate}>
+      New workspace
+    </DropdownItem>
     <div className="workspace-selector-list" ref={list}>
       <div className="workspace-selector-rows" style={{ height: virtualizer.getTotalSize() }}>
         {virtualItems.map((row) => {
           const workspace = matches[row.index]!
 
-          return <button type="button" className="dropdown-item" key={row.key} role="menuitem"
+          return <DropdownItem key={row.key} selected={workspace.id === value}
+            icon={<Icon name="folder-line" className="dropdown-item-icon workspace-choice-icon" />}
             data-choice-index={row.index} data-workspace-color={workspace.color}
             style={{ height: row.size, transform: `translateY(${row.start}px)` }} onClick={() => onChoose(workspace.id)}>
-            <Icon name="folder-line" className="dropdown-item-icon workspace-choice-icon" />
-            <span className="dropdown-item-label">{workspace.name}</span>
-            {workspace.id === value && <Icon name="check-line" />}
-          </button>
+            {workspace.name}
+          </DropdownItem>
         })}
       </div>
       {matches.length === 0 && <p className="input-dropdown-message">No workspaces found.</p>}
     </div>
-    {value && <button type="button" className="dropdown-item" role="menuitem" onClick={() => onChoose(null)}>
-      <Icon name="close-line" className="dropdown-item-icon" /><span>Detach workspace</span>
-    </button>}
+    {value && <DropdownItem icon={<Icon name="close-line" className="dropdown-item-icon" />} onClick={() => onChoose(null)}>
+      Detach workspace
+    </DropdownItem>}
   </div>
 }

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import { AURORA_QUERY_EXAMPLES } from '../../fixtures/aurora'
 import { createConnectionPreview } from '../../fixtures/connections'
-import { finishFiniteAnimations } from '../e2e/fixtures'
+import { finishFiniteAnimations, expectTrailingSelection } from '../e2e/fixtures'
 import { createFeedPreviewExamples } from '../../fixtures/feed-preview'
 
 const CONNECTIONS = [...fs.globSync('tools/*/*/tool.json')].flatMap((file) => {
@@ -495,6 +495,22 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     expect(enabledBounds.width).toBe(disabledBounds.width)
     expect(enabledBounds.height).toBe(disabledBounds.height)
     await expect(availability).toHaveCSS('font-weight', '400')
+    const views = buttons.getByRole('button', { name: 'Choose a view', exact: true })
+    await views.press('Enter')
+    const choices = page.getByRole('menu', { name: 'Choose a view', exact: true })
+    await expectTrailingSelection(choices.getByRole('menuitem', { name: 'Notes', exact: true }))
+    await expect(choices.getByRole('menuitem', { name: 'Ideas', exact: true })).toBeFocused()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await expect(choices).toBeHidden()
+    await expect(views).toBeFocused()
+    await views.press('Enter')
+    const longChoice = choices.getByRole('menuitem', { name: 'Project planning notes and useful references for later', exact: true })
+    await expect(longChoice).toHaveAttribute('aria-current', 'true')
+    await expectTrailingSelection(longChoice)
+    expect(await longChoice.locator('.dropdown-item-label').evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+    await choices.screenshot({ path: testInfo.outputPath(`dropdown-selection-${theme}.png`) })
+    await page.keyboard.press('Escape')
     const compact = buttons.getByRole('button', { name: 'Compact action', exact: true })
     await compact.hover()
     await expect(compact).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')

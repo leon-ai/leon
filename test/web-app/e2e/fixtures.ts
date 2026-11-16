@@ -44,6 +44,24 @@ export async function finishFiniteAnimations(target: Locator): Promise<void> {
 }
 
 /**
+ * Verifies selection stays at the row's trailing edge without overlapping its
+ * label, including when the visible label must be shortened to fit.
+ */
+export async function expectTrailingSelection(row: Locator): Promise<void> {
+  await expect(row.locator('.dropdown-item-check')).toBeVisible()
+  const geometry = await row.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    const marker = element.querySelector('.dropdown-item-check')!.getBoundingClientRect()
+    const label = element.querySelector('.dropdown-item-label')!.getBoundingClientRect()
+
+    return { end: bounds.right - marker.right, padding: Number.parseFloat(getComputedStyle(element).paddingRight),
+      labelGap: marker.left - label.right }
+  })
+  expect(Math.abs(geometry.end - geometry.padding)).toBeLessThanOrEqual(1)
+  expect(geometry.labelGap).toBeGreaterThanOrEqual(0)
+}
+
+/**
  * Keeps controlled API fixtures aligned with the invocation-content contract.
  */
 export function toolContentsFixture(tool: ConversationTool, complete = false): ToolCallContents {

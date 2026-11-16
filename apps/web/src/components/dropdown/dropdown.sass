@@ -74,10 +74,15 @@
   font-size: var(--font-size-xl)
 
 .dropdown-item-label
+  flex: 1 1 auto
   min-width: 0
   overflow: hidden
   text-overflow: ellipsis
   white-space: nowrap
+
+.dropdown-item-check
+  flex: 0 0 auto
+  margin-inline-start: auto
 
 @media (prefers-reduced-motion: reduce)
   .dropdown-content

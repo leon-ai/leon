@@ -11,6 +11,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { Input } from '@/components/input'
+import { DropdownItem } from '@/components/dropdown'
 import { LLMProviderIcon } from '@/components/llm-provider-icon'
 import { ScrollList, SCROLL_LIST_MASK_HEIGHT_PX } from '@/components/scroll-list'
 import {
@@ -329,30 +330,26 @@ export function ModelSelectorMenu({
                   className="model-selector-row-slot list-item-slot"
                   style={{ height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  <button
+                  <DropdownItem
                     id={`${listId}-${virtualRow.index}`}
-                    type="button"
                     role="option"
-                    aria-selected={selected}
+                    selected={selected}
+                    showSelection={row.kind === PickerRowKind.Model}
+                    icon={<LLMProviderIcon provider={row.provider.id} />}
+                    trailing={row.kind === PickerRowKind.Provider ? <Icon name="arrow-right-s-line" /> : undefined}
                     tabIndex={-1}
-                    className="dropdown-item model-selector-row"
+                    className="model-selector-row"
                     data-highlighted={activeRowIndex === virtualRow.index || undefined}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => chooseRow(row)}
                   >
-                    <LLMProviderIcon provider={row.provider.id} />
                     <span className="model-selector-row-copy">
                       <span className="model-selector-row-label">{row.model?.label ?? row.provider.label}</span>
                       {row.model !== undefined && search !== '' && (
                         <span className="model-selector-row-provider">{row.provider.label}</span>
                       )}
                     </span>
-                    {row.kind === PickerRowKind.Provider ? (
-                      <Icon name="arrow-right-s-line" />
-                    ) : selected ? (
-                      <Icon name="check-fill" className="model-selector-selected" />
-                    ) : null}
-                  </button>
+                  </DropdownItem>
                 </div>
               )
             })}

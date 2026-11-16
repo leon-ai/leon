@@ -2,7 +2,7 @@ import { WorkspaceResourceKind } from '../../../bridges/runtime/contracts/worksp
 
 import type { Page, Route } from '@playwright/test'
 
-import { test, expect, SESSION_ID, SESSION_URL, finishFiniteAnimations } from './fixtures'
+import { test, expect, SESSION_ID, SESSION_URL, finishFiniteAnimations, setFixtureTheme, expectTrailingSelection } from './fixtures'
 
 async function mockFolders(page: Page): Promise<void> {
   const home = '/home/owner/'
@@ -610,6 +610,33 @@ test('searches colored workspaces and creates an attached workspace from the com
   await editor.getByRole('button', { name: 'Save workspace', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Fresh idea', exact: true })).toBeVisible()
 })
+
+for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preference']] as const) {
+  test(`aligns workspace selection at the right for short and long labels (${theme})`, async ({ page, ui }, testInfo) => {
+    const workspaces = ['Leon', 'Leon project notes, source folders and useful references for future work'].map((name) => ({
+      id: crypto.randomUUID(), name, brief: '', color: 'pink' as const, resources: [], createdAt: 1, updatedAt: 1
+    }))
+    ui.workspaces.push(...workspaces)
+    await page.emulateMedia({ reducedMotion })
+    await page.goto(`./?workspace=${workspaces[0]!.id}`)
+    await setFixtureTheme(page, theme)
+    const menu = page.getByRole('dialog', { name: 'Choose a workspace', exact: true })
+    for (const workspace of workspaces) {
+      await page.getByRole('button', { name: workspace.name, exact: true }).click()
+      const selected = menu.getByRole('menuitem', { name: workspace.name, exact: true })
+      await expect(selected).toHaveAttribute('aria-current', 'true')
+      await expectTrailingSelection(selected)
+      await menu.screenshot({ path: testInfo.outputPath(`workspace-selection-${theme}-${workspace === workspaces[0] ? 'short' : 'long'}.png`) })
+      await page.setViewportSize({ width: 390, height: 844 })
+      await expectTrailingSelection(selected)
+      if (workspace === workspaces[0]) {
+        await menu.getByRole('menuitem', { name: workspaces[1]!.name, exact: true }).click()
+      }
+    }
+    const label = menu.getByRole('menuitem', { name: workspaces[1]!.name, exact: true }).locator('.dropdown-item-label')
+    expect(await label.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+  })
+}
 
 test('keeps a tall workspace editor scrollable and folder popups independently dismissible', async ({ page, ui }) => {
   const workspaceId = crypto.randomUUID()
