@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 
-import { setFixtureTheme, test, expect, SESSION_URL, SESSION_ID, OTHER_SESSION_ID, LATEST_ANSWER } from './fixtures'
+import { setFixtureTheme, test, expect, SESSION_URL, SESSION_ID, OTHER_SESSION_ID, LATEST_ANSWER, expectTrailingSelection } from './fixtures'
 
 async function countWaves(page: Page): Promise<number> {
   return page.evaluate(() => Reflect.get(window, 'composerWaveCount') as number)
@@ -607,6 +607,7 @@ test('shares keyboard navigation across virtual model results and reasoning/serv
   await expect(popup.getByRole('option', { name: 'OpenAI', exact: true })).toHaveAttribute('data-highlighted', 'true')
   await search.press('ArrowRight')
   await expect(popup.getByRole('listbox', { name: 'OpenAI', exact: true })).toBeVisible()
+  await expectTrailingSelection(popup.getByRole('option', { name: 'GPT-6.1 Sol', exact: true }))
   await search.fill('x')
   await search.press('Backspace')
   await expect(search).toHaveValue('')
@@ -637,8 +638,10 @@ test('shares keyboard navigation across virtual model results and reasoning/serv
   const settings = page.getByRole('dialog', { name: 'Model settings', exact: true })
   const effort = settings.getByRole('radiogroup', { name: 'Reasoning effort', exact: true })
   await expect(effort.getByRole('radio', { name: 'High', exact: true })).toBeFocused()
+  await expectTrailingSelection(effort.getByRole('radio', { name: 'High', exact: true }))
   await page.keyboard.press('Home')
   await expect(effort.getByRole('radio', { name: 'Low', exact: true })).toBeChecked()
+  await expectTrailingSelection(effort.getByRole('radio', { name: 'Low', exact: true }))
   await page.keyboard.press('ArrowDown')
   await expect(effort.getByRole('radio', { name: 'Medium', exact: true })).toBeChecked()
   await page.keyboard.press('End')
@@ -648,6 +651,7 @@ test('shares keyboard navigation across virtual model results and reasoning/serv
   await expect(tier.getByRole('radio', { name: 'Auto', exact: true })).toBeFocused()
   await page.keyboard.press('ArrowRight')
   await expect(tier.getByRole('radio', { name: 'Normal', exact: true })).toBeChecked()
+  await expectTrailingSelection(tier.getByRole('radio', { name: 'Normal', exact: true }))
   await page.keyboard.press('ArrowLeft')
   await expect(tier.getByRole('radio', { name: 'Auto', exact: true })).toBeChecked()
   await page.keyboard.press('Escape')

@@ -6,22 +6,22 @@ import { clsx } from 'clsx'
 
 import { useExitCleanup } from '@/hooks/use-exit-cleanup'
 import { getListNavigationIndex } from '@/utils/list-navigation'
+import { DropdownItem, type DropdownItemVariant } from './dropdown-item'
 
 import './dropdown.sass'
 
 type DropdownPlacement = 'top' | 'bottom'
-type DropdownItemVariant = 'default' | 'danger'
-
-interface DropdownItem {
+interface DropdownItemDefinition {
   iconName: string
   label: string
   variant?: DropdownItemVariant
+  selected?: boolean
   onSelect?: () => void
 }
 
 interface DropdownProps {
   children: ReactNode | ((open: boolean, contentId: string) => ReactNode)
-  items?: DropdownItem[]
+  items?: DropdownItemDefinition[]
   content?: (close: () => void, open: boolean) => ReactNode
   contentLabel?: string
   className?: string
@@ -353,23 +353,19 @@ export function Dropdown({
           style={dropdownStyle}
         >
           {content === undefined ? items.map((item) => (
-            <button
-              type="button"
-              className={clsx(
-                'dropdown-item',
-                `dropdown-item-${item.variant ?? 'default'}`
-              )}
+            <DropdownItem
               key={item.label}
-              role="menuitem"
+              variant={item.variant ?? 'default'}
+              {...(item.selected === undefined ? {} : { selected: item.selected })}
+              icon={<Icon name={`${item.iconName}-line`} className="dropdown-item-icon" />}
               tabIndex={-1}
               onClick={() => {
                 item.onSelect?.()
                 closeDropdown(true)
               }}
             >
-              <Icon name={`${item.iconName}-line`} className="dropdown-item-icon" />
-              <span className="dropdown-item-label">{item.label}</span>
-            </button>
+              {item.label}
+            </DropdownItem>
           )) : content(() => closeDropdown(true), open)}
         </div>,
         document.body

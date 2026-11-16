@@ -1,7 +1,7 @@
 import { Icon } from '@/components/icon'
 import { useEffect, useId, useRef, type KeyboardEvent } from 'react'
 
-import { Dropdown } from '@/components/dropdown'
+import { Dropdown, DropdownItem } from '@/components/dropdown'
 import { ScrollList } from '@/components/scroll-list'
 import { getListNavigationIndex } from '@/utils/list-navigation'
 import type {
@@ -132,22 +132,17 @@ function SettingsSection<TValue extends string>({
           onKeyDown={handleKeyDown}
         >
           {options.map((option, index) => (
-            <button
+            <DropdownItem
               key={option.value}
-              type="button"
-              className="dropdown-item model-settings-choice"
               role="radio"
-              aria-checked={selected === option.value}
+              selected={selected === option.value}
+              trailing={option.icon !== undefined ? <Icon name={option.icon} /> : undefined}
               tabIndex={index === (selectedIndex < 0 ? 0 : selectedIndex) ? 0 : -1}
               title={option.description}
               onClick={() => onChange(option.value)}
             >
-              <span className="dropdown-item-label">{option.label}</span>
-              {option.icon !== undefined && <Icon name={option.icon} />}
-              {selected === option.value && (
-                <Icon name="check-fill" />
-              )}
-            </button>
+              {option.label}
+            </DropdownItem>
           ))}
         </div>
       )}

@@ -16,6 +16,7 @@ import { Callout } from '@/components/callout/callout'
 import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
 import { CopyButton } from '@/components/copy-button'
 import { InputDropdown } from '@/components/input-dropdown/input-dropdown'
+import { Dropdown } from '@/components/dropdown'
 import { Input as AppInput } from '@/components/input'
 import { Icon } from '@/components/icon'
 import { VisualPreviewProvider } from '@/components/visual-preview/visual-preview'
@@ -236,8 +237,22 @@ function ButtonDemo() {
     <div className="aurora-actions">
       <Button variant="primary" disabled={disabled}>Ready when you are</Button>
       <Button variant="secondary" onClick={() => setDisabled((value) => !value)}>Toggle availability</Button>
+      <DropdownDemo />
     </div>
   </div>
+}
+
+function DropdownDemo() {
+  const [selected, setSelected] = useState('Notes')
+
+  return <Dropdown contentLabel="Choose a view" items={[
+    { iconName: 'lightbulb', label: 'Ideas' },
+    { iconName: 'folder', label: 'Notes' },
+    { iconName: 'folder', label: 'Project planning notes and useful references for later' }
+  ].map((item) => ({ ...item, selected: item.label === selected, onSelect: () => setSelected(item.label) }))}>
+    {(open, contentId) => <AppButton iconName="folder" ariaExpanded={open} ariaHasPopup="menu"
+      ariaControls={open ? contentId : undefined}>Choose a view</AppButton>}
+  </Dropdown>
 }
 
 function InputDropdownDemo() {
