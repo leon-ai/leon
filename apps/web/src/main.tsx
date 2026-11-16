@@ -14,6 +14,7 @@ import { router } from './router'
 import { applyStoredTheme, getStoredAccent } from './theme'
 import { RequestErrorToasts } from './data/request-error-toasts'
 import { initializeProfileAuthentication } from './data/profile-query'
+import { SoundActivation } from './components/sound-activation/sound-activation'
 
 applyStoredTheme()
 document.documentElement.dataset['accent'] = getStoredAccent()
@@ -30,6 +31,7 @@ createRoot(rootElement).render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <RequestErrorToasts />
+        <SoundActivation />
         <RouterProvider router={router} />
       </ToastProvider>
     </QueryClientProvider>
