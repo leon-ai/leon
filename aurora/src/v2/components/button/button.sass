@@ -161,3 +161,17 @@
       // Extend both fill layers to the edge so translucent fills have no seam.
       --button-border-gradient: none
       background-clip: border-box
+
+  &.button-compact.button-icon-only
+    flex: 0 0 auto
+    width: 24px
+    height: 24px
+    min-height: 24px
+    padding: 1px
+
+  &.button-color-feedback
+    &:hover:not(:disabled):not([aria-disabled='true']),
+    &:active:not(:disabled):not([aria-disabled='true'])
+      --button-background: transparent
+      box-shadow: none
+      color: var(--color-text)
