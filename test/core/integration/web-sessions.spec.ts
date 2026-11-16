@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConversationLogger } from '@/conversation-logger'
 import { POST_TURN_MAINTENANCE_QUEUE } from '@/core'
+import { postFileSystemList } from '@/core/http-server/api/file-system-list/post'
 import { sessionsPlugin } from '@/core/http-server/api/sessions'
 import { CONVERSATION_SESSION_MANAGER, ConversationSessionManager } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
@@ -141,6 +142,7 @@ describe('web conversation runtime', () => {
     })
     await app.register(sessionsPlugin, { apiVersion: 'v1' })
     await app.register(artifactsPlugin, { apiVersion: 'v1' })
+    await app.register(postFileSystemList, { apiVersion: 'v1' })
     await app.ready()
   })
 
@@ -215,6 +217,29 @@ describe('web conversation runtime', () => {
     expect((await request('GET', '/api/v1/workspaces')).json().workspaces[0]).toMatchObject({ isPinned: true, isExplicitlyPinned: false })
   })
 
+  it('browses folders from home with parent paths, filtering and recoverable errors without changing legacy file results', async () => {
+    const folder = path.join(fixture.root, 'Projects')
+    await fs.mkdir(path.join(folder, 'Leon'), { recursive: true })
+    await fs.mkdir(path.join(folder, 'Notes'))
+    await fs.writeFile(path.join(folder, 'readme.txt'), 'Notes')
+    const home = vi.spyOn(os, 'homedir').mockReturnValue(fixture.root)
+    try {
+      const browse = async (value: string): Promise<{ success: boolean, directory?: string, parent?: string, entries: { name: string }[] }> =>
+        (await request('POST', '/api/v1/file-system/list', { value, folders_only: true })).json()
+      expect(await browse('~/')).toMatchObject({ success: true, directory: fixture.root + path.sep,
+        parent: path.dirname(fixture.root) + path.sep, entries: [{ name: 'Projects', type: 'folder' }] })
+      const nested = await browse('~/Projects/../Projects/')
+      expect(nested['entries'].map((entry: { name: string }) => entry.name)).toEqual(['Leon', 'Notes'])
+      expect((await browse('~\\Projects\\Le'))['entries'].map((entry: { name: string }) => entry.name)).toEqual(['Leon'])
+      expect(await browse(path.parse(folder).root)).toMatchObject({ success: true, directory: path.parse(folder).root,
+        parent: path.parse(folder).root })
+      expect(await browse('~/missing/')).toMatchObject({ success: false, entries: [] })
+      const legacy = (await request('POST', '/api/v1/file-system/list', { value: '@Projects/' })).json()
+      expect(legacy.entries.map((entry: { name: string }) => entry.name)).toContain('readme.txt')
+    } finally {
+      home.mockRestore()
+    }
+  })
 
   async function create(): Promise<string> {
     const id = randomUUID()

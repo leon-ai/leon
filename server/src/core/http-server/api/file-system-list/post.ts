@@ -18,7 +18,8 @@ const ROOT_PATH_VALUE = '@/'
 
 const postFileSystemListSchema = {
   body: Type.Object({
-    value: Type.String()
+    value: Type.String(),
+    folders_only: Type.Optional(Type.Boolean())
   })
 } satisfies FastifySchema
 
@@ -47,11 +48,20 @@ function normalizePathValue(value: string): string {
   return value.replaceAll(path.win32.sep, PATH_SEPARATOR)
 }
 
-function parsePathValue(value: string): {
+function parsePathValue(value: string, foldersOnly = false): {
   directoryPath: string
   directoryValue: string
   query: string
 } {
+  if (foldersOnly) {
+    const input = value.trim().replaceAll(path.win32.sep, path.sep)
+    const expanded = FileHelper.expandHomeAlias(input || '~')
+    const normalized = path.normalize(expanded)
+    const hasTrailingSeparator = !input || input === '~' || input.endsWith(path.sep)
+    const directoryPath = path.resolve(os.homedir(), hasTrailingSeparator ? normalized : path.dirname(normalized))
+
+    return { directoryPath, directoryValue: directoryPath, query: hasTrailingSeparator ? '' : path.basename(normalized) }
+  }
   const normalizedValue = normalizePathValue(value.trim())
   const tokenValue = normalizedValue.startsWith(FILE_SYSTEM_TRIGGER)
     ? normalizedValue.slice(FILE_SYSTEM_TRIGGER.length)
@@ -224,7 +234,7 @@ export const postFileSystemList: FastifyPluginAsync<APIOptions> = async (
     schema: postFileSystemListSchema,
     handler: async (request, reply) => {
       const { directoryPath, directoryValue, query } = parsePathValue(
-        request.body.value
+        request.body.value, request.body.folders_only
       )
 
       try {
@@ -232,7 +242,7 @@ export const postFileSystemList: FastifyPluginAsync<APIOptions> = async (
           withFileTypes: true
         })
         const matchedEntries = directoryEntries
-          .filter((entry) => entry.isDirectory() || entry.isFile())
+          .filter((entry) => entry.isDirectory() || !request.body.folders_only && entry.isFile())
           .map((entry) => {
             const type: FileSystemListEntry['type'] = entry.isDirectory()
               ? 'folder'
@@ -265,7 +275,7 @@ export const postFileSystemList: FastifyPluginAsync<APIOptions> = async (
           })
           .sort(sortEntries)
 
-        const entries = (await expandMatchedFolders(matchedEntries, query))
+        const entries = (request.body.folders_only ? matchedEntries : await expandMatchedFolders(matchedEntries, query))
           .slice(0, MAXIMUM_FILE_SYSTEM_ENTRIES)
           .map(({ name, value, absolutePath, iconName, type }) => {
             return {
@@ -279,11 +289,15 @@ export const postFileSystemList: FastifyPluginAsync<APIOptions> = async (
 
         reply.send({
           success: true,
-          entries
+          entries,
+          ...(request.body.folders_only ? {
+            directory: formatAbsolutePath(directoryPath, 'folder'),
+            parent: formatAbsolutePath(path.dirname(directoryPath), 'folder')
+          } : {})
         })
       } catch (error) {
         reply.send({
-          success: true,
+          success: !request.body.folders_only,
           entries: [],
           message: error instanceof Error ? error.message : String(error)
         })
