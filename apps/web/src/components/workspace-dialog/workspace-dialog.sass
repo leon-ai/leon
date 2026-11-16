@@ -36,6 +36,22 @@
   &[aria-pressed='true']
     outline-color: var(--color-text)
 
+.workspace-folder-list
+  display: grid
+  gap: var(--space-sm)
+
+.workspace-folder-row
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+
+  > .dropdown-trigger
+    flex: 1
+    min-width: 0
+
+.workspace-add-folder
+  justify-self: start
+
 .workspace-selector
   max-width: 100%
   margin-bottom: var(--space-xs)

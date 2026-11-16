@@ -170,11 +170,12 @@ for (const { theme, motion, width } of [
     await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
     await expect(browser).toBeHidden()
     await expect(folder).toHaveValue('/home/owner/Projects/Leon/')
-    await expect(editor.getByRole('button', { name: /^Remove folder / })).toHaveCount(0)
-    await folder.click()
-    await browser.getByRole('button', { name: '..', exact: true }).click()
-    await browser.getByRole('button', { name: 'Notes', exact: true }).click()
-    await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+    await editor.getByRole('button', { name: 'Add folder', exact: true }).click()
+    await editor.getByRole('textbox', { name: 'Folder 2', exact: true }).click()
+    const secondBrowser = page.getByRole('dialog', { name: 'Folder 2', exact: true })
+    await secondBrowser.getByRole('button', { name: 'Projects', exact: true }).click()
+    await secondBrowser.getByRole('button', { name: 'Notes', exact: true }).click()
+    await secondBrowser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
     await editor.getByRole('button', { name: 'Save workspace', exact: true }).click()
     await expect(editor).toHaveCount(0)
     await expect.poll(() => ui.workspaces.length).toBe(1)
@@ -227,6 +228,55 @@ for (const { theme, motion, width } of [
     await expect(page.locator('html')).toHaveAttribute('data-accent', 'violet')
   })
 }
+
+test('edits separate workspace folders, caps new rows and preserves attachments after removal', async ({ page, ui }) => {
+  await mockFolders(page)
+  await page.goto('./')
+  await page.locator('.session-list-heading').hover()
+  await page.locator('.sidebar').getByRole('button', { name: 'New workspace', exact: true }).click()
+  const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+  await editor.getByRole('textbox', { name: 'Workspace name', exact: true }).fill('Leon')
+  const add = editor.getByRole('button', { name: 'Add folder', exact: true })
+  await expect(editor.getByRole('group', { name: 'Folders', exact: true }).getByRole('textbox')).toHaveCount(1)
+  await add.click()
+  await add.click()
+  await expect(add).toHaveCount(0)
+
+  for (const [index, name] of ['Leon', 'Notes'].entries()) {
+    const label = index === 0 ? 'Folder' : `Folder ${index + 1}`
+    await editor.getByRole('textbox', { name: label, exact: true }).click()
+    const browser = page.getByRole('dialog', { name: label, exact: true })
+    await browser.getByRole('button', { name: 'Projects', exact: true }).click()
+    await browser.getByRole('button', { name, exact: true }).click()
+    await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+  }
+  await editor.getByRole('textbox', { name: 'Folder 3', exact: true }).click()
+  const browser = page.getByRole('dialog', { name: 'Folder 3', exact: true })
+  await browser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+  await editor.getByRole('button', { name: 'Save workspace', exact: true }).click()
+  await expect(editor).toHaveCount(0)
+  expect(ui.workspaces[0]!.resources.map((resource) => resource.location)).toEqual([
+    '/home/owner/Projects/Leon/', '/home/owner/Projects/Notes/', '/home/owner/'
+  ])
+
+  await page.locator('.workspace-row').hover()
+  await page.getByRole('button', { name: 'Leon options', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
+  const edit = page.getByRole('dialog', { name: 'Edit workspace', exact: true })
+  await expect(edit.getByRole('textbox', { name: 'Folder 2', exact: true })).toHaveValue('/home/owner/Projects/Notes/')
+  await edit.getByRole('button', { name: 'Remove folder 1', exact: true }).click()
+  await expect(edit.getByRole('textbox', { name: 'Folder', exact: true })).toHaveValue('/home/owner/Projects/Notes/')
+  await expect(edit.getByRole('button', { name: 'Add folder', exact: true })).toBeEnabled()
+  await edit.getByRole('textbox', { name: 'Folder 2', exact: true }).click()
+  const editBrowser = page.getByRole('dialog', { name: 'Folder 2', exact: true })
+  await editBrowser.getByRole('button', { name: 'Projects', exact: true }).click()
+  await editBrowser.getByRole('button', { name: 'Attach this folder', exact: true }).click()
+  await edit.getByRole('button', { name: 'Save workspace', exact: true }).click()
+  await expect(edit).toHaveCount(0)
+  expect(ui.workspaces[0]!.resources.map((resource) => resource.location)).toEqual([
+    '/home/owner/Projects/Notes/', '/home/owner/Projects/'
+  ])
+})
 
 test('plays only live turn completion and keeps routine actions, replay and muted events silent', async ({ page, ui }) => {
   await page.addInitScript(() => {

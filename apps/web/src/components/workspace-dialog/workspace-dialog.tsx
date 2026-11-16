@@ -18,6 +18,11 @@ interface WorkspaceDialogProps {
   onClose: () => void
 }
 
+interface FolderRow {
+  id: string
+  resource?: WorkspaceResource
+}
+
 /**
  * Edits project context while preserving existing resources outside this form.
  * Attaching a folder registers its location without loading its contents.
@@ -30,7 +35,12 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
   const [name, setName] = useState(workspace?.name ?? '')
   const [brief, setBrief] = useState(workspace?.brief ?? '')
   const [color, setColor] = useState<WorkspaceColor>(() => WORKSPACE_COLORS.some((choice) => choice.id === workspace?.color) ? workspace!.color : 'default')
-  const [resources, setResources] = useState<WorkspaceResource[]>(workspace?.resources ?? [])
+  const [folders, setFolders] = useState<FolderRow[]>(() => {
+    const attached = workspace?.resources.filter((resource) => resource.kind === WorkspaceResourceKind.Folder) ?? []
+
+    return attached.length > 0 ? attached.map((resource) => ({ id: crypto.randomUUID(), resource }))
+      : [{ id: crypto.randomUUID() }]
+  })
   const [confirmRemove, setConfirmRemove] = useState(false)
   const formId = useId()
 
@@ -45,7 +55,12 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
       return
     }
     mutation.mutate({ ...(workspace ? { id: workspace.id } : {}), input: {
-      name, brief, resources, color
+      name, brief, color,
+      // Folder rows replace their attachment; unrelated resource metadata stays intact.
+      resources: [
+        ...(workspace?.resources.filter((resource) => resource.kind !== WorkspaceResourceKind.Folder) ?? []),
+        ...folders.flatMap((folder) => folder.resource ? [folder.resource] : [])
+      ]
     } }, { onSuccess: (result) => {
       if (!workspace && result.workspace) {
         onCreated?.(result.workspace.id)
@@ -74,11 +89,23 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
             icon={<span className="workspace-color-dot" data-workspace-color={choice.id} />} />)}
         </div>
       </fieldset>
-      <fieldset className="workspace-folders"><legend>Folder</legend>
-        <FolderPicker disabled={resources.length >= WORKSPACE_LIMITS.resources} onAttach={(location) => {
-          setResources((previous) => previous.some((resource) => resource.location === location) ? previous
-            : [...previous, { kind: WorkspaceResourceKind.Folder, label: '', location }])
-        }} />
+      <fieldset className="workspace-folders"><legend>Folders</legend>
+        <div className="workspace-folder-list">
+          {folders.map((folder, index) => <div className="workspace-folder-row" key={folder.id}>
+            <FolderPicker {...(folder.resource ? { initialPath: folder.resource.location } : {})} label={index === 0 ? 'Folder' : `Folder ${index + 1}`}
+              onAttach={(location) => {
+                setFolders((previous) => previous.map((row) => row.id === folder.id ? {
+                  ...row, resource: { kind: WorkspaceResourceKind.Folder, label: '', ...row.resource, location }
+                } : row))
+              }} />
+            {(folders.length > 1 || folder.resource) && <Button iconName="close" ariaLabel={`Remove folder ${index + 1}`}
+              onClick={() => setFolders((previous) => previous.length === 1
+                ? [{ id: crypto.randomUUID() }] : previous.filter((row) => row.id !== folder.id))} />}
+          </div>)}
+          {folders.length < WORKSPACE_LIMITS.folders && <Button className="workspace-add-folder" iconName="add-large"
+            onClick={() => setFolders((previous) => previous.length < WORKSPACE_LIMITS.folders
+              ? [...previous, { id: crypto.randomUUID() }] : previous)}>Add folder</Button>}
+        </div>
       </fieldset>
       {mutation.isError && <p role="alert">{mutation.error.message}</p>}
     </form>
