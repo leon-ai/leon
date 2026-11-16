@@ -1,5 +1,5 @@
 export { Button, type ButtonProps, type ButtonVariant } from './components/button/button'
-export { Status, type StatusProps, type StatusVariant } from './components/status/status'
+export { Status, type StatusProps, type StatusSize, type StatusVariant } from './components/status/status'
 export { Input, type InputProps } from './components/input/input'
 export { Loader } from './components/loader/loader'
 export { Surface, type SurfaceProps } from './components/surface'
