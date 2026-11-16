@@ -7,6 +7,7 @@ import { useRecents, useWorkspaceMutation, type WorkspaceSummary } from '@/data/
 import { useProfile } from '@/data/profile'
 import { useSessionReadState } from '@/data/session-read-state'
 import { SessionListItem } from '@/layout/sidebar/session-list-item'
+import { Icon } from '@/components/icon'
 import { Loader } from '@/components/loader'
 import { Button } from '@/components/button'
 import { WorkspaceDialog } from '@/components/workspace-dialog/workspace-dialog'
@@ -19,6 +20,7 @@ const ROW_HEIGHT = 41
 const OVERSCAN = 5
 const SCROLL_MASK_FADE_DISTANCE_PX = 54
 const RECENCY_REFRESH_INTERVAL_MS = 60_000
+const RECENTS_STORAGE_PREFIX = 'leon.web-app.recents-expanded.'
 const EXPANSION_STORAGE_PREFIX = 'leon.web-app.workspace-expanded.'
 
 interface SessionListProps {
@@ -37,6 +39,14 @@ type NavigationRow =
   | { kind: 'session', id: string, session: ConversationSession }
   | { kind: 'workspace', id: string, workspace: WorkspaceSummary }
   | { kind: 'more', id: string, workspaceId: string }
+
+function readRecentsExpanded(profile: string): boolean {
+  try {
+    return localStorage.getItem(`${RECENTS_STORAGE_PREFIX}${profile}`) !== 'false'
+  } catch {
+    return true
+  }
+}
 
 function readExpanded(profile: string): Set<string> {
   try {
@@ -79,12 +89,13 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
   const virtualListRef = useRef<HTMLUListElement>(null)
   const scrollMaskRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
+  const [recentsExpanded, setRecentsExpanded] = useState(() => readRecentsExpanded(profile))
   const [expanded, setExpanded] = useState(() => readExpanded(profile))
   const [groups, setGroups] = useState<Record<string, GroupPage>>({})
   const [editing, setEditing] = useState<WorkspaceSummary | 'new' | null>(null)
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now)
-  const rows = useMemo(() => query.items.flatMap((item): NavigationRow[] => {
+  const rows = useMemo(() => !recentsExpanded ? [] : query.items.flatMap((item): NavigationRow[] => {
     if (item.kind === 'session') {
       return [{ kind: 'session', id: item.value.id, session: item.value }]
     }
@@ -96,9 +107,9 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
       ...(expanded.has(item.value.id) && (!children || children.hasNextPage || children.isError)
         ? [{ kind: 'more' as const, id: `more:${item.value.id}`, workspaceId: item.value.id }] : [])
     ]
-  }), [query.items, expanded, groups])
+  }), [query.items, expanded, groups, recentsExpanded])
   const openWorkspaces = useMemo(() => query.items.filter((item) =>
-    item.kind === 'workspace' && expanded.has(item.value.id)), [query.items, expanded])
+    recentsExpanded && item.kind === 'workspace' && expanded.has(item.value.id)), [query.items, expanded, recentsExpanded])
   const getItemKey = useCallback((index: number) => rows[index]?.id ?? index, [rows])
   const rowVirtualizer = useVirtualizer({ count: rows.length, getItemKey,
     getScrollElement: () => scrollElementRef.current, estimateSize: () => ROW_HEIGHT, overscan: OVERSCAN,
@@ -112,10 +123,10 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
   }, [])
 
   useEffect(() => {
-    if (!collapsed && lastVisibleIndex >= rows.length - OVERSCAN && query.hasNextPage && !query.isFetching && !query.isError) {
+    if (!collapsed && recentsExpanded && lastVisibleIndex >= rows.length - OVERSCAN && query.hasNextPage && !query.isFetching && !query.isError) {
       void query.fetchNextPage()
     }
-  }, [collapsed, lastVisibleIndex, rows.length, query.hasNextPage, query.isFetching, query.isError, query.fetchNextPage])
+  }, [collapsed, recentsExpanded, lastVisibleIndex, rows.length, query.hasNextPage, query.isFetching, query.isError, query.fetchNextPage])
 
   useEffect(() => {
     if (collapsed || !hasRows) {
@@ -286,7 +297,20 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
 
   return <nav className="session-list" aria-labelledby="session-list-title">
     <div className="session-list-heading">
-      <h2 className="session-list-title" id="session-list-title">Recents</h2>
+      <h2 className="session-list-title" id="session-list-title">
+        <button type="button" className="session-list-disclosure" aria-expanded={recentsExpanded} aria-controls="recents-items"
+          onClick={() => {
+            const next = !recentsExpanded
+            setRecentsExpanded(next)
+            try {
+              localStorage.setItem(`${RECENTS_STORAGE_PREFIX}${profile}`, String(next))
+            } catch {
+              // Disclosure remains available when browser storage is blocked.
+            }
+          }}>
+          Recents<Icon name="arrow-drop-right-line" />
+        </button>
+      </h2>
       <div className="session-list-heading-actions">
         <Button tone="muted" iconName="folder-add" tooltipMessage="New workspace" onClick={() => setEditing('new')} />
         <Button tone="muted" iconName="edit-box" tooltipMessage="New session" onClick={() => void navigate({ to: '/', search: {} })} />
@@ -294,7 +318,7 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
     </div>
     {openWorkspaces.map((item) =>
       <GroupLoader key={item.value.id} id={item.value.id} profile={profile} onPage={onPage} />)}
-    <ul id="recents-items" className="session-list-items" ref={virtualListRef} onKeyDown={handleListKeyDown}
+    <ul id="recents-items" hidden={!recentsExpanded} className="session-list-items" ref={virtualListRef} onKeyDown={handleListKeyDown}
       style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
       {virtualItems.map((virtualRow) => {
         const row = rows[virtualRow.index]
@@ -337,9 +361,9 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
           onDelete={deleteWorkspace} height={virtualRow.size} offset={offset} />
       })}
     </ul>
-    {query.isPending && <Loader size="sm" label="Loading sessions…" />}
-    {query.isError && <Button onClick={() => void query.refetch()}>Retry loading sessions</Button>}
-    <div ref={scrollMaskRef} className="session-list-mask" aria-hidden="true" />
+    {recentsExpanded && query.isPending && <Loader size="sm" label="Loading sessions…" />}
+    {recentsExpanded && query.isError && <Button onClick={() => void query.refetch()}>Retry loading sessions</Button>}
+    <div ref={scrollMaskRef} hidden={!recentsExpanded} className="session-list-mask" aria-hidden="true" />
     {editing && <WorkspaceDialog key={editing === 'new' ? 'new' : editing.id}
       {...(editing === 'new' ? {} : { workspace: editing })} onClose={() => setEditing(null)} />}
   </nav>
