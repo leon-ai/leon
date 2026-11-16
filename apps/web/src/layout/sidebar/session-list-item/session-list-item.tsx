@@ -298,7 +298,7 @@ export const SessionListItem = memo(function SessionListItem({
   function commitEditing(): void {
     const titleToCommit = draftTitle.trim()
 
-    if (titleToCommit.length > 0) {
+    if (titleToCommit.length > 0 && titleToCommit !== title.trim()) {
       onRename?.(id, titleToCommit)
     }
 

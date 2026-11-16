@@ -2303,6 +2303,38 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
+test('updates a session title only when the committed text changes', async ({ page, ui }) => {
+  const updates: unknown[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && new URL(request.url()).pathname === `/api/v1/sessions/${SESSION_ID}`) {
+      updates.push(request.postDataJSON())
+    }
+  })
+  await page.goto(SESSION_URL)
+  const title = ui.sessions[0]!.title
+  const link = page.getByRole('link', { name: title, exact: true })
+  const input = page.getByRole('textbox', { name: 'Session title', exact: true })
+  await link.dblclick()
+  await expect(input).toBeFocused()
+  await input.press('Enter')
+  await expect(input).toHaveCount(0)
+  await link.dblclick()
+  await input.fill(`  ${title}  `)
+  await page.getByRole('textbox', { name: 'Message Leon' }).click()
+  await expect(input).toHaveCount(0)
+  await link.dblclick()
+  await input.fill('A draft label')
+  await input.fill(title)
+  await input.press('Enter')
+  await expect(input).toHaveCount(0)
+  expect(updates).toEqual([])
+  await link.dblclick()
+  await input.fill('A new session label')
+  await input.press('Enter')
+  await expect(page.getByRole('link', { name: 'A new session label', exact: true })).toBeVisible()
+  expect(updates).toEqual([{ title: 'A new session label' }])
+})
+
 test('confirms session management actions once and only after the server accepts them', async ({ page, ui }) => {
   const now = new Date('2026-11-08T10:00:00+08:00')
   await page.clock.setFixedTime(now)
