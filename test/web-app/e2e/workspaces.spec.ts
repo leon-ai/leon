@@ -173,6 +173,35 @@ test('plays only live turn completion and keeps routine actions, replay and mute
   expect(await count()).toBe(1)
 })
 
+test('pins a workspace directly and inherits its conversations’ pins independently', async ({ page, ui }) => {
+  const workspaceId = '10000000-0000-4000-8000-000000000000'
+  ui.workspaces.push({ id: workspaceId, name: 'Leon', brief: '', color: 'pink', resources: [], createdAt: 1, updatedAt: 1 })
+  ui.sessions[1]!.workspaceId = workspaceId
+  await page.goto(SESSION_URL)
+  const row = page.locator('.workspace-row')
+  const options = row.getByRole('button', { name: 'Leon options', exact: true })
+  await row.hover()
+  await options.click()
+  await expect(page.getByRole('menuitem')).toHaveText(['Edit', 'Pin', 'Delete'])
+  await page.getByRole('menuitem', { name: 'Pin', exact: true }).click()
+  await expect(row).toHaveClass(/session-list-item-pinned/)
+  await row.hover()
+  await options.click()
+  await page.getByRole('menuitem', { name: 'Unpin', exact: true }).click()
+  await expect(row).not.toHaveClass(/session-list-item-pinned/)
+  await row.getByRole('button', { name: 'Expand Leon', exact: true }).click()
+  const child = page.locator(`a[data-session-id="${ui.sessions[1]!.id}"]`).locator('..')
+  await child.hover()
+  await child.getByRole('button', { name: 'Session options', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Pin', exact: true }).click()
+  await expect(child).toHaveClass(/session-list-item-pinned/)
+  await expect(row).toHaveClass(/session-list-item-pinned/)
+  await row.getByRole('button', { name: 'Collapse Leon', exact: true }).click()
+  await expect(row.locator('.session-list-item-pinned-icon')).toBeVisible()
+  await page.reload()
+  await expect(row).toHaveClass(/session-list-item-pinned/)
+})
+
 test('searches colored workspaces and creates an attached workspace from the composer', async ({ page, ui }) => {
   ui.workspaces.push(...Array.from({ length: 80 }, (_, index) => ({ id: crypto.randomUUID(), name: `Project ${index}`, brief: '',
     color: 'pink' as const, resources: [], createdAt: index, updatedAt: index })))

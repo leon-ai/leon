@@ -1086,7 +1086,7 @@ test('opens and navigates session action menus with arrows, boundaries and nativ
   const rename = menu.getByRole('menuitem', { name: 'Rename', exact: true })
   await expect(rename).toBeFocused()
   await rename.press('ArrowDown')
-  await expect(menu.getByRole('menuitem', { name: 'Pin session', exact: true })).toBeFocused()
+  await expect(menu.getByRole('menuitem', { name: 'Pin', exact: true })).toBeFocused()
   await page.keyboard.press('End')
   await expect(menu.getByRole('menuitem', { name: 'Delete', exact: true })).toBeFocused()
   await page.keyboard.press('ArrowDown')
@@ -1785,7 +1785,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     } else {
       await expect(characters).toHaveCount(0)
     }
-    await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Pin', exact: true }).click()
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', OTHER_SESSION_ID)
     if (reducedMotion === 'no-preference') {
       await expect.poll(() => character!.evaluate((element) => element.getAnimations()[0]?.startTime ?? null)).not.toBeNull()
@@ -1799,7 +1799,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     }
     await otherRow.hover()
     await otherRow.getByRole('button', { name: 'Session options', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Unpin session', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Unpin', exact: true }).click()
     await expect(page.getByRole('navigation', { name: 'Recents', exact: true }).getByRole('link').first()).toHaveAttribute('data-session-id', SESSION_ID)
     await expect(characters).toHaveCount(0)
     await expect(link.locator('.session-list-item-title-resting')).toHaveText(session.title)
@@ -2330,7 +2330,7 @@ test('confirms session management actions once and only after the server accepts
       await page.getByRole('menuitem', { name: 'Delete', exact: true }).click()
       await page.getByRole('alertdialog').getByRole('button', { name: 'Delete session', exact: true }).click()
     } else {
-      const item = page.getByRole('menuitem', { name: action === 'pinned' ? 'Pin session' : 'Unpin session', exact: true })
+      const item = page.getByRole('menuitem', { name: action === 'pinned' ? 'Pin' : 'Unpin', exact: true })
       if (action === 'unpinned') {
         const status = row.locator('.session-list-item-pinned-icon')
         await expect(status).toHaveAttribute('data-icon-variant', 'fill')
@@ -2379,7 +2379,7 @@ test('reports a rejected session action once without confirming success', async 
   const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Test session 0', exact: true }) })
   await row.hover()
   await row.getByRole('button', { name: 'Session options', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Pin session', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Pin', exact: true }).click()
   await expect(page.locator('.toast-error .toast-title')).toHaveText(['Session could not be updated'])
   await expect(page.locator('.toast')).toHaveCount(1)
   await expect(row).not.toHaveClass(/session-list-item-pinned/)

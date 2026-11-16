@@ -278,6 +278,9 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
       }
     } })
   }, [mutation.mutate, viewedSessionId, navigate])
+  const pinWorkspace = useCallback((id: string, pinned: boolean): void => {
+    workspaceMutation.mutate({ id, pinned: !pinned })
+  }, [workspaceMutation.mutate])
   const deleteWorkspace = useCallback((id: string): void => {
     workspaceMutation.mutate({ id })
   }, [workspaceMutation.mutate])
@@ -354,10 +357,10 @@ function SessionCatalog({ collapsed = false, scrollElementRef, profile }: Sessio
         const open = expanded.has(row.id)
 
         return <SessionListItem key={row.id} id={row.id} rowKind="workspace" title={workspace.name}
-          workspaceColor={workspace.color} expanded={open} isPinned={false} isUnread={false}
+          workspaceColor={workspace.color} expanded={open} isPinned={workspace.isPinned === true} isExplicitlyPinned={workspace.isExplicitlyPinned === true} isUnread={false}
           status={workspace.runningSessionCount ? SessionStatus.Wip : SessionStatus.Idle}
           timestamp={workspace.lastActivityAt} relativeTime="" isListScrolling={isListScrolling}
-          onToggle={toggleWorkspace} onNewSession={newWorkspaceSession} onEdit={editWorkspace}
+          onPin={pinWorkspace} onToggle={toggleWorkspace} onNewSession={newWorkspaceSession} onEdit={editWorkspace}
           onDelete={deleteWorkspace} height={virtualRow.size} offset={offset} />
       })}
     </ul>

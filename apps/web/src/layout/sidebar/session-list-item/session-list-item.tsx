@@ -95,11 +95,11 @@ export const SessionListItem = memo(function SessionListItem({
   const pinDropdownItem = actionPinned
     ? {
         iconName: 'unpin',
-        label: 'Unpin session'
+        label: 'Unpin'
       }
     : {
         iconName: 'pushpin',
-        label: 'Pin session'
+        label: 'Pin'
       }
 
   useEffect(() => {
@@ -445,6 +445,7 @@ export const SessionListItem = memo(function SessionListItem({
           <Dropdown
             items={isWorkspace ? [
               { iconName: 'edit', label: 'Edit', onSelect: () => onEdit?.(id) },
+              { ...pinDropdownItem, onSelect: () => onPin?.(id, actionPinned) },
               { iconName: 'delete-bin', label: 'Delete', variant: 'danger', onSelect: () => setDeleteDialogOpen(true) }
             ] : [
               {
