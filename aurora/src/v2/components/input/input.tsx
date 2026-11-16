@@ -92,6 +92,8 @@ export function Input({
       {multiline ? (
         <textarea
           {...(fieldProps as TextareaHTMLAttributes<HTMLTextAreaElement>)}
+          rows={variant === 'embedded' ? (fieldProps as TextareaHTMLAttributes<HTMLTextAreaElement>).rows ?? 1
+            : Math.max(4, (fieldProps as TextareaHTMLAttributes<HTMLTextAreaElement>).rows ?? 4)}
           id={inputId}
           className="input-field"
           aria-label={ariaLabel}

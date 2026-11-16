@@ -22,7 +22,7 @@
   min-height: 40px
   padding: 0 var(--space-lg)
   border: 1px solid var(--color-input-border)
-  border-radius: var(--border-radius-xl)
+  border-radius: var(--border-radius-md)
   outline: 0
   background-color: var(--color-background)
   color: var(--input-native-text-color, var(--color-text))
@@ -82,3 +82,10 @@
     &:focus,
     &:active
       border: 0
+
+textarea.input-field
+  resize: vertical
+
+.input-default textarea.input-field
+  min-height: calc(4 * var(--line-height-md) + 2 * var(--space-sm) + 2px)
+  padding-block: var(--space-sm)
