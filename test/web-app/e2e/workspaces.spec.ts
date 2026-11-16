@@ -1,6 +1,6 @@
 import { WorkspaceResourceKind } from '../../../bridges/runtime/contracts/workspace'
 
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 
 import { test, expect, SESSION_ID, SESSION_URL, finishFiniteAnimations } from './fixtures'
 
@@ -530,4 +530,77 @@ test('explains a folder API mismatch and keeps attachment unavailable without di
   await expect(browser.getByRole('alert')).toHaveText('I need Core to be rebuilt and restarted before I can browse folders.')
   await expect(browser.getByRole('button', { name: 'Attach this folder', exact: true })).toBeDisabled()
   await expect(browser.getByRole('button', { name: '..', exact: true })).toHaveCount(0)
+})
+
+
+test('delays folder loading feedback per lookup and clears completed or cancelled notices', async ({ page, ui }) => {
+  void ui
+  const outstanding = new Set<Route>()
+  let nextRequest = Promise.withResolvers<Route>()
+  await page.route('**/api/v1/file-system/list', (route) => {
+    outstanding.add(route)
+    nextRequest.resolve(route)
+  })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.clock.install()
+  await page.goto('./')
+  await page.locator('.session-list-heading').hover()
+  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+  const folder = editor.getByRole('textbox', { name: 'Folder', exact: true })
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 1_000))
+  const browser = page.getByRole('dialog', { name: 'Folder', exact: true })
+  const loading = browser.getByText('Loading folders…', { exact: true })
+  try {
+    await folder.click()
+    const home = await nextRequest.promise
+    await page.clock.runFor(200)
+    await expect(loading).toHaveCount(0)
+    await home.fulfill({ json: { success: true, directory: '/home/owner/', parent: '/home/',
+      entries: [{ name: 'Projects', absolutePath: '/home/owner/Projects/' }] } })
+    outstanding.delete(home)
+    // Network completion queues cache notifications after the response is fulfilled.
+    await expect.poll(async () => {
+      await page.clock.runFor(1)
+
+      return browser.getByRole('button', { name: 'Projects', exact: true }).count()
+    }).toBe(1)
+    await page.clock.runFor(500)
+    await expect(loading).toHaveCount(0)
+
+    nextRequest = Promise.withResolvers<Route>()
+    await browser.getByRole('button', { name: 'Projects', exact: true }).click()
+    await nextRequest.promise
+    await page.clock.runFor(200)
+    await expect(loading).toHaveCount(0)
+    await page.clock.runFor(200)
+    await expect(loading).toBeVisible()
+
+    nextRequest = Promise.withResolvers<Route>()
+    await folder.fill('/home/owner/Notes/')
+    const notes = await nextRequest.promise
+    await expect(loading).toHaveCount(0)
+    await page.clock.runFor(200)
+    await expect(loading).toHaveCount(0)
+    await notes.fulfill({ json: { success: true, directory: '/home/owner/Notes/', parent: '/home/owner/', entries: [] } })
+    outstanding.delete(notes)
+    await expect.poll(async () => {
+      await page.clock.runFor(1)
+
+      return browser.getByRole('button', { name: 'Attach this folder', exact: true }).isEnabled()
+    }).toBe(true)
+    await page.clock.runFor(500)
+    await expect(loading).toHaveCount(0)
+
+    nextRequest = Promise.withResolvers<Route>()
+    await folder.fill('/home/owner/Films/')
+    await nextRequest.promise
+    await page.clock.runFor(200)
+    await folder.press('Escape')
+    await page.clock.runFor(500)
+    await expect(browser).toBeHidden()
+    await expect(page.getByText('Loading folders…', { exact: true })).toHaveCount(0)
+  } finally {
+    await Promise.allSettled([...outstanding].map((route) => route.abort()))
+  }
 })

@@ -7,6 +7,8 @@ import { Button } from '@/components/button'
 import { requestAPI } from '@/data/api'
 import { useProfile } from '@/data/profile'
 
+const FOLDER_LOADING_DELAY_MS = 300
+
 interface FolderListing {
   success: boolean
   directory?: string
@@ -43,7 +45,7 @@ export function FolderPicker({ onAttach, disabled = false }: { onAttach: (path: 
 
   return <InputDropdown fieldRef={input} label="Folder" value={requestedPath ?? listing.data?.directory ?? value} placeholder="Browse folders…" disabled={disabled}
     onChange={setRequestedPath} content={(close, open) => <FolderResults open={open} onOpenChange={setBrowsing}
-      listing={listing} onNavigate={(path) => {
+      path={value} listing={listing} onNavigate={(path) => {
         setRequestedPath(path)
         // Navigation replaces the clicked option; keep keyboard browsing anchored.
         input.current?.focus()
@@ -57,9 +59,10 @@ export function FolderPicker({ onAttach, disabled = false }: { onAttach: (path: 
 }
 
 // Only the mounted popup enables queries, so typing elsewhere never probes disk.
-function FolderResults({ open, onOpenChange, listing, onNavigate, onAttach }: {
+function FolderResults({ open, onOpenChange, path, listing, onNavigate, onAttach }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  path: string
   listing: ReturnType<typeof useQuery<FolderListing, Error>>
   onNavigate: (path: string) => void
   onAttach: () => void
@@ -77,7 +80,7 @@ function FolderResults({ open, onOpenChange, listing, onNavigate, onAttach }: {
         onClick={() => data.parent && onNavigate(data.parent)}>
         <Icon name="corner-left-up-line" className="dropdown-item-icon" /><span>..</span>
       </button>}
-      {listing.isFetching ? <p className="input-dropdown-message">Loading folders…</p>
+      {listing.isFetching ? open && <FolderLoading key={path} />
         : listing.isError || data?.success === false ? <p role="alert" className="input-dropdown-message">{listing.error?.message ?? data?.message}</p>
           : data?.entries.map((folder) => <button type="button" className="dropdown-item" key={folder.absolutePath}
             onClick={() => onNavigate(folder.absolutePath)}>
@@ -87,4 +90,17 @@ function FolderResults({ open, onOpenChange, listing, onNavigate, onAttach }: {
     <footer className="input-dropdown-footer"><Button variant="secondary" disabled={!data?.success || !data.directory || listing.isFetching}
       onClick={onAttach}>Attach this folder</Button></footer>
   </>
+}
+
+// Each lookup owns its delay; navigating, completing or closing cancels the notice.
+function FolderLoading() {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), FOLDER_LOADING_DELAY_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  return visible ? <p className="input-dropdown-message">Loading folders…</p> : null
 }
