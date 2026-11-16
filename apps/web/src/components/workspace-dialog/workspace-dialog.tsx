@@ -24,6 +24,8 @@ interface WorkspaceDialogProps {
 export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDialogProps) {
   const profile = useProfile()
   const mutation = useWorkspaceMutation(profile)
+  // The parent releases this editor only after the shared dialog finishes closing.
+  const [open, setOpen] = useState(true)
   const [name, setName] = useState(workspace?.name ?? '')
   const [brief, setBrief] = useState(workspace?.brief ?? '')
   const [color, setColor] = useState<WorkspaceColor>(() => WORKSPACE_COLORS.some((choice) => choice.id === workspace?.color) ? workspace!.color : 'default')
@@ -31,22 +33,31 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
   const [confirmRemove, setConfirmRemove] = useState(false)
   const formId = useId()
 
+  function close(): void {
+    setOpen(false)
+    setConfirmRemove(false)
+  }
+
   function submit(event: FormEvent): void {
     event.preventDefault()
+    if (!open) {
+      return
+    }
     mutation.mutate({ ...(workspace ? { id: workspace.id } : {}), input: {
       name, brief, resources, color
     } }, { onSuccess: (result) => {
       if (!workspace && result.workspace) {
         onCreated?.(result.workspace.id)
       }
-      onClose()
+      close()
     } })
   }
 
-  return <Dialog open className="workspace-dialog" title={workspace ? 'Edit workspace' : 'New workspace'} onClose={onClose}
+  return <Dialog open={open} className="workspace-dialog" title={workspace ? 'Edit workspace' : 'New workspace'}
+    onClose={close} onAfterClose={onClose}
     footer={<>
       {workspace && <Button variant="danger" disabled={mutation.isPending} onClick={() => setConfirmRemove(true)}>Remove workspace</Button>}
-      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <Button variant="secondary" onClick={close}>Cancel</Button>
       <Button variant="primary" type="submit" form={formId} loading={mutation.isPending} disabled={!name.trim()}>Save workspace</Button>
     </>}>
     <form className="workspace-editor" id={formId} onSubmit={submit}>
@@ -72,7 +83,7 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
     {workspace && <Dialog open={confirmRemove} title="Remove workspace?" description="Your conversations will return to Recents. Your resources and their files will stay where they are."
       onClose={() => setConfirmRemove(false)} actions={[
         { label: 'Cancel', onClick: () => setConfirmRemove(false) },
-        { label: 'Remove workspace', variant: 'danger', onClick: () => mutation.mutate({ id: workspace.id }, { onSuccess: onClose }) }
+        { label: 'Remove workspace', variant: 'danger', onClick: () => mutation.mutate({ id: workspace.id }, { onSuccess: close }) }
       ]} />}
   </Dialog>
 }

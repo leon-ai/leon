@@ -21,6 +21,54 @@ async function mockFolders(page: Page): Promise<void> {
   })
 }
 
+for (const motion of ['normal', 'reduced', 'zero duration'] as const) {
+  test(`closes workspace editors through the shared dialog lifecycle (${motion})`, async ({ page, ui }) => {
+    void ui
+    await page.emulateMedia({ reducedMotion: motion === 'reduced' ? 'reduce' : 'no-preference' })
+    await page.goto('./')
+    // A longer transition lets us inspect the fade without a wall-clock race.
+    await page.addStyleTag({ content: `.dialog-overlay, .dialog { transition-duration: ${motion === 'zero duration' ? '0s' : '2s'}; }` })
+
+    for (const entry of ['sidebar', 'composer'] as const) {
+      if (entry === 'sidebar') {
+        await page.locator('.session-list-heading').hover()
+        await page.locator('.sidebar').getByRole('button', { name: 'New workspace', exact: true }).click()
+      } else {
+        await page.getByRole('button', { name: 'Attach workspace', exact: true }).click()
+        await page.getByRole('menuitem', { name: 'New workspace', exact: true }).click()
+      }
+      const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
+      const overlay = page.locator('.dialog-overlay').filter({ has: editor })
+      await finishFiniteAnimations(overlay)
+      if (entry === 'sidebar') {
+        await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
+      } else {
+        await editor.press('Escape')
+      }
+      if (motion === 'normal') {
+        const opacity = await overlay.evaluate((element) => {
+          const transition = element.getAnimations().find((animation) =>
+            animation instanceof CSSTransition && animation.transitionProperty === 'opacity')
+          if (!transition?.effect) {
+            return null
+          }
+          transition.pause()
+          transition.currentTime = Number(transition.effect.getComputedTiming().duration) / 2
+          const opacity = Number(getComputedStyle(element).opacity)
+          transition.finish()
+
+          return opacity
+        })
+        expect(opacity).not.toBeNull()
+        expect(opacity).toBeGreaterThan(0)
+        expect(opacity).toBeLessThan(1)
+      }
+      await expect(editor).toHaveCount(0)
+      await expect(overlay).toHaveCount(0)
+    }
+  })
+}
+
 for (const { theme, motion, width } of [
   { theme: 'dark', motion: 'no-preference', width: 1_512 },
   { theme: 'light', motion: 'reduce', width: 1_100 }
@@ -122,6 +170,7 @@ for (const { theme, motion, width } of [
     await page.setViewportSize({ width, height: 982 })
     await edit.getByRole('button', { name: 'Remove workspace', exact: true }).click()
     await page.getByRole('dialog', { name: 'Remove workspace?', exact: true }).getByRole('button', { name: 'Remove workspace', exact: true }).click()
+    await expect(edit).toHaveCount(0)
     await expect(sidebar.getByRole('button', { name: 'Collapse Leon', exact: true })).toHaveCount(0)
     await expect(sidebar.locator(`a[data-session-id="${created.id}"]`)).toBeVisible()
     expect(ui.sessions.find((session) => session.id === created.id)).not.toHaveProperty('workspaceId')
