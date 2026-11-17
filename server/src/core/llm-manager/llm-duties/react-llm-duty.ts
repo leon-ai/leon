@@ -1885,11 +1885,14 @@ export class ReActLLMDuty extends LLMDuty {
 
                 const previous = this.streamedToolCalls.get(call.id)
                 const input = call.function.arguments
-                if (previous?.input === input) {
+                if (previous) {
+                  // Only the initial preview needs publication. Execution
+                  // publishes the validated arguments, and rejection uses this draft.
+                  previous.input = input
                   return
                 }
 
-                const groupId = previous?.groupId || `agent_${StringHelper.random(12)}`
+                const groupId = `agent_${StringHelper.random(12)}`
                 this.streamedToolCalls.set(call.id, { callable, groupId, input })
                 this.firstOutputAt ??= Date.now()
                 this.reportProgressEvent({

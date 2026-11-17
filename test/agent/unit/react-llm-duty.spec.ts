@@ -185,6 +185,7 @@ it.each(['success', 'error', 'background', 'throw'])(
   'reports title and dispatch duration for a %s call to live cards and durable progress',
   async (outcome) => {
     const now = vi.spyOn(performance, 'now').mockReturnValue(1_000)
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
     const onProgress = vi.fn()
     const toolCallTitle = 'Look up the requested value'
     const displayNames = { toolkitName: 'Test Toolkit', toolName: 'Official Lookup' }
@@ -242,14 +243,18 @@ it.each(['success', 'error', 'background', 'throw'])(
       toolPhase: 'output_delta', outputDelta: 'Second line\n'
     }))
     expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'running', commandOutput: 'First line\nSecond line\n',
+      status: 'running', commandOutput: 'First line\n',
       lastOutputAt: expect.any(Number)
+    }))
+    expect(onProgress).not.toHaveBeenCalledWith(expect.objectContaining({
+      status: 'running', commandOutput: 'First line\nSecond line\n'
     }))
     expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
       status,
       toolCallTitle,
       ...displayNames,
-      durationMs: 1_234
+      durationMs: 1_234,
+      commandOutput: 'First line\nSecond line\n'
     }))
     expect(coreMocks.emitAnswerToChatClients).toHaveBeenLastCalledWith(
       expect.objectContaining({ toolPhase: 'output', status, toolCallTitle, ...displayNames, durationMs: 1_234 })
@@ -2086,6 +2091,7 @@ describe('continuous agent loop', () => {
         })
         params.onReasoningToken('Checking ')
         params.onReasoningToken('the weather.')
+        params.onToolCall({ ...call, function: { ...call.function, arguments: '' } })
         params.onToolCall(call)
         params.onToolCall(unusedCall)
 
@@ -2117,6 +2123,9 @@ describe('continuous agent loop', () => {
         ...displayNames, status: 'preparing', preparationStartedAt: 1_000
       })
     })
+    expect(onProgressEvent.mock.calls.filter(([event]) =>
+      event.type === 'tool_call' && event.toolCall.status === 'preparing'
+    )).toHaveLength(2)
     expect(duty['responseTraceCollector'].snapshot({}).inferences).toEqual([
       expect.objectContaining({
         attemptId: 'weather-attempt', phase: 'agent', elapsedMs: 500,
@@ -2128,7 +2137,7 @@ describe('continuous agent loop', () => {
     duty['closeStreamedToolCalls']()
     expect(duty['responseTraceCollector'].snapshot({}).toolCalls[0]).toMatchObject({
       ...displayNames,
-      status: 'error', errorMessage: rejection
+      status: 'error', errorMessage: rejection, input: call.function.arguments
     })
     expect(duty['responseTraceCollector'].snapshot({}).toolCalls[1]).toMatchObject({
       status: 'error', errorMessage: 'This proposed tool call was not executed.'
