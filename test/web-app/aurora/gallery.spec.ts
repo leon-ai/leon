@@ -1041,3 +1041,46 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     expect(errors).toEqual([])
   })
 }
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`previews Core stages, desktop restart and setup states with production views (${theme})`, async ({ page }, testInfo) => {
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/aurora.html')
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    await page.getByRole('button', { name: 'Updates', exact: true }).click()
+    await page.getByLabel('Core update state', { exact: true }).selectOption('preparing')
+    await page.getByRole('button', { name: 'Preview Leon update', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('list', { name: 'Core update progress' })).toBeVisible()
+    await dialog.getByText('Details', { exact: true }).click()
+    await expect(dialog.getByText('Applying pending profile migrations.', { exact: true })).toBeVisible()
+    await dialog.getByText('Release notes', { exact: true }).click()
+    await expect(dialog.getByText('Full changelog', { exact: true })).toBeVisible()
+    await expect(dialog).toHaveCSS('opacity', '1')
+    await dialog.screenshot({ path: testInfo.outputPath(`core-update-${theme}.png`) })
+    await dialog.getByLabel('Core update state', { exact: true }).selectOption('completed')
+    await expect(dialog.getByRole('progressbar')).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByLabel('Update preview', { exact: true }).selectOption('desktop')
+    await page.getByLabel('Desktop update state', { exact: true }).selectOption('ready')
+    await page.getByRole('button', { name: 'Preview Leon update', exact: true }).click()
+    await expect(dialog.getByRole('tab')).toHaveCount(0)
+    await expect(dialog.getByRole('list', { name: 'Core update progress' })).toHaveCount(0)
+    await expect(dialog).toHaveCSS('opacity', '1')
+    await dialog.screenshot({ path: testInfo.outputPath(`desktop-update-${theme}.png`) })
+    await page.getByRole('button', { name: 'Update Leon', exact: true }).click()
+    await expect(page.getByText('Restarting Leon', { exact: true })).toBeVisible()
+    await page.reload()
+    await page.getByRole('button', { name: 'Updates', exact: true }).click()
+    await page.getByLabel('Update preview', { exact: true }).selectOption('setup')
+    await page.getByLabel('Setup state', { exact: true }).selectOption('failed')
+    await expect(page.getByRole('button', { name: 'Retry setup', exact: true })).toBeVisible()
+    await page.setViewportSize({ width: 390, height: 800 })
+    await page.screenshot({ path: testInfo.outputPath(`updates-${theme}.png`), fullPage: true })
+    expect(errors).toEqual([])
+  })
+}

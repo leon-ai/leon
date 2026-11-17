@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { Button } from '@/components/button'
 import { UpdateDialog } from '@/components/update-dialog/update-dialog'
+import { DesktopSetupView, SetupPhase, type SetupState } from '@/components/desktop-setup/desktop-setup'
 import { UpdatePhase, UpdateStage, type UpdateState, type DesktopUpdateSnapshot } from '../../../../bridges/runtime/contracts/updates'
 import { UPDATE_FIXTURE } from '../../../fixtures/updates'
 
@@ -18,7 +19,9 @@ export default function UpdatesPreview() {
   const [view, setView] = useState('core')
   const [stage, setStage] = useState('available')
   const [desktopPhase, setDesktopPhase] = useState<DesktopUpdateSnapshot['phase']>('available')
+  const [setupPhase, setSetupPhase] = useState(SetupPhase.Running)
   const [details, setDetails] = useState(true)
+  const [external, setExternal] = useState(false)
   const [supported, setSupported] = useState(true)
   const [includeCore, setIncludeCore] = useState(false)
   const running = STAGES.includes(stage) || stage === 'reconnecting'
@@ -37,6 +40,10 @@ export default function UpdatesPreview() {
     version: desktopPhase === 'idle' || desktopPhase === 'checking' ? null : '0.1.1', releaseNotes: 'Native clipboard improvements and Electron updates.',
     progress: desktopPhase === 'downloading' ? { downloadedBytes: 32 * 1_024 ** 2, totalBytes: 128 * 1_024 ** 2 } : null,
     error: desktopPhase === 'failed' ? 'I could not verify my desktop update. Check again to retry.' : null, reason: supported ? null : 'Automatic desktop updates are unavailable for this installation.' }
+  const setup: SetupState = { phase: setupPhase, external, service: false, logAvailable: true,
+    error: setupPhase === SetupPhase.Failed ? 'I could not finish setup. My completed downloads and profiles are preserved.' : null,
+    steps: [{ id: 'download', label: 'Downloading my Core', phase: setupPhase === SetupPhase.Running ? SetupPhase.Running : setupPhase,
+      value: 64 * 1_024 ** 2, total: 128 * 1_024 ** 2, details: ['My platform archive is selected.', 'My download can resume after an interruption.'] }] }
 
   return <div className="demo-stack">
     <h2>Updates</h2>
@@ -44,7 +51,7 @@ export default function UpdatesPreview() {
       setOpen(false)
       setView(event.target.value)
     }}>
-      <option value="core">Browser update</option><option value="desktop">Desktop update</option>
+      <option value="core">Browser update</option><option value="desktop">Desktop update</option><option value="setup">Core setup</option>
     </select></label>
     <p>{view === 'core' ? 'Update Leon from a browser.' : view === 'desktop'
       ? 'One update action prepares the available server and app updates.'
@@ -80,5 +87,18 @@ export default function UpdatesPreview() {
         {['available', ...STAGES, 'reconnecting', 'completed', 'failed'].map((value) => <option key={value}>{value}</option>)}
       </select></label>}
     </UpdateDialog>}
+    {view === 'setup' && <>
+    <h2>Core setup</h2>
+    <label>Setup state <select aria-label="Setup state" value={setupPhase} onChange={(event) => setSetupPhase(event.target.value as SetupPhase)}>
+      {Object.values(SetupPhase).map((value) => <option key={value}>{value}</option>)}
+    </select></label>
+    <label><input type="checkbox" checked={external} onChange={(event) => {
+      setExternal(event.target.checked)
+      setSetupPhase(SetupPhase.Complete)
+    }} />Connect to an already running Core</label>
+    <DesktopSetupView data={setup} pending={false} choosing={false} onStart={() => setSetupPhase(SetupPhase.Running)}
+      onChoose={noop} onCancel={() => setSetupPhase(SetupPhase.Cancelled)} onConnect={noop} onStartup={noop}
+      onLogs={noop} onStop={() => setSetupPhase(SetupPhase.Idle)} />
+    </>}
   </div>
 }
