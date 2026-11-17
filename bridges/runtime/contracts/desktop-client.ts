@@ -26,3 +26,7 @@ export interface DesktopFilesEvent {
   files: DesktopAttachmentFile[]
   issues?: string[]
 }
+
+export const DESKTOP_UPDATES_PATH = '/__desktop/updates/'
+
+export const DESKTOP_UPDATES_META_NAME = 'leon-desktop-updates'

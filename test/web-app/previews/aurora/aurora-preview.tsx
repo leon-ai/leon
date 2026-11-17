@@ -11,6 +11,7 @@ import {
   DataTableWidget, ComparisonWidget
 } from '../../../../aurora/src/v2'
 import { SidebarUpdateButton } from '@/layout/sidebar/sidebar-update-button'
+import { UpdateDialog } from '@/components/update-dialog/update-dialog'
 import { Button as AppButton } from '@/components/button'
 import { Callout } from '@/components/callout/callout'
 import { ArtifactFiles } from '@/components/artifact-attachments/artifact-files'
@@ -30,12 +31,13 @@ import documentURL from '../../../fixtures/documents/attention-is-all-you-need.p
 
 import './aurora-preview.sass'
 import { ConnectionsPreview } from './connection-preview'
+import { UPDATE_FIXTURE } from '../../../fixtures/updates'
 
 const COLLECTIONS = [
   { value: 'component', label: 'Components' }, { value: 'widget', label: 'Widgets' },
   { value: 'connection', label: 'Connections' }, { value: 'generated', label: 'Generated UI' },
   { value: 'answer', label: 'Answer preview' }, { value: 'feed', label: 'Feed' },
-  { value: 'icons', label: 'Icons' }, { value: 'sounds', label: 'Sounds' }, { value: 'files', label: 'Files' }, { value: 'markdown', label: 'Markdown' }
+  { value: 'updates', label: 'Updates' }, { value: 'icons', label: 'Icons' }, { value: 'sounds', label: 'Sounds' }, { value: 'files', label: 'Files' }, { value: 'markdown', label: 'Markdown' }
 ] as const
 
 type GalleryKind = typeof COLLECTIONS[number]['value']
@@ -56,6 +58,7 @@ const FEEDBACK_EXAMPLES = [
 const SEARCH_INDEX = createSearchIndex(AURORA_CATALOG, (entry) => [entry.title, entry.description])
 const GeneratedFrame = lazy(() => import('@/components/aurora-answer/generated/generated-frame'))
 const ChartWidget = lazy(() => import('@/components/aurora-answer/chart-widget'))
+const UpdatesPreview = lazy(() => import('./updates-preview'))
 const FeedPreview = lazy(() => import('./feed-preview'))
 const SoundsPreview = lazy(() => import('./sounds-preview'))
 const IconsPreview = lazy(() => import('./icons-preview'))
@@ -238,6 +241,7 @@ function ButtonDemo() {
       <Button variant="primary" disabled={disabled}>Ready when you are</Button>
       <Button variant="secondary" onClick={() => setDisabled((value) => !value)}>Toggle availability</Button>
       <DropdownDemo />
+      <UpdateDialogDemo />
     </div>
   </div>
 }
@@ -253,6 +257,16 @@ function DropdownDemo() {
     {(open, contentId) => <AppButton iconName="folder" ariaExpanded={open} ariaHasPopup="menu"
       ariaControls={open ? contentId : undefined}>Choose a view</AppButton>}
   </Dropdown>
+}
+
+function UpdateDialogDemo() {
+  const [open, setOpen] = useState(false)
+
+  return <>
+    <Button variant="secondary" onClick={() => setOpen(true)}>Preview release notes</Button>
+    <UpdateDialog check={UPDATE_FIXTURE.check!} open={open} updating={false} onClose={() => setOpen(false)}
+      onAfterClose={() => undefined} onUpdate={() => setOpen(false)} />
+  </>
 }
 
 function InputDropdownDemo() {
@@ -396,7 +410,7 @@ function App() {
   const [narrow, setNarrow] = useState(false)
   const results = searchIndex(SEARCH_INDEX, query).filter(({ item }) => item.kind === kind)
   const searchable = kind === 'component' || kind === 'widget' || kind === 'generated'
-  const content = kind === 'feed' ? <FeedPreview /> : kind === 'files' ? <FilesPreview />
+  const content = kind === 'updates' ? <UpdatesPreview /> : kind === 'feed' ? <FeedPreview /> : kind === 'files' ? <FilesPreview />
     : kind === 'markdown' ? <MarkdownPreview /> : kind === 'icons' ? <IconsPreview /> : kind === 'sounds' ? <SoundsPreview /> : null
 
   return <ToastProvider><VisualPreviewProvider><main className="aurora-gallery">

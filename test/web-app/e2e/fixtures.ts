@@ -9,6 +9,8 @@ import type { ToolCallContents } from '../../../server/src/core/session-manager/
 import type { ConversationSession } from '../../../apps/web/src/data/sessions'
 import type { Workspace, WorkspaceSummary } from '../../../bridges/runtime/contracts/workspace'
 import type { AmbientConditions } from '../../../apps/web/src/data/ambient-conditions'
+import type { UpdateSnapshot } from '../../../bridges/runtime/contracts/updates'
+import { UPDATE_FIXTURE } from '../../fixtures/updates'
 
 const SESSION_COUNT = 3
 const HISTORY_TURNS = 240
@@ -87,6 +89,7 @@ interface UIFixture {
   models: ModelCatalog
   sessions: ConversationSession[]
   workspaces: Workspace[]
+  updates: UpdateSnapshot
   history: Map<string, ConversationRecord[]>
   historyRequests: URL[]
   requests: URL[]
@@ -160,7 +163,7 @@ export const test = base.extend<{ ui: UIFixture }>({
     const ui: UIFixture = {
       models: structuredClone(catalog),
       uploads: [],
-      sessions, workspaces: [], history, historyRequests: [], requests: [], completedRequests: [],
+      sessions, workspaces: [], updates: structuredClone(UPDATE_FIXTURE), history, historyRequests: [], requests: [], completedRequests: [],
       authenticated: true, profile: 'ui-tests', failure: undefined,
       ambient: { mood: 'default', season: 'autumn', solarPhase: 'afternoon', timeZone: 'UTC', weather: null },
       holdHistory: (): (() => void) => holdRequest('history'),
@@ -211,6 +214,12 @@ export const test = base.extend<{ ui: UIFixture }>({
       }
       if (parts.at(-1) === 'ambient') {
         await json(route, { success: true, ambient: ui.ambient })
+        return
+      }
+      if (parts[2] === 'updates') {
+        await json(route, request.method() === 'POST' && parts.at(-1) === 'apply'
+          ? { message: 'This fixture has no installer.' } : ui.updates,
+        request.method() === 'POST' && parts.at(-1) === 'apply' ? 409 : 200)
         return
       }
       if (parts[2] === 'workspaces') {

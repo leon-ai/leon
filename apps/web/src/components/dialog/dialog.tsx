@@ -23,6 +23,7 @@ interface DialogProps {
   actions?: DialogAction[]
   children?: ReactNode
   closeOnOverlayClick?: boolean
+  dismissible?: boolean
   hideFooter?: boolean
   hideHeader?: boolean
   description?: ReactNode
@@ -41,6 +42,7 @@ export function Dialog({
   children,
   centered = false,
   closeOnOverlayClick = true,
+  dismissible = true,
   description,
   footer,
   hideFooter = false,
@@ -97,7 +99,7 @@ export function Dialog({
         return
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && dismissible) {
         if (ownedPopups().length > 0) {
           return
         }
@@ -122,7 +124,7 @@ export function Dialog({
       cancelAnimationFrame(focusFrame)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onClose, open])
+  }, [dismissible, onClose, open])
 
   if (!mounted) {
     return null
@@ -136,7 +138,7 @@ export function Dialog({
         'dialog-overlay-centered': centered
       })}
       onMouseDown={(event) => {
-        if (closeOnOverlayClick && event.target === event.currentTarget) {
+        if (dismissible && closeOnOverlayClick && event.target === event.currentTarget) {
           onClose()
         }
       }}
@@ -158,6 +160,7 @@ export function Dialog({
               iconName="close"
               tone="muted"
               ariaLabel="Close dialog"
+              disabled={!dismissible}
               onClick={onClose}
             />
           </header>
