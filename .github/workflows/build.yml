@@ -4,6 +4,12 @@
 name: Build and tests
 
 on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: JSON array of verification runners
+        type: string
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
   push:
     branches: [master]
   pull_request:
@@ -24,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(inputs.platforms || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
 
     steps:
       - uses: actions/checkout@v7.0.1
