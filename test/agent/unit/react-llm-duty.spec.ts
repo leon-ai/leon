@@ -542,6 +542,116 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it('settles repeated rejected reads and synthesizes without replaying completed work', async () => {
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName, status: 'success', observation: 'Already inspected.',
+      requestedToolInput: JSON.stringify({ query: 'same' })
+    } }))
+    let calls = 0
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Use the inspected result.' }],
+      catalog: createCatalog(), executeFunction, loadAgentSkill: async () => null,
+      callModel: async (messages, _tools, options) => {
+        calls += 1
+        if (options.isFinalizationAttempt) {
+          expect(messages.some((message) => message.content.includes('Repeated unsuccessful operation'))).toBe(true)
+          return { textContent: 'The inspected result is available; no write was performed.' }
+        }
+        return { toolCalls: [toolCall(`repeat-${calls}`, CALLABLE_TOOL_NAME, {
+          [AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]: `Inspection ${calls}`, query: 'same'
+        })] }
+      }
+    })
+
+    expect(calls).toBe(6)
+    expect(executeFunction).toHaveBeenCalledOnce()
+    expect(result.executionHistory).toHaveLength(1)
+    expect(result.transcript.filter((message) => message.role === 'tool')).toHaveLength(5)
+    expect(result.answer).toContain('no write was performed')
+  })
+
+  it('allows a corrected operation after repeated argument rejection', async () => {
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName, status: 'success', observation: 'Corrected lookup completed.'
+    } }))
+    let calls = 0
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Look up the value.' }],
+      catalog: createCatalog(), executeFunction, loadAgentSkill: async () => null,
+      callModel: async () => {
+        calls += 1
+        if (calls <= 3) {
+          return { toolCalls: [toolCall(`invalid-${calls}`, CALLABLE_TOOL_NAME, {})] }
+        }
+        if (calls === 4) {
+          return { toolCalls: [toolCall('corrected', CALLABLE_TOOL_NAME, { query: 'value' })] }
+        }
+        return { textContent: 'The corrected lookup completed.' }
+      }
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(executeFunction).toHaveBeenCalledOnce()
+    expect(result.executionHistory).toHaveLength(1)
+    expect(result.transcript.some((message) => message.content.includes('Repeated unsuccessful operation'))).toBe(true)
+  })
+
+  it('recovers reasoning-only output exhaustion once without carrying the unfinished reasoning forward', async () => {
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ reasoning: 'Repeated private deliberation.', isTruncated: true })
+      .mockResolvedValueOnce({ textContent: 'Here is the completed answer.' })
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Explain this preference.' }],
+      catalog: createCatalog(), callModel,
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({
+      isRecoveryAttempt: true, isOutputRecoveryAttempt: true,
+      isStallRecoveryAttempt: true, isContextRecoveryAttempt: true
+    })
+    expect(JSON.stringify(result.transcript)).not.toContain('Repeated private deliberation.')
+    expect(result.answer).toBe('Here is the completed answer.')
+  })
+
+  it('explains function selection errors and loads the corrected schema without executing it', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([{
+      toolkitId: 'test', toolkitName: 'Test', toolkitDescription: 'Test discovery.',
+      toolId: 'journal', toolName: 'Journal', toolDescription: 'Read and write a journal.'
+    }])
+    coreMocks.getToolFunctions.mockReturnValue({
+      read: { description: 'Read entries.', parameters: { type: 'object', properties: {} } },
+      write: { description: 'Write entries.', parameters: { type: 'object', properties: {} } }
+    })
+    const catalog = buildAgentToolCatalog()
+    const executeFunction = vi.fn()
+    let calls = 0
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Prepare the journal writer.' }],
+      catalog, executeFunction, loadAgentSkill: async () => null,
+      callModel: async (messages, tools) => {
+        calls += 1
+        if (calls === 1) {
+          return { toolCalls: [toolCall('invalid-selection', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test', tool_id: 'journal.write'
+          })] }
+        }
+        if (calls === 2) {
+          expect(messages.at(-1)?.content).toContain('"tool_id":"journal","functions":["journal.write"]')
+          expect(tools.some((tool) => tool.function.name === 'test__journal__write')).toBe(false)
+          return { toolCalls: [toolCall('correct-selection', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test', tool_id: 'journal', functions: ['journal.write']
+          })] }
+        }
+        expect(tools.some((tool) => tool.function.name === 'test__journal__write')).toBe(true)
+        expect(tools.some((tool) => tool.function.name === 'test__journal__read')).toBe(false)
+        return { textContent: 'The writer is ready.' }
+      }
+    })
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
   it('accepts bounded native presentations with safe destinations and complete, aligned data', () => {
     expect(isAuroraSpec(AURORA_PRESENTATION_SPEC)).toBe(true)
     expect(validateGeneratedSurfaces(AURORA_PRESENTATION_SPEC)).toEqual([])
