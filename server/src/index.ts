@@ -239,15 +239,8 @@ async function bootstrap(): Promise<void> {
     LogHelper.error(`Context Manager failed to load: ${e}`)
   }
 
-  // Check for updates on startup and every 24 hours
   if (IS_PRODUCTION_ENV) {
-    Updater.checkForUpdates()
-    setInterval(
-      () => {
-        Updater.checkForUpdates()
-      },
-      1_000 * 3_600 * 24
-    )
+    Updater.start()
   }
 
   // Telemetry events
