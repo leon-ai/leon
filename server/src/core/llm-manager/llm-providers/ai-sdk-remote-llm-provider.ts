@@ -64,9 +64,9 @@ import {
 } from '@/core/llm-manager/provider-compaction'
 import {
   CHARS_PER_TOKEN,
-  AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
-  AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
+  AGENT_MODEL_IMAGE_ESTIMATED_TOKENS
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
+import { resolveOpenAINativeCompactionTriggerTokens } from '@/core/llm-manager/model-context-windows'
 
 type AISDKFlavor =
   | 'openai-responses'
@@ -1051,16 +1051,21 @@ export default class AISDKRemoteLLMProvider {
   private buildOpenAICommonProviderOptions(
     completionParams: CompletionParams
   ): Record<string, unknown> {
+    const compactThreshold = resolveOpenAINativeCompactionTriggerTokens(
+      this.model,
+      completionParams.maxTokens
+    )
+
     return {
       // Configure storage before SDK serialization so encrypted reasoning is included.
       store: false,
       ...(completionParams.dutyType === LLMDuties.ReAct &&
-        !completionParams.disableContextCompaction
+        !completionParams.disableContextCompaction && compactThreshold !== undefined
         ? {
             contextManagement: [
               {
                 type: 'compaction',
-                compactThreshold: AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
+                compactThreshold
               }
             ]
           }

@@ -8,7 +8,8 @@ import { runTurnPhase, TurnPhase } from '../../turn-timing'
 import { AGENT_IMAGE_BATCH_MAX_BYTES, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
-  isLocalLLMProvider
+  isLocalLLMProvider,
+  resolveAgentBudgetContextWindowTokens
 } from '@/core/llm-manager/model-context-windows'
 
 import {
@@ -19,8 +20,6 @@ import {
   AGENT_RECENT_TOOL_IMAGE_LIMIT,
   AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
-  AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
-  AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   CHARS_PER_TOKEN
 } from './agent-constants'
 
@@ -67,34 +66,33 @@ interface CompletedToolExchange {
 }
 
 /**
- * Resolves when deterministic context compaction should begin. Local models
- * follow their configured window while remote providers share a stable trigger.
+ * Leaves a quarter of the endpoint window for generation and estimation error
+ * when Leon manages the context itself.
  */
 export function resolveAgentContextCompactionTriggerTokens(
-  provider: LLMProviders
+  provider: LLMProviders,
+  contextWindowTokens?: number
 ): number {
-  if (!isLocalLLMProvider(provider)) {
-    return AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
-  }
-
   return Math.floor(
-    LOCAL_LLM_CONTEXT_WINDOW_TOKENS * AGENT_CONTEXT_WINDOW_BUDGET_RATIO
+    resolveAgentBudgetContextWindowTokens(provider, contextWindowTokens) *
+      AGENT_CONTEXT_WINDOW_BUDGET_RATIO
   )
 }
 
 /**
- * Returns the smaller target used for one provider context-pressure retry.
+ * Targets half the window at most and makes a meaningful reduction from the
+ * rejected or stalled request when its estimated size is available.
  */
 export function resolveAgentContextRecoveryTriggerTokens(
-  provider: LLMProviders
+  provider: LLMProviders,
+  contextWindowTokens?: number,
+  failedInputTokens?: number
 ): number {
-  if (!isLocalLLMProvider(provider)) {
-    return AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS
-  }
+  const capacity = resolveAgentBudgetContextWindowTokens(provider, contextWindowTokens)
 
-  return Math.floor(
-    LOCAL_LLM_CONTEXT_WINDOW_TOKENS * AGENT_CONTEXT_RECOVERY_BUDGET_RATIO
-  )
+  return Math.max(1, Math.floor(
+    Math.min(capacity, failedInputTokens ?? capacity) * AGENT_CONTEXT_RECOVERY_BUDGET_RATIO
+  ))
 }
 
 /**
@@ -131,7 +129,7 @@ function estimateTokens(value: string): number {
 /**
  * Estimates the complete request, excluding encoded image bytes.
  */
-function estimateAgentInputTokens(
+export function estimateAgentInputTokens(
   transcript: AgentToolTranscriptMessage[],
   systemPrompt: string,
   tools: OpenAITool[]

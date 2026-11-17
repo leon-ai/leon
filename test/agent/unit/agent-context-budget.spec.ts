@@ -567,25 +567,26 @@ describe('agent context budget', () => {
     ).toBe(Math.floor(LOCAL_LLM_CONTEXT_WINDOW_TOKENS * 0.75))
   })
 
-  it('uses a universal 96K trigger for remote providers', () => {
-    expect(
-      resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenAI)
-    ).toBe(96_000)
-    expect(
-      resolveAgentContextCompactionTriggerTokens(LLMProviders.Anthropic)
-    ).toBe(96_000)
-    expect(
-      resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenRouter)
-    ).toBe(96_000)
+  it('scales portable compaction to the endpoint capacity', () => {
+    expect(resolveAgentContextCompactionTriggerTokens(LLMProviders.Anthropic, 200_000))
+      .toBe(150_000)
+    expect(resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenAI, 1_050_000))
+      .toBe(787_500)
+    expect(resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenRouter))
+      .toBe(96_000)
   })
 
-  it('uses a smaller 50% local and 64K remote recovery target', () => {
+  it('scales recovery to the failed request within the endpoint budget', () => {
     expect(
       resolveAgentContextRecoveryTriggerTokens(LLMProviders.LlamaCPP)
     ).toBe(Math.floor(LOCAL_LLM_CONTEXT_WINDOW_TOKENS * 0.5))
     expect(
       resolveAgentContextRecoveryTriggerTokens(LLMProviders.OpenAI)
     ).toBe(64_000)
+    expect(resolveAgentContextRecoveryTriggerTokens(LLMProviders.OpenAI, 1_050_000, 110_000))
+      .toBe(55_000)
+    expect(resolveAgentContextRecoveryTriggerTokens(LLMProviders.Anthropic, 200_000, 300_000))
+      .toBe(100_000)
   })
 
   it('uses the remaining local context capacity for model output', () => {

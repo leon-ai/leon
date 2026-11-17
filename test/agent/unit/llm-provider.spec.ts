@@ -1380,10 +1380,11 @@ describe('LLMProvider', () => {
   })
 
   it.each([
-    { recovers: true, summaries: true },
-    { recovers: false, summaries: true },
-    { recovers: true, summaries: false }
-  ])('retries a reasoning-only stall once with a fresh request (recovers: $recovers, summaries: $summaries)', async ({ recovers, summaries }) => {
+    { recovers: true, summaries: true, recoverWithContext: false },
+    { recovers: false, summaries: true, recoverWithContext: false },
+    { recovers: true, summaries: false, recoverWithContext: false },
+    { recovers: false, summaries: true, recoverWithContext: true }
+  ])('bounds reasoning stall retries (recovers: $recovers, summaries: $summaries, rebuilds context: $recoverWithContext)', async ({ recovers, summaries, recoverWithContext }) => {
     vi.useFakeTimers()
 
     try {
@@ -1415,7 +1416,9 @@ describe('LLMProvider', () => {
       const pending = manager.prompt('Finish the original task.', {
         dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
         timeout: 180_000, maxRetries: 3, remoteProviderErrorRetries: 3,
-        retryInterruptedResponse: true, onAttempt, onToken
+        retryInterruptedResponse: true,
+        recoverReasoningStallWithContext: recoverWithContext,
+        onAttempt, onToken
       })
 
       await vi.advanceTimersByTimeAsync(29_999)
@@ -1424,25 +1427,29 @@ describe('LLMProvider', () => {
       attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
       attempts[0]!.onStreamEvent?.({ type: 'transport-heartbeat' })
       await vi.advanceTimersByTimeAsync(1)
-      expect(attempts).toHaveLength(2)
+      const expectedAttempts = recoverWithContext ? 1 : 2
+      expect(attempts).toHaveLength(expectedAttempts)
       expect(attempts[0]!.signal?.aborted).toBe(true)
-      expect(attempts[1]!.signal).not.toBe(attempts[0]!.signal)
+      if (!recoverWithContext) {
+        expect(attempts[1]!.signal).not.toBe(attempts[0]!.signal)
+      }
       attempts[0]!.onToken?.('Late discarded output.')
-      if (!recovers) {
+      if (!recovers && !recoverWithContext) {
         await vi.advanceTimersByTimeAsync(30_000)
       }
       const result = await pending
 
       expect(result?.output ?? null).toBe(recovers ? 'Recovered answer.' : null)
-      expect(runChatCompletion).toHaveBeenCalledTimes(2)
+      expect(runChatCompletion).toHaveBeenCalledTimes(expectedAttempts)
       expect(runChatCompletion.mock.calls.every(([prompt]) => prompt === 'Finish the original task.')).toBe(true)
       expect(onToken).not.toHaveBeenCalledWith('Late discarded output.')
       expect(onAttempt.mock.calls[1]![0]).toMatchObject({
         outcome: 'LLMStreamIdleTimeout', elapsedMs: 30_000,
         reasoningOnly: true, replaySafe: true,
-        retryDecision: 'retry', retryReason: 'reasoning_only_timeout'
+        retryDecision: recoverWithContext ? 'stop' : 'retry',
+        retryReason: 'reasoning_only_timeout'
       })
-      if (!recovers) {
+      if (!recovers && !recoverWithContext) {
         expect(onAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
           retryDecision: 'stop', retryReason: 'retry_budget_exhausted'
         })

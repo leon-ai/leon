@@ -61,6 +61,7 @@ import {
 import {
   buildBoundedToolObservation,
   prepareAgentModelContext,
+  resolveAgentContextRecoveryTriggerTokens,
   retainRecentToolImages
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import {
@@ -69,7 +70,6 @@ import {
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_REMOTE_PROVIDER_HISTORY_LOGS,
-  AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   CHARS_PER_TOKEN,
   AGENT_MODEL_RESPONSE_TIMEOUT_MS,
   AGENT_COMPLETION_REVIEW_TIMEOUT_MS,
@@ -1006,6 +1006,8 @@ describe('continuous agent loop', () => {
   })
 
   it.each([
+    { recovers: true, retryReason: ProviderRetryReason.ReasoningTimeout, reasoningOnly: true },
+    { recovers: false, retryReason: ProviderRetryReason.ReasoningTimeout, reasoningOnly: true },
     { recovers: true, retryReason: ProviderRetryReason.Exhausted, reasoningOnly: true },
     { recovers: false, retryReason: ProviderRetryReason.Exhausted, reasoningOnly: true },
     { recovers: true, retryReason: ProviderRetryReason.Output, reasoningOnly: false },
@@ -5174,6 +5176,7 @@ describe('agent automatic compaction', () => {
       lastResultCharacters: 300_000, summaryAvailable: false
     }
   ])('fits large tool results when summaries cannot reduce them ($exchanges exchanges, summary available: $summaryAvailable)', async ({ exchanges, resultCharacters, lastResultCharacters, summaryAvailable }) => {
+    const recoveryTarget = resolveAgentContextRecoveryTriggerTokens(LLMProviders.OpenAI)
     vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
       provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
     })
@@ -5189,7 +5192,8 @@ describe('agent automatic compaction', () => {
     }
     const duty = new ReActLLMDuty({ input: 'Report the verified receipt.' })
     Object.assign(duty, {
-      automaticCompactionFailed: true, continuationSummaryFailed: !summaryAvailable, writeAgentPromptLog: vi.fn()
+      automaticCompactionFailed: true, continuationSummaryFailed: !summaryAvailable,
+      rejectedContextBudgetTokens: recoveryTarget, writeAgentPromptLog: vi.fn()
     })
     coreMocks.prompt.mockImplementation(async (history, params) => ({
       output: params.usagePurpose === InferencePurpose.ContextCompaction
@@ -5212,9 +5216,9 @@ describe('agent automatic compaction', () => {
     expect(coreMocks.prompt).toHaveBeenCalledTimes(summaryAvailable ? 2 : 1)
     const request = coreMocks.prompt.mock.calls.at(-1)![0] as AgentToolTranscriptMessage[]
     expect(JSON.stringify(request).length).toBeLessThan(
-      AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN
+      recoveryTarget * CHARS_PER_TOKEN
     )
-    if (lastResultCharacters < AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN) {
+    if (lastResultCharacters < recoveryTarget * CHARS_PER_TOKEN) {
       expect(request.at(-1)).toEqual(before.at(-1))
     }
     expect(JSON.stringify(request)).toContain('/tmp/receipt.log')
@@ -5222,7 +5226,38 @@ describe('agent automatic compaction', () => {
     expect(request[0]?.content).toBe(before[0]?.content)
   })
 
+  it('recovers a short stalled request with its instructions and checkpoint intact', async () => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+    const duty = new ReActLLMDuty({ input: 'Report the verified receipt.' })
+    Object.assign(duty, {
+      lastDispatchedInputTokens: 100, continuationSummaryFailed: true, writeAgentPromptLog: vi.fn()
+    })
+    coreMocks.prompt.mockResolvedValueOnce({ output: 'Verified release-42.' })
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Report the verified receipt.' }
+    ]
+    await expect(duty['callAgentModel'](transcript, 'Follow the request.', [], {
+      isRecoveryAttempt: true, isContextRecoveryAttempt: true, isStallRecoveryAttempt: true
+    }, {
+      originalInput: 'Report the verified receipt.',
+      trackedSteps: [{ label: 'Read receipt', status: 'completed', details: 'Verified release-42.' }],
+      executionHistory: [], loadedToolkitIds: [], activeSkillId: null
+    })).resolves.toMatchObject({ textContent: 'Verified release-42.' })
+
+    expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    const [history, params] = coreMocks.prompt.mock.calls[0]!
+    expect(JSON.stringify(history)).toContain('Verified release-42.')
+    expect(params).toMatchObject({
+      responseTransport: 'http', systemPrompt: 'Follow the request.'
+    })
+  })
+
   it('stops irreducible context without repeating the same preparation or losing its evidence', async () => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.OpenAI, model: 'uncatalogued-model'
+    })
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: `Required evidence: ${'x'.repeat(500_000)}` }
     ]
@@ -6718,7 +6753,7 @@ describe('model response status', () => {
     })
     const attempts: { params: CompletionParams, prompt: string }[] = []
     const sourceCount = 10
-    const stalledAttempts = output === 'reasoning' ? 2 : 1
+    const stalledAttempts = 1
     let requestedSources = 0
     const runChatCompletion = vi.fn((history, params: CompletionParams) => {
       attempts.push({ params, prompt: JSON.stringify(history) })
@@ -6805,14 +6840,14 @@ describe('model response status', () => {
         }
       )
     })
-    await vi.advanceTimersByTimeAsync(output === 'reasoning' ? 180_001 : 30_001)
+    await vi.advanceTimersByTimeAsync(30_001)
     const result = await pending
 
     expect(result.intent).toBe('answer')
     expect(result.answer).toContain('release-42')
     const summaries = attempts.filter(({ params }) => params.usagePurpose === InferencePurpose.ContextCompaction)
-    expect(summaries.length).toBeGreaterThan(0)
-    expect(attempts).toHaveLength(sourceCount + summaries.length + stalledAttempts + 2)
+    expect(summaries).toHaveLength(0)
+    expect(attempts).toHaveLength(sourceCount + stalledAttempts + 2)
     expect(attempts[stalledAttempts]?.params).toMatchObject({
       responseTransport: 'http', reasoningEffort: 'high', maxRetries: 0,
       remoteProviderErrorRetries: 0, connectionErrorRetries: 0, disableContextCompaction: true
@@ -6824,11 +6859,10 @@ describe('model response status', () => {
     expect(executeFunction).toHaveBeenCalledTimes(sourceCount)
     expect(result.executionHistory).toHaveLength(sourceCount + 1)
     expect(result.executionHistory[0]).toEqual(executionHistory[0])
-    for (const attempt of attempts.slice(stalledAttempts).filter(({ params }) => params.usagePurpose !== InferencePurpose.ContextCompaction)) {
-      expect(attempt.prompt.length).toBeLessThan(
-        AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS * CHARS_PER_TOKEN
-      )
-    }
+    const followupAttempts = attempts.slice(stalledAttempts + 1).filter(({ params }) =>
+      params.usagePurpose !== InferencePurpose.ContextCompaction
+    )
+    expect(followupAttempts.some(({ prompt }) => prompt.length > attempts[0]!.prompt.length)).toBe(true)
     expect(attempts.slice(0, stalledAttempts).every(({ params }) => params.signal?.aborted)).toBe(true)
     const emitted = coreMocks.emitToChatClients.mock.calls
       .filter(([event]) => event === 'llm-token')

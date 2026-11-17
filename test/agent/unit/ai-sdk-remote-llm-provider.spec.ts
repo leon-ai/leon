@@ -414,7 +414,7 @@ describe('AISDKRemoteLLMProvider', () => {
     const context = normalized.compactionContext!
     const body = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
 
-    expect(body.context_management).toEqual([{ type: 'compaction', compact_threshold: 96_000 }])
+    expect(body.context_management).toEqual([{ type: 'compaction', compact_threshold: 945_000 }])
     expect(body.store).toBe(false)
     expect(context.output).toEqual(output.slice(1))
     expect(context.sourceTranscript[0]).toEqual(transcript[0])
@@ -534,6 +534,31 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(JSON.parse(websocketMocks.fetch.mock.calls[0]![1].body).context_management).toBeUndefined()
     provider.dispose()
+  })
+
+  it.each([
+    { model: 'gpt-5.4-mini', maxTokens: undefined, expected: 360_000 },
+    { model: 'gpt-6.1-sol', maxTokens: 128_000, expected: 922_000 },
+    { model: 'uncatalogued-model', maxTokens: undefined, expected: undefined }
+  ])('uses the endpoint window and output allowance for native compaction ($model)', async ({ model, maxTokens, expected }) => {
+    websocketMocks.fetch.mockResolvedValueOnce(Response.json({
+      id: 'resp', created_at: 1, model, status: 'completed',
+      output: [], usage: { input_tokens: 100, output_tokens: 0, total_tokens: 100 }
+    }))
+    const provider = new OpenAILLMProvider({ ...TARGET, provider: LLMProviders.OpenAI, model })
+
+    try {
+      await provider.runChatCompletion([{ role: 'user', content: 'Continue.' }], {
+        ...PARAMS, shouldStream: false, maxTokens
+      })
+      const body = JSON.parse(websocketMocks.fetch.mock.calls[0]![1].body)
+      expect(body.context_management).toEqual(expected === undefined
+        ? undefined
+        : [{ type: 'compaction', compact_threshold: expected }]
+      )
+    } finally {
+      provider.dispose()
+    }
   })
 
   it.each(['connection', 'legacy endpoint', 'workspace'])('restores source evidence when compaction belongs to a different %s', async (difference) => {

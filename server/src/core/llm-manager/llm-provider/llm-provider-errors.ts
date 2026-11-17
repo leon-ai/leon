@@ -563,6 +563,10 @@ export function prepareCompletionRetry(
     )
   }
   if (canRetryReasoningTimeout) {
+    if (completionParams.recoverReasoningStallWithContext) {
+      return stop(ProviderRetryReason.ReasoningTimeout)
+    }
+
     if (remainingRetries <= 0 || remainingProviderRetries <= 0) {
       return stop(ProviderRetryReason.Exhausted)
     }

@@ -434,6 +434,10 @@ export interface CompletionParams {
    */
   retryInterruptedResponse?: boolean
   /**
+   * Lets the caller rebuild context before retrying a replay-safe reasoning stall.
+   */
+  recoverReasoningStallWithContext?: boolean
+  /**
    * Reports each connection retry before waiting, without another model call.
    */
   onConnectionRetry?: (notice: {
