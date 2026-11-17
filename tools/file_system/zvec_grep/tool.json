@@ -1,9 +1,9 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "$schema": "../../../schemas/tool-schemas/tool.json",
   "tool_id": "zvec_grep",
   "toolkit_id": "file_system",
-  "name": "Workspace search",
+  "name": "zvec-grep",
   "description": "Search local code, project notes and text resources by meaning and keywords, with source locations. Defaults to Leon's own codebase.",
   "icon_name": "file-search-line",
   "distribution": "built-in",
