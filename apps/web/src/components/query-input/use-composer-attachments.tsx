@@ -7,11 +7,21 @@ import {
   OWNER_ATTACHMENT_MAX_COUNT, getOwnerAttachmentFormat, getOwnerAttachmentSizeLimit
 } from '../../../../../server/src/core/owner-attachment-contract'
 import { AttachmentDropZone, AttachmentDropPhase } from './attachment-drop-zone'
+import { DESKTOP_FILES_EVENT, type DesktopAttachmentFile, type DesktopFilesEvent } from '../../../../../bridges/runtime/contracts/desktop-client'
+import { isDesktopAttachmentFile, releaseDesktopAttachment } from '@/data/desktop-attachments'
 import { MAXIMUM_ATTACHMENT_ENTRIES, getDroppedAttachmentEntries, readDroppedAttachmentFiles } from './dropped-attachment-files'
 
 const MAXIMUM_DISPLAYED_ISSUES = 5
 
 export type ComposerAttachment = OwnerAttachmentDraft
+
+function releaseAttachment(item: ComposerAttachment): void {
+  if (isDesktopAttachmentFile(item.file)) {
+    releaseDesktopAttachment(item.file)
+  } else {
+    URL.revokeObjectURL(item.url)
+  }
+}
 
 /**
  * Keeps local files and object URLs within one composer's lifetime. Native file
@@ -28,7 +38,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
 
   const clear = useCallback((): void => {
     for (const item of itemsRef.current) {
-      URL.revokeObjectURL(item.url)
+      releaseAttachment(item)
     }
     itemsRef.current = []
     setItems([])
@@ -38,7 +48,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
 
   useEffect(() => () => {
     for (const item of itemsRef.current) {
-      URL.revokeObjectURL(item.url)
+      releaseAttachment(item)
     }
     // Submitted mutations can finish after navigation; they must not retain
     // or update the previous composer's file previews.
@@ -55,7 +65,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
     }
   }, [showToast])
 
-  const add = useCallback((files: Iterable<File>, issues?: Set<string>): number => {
+  const add = useCallback((files: Iterable<File | DesktopAttachmentFile>, issues?: Set<string>): number => {
     if (disabled) {
       return 0
     }
@@ -76,7 +86,8 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
         errors.add(`I can attach up to ${OWNER_ATTACHMENT_MAX_COUNT} files per message.`)
         break
       }
-      const format = getOwnerAttachmentFormat(file.name, file.type)
+      const native = !(file instanceof File)
+      const format = getOwnerAttachmentFormat(file.name, native ? '' : file.type)
       if (!format) {
         errors.add(`I can’t attach ${file.name}: this file type is not supported.`)
         continue
@@ -88,8 +99,8 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       }
       // Browser MIME detection can be missing or use aliases. Give local media
       // previews the same canonical type that the upload validator will inspect.
-      const preview = file.slice(0, file.size, format.mediaType)
-      next.push({ id: crypto.randomUUID(), file, filename: file.name, mediaType: format.mediaType, url: URL.createObjectURL(preview) })
+      const url = native ? file.url : URL.createObjectURL(file.slice(0, file.size, format.mediaType))
+      next.push({ id: crypto.randomUUID(), file, filename: file.name, mediaType: format.mediaType, url })
     }
     if (next.length !== previousCount) {
       itemsRef.current = next
@@ -101,6 +112,47 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
 
     return next.length - previousCount
   }, [disabled, reportIssues])
+
+  useEffect(() => {
+    if (disabled) {
+      return undefined
+    }
+    // The composer's lifetime scopes these handlers to session/new-session
+    // pages. File paste works with focus anywhere on that page; text stays native.
+    const paste = (event: ClipboardEvent): void => {
+      if (!document.hidden && !event.defaultPrevented && event.clipboardData?.files.length) {
+        event.preventDefault()
+        add(event.clipboardData.files)
+      }
+    }
+    const nativePaste = (event: Event): void => {
+      const detail = (event as CustomEvent<DesktopFilesEvent>).detail
+      if (!detail || !Array.isArray(detail.files)) {
+        return
+      }
+      const files = detail.files.filter(isDesktopAttachmentFile)
+      const issues = new Set(detail.issues ?? [])
+      if (document.hidden) {
+        files.forEach(releaseDesktopAttachment)
+        return
+      }
+      add(files, issues)
+      const accepted = new Set(itemsRef.current.map((item) => item.file))
+      for (const file of files) {
+        if (!accepted.has(file)) {
+          releaseDesktopAttachment(file)
+        }
+      }
+      reportIssues(issues)
+    }
+    document.addEventListener('paste', paste)
+    window.addEventListener(DESKTOP_FILES_EVENT, nativePaste)
+
+    return () => {
+      document.removeEventListener('paste', paste)
+      window.removeEventListener(DESKTOP_FILES_EVENT, nativePaste)
+    }
+  }, [add, disabled, reportIssues])
 
   useEffect(() => {
     const target = container.current?.closest<HTMLElement>('.app-main')
@@ -217,7 +269,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
   function remove(id: string): void {
     const item = itemsRef.current.find((entry) => entry.id === id)
     if (item) {
-      URL.revokeObjectURL(item.url)
+      releaseAttachment(item)
     }
     itemsRef.current = itemsRef.current.filter((entry) => entry.id !== id)
     setItems(itemsRef.current)

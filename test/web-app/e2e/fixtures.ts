@@ -414,7 +414,9 @@ export const test = base.extend<{ ui: UIFixture }>({
       }
       // Context disposal cancels remaining streaming requests. Teardown must not
       // wait for a live or already-cancelled route handler to receive a response.
-      await page.unrouteAll({ behavior: 'ignoreErrors' })
+      if (!page.isClosed()) {
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
+      }
     }
   }
 })

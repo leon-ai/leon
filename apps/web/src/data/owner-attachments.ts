@@ -2,10 +2,12 @@ import type { Artifact } from '../../../../server/src/core/artifacts/artifact-ty
 import { requestAPI } from './api'
 import { queryClient } from '@/query-client'
 import { PROFILE_AUTH_QUERY_KEY } from './profile-query'
+import type { DesktopAttachmentFile } from '../../../../bridges/runtime/contracts/desktop-client'
+import { isDesktopAttachmentFile, uploadDesktopAttachment } from './desktop-attachments'
 
 export interface OwnerAttachmentDraft {
   id: string
-  file: File
+  file: File | DesktopAttachmentFile
   filename: string
   mediaType: string
   url: string
@@ -36,7 +38,7 @@ export interface AttachmentUploadProgress {
 export type AttachmentUploadListener = (id: string, progress: AttachmentUploadProgress) => void
 
 // File identity survives retries; weak keys release upload receipts with drafts.
-const uploadedFiles = new WeakMap<File, Map<string, Artifact>>()
+const uploadedFiles = new WeakMap<File | DesktopAttachmentFile, Map<string, Artifact>>()
 const submissionCleanup = new WeakMap<SendMessageInput, () => void>()
 
 /**
@@ -100,14 +102,17 @@ export async function uploadOwnerAttachments(profile: string, sessionId: string,
     if (!attachment) {
       const params = new URLSearchParams({ filename: draft.filename, media_type: draft.mediaType, upload_id: draft.id })
       onProgress?.(draft.id, { state: AttachmentUploadState.Uploading, loaded: 0, total: draft.file.size })
+      const progress = (loaded: number): void => onProgress?.(draft.id, {
+        state: loaded >= draft.file.size ? AttachmentUploadState.Processing : AttachmentUploadState.Uploading,
+        loaded: Math.min(loaded, draft.file.size), total: draft.file.size
+      })
       try {
-        const result = await requestAPI<{ attachment: Artifact }>(`sessions/${encodeURIComponent(sessionId)}/attachments?${params}`, {
+        const result = isDesktopAttachmentFile(draft.file) ? { attachment: await uploadDesktopAttachment(
+          draft.file, profile, sessionId, progress, signal) }
+          : await requestAPI<{ attachment: Artifact }>(`sessions/${encodeURIComponent(sessionId)}/attachments?${params}`, {
           method: 'POST', body: draft.file, headers: { 'Content-Type': 'application/octet-stream' },
           ...(signal ? { signal } : {}),
-          onUploadProgress: (loaded) => onProgress?.(draft.id, {
-            state: loaded >= draft.file.size ? AttachmentUploadState.Processing : AttachmentUploadState.Uploading,
-            loaded: Math.min(loaded, draft.file.size), total: draft.file.size
-          })
+          onUploadProgress: progress
         })
         assertSendMessageActive(profile, signal)
         attachment = result.attachment
