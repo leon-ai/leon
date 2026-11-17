@@ -5,6 +5,12 @@ import fs from 'node:fs'
 import { getUpdateStatePath } from './update/paths.js'
 import { LEON_UPDATE_EXIT_CODE, UpdatePhase } from '../bridges/runtime/contracts/update-status.js'
 
+if (process.env.LEON_RUNTIME_HOME) {
+  const { runRuntime } = await import('./run-runtime.js')
+  await runRuntime(process.env.LEON_RUNTIME_HOME)
+  process.exit(0)
+}
+
 const DEFAULT_LEON_HOME_DIRNAME = '.leon'
 // Must match server/src/core/server-lifecycle.ts.
 const LEON_RESTART_EXIT_CODE = 77

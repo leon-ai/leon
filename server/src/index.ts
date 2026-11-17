@@ -1,3 +1,4 @@
+import { CORE_READY_EVENT } from '@@/bridges/runtime/contracts/update-status.js'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
@@ -188,6 +189,7 @@ async function bootstrap(): Promise<void> {
     // Start the HTTP server before heavyweight LLM startup so the client can
     // render the initialization UI while local providers continue booting.
     await HTTP_SERVER.init()
+    process.send?.({ kind: CORE_READY_EVENT, version: process.env['npm_package_version'] })
   } catch (e) {
     LogHelper.error(`HTTP server failed to init: ${e}`)
   }
