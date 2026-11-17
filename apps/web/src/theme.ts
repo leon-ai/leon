@@ -1,13 +1,10 @@
 import { flushSync } from 'react-dom'
+import { WebPreferenceKey, saveWebPreference } from '@/utils/web-preferences'
 import { ACCENT_COLORS, type AccentColor } from '../../../bridges/runtime/contracts/workspace'
 
 const DEFAULT_THEME = 'dark'
 const DEFAULT_SIDEBAR_EXPANDED = true
 const DEFAULT_SOUNDS_ENABLED = true
-const SIDEBAR_EXPANDED_STORAGE_KEY = 'leon.web-app.sidebar-expanded'
-const SOUNDS_ENABLED_STORAGE_KEY = 'leon.web-app.sounds-enabled'
-const THEME_STORAGE_KEY = 'leon.web-app.theme'
-const ACCENT_STORAGE_KEY = 'leon.web-app.accent'
 const THEMES = ['dark', 'light'] as const
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 export const THEME_TRANSITION_ATTRIBUTE = 'data-theme-transition'
@@ -43,8 +40,8 @@ function getStoredBoolean(key: string, defaultValue: boolean): boolean {
   return value === 'true'
 }
 
-function saveBoolean(key: string, value: boolean): void {
-  window.localStorage.setItem(key, String(value))
+function saveBoolean(key: WebPreferenceKey, value: boolean): void {
+  saveWebPreference(key, String(value))
 }
 
 /**
@@ -168,7 +165,7 @@ export async function applyTheme(theme: Theme): Promise<boolean> {
 }
 
 export function getStoredTheme(): Theme {
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+  const storedTheme = window.localStorage.getItem(WebPreferenceKey.Theme)
 
   return isTheme(storedTheme) ? storedTheme : DEFAULT_THEME
 }
@@ -202,7 +199,7 @@ export function applyStoredTheme(): void {
 export function saveTheme(theme: Theme): void {
   void applyTheme(theme).then((applied) => {
     if (applied) {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+      saveWebPreference(WebPreferenceKey.Theme, theme)
     }
   })
 }
@@ -217,18 +214,18 @@ export function toggleTheme(): void {
 }
 
 export function getStoredSoundsEnabled(): boolean {
-  return getStoredBoolean(SOUNDS_ENABLED_STORAGE_KEY, DEFAULT_SOUNDS_ENABLED)
+  return getStoredBoolean(WebPreferenceKey.SoundsEnabled, DEFAULT_SOUNDS_ENABLED)
 }
 
 export function saveSoundsEnabled(soundsEnabled: boolean): void {
-  saveBoolean(SOUNDS_ENABLED_STORAGE_KEY, soundsEnabled)
+  saveBoolean(WebPreferenceKey.SoundsEnabled, soundsEnabled)
 }
 
 /**
  * Reads only supported palette identities, keeping arbitrary CSS out of storage.
  */
 export function getStoredAccent(): AccentColor {
-  const value = window.localStorage.getItem(ACCENT_STORAGE_KEY)
+  const value = window.localStorage.getItem(WebPreferenceKey.Accent)
 
   return ACCENT_COLORS.find((color) => color.id === value)?.id ?? 'blue'
 }
@@ -237,17 +234,17 @@ export function getStoredAccent(): AccentColor {
  * Applies one shared accent palette to settings and workspace controls.
  */
 export function saveAccent(color: AccentColor): void {
-  window.localStorage.setItem(ACCENT_STORAGE_KEY, color)
+  saveWebPreference(WebPreferenceKey.Accent, color)
   document.documentElement.dataset['accent'] = color
 }
 
 export function getStoredSidebarExpanded(): boolean {
   return getStoredBoolean(
-    SIDEBAR_EXPANDED_STORAGE_KEY,
+    WebPreferenceKey.SidebarExpanded,
     DEFAULT_SIDEBAR_EXPANDED
   )
 }
 
 export function saveSidebarExpanded(sidebarExpanded: boolean): void {
-  saveBoolean(SIDEBAR_EXPANDED_STORAGE_KEY, sidebarExpanded)
+  saveBoolean(WebPreferenceKey.SidebarExpanded, sidebarExpanded)
 }
