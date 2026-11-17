@@ -194,6 +194,9 @@ importers:
       remixicon:
         specifier: 4.9.1
         version: 4.9.1
+      semver:
+        specifier: 7.5.4
+        version: 7.5.4
       shiki:
         specifier: 4.5.0
         version: 4.5.0
@@ -306,9 +309,6 @@ importers:
       sass:
         specifier: 1.100.0
         version: 1.100.0
-      semver:
-        specifier: 7.5.4
-        version: 7.5.4
       shx:
         specifier: 0.4.0
         version: 0.4.0
