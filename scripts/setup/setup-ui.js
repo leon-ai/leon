@@ -1,5 +1,7 @@
 import { createConsola } from 'consola'
 
+import { reportSetupProgress } from './setup-progress'
+
 export const setupConsola = createConsola({
   fancy: true,
   formatOptions: {
@@ -24,6 +26,7 @@ function underline(text) {
  */
 export class SetupUI {
   static section(title) {
+    reportSetupProgress({ phase: 'section', label: title })
     setupConsola.box(title)
   }
 

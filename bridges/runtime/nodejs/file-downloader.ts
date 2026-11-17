@@ -25,6 +25,7 @@ const DOWNLOAD_PROGRESS_SPINNER_FRAMES = [
   '⣷'
 ]
 const DOWNLOAD_PROGRESS_SPINNER_INTERVAL_MS = 80
+const SETUP_DOWNLOAD_PROGRESS_DATA_EVENT = 'leon:setup-download-progress:data'
 const SETUP_DOWNLOAD_PROGRESS_START_EVENT = 'leon:setup-download-progress:start'
 const SETUP_DOWNLOAD_PROGRESS_END_EVENT = 'leon:setup-download-progress:end'
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
@@ -402,6 +403,9 @@ export class FileDownloader {
 
       if (options.onProgress) {
         options.onProgress(progress)
+      }
+      if (process.listenerCount(SETUP_DOWNLOAD_PROGRESS_DATA_EVENT) > 0) {
+        process.emit(SETUP_DOWNLOAD_PROGRESS_DATA_EVENT, { fileName, ...progress })
       }
 
       if (!options.cliProgress) {

@@ -33,6 +33,12 @@ function openWindowsConsoleStdio() {
 // non-interactive contexts there may be no terminal, so setup falls back to the
 // inherited stdio and keeps its existing non-interactive behavior.
 function getTTYStdio() {
+  if (
+    process.env.LEON_SETUP_UPDATE === 'true' ||
+    process.env.LEON_SETUP_PROGRESS === 'json'
+  ) {
+    return null
+  }
   if (process.platform === 'win32') {
     return openWindowsConsoleStdio()
   }
@@ -69,7 +75,7 @@ async function runSetup() {
         cwd: process.cwd(),
         env: process.env,
         stdio: ttyStdio || 'inherit',
-        windowsHide: false
+        windowsHide: process.env.LEON_SETUP_PROGRESS === 'json'
       })
 
       child.once('error', reject)
