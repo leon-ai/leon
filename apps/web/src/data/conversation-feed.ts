@@ -151,7 +151,7 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
   return {
     id: call.id,
     toolCallTitle: title && title !== call.name ? title : '',
-    toolkitName: call.toolkitName ?? parts[0] ?? '',
+    toolkitId: parts[0] ?? '',
     toolName: call.toolName ?? parts[1] ?? '',
     functionName: parts.at(-1) ?? call.name,
     toolIconName: call.toolIconName ?? 'tools-line',

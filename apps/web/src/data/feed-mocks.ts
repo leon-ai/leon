@@ -25,7 +25,7 @@ interface ToolCallOptions {
   output?: JsonValue
   status: FeedToolCallStatus
   toolCallTitle: string
-  toolkitName: string
+  toolkitId: string
   toolName: string
   toolIconName: string
 }
@@ -65,14 +65,14 @@ function createToolCall({
   output,
   status,
   toolCallTitle,
-  toolkitName,
+  toolkitId,
   toolName,
   toolIconName
 }: ToolCallOptions): FeedToolCall {
   return {
     id: window.crypto.randomUUID(),
     toolCallTitle,
-    toolkitName,
+    toolkitId,
     toolName,
     toolIconName,
     functionName,
@@ -86,7 +86,7 @@ function createToolCall({
 function createFileReadToolCall(): FeedToolCall {
   return createToolCall({
     toolCallTitle: 'Read Ghostty configuration',
-    toolkitName: 'Operating System Control',
+    toolkitId: 'file_system',
     toolName: 'File',
     toolIconName: 'file-text-line',
     functionName: 'read',
@@ -111,8 +111,8 @@ function createFileReadToolCall(): FeedToolCall {
 function createSearchToolCall(): FeedToolCall {
   return createToolCall({
     toolCallTitle: 'Check Ghostty theme syntax',
-    toolkitName: 'Search & Web',
-    toolName: 'Hosted LLM Search',
+    toolkitId: 'search_web',
+    toolName: 'hosted',
     toolIconName: 'global-line',
     functionName: 'searchWeb',
     status: 'success',
@@ -143,7 +143,7 @@ function createShellToolCall(
 
   return createToolCall({
     toolCallTitle,
-    toolkitName: 'Operating System Control',
+    toolkitId: 'operating_system_control',
     toolName: 'Shell',
     toolIconName: 'terminal-line',
     functionName: 'executeCommand',

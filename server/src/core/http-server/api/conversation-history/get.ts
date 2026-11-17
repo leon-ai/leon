@@ -65,7 +65,7 @@ export const getConversationHistory: FastifyPluginAsync<APIOptions> = async (
           {
             supportsWidgets,
             source: 'conversation_history',
-            resolveToolIconNames: (qualifiedName) => {
+            resolveToolDisplay: (qualifiedName) => {
               const [toolkitId, toolId] = qualifiedName.split('.')
               if (!toolkitId || !toolId) {
                 return null
@@ -79,6 +79,7 @@ export const getConversationHistory: FastifyPluginAsync<APIOptions> = async (
               return resolvedTool
                 ? {
                     ...(toolLogo ? { toolLogo } : {}),
+                    toolName: resolvedTool.toolName,
                     toolkitIconName: resolvedTool.toolkitIconName,
                     toolIconName: resolvedTool.toolIconName
                   }

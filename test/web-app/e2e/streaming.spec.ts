@@ -138,7 +138,7 @@ for (const legacy of [false, true]) {
       contentType: 'image/svg+xml', path: 'tools/communication/gmail/logo.svg'
     }))
     const tool = { id: 'rich-search', name: 'search_web.hosted.searchWeb', toolCallTitle: 'Read useful guidance',
-      toolLogo: logo,
+      toolkitName: 'Search & Web', toolName: 'hosted', toolLogo: logo,
       status: 'running' as const, input: { query: 'Useful guidance' },
       output: { output: text, format: 'markdown' }, commandOutput: text }
     const saved: ConversationRecord = {
@@ -153,7 +153,10 @@ for (const legacy of [false, true]) {
       turn_id: 'rich-search-turn', response_id: responseId, created_at: Date.now()
     }])
     await emit('turn_status', { status: 'accepted' })
-    await emit('tool_call', { tool_call: { ...tool, tool_logo: logo, tool_call_title: tool.toolCallTitle, command_output: text } })
+    const toolMetadata = { toolkit_name: tool.toolkitName, tool_name: tool.toolName,
+      tool_logo: logo, tool_call_title: tool.toolCallTitle }
+    const toolPath = 'search_web > hosted > searchWeb()'
+    await emit('tool_call', { tool_call: { ...tool, ...toolMetadata, command_output: text } })
     const call = page.locator('.tool-call').filter({ hasText: 'Read useful guidance' })
     const revealTool = async (): Promise<void> => {
       const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true }).last()
@@ -165,6 +168,7 @@ for (const legacy of [false, true]) {
       if (await toggle.getAttribute('aria-expanded') === 'false') {
         await toggle.click()
       }
+      await expect(call.locator('.activity-details-title')).toHaveText(toolPath)
       await expect(call.locator('.activity-wave-content .package-icon-mask')).toHaveAttribute('data-logo-mask', LogoMaskMode.Alpha)
     }
     await revealTool()
@@ -176,13 +180,14 @@ for (const legacy of [false, true]) {
       result: { content: text, sources, ...(legacy ? {} : { format: 'markdown' }) }
     }, commandOutput: `Searching the web...\nSource: https://example.com/guide\n${text}` }
     saved.agentResponseTrace!.toolCalls = [finished]
-    await emit('tool_call', { tool_call: { ...finished, tool_call_title: tool.toolCallTitle, command_output: finished.commandOutput } })
+    await emit('tool_call', { tool_call: { ...finished, ...toolMetadata, command_output: finished.commandOutput } })
     await revealTool()
     await expect(preview.getByRole('heading')).toHaveText('A useful guide')
     await expect(preview).not.toContainText('Source:')
     await expect(preview).not.toContainText('Searching the web...')
     await call.getByRole('button', { name: 'View details', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: tool.toolCallTitle, exact: true })
+    await expect(dialog.locator('.activity-details-path')).toHaveText(toolPath)
     await expect(dialog.getByRole('region', { name: 'Output', exact: true }).getByRole('table')).toContainText('Take your time')
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await dialog.getByRole('button', { name: 'Copy output', exact: true }).click()

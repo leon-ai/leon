@@ -81,10 +81,10 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
   const isBackground = execution && typeof execution === 'object' &&
     !Array.isArray(execution) && execution['state'] === 'running'
   const technicalTitle = [
-    toolCall.toolkitName,
+    toolCall.toolkitId,
     toolCall.toolName,
-    formatFunctionName(toolCall.functionName)
-  ].join(' • ')
+    `${toolCall.functionName}()`
+  ].join(' > ')
   const openDetails = useOpenToolDetails(toolCall, technicalTitle)
 
   return (
