@@ -28,6 +28,9 @@ export default async function setupPreferences(
     if (process.env.LEON_SETUP_UPDATE === 'true') {
       return { ...defaultPreferences, setupLocalAI: existingLLMChoice.setupLocalAI || localAISetupState.isInstalled }
     }
+    if (process.env.IS_DOCKER !== 'true' && process.env.CI !== 'true' && process.env.IS_GITHUB_ACTIONS !== 'true') {
+      SetupUI.info('I cannot ask setup questions without interactive input and output. To choose Local AI and connections, run node node_modules/tsx/dist/cli.mjs scripts/setup/setup.js directly in an interactive terminal.')
+    }
     if (!localAICapability.canInstallLocalAI) {
       SetupUI.info(
         'This computer is not a good fit for local AI, so I will set up the essentials.'

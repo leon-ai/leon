@@ -197,7 +197,6 @@ async function bootstrap(): Promise<void> {
   // Start the socket server as early as possible so init status events can
   // flow to the client while the rest of Leon keeps booting.
   await SOCKET_SERVER.init()
-  PULSE_MANAGER.start()
 
   let isLLMProviderReady = false
 
@@ -210,6 +209,7 @@ async function bootstrap(): Promise<void> {
   if (isLLMProviderReady) {
     try {
       await LLM_MANAGER.init()
+      PULSE_MANAGER.start()
     } catch (e) {
       LogHelper.error(`LLM Manager failed to init: ${e}`)
     }

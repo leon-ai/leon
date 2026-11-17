@@ -42,6 +42,21 @@ afterAll(() => {
 })
 
 describe('setup preferences', () => {
+  it('explains missing terminal input without silently selecting optional downloads', async () => {
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true })
+    vi.stubEnv('IS_DOCKER', 'false')
+    vi.stubEnv('CI', 'false')
+    vi.stubEnv('IS_GITHUB_ACTIONS', 'false')
+    try {
+      const preferences = await setupPreferences(capability, existing, installed)
+      expect(preferences.setupLocalAI).toBe(false)
+      expect(setup.prompt).not.toHaveBeenCalled()
+      expect(setup.info).toHaveBeenCalledWith(expect.stringContaining('directly in an interactive terminal'))
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true })
+    }
+  })
+
   it('offers one connection per provider and method while retaining the full discovery', async () => {
     const connection = (
       id: string,

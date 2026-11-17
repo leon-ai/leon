@@ -8,7 +8,7 @@ import type {
   OpenAIToolCall,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
-import { LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
+import { InferencePurpose, LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
@@ -260,6 +260,44 @@ describe('AISDKRemoteLLMProvider', () => {
     } finally {
       provider.dispose()
       log.mockRestore()
+    }
+  })
+
+  it.each([InferencePurpose.PulsePlanning, InferencePurpose.PulseReaction])('keeps %s behind the whole owner turn while allowing active inference to finish', async (usagePurpose) => {
+    const provider = new LlamaCPPLLMProvider({ ...TARGET, provider: LLMProviders.LlamaCPP, model: 'local-model' })
+    let releaseActive: (() => void) | undefined
+    let releaseOwner: (() => void) | undefined
+    let endTurn: (() => void) | undefined
+    try {
+      releaseActive = await provider.acquireInference({ dutyType: LLMDuties.Inference, usagePurpose })
+      endTurn = provider.beginForegroundTurn()
+      let ownerStarted = false
+      let nextPulseStarted = false
+      const owner = provider.acquireInference({ dutyType: LLMDuties.ReAct }).then((release) => {
+        ownerStarted = true
+        return release
+      })
+      const nextPulse = provider.acquireInference({ dutyType: LLMDuties.Inference, usagePurpose }).then((release) => {
+        nextPulseStarted = true
+        release()
+      })
+      await Promise.resolve()
+      expect(ownerStarted).toBe(false)
+      releaseActive()
+      releaseOwner = await owner
+      expect(ownerStarted).toBe(true)
+      expect(nextPulseStarted).toBe(false)
+      releaseOwner()
+      await Promise.resolve()
+      expect(nextPulseStarted).toBe(false)
+      endTurn()
+      await nextPulse
+      expect(nextPulseStarted).toBe(true)
+    } finally {
+      releaseActive?.()
+      releaseOwner?.()
+      endTurn?.()
+      provider.dispose()
     }
   })
 

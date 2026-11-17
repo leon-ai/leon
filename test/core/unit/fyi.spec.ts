@@ -86,7 +86,7 @@ describe('FYI selection', () => {
     expect(fixture.prompt).not.toHaveBeenCalled()
   })
 
-  it.each([null, [], '', 'x'.repeat(361)])('falls back without a second inference for invalid or unavailable text: %j', async (text) => {
+  it.each([null, [], '', 'x'.repeat(361), 'null', 'text:null', '{"text":null}', '"text": null'])('falls back without a second inference for invalid or unavailable text: %j', async (text) => {
     vi.spyOn(Math, 'random').mockReturnValue(0.1)
     fixture.prompt.mockResolvedValue({ output: JSON.stringify({ text }) })
     expect(await generateFyi('Explain something.', SUBSTANTIVE_ANSWER)).toBeNull()

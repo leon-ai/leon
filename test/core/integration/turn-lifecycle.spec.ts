@@ -58,6 +58,8 @@ vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd(), MEMORY_EXTRACTION_
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: { title: vi.fn(), info: vi.fn(), success: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
+// This lifecycle fixture does not discover procedural skills or execute learning.
+vi.mock('@/helpers/skill-domain-helper', () => ({ SkillDomainHelper: {} }))
 
 vi.mock('@/config', () => ({
   CONFIG_MANAGER: { getConfig: (): { time_zone: string, runtime: { private_diary_enabled: boolean } } => ({ time_zone: 'UTC', runtime: { private_diary_enabled: true } }) }
@@ -162,6 +164,7 @@ async function providerResponse(_input: unknown, params: CompletionParams): Prom
       output = 'Home notes'
     } else if (purpose === InferencePurpose.Memory) {
       output = { items: [{
+        sourceSubject: 'owner', subject: 'owner',
         content: `The owner lives in ${profile}.`, evidence: `I live in ${profile}.`, scope: 'persistent',
         ...(typeof _input === 'string' && _input.startsWith('Turn index') ? { turnIndex: 0 } : {})
       }] }

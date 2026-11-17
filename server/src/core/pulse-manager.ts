@@ -641,6 +641,11 @@ export default class PulseManager {
     }
 
     const core = await this.loadCoreNodes()
+    if (!core.LLM_PROVIDER.isLLMProviderReady) {
+      this.pushTickRecord(state, 'skipped', 'Skipped pulse until the model provider is ready')
+      this.persist()
+      return
+    }
     const recentConversation = await core.CONVERSATION_LOGGER.load({
       nbOfLogsToLoad: 8
     })
@@ -1491,6 +1496,7 @@ export default class PulseManager {
   }
 
   private async loadCoreNodes(): Promise<{
+    LLM_PROVIDER: { isLLMProviderReady: boolean }
     BRAIN: Pick<Brain, 'talk'>
     CONTEXT_MANAGER: {
       getManifest(): string

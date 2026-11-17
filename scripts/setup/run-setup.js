@@ -19,12 +19,17 @@ const WINDOWS_CONSOLE_OUT_PATH = 'CONOUT$'
 // a TTY to the child process. Leon setup needs a TTY to ask setup questions, so
 // this wrapper reattaches the real setup process to the user's terminal.
 function openWindowsConsoleStdio() {
+  let stdin
   try {
-    const stdin = fs.openSync(WINDOWS_CONSOLE_IN_PATH, 'r')
+    stdin = fs.openSync(WINDOWS_CONSOLE_IN_PATH, 'r')
     const stdout = fs.openSync(WINDOWS_CONSOLE_OUT_PATH, 'w')
 
     return [stdin, stdout, stdout]
-  } catch {
+  } catch (error) {
+    if (stdin !== undefined) {
+      fs.closeSync(stdin)
+    }
+    console.warn(`I could not attach Quick Setup to the Windows console (${error.code || 'unknown error'}); I will use inherited input/output.`)
     return null
   }
 }
@@ -37,6 +42,11 @@ function getTTYStdio() {
     process.env.LEON_SETUP_UPDATE === 'true' ||
     process.env.LEON_SETUP_PROGRESS === 'json'
   ) {
+    return null
+  }
+  // Preserve an already interactive console; reattachment is only needed when
+  // the package manager replaced the setup process's standard streams.
+  if (process.stdin.isTTY && process.stdout.isTTY) {
     return null
   }
   if (process.platform === 'win32') {

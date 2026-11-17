@@ -39,6 +39,7 @@ export const AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME = '_leonToolCallTitle'
 export const AGENT_TOOL_CALL_TITLE_MAX_CHARS = 72
 export const AGENT_TEMPERATURE = 0.2
 export const AGENT_INFERENCE_TIMEOUT_MS = 120_000
+export const AGENT_COMPLETION_REVIEW_TIMEOUT_MS = 30_000
 // Productive output and new attempts renew the response deadline within a hard cap.
 export const AGENT_MODEL_RESPONSE_TIMEOUT_MS = 180_000
 export const AGENT_MODEL_RESPONSE_MAX_DURATION_MS = 600_000

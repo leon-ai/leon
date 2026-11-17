@@ -45,10 +45,11 @@ import type {
   TrackedPlanStep
 } from './agent-types'
 import { createAgentPlanTool, isAgentPlanComplete, parseAgentPlan } from './agent-plan'
-import { findDuplicateToolInputMatch } from './agent-helpers'
+import { findDuplicateToolInputMatch, normalizeToolInputForComparison } from './agent-helpers'
 import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_MAX_ITERATIONS,
+  AGENT_COMPLETION_REVIEW_TIMEOUT_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './agent-constants'
@@ -77,6 +78,7 @@ const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
 const AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS = 1_000
 const AGENT_COMPLETION_REVIEW_ATTEMPTS = 2
 const AGENT_PLAN_REMINDER_INTERVAL = 4
+const AGENT_REPEATED_REJECTION_LIMIT = 3
 const AGENT_DIRECT_TOOL_LOAD_MAX_CHARS = 8_000
 const AGENT_FUNCTION_INDEX_MAX_CHARS = 8_000
 const AGENT_RESUMABLE_STEP_LIMIT = 8
@@ -216,7 +218,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </response_policy>`
 
 export const AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT = `<execution_limit_checkpoint>
-The operational iteration budget is exhausted. Address the owner request and subsequent owner updates now using the evidence already present in the transcript.
+Operational execution has stopped. Address the owner request and subsequent owner updates now using the evidence already present in the transcript.
 
 - No operational tools are available in this checkpoint.
 - If the evidence is sufficient, return the complete user-facing answer with no tool call, following the ordinary response policy.
@@ -387,6 +389,7 @@ function appendAgentTranscriptMessage(
 }
 
 interface AgentModelCallOptions {
+  signal?: AbortSignal
   isRecoveryAttempt: boolean
   isOutputRecoveryAttempt?: boolean
   isFinalizationAttempt?: boolean
@@ -988,6 +991,8 @@ export async function runAgentLoop(
   }
 
   let hasEnteredFinishing = false
+  const rejectedCalls = new Map<string, number>()
+  let hasWarnedAboutRejections = false
 
   agentIterations: for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
@@ -997,6 +1002,10 @@ export async function runAgentLoop(
     if (await appendPendingOwnerMessages(params, transcript)) {
       hasOwnerUpdates = true
       pendingOwnerReassessment = true
+    }
+    if (pendingOwnerReassessment) {
+      rejectedCalls.clear()
+      hasWarnedAboutRejections = false
     }
     // Continue an unfinished authorized run once, with bounded resume context.
     // This is a bounded finishing pass, not a new task or a renewed permission.
@@ -1174,6 +1183,21 @@ export async function runAgentLoop(
       hasUsedOutputRecovery = true
       isRecoveryAttempt = true
       isOutputRecoveryAttempt = Boolean(modelResult.isTruncated)
+      if (modelResult.isTruncated && !hasUsableOutput &&
+          (modelResult.reasoning || modelResult.reasoningItems?.length)) {
+        // A reasoning-only length stop needs a fresh evidence view, not the same
+        // deliberation again. Keep the owner's reasoning setting and output capacity.
+        hasUsedStallRecovery = true
+        hasUsedContextRecovery = true
+        isStallRecoveryAttempt = true
+        isContextRecoveryAttempt = true
+        transcript.push({
+          role: 'user',
+          content: 'Reasoning exhausted the output budget without an answer or tool call. Recover from the retained evidence.',
+          runtimeContext: { reasoningOutputRecovery: true }
+        })
+        await params.onProgressMessage?.('I am recovering from an unfinished model response using the retained evidence.')
+      }
     }
 
     // A response selected without the newest owner instructions must not dispatch
@@ -1343,6 +1367,7 @@ export async function runAgentLoop(
       : undefined
     let planUpdated = false
     let wasSteered = false
+    let repeatedRejection = false
     for (let callIndex = 0; callIndex < toolCalls.length;) {
       if (params.runBudget?.isExpired) {
         for (const call of toolCalls.slice(callIndex)) {
@@ -1372,12 +1397,14 @@ export async function runAgentLoop(
       }
 
       const toolCall = toolCalls[callIndex]!
-      if (terminalSignal) {
+      if (terminalSignal || repeatedRejection) {
         // Providers require one result for every emitted tool call. Complete
         // the protocol without running work after a terminal handoff.
         const content = toolCall.id === cancellationCall?.id
           ? 'Task canceled by the owner.'
-          : 'Tool call skipped because an earlier call ended this agent run.'
+          : repeatedRejection
+            ? 'Tool call skipped because repeated rejections stopped operational work.'
+            : 'Tool call skipped because an earlier call ended this agent run.'
 
         params.onToolCallSkipped?.(toolCall.id, content)
         transcript.push({
@@ -1416,6 +1443,24 @@ export async function runAgentLoop(
 
       for (const { call: toolCall, result: toolResult, records } of batch) {
         executionHistory.push(...records)
+        if (records.some((record) => record.status === 'success') || toolResult.madeProgress) {
+          rejectedCalls.clear()
+          hasWarnedAboutRejections = false
+        } else if (toolResult.rejected || records.some((record) => record.status !== 'success')) {
+          const key = `${toolCall.function.name}:${normalizeToolInputForComparison(
+            extractToolCallInput(toolCall.function.arguments).toolInput
+          )}`
+          const count = (rejectedCalls.get(key) ?? 0) + 1
+          rejectedCalls.set(key, count)
+          if (count >= AGENT_REPEATED_REJECTION_LIMIT) {
+            if (hasWarnedAboutRejections) {
+              repeatedRejection = true
+            } else {
+              hasWarnedAboutRejections = true
+              toolResult.content += '\nRepeated unsuccessful operation. Correct the call or use existing evidence; another repetition stops execution.'
+            }
+          }
+        }
         if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
             toolResult.trackedSteps !== trackedSteps) {
           planUpdated = true
@@ -1445,6 +1490,16 @@ export async function runAgentLoop(
 
     if (params.runBudget?.isExpired && terminalSignal?.intent !== 'cancelled') {
       return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
+    }
+
+    if (repeatedRejection && !terminalSignal) {
+      // Settle all emitted calls before synthesis so protocol and completed work survive.
+      transcript.push({
+        role: 'user',
+        content: 'Repeated unsuccessful calls stopped execution. Answer from retained evidence and report unfinished work.',
+        runtimeContext: { repeatedCallRecovery: true }
+      })
+      return finalizeAgentLoopAtLimit(params, transcript, executionHistory, trackedSteps)
     }
 
     if (terminalSignal) {
@@ -1610,7 +1665,7 @@ async function reviewAgentCompletion(
   state: Pick<AgentLoopResult, 'executionHistory' | 'trackedSteps'>,
   isContextRecoveryAttempt = false,
   intent: 'answer' | 'clarification' = 'answer'
-): Promise<{ status: AgentCompletionStatus, reason: string } | null> {
+): Promise<{ status: AgentCompletionStatus | null, reason: string } | null> {
   const messages: AgentToolTranscriptMessage[] = [
     ...transcript,
     { role: 'assistant', content: answer },
@@ -1628,101 +1683,126 @@ async function reviewAgentCompletion(
     }
   ]
 
-  for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
-    try {
-      params.signal?.throwIfAborted()
-      params.runBudget?.throwIfExpired()
-      const response = await params.callModel(messages, params.catalog.tools, {
-        isRecoveryAttempt: false, isCompletionReview: true,
-        completionReviewIntent: intent,
-        isCompletionReviewRetry: attempt > 0,
-        ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
-      }, state)
-      params.signal?.throwIfAborted()
-      params.runBudget?.throwIfExpired()
-      if (response?.isTruncated && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-        // A fitted output budget may be too small for the complete verdict.
-        isContextRecoveryAttempt = true
-        continue
-      }
-      const review = response && !response.isTruncated && !response.toolCalls?.length
-        ? parseToolCallArguments(response.textContent || '')
-        : null
-      const status = review?.['status'] as AgentCompletionStatus
-      const reason = review?.['reason']
-      const outOfScopeSteps = review?.['out_of_scope_steps'] ?? []
-      if (
-        Object.values(AgentCompletionStatus).includes(status) &&
-        typeof reason === 'string' && reason.trim() &&
-        Array.isArray(outOfScopeSteps) && outOfScopeSteps.every((label) =>
-          typeof label === 'string' &&
-          state.trackedSteps.some((step) => step.label === label)
-        )
-      ) {
-        // Keep unrelated work pending without making its status a veto over
-        // this request. Active scope still requires recorded coverage/outcomes.
-        const unfinishedSteps = state.trackedSteps.filter((step) =>
-          !outOfScopeSteps.includes(step.label) && !isAgentPlanComplete([step])
-        )
-        if (intent === 'answer' && status === AgentCompletionStatus.Complete &&
-            unfinishedSteps.length > 0) {
+  const controller = new AbortController()
+  const timeoutError = new Error('Agent completion review timed out')
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  // One fixed deadline covers preparation, streaming and every review retry.
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutHandle = setTimeout(() => {
+      controller.abort(timeoutError)
+      reject(timeoutError)
+    }, AGENT_COMPLETION_REVIEW_TIMEOUT_MS)
+  })
+
+  try {
+    for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
+      try {
+        params.signal?.throwIfAborted()
+        params.runBudget?.throwIfExpired()
+        const response = await Promise.race([
+          params.callModel(messages, params.catalog.tools, {
+            signal: controller.signal,
+            isRecoveryAttempt: false, isCompletionReview: true,
+            completionReviewIntent: intent,
+            isCompletionReviewRetry: attempt > 0,
+            ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
+          }, state),
+          timeout
+        ])
+        params.signal?.throwIfAborted()
+        params.runBudget?.throwIfExpired()
+        if (response?.isTruncated && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+          // A fitted output budget may be too small for the complete verdict.
+          isContextRecoveryAttempt = true
+          continue
+        }
+        const review = response && !response.isTruncated && !response.toolCalls?.length
+          ? parseToolCallArguments(response.textContent || '')
+          : null
+        const status = review?.['status'] as AgentCompletionStatus
+        const reason = review?.['reason']
+        const outOfScopeSteps = review?.['out_of_scope_steps'] ?? []
+        if (
+          Object.values(AgentCompletionStatus).includes(status) &&
+          typeof reason === 'string' && reason.trim() &&
+          Array.isArray(outOfScopeSteps) && outOfScopeSteps.every((label) =>
+            typeof label === 'string' &&
+            state.trackedSteps.some((step) => step.label === label)
+          )
+        ) {
+          // Keep unrelated work pending without making its status a veto over
+          // this request. Active scope still requires recorded coverage/outcomes.
+          const unfinishedSteps = state.trackedSteps.filter((step) =>
+            !outOfScopeSteps.includes(step.label) && !isAgentPlanComplete([step])
+          )
+          if (intent === 'answer' && status === AgentCompletionStatus.Complete &&
+              unfinishedSteps.length > 0) {
+            return {
+              status: AgentCompletionStatus.Continue,
+              reason: `${reason}\nThe active plan still has incomplete scope or unverified outcomes: ${unfinishedSteps.map((step) => step.label).join('; ')}. Reconcile these steps against existing evidence; perform only missing work.`
+            }
+          }
+
+          LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
+          return { status, reason }
+        }
+        LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
+      } catch (error) {
+        params.signal?.throwIfAborted()
+        if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
           return {
-            status: AgentCompletionStatus.Continue,
-            reason: `${reason}\nThe active plan still has incomplete scope or unverified outcomes: ${unfinishedSteps.map((step) => step.label).join('; ')}. Reconcile these steps against existing evidence; perform only missing work.`
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer('deadline', state.trackedSteps, true)
           }
         }
+        if (params.getOwnerMessageSignal?.().aborted) {
+          return null
+        }
 
-        LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
-        return { status, reason }
-      }
-      LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
-    } catch (error) {
-      params.signal?.throwIfAborted()
-      if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer('deadline', state.trackedSteps, true)
+        if (controller.signal.aborted) {
+          // No verdict was obtained; release the draft without claiming review success.
+          LogHelper.warning('Agent completion review timed out; sending the drafted answer')
+          return { status: null, reason: '' }
         }
-      }
-      if (params.getOwnerMessageSignal?.().aborted) {
-        return null
-      }
 
-      if (error instanceof AgentModelResponseTimeoutError) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer(
-            CompletionFailureKind.Timeout, state.trackedSteps, true
-          )
+        if (error instanceof AgentModelResponseTimeoutError) {
+          return {
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer(
+              CompletionFailureKind.Timeout, state.trackedSteps, true
+            )
+          }
         }
-      }
-      if (error instanceof AgentModelProviderError && error.canRetryWithCompaction &&
-          !isContextRecoveryAttempt && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-        // Review adds the draft and instructions after operational admission.
-        // Retry the same evidence through compaction instead of enlarging it.
-        isContextRecoveryAttempt = true
-        continue
-      }
-      if (error instanceof AgentModelProviderError && (
-        error.failureKind === CompletionFailureKind.Unavailable ||
-        attempt === AGENT_COMPLETION_REVIEW_ATTEMPTS - 1
-      )) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps, true)
+        if (error instanceof AgentModelProviderError && error.canRetryWithCompaction &&
+            !isContextRecoveryAttempt && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+          // Review adds the draft and instructions after operational admission.
+          // Retry the same evidence through compaction instead of enlarging it.
+          isContextRecoveryAttempt = true
+          continue
         }
+        if (error instanceof AgentModelProviderError && (
+          error.failureKind === CompletionFailureKind.Unavailable ||
+          attempt === AGENT_COMPLETION_REVIEW_ATTEMPTS - 1
+        )) {
+          return {
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps, true)
+          }
+        }
+        LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
       }
-      LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
+      if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+        messages.push({
+          role: 'user',
+          content: 'The previous completion review response was unusable. Review the same evidence again and return only a JSON object with status and reason as requested.'
+        })
+      }
     }
-    if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-      messages.push({
-        role: 'user',
-        content: 'The previous completion review response was unusable. Review the same evidence again and return only a JSON object with status and reason as requested.'
-      })
-    }
+    // An unavailable verifier must not turn unverified work into success.
+    return null
+  } finally {
+    clearTimeout(timeoutHandle)
   }
-  // An unavailable verifier must not turn unverified work into success.
-  return null
 }
 
 async function finalizeAgentLoopAtLimit(
@@ -1768,7 +1848,7 @@ async function finalizeAgentLoopAtLimit(
         )
       }
 
-      if (!review || review.status !== AgentCompletionStatus.Complete) {
+      if (!review || (review.status !== null && review.status !== AgentCompletionStatus.Complete)) {
         if (isClarification) {
           // A rejected pause cannot restart execution beyond the owner's cap.
           return createResumableAgentResult(
@@ -2235,6 +2315,8 @@ async function executeAgentToolCall(
   files?: NonNullable<ToolExecutionResult['modelFiles']>
   trackedSteps: TrackedPlanStep[]
   signal?: FinalResponseSignal
+  rejected?: boolean
+  madeProgress?: boolean
 }> {
   const visual = await executeAuroraToolCall(toolCall, params.catalog, params.onPresentUI)
   if (visual) {
@@ -2243,7 +2325,7 @@ async function executeAgentToolCall(
   if (toolCall.function.name === AGENT_CANCELLATION_TOOL_NAME) {
     const signal = getCancellationSignal(toolCall)
     if (!signal) {
-      return { content: 'Cancellation rejected: acknowledgment is required.', trackedSteps }
+      return { content: 'Cancellation rejected: acknowledgment is required.', trackedSteps, rejected: true }
     }
 
     return { content: 'Task canceled by the owner.', trackedSteps, signal }
@@ -2252,7 +2334,7 @@ async function executeAgentToolCall(
   if (toolCall.function.name === CONNECTION_SETUP_TOOL_NAME) {
     const input = parseToolCallArguments(toolCall.function.arguments) || {}
     if (!getPendingConnectionProviders(executionHistory).includes(String(input['provider']))) {
-      return { content: 'Connection setup is not needed for this provider in the current task.', trackedSteps }
+      return { content: 'Connection setup is not needed for this provider in the current task.', trackedSteps, rejected: true }
     }
 
     return {
@@ -2281,6 +2363,7 @@ async function executeAgentToolCall(
     if (!toolkitId) {
       return {
         content: 'Toolkit load rejected: toolkit_id is required.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2289,6 +2372,7 @@ async function executeAgentToolCall(
     if (!toolkit) {
       return {
         content: `Toolkit load rejected: "${toolkitId}" is not available.`,
+        rejected: true,
         trackedSteps
       }
     }
@@ -2297,8 +2381,19 @@ async function executeAgentToolCall(
     const toolId = args?.['tool_id']
     const names = args?.['functions']
     if (toolId !== undefined && (typeof toolId !== 'string' || !toolkit.tools.some((tool) => tool.id === toolId))) {
+      const selection = toolkit.tools.flatMap((tool) =>
+        Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkitId, tool.id) || {}).map((name) => ({
+          toolId: tool.id, functionName: `${tool.id}.${name}`
+        }))
+      ).find((entry) => entry.functionName === toolId)
       return {
-        content: `Toolkit load rejected: tool_id must identify an available tool in "${toolkitId}".`,
+        content: [
+          `Toolkit load rejected: tool_id identifies a tool, not a function. Available tool IDs in "${toolkitId}": ${toolkit.tools.map((tool) => tool.id).join(', ')}.`,
+          ...(selection ? [`Load the executable function with load_toolkit(${JSON.stringify({
+            toolkit_id: toolkitId, tool_id: selection.toolId, functions: [selection.functionName]
+          })}).`] : [])
+        ].join('\n'),
+        rejected: true,
         trackedSteps
       }
     }
@@ -2315,7 +2410,7 @@ async function executeAgentToolCall(
           }
         }
       }
-      return { content: 'I could not load this MCP server’s functions. Check its connection in Settings → Tools and connections, then retry.', trackedSteps }
+      return { content: 'I could not load this MCP server’s functions. Check its connection in Settings → Tools and connections, then retry.', trackedSteps, rejected: true }
     }
     const availableFunctions = new Set(selectedTools.flatMap((tool) =>
       Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkitId, tool.id) || {})
@@ -2324,6 +2419,7 @@ async function executeAgentToolCall(
     if (availableFunctions.size === 0) {
       return {
         content: `Toolkit "${toolkit.name}" has no callable functions in the selected scope.`,
+        rejected: true,
         trackedSteps
       }
     }
@@ -2335,11 +2431,13 @@ async function executeAgentToolCall(
           'Toolkit load rejected: functions must be a non-empty array of exact tool_id.function_name entries from this toolkit.',
           ...selectedTools.map((tool) => describeToolkitFunctions(toolkitId, tool.id, params.catalog)).filter(Boolean)
         ].join('\n'),
+        rejected: true,
         trackedSteps
       }
     }
 
     const wasToolkitLoaded = params.catalog.loadedToolkitIds.has(toolkitId)
+    const previousLoadedTools = params.catalog.loadedToolNames.size
     const loadedFunctionCount = loadToolkitFunctions(
       params.catalog,
       toolkitId,
@@ -2355,7 +2453,9 @@ async function executeAgentToolCall(
       : undefined
     return {
       content: [
-        `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} new function schema(s) are available on the next model turn.`,
+        loadedFunctionCount > 0
+          ? `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} new function schema(s) are available on the next model turn.`
+          : `Toolkit discovered: ${toolkit.name}. No new schemas loaded; select needed functions explicitly.`,
         // Explicit selections already have full schemas on the next turn.
         // Keep broad summaries available for discovery without repeating them
         // after every selected load into the growing conversation prefix.
@@ -2372,6 +2472,8 @@ async function executeAgentToolCall(
             ]),
         ...(toolkitContext ? ['', toolkitContext] : [])
       ].join('\n'),
+      madeProgress: loadedFunctionCount > 0 || params.catalog.loadedToolNames.size > previousLoadedTools,
+      rejected: loadedFunctionCount === 0 && params.catalog.loadedToolNames.size === previousLoadedTools,
       trackedSteps
     }
   }
@@ -2381,6 +2483,7 @@ async function executeAgentToolCall(
     if (!signal) {
       return {
         content: 'Clarification request rejected: question is required.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2389,7 +2492,7 @@ async function executeAgentToolCall(
       parseToolCallArguments(toolCall.function.arguments), params.catalog, Boolean(params.onPresentUI)
     )
     if (visual.error) {
-      return { content: visual.error, trackedSteps }
+      return { content: visual.error, trackedSteps, rejected: true }
     }
 
     return {
@@ -2404,6 +2507,7 @@ async function executeAgentToolCall(
     if (!nextSteps) {
       return {
         content: 'Plan update rejected: use unique stable step labels and valid statuses. Enumerate before processing; completed collections need coverage evidence and verified details for every item. Updates merge steps by label and items by id; omit unchanged steps or collections.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2430,6 +2534,7 @@ async function executeAgentToolCall(
     if (!skillId) {
       return {
         content: 'Agent Skill load rejected: skill_id is required.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2474,6 +2579,7 @@ async function executeAgentToolCall(
   if (!callable) {
     return {
       content: `Tool call rejected: "${toolCall.function.name}" is not available.`,
+      rejected: true,
       trackedSteps
     }
   }
@@ -2486,6 +2592,7 @@ async function executeAgentToolCall(
   if (!validation.isValid) {
     return {
       content: `Tool input rejected for ${callable.qualifiedName}: ${validation.message || 'arguments do not match the schema'}`,
+      rejected: true,
       trackedSteps
     }
   }
@@ -2498,7 +2605,7 @@ async function executeAgentToolCall(
     validatedInput
   )
   if (retryBlocker) {
-    return { content: retryBlocker, trackedSteps }
+    return { content: retryBlocker, trackedSteps, rejected: true }
   }
   // State changes expire read observations. Side-effect deduplication keeps
   // the full history so intervening operations cannot authorize a repeat.
@@ -2532,6 +2639,7 @@ async function executeAgentToolCall(
   if (duplicate) {
     return {
       content: `Duplicate call blocked: ${callable.qualifiedName} already ran with the same or an overlapping input in step ${duplicate.stepNumber}. Reuse its result from the transcript or request only the unread range.`,
+      rejected: true,
       trackedSteps
     }
   }

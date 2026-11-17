@@ -12,11 +12,14 @@ export enum ModelFault {
   ContextFailure = 'context-failure',
   ReviewContextFailure = 'review-context-failure',
   ReasoningStall = 'reasoning-stall',
-  OutputStall = 'output-stall'
+  OutputStall = 'output-stall',
+  ReasoningExhaustion = 'reasoning-exhaustion',
+  RejectedCalls = 'rejected-calls'
 }
 
 interface ModelReply {
   textContent?: string
+  reasoning?: string
   toolCalls?: OpenAIToolCall[]
   isTruncated?: boolean
 }
@@ -31,6 +34,7 @@ export type ModelCall = (
     isRecoveryAttempt: boolean
     isStallRecoveryAttempt?: boolean
     isContextRecoveryAttempt?: boolean
+    isFinalizationAttempt?: boolean
   },
   ...rest: unknown[]
 ) => Promise<ModelReply | null>
@@ -54,9 +58,30 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
         let rejections = 0
         let stallRecoveries = 0
         let reviewContextRecoveries = 0
+        let repeatedReads = 0
+        let readsBeforeRejection = 0
         prototype.callAgentModel = async function (...args: Parameters<ModelCall>): Promise<ModelReply | null> {
           const [messages, , , options] = args
           const hasWritten = messages.some((message) => message.role === 'tool' && message.toolName.endsWith('__write'))
+          if (!injected && hasWritten && !options.isCompletionReview && fault === ModelFault.ReasoningExhaustion) {
+            injected = true
+            return { reasoning: 'An unfinished private deliberation.', isTruncated: true }
+          }
+          if (fault === ModelFault.RejectedCalls && hasWritten && !options.isCompletionReview && !options.isFinalizationAttempt && repeatedReads < 4) {
+            const lastWrite = messages.findLastIndex((message) => message.role === 'tool' && message.toolName.endsWith('__write'))
+            const read = messages.findLast((message, index) => index > lastWrite && message.role === 'assistant' &&
+              message.toolCalls?.some((call) => call.function.name === 'file_system__file__read'))
+            const call = read?.role === 'assistant'
+              ? read.toolCalls?.find((entry) => entry.function.name === 'file_system__file__read') : undefined
+            if (call && messages.some((message) => message.role === 'tool' && message.toolCallId === call.id)) {
+              if (repeatedReads === 0) {
+                readsBeforeRejection = messages.filter((message) => message.role === 'tool' && message.toolName === call.function.name).length
+              }
+              repeatedReads += 1
+              injected = true
+              return { toolCalls: [{ ...call, id: `rejected-read-${repeatedReads}` }] }
+            }
+          }
           if (!injected && hasWritten && !options.isCompletionReview &&
             (fault === ModelFault.ReasoningStall || fault === ModelFault.OutputStall)) {
             injected = true
@@ -116,14 +141,18 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
           if (fault === ModelFault.IncorrectDraft) {
             assert.ok(rejections > 0, 'Real review must reject the unsupported draft.')
           }
-          if (fault === ModelFault.ReasoningStall || fault === ModelFault.OutputStall) {
+          if (fault === ModelFault.ReasoningStall || fault === ModelFault.OutputStall || fault === ModelFault.ReasoningExhaustion) {
             assert.equal(stallRecoveries, 1)
+          }
+          if (fault === ModelFault.RejectedCalls) {
+            assert.equal(repeatedReads, 4)
+            assert.equal(turn.executionHistory.filter((execution) => execution.function === 'file_system.file.read').length, readsBeforeRejection)
           }
           if (fault === ModelFault.ReviewContextFailure) {
             assert.equal(reviewContextRecoveries, 1)
           }
 
-          return { turn, injected, reviews, rejections, stallRecoveries, reviewContextRecoveries }
+          return { turn, injected, reviews, rejections, stallRecoveries, reviewContextRecoveries, repeatedReads }
         } finally {
           prototype.callAgentModel = original
         }

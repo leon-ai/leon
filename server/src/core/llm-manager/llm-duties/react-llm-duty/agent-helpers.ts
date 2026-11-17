@@ -102,7 +102,10 @@ export function appendAgentRuntimeContext(
   }
 }
 
-function normalizeToolInputForComparison(toolInput: string): string {
+/**
+ * Compare equivalent JSON arguments independently of object property order.
+ */
+export function normalizeToolInputForComparison(toolInput: string): string {
   const trimmed = toolInput.trim()
   if (!trimmed) {
     return ''
