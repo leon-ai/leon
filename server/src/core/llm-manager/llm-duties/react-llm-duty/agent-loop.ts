@@ -49,6 +49,7 @@ import { findDuplicateToolInputMatch, normalizeToolInputForComparison } from './
 import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_MAX_ITERATIONS,
+  AGENT_COMPLETION_REVIEW_TIMEOUT_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './agent-constants'
@@ -388,6 +389,7 @@ function appendAgentTranscriptMessage(
 }
 
 interface AgentModelCallOptions {
+  signal?: AbortSignal
   isRecoveryAttempt: boolean
   isOutputRecoveryAttempt?: boolean
   isFinalizationAttempt?: boolean
@@ -1663,7 +1665,7 @@ async function reviewAgentCompletion(
   state: Pick<AgentLoopResult, 'executionHistory' | 'trackedSteps'>,
   isContextRecoveryAttempt = false,
   intent: 'answer' | 'clarification' = 'answer'
-): Promise<{ status: AgentCompletionStatus, reason: string } | null> {
+): Promise<{ status: AgentCompletionStatus | null, reason: string } | null> {
   const messages: AgentToolTranscriptMessage[] = [
     ...transcript,
     { role: 'assistant', content: answer },
@@ -1681,101 +1683,126 @@ async function reviewAgentCompletion(
     }
   ]
 
-  for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
-    try {
-      params.signal?.throwIfAborted()
-      params.runBudget?.throwIfExpired()
-      const response = await params.callModel(messages, params.catalog.tools, {
-        isRecoveryAttempt: false, isCompletionReview: true,
-        completionReviewIntent: intent,
-        isCompletionReviewRetry: attempt > 0,
-        ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
-      }, state)
-      params.signal?.throwIfAborted()
-      params.runBudget?.throwIfExpired()
-      if (response?.isTruncated && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-        // A fitted output budget may be too small for the complete verdict.
-        isContextRecoveryAttempt = true
-        continue
-      }
-      const review = response && !response.isTruncated && !response.toolCalls?.length
-        ? parseToolCallArguments(response.textContent || '')
-        : null
-      const status = review?.['status'] as AgentCompletionStatus
-      const reason = review?.['reason']
-      const outOfScopeSteps = review?.['out_of_scope_steps'] ?? []
-      if (
-        Object.values(AgentCompletionStatus).includes(status) &&
-        typeof reason === 'string' && reason.trim() &&
-        Array.isArray(outOfScopeSteps) && outOfScopeSteps.every((label) =>
-          typeof label === 'string' &&
-          state.trackedSteps.some((step) => step.label === label)
-        )
-      ) {
-        // Keep unrelated work pending without making its status a veto over
-        // this request. Active scope still requires recorded coverage/outcomes.
-        const unfinishedSteps = state.trackedSteps.filter((step) =>
-          !outOfScopeSteps.includes(step.label) && !isAgentPlanComplete([step])
-        )
-        if (intent === 'answer' && status === AgentCompletionStatus.Complete &&
-            unfinishedSteps.length > 0) {
+  const controller = new AbortController()
+  const timeoutError = new Error('Agent completion review timed out')
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  // One fixed deadline covers preparation, streaming and every review retry.
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutHandle = setTimeout(() => {
+      controller.abort(timeoutError)
+      reject(timeoutError)
+    }, AGENT_COMPLETION_REVIEW_TIMEOUT_MS)
+  })
+
+  try {
+    for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
+      try {
+        params.signal?.throwIfAborted()
+        params.runBudget?.throwIfExpired()
+        const response = await Promise.race([
+          params.callModel(messages, params.catalog.tools, {
+            signal: controller.signal,
+            isRecoveryAttempt: false, isCompletionReview: true,
+            completionReviewIntent: intent,
+            isCompletionReviewRetry: attempt > 0,
+            ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
+          }, state),
+          timeout
+        ])
+        params.signal?.throwIfAborted()
+        params.runBudget?.throwIfExpired()
+        if (response?.isTruncated && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+          // A fitted output budget may be too small for the complete verdict.
+          isContextRecoveryAttempt = true
+          continue
+        }
+        const review = response && !response.isTruncated && !response.toolCalls?.length
+          ? parseToolCallArguments(response.textContent || '')
+          : null
+        const status = review?.['status'] as AgentCompletionStatus
+        const reason = review?.['reason']
+        const outOfScopeSteps = review?.['out_of_scope_steps'] ?? []
+        if (
+          Object.values(AgentCompletionStatus).includes(status) &&
+          typeof reason === 'string' && reason.trim() &&
+          Array.isArray(outOfScopeSteps) && outOfScopeSteps.every((label) =>
+            typeof label === 'string' &&
+            state.trackedSteps.some((step) => step.label === label)
+          )
+        ) {
+          // Keep unrelated work pending without making its status a veto over
+          // this request. Active scope still requires recorded coverage/outcomes.
+          const unfinishedSteps = state.trackedSteps.filter((step) =>
+            !outOfScopeSteps.includes(step.label) && !isAgentPlanComplete([step])
+          )
+          if (intent === 'answer' && status === AgentCompletionStatus.Complete &&
+              unfinishedSteps.length > 0) {
+            return {
+              status: AgentCompletionStatus.Continue,
+              reason: `${reason}\nThe active plan still has incomplete scope or unverified outcomes: ${unfinishedSteps.map((step) => step.label).join('; ')}. Reconcile these steps against existing evidence; perform only missing work.`
+            }
+          }
+
+          LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
+          return { status, reason }
+        }
+        LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
+      } catch (error) {
+        params.signal?.throwIfAborted()
+        if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
           return {
-            status: AgentCompletionStatus.Continue,
-            reason: `${reason}\nThe active plan still has incomplete scope or unverified outcomes: ${unfinishedSteps.map((step) => step.label).join('; ')}. Reconcile these steps against existing evidence; perform only missing work.`
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer('deadline', state.trackedSteps, true)
           }
         }
+        if (params.getOwnerMessageSignal?.().aborted) {
+          return null
+        }
 
-        LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
-        return { status, reason }
-      }
-      LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
-    } catch (error) {
-      params.signal?.throwIfAborted()
-      if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer('deadline', state.trackedSteps, true)
+        if (controller.signal.aborted) {
+          // No verdict was obtained; release the draft without claiming review success.
+          LogHelper.warning('Agent completion review timed out; sending the drafted answer')
+          return { status: null, reason: '' }
         }
-      }
-      if (params.getOwnerMessageSignal?.().aborted) {
-        return null
-      }
 
-      if (error instanceof AgentModelResponseTimeoutError) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer(
-            CompletionFailureKind.Timeout, state.trackedSteps, true
-          )
+        if (error instanceof AgentModelResponseTimeoutError) {
+          return {
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer(
+              CompletionFailureKind.Timeout, state.trackedSteps, true
+            )
+          }
         }
-      }
-      if (error instanceof AgentModelProviderError && error.canRetryWithCompaction &&
-          !isContextRecoveryAttempt && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-        // Review adds the draft and instructions after operational admission.
-        // Retry the same evidence through compaction instead of enlarging it.
-        isContextRecoveryAttempt = true
-        continue
-      }
-      if (error instanceof AgentModelProviderError && (
-        error.failureKind === CompletionFailureKind.Unavailable ||
-        attempt === AGENT_COMPLETION_REVIEW_ATTEMPTS - 1
-      )) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps, true)
+        if (error instanceof AgentModelProviderError && error.canRetryWithCompaction &&
+            !isContextRecoveryAttempt && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+          // Review adds the draft and instructions after operational admission.
+          // Retry the same evidence through compaction instead of enlarging it.
+          isContextRecoveryAttempt = true
+          continue
         }
+        if (error instanceof AgentModelProviderError && (
+          error.failureKind === CompletionFailureKind.Unavailable ||
+          attempt === AGENT_COMPLETION_REVIEW_ATTEMPTS - 1
+        )) {
+          return {
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps, true)
+          }
+        }
+        LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
       }
-      LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
+      if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+        messages.push({
+          role: 'user',
+          content: 'The previous completion review response was unusable. Review the same evidence again and return only a JSON object with status and reason as requested.'
+        })
+      }
     }
-    if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-      messages.push({
-        role: 'user',
-        content: 'The previous completion review response was unusable. Review the same evidence again and return only a JSON object with status and reason as requested.'
-      })
-    }
+    // An unavailable verifier must not turn unverified work into success.
+    return null
+  } finally {
+    clearTimeout(timeoutHandle)
   }
-  // An unavailable verifier must not turn unverified work into success.
-  return null
 }
 
 async function finalizeAgentLoopAtLimit(
@@ -1821,7 +1848,7 @@ async function finalizeAgentLoopAtLimit(
         )
       }
 
-      if (!review || review.status !== AgentCompletionStatus.Complete) {
+      if (!review || (review.status !== null && review.status !== AgentCompletionStatus.Complete)) {
         if (isClarification) {
           // A rejected pause cannot restart execution beyond the owner's cap.
           return createResumableAgentResult(

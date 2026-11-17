@@ -72,6 +72,7 @@ import {
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   CHARS_PER_TOKEN,
   AGENT_MODEL_RESPONSE_TIMEOUT_MS,
+  AGENT_COMPLETION_REVIEW_TIMEOUT_MS,
   AGENT_MODEL_RESPONSE_MAX_DURATION_MS
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import {
@@ -5608,6 +5609,123 @@ describe('agent automatic compaction', () => {
   })
 })
 
+describe('completion review deadline', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.spyOn(LogHelper, 'warning').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it.each([
+    { clarification: false, atLimit: false },
+    { clarification: false, atLimit: true },
+    { clarification: true, atLimit: false },
+    { clarification: true, atLimit: true }
+  ])('releases the draft when review stalls: %j', async ({ clarification, atLimit }) => {
+    const answer = clarification ? 'Which recipient should I use?' : 'The verified receipt is release-42.'
+    let reviewSignal: AbortSignal | undefined
+    let finishLateReview!: (value: { textContent: string }) => void
+    const callModel = vi.fn<AgentLoopParams['callModel']>(async (_messages, _tools, options) => {
+      if (!options.isCompletionReview) {
+        return clarification
+          ? { toolCalls: [toolCall('recipient', AGENT_CLARIFICATION_TOOL_NAME, { question: answer })] }
+          : { textContent: answer }
+      }
+
+      reviewSignal = options.signal
+      // A stalled adapter may ignore cancellation; its late verdict must be ignored.
+      return new Promise((resolve) => { finishLateReview = resolve })
+    })
+    const pending = runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Deliver the verified receipt.' }],
+      catalog: createCatalog(), initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: 'Verified release-42.'
+      }],
+      maxIterations: atLimit ? 0 : 1,
+      callModel, executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    let settled = false
+    void pending.then(() => { settled = true })
+
+    await vi.advanceTimersByTimeAsync(AGENT_COMPLETION_REVIEW_TIMEOUT_MS - 1)
+    expect(settled).toBe(false)
+    expect(reviewSignal?.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await pending
+
+    expect(result).toMatchObject({ answer, intent: clarification ? 'clarification' : 'answer' })
+    expect(reviewSignal?.aborted).toBe(true)
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(LogHelper.warning).toHaveBeenCalledWith('Agent completion review timed out; sending the drafted answer')
+    expect(vi.getTimerCount()).toBe(0)
+
+    finishLateReview({ textContent: JSON.stringify({ status: 'continue', reason: 'A late verdict.' }) })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(result.answer).toBe(answer)
+    expect(callModel).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears the deadline when review completes normally', async () => {
+    let reviewSignal: AbortSignal | undefined
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Report the receipt.' }],
+      catalog: createCatalog(), initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: 'Verified release-42.'
+      }],
+      callModel: async (_messages, _tools, options) => {
+        if (!options.isCompletionReview) {
+          return { textContent: 'Verified release-42.' }
+        }
+
+        reviewSignal = options.signal
+        return { textContent: JSON.stringify({ status: 'complete', reason: 'The receipt is verified.' }) }
+      },
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+
+    expect(result).toMatchObject({ answer: 'Verified release-42.', intent: 'answer' })
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(AGENT_COMPLETION_REVIEW_TIMEOUT_MS)
+    expect(reviewSignal?.aborted).toBe(false)
+    expect(LogHelper.warning).not.toHaveBeenCalled()
+  })
+
+  it('shares the deadline across unusable review retries', async () => {
+    const signals: AbortSignal[] = []
+    const callModel = vi.fn<AgentLoopParams['callModel']>(async (_messages, _tools, options) => {
+      if (!options.isCompletionReview) {
+        return { textContent: 'Verified release-42.' }
+      }
+
+      signals.push(options.signal!)
+      if (signals.length === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20_000))
+        return { textContent: '{"status":', isTruncated: true }
+      }
+
+      return new Promise(() => {})
+    })
+    const pending = runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Report the receipt.' }],
+      catalog: createCatalog(), initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: 'Verified release-42.'
+      }],
+      callModel, executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+
+    await vi.advanceTimersByTimeAsync(AGENT_COMPLETION_REVIEW_TIMEOUT_MS)
+    expect(await pending).toMatchObject({ answer: 'Verified release-42.', intent: 'answer' })
+    expect(signals).toHaveLength(2)
+    expect(signals[0]).toBe(signals[1])
+    expect(signals[1]?.aborted).toBe(true)
+    expect(callModel).toHaveBeenCalledTimes(3)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
 describe('model response status', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -5668,6 +5786,68 @@ describe('model response status', () => {
       expect(requests[0]?.goal).toBe(goal)
       expect(coreMocks.prompt).toHaveBeenCalledOnce()
     })
+  })
+
+  it.each(['review', 'owner', 'run'] as const)('honors %s cancellation during a productive completion review', async (cancellation) => {
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const owner = new AbortController()
+    const ownerReason = new Error('Owner canceled')
+    const budget = cancellation === 'run' ? new AgentRunBudget(Date.now() + 10_000) : undefined
+    let params!: CompletionParams
+    coreMocks.prompt.mockImplementationOnce((_messages, input: CompletionParams) => {
+      params = input
+      return new Promise((_resolve, reject) => {
+        input.cancellationSignal?.addEventListener('abort', () => {
+          reject(input.cancellationSignal?.reason)
+        }, { once: true })
+      })
+    })
+    const duty = new ReActLLMDuty({ input: 'Report the receipt.', signal: owner.signal })
+    Object.assign(duty, { runBudget: budget, writeAgentPromptLog: vi.fn() })
+    const callModel = vi.fn<AgentLoopParams['callModel']>(async (messages, tools, options) => {
+      return options.isCompletionReview
+        ? duty['callAgentModel'](messages, 'Follow the request.', tools, options)
+        : { textContent: 'Verified release-42.' }
+    })
+    const pending = runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Report the receipt.' }],
+      catalog: createCatalog(), signal: owner.signal, runBudget: budget,
+      initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: 'Verified release-42.'
+      }],
+      callModel, executeFunction: vi.fn(), loadAgentSkill: async () => null
+    }).then((result) => result, (error) => error)
+
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      if (cancellation === 'owner') {
+        owner.abort(ownerReason)
+      } else {
+        const duration = cancellation === 'run' ? 10_000 : AGENT_COMPLETION_REVIEW_TIMEOUT_MS
+        for (let elapsed = 0; elapsed < duration; elapsed += 5_000) {
+          params.onReasoningToken?.('Checking evidence.')
+          params.onToken?.('{')
+          await vi.advanceTimersByTimeAsync(5_000)
+        }
+      }
+
+      const result = await pending
+      expect(params.cancellationSignal?.aborted).toBe(true)
+      expect(callModel).toHaveBeenCalledTimes(2)
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+      if (cancellation === 'owner') {
+        expect(result).toBe(ownerReason)
+      } else if (cancellation === 'run') {
+        expect(result.intent).toBe('blocked')
+        expect(result.answer).toContain('run deadline')
+      } else {
+        expect(result).toMatchObject({ intent: 'answer', answer: 'Verified release-42.' })
+        expect(duty['continuationSummaryFailed']).toBe(false)
+      }
+    } finally {
+      budget?.dispose()
+      clock.mockRestore()
+    }
   })
 
   it('allows accepted reasoning to finish within the advertised response deadline', async () => {

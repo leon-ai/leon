@@ -691,6 +691,7 @@ export class ReActLLMDuty extends LLMDuty {
         allowDirectAnswerHandoff:
           Boolean(this.activeForcedToolName) || this.allowDirectAnswerHandoff,
         callModel: async (messages, tools, options, state) => {
+          options.signal?.throwIfAborted()
           // Loaded guidance and skills must survive compaction and pauses.
           const activeSkill = caller.agentSkillContext
           const progressiveGuidance = Object.fromEntries(
@@ -706,6 +707,7 @@ export class ReActLLMDuty extends LLMDuty {
           const temporaryCreatedAt = Date.now()
           const temporaryStartedAt = performance.now()
           const temporaryContext = await MEMORY_MANAGER.getTemporaryContextSnapshot()
+          options.signal?.throwIfAborted()
           const temporaryDurationMs = performance.now() - temporaryStartedAt
           const fingerprint = JSON.stringify(temporaryContext.entries)
           if (fingerprint !== this.temporaryContextActivity?.fingerprint &&
@@ -1168,8 +1170,10 @@ export class ReActLLMDuty extends LLMDuty {
   private async prepareContinuation(
     transcript: AgentToolTranscriptMessage[],
     checkpointInput?: AgentContinuityCheckpointInput,
-    restoreSourceEvidence = false
+    restoreSourceEvidence = false,
+    signal?: AbortSignal
   ): Promise<AgentToolTranscriptMessage[]> {
+    signal?.throwIfAborted()
     this.signal?.throwIfAborted()
     if (restoreSourceEvidence) {
       // Context recovery needs source evidence instead of opaque provider state.
@@ -1181,7 +1185,7 @@ export class ReActLLMDuty extends LLMDuty {
       if (this.continuationSummaryFailed || this.runBudget?.isFinishing) return null
       const startedAt = Date.now()
       try {
-        const cancellationSignal = this.getExecutionSignal()
+        const cancellationSignal = signal ?? this.getExecutionSignal()
         const result = await runTurnPhase(TurnPhase.Compaction, () => LLM_PROVIDER.prompt(history, {
           ...(cancellationSignal ? { cancellationSignal } : {}),
           dutyType: LLMDuties.ReAct,
@@ -1197,6 +1201,7 @@ export class ReActLLMDuty extends LLMDuty {
           trackProviderErrors: false,
           disableContextCompaction: true
         }))
+        signal?.throwIfAborted()
         this.signal?.throwIfAborted()
         if (result) {
           this.observeCompletionMetrics({
@@ -1217,6 +1222,7 @@ export class ReActLLMDuty extends LLMDuty {
         )
         return summary
       } catch {
+        signal?.throwIfAborted()
         this.signal?.throwIfAborted()
         this.continuationSummaryFailed = true
         LogHelper.warning('Agent continuation summary unavailable; retaining original context')
@@ -1236,6 +1242,7 @@ export class ReActLLMDuty extends LLMDuty {
     systemPrompt: string,
     tools: OpenAITool[],
     options: {
+      signal?: AbortSignal
       isRecoveryAttempt: boolean
       isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
@@ -1259,7 +1266,10 @@ export class ReActLLMDuty extends LLMDuty {
     isTruncated?: boolean
   } | null> {
     this.runBudget?.throwIfExpired()
-    const executionSignal = this.getExecutionSignal()
+    const turnSignal = this.getExecutionSignal()
+    const executionSignal = options.signal
+      ? AbortSignal.any([options.signal, ...(turnSignal ? [turnSignal] : [])])
+      : turnSignal
     executionSignal?.throwIfAborted()
     if (options.isContextRecoveryAttempt || options.isStallRecoveryAttempt) {
       // An opaque window can itself exceed the wire budget. Rebuild from its
@@ -1363,7 +1373,7 @@ export class ReActLLMDuty extends LLMDuty {
         ? await buildAgentContinuationTranscript(
             transcript, async () => null, checkpointInput, true
           )
-        : await this.prepareContinuation(transcript, checkpointInput, true)
+        : await this.prepareContinuation(transcript, checkpointInput, true, executionSignal)
       hasAttemptedSummary = true
       transcript.splice(0, transcript.length, ...summarized)
       preparedContext = prepareAgentModelContext({
@@ -1533,6 +1543,7 @@ export class ReActLLMDuty extends LLMDuty {
       shouldStream: inferencePolicy.streamToProvider
     })
 
+    executionSignal?.throwIfAborted()
     let completionResult: Awaited<ReturnType<typeof LLM_PROVIDER.prompt>> = null
     let completed = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
