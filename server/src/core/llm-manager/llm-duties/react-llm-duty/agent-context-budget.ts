@@ -591,26 +591,27 @@ export function reuseToolContext(
         return value
       }
 
-      if (typeof record['modelContextId'] === 'string' &&
-          typeof record['content'] === 'string') {
+      const { content, ...metadata } = record
+      if (typeof record['modelContextId'] === 'string' && typeof content === 'string') {
         const key = JSON.stringify([message.toolName, record['modelContextId']])
         const previous = nextVisible.get(key)
+        const projectedMetadata = Object.fromEntries(Object.entries(metadata).map(([key, child]) =>
+          [key, project(child)]
+        ))
 
-        if (previous?.content === record['content']) {
-          const reference = { ...record }
-          delete reference['content']
+        if (previous?.content === content) {
           changed = true
           return {
-            ...reference,
+            ...projectedMetadata,
             contentReference: `Unchanged context; complete content is in tool call ${previous.callId}.`
           }
         }
 
         nextVisible.set(key, {
-          content: record['content'],
+          content,
           callId: message.toolCallId
         })
-        return record
+        return { ...projectedMetadata, content }
       }
 
       return Object.fromEntries(Object.entries(record).map(([key, child]) =>

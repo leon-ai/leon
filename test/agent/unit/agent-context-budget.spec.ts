@@ -201,6 +201,33 @@ describe('agent context budget', () => {
     expect(reuseToolContext(transcript)).toEqual(transcript)
   })
 
+  it('references repeated pages and independently keeps the current nested instructions', () => {
+    const result = (id: string, content: string, instructions: string): AgentToolTranscriptMessage => ({
+      role: 'tool', toolCallId: id, toolName: 'source',
+      content: JSON.stringify({ data: { output: {
+        modelContextId: 'page', content,
+        instructions: [{ modelContextId: 'rules', content: instructions }]
+      } } })
+    })
+    const projected = reuseToolContext([
+      result('first', 'Original page', 'Original rules'),
+      result('second', 'Updated page', 'Original rules'),
+      result('third', 'Updated page', 'Updated rules')
+    ])
+
+    expect(JSON.parse(projected[1]!.content).data.output).toEqual({
+      modelContextId: 'page', content: 'Updated page',
+      instructions: [{
+        modelContextId: 'rules',
+        contentReference: expect.stringContaining('first')
+      }]
+    })
+    expect(JSON.parse(projected[2]!.content).data.output).toEqual({
+      modelContextId: 'page', contentReference: expect.stringContaining('second'),
+      instructions: [{ modelContextId: 'rules', content: 'Updated rules' }]
+    })
+  })
+
   it('restores full context when pressure removes the earlier complete source', () => {
     const context = { modelContextId: 'workspace', content: 'Required context. '.repeat(300) }
     const observation = JSON.stringify({

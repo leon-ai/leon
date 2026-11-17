@@ -230,9 +230,8 @@ export default class FileTool extends Tool {
   ): Promise<{
     success: boolean
     exists?: boolean
-    data?: {
+    data?: ReusableToolContext & {
       path: string
-      content: string
       contentHash: string
       size: number
       returnedChars: number
@@ -350,6 +349,7 @@ export default class FileTool extends Tool {
       ...(options.allowMissing === true ? { exists: true } : {}),
       data: {
         path: resolvedPath,
+        modelContextId: JSON.stringify([resolvedPath, offsetChars, returnedContent.length]),
         content: returnedContent,
         contentHash: contentHash(bytes),
         size: readable.size || 0,
