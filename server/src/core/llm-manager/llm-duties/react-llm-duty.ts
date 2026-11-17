@@ -1789,6 +1789,10 @@ export class ReActLLMDuty extends LLMDuty {
           )
         },
         maxTokens: maxOutputTokens,
+        estimatedInputTokens: preparedContext.estimatedInputTokens,
+        portableCompactionThresholdTokens: providerManagesContext
+          ? undefined
+          : contextCompactionTriggerTokens,
         shouldStream: inferencePolicy.streamToProvider,
         onAttempt: (timing): void => {
           this.responseTraceCollector.recordInference({

@@ -163,11 +163,16 @@ describe('Responses connection lifecycle', () => {
     server.on('request', http)
     const events = vi.fn()
     const recovered = await transport.fetch(url, {
-      method: 'POST', body: JSON.stringify({ model: 'fixture', stream: true, input: INPUT })
+      method: 'POST', body: JSON.stringify({
+        model: 'fixture', stream: true, input: INPUT,
+        context_management: [{ type: 'compaction', compact_threshold: 100_000 }]
+      })
     }, events, 'http')
 
     expect(await recovered.text()).toContain('http')
-    expect(events).toHaveBeenCalledWith({ type: 'request-dispatched', transport: 'http' })
+    expect(events).toHaveBeenCalledWith({
+      type: 'request-dispatched', transport: 'http', nativeCompactionThresholdTokens: 100_000
+    })
     expect(http).toHaveBeenCalledOnce()
     expect(received).not.toHaveBeenCalled()
     expect(await request()).toContain('socket')
@@ -763,6 +768,7 @@ describe('Responses connection lifecycle', () => {
         dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
         timeout: 180_000, temperature: 0, data: null, maxRetries: 1,
         remoteProviderErrorRetries: 1, retryInterruptedResponse: true,
+        estimatedInputTokens: 120,
         onAttempt, onStreamEvent, onReasoningToken
       })
       await vi.waitFor(() => expect(onReasoningToken).toHaveBeenCalledWith('Checking.'))
@@ -784,11 +790,27 @@ describe('Responses connection lifecycle', () => {
       expect((await pending)?.output).toBe('Ready.')
       expect(requests).toHaveLength(2)
       expect(requests[1]).toEqual(requests[0])
-      expect(onAttempt.mock.calls[1]![0]).toMatchObject({
+      const failure = onAttempt.mock.calls[1]![0]
+      expect(failure).toMatchObject({
         outcome: 'LLMStreamIdleTimeout', reasoningOnly: true, replaySafe: true,
         retryDecision: 'retry', retryReason: 'reasoning_only_timeout',
-        idleMs: 30_000
+        idleMs: 30_000, estimatedInputTokens: 120,
+        nativeCompactionThresholdTokens: expect.any(Number)
       })
+      expect(failure.recentProviderEvents.at(-1)).toEqual({
+        type: 'response.output_item.done', elapsedMs: expect.any(Number)
+      })
+      expect(failure.recentStreamEvents.at(-1)).toEqual({
+        type: 'reasoning-end', elapsedMs: failure.elapsedMs - failure.idleMs
+      })
+      const failureLog = vi.mocked(LogHelper.error).mock.calls
+        .map(([message]) => message)
+        .find((message) => message.startsWith('LLM attempt '))
+      expect(failureLog).toContain('"recentProviderEvents":')
+      expect(failureLog).toContain('"recentStreamEvents":')
+      expect(failureLog).not.toContain('Checking.')
+      expect(failureLog).not.toContain('retained-reasoning')
+      expect(onAttempt.mock.calls.at(-1)?.[0]).not.toHaveProperty('recentProviderEvents')
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       provider.dispose()

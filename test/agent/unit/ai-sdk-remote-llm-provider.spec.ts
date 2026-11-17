@@ -415,6 +415,10 @@ describe('AISDKRemoteLLMProvider', () => {
     const body = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
 
     expect(body.context_management).toEqual([{ type: 'compaction', compact_threshold: 945_000 }])
+    expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'request-dispatched',
+      nativeCompactionThresholdTokens: body.context_management[0].compact_threshold
+    }))
     expect(body.store).toBe(false)
     expect(context.output).toEqual(output.slice(1))
     expect(context.sourceTranscript[0]).toEqual(transcript[0])
@@ -529,10 +533,15 @@ describe('AISDKRemoteLLMProvider', () => {
       output: [], usage: { input_tokens: 100, output_tokens: 0, total_tokens: 100 }
     }))
     const provider = new OpenAILLMProvider({ ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
+    const onStreamEvent = vi.fn()
     await provider.runChatCompletion([{ role: 'user', content: 'Continue.' }], {
-      ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream: false, disableContextCompaction: true
+      ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream: false, disableContextCompaction: true,
+      onStreamEvent
     })
     expect(JSON.parse(websocketMocks.fetch.mock.calls[0]![1].body).context_management).toBeUndefined()
+    expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'request-dispatched', nativeCompactionThresholdTokens: null
+    }))
     provider.dispose()
   })
 
@@ -1666,7 +1675,7 @@ describe('AISDKRemoteLLMProvider', () => {
       .toBe('Checking the note.\n\n**Preparing the reply**\n\nKeep it clear.')
     expect(provider.transport).toBe('websocket')
     expect(onStreamEvent.mock.calls.filter(([event]) => event.type !== 'prompt-cache').slice(0, 3).map(([event]) => event)).toEqual([
-      { type: 'request-dispatched', transport: 'websocket' },
+      expect.objectContaining({ type: 'request-dispatched', transport: 'websocket' }),
       { type: 'response-headers', transport: 'websocket' },
       { type: 'transport-activity', transport: 'websocket' }
     ])

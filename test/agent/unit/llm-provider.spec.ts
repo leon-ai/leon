@@ -229,6 +229,23 @@ describe('LLMProvider', () => {
       const details = formatPromptErrorForLog(error)
       expect(details).not.toContain('private')
       expect(details).not.toContain('local network instability')
+      expect(activity.snapshot(true).recentProviderEvents).toEqual([
+        { type: 'request.accepted', elapsedMs: 3_000 },
+        { type: 'tool.running', elapsedMs: 5_000 }
+      ])
+      expect(JSON.stringify(activity.snapshot(true))).not.toContain('private')
+
+      for (let index = 0; index < 20; index++) {
+        vi.setSystemTime(10_000 + index)
+        activity.observe({
+          type: 'provider-event',
+          providerEventType: index % 2 === 0 ? 'tool.started' : 'tool.completed'
+        })
+      }
+      expect(activity.snapshot(true).recentProviderEvents).toHaveLength(8)
+      expect(activity.snapshot(true).recentProviderEvents?.at(-1)).toEqual({
+        type: 'tool.completed', elapsedMs: 9_019
+      })
     } finally {
       vi.useRealTimers()
     }

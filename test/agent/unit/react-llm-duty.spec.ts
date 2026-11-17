@@ -5250,7 +5250,9 @@ describe('agent automatic compaction', () => {
     const [history, params] = coreMocks.prompt.mock.calls[0]!
     expect(JSON.stringify(history)).toContain('Verified release-42.')
     expect(params).toMatchObject({
-      responseTransport: 'http', systemPrompt: 'Follow the request.'
+      responseTransport: 'http', systemPrompt: 'Follow the request.',
+      estimatedInputTokens: expect.any(Number),
+      portableCompactionThresholdTokens: expect.any(Number)
     })
   })
 
