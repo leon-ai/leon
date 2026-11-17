@@ -1,4 +1,5 @@
 import { WorkspaceResourceKind } from '../../../bridges/runtime/contracts/workspace'
+import PACKAGE from '../../../package.json' with { type: 'json' }
 
 import type { Page, Route } from '@playwright/test'
 
@@ -120,6 +121,7 @@ for (const { theme, motion, width } of [
     await mockFolders(page)
     await page.goto('./')
     const sidebar = page.locator('.sidebar')
+    await expect(sidebar.locator('.sidebar-footer-status-label')).toHaveText(PACKAGE.version)
     const update = sidebar.getByRole('button', { name: 'New update available!', exact: true })
     await expect(update).toHaveText('New')
     await update.hover()
