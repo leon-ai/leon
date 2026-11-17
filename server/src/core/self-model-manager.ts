@@ -3,8 +3,12 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 
 import { CONFIG_MANAGER } from '@/config'
+import { ajv } from '@/ajv'
 import { runInference } from '@/core/llm-manager/inference'
 import { InferencePurpose } from '@/core/llm-manager/types'
+import { parseProviderResponseData } from '@/core/llm-manager/llm-provider/llm-provider-response'
+import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
+import { buildOwnerTurnEvidence } from '@/core/context-manager/owner-evidence'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -98,8 +102,8 @@ interface ReflectionPatch {
     text?: string
     confidence?: number
   }>
-  current_focus?: string[]
-  working_theories?: string[]
+  current_focus?: string[] | null
+  working_theories?: string[] | null
   retrospection?: string | null
   initiative_candidates?: Array<{
     summary?: string
@@ -118,6 +122,42 @@ const MAX_THEORY_ITEMS = 4
 const MAX_INITIATIVE_CANDIDATES = 5
 const MIN_BEHAVIORAL_PRINCIPLE_SEEN_COUNT = 2
 const MIN_BEHAVIORAL_PRINCIPLE_CONFIDENCE = 0.72
+// Allow the structured envelope and complete replacement lists to fit together.
+const REFLECTION_MAX_TOKENS = 512
+const REFLECTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    story_update: { type: ['string', 'null'] },
+    behavioral_principles: {
+      type: 'array', maxItems: 2,
+      items: {
+        type: 'object',
+        properties: { text: { type: 'string' }, confidence: { type: 'number' } },
+        required: ['text', 'confidence'], additionalProperties: false
+      }
+    },
+    current_focus: { type: ['array', 'null'], maxItems: MAX_FOCUS_ITEMS, items: { type: 'string' } },
+    working_theories: { type: ['array', 'null'], maxItems: MAX_THEORY_ITEMS, items: { type: 'string' } },
+    retrospection: { type: ['string', 'null'] },
+    initiative_candidates: {
+      type: 'array', maxItems: 2,
+      items: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string' }, rationale: { type: 'string' }, confidence: { type: 'number' }
+        },
+        required: ['summary', 'rationale', 'confidence'], additionalProperties: false
+      }
+    }
+  },
+  required: ['story_update', 'behavioral_principles', 'current_focus', 'working_theories', 'retrospection', 'initiative_candidates'],
+  additionalProperties: false
+} as const
+// Compatible providers may omit unchanged fields even when JSON mode requests
+// the full shape. Validate partial patches with the same property contracts.
+const validateReflectionPatch = ajv.compile<ReflectionPatch>({
+  ...REFLECTION_SCHEMA, required: [], minProperties: 1
+})
 const DEFAULT_STORY =
   'I am becoming more grounded through context, memory, and careful initiative.'
 function normalizeText(value: string): string {
@@ -660,9 +700,16 @@ export default class SelfModelManager {
     }
 
     try {
+      const owner = readOwnerProfileSync()
       const prompt = [
         'Current self model:',
         this.buildReflectionStateSection(state),
+        '',
+        'Owner profile:',
+        JSON.stringify({
+          name: owner.owner_full_name || owner.owner_first_name,
+          interactionPreferences: owner.interactionPreferences
+        }),
         '',
         'Current interaction:',
         `- Route: ${input.route}`,
@@ -670,8 +717,10 @@ export default class SelfModelManager {
         `- Tool executions: ${toolExecutions.length}`,
         `- Tool successes: ${digest.toolSuccessCount}`,
         `- Tool errors: ${digest.toolErrorCount}`,
-        `- Owner message: ${clipText(normalizeText(input.userMessage), 400)}`,
-        `- Leon message: ${clipText(normalizeText(input.assistantMessage), 500)}`,
+        JSON.stringify(buildOwnerTurnEvidence(
+          clipText(normalizeText(input.userMessage), 400),
+          clipText(normalizeText(input.assistantMessage), 500)
+        )),
         '',
         'Tool execution summary:',
         this.buildToolExecutionSummary(toolExecutions)
@@ -681,38 +730,20 @@ export default class SelfModelManager {
         usagePurpose: InferencePurpose.SelfModel,
         prompt,
         systemPrompt: [
-          'You maintain your private self-model.',
-          'Return exactly one JSON object and nothing else.',
-          'Prefer durable insight over repetition.',
-          'Use only the provided interaction and current self model.',
-          'Favor insights that help you make the owner\'s life easier over time.',
-          'Be concise and selective.',
-          'The JSON shape is:',
-          '{',
-          '  "story_update": string|null,',
-          '  "behavioral_principles": [{"text": string, "confidence": number}],',
-          '  "current_focus": string[],',
-          '  "working_theories": string[],',
-          '  "retrospection": string|null,',
-          '  "initiative_candidates": [{"summary": string, "rationale": string, "confidence": number}]',
-          '}',
-          'Rules:',
-          '- "story_update" should be one short first-person sentence when your trajectory meaningfully shifts.',
-          '- "behavioral_principles" should contain at most 2 durable first-person service habits that are likely to remain useful across future turns for this owner.',
-          '- Only propose a behavioral principle when it reflects a repeated or clearly durable adaptation, not a one-off tactic.',
-          '- Keep the self-model about durable behavior and decisions only; do not preserve reusable wording from outputs.',
-          '- "current_focus" should contain up to 3 short items.',
-          '- "working_theories" should contain up to 3 short items.',
-          '- "retrospection" should be one short first-person sentence about what you learned or should do differently.',
-          '- "initiative_candidates" should contain at most 2 safe, low-risk, read-only follow-up suggestions or questions.',
-          '- If nothing meaningful changed for a field, use null or an empty array.'
+          'Reflect on Leon’s durable service habits using the interaction, owner profile and current self-model. Return only JSON.',
+          'Current owner statements override profile defaults; explicit preferences override inferred theories. Exclude one-off formatting and reused answer wording.',
+          'For focus/theories, preserve useful items and remove contradictions. Supplied lists replace; null preserves; [] clears.',
+          'Propose only repeated or clearly durable service principles and safe read-only initiatives. Use first person for story/retrospection, concise items, and empty additive arrays when unchanged.'
         ].join('\n'),
         temperature: 0,
-        thoughtTokensBudget: 96,
-        maxTokens: 220,
+        jsonSchema: REFLECTION_SCHEMA,
+        disableThinking: true,
+        maxTokens: REFLECTION_MAX_TOKENS,
         trackProviderErrors: false
       })
-      return this.parseReflectionPatch(result?.output)
+      const patch = this.parseReflectionPatch(result?.output)
+      LogHelper.debug(`Self-model reflection: ${patch ? 'accepted' : 'rejected invalid output'}`)
+      return patch
     } catch (error) {
       LogHelper.title('Self Model Manager')
       LogHelper.warning(
@@ -773,30 +804,8 @@ export default class SelfModelManager {
   }
 
   private parseReflectionPatch(output: unknown): ReflectionPatch | null {
-    if (output && typeof output === 'object' && !Array.isArray(output)) {
-      return output as ReflectionPatch
-    }
-
-    if (typeof output !== 'string') {
-      return null
-    }
-
-    const normalized = output.trim()
-    if (!normalized) {
-      return null
-    }
-
-    const jsonStart = normalized.indexOf('{')
-    const jsonEnd = normalized.lastIndexOf('}')
-    if (jsonStart === -1 || jsonEnd <= jsonStart) {
-      return null
-    }
-
-    try {
-      return JSON.parse(normalized.slice(jsonStart, jsonEnd + 1)) as ReflectionPatch
-    } catch {
-      return null
-    }
+    const patch = parseProviderResponseData(output)
+    return validateReflectionPatch(patch) ? patch : null
   }
 
   private applyReflectionPatch(
@@ -851,14 +860,14 @@ export default class SelfModelManager {
       })
       .slice(0, MAX_BEHAVIORAL_PRINCIPLES)
 
-    state.currentFocus = dedupeList(
-      [...(patch.current_focus || []), ...state.currentFocus],
-      MAX_FOCUS_ITEMS
-    )
-    state.workingTheories = dedupeList(
-      [...(patch.working_theories || []), ...state.workingTheories],
-      MAX_THEORY_ITEMS
-    )
+    // Replacement semantics let explicit corrections retire obsolete hypotheses.
+    // Missing/null fields preserve unrelated learning; an empty list clears it.
+    if (Array.isArray(patch.current_focus)) {
+      state.currentFocus = dedupeList(patch.current_focus, MAX_FOCUS_ITEMS)
+    }
+    if (Array.isArray(patch.working_theories)) {
+      state.workingTheories = dedupeList(patch.working_theories, MAX_THEORY_ITEMS)
+    }
 
     const retrospection = normalizeListItem(String(patch.retrospection || ''), 180)
     if (retrospection) {
