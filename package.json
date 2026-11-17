@@ -74,7 +74,7 @@
     "start:satellite": "cross-env LEON_NODE_ENV=production node scripts/run-with-managed-node.js server/dist/satellite.js",
     "python-bridge": "tsx scripts/run-python-bridge.js server/src/intent-object.sample.json",
     "train": "tsx scripts/train/run-train.js",
-    "prepare-release": "tsx scripts/release/prepare-release.js",
+    "release": "tsx scripts/release/release.ts",
     "check": "tsx scripts/check.js",
     "kill": "tsx scripts/kill.js"
   },
@@ -175,7 +175,6 @@
     "eslint-import-resolver-typescript": "4.4.5",
     "eslint-plugin-import-x": "4.17.1",
     "eslint-plugin-unicorn": "72.0.0",
-    "git-changelog": "2.0.0",
     "globals": "17.7.0",
     "husky": "9.1.7",
     "json": "11.0.0",
