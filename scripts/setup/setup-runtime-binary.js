@@ -1,12 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import assert from 'node:assert/strict'
 
 import { FileHelper } from '@/helpers/file-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 
 import { createSetupStatus } from './setup-status'
 
-const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
+const LOCKED_PATH_ERROR_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
 
 function readManifest(manifestPath) {
   if (!fs.existsSync(manifestPath)) {
@@ -18,65 +19,6 @@ function readManifest(manifestPath) {
   } catch {
     return null
   }
-}
-
-async function removePath(targetPath) {
-  await fs.promises.rm(targetPath, { recursive: true, force: true })
-}
-
-function isMoveFallbackError(error) {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    MOVE_FALLBACK_ERROR_CODES.has(error.code)
-  )
-}
-
-async function movePath(sourcePath, destinationPath) {
-  try {
-    await fs.promises.rename(sourcePath, destinationPath)
-  } catch (error) {
-    if (!isMoveFallbackError(error)) {
-      throw error
-    }
-
-    await fs.promises.cp(sourcePath, destinationPath, {
-      recursive: true,
-      force: true
-    })
-    await removePath(sourcePath)
-  }
-}
-
-async function moveDirectoryContents(sourcePath, destinationPath) {
-  await fs.promises.mkdir(destinationPath, { recursive: true })
-
-  const entries = await fs.promises.readdir(sourcePath, {
-    withFileTypes: true
-  })
-
-  await Promise.all(
-    entries.map((entry) =>
-      movePath(
-        path.join(sourcePath, entry.name),
-        path.join(destinationPath, entry.name)
-      )
-    )
-  )
-}
-
-async function cleanInstallDirectory(basePath) {
-  await fs.promises.mkdir(basePath, { recursive: true })
-
-  const entries = await fs.promises.readdir(basePath, {
-    withFileTypes: true
-  })
-
-  await Promise.all(
-    entries
-      .filter((entry) => entry.name !== 'versions.json')
-      .map((entry) => removePath(path.join(basePath, entry.name)))
-  )
 }
 
 async function getFlattenedExtractionRoot(extractionPath) {
@@ -114,16 +56,30 @@ export async function setupRuntimeBinary({
     return
   }
 
-  await cleanInstallDirectory(basePath)
+  const relative = (filename) => {
+    const value = path.relative(basePath, filename)
+    assert(!value.startsWith('..') && !path.isAbsolute(value), 'Runtime files must stay within their installation')
+
+    return value
+  }
+  let staging
+  let preserveBackup = false
 
   try {
+    await fs.promises.mkdir(path.dirname(basePath), { recursive: true })
+    // Keep downloads and extraction beside the live runtime. A failed download
+    // must leave the executable available to both Core and its recovery worker.
+    staging = await fs.promises.mkdtemp(path.join(path.dirname(basePath), `.${path.basename(basePath)}-`))
+    const candidate = path.join(staging, 'candidate')
+    const backup = path.join(staging, 'previous')
+    const stagedBinary = path.join(candidate, relative(binaryPath))
+    await fs.promises.mkdir(candidate)
     status.pause()
 
     if (archiveFileName) {
-      const archivePath = path.join(basePath, archiveFileName)
-      const extractionPath = await fs.promises.mkdtemp(
-        path.join(basePath, `${name.toLowerCase()}-extract-`)
-      )
+      const archivePath = path.join(staging, archiveFileName)
+      const extractionPath = path.join(staging, 'extracted')
+      await fs.promises.mkdir(extractionPath)
 
       try {
         await FileHelper.downloadFile(downloadURL, archivePath, {
@@ -138,7 +94,9 @@ export async function setupRuntimeBinary({
 
         const flattenedRootPath = await getFlattenedExtractionRoot(extractionPath)
 
-        await moveDirectoryContents(flattenedRootPath, installPath)
+        await fs.promises.cp(flattenedRootPath, path.join(candidate, relative(installPath)), {
+          recursive: true, verbatimSymlinks: true
+        })
       } finally {
         await Promise.all([
           fs.promises.rm(archivePath, { force: true }),
@@ -146,9 +104,9 @@ export async function setupRuntimeBinary({
         ])
       }
     } else {
-      await fs.promises.mkdir(path.dirname(binaryPath), { recursive: true })
+      await fs.promises.mkdir(path.dirname(stagedBinary), { recursive: true })
 
-      await FileHelper.downloadFile(downloadURL, binaryPath, {
+      await FileHelper.downloadFile(downloadURL, stagedBinary, {
         cliProgress: true,
         parallelStreams: 3,
         skipExisting: false
@@ -158,24 +116,52 @@ export async function setupRuntimeBinary({
     }
 
     if (!SystemHelper.isWindows()) {
-      await fs.promises.chmod(binaryPath, 0o755)
+      await fs.promises.chmod(stagedBinary, 0o755)
     }
 
-    if (!fs.existsSync(binaryPath)) {
-      throw new Error(`Cannot find ${name} binary at "${binaryPath}"`)
+    if (!(await fs.promises.stat(stagedBinary)).isFile()) {
+      throw new Error(`Cannot find the staged ${name} binary`)
     }
 
-    await FileHelper.createManifestFile(manifestPath, name.toLowerCase(), version, {
+    const versions = path.join(basePath, 'versions.json')
+    if (fs.existsSync(versions)) {
+      await fs.promises.copyFile(versions, path.join(candidate, 'versions.json'))
+    }
+    await FileHelper.createManifestFile(path.join(candidate, relative(manifestPath)), name.toLowerCase(), version, {
       os: SystemHelper.getInformation().type,
       architecture: SystemHelper.getInformation().cpuArchitecture
     })
 
-    status.succeed(`${name}: ${version}`)
-  } catch (error) {
-    if (status.isSpinning) {
-      status.fail(`Failed to set up ${name}`)
+    const previous = fs.existsSync(basePath)
+    if (previous) {
+      await fs.promises.rename(basePath, backup)
+      preserveBackup = true
+    }
+    try {
+      await fs.promises.rename(candidate, basePath)
+      preserveBackup = false
+    } catch (error) {
+      if (previous) {
+        await fs.promises.rename(backup, basePath)
+        preserveBackup = false
+      }
+      throw error
     }
 
+    status.succeed(`${name}: ${version}`)
+  } catch (error) {
+    status.fail(`Failed to set up ${name}`)
+
     throw new Error(`Failed to set up ${name}: ${error}`)
+  } finally {
+    if (staging && !preserveBackup) {
+      // Windows can retain a running executable in the old directory until its
+      // installer exits. A locked backup must not turn a valid install into failure.
+      await fs.promises.rm(staging, { recursive: true, force: true }).catch((error) => {
+        if (!LOCKED_PATH_ERROR_CODES.has(error.code)) {
+          throw error
+        }
+      })
+    }
   }
 }
