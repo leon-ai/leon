@@ -53,6 +53,9 @@ const globs = [
     await execa('tsrs', ['--fast', '--noEmit', '-p', 'test/web-app/tsconfig.json'], {
       stdio: 'inherit'
     })
+    await execa('tsrs', ['--fast', '--noEmit', '-p', 'scripts/release/tsconfig.json'], {
+      stdio: 'inherit'
+    })
 
     LogHelper.success('Looks great')
     LoaderHelper.stop()

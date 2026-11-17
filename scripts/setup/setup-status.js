@@ -1,4 +1,7 @@
 import ora from 'ora'
+import { randomUUID } from 'node:crypto'
+
+import { reportSetupProgress } from './setup-progress'
 
 import { createSetupJokeScheduler } from './setup-jokes'
 
@@ -21,7 +24,13 @@ import { createSetupJokeScheduler } from './setup-jokes'
  * @returns {SetupStatus}
  */
 export function createSetupStatus(text) {
+  const id = randomUUID()
+  const structured = process.env.LEON_SETUP_PROGRESS === 'json'
+  const emit = (phase, label = spinner.text) => {
+    reportSetupProgress({ id, phase, label })
+  }
   const spinner = ora({
+    isSilent: structured,
     spinner: 'dots2',
     color: 'cyan',
     text,
@@ -31,7 +40,10 @@ export function createSetupStatus(text) {
   const jokeScheduler = createSetupJokeScheduler()
   const status = {
     start() {
-      jokeScheduler.start()
+      if (!structured) {
+        jokeScheduler.start()
+      }
+      emit('running')
       spinner.start()
 
       return status
@@ -43,24 +55,28 @@ export function createSetupStatus(text) {
     },
     stop() {
       jokeScheduler.finish()
+      emit('complete')
       spinner.stop()
 
       return status
     },
     succeed(successText) {
       jokeScheduler.finish()
+      emit('complete', successText)
       spinner.succeed(successText)
 
       return status
     },
     fail(failureText) {
       jokeScheduler.finish()
+      emit('failed', failureText)
       spinner.fail(failureText)
 
       return status
     },
     warn(warningText) {
       jokeScheduler.finish()
+      emit('message', warningText)
       spinner.warn(warningText)
 
       return status
@@ -73,6 +89,7 @@ export function createSetupStatus(text) {
     },
     set text(nextText) {
       spinner.text = nextText
+      emit('running', nextText)
     }
   }
 

@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { stripVTControlCharacters } from 'node:util'
+import { fileURLToPath } from 'node:url'
 
 const INSTALL_COMMAND =
   'stty rows 40 cols 120 && pnpm install --frozen-lockfile'
@@ -98,7 +99,10 @@ function getCleanEnvironment() {
   return environment
 }
 
-function stopProcessGroup(child, signal = 'SIGTERM') {
+/**
+ * Stops a CI-owned process tree without affecting other Leon installations.
+ */
+export function stopProcessGroup(child, signal = 'SIGTERM') {
   if (!child?.pid) {
     return
   }
@@ -142,9 +146,6 @@ function stopActiveChildAndExit(signal) {
   process.exit(signal === 'SIGINT' ? 130 : 143)
 }
 
-process.once('SIGINT', () => stopActiveChildAndExit('SIGINT'))
-process.once('SIGTERM', () => stopActiveChildAndExit('SIGTERM'))
-
 function ensureEmptyPNPMStore(environment) {
   const result = spawnSync(
     PNPM_COMMAND,
@@ -176,7 +177,7 @@ function normalizeOutput(output) {
  * Redact complete lines before console or artifact output, including secrets
  * split across process output chunks. Installer prompts are handled separately.
  */
-function forwardSafeOutput(source, destination, logStream) {
+export function forwardSafeOutput(source, destination, logStream) {
   const apiKey = process.env.LEON_FRESH_INSTALL_API_KEY?.trim()
   const lines = createInterface({ input: source, crlfDelay: Infinity })
   lines.on('line', (line) => {
@@ -569,15 +570,17 @@ async function main() {
   console.log('Fresh installation, build, shell, and OCR verification passed.')
 }
 
-main().catch((error) => {
-  if (inferenceChild) {
-    stopProcessGroup(inferenceChild)
-  }
-
-  if (activeChild) {
-    stopProcessGroup(activeChild)
-  }
-
-  console.error(error)
-  process.exit(1)
-})
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
+  process.once('SIGINT', () => stopActiveChildAndExit('SIGINT'))
+  process.once('SIGTERM', () => stopActiveChildAndExit('SIGTERM'))
+  main().catch((error) => {
+    if (inferenceChild) {
+      stopProcessGroup(inferenceChild)
+    }
+    if (activeChild) {
+      stopProcessGroup(activeChild)
+    }
+    console.error(error)
+    process.exit(1)
+  })
+}

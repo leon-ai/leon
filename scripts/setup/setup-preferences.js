@@ -25,6 +25,9 @@ export default async function setupPreferences(
     !process.stdin.isTTY ||
     !process.stdout.isTTY
   ) {
+    if (process.env.LEON_SETUP_UPDATE === 'true') {
+      return { ...defaultPreferences, setupLocalAI: existingLLMChoice.setupLocalAI || localAISetupState.isInstalled }
+    }
     if (!localAICapability.canInstallLocalAI) {
       SetupUI.info(
         'This computer is not a good fit for local AI, so I will set up the essentials.'

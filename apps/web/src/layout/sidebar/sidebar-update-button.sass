@@ -9,10 +9,16 @@
     font-size: var(--font-size-xl)
 
   &.sidebar-update-button-available
-    .button-icon,
-    .button-label
-      color: var(--color-accent)
+    --button-background: var(--color-accent-soft)
+    color: var(--color-accent)
 
     .button-label
-      font-size: var(--font-size-sm)
+      font-size: var(--font-size-xs)
       font-weight: var(--font-weight-semi-bold)
+
+.sidebar-update-button-checking .icon-part-download
+  animation: icon-download calc(var(--transition-duration-main) * 4) var(--transition-timing-main) infinite
+
+@media (prefers-reduced-motion: reduce)
+  .sidebar-update-button-checking .icon-part-download
+    animation: none

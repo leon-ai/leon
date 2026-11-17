@@ -36,6 +36,8 @@ Read the relevant source and look for existing helpers, components, and utilitie
 
 The [repository instructions](../AGENTS.md) cover architecture, style, dependencies, and testing in more detail. The generated [Leon overview](../core/context/LEON.md) and [architecture overview](../core/context/ARCHITECTURE.md) can help you find your way around; check the source for the details.
 
+For versioning, release preparation, distribution, and owner updates, read [Releasing Leon](../RELEASING.md).
+
 ## Development setup
 
 - macOS, Linux, or Windows

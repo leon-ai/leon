@@ -1,3 +1,10 @@
+import { version } from '../../../package.json'
+
+/**
+ * Keeps the installed web app's version aligned with the root release manifest.
+ */
+export const LEON_VERSION = version
+
 /**
  * Development uses Vite's same-origin API proxy, preserving profile cookies.
  */

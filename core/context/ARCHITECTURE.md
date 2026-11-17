@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-11-15T20:57:07+08:00
+- Generated at: 2026-11-17T23:22:43+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -85,6 +85,8 @@
 - A small shortlist matches the current task; full procedures load on demand. Retrieval uses local matching, without QMD or an extra LLM call.
 - The limit is 196 experiences. Retention uses last use, or creation time when unused, and protects active procedures. Loading and use have separate counters.
 ## Reliability
+- Published GitHub releases drive host-wide updates through the authenticated Core API. Clean Git-clone installations started with the managed launcher can fast-forward to a reviewed release; dependency installation and setup run after Core stops, with rollback on setup failure and a browser reconnect after restart.
+- Prebuilt Core installations stage checksum-verified archives, prepare profiles through the same ordered setup as source installations, then select immutable runtime versions. Failed candidate startup restores previous code without undoing profile migrations. Core and desktop share product versions and release notes; one client action coordinates their platform-specific update transports, with native replacement following successful server preparation.
 - Schema-guided tool calls and argument repair reduce malformed executions.
 - Duplicate-input guards and observation-driven recovery reduce repeated bad calls while preserving successful progress.
 - Leon prefers dedicated tools over shell commands to keep behavior stable and auditable.

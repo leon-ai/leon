@@ -21,7 +21,7 @@ import { Logo } from './logo'
 import { Menu } from './menu'
 import { SessionList } from './session-list'
 import { SidebarFooter } from './sidebar-footer'
-import { SidebarUpdateButton } from './sidebar-update-button'
+import { SidebarUpdateControl } from './sidebar-update-control'
 
 const DARK_THEME_LOGO_SRC = getPublicAssetPath('img/logo-for-dark-bg-text.svg')
 const LIGHT_THEME_LOGO_SRC = getPublicAssetPath(
@@ -245,7 +245,7 @@ export function Sidebar() {
           </div>
         </div>
         <div className="sidebar-controls">
-          <SidebarUpdateButton available />
+          <SidebarUpdateControl />
           <Button
             iconName={sidebarExpanded ? 'sidebar-fold' : 'sidebar-unfold'}
             tone="muted"

@@ -4,6 +4,15 @@
 name: Fresh installation
 
 on:
+  workflow_call:
+    inputs:
+      verify-ota:
+        description: Verify the release upgrade on Linux
+        type: boolean
+        default: false
+    secrets:
+      LEON_DEEPSEEK_API_KEY:
+        required: true
   schedule:
     # Space the three weekly runs exactly 56 hours apart (UTC).
     - cron: '17 4 * * 1'
@@ -20,9 +29,9 @@ concurrency:
 
 jobs:
   fresh-install:
-    name: Fresh installation (Linux)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    name: ${{ inputs.verify-ota && 'Fresh installation and OTA (Linux)' || 'Fresh installation (Linux)' }}
+    runs-on: ${{ inputs.verify-ota && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    timeout-minutes: ${{ inputs.verify-ota && 180 || 90 }}
 
     steps:
       # Scheduled workflows are loaded from the default branch, but Leon's
@@ -31,6 +40,7 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
+          fetch-depth: ${{ inputs.verify-ota && '0' || '1' }}
 
       - name: Use Node.js
         uses: actions/setup-node@v7.1.0
@@ -54,12 +64,56 @@ jobs:
           UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
         run: node scripts/ci/test-fresh-install.js
 
+      - name: Package and verify prebuilt Core
+        if: inputs.verify-ota
+        env:
+          LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+          LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/distribution/build-runtime.js "${{ runner.temp }}/leon-runtime"
+          node scripts/distribution/verify-runtime.js "${{ runner.temp }}/leon-runtime"
+          node scripts/distribution/verify-runtime-ota.js "${{ runner.temp }}/leon-runtime"
+
+      - name: Retain verified Core archive
+        if: inputs.verify-ota
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: core-runtime-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/leon-runtime
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Verify release OTA and prepare publication
+        if: inputs.verify-ota
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+          LEON_HOME: ${{ runner.temp }}/leon-ota
+          LEON_PROFILE: ota-ci
+          LEON_OTA_LOG_PATH: ${{ runner.temp }}/leon-ota.log
+          LEON_RELEASE_OUTPUT: ${{ runner.temp }}/leon-release
+          pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
+          UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
+        run: pnpm exec tsx scripts/ci/test-release-ota.ts
+
+      - name: Retain verified release content
+        if: inputs.verify-ota
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: verified-release
+          path: ${{ runner.temp }}/leon-release
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload installer log on failure
         if: failure()
         uses: actions/upload-artifact@v7.0.2
         with:
           name: fresh-install-log
-          path: /tmp/leon-fresh-install.log
+          path: |
+            /tmp/leon-fresh-install.log
+            ${{ runner.temp }}/leon-ota.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -70,7 +124,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        # Releases build on native, versioned images; routine checks follow latest.
+        os: ${{ fromJSON(inputs.verify-ota && '["macos-15", "windows-2022", "ubuntu-24.04-arm"]' || '["macos-latest", "windows-latest"]') }}
 
     steps:
       - name: Check out Leon
@@ -128,6 +183,26 @@ jobs:
           LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
           LEON_FRESH_INSTALL_LOG_PATH: ${{ runner.temp }}/leon-fresh-inferences.log
         run: node scripts/ci/test-fresh-install.js --verify
+
+      - name: Package and verify prebuilt Core
+        if: inputs.verify-ota
+        env:
+          LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+          LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/distribution/build-runtime.js "${{ runner.temp }}/leon-runtime"
+          node scripts/distribution/verify-runtime.js "${{ runner.temp }}/leon-runtime"
+          node scripts/distribution/verify-runtime-ota.js "${{ runner.temp }}/leon-runtime"
+
+      - name: Retain verified Core archive
+        if: inputs.verify-ota
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: core-runtime-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/leon-runtime
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload inference log on failure
         if: failure()

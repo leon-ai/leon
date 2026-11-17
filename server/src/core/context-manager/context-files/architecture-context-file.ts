@@ -94,6 +94,8 @@ export class ArchitectureContextFile extends ContextFile {
       '- A small shortlist matches the current task; full procedures load on demand. Retrieval uses local matching, without QMD or an extra LLM call.',
       '- The limit is 196 experiences. Retention uses last use, or creation time when unused, and protects active procedures. Loading and use have separate counters.',
       '## Reliability',
+      '- Published GitHub releases drive host-wide updates through the authenticated Core API. Clean Git-clone installations started with the managed launcher can fast-forward to a reviewed release; dependency installation and setup run after Core stops, with rollback on setup failure and a browser reconnect after restart.',
+      '- Prebuilt Core installations stage checksum-verified archives, prepare profiles through the same ordered setup as source installations, then select immutable runtime versions. Failed candidate startup restores previous code without undoing profile migrations. Core and desktop share product versions and release notes; one client action coordinates their platform-specific update transports, with native replacement following successful server preparation.',
       '- Schema-guided tool calls and argument repair reduce malformed executions.',
       '- Duplicate-input guards and observation-driven recovery reduce repeated bad calls while preserving successful progress.',
       '- Leon prefers dedicated tools over shell commands to keep behavior stable and auditable.'

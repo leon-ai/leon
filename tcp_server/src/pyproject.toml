@@ -3,7 +3,7 @@ name = "leon-tcp-server"
 # Keep this metadata version for uv project compatibility only.
 # Leon runtime versioning still comes from `version.py`.
 version = "1.0.0"
-requires-python = "==3.11.9"
+requires-python = "==3.11.18"
 dependencies = [
   "python-dotenv==0.19.2",
   "transformers==4.27.4",
