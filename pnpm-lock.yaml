@@ -164,6 +164,9 @@ importers:
       marked:
         specifier: 18.0.11
         version: 18.0.11
+      node-llama-cpp:
+        specifier: 3.22.2
+        version: 3.22.2(@typescript/typescript6@6.0.2)(supports-color@5.5.0)
       ora:
         specifier: 9.3.0
         version: 9.3.0
@@ -209,9 +212,15 @@ importers:
       streamdown:
         specifier: 2.7.1
         version: 2.7.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(supports-color@5.5.0)
+      tar:
+        specifier: 7.5.23
+        version: 7.5.23
       tree-kill:
         specifier: 1.2.2
         version: 1.2.2
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       ws:
         specifier: 8.22.2
         version: 8.22.2
@@ -297,9 +306,6 @@ importers:
       lint-staged:
         specifier: 15.1.0
         version: 15.1.0(supports-color@5.5.0)
-      node-llama-cpp:
-        specifier: 3.22.2
-        version: 3.22.2(@typescript/typescript6@6.0.2)(supports-color@5.5.0)
       nodemon:
         specifier: 3.1.14
         version: 3.1.14
@@ -318,9 +324,6 @@ importers:
       tsrs:
         specifier: 0.25.0-ts7.1.0-beta
         version: 0.25.0-ts7.1.0-beta
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -4425,8 +4428,8 @@ packages:
   tailwind-merge@3.7.0:
     resolution: {integrity: sha512-XPPUyAc+cvspz3lHTcR/QgPfW2A0lv/xQNIjX3HGhLR+Nq2lHaLq5MtTesHn8GUr3W3DguT2KT5x3NVgRtYwmA==}
 
-  tar@7.5.9:
-    resolution: {integrity: sha512-BTLcK0xsDh2+PUe9F6c2TlRp4zOOBMTkoQHQIWSIzI0R7KG46uEwq4OPk2W7bZcprBMsuaeFsqwYr7pjh6CuHg==}
+  tar@7.5.23:
+    resolution: {integrity: sha512-lkukzdoGngZHJZXxW4S/E4Fp9ghTDlyZXrQGRNoJ/LXvDKcXUTq2sg5yQe74po7Voea6n/IN09+wE/QvJMiifA==}
     engines: {node: '>=18'}
 
   thread-stream@4.0.0:
@@ -6942,7 +6945,7 @@ snapshots:
       node-api-headers: 1.8.0
       rc: 1.2.8
       semver: 7.8.5
-      tar: 7.5.9
+      tar: 7.5.23
       url-join: 4.0.1
       which: 6.0.1
       yargs: 17.7.2
@@ -9451,7 +9454,7 @@ snapshots:
 
   tailwind-merge@3.7.0: {}
 
-  tar@7.5.9:
+  tar@7.5.23:
     dependencies:
       '@isaacs/fs-minipass': 4.0.1
       chownr: 3.0.0

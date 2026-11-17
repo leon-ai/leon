@@ -120,7 +120,7 @@ export class RuntimeHelper {
    * Resolve the shared JSON processor installed during Leon's base setup.
    */
   public static getJQBinPath(): string {
-    return path.join(this.binPath, 'jq', SystemHelper.isWindows() ? 'jq.exe' : 'jq')
+    return process.env['LEON_JQ_PATH'] || path.join(this.binPath, 'jq', SystemHelper.isWindows() ? 'jq.exe' : 'jq')
   }
 
   /**
