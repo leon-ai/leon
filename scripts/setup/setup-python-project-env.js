@@ -175,7 +175,8 @@ export async function installPythonProjectDependencies(
 export async function setupPythonProjectEnv({
   name,
   projectPath,
-  stampFileName
+  stampFileName,
+  prebuiltPackagesPath
 }) {
   const status = createSetupStatus(`Setting up ${name} dependencies...`).start()
   const pyprojectPath = path.join(projectPath, PYPROJECT_FILE_NAME)
@@ -209,7 +210,15 @@ export async function setupPythonProjectEnv({
       venvPath
     ], { cwd: projectPath })
 
-  await installPythonProjectDependencies(projectPath, dependencies)
+  if (prebuiltPackagesPath) {
+    // Build workers resolve dependencies; owners only bind them to a local venv.
+    const result = await execa(getProjectVenvPythonPath(projectPath), [
+      '-c', 'import sysconfig; print(sysconfig.get_path("purelib"))'
+    ])
+    await fs.promises.cp(prebuiltPackagesPath, result.stdout.trim(), { recursive: true })
+  } else {
+    await installPythonProjectDependencies(projectPath, dependencies)
+  }
 
   await fs.promises.writeFile(stampPath, fingerprint)
 

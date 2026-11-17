@@ -10,7 +10,7 @@ import syncSkillDependencies from './sync-skill-dependencies'
 /**
  * Browse skills and set them up
  */
-export default async function () {
+export default async function ({ installDependencies = true } = {}) {
   const status = createSetupStatus('Setting up skills...').start()
 
   try {
@@ -40,7 +40,9 @@ export default async function () {
       }
 
       await setupSkillsSettings(skillName, skillContext)
-      await syncSkillDependencies(skillName, skillContext)
+      if (installDependencies) {
+        await syncSkillDependencies(skillName, skillContext)
+      }
     }
 
     status.succeed('Skills: ready')
