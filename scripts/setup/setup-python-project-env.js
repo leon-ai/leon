@@ -16,9 +16,9 @@ import {
   UV_RUNTIME_BIN_PATH
 } from '@/constants'
 import { SystemHelper } from '@/helpers/system-helper'
-import { LogHelper } from '@/helpers/log-helper'
 
 import { createSetupStatus } from './setup-status'
+import { SetupUI } from './setup-ui'
 
 const PYPROJECT_FILE_NAME = 'pyproject.toml'
 const UV_CONFIG_FILE_NAME = 'uv.toml'
@@ -228,7 +228,7 @@ export async function installPythonProjectDependencies(
 
     // uv's index search handles missing metadata, but not every transport or
     // artifact failure. Retry once against PyPI with the same pins and policy.
-    LogHelper.warning('Python mirror installation failed; retrying once with the original PyPI index')
+    SetupUI.warning('I could not install from the Python mirror; I will retry once with the original PyPI index')
 
     const fallbackEnvironment = { ...environment }
 

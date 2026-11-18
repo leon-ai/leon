@@ -88,7 +88,7 @@ export class UpdateService {
         try {
           return [await read<PublishedRelease>(`${RELEASES_URL}/latest`)]
         } catch (error) {
-          if ((error as { status?: number }).status !== 404) {
+          if ((error as { upstreamStatus?: number })?.upstreamStatus !== 404) {
             throw error
           }
         }

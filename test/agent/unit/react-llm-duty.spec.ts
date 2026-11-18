@@ -7,6 +7,7 @@ import { saveConnection } from '@/core/connections/connection-service'
 import { ConnectionStatus } from '@/core/connections/connection-store'
 import { AuroraMode } from '@/core/aurora/agent-ui-contract'
 import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
+import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -2389,6 +2390,109 @@ describe('continuous agent loop', () => {
       observation: expect.stringContaining('Verified invoice-0003.pdf.')
     }))
     expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')
+  })
+
+  it('keeps recovered proof visible during completion review after a long tool history', async () => {
+    const receipt = 'The archive checksum matches the signed receipt.'
+    const observation = JSON.stringify({
+      status: 'success',
+      output_log_path: '/artifacts/receipt',
+      data: { before: 'x'.repeat(1_800), receipt, after: 'x'.repeat(1_800) }
+    })
+    const initialExecutionHistory = Array.from({ length: 48 }, (_, index) => ({
+      function: callable.qualifiedName,
+      status: 'success' as const,
+      observation: JSON.stringify({
+        status: 'success',
+        output_log_path: `/artifacts/search-${index}`,
+        data: '\\"'.repeat(1_000)
+      })
+    }))
+    const executeFunction = vi.fn(async () => ({
+      execution: { function: callable.qualifiedName, status: 'success' as const, observation }
+    }))
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: 'I checked the archive.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'continue', reason: 'Recover the signed receipt.'
+      }) })
+      .mockResolvedValueOnce({
+        toolCalls: [toolCall('receipt', CALLABLE_TOOL_NAME, { query: 'signed receipt' })]
+      })
+      .mockResolvedValueOnce({ textContent: 'I verified the archive.' })
+      .mockImplementationOnce(async (messages) => {
+        const { tool_evidence: evidence } = JSON.parse(messages.at(-1).content)
+
+        expect(Array.isArray(evidence)).toBe(true)
+        expect(JSON.stringify(evidence).length).toBeLessThanOrEqual(TOOL_RESULT_INLINE_MAX_CHARS)
+        expect(evidence).toContainEqual(expect.objectContaining({ artifact: '/artifacts/search-0' }))
+        expect(evidence).toContainEqual(expect.objectContaining({
+          artifact: '/artifacts/receipt',
+          observation
+        }))
+
+        return { textContent: JSON.stringify({
+          status: 'continue', reason: 'Include the verified checksum outcome in the answer.'
+        }) }
+      })
+      .mockResolvedValueOnce({ textContent: receipt })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'complete', reason: 'The answer reports the verified outcome.'
+      }) })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Verify the archive against its receipt.' }],
+      catalog: createCatalog(),
+      initialExecutionHistory,
+      executeFunction,
+      callModel,
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe(receipt)
+    expect(executeFunction).toHaveBeenCalledOnce()
+  })
+
+  it('stops completion review without republishing drafts when the evidence has not changed', async () => {
+    const firstDraft = 'I verified the first archive.'
+    const revisedDraft = 'The first archive has been checked.'
+    const reason = 'Evidence for the second archive is still missing.'
+    const onProgressMessage = vi.fn()
+    const executeFunction = vi.fn(async () => ({
+      execution: {
+        function: callable.qualifiedName,
+        status: 'success' as const,
+        observation: 'The checksum of the first archive matches.'
+      }
+    }))
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({
+        toolCalls: [toolCall('first', CALLABLE_TOOL_NAME, { query: 'first archive' })]
+      })
+      .mockResolvedValueOnce({ textContent: firstDraft })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({
+        status: 'continue', reason: 'Verify the second archive.'
+      }) })
+      .mockResolvedValueOnce({ textContent: revisedDraft })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'continue', reason }) })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Verify both archives.' }],
+      catalog: createCatalog(),
+      executeFunction,
+      onProgressMessage,
+      callModel,
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('progress is saved in this session')
+    expect(result.transcript).toContainEqual(expect.objectContaining({
+      runtimeContext: { completion_review_feedback: reason }
+    }))
+    expect(result.executionHistory).toHaveLength(1)
+    expect(executeFunction).toHaveBeenCalledOnce()
+    expect(onProgressMessage).toHaveBeenCalledExactlyOnceWith(firstDraft)
+    expect(callModel).toHaveBeenCalledTimes(5)
   })
 
   it('returns a genuine blocker without replaying input', async () => {

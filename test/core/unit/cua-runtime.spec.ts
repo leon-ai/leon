@@ -767,10 +767,12 @@ describe('CuaRuntime', () => {
     const provider = new CuaRuntime(async () => driver as never)
     const input = {
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'click',
-      parameters: { pid: 42, window_id: 7, element_token: 'button' },
+      parameters: { pid: 42, window_id: 7, element_token: 'button', action: 'press' },
       profileName: PROFILE_NAME, conversationSessionId: 'cleanup-error'
     }
     expect((await provider.execute(input)).success).toBe(false)
+    const click = driver.callTool.mock.calls.find(([action]) => action === 'click')
+    expect(JSON.parse(click![1])).not.toHaveProperty('action')
     expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([true, false])
     await provider.execute({ ...input, functionName: 'get_window_state', parameters: { pid: 42, window_id: 7 } })
     expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([true, false, false, false])
