@@ -419,7 +419,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 test('restores browsed single-choice drafts without submitting and locks an activated answer while saving', async ({ page, ui }) => {
   const history = ui.history.get(SESSION_ID)!
   const answer = history.at(-1)!
-  answer.message = 'A quiet morning leaves more time for a walk.'
+  const context = 'A quiet morning leaves more time for a walk.'
+  const title = 'How would you like to start?'
+  answer.message = `${context}\r\n\r\n${title}`
   answer.answerParts = auroraParts(history.at(-2)!.messageId)
   let finish: (() => void) | undefined
   const pending = new Promise<void>((resolve) => {
@@ -439,10 +441,12 @@ test('restores browsed single-choice drafts without submitting and locks an acti
 
   try {
     await page.goto(SESSION_URL)
-    const choice = page.getByRole('region', { name: 'How would you like to start?', exact: true })
-    const explanation = page.getByText(answer.message, { exact: true })
+    const choice = page.getByRole('region', { name: title, exact: true })
+    const question = page.getByText(title, { exact: true })
+    const explanation = page.getByText(context, { exact: true })
     await expect(explanation).toBeVisible()
     await expect(choice).toBeVisible()
+    await expect(question).toHaveCount(1)
     expect((await explanation.boundingBox())!.y).toBeLessThan((await choice.boundingBox())!.y)
     await choice.getByRole('radio').first().focus()
     await choice.getByRole('radio').first().press('ArrowDown')
@@ -451,6 +455,7 @@ test('restores browsed single-choice drafts without submitting and locks an acti
     expect(requests).toHaveLength(0)
     await page.reload()
     await expect(explanation).toBeVisible()
+    await expect(question).toHaveCount(1)
     await expect(selected).toBeChecked()
     expect(requests).toHaveLength(0)
     await selected.click()
@@ -570,13 +575,17 @@ test('streams Markdown beside native surfaces without waiting for the final resp
     .getByRole('radio').first()).toBeDisabled()
 })
 
-test('shows finalized clarification Markdown once above the choices and restores it after reload', async ({ page, ui }) => {
+test('keeps the confirmation question inside the card during live delivery and after reload', async ({ page, ui }) => {
   const history = ui.history.get(SESSION_ID)!
   const answer = history.at(-1)!
   answer.message = ''
   answer.isAddedToHistory = false
   ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
-  const draftParts = auroraParts(history.at(-2)!.messageId)
+  const title = 'May I save the draft?'
+  const parts = auroraParts(history.at(-2)!.messageId, {
+    root: 'input', elements: { input: { type: 'BooleanChoice', props: { title } } }
+  })
+  const draftParts = structuredClone(parts)
   const draft = draftParts[0]!
   if (draft.kind === 'ui') {
     draft.surface.status = 'draft'
@@ -587,17 +596,20 @@ test('shows finalized clarification Markdown once above the choices and restores
   const draftText = 'I am weighing the options.'
   await ui.emit([{ ...event, sequence: 1, type: 'answer_parts', data: { answer_parts: draftParts } },
     { ...event, sequence: 2, type: 'text_stream', data: { kind: 'answer', generationId: 'live-answer', token: draftText } }])
-  const choice = page.getByRole('region', { name: 'How would you like to start?', exact: true })
-  const radio = choice.getByRole('radio', { name: 'A quiet morning', exact: true })
+  const choice = page.getByRole('region', { name: title, exact: true })
+  const radio = choice.getByRole('radio', { name: 'Yes', exact: true })
   await expect(radio).toBeDisabled()
   await expect(page.getByText(draftText, { exact: true })).toBeVisible()
 
-  const text = 'A quiet morning leaves more time for a walk.'
-  const answerParts = [{ id: `${answer.messageId}:text`, kind: 'text' as const, text }, ...auroraParts(history.at(-2)!.messageId)]
+  const context = 'The revised draft is ready to save.'
+  const text = `${context}\n\n${title}`
+  const answerParts = [{ id: `${answer.messageId}:text`, kind: 'text' as const, text }, ...parts]
   await ui.emit([{ ...event, sequence: 3, type: 'final_answer', data: { content: text, answer_parts: answerParts, artifacts: [] } }])
-  const explanation = page.getByText(text, { exact: true })
+  const explanation = page.getByText(context, { exact: true })
+  const question = page.getByText(title, { exact: true })
   await expect(explanation).toBeVisible()
-  await expect(explanation).toHaveCount(1)
+  await expect(choice.getByRole('heading', { name: title, exact: true })).toBeVisible()
+  await expect(question).toHaveCount(1)
   await expect(radio).toBeEnabled()
   await expect(page.getByText(draftText, { exact: true })).toHaveCount(0)
   expect((await explanation.boundingBox())!.y).toBeLessThan((await choice.boundingBox())!.y)
@@ -606,7 +618,7 @@ test('shows finalized clarification Markdown once above the choices and restores
   ui.sessions[0]!.status = 'idle' as typeof ui.sessions[0]['status']
   await page.reload()
   await expect(explanation).toBeVisible()
-  await expect(explanation).toHaveCount(1)
+  await expect(question).toHaveCount(1)
   await expect(radio).toBeEnabled()
 })
 
@@ -714,12 +726,15 @@ for (const form of [false, true]) {
   test(`keeps ${form ? 'form details' : 'choices'} readable when the optional renderer cannot load`, async ({ page, ui }) => {
     const history = ui.history.get(SESSION_ID)!
     const answer = history.at(-1)!
+    const title = form ? 'A little project' : 'How would you like to start?'
+    answer.message = title
     answer.answerParts = auroraParts(history.at(-2)!.messageId, form ? AURORA_FORM_SPEC : undefined)
     await page.route('**/assets/aurora-surface-*.js', (route) => route.abort())
     await page.goto(SESSION_URL)
     await expect(page.getByText('I couldn’t display the interactive version. You can still read it here and reply below.', { exact: true })).toBeVisible()
-    const question = page.getByRole('region', { name: form ? 'A little project' : 'How would you like to start?', exact: true })
+    const question = page.getByRole('region', { name: title, exact: true })
     await expect(question).toBeVisible()
+    await expect(page.getByText(title, { exact: true })).toHaveCount(1)
     await expect(question.getByRole('button')).toHaveCount(0)
     await expect(question.getByRole('listitem')).toContainText(form
       ? ['Project name', 'Pace', 'Notes'] : ['A quiet morning', 'Something creative'])
