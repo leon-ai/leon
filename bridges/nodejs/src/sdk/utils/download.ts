@@ -60,6 +60,7 @@ export class DownloadTracker {
     options: {
       destination?: string
       signal?: AbortSignal
+      sha256?: string
     } = {}
   ): Promise<void> {
     if (!this.files.has(file.path)) {
@@ -84,6 +85,7 @@ export class DownloadTracker {
       await FileDownloader.downloadFile(file.url, options.destination ?? file.path, {
         cliProgress: false,
         ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.sha256 !== undefined ? { sha256: options.sha256 } : {}),
         onProgress: (progress) => {
           current = {
             ...current,

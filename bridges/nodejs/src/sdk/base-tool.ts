@@ -8,7 +8,7 @@ import { ToolRuntimePhase } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { spawn, execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -32,7 +32,6 @@ import { reportToolOutput } from '@sdk/tool-reporter'
 import {
   isWindows,
   isMacOS,
-  setHuggingFaceURL,
   formatBytes,
   formatFilePath,
   extractArchive
@@ -119,10 +118,12 @@ export abstract class Tool {
   protected async downloadFile(
     url: string,
     targetPath: string,
-    destination = targetPath
+    destination = targetPath,
+    sha256?: string
   ): Promise<void> {
     await this.downloads.download({ url, path: targetPath }, {
       destination,
+      ...(sha256 !== undefined ? { sha256 } : {}),
       ...(this.preparations.size === 0 && this.executionContext?.signal
         ? { signal: this.executionContext.signal } : {})
     })
@@ -1095,11 +1096,10 @@ export abstract class Tool {
 
       // Download each resource file
       for (const resourceUrl of resourceUrls) {
-        const adjustedUrl = await setHuggingFaceURL(resourceUrl)
-        const relativePath = this.getResourceRelativePath(adjustedUrl)
+        const relativePath = this.getResourceRelativePath(resourceUrl)
 
         if (!relativePath) {
-          throw new Error(`Invalid filename extracted from URL: ${adjustedUrl}`)
+          throw new Error(`Invalid filename extracted from URL: ${resourceUrl}`)
         }
 
         const fileName = path.basename(relativePath)
@@ -1107,12 +1107,12 @@ export abstract class Tool {
         await this.report('bridges.tools.downloading_resource_file', {
           resource_name: resourceName,
           file_name: fileName,
-          url: adjustedUrl
+          url: resourceUrl
         })
 
         try {
           await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
-          await this.downloadFile(adjustedUrl, filePath)
+          await this.downloadFile(resourceUrl, filePath)
           await this.report('bridges.tools.resource_file_downloaded', {
             resource_name: resourceName,
             file_name: fileName,
@@ -1122,7 +1122,7 @@ export abstract class Tool {
           await this.report('bridges.tools.resource_file_download_failed', {
             resource_name: resourceName,
             file_name: fileName,
-            url: adjustedUrl,
+            url: resourceUrl,
             error: (error as Error).message
           })
           throw new Error(
@@ -1572,22 +1572,7 @@ export abstract class Tool {
         downloadPath = outputPath + archiveExt
       }
 
-      await this.downloadFile(url, downloadPath)
-
-      if (checksum !== undefined) {
-        if (!/^[a-fA-F0-9]{64}$/.test(checksum)) {
-          throw new Error('Invalid binary SHA-256 declaration')
-        }
-
-        const hash = createHash('sha256')
-        for await (const chunk of fs.createReadStream(downloadPath)) {
-          hash.update(chunk)
-        }
-
-        if (hash.digest('hex') !== checksum.toLowerCase()) {
-          throw new Error('Downloaded binary SHA-256 does not match its declaration')
-        }
-      }
+      await this.downloadFile(url, downloadPath, downloadPath, checksum)
 
       // If it's an archive, extract it
       if (isArchiveDownload) {
