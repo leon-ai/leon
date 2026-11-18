@@ -12,7 +12,8 @@ const SETUP_PROVIDER_ORDER = [
   LLMProviders.Celeris,
   LLMProviders.HuggingFace,
   LLMProviders.Groq,
-  LLMProviders.Cerebras
+  LLMProviders.Cerebras,
+  LLMProviders.Requesty
 ]
 
 export const LLM_MODEL_REASONING_VALUES = [
@@ -829,6 +830,56 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     reasoning: MANDATORY_XHIGH_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: VIDEO_INPUTS
+  },
+
+  /**
+   * @see https://router.requesty.ai/v1/models/managed Managed model ids route across providers.
+   */
+  {
+    provider: LLMProviders.Requesty,
+    model: 'claude-sonnet-4-6',
+    contextWindowTokens: 1_000_000,
+    label: 'claude-sonnet-4-6',
+    recommended: true,
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://router.requesty.ai/v1/models/managed
+   */
+  {
+    provider: LLMProviders.Requesty,
+    model: 'gpt-5.4-mini',
+    contextWindowTokens: 400_000,
+    label: 'gpt-5.4-mini',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://router.requesty.ai/v1/models/managed
+   */
+  {
+    provider: LLMProviders.Requesty,
+    model: 'gemini-3.8-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'gemini-3.8-flash',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
+  /**
+   * @see https://router.requesty.ai/v1/models/managed
+   */
+  {
+    provider: LLMProviders.Requesty,
+    model: 'deepseek-v4.1-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'deepseek-v4.1-flash',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
   },
 
   /**

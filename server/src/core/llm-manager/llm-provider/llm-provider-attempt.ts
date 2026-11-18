@@ -769,7 +769,8 @@ export async function runCompletionAttempt(
         LLMProviders.MoonshotAI,
         LLMProviders.Cerebras,
         LLMProviders.HuggingFace,
-        LLMProviders.Celeris
+        LLMProviders.Celeris,
+        LLMProviders.Requesty
       ].includes(providerName)
     ) {
       const normalized = normalizeCompletionResultForOpenAICompatibleProvider(

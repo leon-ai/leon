@@ -115,6 +115,16 @@ const DEFAULT_CONFIG: LeonConfig = {
           ).apiKeyEnv
         }
       },
+      requesty: {
+        base_url: getRequiredLLMProviderAccountConfig(
+          LLMProviders.Requesty
+        ).baseURL,
+        api_key: {
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.Requesty
+          ).apiKeyEnv
+        }
+      },
       deepseek: {
         api_key: {
           env: getRequiredLLMProviderAccountConfig(

@@ -105,6 +105,7 @@ export const configSchemaObject = strictObject({
       }),
       sglang: llmProviderWithBaseURL,
       openrouter: llmProvider,
+      requesty: llmProviderWithBaseURL,
       zai: llmProvider,
       deepseek: llmProvider,
       minimax: llmProviderWithBaseURL,

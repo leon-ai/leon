@@ -28,6 +28,14 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: 'https://openrouter.ai/settings/keys'
     },
     {
+      label: 'Requesty',
+      value: LLMProviders.Requesty,
+      baseURL: 'https://router.requesty.ai/v1',
+      fellowAPIKeyEnvs: ['REQUESTY_API_KEY'],
+      apiKeyEnv: 'LEON_REQUESTY_API_KEY',
+      apiKeyURL: 'https://app.requesty.ai/api-keys'
+    },
+    {
       label: 'OpenAI',
       value: LLMProviders.OpenAI,
       accountLabel: 'ChatGPT',
