@@ -35,11 +35,17 @@ import { readArtifact } from '@/core/artifacts/artifact-store'
 import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
 import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { presentAurora } from '@/core/aurora/answer-presentation'
+
+interface FixtureAnswer {
+  output: string
+  finalIntent: 'answer' | 'clarification'
+}
 
 const fixture = vi.hoisted(() => ({
   root: '',
   logger: null as ConversationLogger | null,
-  executions: [] as { profile: string, session: string, query: string, target: string, files: ReactLLMDutyParams['files'], release: () => void }[]
+  executions: [] as { profile: string, session: string, query: string, target: string, files: ReactLLMDutyParams['files'], release: (answer?: FixtureAnswer) => void }[]
 }))
 
 vi.mock('@/core', () => ({
@@ -96,23 +102,24 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
       }, { sessionId: session, activity: true })
       this.params.onTextStream?.('reasoning', { token: 'Public reasoning', generationId: `${query}:thought` })
       try {
-        await new Promise<void>((resolve, reject) => {
+        const answer = await new Promise<FixtureAnswer | undefined>((resolve, reject) => {
           const signal = this.params.signal!
           const abort = (): void => reject(signal.reason)
           signal.addEventListener('abort', abort, { once: true })
           fixture.executions.push({ profile: getActiveProfileName(), session, query, files: this.params.files,
-            target: CONFIG_STATE.getModelState().getAgentTarget().label, release: () => {
+            target: CONFIG_STATE.getModelState().getAgentTarget().label, release: (result) => {
             signal.removeEventListener('abort', abort)
-            resolve()
+              resolve(result)
           } })
           if (signal.aborted) {
             abort()
           }
         })
-        this.params.onTextStream?.('answer', { token: `Done: ${query}`, generationId: query })
+        const output = answer?.output ?? `Done: ${query}`
+        this.params.onTextStream?.('answer', { token: output, generationId: query })
 
-        return { output: `Done: ${query}`, data: {
-          agentResponseTrace: trace, llmMetrics: { durationMs: 250 }, finalIntent: 'answer'
+        return { output, data: {
+          agentResponseTrace: trace, llmMetrics: { durationMs: 250 }, finalIntent: answer?.finalIntent ?? 'answer'
         } }
       } finally {
         turn.close()
@@ -550,6 +557,36 @@ describe('web conversation runtime', () => {
     await expect.poll(() => runWithProfileContext({ profileName: profile }, () => WEB_SESSION_RUNTIME.isRunning(sessionId))).toBe(false)
     expect((await request('POST', endpoint, body)).statusCode).toBe(202)
     expect(fixture.executions).toHaveLength(1)
+  })
+
+  it.each([
+    { purpose: 'clarification', spec: AURORA_CHOICE_SPEC, order: ['text', 'ui'] },
+    { purpose: 'answer', spec: AURORA_GENERATED_SPEC, order: ['ui', 'text'] }
+  ] as const)('keeps $purpose Markdown and visual parts in order in live delivery and history', async ({ purpose, spec, order }) => {
+    const sessionId = await create()
+    const id = randomUUID()
+    const messageId = `${id}:leon`
+    const output = 'A quiet morning leaves more time for a walk.'
+    expect((await request('POST', `/api/v1/sessions/${sessionId}/messages`, { id, query: 'Help me choose.' })).statusCode).toBe(202)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    await runWithProfileContext({ profileName: profile }, () => presentAurora(sessionId, messageId, spec, purpose))
+    fixture.executions[0]!.release({ output, finalIntent: purpose })
+
+    await expect.poll(async () => (await request('GET', `/api/v1/sessions/${sessionId}`)).json().is_running).toBe(false)
+    const page = (await request('GET', `/api/v1/sessions/${sessionId}`)).json() as { messages: ConversationRecord[] }
+    const answer = page.messages.find((record) => record.messageId === messageId)
+    expect(answer?.message).toBe(output)
+    expect(answer?.answerParts?.map((part) => part.kind)).toEqual(order)
+    expect(answer?.answerParts).toContainEqual({ id: `${messageId}:text`, kind: 'text', text: output })
+    expect(answer?.answerParts).toContainEqual(expect.objectContaining({ kind: 'ui',
+      surface: expect.objectContaining({ status: 'ready', ownerMessageId: id }) }))
+
+    await runWithProfileContext({ profileName: profile }, () => {
+      const event = CONVERSATION_REPOSITORY.readEvents<ConversationEvent>(0).items.find((item) =>
+        item.type === 'final_answer' && item.response_id === messageId
+      )
+      expect(event?.data['answer_parts']).toEqual(answer?.answerParts)
+    })
   })
 
   it('does not present an unavailable retained preparation as live after recovery', async () => {

@@ -50,6 +50,8 @@ export interface LLMModelCatalogEntry {
   supportsPerMessageReasoning?: boolean
   // Verified endpoint capacity; omitted when the limit is unknown.
   contextWindowTokens?: number
+  // Some providers cap input separately from the combined context window.
+  maxInputTokens?: number
   // Verified inline inputs supported by both this endpoint and Leon's adapter.
   // null means unverified; [] means no native media through this adapter.
   inputMediaTypes: readonly string[] | null
@@ -114,6 +116,14 @@ const MANDATORY_XHIGH_REASONING = [
   'xhigh',
   'max'
 ] as const satisfies readonly LLMModelReasoning[]
+const GPT_62_CAPABILITIES = {
+  contextWindowTokens: 1_050_000,
+  maxInputTokens: 922_000,
+  reasoning: MANDATORY_XHIGH_REASONING,
+  supportsTemperature: false,
+  supportsStructuredOutput: true,
+  inputMediaTypes: DOCUMENT_INPUTS
+} as const
 const OPENROUTER_GLM_52_REASONING = [
   'auto',
   'none',
@@ -211,6 +221,28 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: []
   },
 
+  /**
+   * @see https://openrouter.ai/openai/gpt-6.2-astra
+   */
+  {
+    ...GPT_62_CAPABILITIES,
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6.2-astra',
+    label: 'openai/gpt-6.2-astra',
+    defaultReasoningEffort: 'medium',
+    speed: ROUTABLE_SPEED
+  },
+  /**
+   * @see https://openrouter.ai/openai/gpt-6.2-sol
+   */
+  {
+    ...GPT_62_CAPABILITIES,
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6.2-sol',
+    label: 'openai/gpt-6.2-sol',
+    defaultReasoningEffort: 'medium',
+    speed: ROUTABLE_SPEED
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-6-astra
    */
@@ -831,6 +863,28 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     inputMediaTypes: VIDEO_INPUTS
   },
 
+  /**
+   * @see https://developers.openai.com/api/docs/models/gpt-6.2-astra
+   */
+  {
+    ...GPT_62_CAPABILITIES,
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-6.2-astra',
+    label: 'GPT-6.2 Astra',
+    supportsPromptCacheOptions: true,
+    speed: ROUTABLE_SPEED
+  },
+  /**
+   * @see https://developers.openai.com/api/docs/models/gpt-6.2-sol
+   */
+  {
+    ...GPT_62_CAPABILITIES,
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-6.2-sol',
+    label: 'GPT-6.2 Sol',
+    supportsPromptCacheOptions: true,
+    speed: ROUTABLE_SPEED
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-6-astra
    */

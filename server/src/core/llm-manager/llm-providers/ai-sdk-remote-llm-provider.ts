@@ -52,7 +52,8 @@ import type {
 import { LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
 import {
   canDisableLLMModelReasoning,
-  getLLMModelCatalogEntry
+  getLLMModelCatalogEntry,
+  type LLMModelReasoning
 } from '@/core/llm-manager/llm-model-catalog'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
@@ -137,6 +138,21 @@ interface CallState {
 
 const STRUCTURED_OUTPUT_JSON_INSTRUCTION =
   'Return only valid JSON matching the requested schema.'
+
+/**
+ * Preserves the intent of legacy minimal settings on models that start at low.
+ */
+function resolveMinimalReasoningEffort(
+  requested: LLMReasoningEffort | undefined,
+  supported: readonly LLMModelReasoning[] | undefined
+): LLMReasoningEffort | undefined {
+  if (requested === 'minimal' && supported?.includes('low') &&
+      !supported.includes('minimal')) {
+    return 'low'
+  }
+
+  return requested
+}
 
 export default class AISDKRemoteLLMProvider {
   protected readonly name: string
@@ -1037,8 +1053,12 @@ export default class AISDKRemoteLLMProvider {
       return 'low'
     }
 
-    if (completionParams.reasoningEffort) {
-      return completionParams.reasoningEffort
+    const requestedEffort = resolveMinimalReasoningEffort(
+      completionParams.reasoningEffort,
+      getLLMModelCatalogEntry(LLMProviders.OpenAI, this.model)?.reasoning
+    )
+    if (requestedEffort) {
+      return requestedEffort
     }
 
     if (reasoningMode === 'off') {
@@ -1111,6 +1131,10 @@ export default class AISDKRemoteLLMProvider {
         ? { provider: { sort: 'throughput' } }
         : {}
       const catalogEntry = getLLMModelCatalogEntry(LLMProviders.OpenRouter, this.model)
+      const reasoningEffort = resolveMinimalReasoningEffort(
+        completionParams.reasoningEffort,
+        catalogEntry?.reasoning
+      )
 
       if (catalogEntry?.reasoning.includes('on')) {
         const enabled = reasoningMode !== 'off' &&
@@ -1156,7 +1180,7 @@ export default class AISDKRemoteLLMProvider {
           openrouter: {
             ...routing,
             reasoning: {
-              effort: completionParams.reasoningEffort || 'low'
+              effort: reasoningEffort || 'low'
             }
           }
         }
@@ -1179,8 +1203,8 @@ export default class AISDKRemoteLLMProvider {
           reasoning: {
             ...(typeof reasoningBudget === 'number'
               ? { max_tokens: reasoningBudget }
-              : completionParams.reasoningEffort
-                ? { effort: completionParams.reasoningEffort }
+              : reasoningEffort
+                ? { effort: reasoningEffort }
                 : { enabled: true })
           }
         }
@@ -1393,10 +1417,13 @@ export default class AISDKRemoteLLMProvider {
         ? { provider: { sort: 'throughput' } }
         : {}
 
-      if (completionParams.disableThinking === true) {
+      if (completionParams.disableThinking === true || completionParams.reasoningEffort) {
         Object.assign(
           providerOptions,
-          this.buildManagedProviderOptions('off', completionParams)
+          this.buildManagedProviderOptions(
+            completionParams.disableThinking === true ? 'off' : 'on',
+            completionParams
+          )
         )
       } else if (Object.keys(routing).length > 0) {
         providerOptions['openrouter'] = routing

@@ -2437,16 +2437,32 @@ describe('continuous agent loop', () => {
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
-  it('allows an answer correction from existing evidence without another tool action', async () => {
-    const duty = new ReActLLMDuty({ input: 'What is the temperature?' })
+  it.each([
+    {
+      format: 'prose',
+      request: 'What is the temperature?',
+      draft: '{"temperature":20}',
+      answer: 'The temperature is 20 degrees.'
+    },
+    {
+      format: 'JSON',
+      request: 'What is the temperature? Return JSON with a temperature field.',
+      draft: 'The temperature is 30 degrees.',
+      answer: '{"temperature":20}'
+    }
+  ])('corrects the answer to $format from existing evidence without repeating work', async ({
+    request, draft, answer
+  }) => {
+    const ownerMessage = { role: 'user' as const, content: request }
+    const duty = new ReActLLMDuty({ input: request })
 
     Object.assign(duty, { writeAgentPromptLog: vi.fn() })
-    coreMocks.prompt.mockResolvedValueOnce({ output: 'The temperature is 20 degrees.' })
+    coreMocks.prompt.mockResolvedValueOnce({ output: answer })
 
     const callModel = vi.fn()
-      .mockResolvedValueOnce({ textContent: 'The temperature is 30 degrees.' })
+      .mockResolvedValueOnce({ textContent: draft })
       .mockResolvedValueOnce({ textContent: JSON.stringify({
-        status: 'continue', reason: 'The observed temperature is 20 degrees; correct the answer.'
+        status: 'continue', reason: 'Report the observed temperature of 20 degrees in the requested format.'
       }) })
       .mockImplementationOnce(async (messages, tools, options) => duty['callAgentModel'](
         messages, AGENT_SYSTEM_PROMPT, tools, options
@@ -2456,7 +2472,7 @@ describe('continuous agent loop', () => {
       }) })
     const executeFunction = vi.fn()
     const result = await runAgentLoopWithCompletionReview({
-      transcript: [{ role: 'user', content: 'What is the temperature?' }],
+      transcript: [ownerMessage],
       catalog: createCatalog(),
       initialExecutionHistory: [{
         function: callable.qualifiedName, status: 'success',
@@ -2466,10 +2482,15 @@ describe('continuous agent loop', () => {
     })
 
     expect(result.intent).toBe('answer')
-    expect(result.answer).toBe('The temperature is 20 degrees.')
+    expect(result.answer).toBe(answer)
     expect(coreMocks.prompt.mock.lastCall?.[1].toolChoice).toBe('auto')
     expect(callModel).toHaveBeenCalledTimes(4)
     expect(executeFunction).not.toHaveBeenCalled()
+
+    const reviewMessages = callModel.mock.calls[3]![0] as AgentToolTranscriptMessage[]
+
+    expect(reviewMessages.slice(0, -1).filter((message) => message.role === 'user'))
+      .toEqual([ownerMessage])
   })
 
   it('retains concrete completed outcomes when the provider cannot continue', async () => {
@@ -3259,6 +3280,10 @@ describe('continuous agent loop', () => {
   })
 
   it('continues from tool evidence when review rejects an unnecessary clarification', async () => {
+    const ownerMessage = {
+      role: 'user' as const,
+      content: 'Check why the previous turn missed the cache.'
+    }
     const callModel = vi.fn()
       .mockResolvedValueOnce({
         toolCalls: [toolCall('unnecessary-pause', AGENT_CLARIFICATION_TOOL_NAME, {
@@ -3291,7 +3316,7 @@ describe('continuous agent loop', () => {
     } }))
 
     const result = await runAgentLoopWithCompletionReview({
-      transcript: [{ role: 'user', content: 'Check why the previous turn missed the cache.' }],
+      transcript: [ownerMessage],
       catalog: createCatalog(),
       callModel,
       executeFunction,
@@ -3306,6 +3331,11 @@ describe('continuous agent loop', () => {
 
     expect(review.review_intent).toBe('clarification')
     expect(review.review_instructions).toContain('<clarification_review>')
+
+    const answerReviewMessages = callModel.mock.calls[4]![0] as AgentToolTranscriptMessage[]
+
+    expect(answerReviewMessages.slice(0, -1).filter((message) => message.role === 'user'))
+      .toEqual([ownerMessage])
   })
 
   it.each([false, true])('accepts a reviewed clarification with unfinished work at the iteration limit=%s', async (atLimit) => {
