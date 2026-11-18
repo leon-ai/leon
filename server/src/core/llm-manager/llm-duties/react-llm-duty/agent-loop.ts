@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util'
+
 import { ToolCompletionReview, ToolConcurrency, SkillOrigin } from '@/types'
 import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
@@ -63,7 +65,12 @@ import {
   buildComputerUseConvergenceHint,
   getComputerUseRetryBlocker
 } from './computer-use-convergence'
-import { createAgentTextPreview, projectSettledAgentEvidence, retainRecentToolImages } from './agent-context-budget'
+import {
+  buildBoundedToolObservation,
+  createAgentTextPreview,
+  projectSettledAgentEvidence,
+  retainRecentToolImages
+} from './agent-context-budget'
 import {
   completeAgentImageBatch,
   prepareAgentImageBatch,
@@ -83,6 +90,8 @@ const AGENT_TOOL_NAME_SEPARATOR = '__'
 const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
 const AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS = 1_000
 const AGENT_COMPLETION_REVIEW_ATTEMPTS = 2
+const AGENT_REVIEW_REFERENCE_BUDGET = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 2)
+const AGENT_REVIEW_OBSERVATION_MAX_CHARS = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 4)
 const AGENT_PLAN_REMINDER_INTERVAL = 4
 const AGENT_REPEATED_REJECTION_LIMIT = 3
 const AGENT_DIRECT_TOOL_LOAD_MAX_CHARS = 8_000
@@ -1006,6 +1015,28 @@ export async function runAgentLoop(
   let hasEnteredFinishing = false
   const rejectedCalls = new Map<string, number>()
   let hasWarnedAboutRejections = false
+  let reviewRevisionPending = false
+
+  // A verdict can request one correction before the agent must advance the work.
+  const requestReviewRevision = (
+    reason: string,
+    intent: 'answer' | 'clarification'
+  ): AgentLoopResult | null => {
+    appendAgentRuntimeContext(
+      transcript,
+      intent === 'answer'
+        ? { completion_review_feedback: reason }
+        : { clarification_review_feedback: reason }
+    )
+    if (reviewRevisionPending) {
+      return createResumableAgentResult(
+        'review', transcript, executionHistory, trackedSteps, intent === 'answer'
+      )
+    }
+
+    reviewRevisionPending = true
+    return null
+  }
 
   agentIterations: for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
@@ -1019,6 +1050,7 @@ export async function runAgentLoop(
     if (pendingOwnerReassessment) {
       rejectedCalls.clear()
       hasWarnedAboutRejections = false
+      reviewRevisionPending = false
     }
     const evidenceView = projectSettledAgentEvidence(transcript)
     if (evidenceView !== transcript) {
@@ -1234,6 +1266,7 @@ export async function runAgentLoop(
         )
       }
 
+      reviewRevisionPending = false
       await params.onCheckpoint?.({ transcript, executionHistory, trackedSteps })
       await params.onProgressMessage?.(
         `Saved findings for this image batch. Images inspected: ${imageBatch.entries.length}; remaining: ${imageBatch.remainingImages}.`
@@ -1309,14 +1342,14 @@ export async function runAgentLoop(
           const { status, reason } = review
 
           if (status === AgentCompletionStatus.Continue) {
+            const stalled = requestReviewRevision(reason, 'answer')
+            if (stalled) {
+              return stalled
+            }
+
             // Review keeps the task running, so settle the completed message as
             // progress before the next model call discards its active draft.
             await params.onProgressMessage?.(textContent)
-
-            // Subsequent reviews must distinguish this feedback from owner input.
-            appendAgentRuntimeContext(transcript, {
-              completion_review_feedback: reason
-            })
             continue
           }
 
@@ -1475,9 +1508,19 @@ export async function runAgentLoop(
             }
           }
         }
-        if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
-            toolResult.trackedSteps !== trackedSteps) {
+        const isPlanUpdate = toolCall.function.name === AGENT_PLAN_TOOL_NAME
+        if (isPlanUpdate && toolResult.trackedSteps !== trackedSteps) {
           planUpdated = true
+        }
+        if (reviewRevisionPending) {
+          const hasNewEvidence = records.length > 0 || toolResult.madeProgress ||
+            (!isPlanUpdate && !toolResult.rejected && !toolResult.signal &&
+              !transcript.some((message) => message.role === 'tool' &&
+                message.toolName === toolCall.function.name && message.content === toolResult.content))
+          const planChanged = isPlanUpdate && !isDeepStrictEqual(toolResult.trackedSteps, trackedSteps)
+          if (hasNewEvidence || planChanged) {
+            reviewRevisionPending = false
+          }
         }
         trackedSteps = toolResult.trackedSteps
         transcript.push({
@@ -1540,9 +1583,11 @@ export async function runAgentLoop(
           )
         }
         if (review.status === AgentCompletionStatus.Continue) {
-          appendAgentRuntimeContext(transcript, {
-            clarification_review_feedback: review.reason
-          })
+          const stalled = requestReviewRevision(review.reason, 'clarification')
+          if (stalled) {
+            return stalled
+          }
+
           continue
         }
         if (review.status === AgentCompletionStatus.Blocked) {
@@ -1665,18 +1710,12 @@ function isCompleteOptionalLookup(
 }
 
 /**
- * Reviews proposed answers and owner-input pauses, including at the budget boundary.
+ * Fits recent observations and older source references into a structured review payload.
  */
-async function reviewAgentCompletion(
-  params: AgentLoopParams,
-  transcript: AgentToolTranscriptMessage[],
-  answer: string,
-  remainingIterations: number,
-  state: Pick<AgentLoopResult, 'executionHistory' | 'trackedSteps'>,
-  isContextRecoveryAttempt = false,
-  intent: 'answer' | 'clarification' = 'answer'
-): Promise<{ status: AgentCompletionStatus | null, reason: string } | null> {
-  const source = restoreCompactionSources(transcript)
+function buildCompletionReviewEvidence(
+  source: AgentToolTranscriptMessage[],
+  executionHistory: ExecutionRecord[]
+): { entries: Record<string, unknown>[], omittedCount: number } {
   const requests = new Map(source.flatMap((message) => message.role === 'assistant'
     ? (message.toolCalls ?? []).map((call) => [call.id, call.function.arguments] as const)
     : []))
@@ -1691,8 +1730,7 @@ async function reviewAgentCompletion(
     : [])
   const recorded = new Set(observations.map(({ id }) => id))
   const evidence = [
-    ...observations,
-    ...state.executionHistory.filter((execution) =>
+    ...executionHistory.filter((execution) =>
       typeof execution.observation === 'string' &&
       (!execution.toolCallId || !recorded.has(execution.toolCallId))
     ).map((execution) => ({
@@ -1700,27 +1738,80 @@ async function reviewAgentCompletion(
       id: execution.toolCallId,
       requestedInput: execution.requestedToolInput,
       observation: execution.observation
-    }))
-  ]
-  // Keep each result identifiable even when a long investigation needs excerpts.
-  const observationBudget = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / Math.max(1, evidence.length))
-  const evidenceBrief = evidence.map(({ function: tool, id, requestedInput, observation }) => {
+    })),
+    ...observations
+  ].reverse().map(({ function: tool, id, requestedInput, observation }) => {
     const result = parseToolCallArguments(observation)
-    const input = requestedInput
-      ? createAgentTextPreview(requestedInput, Math.floor(observationBudget / 3))
-      : undefined
 
     return {
-      tool,
-      id,
-      status: result?.['status'],
-      artifact: result?.['output_log_path'],
-      execution_id: (result?.['execution'] as { id?: unknown } | undefined)?.id,
-      requested_input: input,
-      observation: createAgentTextPreview(observation, Math.max(0, observationBudget - (input?.length ?? 0)))
+      reference: {
+        tool,
+        id,
+        status: result?.['status'],
+        artifact: result?.['output_log_path'],
+        execution_id: (result?.['execution'] as { id?: unknown } | undefined)?.id
+      },
+      result,
+      observation,
+      requestedInput
     }
   })
-  const serializedEvidence = JSON.stringify(evidenceBrief)
+  let remainingChars = TOOL_RESULT_INLINE_MAX_CHARS - '[]'.length
+  const selected: typeof evidence = []
+  for (const item of evidence) {
+    const referenceChars = JSON.stringify(item.reference).length + Number(selected.length > 0)
+    if (remainingChars - referenceChars < TOOL_RESULT_INLINE_MAX_CHARS - AGENT_REVIEW_REFERENCE_BUDGET) {
+      break
+    }
+
+    selected.push(item)
+    remainingChars -= referenceChars
+  }
+
+  // Count serialized fields so escaping cannot force a second cut through the list.
+  const entries = selected.map(({ reference, result, observation, requestedInput }) => {
+    const preview = observation.length > AGENT_REVIEW_OBSERVATION_MAX_CHARS && result?.['data'] !== undefined
+      ? buildBoundedToolObservation(result, AGENT_REVIEW_OBSERVATION_MAX_CHARS)
+      : createAgentTextPreview(observation, AGENT_REVIEW_OBSERVATION_MAX_CHARS)
+    const input = requestedInput
+      ? createAgentTextPreview(requestedInput, Math.floor(AGENT_REVIEW_OBSERVATION_MAX_CHARS / 3))
+      : undefined
+    // Adding a field to the existing reference replaces the opening brace with a comma.
+    const observationChars = JSON.stringify({ observation: preview }).length - 1
+    const inputChars = JSON.stringify({ requested_input: input }).length - 1
+    const keepObservation = observationChars <= remainingChars
+    if (keepObservation) {
+      remainingChars -= observationChars
+    }
+    const keepInput = input !== undefined && inputChars <= remainingChars
+    if (keepInput) {
+      remainingChars -= inputChars
+    }
+
+    return {
+      ...reference,
+      ...(keepObservation ? { observation: preview } : {}),
+      ...(keepInput ? { requested_input: input } : {})
+    }
+  })
+
+  return { entries: entries.reverse(), omittedCount: evidence.length - entries.length }
+}
+
+/**
+ * Reviews proposed answers and owner-input pauses, including at the budget boundary.
+ */
+async function reviewAgentCompletion(
+  params: AgentLoopParams,
+  transcript: AgentToolTranscriptMessage[],
+  answer: string,
+  remainingIterations: number,
+  state: Pick<AgentLoopResult, 'executionHistory' | 'trackedSteps'>,
+  isContextRecoveryAttempt = false,
+  intent: 'answer' | 'clarification' = 'answer'
+): Promise<{ status: AgentCompletionStatus | null, reason: string } | null> {
+  const source = restoreCompactionSources(transcript)
+  const { entries, omittedCount } = buildCompletionReviewEvidence(source, state.executionHistory)
   const messages: AgentToolTranscriptMessage[] = [
     ...source.flatMap((message): AgentToolTranscriptMessage[] => {
       if (message.role === 'user' && !message.runtimeContext) {
@@ -1744,9 +1835,8 @@ async function reviewAgentCompletion(
         reported_plan: state.trackedSteps,
         available_toolkits: [...params.catalog.availableToolkitsById.keys()],
         loaded_functions: [...params.catalog.functionsByToolName.values()].map((tool) => tool.qualifiedName),
-        tool_evidence: serializedEvidence.length <= TOOL_RESULT_INLINE_MAX_CHARS
-          ? evidenceBrief
-          : createAgentTextPreview(serializedEvidence, TOOL_RESULT_INLINE_MAX_CHARS)
+        tool_evidence: entries,
+        ...(omittedCount > 0 ? { omitted_tool_evidence_count: omittedCount } : {})
       })
     }
   ]
