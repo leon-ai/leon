@@ -12,29 +12,13 @@ import { resolveConfiguredLLMTarget } from '@/core/llm-manager/llm-routing'
 import type { ConversationSession } from '@/core/session-manager'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { listAgentScenarios, selectAgentScenarios } from '../../../scripts/agent-scenarios'
-import { withAgentScenarioHome } from '../scenario-home'
+import { stopScenarioProcesses, withAgentScenarioHome } from '../scenario-home'
 
 const SELECTION = process.env['LEON_AGENT_REAL_SCENARIO']
 const SCENARIOS = selectAgentScenarios(listAgentScenarios(), SELECTION)
 const RESULT_PREFIX = '__AGENT_RESULT__'
 const PROGRESS_PREFIX = '__AGENT_PROGRESS__'
 const TIMEOUT_MS = 300_000
-
-/**
- * Stop probe descendants in this test's process group before deleting its home.
- */
-function stopScenarioProcesses(pid: number | undefined): void {
-  if (process.platform === 'win32' || !pid) {
-    return
-  }
-  try {
-    process.kill(-pid, 'SIGKILL')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-      throw error
-    }
-  }
-}
 
 // Only the scenario command opts in; broad Vitest runs never make paid calls.
 it.skipIf(!SELECTION).concurrent.each(SCENARIOS)('%s', async (scenario) => {

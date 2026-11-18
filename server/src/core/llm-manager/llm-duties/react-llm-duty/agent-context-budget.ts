@@ -29,6 +29,8 @@ const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 const RETAINED_RESULT_PREVIEW_MAX_CHARS = 4_096
+const IMPLICIT_SOURCE_PAGE_MAX_CHARS = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 3)
+const COMMAND_OUTPUT_PREVIEW_MAX_CHARS = RETAINED_RESULT_PREVIEW_MAX_CHARS
 const MAX_RETAINED_TOOL_IMAGE_BYTES = 1_024 * 1_024
 
 interface AgentModelContextParams {
@@ -333,6 +335,86 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * Keeps the first implicit text page small while preserving its exact
+ * continuation offset and the source metadata. Call only for saved results.
+ */
+export function projectImplicitSourcePage(output: Record<string, unknown>): Record<string, unknown> {
+  const result = readRecord(output['result'])
+  const data = readRecord(result?.['data'])
+  const offset = data?.['offsetChars']
+  const total = data?.['totalChars']
+  const field = typeof data?.['content'] === 'string' ? 'content' : 'text'
+  const text = data?.[field]
+  if (!result || !data || typeof offset !== 'number' || offset !== 0 ||
+    typeof total !== 'number' || typeof text !== 'string' ||
+    text.length <= IMPLICIT_SOURCE_PAGE_MAX_CHARS || total < text.length) {
+    return output
+  }
+
+  const preview = text.slice(0, IMPLICIT_SOURCE_PAGE_MAX_CHARS)
+  const projected: Record<string, unknown> = {
+    ...data,
+    [field]: preview,
+    ...(typeof data['returnedChars'] === 'number' ? { returnedChars: preview.length } : {}),
+    truncated: true,
+    nextOffsetChars: preview.length
+  }
+  // The saved identity describes the complete original range.
+  delete projected['modelContextId']
+
+  return { ...output, result: { ...result, data: projected } }
+}
+
+/**
+ * Prioritizes the end of an archived command's output where status and
+ * diagnostics usually appear. Explicit session pages keep their requested range.
+ */
+export function projectCommandOutput(
+  output: Record<string, unknown>,
+  hasRequestedRange: boolean
+): Record<string, unknown> {
+  const result = readRecord(output['result'])
+  const data = readRecord(result?.['data'])
+  if (!result) {
+    return output
+  }
+
+  const { stdout, stderr, returncode } = result
+  if (typeof stdout === 'string' && typeof stderr === 'string' && typeof returncode === 'number' &&
+      stdout.length + stderr.length > COMMAND_OUTPUT_PREVIEW_MAX_CHARS) {
+    const stderrLimit = Math.max(COMMAND_OUTPUT_PREVIEW_MAX_CHARS - stdout.length,
+      Math.floor(COMMAND_OUTPUT_PREVIEW_MAX_CHARS / 2))
+    const stderrPreview = stderr.slice(-stderrLimit)
+    const stdoutPreview = stdout.slice(-(COMMAND_OUTPUT_PREVIEW_MAX_CHARS - stderrPreview.length))
+    const retained = typeof readRecord(output['execution'])?.['id'] === 'string'
+
+    return { ...output, result: {
+      ...result,
+      stdout: stdoutPreview,
+      stderr: stderrPreview,
+      output_truncated: true,
+      output_note: retained
+        ? 'Output shows the tail of each stream. If omitted lines are needed, query the retained result by execution.id with system_utilities.tool_executions.read.'
+        : 'Output shows the tail of each stream. If omitted lines are needed, read the original at output_log_path.'
+    } }
+  }
+
+  if (!hasRequestedRange && data && typeof data['sessionId'] === 'string' &&
+      typeof data['offsetChars'] === 'number' && typeof data['nextOffsetChars'] === 'number' &&
+      typeof data['output'] === 'string' && data['output'].length > COMMAND_OUTPUT_PREVIEW_MAX_CHARS) {
+    // Keep the earliest unread page so the next read resumes without a gap.
+    return { ...output, result: { ...result, data: {
+      ...data,
+      output: data['output'].slice(0, COMMAND_OUTPUT_PREVIEW_MAX_CHARS),
+      nextOffsetChars: data['offsetChars'] + COMMAND_OUTPUT_PREVIEW_MAX_CHARS,
+      hasMore: true
+    } } }
+  }
+
+  return output
+}
+
+/**
  * Keeps a complete tool result in its artifact log while placing only a
  * bounded, useful observation in the model transcript.
  */
@@ -446,6 +528,56 @@ function findCompletedToolExchanges(
   }
 
   return exchanges
+}
+
+/**
+ * Limits replay of archived results at a completed turn or after a substantial
+ * batch of older evidence has accrued. Keep recent exchanges and source handles.
+ */
+export function projectSettledAgentEvidence(
+  transcript: AgentToolTranscriptMessage[],
+  atTurnBoundary = false
+): AgentToolTranscriptMessage[] {
+  const recentExchanges = atTurnBoundary ? 1 : SUMMARY_RECENT_EXCHANGES
+  const exchanges = findCompletedToolExchanges(transcript).slice(0, -recentExchanges)
+  const replacements = new Map<ToolTranscriptMessage, ToolTranscriptMessage>()
+  let savedChars = 0
+
+  for (const exchange of exchanges) {
+    for (const message of exchange.toolMessages) {
+      if (message.files?.length || typeof message.content !== 'string' ||
+        message.content.length <= RETAINED_RESULT_PREVIEW_MAX_CHARS) {
+        continue
+      }
+
+      let observation: Record<string, unknown> | null
+      try {
+        observation = readRecord(JSON.parse(message.content))
+      } catch {
+        continue
+      }
+      if (!observation || observation['status'] !== 'success' ||
+        observation['observation_compacted'] || observation['observed_tool_failure'] ||
+        (typeof observation['output_log_path'] !== 'string' &&
+          typeof readRecord(observation['execution'])?.['id'] !== 'string')) {
+        continue
+      }
+
+      const content = buildBoundedToolObservation(observation, RETAINED_RESULT_PREVIEW_MAX_CHARS)
+      replacements.set(message, { ...message, content })
+      savedChars += message.content.length - content.length
+    }
+  }
+
+  // Preserve the reusable prefix between batches. The projected view is used
+  // as the canonical transcript after a checkpoint so it never shrinks twice.
+  if (savedChars <= 0 || (!atTurnBoundary && savedChars < TOOL_RESULT_INLINE_MAX_CHARS)) {
+    return transcript
+  }
+
+  return transcript.map((message) =>
+    message.role === 'tool' ? replacements.get(message) ?? message : message
+  )
 }
 
 /**

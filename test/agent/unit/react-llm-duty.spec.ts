@@ -892,6 +892,33 @@ describe('continuous agent loop', () => {
     expect(onPresentUI).toHaveBeenCalledExactlyOnceWith(AURORA_FORM_SPEC, 'clarification')
   })
 
+  it('reviews a native yes/no question without loading a visual toolkit first', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([])
+    const onPresentUI = vi.fn().mockResolvedValue('confirmation')
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [toolCall('ask', AGENT_CLARIFICATION_TOOL_NAME, {
+        question: 'May I save the draft?', confirmation: true
+      })] })
+      .mockImplementationOnce(async (_messages, tools, options) => {
+        expect(tools).toEqual([])
+        expect(options.completionReviewIntent).toBe('clarification')
+        expect(onPresentUI).not.toHaveBeenCalled()
+
+        return { textContent: JSON.stringify({ status: 'complete', reason: 'The owner requires approval.' }) }
+      })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Ask me before saving the draft.' }],
+      catalog: buildAgentToolCatalog(), callModel, onPresentUI,
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('clarification')
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(onPresentUI).toHaveBeenCalledExactlyOnceWith({
+      root: 'input', elements: { input: { type: 'BooleanChoice', props: { title: 'May I save the draft?' } } }
+    }, 'clarification')
+  })
+
   it.each([
     { type: 'BooleanChoice', props: { title: 'Keep this idea?' } },
     AURORA_CHOICE_SPEC.elements['choice']!,
@@ -1374,6 +1401,7 @@ describe('continuous agent loop', () => {
     })
 
     expect(result.intent).toBe('answer')
+    expect(result.routineLookup === true).toBe(['optional', 'default'].includes(scenario))
     expect(callModel.mock.calls.some(([, , options]) => options.isCompletionReview))
       .toBe(!['optional', 'default'].includes(scenario))
   })
@@ -2348,14 +2376,18 @@ describe('continuous agent loop', () => {
       undefined,
       'remaining'
     )
-    expect(callModel.mock.calls[1]?.[1]).toEqual(catalog.tools)
+    expect(callModel.mock.calls[1]?.[1]).toEqual([])
     expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
     expect(
       callModel.mock.calls[1]?.[0].slice(0, transcript.length)
     ).toEqual(transcript)
     const review = JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)
 
-    expect(review).not.toHaveProperty('available_tool_contracts')
+    expect(review.loaded_functions).toEqual([callable.qualifiedName])
+    expect(review.tool_evidence).toContainEqual(expect.objectContaining({
+      requested_input: JSON.stringify({ query: 'invoice-0003' }),
+      observation: expect.stringContaining('Verified invoice-0003.pdf.')
+    }))
     expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')
   })
 

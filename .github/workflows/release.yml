@@ -40,6 +40,13 @@ jobs:
     with:
       platforms: '["ubuntu-24.04"]'
 
+  quick-evals:
+    name: Quick Evals
+    needs: candidate
+    uses: ./.github/workflows/quick-evals.yml
+    secrets:
+      LEON_DEEPSEEK_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+
   installation-and-ota:
     name: Fresh installation and OTA
     needs: candidate
@@ -51,7 +58,7 @@ jobs:
 
   publish:
     name: Publish verified release
-    needs: [verification, installation-and-ota]
+    needs: [verification, quick-evals, installation-and-ota]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

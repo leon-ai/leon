@@ -32,6 +32,7 @@ export interface SelfModelObservationInput {
   sentAt?: number
   route: 'react' | 'controlled' | 'pulse'
   finalIntent?: FinalIntent
+  routineLookup?: boolean
   toolExecutions?: ToolExecutionDigest[]
 }
 
@@ -136,8 +137,9 @@ const REFLECTION_SCHEMA = {
         required: ['text', 'confidence'], additionalProperties: false
       }
     },
-    current_focus: { type: ['array', 'null'], maxItems: MAX_FOCUS_ITEMS, items: { type: 'string' } },
-    working_theories: { type: ['array', 'null'], maxItems: MAX_THEORY_ITEMS, items: { type: 'string' } },
+    // Some structured-output engines accept nullable arrays only as branches.
+    current_focus: { anyOf: [{ type: 'array', maxItems: MAX_FOCUS_ITEMS, items: { type: 'string' } }, { type: 'null' }] },
+    working_theories: { anyOf: [{ type: 'array', maxItems: MAX_THEORY_ITEMS, items: { type: 'string' } }, { type: 'null' }] },
     retrospection: { type: ['string', 'null'] },
     initiative_candidates: {
       type: 'array', maxItems: 2,
@@ -678,7 +680,9 @@ export default class SelfModelManager {
       return true
     }
 
-    if ((input.toolExecutions || []).length > 0) {
+    // A complete basic lookup still records its digest and counts toward
+    // periodic reflection. It does not need reflection just for using a tool.
+    if (!input.routineLookup && input.toolExecutions?.length) {
       return true
     }
 
