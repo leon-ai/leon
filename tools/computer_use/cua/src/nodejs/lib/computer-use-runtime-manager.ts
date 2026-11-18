@@ -162,6 +162,14 @@ export class ComputerUseRuntimeManager {
     }
     const hasElement = typeof managedParameters['element_token'] === 'string' &&
       managedParameters['element_token'].length > 0
+    if (action === 'click' && managedParameters['action'] !== undefined &&
+        !runtime.supportsExplicitClickAction) {
+      // Drivers without an action selector can only perform their default press.
+      if (managedParameters['action'] !== 'press') {
+        throw new Error('This driver does not support the requested accessibility click action. No input was sent.')
+      }
+      delete managedParameters['action']
+    }
     if (['click', 'type_text', 'press_key', 'hotkey', 'scroll'].includes(action)) {
       const hasPixels = managedParameters['x'] != null || managedParameters['y'] != null
       if (hasElement && hasPixels) {
@@ -351,7 +359,7 @@ export class ComputerUseRuntimeManager {
   ): Promise<
     Pick<
       ManagedComputerUseRuntime,
-      'sessionAwareActions' | 'foregroundCapableActions' | 'zoomCapableActions'
+      'sessionAwareActions' | 'foregroundCapableActions' | 'zoomCapableActions' | 'supportsExplicitClickAction'
     >
   > {
     const catalog = asRecord(JSON.parse(await driver.listToolsJson()))
@@ -359,6 +367,7 @@ export class ComputerUseRuntimeManager {
     const sessionAwareActions = new Set<string>()
     const foregroundCapableActions = new Set<string>()
     const zoomCapableActions = new Set<string>()
+    let supportsExplicitClickAction = false
 
     for (const tool of tools) {
       const toolRecord = asRecord(tool)
@@ -377,8 +386,11 @@ export class ComputerUseRuntimeManager {
       if (properties?.['from_zoom']) {
         zoomCapableActions.add(name)
       }
+      if (name === 'click') {
+        supportsExplicitClickAction = Boolean(properties?.['action'])
+      }
     }
 
-    return { sessionAwareActions, foregroundCapableActions, zoomCapableActions }
+    return { sessionAwareActions, foregroundCapableActions, zoomCapableActions, supportsExplicitClickAction }
   }
 }

@@ -334,7 +334,12 @@ export class CuaRuntime {
         input,
         action,
         actionParameters
-      )
+      ).catch((error: unknown) => {
+        if (COMPUTER_USE_SCREEN_CAPTURE_ACTIONS.has(action)) {
+          this.forgetVisualState(input, actionParameters)
+        }
+        throw error
+      })
       let structuredResult =
         parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
       if (hasCuaError(result) && COMPUTER_USE_SCREEN_CAPTURE_ACTIONS.has(action)) {
