@@ -27,7 +27,7 @@ These are community expectations for agents, not license conditions. The unchang
 
 ## Releases, publishing and distribution
 
-- Read [RELEASING.md](RELEASING.md) before changing versioning, publishing workflows, release content or update delivery. Keep the documented policy and implementation aligned, clearly distinguishing planned delivery from supported behavior.
+- Read [RELEASING.md](docs/reference/RELEASING.md) before changing versioning, publishing workflows, release content or update delivery. Keep the documented policy and implementation aligned, clearly distinguishing planned delivery from supported behavior.
 - For every Leon-owned versioned component (project, packages, tools, skills, bridges/SDKs, schemas, etc.), use the latest version already pushed upstream or published as the baseline. Apply one appropriate version bump for the combined unpublished changes and reuse that pending version across follow-up edits, review fixes and local commits. If the required SemVer level changes, recalculate from the same baseline. Inspect upstream history or release metadata when needed; local `HEAD` may already contain an unpublished bump. Preserve versions already pushed or published; subsequent changes use a new bump. Third-party dependency upgrades follow upstream releases.
 - Keep release tooling minimal and independent of the legacy release scripts. Validate agreement between source versions, tags and release metadata, preserve preview/stable channel continuity, and publish only after the applicable checks and required assets are complete.
 

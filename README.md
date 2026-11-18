@@ -81,6 +81,7 @@ pnpm start
 - Follow the setup prompts during `pnpm install`.
 - Open **[http://localhost:5366/web-app/](http://localhost:5366/web-app/)** for the new web app. The legacy interface is still at `/`.
 - Run `pnpm run check` to check your setup.
+- Downloads select supported Chinese mirrors when the downloading machine is in China. See [download sources and overrides](docs/reference/DOWNLOADS.md).
 - Use the [`master` branch](https://github.com/leon-ai/leon/tree/master) for the previous, pre-agentic version.
 
 ## A little look inside

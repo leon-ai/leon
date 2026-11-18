@@ -1,12 +1,12 @@
 # Releasing Leon
 
-GitHub Releases are the distribution record for complete Leon versions. Publication is gated by [the release workflow](.github/workflows/release.yml). The Core updater renders the generated Markdown description; direct JSON changelog consumption remains planned.
+GitHub Releases are the distribution record for complete Leon versions. Publication is gated by [the release workflow](../../.github/workflows/release.yml). The Core updater renders the generated Markdown description; direct JSON changelog consumption remains planned.
 
 ## Versions and channels
 
 - Root `package.json` owns Leon's version. Commit it before tagging; the tag (`v<version>`) and release metadata must match.
 - Use [SemVer](https://semver.org/): patch for compatible fixes, minor for compatible features, major for breaking public-contract changes. Increment prerelease numbers for successive previews.
-- Follow the [repository versioning rule](AGENTS.md#releases-publishing-and-distribution): reuse the pending bump across local follow-up work; preserve versions already pushed or published.
+- Follow the [repository versioning rule](../../AGENTS.md#releases-publishing-and-distribution): reuse the pending bump across local follow-up work; preserve versions already pushed or published.
 - Before the public announcement, use `2.0.0-alpha.0`, then `2.0.0-alpha.0.1`, `2.0.0-alpha.0.2`, etc. Reserve `2.0.0-alpha.1` for the announcement; continue through alpha, beta, rc, and finally `2.0.0`.
 - Preview installs receive eligible prereleases and stable releases; stable installs receive stable releases. Changed distributions need unique, increasing versions. `+dev` metadata does not increase version precedence.
 - Tools, skills, and bridges keep independent versions. Distinguish their separate releases from complete Leon releases.
