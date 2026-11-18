@@ -44,7 +44,15 @@ export function AnswerParts({ parts, artifacts, animationId, active, fallbackTex
   active: boolean | undefined
   fallbackText: string
 }) {
-  return <div className="answer-parts">{parts.map((part) => {
+  // Older clarifications saved the explanation on the message itself.
+  const restoreClarification = fallbackText.trim().length > 0 &&
+    parts.some((part) => part.kind === 'ui' && part.surface.purpose === 'clarification' && part.surface.status === 'ready') &&
+    !parts.some((part) => part.kind === 'text')
+  const orderedParts = restoreClarification
+    ? [{ id: `${animationId}:clarification`, kind: 'text' as const, text: fallbackText }, ...parts]
+    : parts
+
+  return <div className="answer-parts">{orderedParts.map((part) => {
     if (part.kind === 'text') {
       return <MarkdownContent key={part.id} animationId={`${animationId}:${part.id}`} text={part.text} active={active} />
     }

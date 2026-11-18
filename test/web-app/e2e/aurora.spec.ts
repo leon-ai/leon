@@ -419,6 +419,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 test('restores browsed single-choice drafts without submitting and locks an activated answer while saving', async ({ page, ui }) => {
   const history = ui.history.get(SESSION_ID)!
   const answer = history.at(-1)!
+  answer.message = 'A quiet morning leaves more time for a walk.'
   answer.answerParts = auroraParts(history.at(-2)!.messageId)
   let finish: (() => void) | undefined
   const pending = new Promise<void>((resolve) => {
@@ -439,12 +440,17 @@ test('restores browsed single-choice drafts without submitting and locks an acti
   try {
     await page.goto(SESSION_URL)
     const choice = page.getByRole('region', { name: 'How would you like to start?', exact: true })
+    const explanation = page.getByText(answer.message, { exact: true })
+    await expect(explanation).toBeVisible()
+    await expect(choice).toBeVisible()
+    expect((await explanation.boundingBox())!.y).toBeLessThan((await choice.boundingBox())!.y)
     await choice.getByRole('radio').first().focus()
     await choice.getByRole('radio').first().press('ArrowDown')
     const selected = choice.getByRole('radio', { name: 'Something creative', exact: true })
     await expect(selected).toBeChecked()
     expect(requests).toHaveLength(0)
     await page.reload()
+    await expect(explanation).toBeVisible()
     await expect(selected).toBeChecked()
     expect(requests).toHaveLength(0)
     await selected.click()
@@ -453,6 +459,7 @@ test('restores browsed single-choice drafts without submitting and locks an acti
     expect(requests).toHaveLength(1)
     finish?.()
     await expect(choice.getByRole('status')).toHaveText('Saved. Thank you.')
+    await expect(explanation).toBeVisible()
     expect(requests).toHaveLength(1)
   } finally {
     finish?.()
@@ -561,6 +568,46 @@ test('streams Markdown beside native surfaces without waiting for the final resp
     .getByText('I could not finish this answer. Please try again.', { exact: true })).toBeVisible()
   await expect(page.getByRole('region', { name: 'How would you like to start?', exact: true })
     .getByRole('radio').first()).toBeDisabled()
+})
+
+test('shows finalized clarification Markdown once above the choices and restores it after reload', async ({ page, ui }) => {
+  const history = ui.history.get(SESSION_ID)!
+  const answer = history.at(-1)!
+  answer.message = ''
+  answer.isAddedToHistory = false
+  ui.sessions[0]!.status = 'wip' as typeof ui.sessions[0]['status']
+  const draftParts = auroraParts(history.at(-2)!.messageId)
+  const draft = draftParts[0]!
+  if (draft.kind === 'ui') {
+    draft.surface.status = 'draft'
+  }
+
+  await page.goto(SESSION_URL)
+  const event = { session_id: SESSION_ID, turn_id: null, response_id: answer.messageId, created_at: Date.now() }
+  const draftText = 'I am weighing the options.'
+  await ui.emit([{ ...event, sequence: 1, type: 'answer_parts', data: { answer_parts: draftParts } },
+    { ...event, sequence: 2, type: 'text_stream', data: { kind: 'answer', generationId: 'live-answer', token: draftText } }])
+  const choice = page.getByRole('region', { name: 'How would you like to start?', exact: true })
+  const radio = choice.getByRole('radio', { name: 'A quiet morning', exact: true })
+  await expect(radio).toBeDisabled()
+  await expect(page.getByText(draftText, { exact: true })).toBeVisible()
+
+  const text = 'A quiet morning leaves more time for a walk.'
+  const answerParts = [{ id: `${answer.messageId}:text`, kind: 'text' as const, text }, ...auroraParts(history.at(-2)!.messageId)]
+  await ui.emit([{ ...event, sequence: 3, type: 'final_answer', data: { content: text, answer_parts: answerParts, artifacts: [] } }])
+  const explanation = page.getByText(text, { exact: true })
+  await expect(explanation).toBeVisible()
+  await expect(explanation).toHaveCount(1)
+  await expect(radio).toBeEnabled()
+  await expect(page.getByText(draftText, { exact: true })).toHaveCount(0)
+  expect((await explanation.boundingBox())!.y).toBeLessThan((await choice.boundingBox())!.y)
+
+  Object.assign(answer, { message: text, answerParts, isAddedToHistory: true })
+  ui.sessions[0]!.status = 'idle' as typeof ui.sessions[0]['status']
+  await page.reload()
+  await expect(explanation).toBeVisible()
+  await expect(explanation).toHaveCount(1)
+  await expect(radio).toBeEnabled()
 })
 
 test('places retained files once, between native text inside the final answer', async ({ page, ui }) => {
