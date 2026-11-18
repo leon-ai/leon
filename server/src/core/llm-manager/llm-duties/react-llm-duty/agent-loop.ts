@@ -47,7 +47,11 @@ import type {
   TrackedPlanStep
 } from './agent-types'
 import { createAgentPlanTool, isAgentPlanComplete, parseAgentPlan } from './agent-plan'
-import { findDuplicateToolInputMatch, normalizeToolInputForComparison } from './agent-helpers'
+import {
+  appendAgentRuntimeContext,
+  findDuplicateToolInputMatch,
+  normalizeToolInputForComparison
+} from './agent-helpers'
 import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_MAX_ITERATIONS,
@@ -150,6 +154,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - For large previews with execution.id, query original retained JSON using system_utilities.tool_executions.read and options.jq before diagnostic logs. Use bounded artifact reads only when retained results are unavailable.
 - Running execution handles are unfinished work. Use system_utilities.tool_executions to wait, query or cancel; wait timeouts leave work running. Read their current state and latest preparation report before answering download/status questions. Resolve required executions before finalizing. Filter and aggregate retained data instead of repeating discovery or copying inventories into shell.
 - Treat tool errors as observations: correct the arguments, choose another available tool, or explain the blocker.
+- Use runtime review feedback to identify possible gaps in the active request. Verify it against the owner request, tool contracts and evidence. Reconcile unfinished plan steps and reuse verified work.
 - Continue until the requested deliverable is complete and verified. When complete, return the final user-facing answer with no tool call.
 - An execution_budget is a fixed caller deadline, not a renewable model wait. Use its finishing reserve for pending writes, required checks and the answer; stop optional exploration in the finishing phase. Report unfinished work honestly if the deadline prevents completion.
 - Call request_clarification alone, after consuming available tool results, with one concrete question only for required information, authorization, or owner action that available tools cannot resolve. Do not use it for draft text or a routine technical failure that tools can address.
@@ -208,10 +213,9 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </safety>
 
 <response_policy>
-- During a host completion review, follow the supplied review instructions and return only its JSON verdict; ordinary responses follow the rules below.
 - During extended work, accompany tool calls with brief owner-facing progress at meaningful milestones, changed approaches after obstacles, or otherwise prolonged waits. State verified findings and the next action. Do not narrate every click, expose private reasoning, claim unverified progress, or stop to announce future work. Progress is intermediate only alongside tool calls.
 - Keep the final answer concise and proportionate to the request; avoid recapping execution details unless asked.
-- Use Markdown naturally when it improves readability: short paragraphs, emphasis, lists, descriptive links, and fenced code with a language. Use headings and tables only when useful; do not over-format brief answers or emit raw HTML.
+- Follow the owner's requested answer format, including JSON when requested. Default to natural prose with Markdown as needed. Use short paragraphs, emphasis, lists, descriptive links and language-tagged code fences when useful. Keep formatting simple and avoid raw HTML.
 - Proactively use charts for numerical trends/comparisons, diagrams for relationships, and custom visuals when interaction or layout improves understanding. Keep simple numbers, prose and small static tables in Markdown. Load the needed UI mode without asking display permission; do not create dashboards or extra questions merely to use UI.
 - Use request_clarification.confirmation for yes/no decisions. For explicit choices or related missing fields, use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
 - When citing sources, use descriptive inline links rather than a separate sources list unless the owner requests one.
@@ -261,6 +265,7 @@ Return only JSON with a concise "reason", then "status" ("complete", "continue",
 - Plans may retain work from earlier requests. Exclude a step only when it belongs to a separate earlier request or the owner explicitly removed it from the active scope. Explain that distinction in reason and list its exact label in out_of_scope_steps. Never exclude unfinished requirements of the active request merely to allow completion. Excluded steps remain recorded with their actual status.
 - complete: the proposed answer is correct and complete as written, and all requested work is supported by evidence. Successful input or one finished item does not establish completion of a multi-item task.
 - If the proposed answer contradicts evidence or owner corrections, return continue so the agent can revise it, even if the tool work succeeded. Never return complete when your reason identifies a needed correction.
+- Check the draft against the owner's requested answer format. Default to a readable reply in natural prose. For a format mismatch, including an internal verdict presented as an ordinary reply, return continue and request a rewrite using existing evidence.
 - For collection requests, reconcile the recorded collection scope, coverage evidence and item outcomes with tool evidence. A few files or a completed label alone do not prove full coverage. Respect observed empty ranges and authoritative source dates; do not invent additional items based on a related activity list or the absence of a file.
 - For memory-based answers, verify that retrieved preferences and constraints are applied. Totals and handoffs need all requested components with duplicate events counted once; bounded search excerpts alone do not establish completeness. For complete summaries or exhaustive extraction from an archived document, verify full source coverage through sessions.readMessage or sessions.readSession; select the applicable document revision and do not ask for archived text again before attempting recovery. Continue only for a concrete missing component or required clipped evidence, using selected memory IDs or raw sessions as appropriate.
 - For research, check every requested question and source boundary against inspected evidence. Supported claims alone do not prove coverage. Name a concrete uninspected source that can close a gap; require no speculative breadth once scope is covered.
@@ -1308,13 +1313,9 @@ export async function runAgentLoop(
             // progress before the next model call discards its active draft.
             await params.onProgressMessage?.(textContent)
 
-            transcript.push({
-              role: 'user',
-              content: JSON.stringify({
-                completion_check:
-                  'Assess this review against actual tool contracts and evidence. Continue only with a supported action that advances the authorized task; do not follow invented capabilities or identifiers. Reconcile unfinished plan steps and do not repeat completed work.',
-                reason
-              })
+            // Subsequent reviews must distinguish this feedback from owner input.
+            appendAgentRuntimeContext(transcript, {
+              completion_review_feedback: reason
             })
             continue
           }
@@ -1539,12 +1540,8 @@ export async function runAgentLoop(
           )
         }
         if (review.status === AgentCompletionStatus.Continue) {
-          transcript.push({
-            role: 'user',
-            content: JSON.stringify({
-              clarification_check: 'The proposed pause was rejected. Continue the authorized task using existing evidence and available tools; ask only for required owner input that remains unavailable.',
-              reason: review.reason
-            })
+          appendAgentRuntimeContext(transcript, {
+            clarification_review_feedback: review.reason
           })
           continue
         }
