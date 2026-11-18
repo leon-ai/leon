@@ -548,6 +548,8 @@ describe('AISDKRemoteLLMProvider', () => {
   it.each([
     { model: 'gpt-5.4-mini', maxTokens: undefined, expected: 360_000 },
     { model: 'gpt-6.1-sol', maxTokens: 128_000, expected: 922_000 },
+    { model: 'gpt-6.2-astra', maxTokens: undefined, expected: 922_000 },
+    { model: 'gpt-6.2-sol', maxTokens: 4_000, expected: 922_000 },
     { model: 'uncatalogued-model', maxTokens: undefined, expected: undefined }
   ])('uses the endpoint window and output allowance for native compaction ($model)', async ({ model, maxTokens, expected }) => {
     websocketMocks.fetch.mockResolvedValueOnce(Response.json({
@@ -802,9 +804,19 @@ describe('AISDKRemoteLLMProvider', () => {
   })
 
   it.each([
-    [LLMProviders.Groq, 'groq', 'qwen/qwen3.8-27b'],
-    [LLMProviders.Cerebras, 'cerebras', 'qwen-3.8-27b']
-  ] as const)('honors explicit reasoning controls on %s models that can disable thinking', async (providerName, flavor, model) => {
+    [LLMProviders.Groq, 'groq', 'qwen/qwen3.8-27b', 'none'],
+    [LLMProviders.Cerebras, 'cerebras', 'qwen-3.8-27b', 'none'],
+    [LLMProviders.OpenAI, 'openai-responses', 'gpt-6.2-astra', 'low'],
+    [LLMProviders.OpenRouter, 'openrouter', 'openai/gpt-6.2-sol', 'low']
+  ] as const)('honors explicit reasoning controls within the limits of %s/%s', async (providerName, flavor, model, minimum) => {
+    if (providerName === LLMProviders.OpenRouter) {
+      const actual = await vi.importActual<typeof import('@openrouter/ai-sdk-provider')>('@openrouter/ai-sdk-provider')
+      openRouterMocks.createOpenRouter.mockImplementationOnce((...args: unknown[]) =>
+        actual.createOpenRouter(args[0] as Parameters<typeof actual.createOpenRouter>[0]) as unknown as
+          ReturnType<typeof openRouterMocks.createOpenRouter>
+      )
+    }
+
     const fetch = vi.fn().mockImplementation(async (url) => Response.json(
       String(url).endsWith('/responses')
         ? {
@@ -816,7 +828,7 @@ describe('AISDKRemoteLLMProvider', () => {
         : {
             id: 'chat_reasoning', created: 1, model,
             choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
-            usage: { prompt_tokens: 10, completion_tokens: 2 }
+            usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 }
           }
     ))
     vi.stubGlobal('fetch', fetch)
@@ -830,7 +842,8 @@ describe('AISDKRemoteLLMProvider', () => {
       { reasoningMode: 'on', disableThinking: true },
       { reasoningMode: 'on', reasoningEffort: 'none' },
       { reasoningMode: 'on', reasoningEffort: 'high' },
-      { disableThinking: true }
+      { disableThinking: true },
+      ...(minimum === 'low' ? [{ reasoningEffort: 'minimal' as const }] : [])
     ] as const
 
     for (const control of controls) {
@@ -841,7 +854,10 @@ describe('AISDKRemoteLLMProvider', () => {
       const body = JSON.parse(request.body)
 
       return body.reasoning?.effort ?? body.reasoning_effort
-    })).toEqual(['none', 'none', 'none', 'high', 'none'])
+    })).toEqual([
+      minimum, minimum, minimum, 'high', minimum,
+      ...(minimum === 'low' ? ['low'] : [])
+    ])
   })
 
   it.each([

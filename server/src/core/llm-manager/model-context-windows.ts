@@ -41,21 +41,23 @@ export function resolveAgentBudgetContextWindowTokens(
 }
 
 /**
- * Follows Codex's 90% ceiling and reserves any larger explicitly requested output.
+ * Follows Codex's 90% ceiling, respecting separate input and output limits.
  * Returns unknown when we cannot set a valid threshold for the endpoint.
  */
 export function resolveOpenAINativeCompactionTriggerTokens(
   model: string,
   requestedOutputTokens = 0
 ): number | undefined {
-  const capacity = resolveModelContextWindowTokens(LLMProviders.OpenAI, model)
+  const entry = getLLMModelCatalogEntry(LLMProviders.OpenAI, model)
+  const capacity = entry?.contextWindowTokens
   if (capacity === undefined) {
     return undefined
   }
 
   const threshold = Math.min(
     Math.floor(capacity * OPENAI_NATIVE_COMPACTION_RATIO),
-    capacity - requestedOutputTokens
+    capacity - requestedOutputTokens,
+    entry?.maxInputTokens ?? capacity
   )
   return threshold >= OPENAI_MINIMUM_COMPACTION_THRESHOLD_TOKENS
     ? threshold
