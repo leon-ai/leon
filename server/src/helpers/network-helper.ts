@@ -5,6 +5,7 @@ export type { DownloadFileOptions, DownloadFileProgress } from '@@/bridges/runti
 
 const HUGGING_FACE_URL = 'https://huggingface.co'
 const HUGGING_FACE_MIRROR_URL = 'https://hf-mirror.com'
+const HUGGING_FACE_PROBE_TIMEOUT_MS = 1_000
 const PUBLIC_IPV6 = new BlockList()
 const RESERVED_ADDRESSES = new BlockList()
 const LOOPBACK_ADDRESSES = new BlockList()
@@ -118,7 +119,7 @@ export class NetworkHelper {
   public static async canAccessHuggingFace(): Promise<boolean> {
     try {
       const { default: axios } = await import('axios')
-      await axios.head(HUGGING_FACE_URL)
+      await axios.head(HUGGING_FACE_URL, { timeout: HUGGING_FACE_PROBE_TIMEOUT_MS })
 
       return true
     } catch {

@@ -15,6 +15,7 @@ import { LEON_PROFILE_NAME, PROFILE_TOKEN_SEPARATOR } from '@/leon-roots'
 import { UpdatePhase, type UpdateSnapshot } from '../../bridges/runtime/contracts/updates'
 import { RELEASE_ASSET_NAME, RELEASE_SOURCE_NAME, formatReleaseNotes, isPreviewVersion, selectPreviousDistribution,
   validateReleaseContent, type PublishedDistribution } from '../release/release-content'
+import { getFullInstallEnvironment } from '../setup/setup-ci.js'
 import { forwardSafeOutput, stopProcessGroup } from './test-fresh-install.js'
 
 const execute = promisify(execFile)
@@ -43,9 +44,9 @@ export async function verifyReleaseOTA(): Promise<void> {
   const fixturePath = path.join(home, 'candidate.json')
   const bootsPath = path.join(home, 'boots.jsonl')
   const log = fs.createWriteStream(process.env['LEON_OTA_LOG_PATH'] ?? path.join(home, 'ota.log'))
-  const env: NodeJS.ProcessEnv = { ...process.env, LEON_HOME: home, LEON_CODEBASE_PATH: installed,
+  const env: NodeJS.ProcessEnv = { ...getFullInstallEnvironment(), LEON_HOME: home, LEON_CODEBASE_PATH: installed,
     LEON_OPEN_BROWSER: 'false', CI: 'true' }
-  // Exercise the owner's setup instead of its GitHub Actions shortcuts.
+  // Previous releases may still use the provider marker to select setup shortcuts.
   delete env['GITHUB_ACTIONS']
   delete env['NODE_OPTIONS']
   delete env['IS_DOCKER']

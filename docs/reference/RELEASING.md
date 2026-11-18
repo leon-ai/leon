@@ -1,12 +1,12 @@
 # Releasing Leon
 
-GitHub Releases are the distribution record for complete Leon versions. Publication is gated by [the release workflow](.github/workflows/release.yml). The Core updater renders the generated Markdown description; direct JSON changelog consumption remains planned.
+GitHub Releases are the distribution record for complete Leon versions. Publication is gated by [the release workflow](../../.github/workflows/release.yml). The Core updater renders the generated Markdown description; direct JSON changelog consumption remains planned.
 
 ## Versions and channels
 
 - Root `package.json` owns Leon's version. Commit it before tagging; the tag (`v<version>`) and release metadata must match.
 - Use [SemVer](https://semver.org/): patch for compatible fixes, minor for compatible features, major for breaking public-contract changes. Increment prerelease numbers for successive previews.
-- Follow the [repository versioning rule](AGENTS.md#releases-publishing-and-distribution): reuse the pending bump across local follow-up work; preserve versions already pushed or published.
+- Follow the [repository versioning rule](../../AGENTS.md#releases-publishing-and-distribution): reuse the pending bump across local follow-up work; preserve versions already pushed or published.
 - Before the public announcement, use `2.0.0-alpha.0`, then `2.0.0-alpha.0.1`, `2.0.0-alpha.0.2`, etc. Reserve `2.0.0-alpha.1` for the announcement; continue through alpha, beta, rc, and finally `2.0.0`.
 - Preview installs receive eligible prereleases and stable releases; stable installs receive stable releases. Changed distributions need unique, increasing versions. `+dev` metadata does not increase version precedence.
 - Tools, skills, and bridges keep independent versions. Distinguish their separate releases from complete Leon releases.
@@ -23,8 +23,10 @@ CI generates the GitHub description and `leon-release.json` asset from it. GitHu
 
 ## Publishing
 
+Shared installation behavior uses `CI=true`, which both [GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/variables) and [GitLab CI](https://docs.gitlab.com/ci/variables/predefined_variables/) provide. CI skips Git hook installation and optional memory models. Verification jobs reuse provisioned runtimes only when all four explicit overrides (`LEON_NODE_PATH`, `LEON_PNPM_PATH`, `LEON_PYTHON_PATH`, `LEON_UV_PATH`) are nonempty; this also skips the Python TCP stack and optional hardware setup. Jobs without the complete set perform managed runtime and TCP installation. Cold-install and OTA harnesses clear these overrides through `getFullInstallEnvironment`, retaining the CI marker, isolated home and network policy. A GitLab verification job can bind the same overrides to its installed executables; it does not need a GitHub-specific marker.
+
 1. Review the version and content, commit and push the branch, then run `pnpm release`. It requires a clean tree and the exact branch commit on origin, creates the immutable `v<version>` tag and pushes it to request the release workflow.
-2. CI reuses `build.yml` for lint/build/tests and `fresh-install.yml` for cold installations and live inference checks on Linux, macOS, and Windows. [Quick Evals](.github/workflows/quick-evals.yml) checks the tagged commit against the committed DeepSeek baseline.
+2. CI reuses `build.yml` for lint/build/tests and `fresh-install.yml` for cold installations and live inference checks on Linux, macOS, and Windows. [Quick Evals](../../.github/workflows/quick-evals.yml) checks the tagged commit against the committed DeepSeek baseline.
 3. The Linux OTA gate starts the previous published OTA-capable version in the same channel, installs the exact candidate, and verifies restart, version, profile credentials, and a live LLM ping.
 4. Native workers package Core archives for macOS ARM64, Linux x64/ARM64 and Windows x64. Each archive must pass isolated startup, the real HTTP artifact-OTA flow, existing conversations/workspaces in two isolated profiles, credential preservation and live inference. Until a predecessor archive is published for that platform, the artifact gate records an explicit bootstrap baseline.
 5. Only after every gate passes, CI verifies archive hashes and receipts against the exact commit/workflow run, uploads notes/JSON, `leon-runtime-assets.json` and platform archives to a draft, then publishes it. Alpha/beta/rc releases are prereleases; only stable releases are marked latest.

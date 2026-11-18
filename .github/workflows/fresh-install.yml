@@ -154,16 +154,16 @@ jobs:
           pnpm_config_store_dir: ${{ runner.temp }}/leon-fresh-pnpm-store
           UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
         run: |
-          node -e "
-            const fs = require('node:fs');
-            const { spawnSync } = require('node:child_process');
+          node --input-type=module -e "
+            import fs from 'node:fs';
+            import { spawnSync } from 'node:child_process';
+            import { getFullInstallEnvironment } from './scripts/setup/setup-ci.js';
             for (const directory of ['node_modules', process.env.LEON_HOME, process.env.pnpm_config_store_dir, process.env.UV_CACHE_DIR]) {
               if (fs.existsSync(directory) && fs.readdirSync(directory).length > 0) {
                 throw new Error('Fresh installation requires an empty directory: ' + directory);
               }
             }
-            const env = { ...process.env };
-            delete env.GITHUB_ACTIONS;
+            const env = getFullInstallEnvironment();
             // Package-manager actions can expose pnpm through a Windows command shim.
             const isWindows = process.platform === 'win32';
             const command = isWindows ? process.env.ComSpec || 'cmd.exe' : 'pnpm';

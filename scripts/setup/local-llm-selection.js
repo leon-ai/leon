@@ -284,9 +284,7 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
         quality: Math.min(100, recommendation.score_components.quality +
           baselinePenalty - precision.qualityPenalty),
         fileName, sizeBytes, checksum,
-        downloadURL: await NetworkHelper.setHuggingFaceURL(
-          `${MODEL_URL}/${repository}/resolve/${metadata.sha}/${fileName}`
-        )
+        downloadURL: `${MODEL_URL}/${repository}/resolve/${metadata.sha}/${fileName}`
       })
     }
   }
