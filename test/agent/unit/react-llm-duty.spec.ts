@@ -1401,6 +1401,7 @@ describe('continuous agent loop', () => {
     })
 
     expect(result.intent).toBe('answer')
+    expect(result.routineLookup === true).toBe(['optional', 'default'].includes(scenario))
     expect(callModel.mock.calls.some(([, , options]) => options.isCompletionReview))
       .toBe(!['optional', 'default'].includes(scenario))
   })

@@ -32,6 +32,7 @@ export interface SelfModelObservationInput {
   sentAt?: number
   route: 'react' | 'controlled' | 'pulse'
   finalIntent?: FinalIntent
+  routineLookup?: boolean
   toolExecutions?: ToolExecutionDigest[]
 }
 
@@ -679,7 +680,9 @@ export default class SelfModelManager {
       return true
     }
 
-    if ((input.toolExecutions || []).length > 0) {
+    // A complete basic lookup still records its digest and counts toward
+    // periodic reflection. It does not need reflection just for using a tool.
+    if (!input.routineLookup && input.toolExecutions?.length) {
       return true
     }
 

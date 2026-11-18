@@ -62,6 +62,7 @@ export function schedulePostTurn({ sessionId, query, result, onActivity }: Compl
     sentAt,
     route: 'react',
     finalIntent: finalIntent ?? 'answer',
+    routineLookup: result?.data?.['routineLookup'] === true,
     toolExecutions
   }))
 

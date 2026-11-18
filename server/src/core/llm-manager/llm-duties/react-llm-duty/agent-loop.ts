@@ -459,6 +459,7 @@ export interface AgentLoopParams {
 export interface AgentLoopResult {
   answer: string
   intent: FinalPhaseIntent
+  routineLookup?: boolean
   transcript: AgentToolTranscriptMessage[]
   executionHistory: ExecutionRecord[]
   trackedSteps: TrackedPlanStep[]
@@ -1276,11 +1277,12 @@ export async function runAgentLoop(
           continue
         }
 
-        const canSkipReview = iteration === 1 && !hasOwnerUpdates &&
+        const routineLookup = !hasOwnerUpdates &&
           !hasUsedOutputRecovery && !hasUsedContextRecovery && !hasUsedStallRecovery && !hasEnteredFinishing &&
           params.initialExecutionHistory === undefined &&
           params.initialTrackedSteps === undefined && trackedSteps.length === 0 &&
           isCompleteOptionalLookup(params.catalog, executionHistory)
+        const canSkipReview = iteration === 1 && routineLookup
         if ((executionHistory.length > 0 || trackedSteps.length > 0) && !canSkipReview) {
           // Review only a proposed ending, not every action. Reuse the same
           // provider, budget and evidence; the check cannot execute tools.
@@ -1336,6 +1338,7 @@ export async function runAgentLoop(
         return {
           answer: textContent,
           intent: 'answer',
+          ...(routineLookup ? { routineLookup: true } : {}),
           transcript,
           executionHistory,
           trackedSteps

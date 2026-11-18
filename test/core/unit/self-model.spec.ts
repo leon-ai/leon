@@ -32,6 +32,33 @@ afterEach(async () => {
   await fs.rm(fixture.root, { recursive: true, force: true })
 })
 
+it('records basic lookups and reflects periodically while responding immediately to a failed tool', async () => {
+  const manager = new SelfModelManager()
+  const lookup = {
+    userMessage: 'What is the weather?',
+    route: 'react' as const,
+    routineLookup: true,
+    toolExecutions: [{ functionName: 'weather.lookup', status: 'success' as const, observation: 'Clear' }]
+  }
+
+  for (const city of ['Shenzhen', 'Paris', 'Haarlem']) {
+    await manager.observeTurn({ ...lookup, assistantMessage: `Clear in ${city}.` })
+  }
+  expect(fixture.infer).not.toHaveBeenCalled()
+  const diary = await fs.readFile(manager.getDiaryPath(), 'utf8')
+  expect(diary).toContain('Observed turns: 3')
+  expect(diary).toContain('Tool successes: 3')
+
+  fixture.infer.mockResolvedValue({ output: { retrospection: 'I retain useful observations.' } })
+  await manager.observeTurn({ ...lookup, assistantMessage: 'Clear in Calgary.' })
+  expect(fixture.infer).toHaveBeenCalledTimes(1)
+
+  await manager.observeTurn({ ...lookup, routineLookup: false, assistantMessage: 'The lookup failed.',
+    toolExecutions: [{ functionName: 'weather.lookup', status: 'error', observation: 'Unavailable' }]
+  })
+  expect(fixture.infer).toHaveBeenCalledTimes(2)
+})
+
 it('replaces contradicted hypotheses while preserving unrelated learning across restarts', async () => {
   const manager = new SelfModelManager()
   fixture.infer.mockResolvedValueOnce({ output: {

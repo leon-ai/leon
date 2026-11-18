@@ -467,7 +467,8 @@ export class ReActLLMDuty extends LLMDuty {
       }
       const finalize = (
         answer: string,
-        intent: FinalResponseSignal['intent']
+        intent: FinalResponseSignal['intent'],
+        routineLookup?: boolean
       ): LLMDutyResult => {
         if (hasAurora) {
           finishAuroraAnswer(sessionId, traceId, answer, intent === 'answer' || intent === 'clarification')
@@ -478,7 +479,7 @@ export class ReActLLMDuty extends LLMDuty {
           ...item
         }))
 
-        const dutyResult = this.makeDutyResult(answer)
+        const dutyResult = this.makeDutyResult(answer, routineLookup)
         scheduleHistoryCompaction(
           () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer()
         )
@@ -970,7 +971,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
 
       this.signal?.throwIfAborted()
-      return finalize(result.answer, result.intent)
+      return finalize(result.answer, result.intent, result.routineLookup)
     } catch (error) {
       this.answerStream.discard()
       this.responseTraceCollector.interrupt()
@@ -2590,7 +2591,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
   }
 
-  private makeDutyResult(output: string): LLMDutyResult {
+  private makeDutyResult(output: string, routineLookup?: boolean): LLMDutyResult {
     if (!this.hasFinalizedAnswer) {
       throw new Error(
         'Agent invariant violation: user-facing output must be finalized before creating a duty result.'
@@ -2652,6 +2653,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: normalizedOutput,
       data: {
         hasExplicitMemoryWrite: this.hasExplicitMemoryWrite,
+        ...(routineLookup ? { routineLookup } : {}),
         workspace: process.cwd(),
         hasOwnerMessages: this.hasOwnerMessages,
         finalIntent: this.finalResponseIntent,
