@@ -760,10 +760,11 @@ export async function syncOwnerProfileFromTurn(
       normalizedAssistantMessage
     )
     if (!verification?.safe) {
-      // Log the failing stage, not personal facts or credentials echoed by a model.
-      LogHelper.error(verification
-        ? 'Owner profile sync: revision rejected by curation/correction verification'
-        : 'Owner profile sync: revision verification failed or returned invalid output')
+      // The maintenance queue reports rejected drafts with a reason and issue count.
+      if (!verification) {
+        LogHelper.error('Owner profile sync: revision verification failed or returned invalid output')
+      }
+
       return {
         outcome: verification ? 'rejected' : 'failed',
         reason: verification ? OwnerProfileSyncReason.VerificationRejected : OwnerProfileSyncReason.VerificationFailed,

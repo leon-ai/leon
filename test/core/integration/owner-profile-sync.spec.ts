@@ -9,6 +9,7 @@ import {
   normalizeOwnerProfile, readOwnerProfileSync, writeOwnerProfile
 } from '@/core/context-manager/owner-profile'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
+import { LogHelper } from '@/helpers/log-helper'
 
 const fixture = vi.hoisted(() => ({ root: '', prompt: vi.fn() }))
 vi.mock('@/core/profile-runtime/profile-paths', () => ({ getProfilePaths: (): { context: string } => ({ context: fixture.root }) }))
@@ -46,6 +47,7 @@ it.each([
   const result = await syncOwnerProfileFromTurn('Hello, Leon!', 'I am Leon, your assistant.')
 
   expect(result.outcome).toBe(verification.safe === undefined ? 'failed' : 'rejected')
+  expect(LogHelper.error).toHaveBeenCalledTimes(verification.safe === undefined ? 1 : 0)
   expect(await Promise.all(paths.map((file) => fs.readFile(file, 'utf8')))).toEqual(before)
 })
 
