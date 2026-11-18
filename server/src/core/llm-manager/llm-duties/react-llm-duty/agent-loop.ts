@@ -12,6 +12,8 @@ import {
   redactConnectionSetupCall
 } from '@/core/connections/connection-tool'
 import { LogHelper } from '@/helpers/log-helper'
+import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import {
   CompletionFailureKind,
   ProviderRetryReason,
@@ -211,7 +213,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - Keep the final answer concise and proportionate to the request; avoid recapping execution details unless asked.
 - Use Markdown naturally when it improves readability: short paragraphs, emphasis, lists, descriptive links, and fenced code with a language. Use headings and tables only when useful; do not over-format brief answers or emit raw HTML.
 - Proactively use charts for numerical trends/comparisons, diagrams for relationships, and custom visuals when interaction or layout improves understanding. Keep simple numbers, prose and small static tables in Markdown. Load the needed UI mode without asking display permission; do not create dashboards or extra questions merely to use UI.
-- Required yes/no decisions, explicit choices and related missing fields use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
+- Use request_clarification.confirmation for yes/no decisions. For explicit choices or related missing fields, use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
 - When citing sources, use descriptive inline links rather than a separate sources list unless the owner requests one.
 - Refer to yourself in the first person.
 - Wrap every file path as [FILE_PATH]/path[/FILE_PATH].
@@ -263,7 +265,7 @@ Return only JSON with a concise "reason", then "status" ("complete", "continue",
 - For memory-based answers, verify that retrieved preferences and constraints are applied. Totals and handoffs need all requested components with duplicate events counted once; bounded search excerpts alone do not establish completeness. For complete summaries or exhaustive extraction from an archived document, verify full source coverage through sessions.readMessage or sessions.readSession; select the applicable document revision and do not ask for archived text again before attempting recovery. Continue only for a concrete missing component or required clipped evidence, using selected memory IDs or raw sessions as appropriate.
 - For research, check every requested question and source boundary against inspected evidence. Supported claims alone do not prove coverage. Name a concrete uninspected source that can close a gap; require no speculative breadth once scope is covered.
 - For publication, require evidence that exact outgoing content and relevant history were inspected and discovered credentials removed before acting. Warnings/refusals cannot undo unsafe actions. If remediation is blocked, accept a truthful redacted report naming the blocked publication and required owner action; never encourage unsafe publication or credential testing.
-- Use the provided tool definitions and loaded tool guidance to assess capabilities. Never infer a listing function from a retrieval function, invent optional arguments, or substitute identifiers of different resource types.
+- Use the available toolkit and function names to assess capabilities. If decisive evidence is clipped, identify exactly what the acting agent should check. Do not infer tool arguments or decide that an unlisted function is unavailable.
 - An authoritative empty result with no further pagination can complete a bounded visibility check. Distinguish inaccessible content from an empty workspace; do not demand speculative searches when the proposed answer already states that limitation.
 - continue: work, decisive verification or an answer correction remains. State the next concrete action using existing evidence and exact relevant identifiers. Correct an answer directly when existing evidence is sufficient; do not require another tool call. Preserve already completed work; do not repeat it.
 - blocked: remaining work cannot proceed because of a concrete obstacle that available tools cannot resolve. Explain that obstacle. Routine tool recovery, a failed approach with alternatives, or missing verification are not themselves blockers.
@@ -1665,8 +1667,61 @@ async function reviewAgentCompletion(
   isContextRecoveryAttempt = false,
   intent: 'answer' | 'clarification' = 'answer'
 ): Promise<{ status: AgentCompletionStatus | null, reason: string } | null> {
+  const source = restoreCompactionSources(transcript)
+  const requests = new Map(source.flatMap((message) => message.role === 'assistant'
+    ? (message.toolCalls ?? []).map((call) => [call.id, call.function.arguments] as const)
+    : []))
+  const observations = source.flatMap((message) =>
+    message.role === 'tool' && typeof message.content === 'string'
+    ? [{
+        function: message.toolName,
+        id: message.toolCallId,
+        requestedInput: requests.get(message.toolCallId),
+        observation: message.content
+      }]
+    : [])
+  const recorded = new Set(observations.map(({ id }) => id))
+  const evidence = [
+    ...observations,
+    ...state.executionHistory.filter((execution) =>
+      typeof execution.observation === 'string' &&
+      (!execution.toolCallId || !recorded.has(execution.toolCallId))
+    ).map((execution) => ({
+      function: execution.function,
+      id: execution.toolCallId,
+      requestedInput: execution.requestedToolInput,
+      observation: execution.observation
+    }))
+  ]
+  // Keep each result identifiable even when a long investigation needs excerpts.
+  const observationBudget = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / Math.max(1, evidence.length))
+  const evidenceBrief = evidence.map(({ function: tool, id, requestedInput, observation }) => {
+    const result = parseToolCallArguments(observation)
+    const input = requestedInput
+      ? createAgentTextPreview(requestedInput, Math.floor(observationBudget / 3))
+      : undefined
+
+    return {
+      tool,
+      id,
+      status: result?.['status'],
+      artifact: result?.['output_log_path'],
+      execution_id: (result?.['execution'] as { id?: unknown } | undefined)?.id,
+      requested_input: input,
+      observation: createAgentTextPreview(observation, Math.max(0, observationBudget - (input?.length ?? 0)))
+    }
+  })
+  const serializedEvidence = JSON.stringify(evidenceBrief)
   const messages: AgentToolTranscriptMessage[] = [
-    ...transcript,
+    ...source.flatMap((message): AgentToolTranscriptMessage[] => {
+      if (message.role === 'user' && !message.runtimeContext) {
+        return [message]
+      }
+      if (message.role === 'assistant' && message.content && !message.toolCalls?.length) {
+        return [{ role: 'assistant', content: message.content }]
+      }
+      return []
+    }),
     { role: 'assistant', content: answer },
     {
       role: 'user',
@@ -1677,7 +1732,12 @@ async function reviewAgentCompletion(
           ? AGENT_CLARIFICATION_REVIEW_SYSTEM_PROMPT
           : AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
         remaining_operational_iterations: remainingIterations,
-        reported_plan: state.trackedSteps
+        reported_plan: state.trackedSteps,
+        available_toolkits: [...params.catalog.availableToolkitsById.keys()],
+        loaded_functions: [...params.catalog.functionsByToolName.values()].map((tool) => tool.qualifiedName),
+        tool_evidence: serializedEvidence.length <= TOOL_RESULT_INLINE_MAX_CHARS
+          ? evidenceBrief
+          : createAgentTextPreview(serializedEvidence, TOOL_RESULT_INLINE_MAX_CHARS)
       })
     }
   ]
@@ -1699,7 +1759,7 @@ async function reviewAgentCompletion(
         params.signal?.throwIfAborted()
         params.runBudget?.throwIfExpired()
         const response = await Promise.race([
-          params.callModel(messages, params.catalog.tools, {
+          params.callModel(messages, [], {
             signal: controller.signal,
             isRecoveryAttempt: false, isCompletionReview: true,
             completionReviewIntent: intent,
