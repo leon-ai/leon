@@ -136,8 +136,9 @@ const REFLECTION_SCHEMA = {
         required: ['text', 'confidence'], additionalProperties: false
       }
     },
-    current_focus: { type: ['array', 'null'], maxItems: MAX_FOCUS_ITEMS, items: { type: 'string' } },
-    working_theories: { type: ['array', 'null'], maxItems: MAX_THEORY_ITEMS, items: { type: 'string' } },
+    // Some structured-output engines accept nullable arrays only as branches.
+    current_focus: { anyOf: [{ type: 'array', maxItems: MAX_FOCUS_ITEMS, items: { type: 'string' } }, { type: 'null' }] },
+    working_theories: { anyOf: [{ type: 'array', maxItems: MAX_THEORY_ITEMS, items: { type: 'string' } }, { type: 'null' }] },
     retrospection: { type: ['string', 'null'] },
     initiative_candidates: {
       type: 'array', maxItems: 2,
