@@ -3,6 +3,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 
 import { execa } from 'execa'
+import { getRegionalInstallerEnvironment } from '../../bridges/runtime/nodejs/download-region.js'
 
 import {
   CODEBASE_PATH,
@@ -15,6 +16,35 @@ import { createSetupStatus } from './setup-status'
 
 const PYPROJECT_FILE_NAME = 'pyproject.toml'
 const UV_CONFIG_FILE_NAME = 'uv.toml'
+const PYTHON_INDEX_CONFIGURATION_PATTERN = /^\s*(?:(?:default-index|index-url|extra-index-url|index)\s*=|\[\[?(?:tool\.uv\.)?index(?:\]|\.))/m
+
+/**
+ * Apply regional defaults only when project and shared policy leave indexes unset.
+ */
+async function getPythonInstallEnvironment(projectPath) {
+  const environment = await getRegionalInstallerEnvironment()
+
+  if (!environment.UV_DEFAULT_INDEX || process.env.UV_DEFAULT_INDEX) {
+    return environment
+  }
+
+  // An explicitly configured project or company index takes precedence over
+  // regional defaults, just as source-scoped npm registries do.
+  for (const filename of [
+    path.join(CODEBASE_PATH, UV_CONFIG_FILE_NAME),
+    path.join(projectPath, UV_CONFIG_FILE_NAME),
+    path.join(projectPath, PYPROJECT_FILE_NAME)
+  ]) {
+    const content = await fs.promises.readFile(filename, 'utf8').catch(() => '')
+
+    if (PYTHON_INDEX_CONFIGURATION_PATTERN.test(content)) {
+      delete environment.UV_DEFAULT_INDEX
+      break
+    }
+  }
+
+  return environment
+}
 
 /**
  * Detect whether a command failed to spawn because the executable was missing.
@@ -165,7 +195,7 @@ export async function installPythonProjectDependencies(
       '--python',
       getProjectVenvPythonPath(projectPath),
       ...dependencies
-    ], { cwd: projectPath, stdio })
+    ], { cwd: projectPath, stdio, env: await getPythonInstallEnvironment(projectPath) })
 }
 
 /**

@@ -9,6 +9,7 @@ import buildAurora from './build-aurora.js'
 const ESLINT_CACHE_PATH = 'node_modules/.cache/eslint/full'
 
 const globs = [
+  '.pnpmfile.mjs',
   'apps/web-legacy/src/js/*.{ts,js}',
   'aurora/src/**/*.{ts,tsx,js,jsx}',
   'apps/web/src/**/*.{ts,tsx}',
@@ -18,7 +19,7 @@ const globs = [
   // '"hotword/index.{ts,js}"',
   'skills/**/*.{ts,js}',
   'scripts/**/*.{ts,js}',
-  'bridges/runtime/**/*.ts',
+  'bridges/runtime/**/*.{ts,js}',
   'server/src/**/*.{ts,js}',
   'test/**/*.{ts,tsx,js}',
   'tools/**/*.ts'
