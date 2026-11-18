@@ -1,0 +1,51 @@
+name: Quick Evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      max-input-growth:
+        description: Maximum percentage growth in input tokens
+        type: number
+        default: 15
+  workflow_call:
+    inputs:
+      max-input-growth:
+        type: number
+        default: 15
+    secrets:
+      LEON_DEEPSEEK_API_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  quick-evals:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6.1.1
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install scenario dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Compare live DeepSeek scenarios against baseline
+        env:
+          LEON_DEEPSEEK_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+          LEON_EVAL_MAX_GROWTH_PERCENT: ${{ inputs.max-input-growth }}
+          LEON_EVAL_REPORT: ${{ runner.temp }}/quick-evals.json
+        run: pnpm exec tsx scripts/ci/quick-evals.ts
+      - name: Retain metrics
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: quick-evals
+          path: ${{ runner.temp }}/quick-evals.json
+          if-no-files-found: ignore
