@@ -1,7 +1,7 @@
 import {
   LLM_DIR_PATH,
   LLM_MANIFEST_PATH,
-  IS_GITHUB_ACTIONS
+  IS_CI
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { NetworkHelper } from '@/helpers/network-helper'
@@ -16,6 +16,7 @@ import { updateDotEnvVariable } from './setup-dotenv'
 import { CONFIG_MANAGER } from '@/config'
 import setupCore from './setup-core'
 import { setupProfile } from './setup-profile'
+import { shouldUseCIRuntimes } from './setup-ci.js'
 import setupNode from './setup-node'
 import setupPNPM from './setup-pnpm'
 import setupPython from './setup-python'
@@ -44,6 +45,8 @@ import { createSetupStatus } from './setup-status'
 import { SetupUI } from './setup-ui'
 import setFfprobePermissions from './set-ffprobe-permissions'
 import setupGitHooks from './setup-git-hooks'
+
+const USE_CI_RUNTIMES = shouldUseCIRuntimes()
 
 function isExplicitLocalLLMTarget(value) {
   const normalizedValue = (value || '').trim()
@@ -196,12 +199,12 @@ async function syncLLMSetupChoice(preferences) {
 
   try {
     // Print the setup banner outside CI so the local install feels branded.
-    if (!IS_GITHUB_ACTIONS) {
+    if (!IS_CI) {
       printSetupBanner()
     }
 
     // Ask setup questions first so the rest of the install can run unattended.
-    if (!IS_GITHUB_ACTIONS) {
+    if (!USE_CI_RUNTIMES) {
       SetupUI.section('Quick Setup')
 
       currentStep = 'inspectLocalAICapability'
@@ -252,7 +255,7 @@ async function syncLLMSetupChoice(preferences) {
         await syncLLMSetupChoice(preferences)
         currentStep = 'setupCore'
         await setupCore()
-        if (!IS_GITHUB_ACTIONS) {
+        if (!USE_CI_RUNTIMES) {
           currentStep = 'setupNode'
           await setupNode()
           currentStep = 'setupPNPM'
@@ -263,7 +266,7 @@ async function syncLLMSetupChoice(preferences) {
           await setupUV()
         } else {
           SetupUI.info(
-            'Skipping portable Node.js, pnpm, Python and uv setup because it is running in CI'
+            'Skipping portable Node.js, pnpm, Python and uv setup because CI supplies verification runtimes'
           )
         }
 
@@ -272,11 +275,11 @@ async function syncLLMSetupChoice(preferences) {
         await setupJQ()
         currentStep = 'setupNodejsBridgeEnv'
         await setupNodejsBridgeEnv()
-        if (!IS_GITHUB_ACTIONS) {
+        if (!USE_CI_RUNTIMES) {
           currentStep = 'setupTCPServerEnv'
           await setupTCPServerEnv()
         } else {
-          SetupUI.info('Skipping Python TCP server setup because it is running in CI')
+          SetupUI.info('Skipping Python TCP server setup because CI supplies verification runtimes')
         }
       },
       async prepareTools() {
@@ -284,16 +287,15 @@ async function syncLLMSetupChoice(preferences) {
         await setupToolsDependencies()
       }
     })
-    // CI can exercise full setup without the GitHub Actions marker.
-    // Local memory model downloads are unnecessary for those smoke checks.
-    if (!IS_GITHUB_ACTIONS && process.env.CI !== 'true') {
+    // CI installation checks do not need optional local memory models.
+    if (!IS_CI) {
       currentStep = 'setupQMDLLM'
       await setupQMDLLM()
     } else {
       SetupUI.info('Skipping QMD model setup because it is running in CI')
     }
 
-    if (!IS_GITHUB_ACTIONS) {
+    if (!USE_CI_RUNTIMES) {
       // Install local AI components based on the earlier capability check and answers.
       SetupUI.section('Local AI')
 
@@ -367,7 +369,7 @@ async function syncLLMSetupChoice(preferences) {
       }
     }
 
-    if (!IS_GITHUB_ACTIONS) {
+    if (!IS_CI) {
       printSetupBanner()
     }
 

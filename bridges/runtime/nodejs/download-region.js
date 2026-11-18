@@ -11,6 +11,7 @@ export const PUBLIC_NPM_REGISTRY = 'https://registry.npmjs.org/'
 export const CHINA_NPM_REGISTRY = 'https://registry.npmmirror.com/'
 export const CHINA_BINARY_BASE = 'https://cdn.npmmirror.com/binaries'
 export const CHINA_PYPI_INDEX = 'https://pypi.tuna.tsinghua.edu.cn/simple/'
+export const PUBLIC_PYPI_INDEX = 'https://pypi.org/simple/'
 const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/
 const checks = new Map()
 const mirrorChecks = new Map()
@@ -162,9 +163,13 @@ export async function getRegionalInstallerEnvironment(environment = process.env,
     isDownloadMirrorAvailable(`${CHINA_BINARY_BASE}/node/index.json`)
   ])
 
-  if (!['UV_DEFAULT_INDEX', 'UV_INDEX_URL', 'UV_INDEX', 'UV_EXTRA_INDEX_URL',
+  if (!['UV_DEFAULT_INDEX', 'UV_INDEX_URL', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_INDEX_STRATEGY',
     'PIP_INDEX_URL', 'PIP_EXTRA_INDEX_URL'].some((key) => environment[key]) && pythonAvailable) {
-    result.UV_DEFAULT_INDEX = CHINA_PYPI_INDEX
+    // These endpoints serve the same public namespace. Never extend this
+    // strategy to owner indexes: private names must not leak to public PyPI.
+    result.UV_INDEX = CHINA_PYPI_INDEX
+    result.UV_DEFAULT_INDEX = PUBLIC_PYPI_INDEX
+    result.UV_INDEX_STRATEGY = 'unsafe-first-match'
   }
 
   if (binariesAvailable) {

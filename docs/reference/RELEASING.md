@@ -23,6 +23,8 @@ CI generates the GitHub description and `leon-release.json` asset from it. GitHu
 
 ## Publishing
 
+Shared installation behavior uses `CI=true`, which both [GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/variables) and [GitLab CI](https://docs.gitlab.com/ci/variables/predefined_variables/) provide. CI skips Git hook installation and optional memory models. Verification jobs reuse provisioned runtimes only when all four explicit overrides (`LEON_NODE_PATH`, `LEON_PNPM_PATH`, `LEON_PYTHON_PATH`, `LEON_UV_PATH`) are nonempty; this also skips the Python TCP stack and optional hardware setup. Jobs without the complete set perform managed runtime and TCP installation. Cold-install and OTA harnesses clear these overrides through `getFullInstallEnvironment`, retaining the CI marker, isolated home and network policy. A GitLab verification job can bind the same overrides to its installed executables; it does not need a GitHub-specific marker.
+
 1. Review the version and content, commit and push the branch, then run `pnpm release`. It requires a clean tree and the exact branch commit on origin, creates the immutable `v<version>` tag and pushes it to request the release workflow.
 2. CI reuses `build.yml` for lint/build/tests and `fresh-install.yml` for cold installations and live inference checks on Linux, macOS, and Windows. [Quick Evals](../../.github/workflows/quick-evals.yml) checks the tagged commit against the committed DeepSeek baseline.
 3. The Linux OTA gate starts the previous published OTA-capable version in the same channel, installs the exact candidate, and verifies restart, version, profile credentials, and a live LLM ping.

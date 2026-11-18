@@ -46,7 +46,6 @@ describe('setup preferences', () => {
     Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true })
     vi.stubEnv('IS_DOCKER', 'false')
     vi.stubEnv('CI', 'false')
-    vi.stubEnv('IS_GITHUB_ACTIONS', 'false')
     try {
       const preferences = await setupPreferences(capability, existing, installed)
       expect(preferences.setupLocalAI).toBe(false)

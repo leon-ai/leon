@@ -8,6 +8,8 @@ import { createInterface } from 'node:readline'
 import { stripVTControlCharacters } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
+import { getFullInstallEnvironment } from '../setup/setup-ci.js'
+
 const INSTALL_COMMAND =
   'stty rows 40 cols 120 && pnpm install --frozen-lockfile'
 // Windows command shims need a command interpreter even when pnpm is on PATH.
@@ -88,9 +90,7 @@ let activeChild = null
 let inferenceChild = null
 
 function getCleanEnvironment() {
-  const environment = { ...process.env }
-
-  delete environment.GITHUB_ACTIONS
+  const environment = getFullInstallEnvironment()
   delete environment.IS_DOCKER
   environment.CI = 'true'
   environment.COLUMNS = '120'

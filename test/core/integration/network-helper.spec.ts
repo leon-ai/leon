@@ -12,6 +12,7 @@ import * as DownloadSources from '@@/bridges/runtime/nodejs/download-sources.js'
 import {
   CHINA_NPM_REGISTRY,
   CHINA_PYPI_INDEX,
+  PUBLIC_PYPI_INDEX,
   configureRegionalPnpm,
   getDownloadRegion,
   getRegionalInstallerEnvironment
@@ -89,15 +90,25 @@ describe('NetworkHelper download integration', () => {
     expect((await configureRegionalPnpm(privateConfig)).registriesByScope).toEqual(privateConfig.registriesByScope)
 
     const environment = await getRegionalInstallerEnvironment({ LEON_DOWNLOAD_REGION: 'cn' })
-    expect(environment.UV_DEFAULT_INDEX).toBe(CHINA_PYPI_INDEX)
+    expect(environment.UV_INDEX).toBe(CHINA_PYPI_INDEX)
+    expect(environment.UV_DEFAULT_INDEX).toBe(PUBLIC_PYPI_INDEX)
+    expect(environment.UV_INDEX_STRATEGY).toBe('unsafe-first-match')
     const explicit = {
       LEON_DOWNLOAD_REGION: 'cn', UV_INDEX_URL: 'https://python.example/simple/',
       HTTPS_PROXY: 'http://proxy.example:8080'
     }
     const preserved = await getRegionalInstallerEnvironment(explicit)
     expect(preserved.UV_DEFAULT_INDEX).toBeUndefined()
+    expect(preserved.UV_INDEX).toBeUndefined()
+    expect(preserved.UV_INDEX_STRATEGY).toBeUndefined()
     expect(preserved.UV_INDEX_URL).toBe(explicit.UV_INDEX_URL)
     expect(preserved.HTTPS_PROXY).toBe(explicit.HTTPS_PROXY)
+    const strategy = await getRegionalInstallerEnvironment({
+      LEON_DOWNLOAD_REGION: 'cn', UV_INDEX_STRATEGY: 'first-index'
+    })
+    expect(strategy.UV_INDEX).toBeUndefined()
+    expect(strategy.UV_DEFAULT_INDEX).toBeUndefined()
+    expect(strategy.UV_INDEX_STRATEGY).toBe('first-index')
   })
 
   it('leaves signed, authenticated and unlisted release sources untouched', async () => {

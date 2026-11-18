@@ -17,7 +17,7 @@ const HUSKY_BIN_PATH = path.join(
  * Install git hooks through Husky when Leon is inside a git checkout.
  */
 export default async function setupGitHooks() {
-  if (process.env.GITHUB_ACTIONS === 'true' || !fs.existsSync(GIT_PATH)) {
+  if (process.env.CI === 'true' || !fs.existsSync(GIT_PATH)) {
     return
   }
 

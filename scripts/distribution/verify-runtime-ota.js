@@ -109,7 +109,7 @@ export async function verifyRuntimeOTA(directory) {
       const tsx = fileURLToPath(import.meta.resolve('tsx/cli'))
       await execute(process.execPath, [tsx, 'scripts/ci/fresh-install-inferences.ts', 'configure'], source)
     } else {
-      assert(!process.env.GITHUB_ACTIONS, 'A release runtime needs the live inference gate secret')
+      assert(process.env.CI !== 'true', 'A release runtime needs the live inference gate secret')
     }
     server = http.createServer((request, response) => {
       const file = path.join(directory, metadata.assets[0].name)

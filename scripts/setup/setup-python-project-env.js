@@ -1,9 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { createHash } from 'node:crypto'
 
 import { execa } from 'execa'
-import { getRegionalInstallerEnvironment } from '../../bridges/runtime/nodejs/download-region.js'
+import {
+  CHINA_PYPI_INDEX,
+  PUBLIC_PYPI_INDEX,
+  getRegionalInstallerEnvironment
+} from '../../bridges/runtime/nodejs/download-region.js'
 
 import {
   CODEBASE_PATH,
@@ -11,39 +16,42 @@ import {
   UV_RUNTIME_BIN_PATH
 } from '@/constants'
 import { SystemHelper } from '@/helpers/system-helper'
+import { LogHelper } from '@/helpers/log-helper'
 
 import { createSetupStatus } from './setup-status'
 
 const PYPROJECT_FILE_NAME = 'pyproject.toml'
 const UV_CONFIG_FILE_NAME = 'uv.toml'
-const PYTHON_INDEX_CONFIGURATION_PATTERN = /^\s*(?:(?:default-index|index-url|extra-index-url|index)\s*=|\[\[?(?:tool\.uv\.)?index(?:\]|\.))/m
+const MIRROR_HTTP_TIMEOUT_SECONDS = 15
+const PYTHON_INDEX_CONFIGURATION_PATTERN = /^\s*(?:(?:default-index|index-url|extra-index-url|index-strategy|index)\s*=|\[\[?(?:tool\.uv\.)?index(?:\]|\.))/m
 
 /**
  * Apply regional defaults only when project and shared policy leave indexes unset.
  */
 async function getPythonInstallEnvironment(projectPath) {
-  const environment = await getRegionalInstallerEnvironment()
-
-  if (!environment.UV_DEFAULT_INDEX || process.env.UV_DEFAULT_INDEX) {
-    return environment
-  }
-
   // An explicitly configured project or company index takes precedence over
   // regional defaults, just as source-scoped npm registries do.
   for (const filename of [
+    process.env.UV_CONFIG_FILE,
+    path.join(process.env.APPDATA || process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'uv', UV_CONFIG_FILE_NAME),
+    ...(process.env.XDG_CONFIG_DIRS || '/etc').split(path.delimiter)
+      .map((directory) => path.join(directory, 'uv', UV_CONFIG_FILE_NAME)),
     path.join(CODEBASE_PATH, UV_CONFIG_FILE_NAME),
     path.join(projectPath, UV_CONFIG_FILE_NAME),
     path.join(projectPath, PYPROJECT_FILE_NAME)
   ]) {
+    if (!filename) {
+      continue
+    }
+
     const content = await fs.promises.readFile(filename, 'utf8').catch(() => '')
 
     if (PYTHON_INDEX_CONFIGURATION_PATTERN.test(content)) {
-      delete environment.UV_DEFAULT_INDEX
-      break
+      return getRegionalInstallerEnvironment(process.env, { python: false })
     }
   }
 
-  return environment
+  return getRegionalInstallerEnvironment()
 }
 
 /**
@@ -187,15 +195,52 @@ export async function installPythonProjectDependencies(
     return
   }
 
-  await execa(UV_RUNTIME_BIN_PATH, [
-      'pip',
-      'install',
-      '--config-file',
-      path.join(CODEBASE_PATH, UV_CONFIG_FILE_NAME),
-      '--python',
-      getProjectVenvPythonPath(projectPath),
-      ...dependencies
-    ], { cwd: projectPath, stdio, env: await getPythonInstallEnvironment(projectPath) })
+  const environment = await getPythonInstallEnvironment(projectPath)
+  const usesAutomaticMirror = (
+    !process.env.UV_INDEX &&
+    environment.UV_INDEX === CHINA_PYPI_INDEX &&
+    environment.UV_DEFAULT_INDEX === PUBLIC_PYPI_INDEX
+  )
+  const installArguments = [
+    'pip',
+    'install',
+    '--config-file',
+    path.join(CODEBASE_PATH, UV_CONFIG_FILE_NAME),
+    '--python',
+    getProjectVenvPythonPath(projectPath),
+    ...dependencies
+  ]
+
+  try {
+    await execa(UV_RUNTIME_BIN_PATH, installArguments, {
+      cwd: projectPath,
+      stdio,
+      env: usesAutomaticMirror ? {
+        ...environment,
+        UV_HTTP_TIMEOUT: environment.UV_HTTP_TIMEOUT || String(MIRROR_HTTP_TIMEOUT_SECONDS),
+        UV_HTTP_RETRIES: environment.UV_HTTP_RETRIES || '0'
+      } : environment
+    })
+  } catch (error) {
+    if (!usesAutomaticMirror || error.exitCode === undefined || error.isCanceled || error.signal) {
+      throw error
+    }
+
+    // uv's index search handles missing metadata, but not every transport or
+    // artifact failure. Retry once against PyPI with the same pins and policy.
+    LogHelper.warning('Python mirror installation failed; retrying once with the original PyPI index')
+
+    const fallbackEnvironment = { ...environment }
+
+    delete fallbackEnvironment.UV_INDEX
+    delete fallbackEnvironment.UV_INDEX_STRATEGY
+
+    await execa(UV_RUNTIME_BIN_PATH, installArguments, {
+      cwd: projectPath,
+      stdio,
+      env: fallbackEnvironment
+    })
+  }
 }
 
 /**
