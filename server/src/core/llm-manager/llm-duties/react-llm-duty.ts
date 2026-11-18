@@ -805,7 +805,7 @@ export class ReActLLMDuty extends LLMDuty {
             ),
             planning_guidance: state.trackedSteps.length ? AGENT_PLAN_GUIDANCE : null,
             plan_reconciliation: options.requiresPlanReconciliation
-              ? 'Reconcile the plan with tool evidence now using update_plan: record verified milestones, the actual active step and unresolved mappings/blockers. Preserve completed work; never infer completion from successful input or invent work for this reminder. If the same step remains active, record why. Ask the owner only for missing information or access.'
+              ? 'Use the available evidence to record verified plan changes with the next independent action. Reconcile the plan on its own only when a discrepancy prevents choosing that action. Preserve completed work, keep unresolved steps pending, and ask the owner only for missing information or access.'
               : null,
             active_skill: activeSkill
               ? {
