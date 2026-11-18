@@ -59,7 +59,7 @@ import {
   buildComputerUseConvergenceHint,
   getComputerUseRetryBlocker
 } from './computer-use-convergence'
-import { createAgentTextPreview, retainRecentToolImages } from './agent-context-budget'
+import { createAgentTextPreview, projectSettledAgentEvidence, retainRecentToolImages } from './agent-context-budget'
 import {
   completeAgentImageBatch,
   prepareAgentImageBatch,
@@ -556,18 +556,23 @@ export function buildAgentToolCatalog(
     if (mode) {
       enableAuroraTools(catalog, mode)
     }
-    const order = new Map(previous.toolOrder.map((name, index) => [name, index]))
-
-    // Rebuild callable contracts from the current registry while retaining their
-    // conversation order. New capabilities append; removed ones stay unavailable.
-    tools.sort((left, right) =>
-      (order.get(left.function.name) ?? previous.toolOrder.length) -
-      (order.get(right.function.name) ?? previous.toolOrder.length)
-    )
+    restoreAgentToolOrder(tools, previous.toolOrder)
     catalog.planTracking = previous.planTracking
   }
 
   return catalog
+}
+
+/**
+ * Keeps the surviving contracts in their persisted order and appends new tools.
+ */
+export function restoreAgentToolOrder(tools: OpenAITool[], previous: string[]): void {
+  const order = new Map(previous.map((name, index) => [name, index]))
+
+  tools.sort((left, right) =>
+    (order.get(left.function.name) ?? previous.length) -
+    (order.get(right.function.name) ?? previous.length)
+  )
 }
 
 function tokenizeAgentToolkitRoutingText(value: string): string[] {
@@ -1008,6 +1013,10 @@ export async function runAgentLoop(
     if (pendingOwnerReassessment) {
       rejectedCalls.clear()
       hasWarnedAboutRejections = false
+    }
+    const evidenceView = projectSettledAgentEvidence(transcript)
+    if (evidenceView !== transcript) {
+      transcript.splice(0, transcript.length, ...evidenceView)
     }
     // Continue an unfinished authorized run once, with bounded resume context.
     // This is a bounded finishing pass, not a new task or a renewed permission.

@@ -21,7 +21,7 @@ import { PreparationStatus, type ToolPreparationSnapshot } from '@@/aurora/src/v
 import type { ToolExecutionInput } from '@/core/tool-manager/tool-executor'
 
 import { DUTY_NAME } from './agent-constants'
-import { buildBoundedToolObservation } from './agent-context-budget'
+import { buildBoundedToolObservation, projectCommandOutput, projectImplicitSourcePage } from './agent-context-budget'
 import type { AgentRunProgressEvent, ToolExecutionResult } from './agent-types'
 import {
   extractFinalAnswerFromToolResult,
@@ -774,6 +774,15 @@ export async function runToolExecution(
   const effectiveMessage =
     (hasObservedToolFailure && (nestedResultError || toolOutputError)) ||
     toolExecutionResult.message
+  const requestedOptions = asRecord(toolExecutionInput.parsedInput?.['options'])
+  if (outputLogPath && !modelFiles?.length) {
+    const hasRequestedRange = requestedOptions?.['maxChars'] !== undefined ||
+      requestedOptions?.['offsetChars'] !== undefined
+    observationData.output = projectCommandOutput(toolOutput, hasRequestedRange)
+    if (effectiveStatus === 'success' && (!requestedOptions || !Object.keys(requestedOptions).length)) {
+      observationData.output = projectImplicitSourcePage(observationData.output)
+    }
+  }
 
   LogHelper.title(`${DUTY_NAME} / execution`)
   if (hasObservedToolFailure) {

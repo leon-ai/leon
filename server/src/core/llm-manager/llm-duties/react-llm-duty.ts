@@ -136,6 +136,7 @@ import {
   buildAgentTranscriptHistory,
   evaluateAgentToolkitPreloadCost,
   findHighConfidenceAgentToolSelection,
+  restoreAgentToolOrder,
   runAgentLoop
 } from './react-llm-duty/agent-loop'
 import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/agent-loop'
@@ -163,6 +164,7 @@ import {
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import {
   prepareAgentModelContext,
+  projectSettledAgentEvidence,
   retainRecentToolImages,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
@@ -571,6 +573,9 @@ export class ReActLLMDuty extends LLMDuty {
 
       if (CONFIG_MANAGER.getConfig().runtime.experience_enabled !== false && EXPERIENCE_MANAGER.list().length > 0) {
         catalog.tools.push(createExperienceSearchTool())
+        if (loadedState?.toolOrder) {
+          restoreAgentToolOrder(catalog.tools, loadedState.toolOrder)
+        }
       }
 
       const agentSystemPrompt = this.appendAdditionalInstructions(
@@ -589,7 +594,7 @@ export class ReActLLMDuty extends LLMDuty {
       const transcript = continuation
         ? structuredClone(continuation.transcript)
         : conversationState
-          ? structuredClone(conversationState.transcript)
+          ? projectSettledAgentEvidence(structuredClone(conversationState.transcript), true)
           : buildAgentTranscriptHistory(history, ownerInput)
       if (transcript.length || this.files?.length || this.additionalInstructions) {
         lookupToolName = undefined

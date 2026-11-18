@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBoundedToolObservation,
   prepareAgentModelContext,
+  projectCommandOutput,
+  projectImplicitSourcePage,
+  projectSettledAgentEvidence,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
   resolveAgentMaxOutputTokens,
@@ -66,6 +69,79 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('keeps the exit status and diagnostic tail of a noisy command with its original result available', () => {
+    const stdout = `${'Progress update\n'.repeat(2_500)}Last check: 37 assets\n`
+    const stderr = 'Permission denied for snapshot.json'
+    const original = { execution: { id: 'saved-command' }, result: {
+      stdout, stderr, returncode: 2, success: false
+    } }
+    const { result, execution } = projectCommandOutput(original, false) as typeof original
+
+    expect(execution).toEqual(original.execution)
+    expect(result).toMatchObject({ returncode: 2, success: false, stderr, output_truncated: true })
+    expect(result.stdout.length).toBeLessThan(stdout.length)
+    expect(result.stdout).toBe(stdout.slice(-result.stdout.length))
+    expect(original.result.stdout).toBe(stdout)
+  })
+
+  it('keeps retained command pages readable from their original absolute cursor', () => {
+    const offsetChars = 120
+    const output = 'Completed asset check.\n'.repeat(520)
+    const original = { result: { data: {
+      sessionId: 'command-session', output, offsetChars, nextOffsetChars: offsetChars + output.length,
+      hasMore: false, outputLost: true
+    } } }
+    const { data } = (projectCommandOutput(original, false) as typeof original).result
+
+    expect(data.output.length).toBeLessThan(output.length)
+    expect(data.output).toBe(output.slice(0, data.output.length))
+    expect(data.nextOffsetChars).toBe(offsetChars + data.output.length)
+    expect(data).toMatchObject({ hasMore: true, outputLost: true })
+    expect(projectCommandOutput(original, true)).toBe(original)
+  })
+
+  it('previews the first source page with an exact continuation and preserves repository instructions', () => {
+    const content = 'Source evidence. '.repeat(1_400)
+    const original = { result: { success: true, data: {
+      content, offsetChars: 0, totalChars: content.length, nextOffsetChars: null,
+      returnedChars: content.length, modelContextId: 'complete range',
+      repositoryInstructions: [{ content: 'Use pnpm.' }]
+    } } }
+    const output = projectImplicitSourcePage(original) as typeof original
+    const page = output.result.data
+
+    expect(page.content.length).toBeLessThan(content.length)
+    expect(page.content).toBe(content.slice(0, page.nextOffsetChars!))
+    expect(page.returnedChars).toBe(page.content.length)
+    expect(page.totalChars).toBe(content.length)
+    expect(page.repositoryInstructions).toEqual(original.result.data.repositoryInstructions)
+    expect(page).not.toHaveProperty('modelContextId')
+    expect(original.result.data.content).toBe(content)
+  })
+
+  it('bounds archived tool results without losing their source or touching the latest exchange', () => {
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Inspect the records.' }]
+    const fullResult = JSON.stringify({
+      status: 'success',
+      output_log_path: '/tmp/archived-result.json',
+      data: { content: 'An archived record. '.repeat(500) }
+    })
+    appendToolExchange(transcript, 'first', fullResult)
+    appendToolExchange(transcript, 'latest', fullResult)
+
+    expect(projectSettledAgentEvidence(transcript)).toBe(transcript)
+    const projected = projectSettledAgentEvidence(transcript, true)
+
+    expect(projected[1]).toEqual(transcript[1])
+    expect(projected[2]).toMatchObject({ toolCallId: 'first' })
+    expect(JSON.parse(projected[2]!.content)).toMatchObject({
+      output_log_path: '/tmp/archived-result.json', observation_compacted: true
+    })
+    expect(projected[2]!.content.length).toBeLessThan(fullResult.length)
+    expect(projected[4]).toEqual(transcript[4])
+    expect(projectSettledAgentEvidence(projected, true)).toBe(projected)
+  })
+
   it('pages oversized inspections by bytes and saves every source before releasing previews', () => {
     const files = [7, 7, 1].map((size, index) => ({
       dataBase64: 'x'.repeat(size * 1_024 * 1_024),
