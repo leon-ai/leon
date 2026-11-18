@@ -1033,8 +1033,8 @@ export async function runAgentLoop(
     let isRecoveryAttempt = false
     let isOutputRecoveryAttempt = false
     let isStallRecoveryAttempt = false
-    // Once a provider needs the smaller context target, keep that target for
-    // the rest of the run instead of allowing the prompt to grow back.
+    // Keep the smaller target after a context rejection. A stream stall only
+    // needs the smaller request for the recovery attempt.
     let isContextRecoveryAttempt = hasUsedContextRecovery
     const remainingIterations = iterationLimit - iteration
     // A stale plan is a cue to reconcile evidence, never proof that work finished.
@@ -1100,11 +1100,11 @@ export async function runAgentLoop(
             !error.diagnostics.providerCompleted &&
             (error.diagnostics.retryReason === ProviderRetryReason.Output ||
               (error.diagnostics.reasoningOnly === true &&
-                error.diagnostics.retryReason === ProviderRetryReason.Exhausted))) {
+                (error.diagnostics.retryReason === ProviderRetryReason.ReasoningTimeout ||
+                  error.diagnostics.retryReason === ProviderRetryReason.Exhausted)))) {
             // Interrupted drafts and unexecuted tool arguments are provisional.
             // Rebuild once from retained evidence without replaying completed actions.
             hasUsedStallRecovery = true
-            hasUsedContextRecovery = true
             isRecoveryAttempt = true
             isStallRecoveryAttempt = true
             isContextRecoveryAttempt = true
@@ -1152,7 +1152,7 @@ export async function runAgentLoop(
         )
       }
       if (!modelResult) {
-        if (hasUsedContextRecovery) {
+        if (hasUsedContextRecovery || hasUsedStallRecovery) {
           return createResumableAgentResult(
             'synthesis',
             transcript,
@@ -1188,7 +1188,6 @@ export async function runAgentLoop(
         // A reasoning-only length stop needs a fresh evidence view, not the same
         // deliberation again. Keep the owner's reasoning setting and output capacity.
         hasUsedStallRecovery = true
-        hasUsedContextRecovery = true
         isStallRecoveryAttempt = true
         isContextRecoveryAttempt = true
         transcript.push({

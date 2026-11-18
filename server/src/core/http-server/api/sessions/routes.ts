@@ -27,12 +27,22 @@ const SESSION_ID_PARAM_NAME = 'session_id'
  */
 function projectSessionMessage(sessionId: string, record: MessageLog): MessageLog {
   if (record.agentResponseTrace) {
-    record = { ...record, agentResponseTrace: ConversationHistoryHelper.resolveAgentTraceToolIcons(
+    record = { ...record, agentResponseTrace: ConversationHistoryHelper.resolveAgentTraceToolDisplay(
       record.agentResponseTrace, (name) => {
         const [toolkitId, toolId] = name.split('.')
-        const toolLogo = toolkitId && toolId ? TOOLKIT_REGISTRY.getToolIconLogo(toolkitId, toolId) : undefined
+        if (!toolkitId || !toolId) {
+          return null
+        }
 
-        return toolLogo ? { toolLogo } : null
+        const tool = TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)
+        const toolLogo = TOOLKIT_REGISTRY.getToolIconLogo(toolkitId, toolId)
+
+        return tool || toolLogo
+          ? {
+              ...(tool ? { toolName: tool.toolName } : {}),
+              ...(toolLogo ? { toolLogo } : {})
+            }
+          : null
       }
     ) }
   }

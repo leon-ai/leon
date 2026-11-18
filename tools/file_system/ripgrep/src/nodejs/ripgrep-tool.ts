@@ -16,6 +16,8 @@ const MAX_RECORDS = 1_000_000
 const MAX_RETAINED_BYTES = 128 * 1_024 * 1_024
 const MAX_PREVIEW_RECORDS = 100
 const MAX_PREVIEW_BYTES = 32_000
+const MAX_MATCH_PREVIEW_RECORDS = 24
+const MAX_MATCH_PREVIEW_BYTES = 8_000
 const WRITE_BUFFER_BYTES = 64 * 1_024
 const SEARCH_TIMEOUT_MS = 120_000
 const THREADS = 0
@@ -196,6 +198,8 @@ export default class RipgrepTool extends Tool {
     const filename = path.join(directory, `${randomUUID()}.json`)
     const file = await fs.open(filename, 'wx', 0o600)
     const preview: (TextData | MatchData)[] = []
+    const maxPreviewRecords = field === 'matches' ? MAX_MATCH_PREVIEW_RECORDS : MAX_PREVIEW_RECORDS
+    const maxPreviewBytes = field === 'matches' ? MAX_MATCH_PREVIEW_BYTES : MAX_PREVIEW_BYTES
     let previewBytes = 0
     let retainedBytes = 0
     let records = 0
@@ -224,8 +228,8 @@ export default class RipgrepTool extends Tool {
         records += 1
 
         if (
-          preview.length < MAX_PREVIEW_RECORDS &&
-          previewBytes + bytes <= MAX_PREVIEW_BYTES
+          preview.length < maxPreviewRecords &&
+          previewBytes + bytes <= maxPreviewBytes
         ) {
           preview.push(value)
           previewBytes += bytes

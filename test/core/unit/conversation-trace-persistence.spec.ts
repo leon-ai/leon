@@ -485,11 +485,16 @@ describe('conversation trace persistence', () => {
     expect(ConversationHistoryHelper.toHistoryItems(reloaded, { supportsWidgets: true })[0]?.agentResponseTrace)
       .toEqual(draft.agentResponseTrace)
     const logo = { url: 'tools/test.lookup/assets/logo.svg', mode: LogoMaskMode.Alpha }
-    const projected = ConversationHistoryHelper.toHistoryItems(reloaded, {
-      supportsWidgets: true, resolveToolIconNames: () => ({ toolLogo: logo })
+    const resolveToolDisplay = (): { toolName: string, toolLogo: typeof logo } => ({
+      toolName: 'lookup', toolLogo: logo
     })
-    expect(projected[0]?.agentResponseTrace?.toolCalls[0]?.toolLogo).toEqual(logo)
-    expect(reloaded[0]?.agentResponseTrace?.toolCalls[0]).not.toHaveProperty('toolLogo')
+    const projected = ConversationHistoryHelper.toHistoryItems(reloaded, {
+      supportsWidgets: true, resolveToolDisplay
+    })
+    expect(projected[0]?.agentResponseTrace?.toolCalls[0]).toMatchObject({
+      toolName: 'lookup', toolLogo: logo
+    })
+    expect(reloaded[0]?.agentResponseTrace?.toolCalls[0]).toEqual(draft.agentResponseTrace?.toolCalls[0])
 
     const activity = {
       ...draft,

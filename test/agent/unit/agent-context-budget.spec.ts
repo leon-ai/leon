@@ -201,6 +201,33 @@ describe('agent context budget', () => {
     expect(reuseToolContext(transcript)).toEqual(transcript)
   })
 
+  it('references repeated pages and independently keeps the current nested instructions', () => {
+    const result = (id: string, content: string, instructions: string): AgentToolTranscriptMessage => ({
+      role: 'tool', toolCallId: id, toolName: 'source',
+      content: JSON.stringify({ data: { output: {
+        modelContextId: 'page', content,
+        instructions: [{ modelContextId: 'rules', content: instructions }]
+      } } })
+    })
+    const projected = reuseToolContext([
+      result('first', 'Original page', 'Original rules'),
+      result('second', 'Updated page', 'Original rules'),
+      result('third', 'Updated page', 'Updated rules')
+    ])
+
+    expect(JSON.parse(projected[1]!.content).data.output).toEqual({
+      modelContextId: 'page', content: 'Updated page',
+      instructions: [{
+        modelContextId: 'rules',
+        contentReference: expect.stringContaining('first')
+      }]
+    })
+    expect(JSON.parse(projected[2]!.content).data.output).toEqual({
+      modelContextId: 'page', contentReference: expect.stringContaining('second'),
+      instructions: [{ modelContextId: 'rules', content: 'Updated rules' }]
+    })
+  })
+
   it('restores full context when pressure removes the earlier complete source', () => {
     const context = { modelContextId: 'workspace', content: 'Required context. '.repeat(300) }
     const observation = JSON.stringify({
@@ -540,25 +567,26 @@ describe('agent context budget', () => {
     ).toBe(Math.floor(LOCAL_LLM_CONTEXT_WINDOW_TOKENS * 0.75))
   })
 
-  it('uses a universal 96K trigger for remote providers', () => {
-    expect(
-      resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenAI)
-    ).toBe(96_000)
-    expect(
-      resolveAgentContextCompactionTriggerTokens(LLMProviders.Anthropic)
-    ).toBe(96_000)
-    expect(
-      resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenRouter)
-    ).toBe(96_000)
+  it('scales portable compaction to the endpoint capacity', () => {
+    expect(resolveAgentContextCompactionTriggerTokens(LLMProviders.Anthropic, 200_000))
+      .toBe(150_000)
+    expect(resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenAI, 1_050_000))
+      .toBe(787_500)
+    expect(resolveAgentContextCompactionTriggerTokens(LLMProviders.OpenRouter))
+      .toBe(96_000)
   })
 
-  it('uses a smaller 50% local and 64K remote recovery target', () => {
+  it('scales recovery to the failed request within the endpoint budget', () => {
     expect(
       resolveAgentContextRecoveryTriggerTokens(LLMProviders.LlamaCPP)
     ).toBe(Math.floor(LOCAL_LLM_CONTEXT_WINDOW_TOKENS * 0.5))
     expect(
       resolveAgentContextRecoveryTriggerTokens(LLMProviders.OpenAI)
     ).toBe(64_000)
+    expect(resolveAgentContextRecoveryTriggerTokens(LLMProviders.OpenAI, 1_050_000, 110_000))
+      .toBe(55_000)
+    expect(resolveAgentContextRecoveryTriggerTokens(LLMProviders.Anthropic, 200_000, 300_000))
+      .toBe(100_000)
   })
 
   it('uses the remaining local context capacity for model output', () => {

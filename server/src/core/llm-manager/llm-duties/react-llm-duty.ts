@@ -92,7 +92,6 @@ import {
   AGENT_PROMPT_CACHE_KEY,
   AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
   AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
-  AGENT_CONTEXT_RECOVERY_BUDGET_RATIO,
   AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT
 } from './react-llm-duty/agent-constants'
 import type {
@@ -165,6 +164,7 @@ import {
   retainRecentToolImages,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
+  estimateAgentInputTokens,
   resolveAgentMaxOutputTokens
 } from './react-llm-duty/agent-context-budget'
 import { AgentHistoryManager } from './react-llm-duty/agent-history-manager'
@@ -229,6 +229,8 @@ export class ReActLLMDuty extends LLMDuty {
   private completionCount = 0
   private continuationSummaryFailed = false
   private automaticCompactionFailed = false
+  private lastDispatchedInputTokens: number | undefined
+  private rejectedContextBudgetTokens: number | undefined
   private totalInputTokens = 0
   private contextUsage: ContextUsageMetrics | undefined
   private usageAccounting: UsageAccounting | undefined
@@ -364,6 +366,8 @@ export class ReActLLMDuty extends LLMDuty {
     this.completionCount = 0
     this.continuationSummaryFailed = false
     this.automaticCompactionFailed = false
+    this.lastDispatchedInputTokens = undefined
+    this.rejectedContextBudgetTokens = undefined
     this.totalInputTokens = 0
     this.contextUsage = undefined
     this.usageAccounting = undefined
@@ -1318,6 +1322,7 @@ export class ReActLLMDuty extends LLMDuty {
         : [])
     ].join('\n\n')
     const providerName = getLLMProviderName()
+    const agentTarget = CONFIG_STATE.getModelState().getAgentTarget()
     if (providerName === LLMProviders.OpenAI &&
       (options.isContextRecoveryAttempt || options.isStallRecoveryAttempt)) {
       this.automaticCompactionFailed = true
@@ -1325,20 +1330,51 @@ export class ReActLLMDuty extends LLMDuty {
     const nativeContextWindowTokens = providerName === LLMProviders.LlamaCPP
       ? await LLM_PROVIDER.getAgentNativeContextWindowTokens()
       : undefined
+    const contextWindowTokens = nativeContextWindowTokens ??
+      resolveModelContextWindowTokens(providerName, agentTarget.model)
     // Operational recovery does not imply the later review is oversized too.
     // Count its first request before spending the shared deadline on reduction.
     const nativeContextAdmission = Boolean(nativeContextWindowTokens) &&
       (!options.isContextRecoveryAttempt ||
         (options.isCompletionReview && !options.isCompletionReviewRetry))
     const providerManagesContext = nativeContextAdmission || (
-      providerName === LLMProviders.OpenAI &&
+      providerName === LLMProviders.OpenAI && contextWindowTokens !== undefined &&
       !this.automaticCompactionFailed && !options.hasPendingImages
     )
-    const contextCompactionTriggerTokens = options.isContextRecoveryAttempt || options.isStallRecoveryAttempt
-      ? nativeContextWindowTokens
-        ? Math.floor(nativeContextWindowTokens * AGENT_CONTEXT_RECOVERY_BUDGET_RATIO)
-        : resolveAgentContextRecoveryTriggerTokens(providerName)
-      : resolveAgentContextCompactionTriggerTokens(providerName)
+    let contextCompactionTriggerTokens = resolveAgentContextCompactionTriggerTokens(
+      providerName, contextWindowTokens
+    )
+    let stallRecoveryAdmissionTokens: number | undefined
+    if (options.isStallRecoveryAttempt) {
+      const conversation = transcript.filter((message) =>
+        message.role !== 'tool' &&
+        !(message.role === 'assistant' && message.toolCalls?.length)
+      )
+      // A small stalled request can still need its instructions, capabilities
+      // and continuity checkpoint to make a safe, meaningful recovery.
+      const requiredInputTokens = estimateAgentInputTokens(conversation, activeSystemPrompt, tools)
+      const recoveryTarget = resolveAgentContextRecoveryTriggerTokens(
+        providerName, contextWindowTokens, this.lastDispatchedInputTokens
+      )
+      stallRecoveryAdmissionTokens = Math.min(
+        resolveAgentContextRecoveryTriggerTokens(providerName, contextWindowTokens),
+        this.rejectedContextBudgetTokens ?? Infinity
+      )
+      contextCompactionTriggerTokens = Math.min(
+        stallRecoveryAdmissionTokens,
+        Math.max(recoveryTarget, requiredInputTokens)
+      )
+    } else if (options.isContextRecoveryAttempt) {
+      if (options.isRecoveryAttempt || options.isCompletionReviewRetry) {
+        // Set the budget once per rejection. Productive calls must not halve
+        // the window again on every subsequent iteration.
+        this.rejectedContextBudgetTokens ??= resolveAgentContextRecoveryTriggerTokens(
+          providerName, contextWindowTokens, this.lastDispatchedInputTokens
+        )
+      }
+      contextCompactionTriggerTokens = this.rejectedContextBudgetTokens ??
+        resolveAgentContextRecoveryTriggerTokens(providerName, contextWindowTokens)
+    }
     let preparedContext = prepareAgentModelContext({
       transcript,
       systemPrompt: activeSystemPrompt,
@@ -1356,7 +1392,7 @@ export class ReActLLMDuty extends LLMDuty {
     let hasAttemptedSummary = false
     // Rejected requests need a fresh reduction even if estimates look small.
     // Later productive calls retain their evidence until pressure grows again.
-    const requiresContextReduction = options.isContextRecoveryAttempt &&
+    const requiresContextReduction = options.isContextRecoveryAttempt && !options.isStallRecoveryAttempt &&
       (options.isRecoveryAttempt || options.isCompletionReviewRetry)
     while (
       !providerManagesContext &&
@@ -1411,16 +1447,19 @@ export class ReActLLMDuty extends LLMDuty {
     }
     // The ratio guides compaction; native admission decides whether the final
     // serialized request fits, including output space and template overhead.
+    // A stream stall supplies no size rejection. A bounded retry can still
+    // proceed when required evidence is larger than the reduction target.
+    const admissionLimitTokens = stallRecoveryAdmissionTokens ?? contextCompactionTriggerTokens
     if (
       !providerManagesContext &&
       !nativeContextWindowTokens &&
-      preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
+      preparedContext.estimatedInputTokens > admissionLimitTokens
     ) {
       LogHelper.warning(
-        `Agent context preparation stopped before dispatch | est_tokens=${preparedContext.estimatedInputTokens} | target=${contextCompactionTriggerTokens} | messages=${transcript.length}`
+        `Agent context preparation stopped before dispatch | est_tokens=${preparedContext.estimatedInputTokens} | target=${admissionLimitTokens} | messages=${transcript.length}`
       )
       throw new AgentModelProviderError(
-        `Agent context remains above its ${contextCompactionTriggerTokens}-token target after compaction.`,
+        `Agent context remains above its ${admissionLimitTokens}-token target after compaction.`,
         false,
         CompletionFailureKind.Context
       )
@@ -1433,7 +1472,6 @@ export class ReActLLMDuty extends LLMDuty {
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
-    const agentTarget = CONFIG_STATE.getModelState().getAgentTarget()
     const modelSettings = CONFIG_STATE
       .getModelSettingsState()
       .getSettings(agentTarget)
@@ -1553,10 +1591,6 @@ export class ReActLLMDuty extends LLMDuty {
     const modelResponseStartedAt = Date.now()
     const modelResponseMaximumDeadlineAt = modelResponseStartedAt +
       (this.runBudget?.capTimeout(AGENT_MODEL_RESPONSE_MAX_DURATION_MS) ?? AGENT_MODEL_RESPONSE_MAX_DURATION_MS)
-    const contextWindowTokens = nativeContextWindowTokens ?? resolveModelContextWindowTokens(
-      agentTarget.provider,
-      agentTarget.model
-    )
     // Only the active transcript describes context occupancy; auxiliary summaries
     // still contribute to turn accounting without replacing this snapshot.
     this.contextUsage = captureContextUsage({
@@ -1707,6 +1741,7 @@ export class ReActLLMDuty extends LLMDuty {
         : options.isImageInspection ? TurnPhase.Inspection
           : options.isFinalizationAttempt ? TurnPhase.Answer : TurnPhase.Request
       const streamedGoals = new Set<TurnPhase>()
+      this.lastDispatchedInputTokens = preparedContext.estimatedInputTokens
       completionResult = await runTurnPhase(requestGoal, () => LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         ...(options.isImageInspection ? { usagePurpose: InferencePurpose.ImageInspection } : {}),
@@ -1735,6 +1770,7 @@ export class ReActLLMDuty extends LLMDuty {
           : {}),
         // This loop executes local tools only after the whole response succeeds.
         retryInterruptedResponse: true,
+        recoverReasoningStallWithContext: !isPrivateResponse && !options.isFinalizationAttempt,
         onConnectionRetry: async ({ attempt, maxRetries, delayMs, failureMessage }): Promise<void> => {
           cancellationSignal.throwIfAborted()
           if (!isPrivateResponse) {
@@ -1753,6 +1789,10 @@ export class ReActLLMDuty extends LLMDuty {
           )
         },
         maxTokens: maxOutputTokens,
+        estimatedInputTokens: preparedContext.estimatedInputTokens,
+        portableCompactionThresholdTokens: providerManagesContext
+          ? undefined
+          : contextCompactionTriggerTokens,
         shouldStream: inferencePolicy.streamToProvider,
         onAttempt: (timing): void => {
           this.responseTraceCollector.recordInference({
@@ -1885,11 +1925,14 @@ export class ReActLLMDuty extends LLMDuty {
 
                 const previous = this.streamedToolCalls.get(call.id)
                 const input = call.function.arguments
-                if (previous?.input === input) {
+                if (previous) {
+                  // Only the initial preview needs publication. Execution
+                  // publishes the validated arguments, and rejection uses this draft.
+                  previous.input = input
                   return
                 }
 
-                const groupId = previous?.groupId || `agent_${StringHelper.random(12)}`
+                const groupId = `agent_${StringHelper.random(12)}`
                 this.streamedToolCalls.set(call.id, { callable, groupId, input })
                 this.firstOutputAt ??= Date.now()
                 this.reportProgressEvent({

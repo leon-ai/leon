@@ -11,7 +11,8 @@ import type {
 
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
 
-interface ToolIconNames {
+interface ToolDisplayMetadata {
+  toolName?: string
   toolkitIconName?: string
   toolIconName?: string
   toolLogo?: import('@@/aurora/src/contracts/package-logo').MaskedPackageLogo
@@ -233,7 +234,7 @@ export class ConversationHistoryHelper {
     options: {
       supportsWidgets: boolean
       source?: ConversationHistoryItem['source']
-      resolveToolIconNames?: (qualifiedName: string) => ToolIconNames | null
+      resolveToolDisplay?: (qualifiedName: string) => ToolDisplayMetadata | null
     }
   ): ConversationHistoryItem[] {
     return conversationLogs.map((conversationLog) => {
@@ -246,9 +247,9 @@ export class ConversationHistoryHelper {
         ? this.normalizeLLMAnswerMetrics(conversationLog.llmMetrics)
         : null
       const agentResponseTrace = conversationLog.agentResponseTrace
-        ? this.resolveAgentTraceToolIcons(
+        ? this.resolveAgentTraceToolDisplay(
             conversationLog.agentResponseTrace,
-            options.resolveToolIconNames
+            options.resolveToolDisplay
           )
         : null
 
@@ -280,26 +281,30 @@ export class ConversationHistoryHelper {
   }
 
   /**
-   * Fills missing display metadata in a response without rewriting stored history
-   * or coupling conversation persistence to the execution registry.
+   * Uses current tool names and fills missing icons in a history response.
    */
-  public static resolveAgentTraceToolIcons(
+  public static resolveAgentTraceToolDisplay(
     trace: AgentResponseTrace,
-    resolveToolIconNames?: (qualifiedName: string) => ToolIconNames | null
+    resolveToolDisplay?: (qualifiedName: string) => ToolDisplayMetadata | null
   ): AgentResponseTrace {
-    if (!resolveToolIconNames) {
+    if (!resolveToolDisplay) {
       return trace
     }
 
     return {
       ...trace,
       toolCalls: trace.toolCalls.map((toolCall) => {
-        if (toolCall.toolIconName && toolCall.toolkitIconName && toolCall.toolLogo) {
+        const display = resolveToolDisplay(toolCall.name)
+        if (!display) {
           return toolCall
         }
 
-        const iconNames = resolveToolIconNames(toolCall.name)
-        return iconNames ? { ...iconNames, ...toolCall } : toolCall
+        // Keep the original artwork and use the catalog's current name.
+        return {
+          ...display,
+          ...toolCall,
+          ...(display.toolName === undefined ? {} : { toolName: display.toolName })
+        }
       })
     }
   }
