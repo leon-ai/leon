@@ -31,6 +31,12 @@ These are community expectations for agents, not license conditions. The unchang
 - For every Leon-owned versioned component (project, packages, tools, skills, bridges/SDKs, schemas, etc.), use the latest version already pushed upstream or published as the baseline. Apply one appropriate version bump for the combined unpublished changes and reuse that pending version across follow-up edits, review fixes and local commits. If the required SemVer level changes, recalculate from the same baseline. Inspect upstream history or release metadata when needed; local `HEAD` may already contain an unpublished bump. Preserve versions already pushed or published; subsequent changes use a new bump. Third-party dependency upgrades follow upstream releases.
 - Keep release tooling minimal and independent of the legacy release scripts. Validate agreement between source versions, tags and release metadata, preserve preview/stable channel continuity, and publish only after the applicable checks and required assets are complete.
 
+## Third-party downloads
+
+- Whenever adding or changing a third-party download, package installer or runtime bootstrap, always investigate maintained Chinese mirror alternatives. Verify availability of the exact version, platform and artifact, and record unsupported or unverified cases instead of assuming a mirror exists.
+- Regional download selection must use the downloading host's current network country, with a bounded, cached check and an explicit owner override. Prefer a verified Chinese equivalent in China and retain bounded fallback to the original source. Language, timezone and the owner's saved home address alone do not establish network location.
+- Reuse the shared downloader for Leon-owned transfers and supported native configuration for external installers. Preserve explicit source/proxy settings, pinned versions, TLS, trusted integrity checks and the 36-hour dependency cooldown, including required index upload timestamps. Never rewrite arbitrary URLs or switch to a different build merely because a mirror is faster.
+
 ## Testing
 
 - Add tests only for distinct observable contracts and real coverage gaps, expressed in names, fixtures and assertions without change history or incidental versions. Cover broad behavior/invariants for the failure class, not incident-specific reproductions, copied configuration assertions, private-wiring checks or mock passthrough smoke tests. Trivial changes need no new tests.
