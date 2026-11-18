@@ -11,18 +11,19 @@ let server: http.Server
 let origin: string
 let now: number
 let requests: string[]
-let limited: boolean
+let failure: { status: number, headers?: http.OutgoingHttpHeaders, message: string } | undefined
 
 beforeEach(async () => {
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-release-cache-'))
-  now = Date.now()
+  now = Math.floor(Date.now() / 1_000) * 1_000
   vi.spyOn(Date, 'now').mockImplementation(() => now)
   requests = []
-  limited = false
+  failure = undefined
   server = http.createServer((request, response) => {
     requests.push(String(request.headers['if-none-match'] ?? ''))
-    if (limited) {
-      response.writeHead(429, { 'retry-after': '60', 'x-ratelimit-reset': String(Math.ceil((now + 1_800_000) / 1_000)) }).end()
+    if (failure) {
+      response.writeHead(failure.status, { 'content-type': 'application/json', ...failure.headers })
+        .end(JSON.stringify({ message: failure.message }))
     } else if (request.headers['if-none-match'] === 'release-identity') {
       response.writeHead(304).end()
     } else {
@@ -50,14 +51,58 @@ it('reuses recent metadata across restarts and revalidates unchanged releases wi
   expect(requests).toEqual(['', 'release-identity'])
 })
 
-it('persists the longer rate-limit deadline and avoids requests until GitHub permits retry', async () => {
-  limited = true
-  await expect(createReleaseSource(directory)(origin)).rejects.toThrow('429')
+it('persists the exhausted primary quota deadline when a secondary limit also applies', async () => {
+  const reset = Math.ceil((now + 1_800_000) / 1_000)
+  const retryAt = reset * 1_000
+  failure = {
+    status: 429, message: 'You have exceeded a secondary rate limit.',
+    headers: { 'retry-after': '60', 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) }
+  }
+  await expect(createReleaseSource(directory)(origin)).rejects.toMatchObject({ statusCode: 429, headers: { 'retry-after': '1800' } })
   now += 120_000
-  await expect(createReleaseSource(directory)(origin)).rejects.toThrow('again after')
+  await expect(createReleaseSource(directory)(origin)).rejects.toMatchObject({ statusCode: 429, headers: { 'retry-after': '1680' } })
   expect(requests).toHaveLength(1)
-  now += 1_800_000
-  limited = false
+  now = retryAt
+  failure = undefined
   expect(await createReleaseSource(directory)(origin)).toEqual([{ version: '2.0.0-alpha.0' }])
+  expect(requests).toHaveLength(2)
+})
+
+it('honors Retry-After while the primary quota still has requests available', async () => {
+  const retryAt = now + 20_000
+  failure = {
+    status: 429, message: 'Too many requests.',
+    headers: { 'retry-after': '20', 'x-ratelimit-remaining': '10', 'x-ratelimit-reset': String(Math.ceil((now + 1_800_000) / 1_000)) }
+  }
+  const source = createReleaseSource(directory)
+  await expect(source(origin)).rejects.toMatchObject({ statusCode: 429, headers: { 'retry-after': '20' } })
+  now = retryAt - 1
+  await expect(source(origin)).rejects.toMatchObject({ statusCode: 429, headers: { 'retry-after': '1' } })
+  expect(requests).toHaveLength(1)
+  now = retryAt
+  failure = undefined
+  await expect(source(origin)).resolves.toEqual([{ version: '2.0.0-alpha.0' }])
+})
+
+it('increases the fallback wait for repeated secondary limits without a usable deadline', async () => {
+  failure = {
+    status: 403, message: 'You have exceeded a secondary rate limit.',
+    headers: { 'x-ratelimit-remaining': '10', 'x-ratelimit-reset': String(Math.ceil((now + 1_800_000) / 1_000)) }
+  }
+  await expect(createReleaseSource(directory)(origin)).rejects.toMatchObject({ statusCode: 429, headers: { 'retry-after': '60' } })
+  now += 60_000
+  await expect(createReleaseSource(directory)(origin)).rejects.toMatchObject({ statusCode: 429, headers: { 'retry-after': '120' } })
+  expect(requests).toHaveLength(2)
+})
+
+it('allows a new check after an upstream forbidden response unrelated to rate limits', async () => {
+  failure = {
+    status: 403, message: 'Forbidden.',
+    headers: { 'x-ratelimit-remaining': '10', 'x-ratelimit-reset': String(Math.ceil((now + 1_800_000) / 1_000)) }
+  }
+  const source = createReleaseSource(directory)
+  await expect(source(origin)).rejects.toMatchObject({ statusCode: 503, upstreamStatus: 403 })
+  failure = undefined
+  await expect(source(origin)).resolves.toEqual([{ version: '2.0.0-alpha.0' }])
   expect(requests).toHaveLength(2)
 })
