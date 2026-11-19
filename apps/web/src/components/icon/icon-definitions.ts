@@ -193,7 +193,7 @@ export const ICON_ALIASES: Readonly<Record<string, string>> = {
 export const TOOL_ICON_NAMES = new Set([
   'gamepad', 'sun-cloudy', 'heart-pulse', 'share', 'newspaper', 'notion',
   'money-dollar-circle', 'computer', 'cursor', 'road-map', 'restaurant-2',
-  'calendar-2', 'shopping-cart-2', 'video', 'code-s-slash', 'football', 'slideshow',
+  'calendar-2', 'shopping-cart-2', 'video', 'record-circle', 'code-s-slash', 'football', 'slideshow',
   'home-smile-2', 'hard-drive', 'film', 'layout-4', 'radar', 'brush', 'sound-module',
   'music-2', 'pie-chart', 'pages', 'grok-ai', 'movie-2', 'youtube', 'sparkling-2',
   'image-edit', 'image', 'discuss', 'color-filter', 'mic-2', 'voice-recognition',

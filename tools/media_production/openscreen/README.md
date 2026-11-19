@@ -8,7 +8,7 @@ Enable this tool in your profile. Its retained editing session runs through the 
 
 An explicit `executable_path`, standard macOS/Windows installations and PATH are checked first. Otherwise the SDK provisions the pinned, checksum-verified asset in `tool.json`: a full macOS ARM64/x64 application bundle or Linux x64 AppImage. Extraction preserves resources, modes and framework links, and publishes only a complete installation. macOS ZIP extraction requires system `unzip`; Linux AppImages need host AppImage/FUSE support. Windows and unsupported architectures require an existing installation. Provisioning never approves OS permissions or changes security policy.
 
-Grant Screen Recording and, for physical click telemetry, Accessibility on macOS. Microphone and camera permissions are needed only when those inputs are requested. Linux Wayland requires `systemPicker: true` and owner selection in the desktop portal; it cannot choose a window unattended. Verify capture on each target OS rather than inferring runtime support from the declared download.
+Grant Screen Recording and, for physical click telemetry, Accessibility on macOS. Microphone and camera permissions are needed only when those inputs are requested. On Wayland, pass `systemPicker: true` and have the owner select a source in the desktop portal. Verify capture on each target OS rather than inferring runtime support from the declared download.
 
 The app's user-data directory is inside the profile's tool directory, separated by conversation. Projects, raw media, cursor tracks and preferences do not share the owner's desktop-app state or another conversation's project list. At most four app sessions are retained. Idle sessions may close; saved project IDs remain usable in their conversation, while active captures and pointer registration cannot resume after worker loss.
 
@@ -36,7 +36,7 @@ Defaults apply once when a new project is recorded or imported. Exports preserve
 
 ## Recording and editing
 
-1. `sources()` lists display indices, window titles and input-device labels. Select exactly one explicit source. A window title must be unique because upstream selects by substring.
+1. `sources()` lists display indices, window titles and input-device labels. Select exactly one source. A window title must be unique because upstream selects by substring. On Wayland, source selection takes place in the portal.
 2. `start(options)` waits for actual capture and returns a conversation-owned session ID and capture-start timestamp. Default duration is 120 seconds, maximum 3600. Microphone, system audio and camera stay off unless enabled. Optional device names require the corresponding input to be enabled.
 3. Demonstrate the workflow with existing browser/computer tools, then `stop(sessionId)`. Duration expiry and worker shutdown also stop capture. `status(sessionId)` reports the saved result or failure.
 4. Stop returns a conversation-owned `projectId`, source video path, actual `autoZooms` count and, for linked browser takes, an `optimization` report. `info(projectId)` reads its document, zooms and trims. `createProject(videoPath, title)` imports existing footage into an editable project.
@@ -49,9 +49,9 @@ Project IDs belong to their originating conversation. Capture handles cannot be 
 
 ## Browser-generated cursor and zoom
 
-If window selection fails, refresh `sources` and resolve the window ambiguity. Keep the tab link; switching to a whole-display recording and omitting `browserTabId` loses browser-generated cursor motion and zooms.
+For a browser demonstration, pass `browserTabId` with the exact browser `windowTitle`, or with `systemPicker: true` on Wayland. Tell the owner which browser window to select in the portal. If `stop(sessionId)` returns `browserWindowVerificationRequired`, use `preview(projectId, atSeconds)` to check that the full browser window and demonstrated controls are visible. Then call `stop(sessionId, true)` to link the browser events. If the take shows a different window or a whole display, record a new take of the intended window.
 
-For a browser demonstration, pass `browserTabId` and the exact browser `windowTitle` to `start`. Browser Use journals the timestamp and normalized outer-window position of delivered clicks and scrolls. Positions use native browser window bounds and the reported page zoom; page-visible outer dimensions can differ from the captured window. At stop, OpenScreen imports only that tab's events delivered during this conversation's take and plans smooth cursor motion and zooms through its own `setPointerTrack` API. No physical mouse movement is required. Read-only browser operations and rejected input do not produce fake clicks.
+Browser Use journals the timestamp and normalized outer-window position of delivered clicks and scrolls. Positions use native browser window bounds and the reported page zoom. OpenScreen imports only the linked tab's events delivered during the take and plans smooth cursor motion and zooms through its own `setPointerTrack` API. Preview the composed take to verify that the cursor and zoom align with the demonstrated controls.
 
 Keep the demonstration in the linked tab. A new tab requires its own take or an explicitly combined observed pointer track. External scripts can call `setPointerTrack(projectId, events)` with their observed epoch-millisecond timestamps and normalized recorded-window coordinates. The same retained OpenScreen session must have recorded the take. Never reconstruct missing clicks from assumed control positions or approximate model/tool-call timings.
 
