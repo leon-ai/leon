@@ -107,6 +107,13 @@ export class BrowserUseTool extends Tool {
   public run(code: string): Promise<Record<string, unknown>> { return this.invoke('run', { code }) }
 
   /**
+   * Record a grounded browser batch in the selected tab at its page resolution.
+   */
+  public record(tab_id: string, code: string): Promise<Record<string, unknown>> {
+    return this.invoke('record', { tab_id, code })
+  }
+
+  /**
    * Inspect visible controls in an observed tab.
    */
   public inspect(tab_id: string, selector?: string, offset?: number, limit?: number): Promise<Record<string, unknown>> {
@@ -268,7 +275,11 @@ export class BrowserUseTool extends Tool {
 
   private async perform(functionName: string, parameters: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!existsSync(CLI_PATH)) throw new Error('Browser Use dependencies are missing. Run Leon setup to install the tool dependencies.')
-    if (functionName === 'run' && (typeof parameters['code'] !== 'string' || !parameters['code'].trim())) throw new Error('code must contain a Python script.')
+    const recording = functionName === 'record'
+    if ((recording || functionName === 'run') &&
+      (typeof parameters['code'] !== 'string' || !parameters['code'].trim())) {
+      throw new Error('code must contain a Python script.')
+    }
     const env = await this.environment()
     const directory = path.join(PROFILE_SESSIONS_PATH,
       encodeURIComponent(process.env['LEON_SESSION_ID'] || 'unscoped'), 'artifacts', 'browser_use')
@@ -277,6 +288,7 @@ export class BrowserUseTool extends Tool {
     const actionsPath = path.join(directory, `${randomUUID()}.actions.json`)
     const pointerPath = path.join(directory, `${randomUUID()}.pointer.json`)
     const inputActivityPath = path.join(directory, `${randomUUID()}.input-activity.json`)
+    const videoPath = recording ? path.join(directory, `${randomUUID()}.webm`) : undefined
     // JSON string literals are also valid Python strings for these generated paths.
     let code = functionName === 'screenshot'
       ? `print(capture_screenshot(path=${JSON.stringify(screenshot)}, max_dim=${SCREENSHOT_MAX_DIMENSION}))`
@@ -292,7 +304,13 @@ export class BrowserUseTool extends Tool {
       }
     }
     // This support script runs inside the CLI, where upstream browser helpers are available.
-    const workflow = await fs.readFile(path.join(SOURCE_DIRECTORY, 'lib', 'browser-use-runtime.py'), 'utf8')
+    const library = path.join(SOURCE_DIRECTORY, 'lib')
+    let workflow = await fs.readFile(path.join(library, 'browser-use-runtime.py'), 'utf8')
+    if (videoPath) {
+      workflow += `\n${await fs.readFile(path.join(library, 'browser-tab-recording.py'), 'utf8')}`
+      const args = [parameters['tab_id'], code, videoPath].map((value) => JSON.stringify(value))
+      code = `_leon_record_tab(${args.join(', ')})`
+    }
     const startedAt = performance.now()
     const execution = this.command([], {
       input: `${workflow}\n_leon_execute(${JSON.stringify(code)})`, cwd: directory,
@@ -334,7 +352,8 @@ export class BrowserUseTool extends Tool {
         env, timeout: COMMAND_TIMEOUT_MS, reject: false
       }, true)
     }
-    const success = result.exitCode === 0 && !result.timedOut && actions.every((action) => action['success'] === true)
+    const success = result.exitCode === 0 && !result.timedOut && actions.every((action) => action['success'] === true) &&
+      (!videoPath || existsSync(videoPath))
     let observation: Record<string, unknown> | undefined
     let actionResult: Record<string, unknown> | undefined
     if (functionName === 'inspect' && success) observation = JSON.parse(result.stdout) as Record<string, unknown>
@@ -366,6 +385,7 @@ export class BrowserUseTool extends Tool {
       ...(outputTruncated ? { output_truncated: true, full_output_path: outputPath } : {}),
       timed_out: result.timedOut, duration_ms: Math.round(performance.now() - startedAt),
       artifacts_directory: directory,
+      ...(success && videoPath ? { videoPath, tab_id: parameters['tab_id'] } : {}),
       ...(observation ? { observation } : {}),
       ...(actions.length ? { browser_actions: actions } : {}),
       ...(pointerEvents.length ? { pointer_events: pointerEvents, pointer_events_path: pointerPath } : {}),

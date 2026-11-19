@@ -24,6 +24,7 @@ _LEON_LABEL_LIMIT = 200
 _LEON_HREF_LIMIT = 1_000
 _LEON_ACTIONS = []
 _LEON_POINTERS = []
+_LEON_PAGE_POINTERS = []
 _LEON_INPUT_ACTIVITY = []
 _LEON_DIALOG_PENDING = 'browser_dialog_pending'
 _LEON_DIALOG_RECOVERY = (
@@ -49,12 +50,19 @@ class BrowserWorkflowError(RuntimeError):
 _leon_native_send = _leon_helpers._send
 _LEON_TARGET_ID = None
 _LEON_SESSION_ID = None
+_LEON_RECORDING_TAB_ID = None
 
 
 def switch_tab(target, activate=False):
     """Bind page commands to this exact target without querying the old renderer."""
     global _LEON_TARGET_ID, _LEON_SESSION_ID
     target_id = _leon_helpers._target_id(target)
+    if _LEON_RECORDING_TAB_ID is not None:
+        if target_id != _LEON_RECORDING_TAB_ID:
+            raise BrowserWorkflowError('recording_tab_changed', 'Keep the demonstration in the recorded tab.')
+        if activate:
+            activate_tab(target_id)
+        return _LEON_SESSION_ID
     # Clear the previous binding before attach: a failed switch must not leave
     # subsequent commands able to edit the previous page accidentally.
     _LEON_TARGET_ID, _LEON_SESSION_ID = target_id if isinstance(target_id, str) else '', None
@@ -134,10 +142,18 @@ def _leon_save_actions():
 
 
 def _leon_pointer_event(x, y, clicked):
-    """Measure a dispatched page point in its outer browser window's coordinates."""
+    """Measure a dispatched point in the viewport or outer window being recorded."""
     try:
-        # Use native bounds: page-visible outer dimensions can differ from the captured window.
         tab_id = current_tab()['targetId']
+        if tab_id == _LEON_RECORDING_TAB_ID:
+            viewport = cdp('Page.getLayoutMetrics')['cssVisualViewport']
+            page_x, page_y = float(x) / viewport['clientWidth'], float(y) / viewport['clientHeight']
+            if 0 <= page_x <= 1 and 0 <= page_y <= 1:
+                return {'at': time.time_ns() // 1_000_000, 'x': page_x, 'y': page_y,
+                        'click': clicked, 'tab_id': tab_id}
+            return None
+
+        # Use native bounds: page-visible outer dimensions can differ from the captured window.
         bounds = cdp('Browser.getWindowForTarget', targetId=tab_id)['bounds']
         viewport = cdp('Page.getLayoutMetrics')['cssVisualViewport']
         zoom = float(viewport['zoom'])
@@ -157,6 +173,9 @@ def _leon_pointer_event(x, y, clicked):
 def _leon_save_pointer(event):
     """Keep recording telemetry separate from action-outcome convergence evidence."""
     if event is None:
+        return
+    if event['tab_id'] == _LEON_RECORDING_TAB_ID:
+        _LEON_PAGE_POINTERS.append(event)
         return
     _LEON_POINTERS.append(event)
     journal = os.environ.get('LEON_BROWSER_POINTERS')
