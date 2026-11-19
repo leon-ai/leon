@@ -15,6 +15,7 @@ import { Loader } from '@/components/loader'
 import { Icon } from '@/components/icon'
 import { useToast } from '@/components/toast'
 import { THEME_CHANGE_EVENT, getCurrentTheme } from '@/theme'
+import { createUUID } from '@/utils/create-uuid'
 
 import './generated-frame.sass'
 
@@ -156,7 +157,7 @@ export default function GeneratedFrame({ node, readOnly = false, submitted = fal
           reject(new Error('An image is already being prepared.'))
           return
         }
-        const id = crypto.randomUUID()
+        const id = createUUID()
         const timeout = setTimeout(() => {
           imageRequest = undefined
           reject(new Error('Image export took too long.'))

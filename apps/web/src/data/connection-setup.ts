@@ -15,6 +15,7 @@ import { useProfile, PROFILE_AUTH_QUERY_KEY } from './profile'
 import { queryClient } from '@/query-client'
 import { router } from '@/router'
 import { useToast } from '@/components/toast'
+import { createUUID } from '@/utils/create-uuid'
 
 interface ConnectionSetupController {
   view: ConnectionSetupView | undefined
@@ -184,7 +185,7 @@ export function useConnectionSetup(sessionId: string, provider: string, initialA
           }
           const query = result.event.methodParams.utterance
           if (continuation.current?.query !== query) {
-            continuation.current = { id: crypto.randomUUID(), query }
+            continuation.current = { id: createUUID(), query }
           }
           // Reuse the normal owner-command path and its stable retry identity.
           await send.mutateAsync(continuation.current)

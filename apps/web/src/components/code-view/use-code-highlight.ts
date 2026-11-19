@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createUUID } from '@/utils/create-uuid'
 
 import type { CodeToken, HighlightRequest, HighlightResponse } from './code-highlight-types'
 
@@ -35,7 +36,7 @@ function getWorker(): Worker | undefined {
  * lexer state when viewers close. Oversized text remains virtualized plain text.
  */
 export function useCodeHighlight(text: string, language: string): CodeToken[][] | null {
-  const id = useRef(crypto.randomUUID())
+  const id = useRef(createUUID())
   const revision = useRef(0)
   const requested = useRef({ text, language })
   const [result, setResult] = useState<{ text: string, language: string, lines: CodeToken[][] | null } | null>(null)

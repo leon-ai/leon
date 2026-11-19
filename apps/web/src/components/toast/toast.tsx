@@ -14,6 +14,7 @@ import { clsx } from 'clsx'
 
 import { Button } from '@/components/button'
 import { useExitCleanup } from '@/hooks/use-exit-cleanup'
+import { createUUID } from '@/utils/create-uuid'
 
 import './toast.sass'
 
@@ -56,10 +57,6 @@ const TOAST_ICONS: Record<ToastType, string> = {
   error: 'close-circle-line'
 }
 const ToastContext = createContext<ToastContextValue | null>(null)
-
-function createToastId(): string {
-  return window.crypto.randomUUID()
-}
 
 function ToastCard({
   stackIndex,
@@ -183,7 +180,7 @@ export function ToastProvider({
     showToast: (toast) => {
       setToasts((currentToasts) => [
         {
-          id: createToastId(),
+          id: createUUID(),
           exiting: false,
           type: toast.type ?? 'info',
           title: toast.title,

@@ -5,6 +5,7 @@ import { infiniteQueryOptions, useInfiniteQuery, useMutation, type InfiniteData,
 import { queryClient } from '@/query-client'
 import { useToast } from '@/components/toast'
 import { canPrefetch, prefetchModule } from '@/utils/prefetch'
+import { createUUID } from '@/utils/create-uuid'
 import { requestAPI } from './api'
 import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
 import { applyConversationEvent, mergeAnswerParts } from './conversation-events'
@@ -53,7 +54,7 @@ async function fetchConversationPage(profile: string, sessionId: string, cursor:
   const liveRecords = new Map(cached?.pages.flatMap((item) => item.messages.filter((record) => !record.historical).map((record) => [record.messageId, record] as const)))
 
   return {
-    ...page, snapshotVersion: crypto.randomUUID(), appliedCursor: page.event_cursor,
+    ...page, snapshotVersion: createUUID(), appliedCursor: page.event_cursor,
     messages: page.messages.map((record) => {
       const live = liveRecords.get(record.messageId)
       return { ...record, historical: record.isAddedToHistory && !live,

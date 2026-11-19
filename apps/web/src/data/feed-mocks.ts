@@ -12,6 +12,7 @@ import type {
   LeonFeedEntry
 } from './feed'
 import { FeedTurnStatus } from './feed'
+import { createUUID } from '@/utils/create-uuid'
 
 type MockFeedScenario =
   | 'completed-no-plan'
@@ -70,7 +71,7 @@ function createToolCall({
   toolIconName
 }: ToolCallOptions): FeedToolCall {
   return {
-    id: window.crypto.randomUUID(),
+    id: createUUID(),
     toolCallTitle,
     toolkitId,
     toolName,
@@ -180,7 +181,7 @@ function createPlanStep(
   toolCalls: FeedToolCall[] = []
 ): FeedPlanStep {
   return {
-    id: window.crypto.randomUUID(),
+    id: createUUID(),
     label,
     status,
     toolCalls
@@ -218,7 +219,7 @@ function createThinkingActivity(
   isActive: boolean
 ): FeedThinkingActivity {
   return {
-    id: window.crypto.randomUUID(),
+    id: createUUID(),
     type: 'thinking',
     details,
     durationMs,
@@ -228,7 +229,7 @@ function createThinkingActivity(
 
 function createSummaryActivity(content: string): FeedSummaryActivity {
   return {
-    id: window.crypto.randomUUID(),
+    id: createUUID(),
     type: 'summary',
     content
   }
@@ -236,7 +237,7 @@ function createSummaryActivity(content: string): FeedSummaryActivity {
 
 function createPlanActivity(steps: FeedPlanStep[]): FeedPlanActivity {
   return {
-    id: window.crypto.randomUUID(),
+    id: createUUID(),
     type: 'plan',
     steps
   }
@@ -244,7 +245,7 @@ function createPlanActivity(steps: FeedPlanStep[]): FeedPlanActivity {
 
 function createToolsActivity(toolCalls: FeedToolCall[]): FeedToolsActivity {
   return {
-    id: window.crypto.randomUUID(),
+    id: createUUID(),
     type: 'tools',
     toolCalls
   }
@@ -262,7 +263,7 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
 
   if (hasPlan) {
     return {
-      id: window.crypto.randomUUID(),
+      id: createUUID(),
       role: 'leon',
       status,
       durationMs: PLAN_TURN_DURATION_MS,
@@ -294,7 +295,7 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
   )
 
   return {
-    id: window.crypto.randomUUID(),
+    id: createUUID(),
     role: 'leon',
     status,
     durationMs: TURN_DURATION_MS,
@@ -323,7 +324,7 @@ export function createMockFeedExchange(query: string): FeedEntry[] {
 
   return [
     {
-      id: window.crypto.randomUUID(),
+      id: createUUID(),
       role: 'owner',
       content: query
     },

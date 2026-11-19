@@ -1,5 +1,7 @@
 import { setFixtureTheme, test, expect, SESSION_URL, LATEST_ANSWER, finishFiniteAnimations } from './fixtures'
 
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
 for (const { theme, reducedMotion, width } of [
   { theme: 'dark', reducedMotion: 'no-preference', width: 1_512 },
   { theme: 'light', reducedMotion: 'reduce', width: 390 }
@@ -44,6 +46,31 @@ for (const { theme, reducedMotion, width } of [
     await expect(pageContent).toHaveCount(0)
   })
 }
+
+test('starts a conversation without the secure-context UUID method', async ({ page, ui }) => {
+  const sessionCount = ui.sessions.length
+
+  await page.addInitScript(() => {
+    Object.defineProperty(crypto, 'randomUUID', { value: undefined })
+  })
+  await page.goto('./')
+
+  const message = 'Help me plan my day'
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+
+  await expect(composer).toBeVisible()
+  await composer.fill(message)
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect.poll(() => ui.sessions.length).toBe(sessionCount + 1)
+
+  const sessionId = ui.sessions.at(-1)!.id
+
+  expect(sessionId).toMatch(UUID_V4_PATTERN)
+  await expect(page).toHaveURL(new RegExp(`/session/${sessionId}$`))
+  expect(ui.history.get(sessionId)).toContainEqual(expect.objectContaining({
+    who: 'owner', message, messageId: expect.stringMatching(UUID_V4_PATTERN)
+  }))
+})
 
 test('renders the frame and editable composer during slow authentication without private requests', async ({ page, ui }) => {
   const releaseAuth = ui.holdAuthentication()

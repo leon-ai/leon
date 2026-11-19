@@ -1,6 +1,7 @@
 import { CONNECTION_AUTHORIZATION_CHANNEL, CONNECTION_SETUP_MESSAGES,
   type ConnectionAuthorizationCompletion } from '../../../../aurora/src/contracts/connection-setup'
 import { isPresentationURL } from '../../../../aurora/src/v2/contracts/presentation'
+import { createUUID } from '@/utils/create-uuid'
 
 const AUTHORIZATION_TIMEOUT_MS = 10 * 60_000
 const CLOSED_CHECK_INTERVAL_MS = 500
@@ -24,7 +25,7 @@ export interface ConnectionAuthorizationPopup {
  * Completion is only a refresh signal; the authenticated server owns status.
  */
 export function openConnectionAuthorization(provider: string): ConnectionAuthorizationPopup {
-  const id = crypto.randomUUID()
+  const id = createUUID()
   const popup = window.open('about:blank', '_blank', 'popup,width=560,height=720')
   if (!popup) {
     throw new ConnectionAuthorizationError(CONNECTION_SETUP_MESSAGES.popupBlocked)

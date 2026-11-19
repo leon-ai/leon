@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useToast } from '@/components/toast'
+import { createUUID } from '@/utils/create-uuid'
 import { AttachmentUploadState, type AttachmentUploadListener, type AttachmentUploadProgress, type OwnerAttachmentDraft } from '@/data/owner-attachments'
 import {
   OWNER_ATTACHMENT_MAX_COUNT, getOwnerAttachmentFormat, getOwnerAttachmentSizeLimit
@@ -100,7 +101,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       // Browser MIME detection can be missing or use aliases. Give local media
       // previews the same canonical type that the upload validator will inspect.
       const url = native ? file.url : URL.createObjectURL(file.slice(0, file.size, format.mediaType))
-      next.push({ id: crypto.randomUUID(), file, filename: file.name, mediaType: format.mediaType, url })
+      next.push({ id: createUUID(), file, filename: file.name, mediaType: format.mediaType, url })
     }
     if (next.length !== previousCount) {
       itemsRef.current = next
