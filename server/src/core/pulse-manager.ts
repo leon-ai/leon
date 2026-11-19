@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { AgentResponseTrace, LLMAnswerMetrics, MessageLog } from '@/types'
 import type Brain from '@/core/brain/brain'
-import type { FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
+import type { AgentRunProgressEvent, FinalPhaseIntent, ReactLLMDutyParams } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import { AgentSessionState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
 import { isAgentLoopContinuationStateValid } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { LEON_PULSE_INTERVAL_MS } from '@/constants'
@@ -15,7 +15,13 @@ import { InferencePurpose } from '@/core/llm-manager/types'
 import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { runOutsideTurnTiming, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
+import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
+import { serializeAgentTrace, serializeProgressMessage } from '@/core/http-server/http-plugins/leon-services/agent-trace-serializer'
+import type { HTTPPluginAgentEvent } from '@/core/http-server/http-plugins/types'
+import { collectArtifacts } from '@/core/artifacts/artifact-context'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -251,6 +257,24 @@ function defaultPulseState(isEnabled: boolean): PulseState {
     suppressionPolicies: [],
     recentTicks: [],
     contextFileStamps: {}
+  }
+}
+
+/**
+ * Shares the web feed's structured activity format for proactive responses.
+ */
+function pulseProgressData(event: AgentRunProgressEvent): Record<string, unknown> {
+  switch (event.type) {
+    case 'progress_message':
+      return { message: serializeProgressMessage(event.message) }
+    case 'tool_call':
+      return { tool_call: serializeAgentTrace({ planSteps: [], toolCalls: [event.toolCall] }, true).tool_calls[0] }
+    case 'inference_activity':
+      return { activity: event.activity }
+    case 'plan_step':
+      return { step: event.step }
+    case 'reasoning_summary':
+      return { summary: event.summary }
   }
 }
 
@@ -1085,7 +1109,7 @@ export default class PulseManager {
         return
       }
 
-      await runWithTurnTiming(matter.id, sessionId, () => this.executeSessionMatter(state, matter), {
+      await runWithTurnTiming(matter.id, sessionId, () => this.executeSessionMatter(state, matter, sessionId), {
         stage: TurnStage.AgentLoop
       })
     })
@@ -1096,7 +1120,8 @@ export default class PulseManager {
    */
   private async executeSessionMatter(
     state: PulseState,
-    matter: PulseMatter
+    matter: PulseMatter,
+    sessionId: string
   ): Promise<void> {
     matter.status = 'running'
     matter.updatedAt = new Date().toISOString()
@@ -1113,7 +1138,7 @@ export default class PulseManager {
 
     let output = ''
     let shouldNotifyOwner = matter.notifyOwner
-    let answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace'> = {}
+    let answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace' | 'artifacts'> = {}
     let finalIntent: FinalPhaseIntent = 'answer'
     let toolExecutions: Array<{
       functionName: string
@@ -1121,13 +1146,34 @@ export default class PulseManager {
       observation: string
     }> = []
 
+    const profile = getActiveProfileName()
+    const publish = (type: HTTPPluginAgentEvent['type'], data: Record<string, unknown>): void => {
+      publishAgentEvent(profile, {
+        type, session_id: sessionId, turn_id: matter.id, response_id: matter.id,
+        data: { ...data, origin: 'pulse' }
+      })
+    }
+    let announced = false
+
     try {
       const { ReActLLMDuty } = await this.loadReActLLMDuty()
       const duty = new ReActLLMDuty({
-        input
+        input,
+        responseId: matter.id,
+        ...(matter.notifyOwner ? {
+          onProgressEvent: (event: AgentRunProgressEvent): void => {
+            if (!announced) {
+              announced = true
+              publish('session_changed', { is_running: true })
+            }
+            publish(event.type, pulseProgressData(event))
+          }
+        } : {})
       })
       await duty.init()
-      const result = await runWithInferencePurpose(InferencePurpose.Pulse, () => duty.execute())
+      const { value: result, artifacts } = await collectArtifacts(() =>
+        runWithInferencePurpose(InferencePurpose.Pulse, () => duty.execute())
+      )
       output = typeof result?.output === 'string' ? result.output : ''
       const resultData =
         result?.data && typeof result.data === 'object'
@@ -1142,6 +1188,7 @@ export default class PulseManager {
       // A direct owner reply requires an answer even when the initiative was quiet.
       shouldNotifyOwner ||= resultData['hasOwnerMessages'] === true
       answerMetadata = {
+        ...(artifacts.length ? { artifacts } : {}),
         ...(resultData['llmMetrics']
           ? { llmMetrics: resultData['llmMetrics'] as LLMAnswerMetrics }
           : {}),
@@ -1153,6 +1200,10 @@ export default class PulseManager {
     } catch (error) {
       finalIntent = 'error'
       output = `Pulse execution failed: ${String(error)}`
+    } finally {
+      if (announced) {
+        publish('session_changed', { is_running: WEB_SESSION_RUNTIME.isRunning(sessionId) })
+      }
     }
 
     const nowTs = Date.now()
@@ -1205,6 +1256,9 @@ export default class PulseManager {
       )
     }
 
+    if (!output && shouldNotifyOwner) {
+      output = 'I couldn’t finish this Pulse follow-up.'
+    }
     if (output && (shouldNotifyOwner || finalIntent === 'cancelled')) {
       await this.surfacePulseMessage(state, matter, output, answerMetadata)
     }
@@ -1235,7 +1289,7 @@ export default class PulseManager {
     state: PulseState,
     matter: PulseMatter,
     output: string,
-    answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace'>
+    answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace' | 'artifacts'>
   ): Promise<void> {
     const core = await this.loadCoreNodes()
     await core.BRAIN.talk(
@@ -1243,6 +1297,7 @@ export default class PulseManager {
         text: output,
         speech: output,
         responseRoute: 'pulse',
+        messageId: matter.id,
         ...answerMetadata
       },
       true
@@ -1550,7 +1605,7 @@ export default class PulseManager {
 
   private async loadReActLLMDuty(): Promise<{
     ReActLLMDuty: {
-      new (params: { input: string }): {
+      new (params: ReactLLMDutyParams): {
         init(): Promise<void>
         execute(): Promise<{
           output: unknown

@@ -21,13 +21,32 @@ const scenario: RealAgentScenario = {
     assert.deepEqual(chart.props.series[0]?.values, TOKENS, 'Chart values must preserve the supplied token totals.')
     assert.match(`${chart.props.description ?? ''} ${trend.output}`, /partial|ten days|10 days|first 10|first ten/i)
 
+    const reversal = await runTurn(
+      'A game publisher’s share price rose 6.2% on review day and fell 3.7% the next day at launch. If investors already expected a hit, why might the launch have produced so little upside?'
+    )
+    assert.equal(reversal.finalIntent, 'answer', reversal.output)
+    const shortAnswer = CONVERSATION_REPOSITORY.readMessage(reversal.sessionId, reversal.responseTrace.id)
+    const parts = shortAnswer?.answerParts ?? []
+    const moves = parts.flatMap((part) => part.kind === 'ui' ? Object.values(part.surface.spec.elements) : [])
+      .find((node) => node.type === 'Chart')
+    assert.ok(moves?.type === 'Chart', 'A short comparison that supports an explanation should use a native chart.')
+    assert.equal(moves.props.categories.length, 2)
+    assert.deepEqual(moves.props.series.flatMap((series) => series.values).filter((value) => value !== null), [6.2, -3.7])
+    const explanation = parts.find((part) => part.kind === 'text')
+    assert.ok(explanation?.kind === 'text' && /expect|priced in/i.test(explanation.text),
+      'Keep the explanation in the same answer as the chart.')
+
     const reference = await runTurn('Give me a small reference table for these settings: timeout 30 seconds, retry limit 2, cache enabled. These are fixed values, not a trend.')
     assert.equal(reference.finalIntent, 'answer', reference.output)
     const plain = CONVERSATION_REPOSITORY.readMessage(reference.sessionId, reference.responseTrace.id)
     assert.ok(!plain?.answerParts?.some((part) => part.kind === 'ui'), 'A small static reference table should remain Markdown, not an interactive widget.')
     assert.ok(reference.output.includes('|'), 'The fixed settings should be readable as a Markdown table.')
 
-    return { trend: { sessionId: trend.sessionId, chart, answer: trend.output }, reference: reference.output }
+    return {
+      trend: { sessionId: trend.sessionId, chart, answer: trend.output },
+      reversal: { chart: moves, answer: reversal.output },
+      reference: reference.output
+    }
   }
 }
 

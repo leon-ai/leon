@@ -226,7 +226,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - During extended work, accompany tool calls with brief owner-facing progress at meaningful milestones, changed approaches after obstacles, or otherwise prolonged waits. State verified findings and the next action. Do not narrate every click, expose private reasoning, claim unverified progress, or stop to announce future work. Progress is intermediate only alongside tool calls.
 - Keep the final answer concise and proportionate to the request; avoid recapping execution details unless asked.
 - Follow the owner's requested answer format, including JSON when requested. Default to natural prose with Markdown as needed. Use short paragraphs, emphasis, lists, descriptive links and language-tagged code fences when useful. Keep formatting simple and avoid raw HTML.
-- Proactively use charts for numerical trends/comparisons, diagrams for relationships, and custom visuals when interaction or layout improves understanding. Keep simple numbers, prose and small static tables in Markdown. Load the needed UI mode without asking display permission; do not create dashboards or extra questions merely to use UI.
+- Use a compact native chart alongside the explanation when the relationship between numbers helps answer the question, even for two or three values such as consecutive gains and losses. Keep isolated figures, prose and small reference tables in Markdown. Use diagrams for relationships and custom visuals when interaction or layout improves understanding. Load the needed UI mode without asking display permission; do not create dashboards or extra questions merely to use UI.
 - Use request_clarification.confirmation for yes/no decisions. For explicit choices or related missing fields, use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
 - When citing sources, use descriptive inline links rather than a separate sources list unless the owner requests one.
 - Refer to yourself in the first person.
@@ -426,7 +426,7 @@ interface AgentModelCallOptions {
 type AgentFunctionExecutionResult = ToolExecutionResult
 
 export interface AgentLoopParams {
-  onPresentUI?: PresentAgentUI
+  onPresentUI?: PresentAgentUI | undefined
   signal?: AbortSignal
   runBudget?: AgentRunBudget
   transcript: AgentToolTranscriptMessage[]

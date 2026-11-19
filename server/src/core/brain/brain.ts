@@ -5,6 +5,7 @@ import path from 'node:path'
 import type {
   AgentResponseTrace,
   LLMAnswerMetrics,
+  MessageLog,
   ShortLanguageCode
 } from '@/types'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
@@ -28,6 +29,9 @@ import { AnswerQueue } from '@/core/brain/answer-queue'
 import { LogicActionSkillHandler } from '@/core/brain/logic-action-skill-handler'
 import { DialogActionSkillHandler } from '@/core/brain/dialog-action-skill-handler'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
 
 type SkillProcess = ChildProcessWithoutNullStreams | undefined
 interface IsTalkingWithVoiceOptions {
@@ -41,6 +45,8 @@ type QueuedAnswer =
       text?: string
       llmMetrics?: LLMAnswerMetrics
       agentResponseTrace?: AgentResponseTrace
+      artifacts?: MessageLog['artifacts']
+      messageId?: string
       shouldSkipParaphrase?: boolean
       responseRoute?: 'controlled' | 'react' | 'pulse'
     }
@@ -332,11 +338,20 @@ export default class Brain {
             NLU.nluResult.utterance ||
             ''
           const sentAt = Date.now()
+          const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+          const messageId = typeof answer === 'object' && 'messageId' in answer
+            ? answer.messageId
+            : undefined
+          const artifacts = typeof answer === 'object' && 'artifacts' in answer
+            ? answer.artifacts
+            : undefined
 
           SOCKET_SERVER.emitAnswerToChatClients(
-            llmMetrics || agentResponseTrace
+            llmMetrics || agentResponseTrace || messageId
               ? {
                   answer: finalTextAnswer,
+                  ...(messageId ? { messageId } : {}),
+                  ...(artifacts?.length ? { artifacts } : {}),
                   ...(llmMetrics ? { llmMetrics } : {}),
                   ...(agentResponseTrace ? { agentResponseTrace } : {})
                 }
@@ -360,9 +375,24 @@ export default class Brain {
             who: 'leon',
             message: finalTextAnswer,
             isAddedToHistory: true,
+            ...(messageId ? { messageId } : {}),
+            ...(responseRoute === 'pulse' ? { origin: 'pulse' as const } : {}),
+            ...(artifacts?.length ? { artifacts } : {}),
             ...(llmMetrics ? { llmMetrics } : {}),
             ...(agentResponseTrace ? { agentResponseTrace } : {})
           })
+          if (responseRoute === 'pulse' && messageId) {
+            const record = CONVERSATION_REPOSITORY.readMessage(sessionId, messageId, { summary: true })
+            if (record) {
+              publishAgentEvent(getActiveProfileName(), {
+                session_id: sessionId, turn_id: messageId, response_id: messageId,
+                type: 'final_answer', data: {
+                  message_id: messageId, content: finalTextAnswer,
+                  message: record
+                }
+              })
+            }
+          }
           // Owner-agent turns schedule titles through their shared lifecycle.
           if (responseRoute !== 'react') {
             POST_TURN_MAINTENANCE_QUEUE.enqueue(

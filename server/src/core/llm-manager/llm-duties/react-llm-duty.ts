@@ -143,6 +143,7 @@ import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/ag
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
 import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings } from '../turn-timing'
+import { getActiveInferencePurpose } from '../llm-usage/usage-context'
 import { isToolPreparationPhase } from '../turn-timing-contract'
 import { CATALOG_SEARCH_TOOL_NAME } from '@/core/tool-manager/catalog/agent-catalog'
 import { AURORA_LOADER_NAME, AURORA_PREVIEW_NAME, AURORA_PRESENT_NAME } from '@/core/aurora/agent-ui-contract'
@@ -403,28 +404,36 @@ export class ReActLLMDuty extends LLMDuty {
     // Capture the session and profile-bound writer before any deferred saves.
     const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
     const upsert = CONVERSATION_LOGGER.upsert
-    this.persistResponseTrace = (): Promise<void> => upsert({
-      who: 'leon',
-      message: '',
-      messageId: traceId,
-      isAddedToHistory: false,
-      agentResponseTrace: this.responseTraceCollector.snapshot({})
-    }, { sessionId, activity: true })
-    this.reportProgressEvent({
-      type: 'reasoning_summary',
-      summary: 'Working'
-    })
-
+    const isPulse = getActiveInferencePurpose() === InferencePurpose.Pulse
+    const isVisible = !isPulse || Boolean(this.onProgressEvent)
+    if (isVisible) {
+      this.persistResponseTrace = (): Promise<void> => upsert({
+        who: 'leon',
+        message: '',
+        messageId: traceId,
+        isAddedToHistory: false,
+        ...(isPulse ? { origin: 'pulse' as const } : {}),
+        agentResponseTrace: this.responseTraceCollector.snapshot({})
+      }, { sessionId, activity: true })
+    }
     // Background duties without a bound conversation must not consume messages
     // addressed to the profile's currently selected chat session.
     const activeSessionId = getActiveConversationSessionId()
     const agentTurn = activeSessionId
-      ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId)
+      ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId, isVisible)
       : null
     this.getOwnerMessageSignal = agentTurn?.getOwnerMessageSignal
     this.agentTurnSignal = agentTurn?.signal
 
     try {
+      if (isPulse && this.persistResponseTrace) {
+        await this.persistResponseTrace()
+      }
+      this.reportProgressEvent({
+        type: 'reasoning_summary',
+        summary: 'Working'
+      })
+
       const ownerInput = this.getInputAsText(this.input)
       const { messageLogs: history, conversationState } =
         await runTurnPhase(TurnPhase.History, () => ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput))
@@ -481,7 +490,7 @@ export class ReActLLMDuty extends LLMDuty {
 
         const dutyResult = this.makeDutyResult(answer, routineLookup)
         scheduleHistoryCompaction(
-          () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer()
+          () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(!isPulse)
         )
 
         return dutyResult
@@ -681,11 +690,11 @@ export class ReActLLMDuty extends LLMDuty {
       }
 
       const result = await runAgentLoop({
-        onPresentUI: async (spec, purpose, surfaceId) => {
+        onPresentUI: isVisible ? async (spec, purpose, surfaceId): Promise<string> => {
           const surface = await presentAurora(sessionId, traceId, spec, purpose, surfaceId)
           hasAurora = true
           return surface.id
-        },
+        } : undefined,
         ...(agentTurn ? {
           drainOwnerMessages: agentTurn.drainOwnerMessages,
           getOwnerMessageSignal: agentTurn.getOwnerMessageSignal

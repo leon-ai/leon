@@ -26,7 +26,7 @@ export class WebSessionRuntime {
   private readonly active = new Map<string, Set<ActiveWebTurn>>()
 
   public isRunning(sessionId: string): boolean {
-    return this.active.has(sessionId) || CONVERSATION_SESSION_MANAGER.isAgentTurnActive(sessionId)
+    return this.active.has(sessionId) || CONVERSATION_SESSION_MANAGER.isVisibleAgentTurnActive(sessionId)
   }
 
   /**

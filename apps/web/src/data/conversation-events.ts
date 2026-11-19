@@ -239,6 +239,10 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   } else if (event.type === 'metrics') {
     trace.metrics = data['metrics'] as NonNullable<ConversationTrace['metrics']>
   } else if (event.type === 'final_answer') {
+    const saved = data['message'] as ConversationRecord | undefined
+    if (saved?.origin === 'pulse' && saved.messageId === id && saved.isAddedToHistory) {
+      return index < 0 ? [...messages, saved] : messages.map((item, position) => position === index ? saved : item)
+    }
     // Completed traces include provider attempts that are not streamed as
     // separate events. Use them immediately instead of waiting for navigation.
     const completedTrace = data['response_trace'] as Pick<ConversationTrace, 'inferences' | 'metrics' | 'timings' | 'answerStartedAt'> | undefined
@@ -270,6 +274,10 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     }
   } else {
     return messages
+  }
+
+  if (data['origin'] === 'pulse') {
+    record.origin = 'pulse'
   }
 
   return index < 0 ? [...messages, record] : messages.map((message, position) => position === index ? record : message)

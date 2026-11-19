@@ -9,6 +9,41 @@ import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/c
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
+test('labels Pulse progress and its saved reply in one turn', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const answers = page.getByRole('region', { name: 'Leon’s final answer', exact: true })
+  await expect(answers.last()).toBeVisible()
+  const sentAt = Date.now()
+  const messageId = 'pulse-reading-list'
+  const step = { id: 'sources', label: 'Check for new reading material', status: 'in_progress' as const }
+  const event = (type: string, sequence: number, data: Record<string, unknown>): ConversationEvent => ({
+    type, sequence, session_id: SESSION_ID, turn_id: messageId, response_id: messageId,
+    created_at: sentAt + sequence, data: { ...data, origin: 'pulse' }
+  })
+  await ui.emit([
+    event('session_changed', 1, { is_running: true }),
+    event('plan_step', 2, { step })
+  ])
+  const label = page.getByText('Pulse', { exact: true })
+  await expect(label).toBeVisible()
+  const turn = page.locator('.leon-message').filter({ has: label })
+  await expect(turn.getByRole('region', { name: 'Leon’s execution plan' })).toBeVisible()
+  const saved: ConversationRecord = {
+    origin: 'pulse', who: 'leon', messageId, message: 'I found two new articles for your reading list.',
+    sentAt: sentAt + 3, isAddedToHistory: true, llmMetrics: { durationMs: 2_000 },
+    agentResponseTrace: { id: messageId, planSteps: [{ ...step, status: 'completed' }], toolCalls: [] }
+  }
+  ui.history.get(SESSION_ID)!.push(saved)
+  await ui.emit([
+    event('final_answer', 3, { message: saved }),
+    event('session_changed', 4, { is_running: false })
+  ])
+  await expect(turn.getByText(saved.message)).toBeVisible()
+  await page.reload()
+  await expect(turn.getByText(saved.message)).toBeVisible()
+  await expect(label).toHaveCount(1)
+})
+
 test('explains completed empty tool output in both the preview and inspector', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [{
@@ -435,6 +470,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       '> [!CAUTION]\n> This action cannot be undone.',
       '<details>\n<summary>A little more</summary>\n\nA **warm** detail.\n\n</details>',
       '| Craft | Pace |\n| --- | --- |\n| Wood | Gentle |',
+      '**The price fell to $208.65** before [the update](https://example.com/update), with a forecast of **$8.0–$8.2 billion**.',
+      'At $5 each, the total is $n \\times 5$.',
+      'The term $2 x$ already includes the coefficient.',
       'A right triangle: $a^2 + b^2 = c^2$.',
       '$$\nE = mc^2\n$$',
       '```typescript\nconst craft: string = "care";\n```',
@@ -450,8 +488,11 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     ui.history.get(SESSION_ID)!.at(-3)!.message = 'Another quiet note[^craft].\n\n[^craft]: A separate footnote.'
     await page.goto(SESSION_URL)
     const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
-    await expect(answer.locator('.katex')).toHaveCount(2)
-    await expect(answer.locator('math')).toHaveCount(2)
+    await expect(answer.locator('.katex')).toHaveCount(4)
+    await expect(answer.locator('math')).toHaveCount(4)
+    await expect(answer.getByText('The price fell to $208.65', { exact: true })).toBeVisible()
+    await expect(answer.getByText('$8.0–$8.2 billion', { exact: true })).toBeVisible()
+    await expect(answer.getByRole('link', { name: 'the update' })).toHaveAttribute('href', 'https://example.com/update')
     await expect(answer.locator('.markdown-task-item')).toHaveCount(2)
     await expect(answer.getByRole('checkbox').first()).toBeChecked()
     await expect(answer.getByRole('checkbox').first()).toBeDisabled()

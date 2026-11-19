@@ -88,7 +88,7 @@ export function createAuroraLoaderTool(): OpenAITool {
     type: 'function',
     function: {
       name: AURORA_LOADER_NAME,
-      description: 'Load UI proactively for understanding: input for decisions/forms, native for charts/comparisons or data exploration, generated for bespoke visuals/interactions. Numbers and small static tables stay Markdown. No display permission needed.',
+      description: 'Load UI proactively for understanding: input for decisions/forms, native for charts including compact numerical comparisons, generated for bespoke visuals/interactions. Keep isolated figures and small reference tables in Markdown. No display permission needed.',
       parameters: {
         type: 'object',
         properties: { mode: { type: 'string', enum: MODE_ORDER } },

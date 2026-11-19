@@ -69,7 +69,7 @@ function groupEntriesByTurn(entries: FeedEntry[]): FeedTurn[] {
   for (const entry of entries) {
     const currentTurn = turns.at(-1)
 
-    if (entry.role === 'owner' || currentTurn === undefined) {
+    if (entry.role === 'owner' || entry.origin === 'pulse' || currentTurn === undefined) {
       turns.push({
         id: entry.id,
         entries: [entry]

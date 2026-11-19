@@ -31,7 +31,8 @@ import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { Telemetry } from '@/telemetry'
-import { LLMProviders } from '@/core/llm-manager/types'
+import { InferencePurpose, LLMProviders } from '@/core/llm-manager/types'
+import { getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { RoutingMode, type ConversationWidgetData } from '@/types'
@@ -477,6 +478,10 @@ export default class SocketServer {
     payload?: unknown,
     options?: { sessionId?: string | null }
   ): void {
+    if (getActiveInferencePurpose() === InferencePurpose.Pulse) {
+      return
+    }
+
     if (eventName === 'fyi' && options?.sessionId && payload && typeof payload === 'object') {
       const footer = payload as { messageId: string, fyi: import('@/core/fyi/fyi-contract').Fyi }
       publishAgentEvent(getActiveProfileName(), {
@@ -600,6 +605,12 @@ export default class SocketServer {
     answerData: unknown,
     options?: { sessionId?: string | null }
   ): void {
+    // Pulse owns delivery for its response. Legacy activity has no response ID
+    // and cannot honour the run's visibility or be settled with its final answer.
+    if (getActiveInferencePurpose() === InferencePurpose.Pulse) {
+      return
+    }
+
     const sessionId =
       options?.sessionId || CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
     const answerDataRecord =

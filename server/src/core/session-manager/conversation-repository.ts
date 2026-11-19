@@ -697,14 +697,14 @@ export class ConversationRepository {
   }
 
   /**
-   * Reads one disclosure body without loading the rest of the conversation.
+   * Reads one message, with disclosure bodies omitted when requested.
    */
-  public readMessage(sessionId: string, messageId: string): MessageLog | null {
-    const row = this.db.prepare(`SELECT payload FROM conversation_messages
+  public readMessage(sessionId: string, messageId: string, options: { summary?: boolean } = {}): MessageLog | null {
+    const row = this.db.prepare(`SELECT ${options.summary ? 'summary' : 'payload'} AS value FROM conversation_messages
       WHERE session_id = ? AND (id = ? OR trace_id = ?) LIMIT 1`)
       .get(sessionId, messageId, messageId)
 
-    return row ? JSON.parse(String(row['payload'])) as MessageLog : null
+    return row ? JSON.parse(String(row['value'])) as MessageLog : null
   }
 
   /**

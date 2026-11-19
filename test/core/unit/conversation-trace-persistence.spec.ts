@@ -12,6 +12,8 @@ import { CONFIG_MANAGER } from '@/config'
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import type { LLMAnswerMetrics, MessageLog } from '@/types'
+import type { HTTPPluginAgentEvent } from '@/core/http-server/http-plugins/types'
+import type { ReactLLMDutyParams } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import {
   getActiveTurnInference,
   getActiveConversationSessionId,
@@ -64,6 +66,7 @@ vi.mock('@/core/session-manager', () => ({
   CONVERSATION_SESSION_MANAGER: {
     getSession: (sessionId: string): ReturnType<ConversationRepository['readSession']> | undefined => sessions.repository?.readSession(sessionId),
     getActiveSessionId: (): string => sessions.selectedSession,
+    isVisibleAgentTurnActive: (): boolean => false,
     updateSessionFromStoredMessages: vi.fn(),
     getCurrentSessionId: (): string => getActiveConversationSessionId() || sessions.selectedSession,
     runWithSession: async (sessionId: string, callback: () => Promise<void>): Promise<void> => {
@@ -102,9 +105,13 @@ describe('conversation trace persistence', () => {
     await fs.rm(sessions.root, { recursive: true, force: true })
   })
 
-  it.each(['answer', 'cancelled'])(
-    'keeps pulse execution and its %s outcome in the owning session',
-    async (finalIntent) => {
+  it.each([
+    { finalIntent: 'answer', notifyOwner: true },
+    { finalIntent: 'answer', notifyOwner: false },
+    { finalIntent: 'cancelled', notifyOwner: false }
+  ])(
+    'settles a Pulse $finalIntent in its owning session (notify owner: $notifyOwner)',
+    async ({ finalIntent, notifyOwner }) => {
       vi.useFakeTimers()
       const config = CONFIG_MANAGER.getConfig()
       vi.spyOn(CONFIG_MANAGER, 'getConfig').mockReturnValue({
@@ -135,7 +142,8 @@ describe('conversation trace persistence', () => {
           costCompletionCount: 0, estimatedCostCompletionCount: 0, costSources: []
         }
       }
-      const agentResponseTrace = { id: 'pulse-turn', metrics: llmMetrics }
+      const responseId = 'pulse-matter'
+      const agentResponseTrace = { id: responseId, metrics: llmMetrics, planSteps: [], toolCalls: [] }
       Object.assign(pulse, {
         persist: vi.fn(),
         loadCoreNodes: async () => ({
@@ -145,6 +153,8 @@ describe('conversation trace persistence', () => {
         }),
         loadReActLLMDuty: async () => ({
           ReActLLMDuty: class {
+            constructor(private readonly params: ReactLLMDutyParams) {}
+
             public async init(): Promise<void> {
               return
             }
@@ -152,6 +162,10 @@ describe('conversation trace persistence', () => {
             public async execute(): Promise<unknown> {
               expect(getActiveConversationSessionId()).toBe('pulse-session')
               sessions.selectedSession = 'other-session'
+              this.params.onProgressEvent?.({
+                type: 'plan_step',
+                step: { id: 'sources', label: 'Review the meeting notes', status: 'in_progress' }
+              })
 
               return { output, data: { finalIntent, llmMetrics, agentResponseTrace } }
             }
@@ -159,10 +173,10 @@ describe('conversation trace persistence', () => {
         })
       })
       const matter = {
-        id: 'pulse-matter', fingerprint: 'meeting-notes', intentKey: 'prepare',
+        id: responseId, fingerprint: 'meeting-notes', intentKey: 'prepare',
         targetScope: 'calendar', turnPrompt: 'Prepare meeting notes.',
       summary: 'Prepare meeting notes', why: 'An upcoming meeting',
-      notifyOwner: finalIntent === 'answer'
+        notifyOwner
       } as Parameters<PulseManager['executeMatter']>[1]
       const state = {
         matters: [matter], recentOutcomes: [], suppressionPolicies: [], recentTicks: []
@@ -170,15 +184,23 @@ describe('conversation trace persistence', () => {
 
       await pulse['executeMatter'](state, matter)
 
-      expect(answerRuntime.SOCKET_SERVER.emitAnswerToChatClients)
-        .toHaveBeenCalledExactlyOnceWith({ answer: output, llmMetrics, agentResponseTrace })
+      const events = sessions.repository!.readEvents<HTTPPluginAgentEvent>(0, 'pulse-session').items
+      expect(events.filter((event) => event.type === 'plan_step')).toHaveLength(notifyOwner ? 1 : 0)
+      const surfaced = notifyOwner || finalIntent === 'cancelled'
       const history = ConversationHistoryHelper.toHistoryItems(
         await logger.loadAll({ sessionId: 'pulse-session' }), { supportsWidgets: false }
       )
-      expect(history).toHaveLength(1)
-      expect(history[0]).toMatchObject({
-        originalString: output, llmMetrics, agentResponseTrace
-      })
+      expect(history).toHaveLength(surfaced ? 1 : 0)
+      if (surfaced) {
+        expect(answerRuntime.SOCKET_SERVER.emitAnswerToChatClients)
+          .toHaveBeenCalledExactlyOnceWith({ answer: output, messageId: responseId, llmMetrics, agentResponseTrace })
+        expect(history[0]).toMatchObject({ messageId: responseId, originalString: output, llmMetrics, agentResponseTrace })
+        expect(events.filter((event) => event.type === 'final_answer')).toMatchObject([
+          { response_id: responseId, data: { message: { messageId: responseId, origin: 'pulse', message: output } } }
+        ])
+      } else {
+        expect(events).toEqual([])
+      }
       expect(paraphrase).not.toHaveBeenCalled()
       expect(await logger.loadAll({ sessionId: 'other-session' })).toEqual([])
       expect(matter.status).toBe(finalIntent === 'cancelled' ? 'declined' : 'completed')
@@ -191,7 +213,7 @@ describe('conversation trace persistence', () => {
       }
 
       expect(answerRuntime.POST_TURN_MAINTENANCE_QUEUE.enqueue.mock.calls.map(([label]) => label))
-        .toEqual(['pulse self-model reflection', 'session title generation'])
+        .toEqual(surfaced ? ['pulse self-model reflection', 'session title generation'] : ['pulse self-model reflection'])
     }
   )
 

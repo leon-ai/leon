@@ -510,6 +510,7 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
   } : {
     id: record.messageId,
     role: 'leon',
+    ...(record.origin ? { origin: record.origin } : {}),
     sentAt: record.sentAt,
     metrics,
     status: active ? FeedTurnStatus.InProgress : FeedTurnStatus.Completed,
@@ -646,7 +647,7 @@ export function toFeedEntries(records: readonly ConversationRecord[], running: b
   for (const record of records) {
     if (record.who === 'owner') {
       turnId = record.messageId
-    } else {
+    } else if (record.origin !== 'pulse') {
       if (record.agentResponseTrace?.planSteps.length) {
         structuredPlanTurns.add(turnId)
       }
