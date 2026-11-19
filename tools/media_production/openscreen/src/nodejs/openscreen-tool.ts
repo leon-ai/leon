@@ -39,6 +39,7 @@ interface Recording {
   endedAt?: number
   title?: string
   browserTabId?: string
+  systemPicker: boolean
   hasCamera: boolean
   state: RecordingState
   context?: ToolExecutionContext
@@ -140,14 +141,14 @@ export default class OpenScreenTool extends Tool {
     if (selected !== 1 || !Number.isInteger(duration) || duration < 1 || duration > MAX_RECORDING_SECONDS) {
       throw new Error('Select exactly one source and a duration from 1 to 3600 seconds.')
     }
-    if (options.browserTabId && !options.windowTitle) {
-      throw new Error('Browser pointer tracking requires a selected browser windowTitle. Keep browserTabId and choose a browser window from sources; dropping the tab link loses scripted cursor motion and zooms.')
-    }
     const wayland = process.platform === 'linux' && (
       process.env['XDG_SESSION_TYPE'] === 'wayland' || Boolean(process.env['WAYLAND_DISPLAY'])
     )
     if (wayland !== Boolean(options.systemPicker)) {
       throw new Error('Wayland requires systemPicker and owner portal selection; other desktops require an explicit window or display.')
+    }
+    if (options.browserTabId && !options.windowTitle && !options.systemPicker) {
+      throw new Error('Browser pointer tracking requires a selected browser windowTitle or a Wayland systemPicker. Keep browserTabId when selecting the browser window.')
     }
     if (options.microphoneDevice && options.microphone !== true) {
       throw new Error('microphoneDevice requires microphone=true.')
@@ -157,18 +158,22 @@ export default class OpenScreenTool extends Tool {
     }
 
     const session = await this.session()
-    const sources = (await this.call('listSources', {}, session)).data
-    if (options.windowTitle !== undefined) {
-      const matches = (sources['windows'] as string[]).filter((title) =>
-        title.toLowerCase().includes(options.windowTitle!.toLowerCase())
-      )
-      if (!options.windowTitle.trim() || matches.length !== 1) {
-        throw new Error(`Choose a unique window title from refreshed sources; upstream selects by substring. Matching windows: ${JSON.stringify(matches)}. For browser capture, keep browserTabId and resolve the window selection before recording.`)
+    // The portal owns source selection and can list windows unavailable to OpenScreen.
+    if (!options.systemPicker) {
+      const sources = (await this.call('listSources', {}, session)).data
+      const { windowTitle, displayIndex } = options
+      if (windowTitle !== undefined) {
+        const matches = (sources['windows'] as string[]).filter((title) =>
+          title.toLowerCase().includes(windowTitle.toLowerCase())
+        )
+        if (!windowTitle.trim() || matches.length !== 1) {
+          throw new Error(`Choose a unique window title from refreshed sources; upstream selects by substring. Matching windows: ${JSON.stringify(matches)}. For browser capture, keep browserTabId and resolve the window selection before recording.`)
+        }
       }
-    }
-    if (options.displayIndex !== undefined && !(sources['displays'] as { index: number }[])
-      .some((display) => display.index === options.displayIndex)) {
-      throw new Error('The selected display is unavailable. Refresh sources.')
+      if (displayIndex !== undefined && !(sources['displays'] as { index: number }[])
+        .some((display) => display.index === displayIndex)) {
+        throw new Error('The selected display is unavailable. Refresh sources.')
+      }
     }
 
     const started = (await this.call('startRecording', {
@@ -194,6 +199,7 @@ export default class OpenScreenTool extends Tool {
     const recording: Recording = {
       id: randomUUID(), owner, session, startedAt: started['startedAt'],
       state: RecordingState.Recording,
+      systemPicker: options.systemPicker === true,
       hasCamera: options.camera === true,
       ...(options.title ? { title: options.title } : {}),
       ...(options.browserTabId ? { browserTabId: options.browserTabId } : {}),
@@ -226,11 +232,22 @@ export default class OpenScreenTool extends Tool {
   }
 
   /**
-   * Finalizes capture once, including concurrent duration expiry and explicit stop.
+   * Finalizes capture once and links Wayland browser evidence after source review.
    */
-  public async stop(sessionId: string): Promise<unknown> {
+  public async stop(sessionId: string, browserWindowVerified = false): Promise<unknown> {
     const recording = this.ownedRecording(sessionId)
-    await this.finish(recording, this.executionContext ?? undefined)
+    const context = this.executionContext ?? undefined
+    if (browserWindowVerified) {
+      if (recording.state !== RecordingState.Completed || !recording.systemPicker || !recording.browserTabId) {
+        throw new Error('Stop the Wayland browser take and preview the selected window before confirming it.')
+      }
+      if (recording.result?.['browserWindowVerificationRequired']) {
+        await this.applyBrowserEvidence(recording, context)
+        await this.reportZooms(recording, context)
+        delete recording.result['browserWindowVerificationRequired']
+      }
+    }
+    await this.finish(recording, context)
     if ((recording.result?.['optimization'] as { status?: string } | undefined)?.status === 'pending') {
       recording.result!['optimization'] = await this.optimizeRecording(String(recording.result!['projectId']))
     }
@@ -288,6 +305,7 @@ export default class OpenScreenTool extends Tool {
    * Replaces scripted pointer data and returns the number of planned zoom regions.
    */
   public async setPointerTrack(projectId: string, events: PointerEvent[]): Promise<unknown> {
+    this.requireVerifiedBrowserWindow(projectId)
     if (!events.length || events.length > MAX_POINTER_EVENTS) {
       throw new Error(`Supply from 1 to ${MAX_POINTER_EVENTS} observed pointer events.`)
     }
@@ -316,6 +334,7 @@ export default class OpenScreenTool extends Tool {
    * Exports the edited document and delivers only a successful, nonempty file.
    */
   public async exportRecording(projectId: string, outputDirectory: string, options: ExportOptions = {}): Promise<unknown> {
+    this.requireVerifiedBrowserWindow(projectId)
     const format = options.format ?? 'mp4'
     if (format === 'gif' && (options.quality !== undefined || options.fps !== undefined)) {
       throw new Error('quality and fps apply only to MP4; use GIF options instead.')
@@ -389,7 +408,7 @@ export default class OpenScreenTool extends Tool {
   }
 
   /**
-   * Saves the take and its scripted input before reporting a completed recording.
+   * Saves the take and links scripted input when the capture source is known.
    */
   private async finalize(recording: Recording, context?: ToolExecutionContext): Promise<void> {
     clearTimeout(recording.timer)
@@ -403,51 +422,14 @@ export default class OpenScreenTool extends Tool {
       recording.result = result
       result['videoPathNote'] = 'videoPath is the raw capture. Use exportRecording to render the project trims, background, cursor and zooms before delivery or importing into another editor.'
       await this.applyDefaults(projectId, recording.session, context)
-      if (recording.browserTabId) {
-        const events = await this.browserEvents(recording)
-        result['pointerEventsImported'] = events.length
-        if (events.length) {
-          const pointer = (await this.request(recording.session, 'setPointerTrack', { projectId, events }, context)).data
-          result['pointerTrack'] = pointer
+      if (recording.systemPicker && recording.browserTabId) {
+        // The portal does not tell the recorder which browser window it captured.
+        result['browserWindowVerificationRequired'] = true
+      } else {
+        if (recording.browserTabId) {
+          await this.applyBrowserEvidence(recording, context)
         }
-        try {
-          const inputRanges = (await this.browserJournals(recording, '.input-activity.json')).flatMap((entry) => {
-            const start = Number(entry['startedAt'])
-            const end = Number(entry['endedAt'])
-            if (entry['tab_id'] !== recording.browserTabId || !Number.isFinite(start) || !Number.isFinite(end) ||
-              end < start || start < recording.startedAt || end > recording.endedAt!) {
-              return []
-            }
-            return [{ startSec: (start - recording.startedAt) / 1_000,
-              endSec: Math.max(end - recording.startedAt, start - recording.startedAt + 1) / 1_000 }]
-          })
-          if (inputRanges.length) {
-            const evidence: CaptureEvidence = {
-              videoPath: String(result['videoPath']),
-              firstInputSec: inputRanges.reduce((first, span) => Math.min(first, span.startSec), Infinity),
-              inputRanges, hasCamera: recording.hasCamera
-            }
-            const filename = this.captureEvidencePath(projectId, recording.owner)
-            await fs.writeFile(`${filename}.tmp`, JSON.stringify(evidence))
-            await fs.rename(`${filename}.tmp`, filename)
-            // Expiry and worker shutdown save evidence; analysis needs an active host deadline.
-            result['optimization'] = context
-              ? await this.optimize(projectId, recording.session, evidence, context)
-              : { status: 'pending', reason: 'Run optimizeRecording under an active tool call before exporting.' }
-          } else {
-            result['optimization'] = { status: 'skipped', reason: 'No delivered-input timing was available; the full take was preserved.' }
-          }
-        } catch (error) {
-          context?.signal?.throwIfAborted()
-          // A completed capture remains usable when optional analysis is unavailable.
-          result['optimization'] = { status: 'failed', reason: String(error) }
-        }
-      }
-      const document = (await this.request(recording.session, 'getCurrentDocument', { projectId }, context)).data
-      result['autoZooms'] = Array.isArray(document['zoomRanges']) ? document['zoomRanges'].length : 0
-      if (result['autoZooms'] === 0) {
-        result['warnings'] = [...(Array.isArray(result['warnings']) ? result['warnings'] : []),
-          'No zoom regions were generated. Browser automation requires browserTabId linked to the recorded window and matching delivered pointer events. Inspect info and preview before claiming cursor motion or zoom.']
+        await this.reportZooms(recording, context)
       }
       recording.state = RecordingState.Completed
       this.recordingOutput(recording, 'OpenScreen capture finalized.\n', 'completed')
@@ -456,6 +438,68 @@ export default class OpenScreenTool extends Tool {
       recording.error = String(error)
       this.recordingOutput(recording, `${recording.error}\n`, 'failed')
       throw error
+    }
+  }
+
+  /**
+   * Uses delivered browser input to place the cursor and preserve interactions during trimming.
+   */
+  private async applyBrowserEvidence(recording: Recording, context?: ToolExecutionContext): Promise<void> {
+    const result = recording.result!
+    const projectId = String(result['projectId'])
+
+    const events = await this.browserEvents(recording)
+    result['pointerEventsImported'] = events.length
+    if (events.length) {
+      const pointer = (await this.request(recording.session, 'setPointerTrack', { projectId, events }, context)).data
+      result['pointerTrack'] = pointer
+    }
+    try {
+      const inputRanges = (await this.browserJournals(recording, '.input-activity.json')).flatMap((entry) => {
+        const start = Number(entry['startedAt'])
+        const end = Number(entry['endedAt'])
+        if (entry['tab_id'] !== recording.browserTabId || !Number.isFinite(start) || !Number.isFinite(end) ||
+          end < start || start < recording.startedAt || end > recording.endedAt!) {
+          return []
+        }
+        return [{ startSec: (start - recording.startedAt) / 1_000,
+          endSec: Math.max(end - recording.startedAt, start - recording.startedAt + 1) / 1_000 }]
+      })
+      if (inputRanges.length) {
+        const evidence: CaptureEvidence = {
+          videoPath: String(result['videoPath']),
+          firstInputSec: inputRanges.reduce((first, span) => Math.min(first, span.startSec), Infinity),
+          inputRanges, hasCamera: recording.hasCamera
+        }
+        const filename = this.captureEvidencePath(projectId, recording.owner)
+        await fs.writeFile(`${filename}.tmp`, JSON.stringify(evidence))
+        await fs.rename(`${filename}.tmp`, filename)
+        // Expiry and worker shutdown save evidence; analysis needs an active host deadline.
+        result['optimization'] = context
+          ? await this.optimize(projectId, recording.session, evidence, context)
+          : { status: 'pending', reason: 'Run optimizeRecording under an active tool call before exporting.' }
+      } else {
+        result['optimization'] = { status: 'skipped', reason: 'No delivered-input timing was available; the full take was preserved.' }
+      }
+    } catch (error) {
+      context?.signal?.throwIfAborted()
+      // A completed capture remains usable when optional analysis is unavailable.
+      result['optimization'] = { status: 'failed', reason: String(error) }
+    }
+  }
+
+  /**
+   * Reports focus regions from the edited project so zero zooms can be reviewed before export.
+   */
+  private async reportZooms(recording: Recording, context?: ToolExecutionContext): Promise<void> {
+    const result = recording.result!
+    const projectId = String(result['projectId'])
+    const document = (await this.request(recording.session, 'getCurrentDocument', { projectId }, context)).data
+
+    result['autoZooms'] = Array.isArray(document['zoomRanges']) ? document['zoomRanges'].length : 0
+    if (result['autoZooms'] === 0) {
+      result['warnings'] = [...(Array.isArray(result['warnings']) ? result['warnings'] : []),
+        'No zoom regions were generated. Browser automation requires browserTabId linked to the recorded window and matching delivered pointer events. Inspect info and preview before claiming cursor motion or zoom.']
     }
   }
 
@@ -680,6 +724,18 @@ export default class OpenScreenTool extends Tool {
       throw new Error('No recording with that ID belongs to this conversation.')
     }
     return recording
+  }
+
+  /**
+   * Keeps a portal-selected take in review until its browser window is verified.
+   */
+  private requireVerifiedBrowserWindow(projectId: string): void {
+    const owner = this.requireOwner()
+    if ([...this.recordings.values()].some(({ owner: recordingOwner, result }) =>
+      recordingOwner === owner && result?.['projectId'] === projectId && result['browserWindowVerificationRequired']
+    )) {
+      throw new Error('Preview the Wayland take and confirm the recorded browser window with stop before adding pointer events or exporting.')
+    }
   }
 
   private recordingOutput(recording: Recording, text: string, state: 'running' | 'completed' | 'failed'): void {
