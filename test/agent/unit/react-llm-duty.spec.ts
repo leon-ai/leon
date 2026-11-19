@@ -1448,6 +1448,7 @@ describe('continuous agent loop', () => {
   })
 
   it('bounds completion review recovery and retains evidence when capacity remains insufficient', async () => {
+    const warning = vi.spyOn(LogHelper, 'warning').mockImplementation(() => {})
     let reviews = 0
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Report the verified receipt.' }],
@@ -1469,7 +1470,8 @@ describe('continuous agent loop', () => {
 
     expect(reviews).toBe(2)
     expect(result.intent).toBe('blocked')
-    expect(result.answer).toContain('release-42')
+    expect(result.answer).toBe('Verified release-42.')
+    expect(warning).toHaveBeenCalledWith('Agent completion review could not finish (context)')
     expect(result.executionHistory).toHaveLength(1)
   })
 
@@ -1495,7 +1497,7 @@ describe('continuous agent loop', () => {
       })
 
       expect(result.intent).toBe('blocked')
-      expect(result.answer).toContain('run deadline')
+      expect(result.answer).toBe('Inspection completed.')
       expect(callModel).toHaveBeenCalledTimes(3)
     } finally {
       runBudget.dispose()
@@ -2453,28 +2455,47 @@ describe('continuous agent loop', () => {
     expect(executeFunction).toHaveBeenCalledOnce()
   })
 
-  it('stops completion review without republishing drafts when the evidence has not changed', async () => {
+  it.each([
+    {
+      status: 'revise',
+      observation: 'The checksums of both archives match.',
+      firstReason: 'Report the supported result for the second archive too.',
+      reason: 'State explicitly that both checksums match.',
+      finalAnswer: 'Both archive checksums match.',
+      intent: 'answer'
+    },
+    {
+      status: 'continue',
+      observation: 'The checksum of the first archive matches.',
+      firstReason: 'Verify the second archive.',
+      reason: 'Evidence for the second archive is still missing.',
+      finalAnswer: 'The first archive’s checksum matches. The second archive is still unverified.',
+      intent: 'blocked'
+    }
+  ])('delivers a final revision after repeated $status verdicts', async ({
+    status, observation, firstReason, reason, finalAnswer, intent
+  }) => {
     const firstDraft = 'I verified the first archive.'
     const revisedDraft = 'The first archive has been checked.'
-    const reason = 'Evidence for the second archive is still missing.'
     const onProgressMessage = vi.fn()
     const executeFunction = vi.fn(async () => ({
       execution: {
         function: callable.qualifiedName,
         status: 'success' as const,
-        observation: 'The checksum of the first archive matches.'
+        observation
       }
     }))
     const callModel = vi.fn()
       .mockResolvedValueOnce({
-        toolCalls: [toolCall('first', CALLABLE_TOOL_NAME, { query: 'first archive' })]
+        toolCalls: [toolCall('check', CALLABLE_TOOL_NAME, { query: 'archives' })]
       })
       .mockResolvedValueOnce({ textContent: firstDraft })
       .mockResolvedValueOnce({ textContent: JSON.stringify({
-        status: 'continue', reason: 'Verify the second archive.'
+        status, reason: firstReason
       }) })
       .mockResolvedValueOnce({ textContent: revisedDraft })
-      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'continue', reason }) })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status, reason }) })
+      .mockResolvedValueOnce({ textContent: finalAnswer })
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Verify both archives.' }],
       catalog: createCatalog(),
@@ -2484,15 +2505,24 @@ describe('continuous agent loop', () => {
       loadAgentSkill: async () => null
     })
 
-    expect(result.intent).toBe('error')
-    expect(result.answer).toContain('progress is saved in this session')
+    expect(result.intent).toBe(intent)
+    expect(result.answer).toBe(finalAnswer)
+    expect(result.transcript.at(-1)).toEqual({ role: 'assistant', content: finalAnswer })
     expect(result.transcript).toContainEqual(expect.objectContaining({
       runtimeContext: { completion_review_feedback: reason }
     }))
     expect(result.executionHistory).toHaveLength(1)
     expect(executeFunction).toHaveBeenCalledOnce()
     expect(onProgressMessage).toHaveBeenCalledExactlyOnceWith(firstDraft)
-    expect(callModel).toHaveBeenCalledTimes(5)
+    expect(callModel).toHaveBeenCalledTimes(6)
+    expect(callModel.mock.calls[5]?.[0].at(-2)).toMatchObject({
+      role: 'assistant', content: revisedDraft
+    })
+    expect(callModel.mock.calls[5]?.[0].at(-1)?.runtimeContext).toMatchObject({
+      final_answer_review: { feedback: reason }
+    })
+    expect(callModel.mock.calls[5]?.[1]).toEqual([])
+    expect(callModel.mock.calls[5]?.[2]).toMatchObject({ isFinalizationAttempt: true })
   })
 
   it('returns a genuine blocker without replaying input', async () => {
@@ -2624,21 +2654,26 @@ describe('continuous agent loop', () => {
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
-  it('preserves unfinished work at the hard limit instead of returning a successful answer', async () => {
+  it.each([1, 2])('delivers partial findings when the final revision is unavailable after %i operational turns', async (maxIterations) => {
+    const partialAnswer = 'Only one requested file is downloaded.'
+    const remainingWork = 'The remaining requested files have not been downloaded.'
     const callModel = vi.fn()
       .mockResolvedValueOnce({ toolCalls: [toolCall('first', CALLABLE_TOOL_NAME, { query: 'first-item' })] })
-      .mockResolvedValueOnce({ textContent: 'Only one requested file is downloaded.' })
-      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'continue', reason: 'The remaining requested files have not been downloaded.' }) })
+      .mockResolvedValueOnce({ textContent: partialAnswer })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'continue', reason: remainingWork }) })
+      .mockResolvedValueOnce({ isTruncated: true, textContent: 'Only one' })
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Download all requested files.' }], catalog: createCatalog(),
-      maxIterations: 1, callModel,
+      maxIterations, callModel,
       executeFunction: vi.fn(async () => ({ execution: {
         function: callable.qualifiedName, status: 'success', observation: 'First file exists; others remain.'
       } })), loadAgentSkill: async () => null
     })
     expect(result.intent).toBe('blocked')
-    expect(result.answer).toBe('The remaining requested files have not been downloaded.')
+    expect(result.answer).toContain(partialAnswer)
+    expect(result.answer).toContain(remainingWork)
     expect(result.executionHistory).toHaveLength(1)
+    expect(callModel).toHaveBeenCalledTimes(4)
     expect(JSON.parse(callModel.mock.calls[2]?.[0].at(-1).content)).toMatchObject({ remaining_operational_iterations: 0 })
   })
 
@@ -2649,23 +2684,28 @@ describe('continuous agent loop', () => {
     { textContent: JSON.stringify({ status: 'complete', reason: 'Done.', out_of_scope_steps: 'All steps' }) },
     { textContent: '{"status":"complete","reason":"ok"}', isTruncated: true },
     { toolCalls: [toolCall('unexpected', CALLABLE_TOOL_NAME, { query: 'unexpected' })] }
-  ])('does not accept an unavailable or invalid completion review: %j', async (review) => {
+  ])('delivers the answer intact and logs an unusable review verdict: %j', async (review) => {
+    const warning = vi.spyOn(LogHelper, 'warning').mockImplementation(() => {})
     const executeFunction = vi.fn()
+    const answer = JSON.stringify({ resultPath: '/tmp/result.txt' })
+    const trackedSteps = [{
+      label: 'Save the result', status: 'completed' as const, details: 'Verified result at /tmp/result.txt.'
+    }]
     const result = await runAgentLoopWithCompletionReview({
-      transcript: [{ role: 'user', content: 'Do the task.' }], catalog: createCatalog(),
+      transcript: [{ role: 'user', content: 'Save the result and return the path in JSON.' }],
+      catalog: createCatalog(),
       initialExecutionHistory: [{ function: callable.qualifiedName, status: 'success', observation: 'Evidence.' }],
-      initialTrackedSteps: [{
-        label: 'Save the result', status: 'completed', details: 'Verified result at /tmp/result.txt.'
-      }],
+      initialTrackedSteps: trackedSteps,
       callModel: vi.fn()
-        .mockResolvedValueOnce({ textContent: 'Done.' })
+        .mockResolvedValueOnce({ textContent: answer })
         .mockResolvedValueOnce(review)
         .mockResolvedValueOnce(review),
       executeFunction, loadAgentSkill: async () => null
     })
     expect(result.intent).toBe('error')
-    expect(result.answer).toContain('completion check failed')
-    expect(result.answer).toContain('Verified result at /tmp/result.txt.')
+    expect(result.answer).toBe(answer)
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('Agent completion review returned an unusable response'))
+    expect(result.trackedSteps).toEqual(trackedSteps)
     expect(executeFunction).not.toHaveBeenCalled()
   })
 
@@ -2689,7 +2729,7 @@ describe('continuous agent loop', () => {
     expect(callModel.mock.calls[2]?.[0].at(-1)?.content).toContain('previous completion review response was unusable')
   })
 
-  it('checks unfinished plans and enters the finishing pass after rejected completion', async () => {
+  it.each(['complete', 'revise'])('reconciles unfinished plans when a %s verdict treats the work as done', async (status) => {
     const prepareContinuation = vi.fn(async (state) => state.transcript)
     const onPlanUpdated = vi.fn()
     const completedStep = {
@@ -2699,7 +2739,7 @@ describe('continuous agent loop', () => {
     }
     const callModel = vi.fn()
       .mockResolvedValueOnce({ textContent: 'Done.' })
-      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The task is complete.' }) })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status, reason: 'The work is complete.' }) })
       .mockResolvedValueOnce({ toolCalls: [toolCall('finish-plan', AGENT_PLAN_TOOL_NAME, {
         steps: [{ label: 'Verify the files', status: 'completed' }]
       })] })
@@ -5868,7 +5908,7 @@ describe('completion review deadline', () => {
     await vi.advanceTimersByTimeAsync(1)
     const result = await pending
 
-    expect(result).toMatchObject({ answer, intent: clarification ? 'clarification' : 'answer' })
+    expect(result).toMatchObject({ answer, intent: clarification ? 'clarification' : 'error' })
     expect(reviewSignal?.aborted).toBe(true)
     expect(callModel).toHaveBeenCalledTimes(2)
     expect(LogHelper.warning).toHaveBeenCalledWith('Agent completion review timed out; sending the drafted answer')
@@ -5929,7 +5969,7 @@ describe('completion review deadline', () => {
     })
 
     await vi.advanceTimersByTimeAsync(AGENT_COMPLETION_REVIEW_TIMEOUT_MS)
-    expect(await pending).toMatchObject({ answer: 'Verified release-42.', intent: 'answer' })
+    expect(await pending).toMatchObject({ answer: 'Verified release-42.', intent: 'error' })
     expect(signals).toHaveLength(2)
     expect(signals[0]).toBe(signals[1])
     expect(signals[1]?.aborted).toBe(true)
@@ -6051,9 +6091,9 @@ describe('model response status', () => {
         expect(result).toBe(ownerReason)
       } else if (cancellation === 'run') {
         expect(result.intent).toBe('blocked')
-        expect(result.answer).toContain('run deadline')
+        expect(result.answer).toBe('Verified release-42.')
       } else {
-        expect(result).toMatchObject({ intent: 'answer', answer: 'Verified release-42.' })
+        expect(result).toMatchObject({ intent: 'error', answer: 'Verified release-42.' })
         expect(duty['continuationSummaryFailed']).toBe(false)
       }
     } finally {
@@ -7145,18 +7185,15 @@ describe('model response status', () => {
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
     expect(result.intent).not.toBe('answer')
-    expect(result.answer).toContain('exceeded its time limit')
-    if (status === 'completed') {
-      expect(result.answer).toContain('Reported completed work:\n- Verify the deliverable')
-      expect(result.answer).toContain(trackedSteps[0]!.details)
-      expect(result.answer).not.toContain('The task is incomplete')
-    }
     if (phase === 'review') {
-      expect(result.answer).toContain('The final answer was drafted, but completion could not be verified')
-      expect(result.answer).toContain(status === 'completed'
-        ? 'Remaining: Verify the drafted final answer.'
-        : 'Remaining: Verify the deliverable.')
-      expect(result.answer).not.toContain('Produce the final answer')
+      expect(result.answer).toBe('Proposed result.')
+    } else {
+      expect(result.answer).toContain('exceeded its time limit')
+      if (status === 'completed') {
+        expect(result.answer).toContain('Reported completed work:\n- Verify the deliverable')
+        expect(result.answer).toContain(trackedSteps[0]!.details)
+        expect(result.answer).not.toContain('The task is incomplete')
+      }
     }
     expect(result.trackedSteps).toEqual(trackedSteps)
     expect(callModel).toHaveBeenCalledTimes(phase === 'review' ? 2 : 1)

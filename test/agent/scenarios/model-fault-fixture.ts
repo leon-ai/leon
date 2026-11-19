@@ -42,20 +42,24 @@ export type ModelCall = (
 const MARKER = 'verified-inspection-42'
 
 /**
- * Inject one controlled model failure while retaining real operational inference
- * and real completion review, so recovery cannot pass through a mocked verifier.
+ * Inject controlled model failures while retaining real inference for the work
+ * and for completion review.
  */
 export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
   return {
     async run(context): Promise<Record<string, unknown>> {
       return inScenarioWorkspace(context.profilePath, async (workspace) => {
         const { ReActLLMDuty } = await import('@/core/llm-manager/llm-duties/react-llm-duty')
-        const { AgentModelProviderError, AgentModelResponseTimeoutError } = await import('@/core/llm-manager/llm-duties/react-llm-duty/agent-loop')
+        const {
+          AgentCompletionStatus, AgentModelProviderError, AgentModelResponseTimeoutError
+        } = await import('@/core/llm-manager/llm-duties/react-llm-duty/agent-loop')
         const prototype = ReActLLMDuty.prototype as unknown as { callAgentModel: ModelCall }
         const original = prototype.callAgentModel
         let injected = false
         let reviews = 0
         let rejections = 0
+        let incorrectDrafts = 0
+        let finalRevisions = 0
         let stallRecoveries = 0
         let reviewContextRecoveries = 0
         let repeatedReads = 0
@@ -117,13 +121,18 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
             } catch {
               // Invalid reviews belong to the real review parser and its retry policy.
             }
-            if (review?.status === 'continue') {
+            if (review?.status === AgentCompletionStatus.Continue ||
+                review?.status === AgentCompletionStatus.Revise) {
               rejections += 1
             }
-          } else if (!injected && hasWritten && result?.textContent && !result.toolCalls?.length &&
-            fault === ModelFault.IncorrectDraft) {
-            injected = true
-            return { ...result, textContent: 'The file contains failed-inspection-99.' }
+          } else if (fault === ModelFault.IncorrectDraft && hasWritten && result?.textContent && !result.toolCalls?.length) {
+            if (options.isFinalizationAttempt) {
+              finalRevisions += 1
+            } else if (incorrectDrafts < 2) {
+              incorrectDrafts += 1
+              injected = true
+              return { ...result, textContent: `The file contains unsupported-value-${incorrectDrafts}.` }
+            }
           }
 
           return result
@@ -139,7 +148,9 @@ export function createModelFaultScenario(fault: ModelFault): RealAgentScenario {
             'Recovery must preserve the completed write rather than replay its side effect.')
           assert.ok(reviews > 0)
           if (fault === ModelFault.IncorrectDraft) {
-            assert.ok(rejections > 0, 'Real review must reject the unsupported draft.')
+            assert.equal(rejections, 2, 'Review must reject both unsupported drafts.')
+            assert.equal(finalRevisions, 1, 'A bounded final revision must deliver the verified contents.')
+            assert.equal(reviews, rejections, 'The final revision must settle the reply without another review.')
           }
           if (fault === ModelFault.ReasoningStall || fault === ModelFault.OutputStall || fault === ModelFault.ReasoningExhaustion) {
             assert.equal(stallRecoveries, 1)
