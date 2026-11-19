@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util'
+
 import { ToolCompletionReview, ToolConcurrency, SkillOrigin } from '@/types'
 import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
@@ -12,6 +14,8 @@ import {
   redactConnectionSetupCall
 } from '@/core/connections/connection-tool'
 import { LogHelper } from '@/helpers/log-helper'
+import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import {
   CompletionFailureKind,
   ProviderRetryReason,
@@ -45,10 +49,15 @@ import type {
   TrackedPlanStep
 } from './agent-types'
 import { createAgentPlanTool, isAgentPlanComplete, parseAgentPlan } from './agent-plan'
-import { findDuplicateToolInputMatch } from './agent-helpers'
+import {
+  appendAgentRuntimeContext,
+  findDuplicateToolInputMatch,
+  normalizeToolInputForComparison
+} from './agent-helpers'
 import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_MAX_ITERATIONS,
+  AGENT_COMPLETION_REVIEW_TIMEOUT_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './agent-constants'
@@ -56,7 +65,12 @@ import {
   buildComputerUseConvergenceHint,
   getComputerUseRetryBlocker
 } from './computer-use-convergence'
-import { createAgentTextPreview, retainRecentToolImages } from './agent-context-budget'
+import {
+  buildBoundedToolObservation,
+  createAgentTextPreview,
+  projectSettledAgentEvidence,
+  retainRecentToolImages
+} from './agent-context-budget'
 import {
   completeAgentImageBatch,
   prepareAgentImageBatch,
@@ -76,7 +90,10 @@ const AGENT_TOOL_NAME_SEPARATOR = '__'
 const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
 const AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS = 1_000
 const AGENT_COMPLETION_REVIEW_ATTEMPTS = 2
+const AGENT_REVIEW_REFERENCE_BUDGET = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 2)
+const AGENT_REVIEW_OBSERVATION_MAX_CHARS = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 4)
 const AGENT_PLAN_REMINDER_INTERVAL = 4
+const AGENT_REPEATED_REJECTION_LIMIT = 3
 const AGENT_DIRECT_TOOL_LOAD_MAX_CHARS = 8_000
 const AGENT_FUNCTION_INDEX_MAX_CHARS = 8_000
 const AGENT_RESUMABLE_STEP_LIMIT = 8
@@ -146,7 +163,9 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - For large previews with execution.id, query original retained JSON using system_utilities.tool_executions.read and options.jq before diagnostic logs. Use bounded artifact reads only when retained results are unavailable.
 - Running execution handles are unfinished work. Use system_utilities.tool_executions to wait, query or cancel; wait timeouts leave work running. Read their current state and latest preparation report before answering download/status questions. Resolve required executions before finalizing. Filter and aggregate retained data instead of repeating discovery or copying inventories into shell.
 - Treat tool errors as observations: correct the arguments, choose another available tool, or explain the blocker.
+- Use runtime review feedback to identify possible gaps in the active request. Verify it against the owner request, tool contracts and evidence. Reconcile unfinished plan steps and reuse verified work.
 - Continue until the requested deliverable is complete and verified. When complete, return the final user-facing answer with no tool call.
+- If an authoritative source withholds a requested detail and no available, authorized source can verify it, report the confirmed facts and the limit. If the evidence identifies a record the owner can consult, name it. Leave the withheld value unconfirmed.
 - An execution_budget is a fixed caller deadline, not a renewable model wait. Use its finishing reserve for pending writes, required checks and the answer; stop optional exploration in the finishing phase. Report unfinished work honestly if the deadline prevents completion.
 - Call request_clarification alone, after consuming available tool results, with one concrete question only for required information, authorization, or owner action that available tools cannot resolve. Do not use it for draft text or a routine technical failure that tools can address.
 </agent_loop>
@@ -204,19 +223,18 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </safety>
 
 <response_policy>
-- During a host completion review, follow the supplied review instructions and return only its JSON verdict; ordinary responses follow the rules below.
 - During extended work, accompany tool calls with brief owner-facing progress at meaningful milestones, changed approaches after obstacles, or otherwise prolonged waits. State verified findings and the next action. Do not narrate every click, expose private reasoning, claim unverified progress, or stop to announce future work. Progress is intermediate only alongside tool calls.
 - Keep the final answer concise and proportionate to the request; avoid recapping execution details unless asked.
-- Use Markdown naturally when it improves readability: short paragraphs, emphasis, lists, descriptive links, and fenced code with a language. Use headings and tables only when useful; do not over-format brief answers or emit raw HTML.
+- Follow the owner's requested answer format, including JSON when requested. Default to natural prose with Markdown as needed. Use short paragraphs, emphasis, lists, descriptive links and language-tagged code fences when useful. Keep formatting simple and avoid raw HTML.
 - Proactively use charts for numerical trends/comparisons, diagrams for relationships, and custom visuals when interaction or layout improves understanding. Keep simple numbers, prose and small static tables in Markdown. Load the needed UI mode without asking display permission; do not create dashboards or extra questions merely to use UI.
-- Required yes/no decisions, explicit choices and related missing fields use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
+- Use request_clarification.confirmation for yes/no decisions. For explicit choices or related missing fields, use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
 - When citing sources, use descriptive inline links rather than a separate sources list unless the owner requests one.
 - Refer to yourself in the first person.
 - Wrap every file path as [FILE_PATH]/path[/FILE_PATH].
 </response_policy>`
 
 export const AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT = `<execution_limit_checkpoint>
-The operational iteration budget is exhausted. Address the owner request and subsequent owner updates now using the evidence already present in the transcript.
+Operational execution has stopped. Address the owner request and subsequent owner updates now using the evidence already present in the transcript.
 
 - No operational tools are available in this checkpoint.
 - If the evidence is sufficient, return the complete user-facing answer with no tool call, following the ordinary response policy.
@@ -257,12 +275,14 @@ Return only JSON with a concise "reason", then "status" ("complete", "continue",
 - Plans may retain work from earlier requests. Exclude a step only when it belongs to a separate earlier request or the owner explicitly removed it from the active scope. Explain that distinction in reason and list its exact label in out_of_scope_steps. Never exclude unfinished requirements of the active request merely to allow completion. Excluded steps remain recorded with their actual status.
 - complete: the proposed answer is correct and complete as written, and all requested work is supported by evidence. Successful input or one finished item does not establish completion of a multi-item task.
 - If the proposed answer contradicts evidence or owner corrections, return continue so the agent can revise it, even if the tool work succeeded. Never return complete when your reason identifies a needed correction.
+- Check the draft against the owner's requested answer format. Default to a readable reply in natural prose. For a format mismatch, including an internal verdict presented as an ordinary reply, return continue and request a rewrite using existing evidence.
 - For collection requests, reconcile the recorded collection scope, coverage evidence and item outcomes with tool evidence. A few files or a completed label alone do not prove full coverage. Respect observed empty ranges and authoritative source dates; do not invent additional items based on a related activity list or the absence of a file.
 - For memory-based answers, verify that retrieved preferences and constraints are applied. Totals and handoffs need all requested components with duplicate events counted once; bounded search excerpts alone do not establish completeness. For complete summaries or exhaustive extraction from an archived document, verify full source coverage through sessions.readMessage or sessions.readSession; select the applicable document revision and do not ask for archived text again before attempting recovery. Continue only for a concrete missing component or required clipped evidence, using selected memory IDs or raw sessions as appropriate.
 - For research, check every requested question and source boundary against inspected evidence. Supported claims alone do not prove coverage. Name a concrete uninspected source that can close a gap; require no speculative breadth once scope is covered.
 - For publication, require evidence that exact outgoing content and relevant history were inspected and discovered credentials removed before acting. Warnings/refusals cannot undo unsafe actions. If remediation is blocked, accept a truthful redacted report naming the blocked publication and required owner action; never encourage unsafe publication or credential testing.
-- Use the provided tool definitions and loaded tool guidance to assess capabilities. Never infer a listing function from a retrieval function, invent optional arguments, or substitute identifiers of different resource types.
+- Use the available toolkit and function names to assess capabilities. If decisive evidence is clipped, identify exactly what the acting agent should check. Do not infer tool arguments or decide that an unlisted function is unavailable.
 - An authoritative empty result with no further pagination can complete a bounded visibility check. Distinguish inaccessible content from an empty workspace; do not demand speculative searches when the proposed answer already states that limitation.
+- When an authoritative source intentionally withholds a requested detail, accept an answer that distinguishes confirmed facts from the withheld value and names a concrete way to verify it if one is known. Ask for another lookup only if you can identify an available, authorized source likely to resolve the gap. Ask for a correction if the draft guesses the withheld value.
 - continue: work, decisive verification or an answer correction remains. State the next concrete action using existing evidence and exact relevant identifiers. Correct an answer directly when existing evidence is sufficient; do not require another tool call. Preserve already completed work; do not repeat it.
 - blocked: remaining work cannot proceed because of a concrete obstacle that available tools cannot resolve. Explain that obstacle. Routine tool recovery, a failed approach with alternatives, or missing verification are not themselves blockers.
 Respect owner cancellation, limits and authorization boundaries. Never encourage continuing beyond them. Do not invent work or demand redundant checks when existing evidence is sufficient.
@@ -387,6 +407,7 @@ function appendAgentTranscriptMessage(
 }
 
 interface AgentModelCallOptions {
+  signal?: AbortSignal
   isRecoveryAttempt: boolean
   isOutputRecoveryAttempt?: boolean
   isFinalizationAttempt?: boolean
@@ -454,6 +475,7 @@ export interface AgentLoopParams {
 export interface AgentLoopResult {
   answer: string
   intent: FinalPhaseIntent
+  routineLookup?: boolean
   transcript: AgentToolTranscriptMessage[]
   executionHistory: ExecutionRecord[]
   trackedSteps: TrackedPlanStep[]
@@ -551,18 +573,23 @@ export function buildAgentToolCatalog(
     if (mode) {
       enableAuroraTools(catalog, mode)
     }
-    const order = new Map(previous.toolOrder.map((name, index) => [name, index]))
-
-    // Rebuild callable contracts from the current registry while retaining their
-    // conversation order. New capabilities append; removed ones stay unavailable.
-    tools.sort((left, right) =>
-      (order.get(left.function.name) ?? previous.toolOrder.length) -
-      (order.get(right.function.name) ?? previous.toolOrder.length)
-    )
+    restoreAgentToolOrder(tools, previous.toolOrder)
     catalog.planTracking = previous.planTracking
   }
 
   return catalog
+}
+
+/**
+ * Keeps the surviving contracts in their persisted order and appends new tools.
+ */
+export function restoreAgentToolOrder(tools: OpenAITool[], previous: string[]): void {
+  const order = new Map(previous.map((name, index) => [name, index]))
+
+  tools.sort((left, right) =>
+    (order.get(left.function.name) ?? previous.length) -
+    (order.get(right.function.name) ?? previous.length)
+  )
 }
 
 function tokenizeAgentToolkitRoutingText(value: string): string[] {
@@ -988,6 +1015,30 @@ export async function runAgentLoop(
   }
 
   let hasEnteredFinishing = false
+  const rejectedCalls = new Map<string, number>()
+  let hasWarnedAboutRejections = false
+  let reviewRevisionPending = false
+
+  // A verdict can request one correction before the agent must advance the work.
+  const requestReviewRevision = (
+    reason: string,
+    intent: 'answer' | 'clarification'
+  ): AgentLoopResult | null => {
+    appendAgentRuntimeContext(
+      transcript,
+      intent === 'answer'
+        ? { completion_review_feedback: reason }
+        : { clarification_review_feedback: reason }
+    )
+    if (reviewRevisionPending) {
+      return createResumableAgentResult(
+        'review', transcript, executionHistory, trackedSteps, intent === 'answer'
+      )
+    }
+
+    reviewRevisionPending = true
+    return null
+  }
 
   agentIterations: for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
@@ -997,6 +1048,15 @@ export async function runAgentLoop(
     if (await appendPendingOwnerMessages(params, transcript)) {
       hasOwnerUpdates = true
       pendingOwnerReassessment = true
+    }
+    if (pendingOwnerReassessment) {
+      rejectedCalls.clear()
+      hasWarnedAboutRejections = false
+      reviewRevisionPending = false
+    }
+    const evidenceView = projectSettledAgentEvidence(transcript)
+    if (evidenceView !== transcript) {
+      transcript.splice(0, transcript.length, ...evidenceView)
     }
     // Continue an unfinished authorized run once, with bounded resume context.
     // This is a bounded finishing pass, not a new task or a renewed permission.
@@ -1024,8 +1084,8 @@ export async function runAgentLoop(
     let isRecoveryAttempt = false
     let isOutputRecoveryAttempt = false
     let isStallRecoveryAttempt = false
-    // Once a provider needs the smaller context target, keep that target for
-    // the rest of the run instead of allowing the prompt to grow back.
+    // Keep the smaller target after a context rejection. A stream stall only
+    // needs the smaller request for the recovery attempt.
     let isContextRecoveryAttempt = hasUsedContextRecovery
     const remainingIterations = iterationLimit - iteration
     // A stale plan is a cue to reconcile evidence, never proof that work finished.
@@ -1091,11 +1151,11 @@ export async function runAgentLoop(
             !error.diagnostics.providerCompleted &&
             (error.diagnostics.retryReason === ProviderRetryReason.Output ||
               (error.diagnostics.reasoningOnly === true &&
-                error.diagnostics.retryReason === ProviderRetryReason.Exhausted))) {
+                (error.diagnostics.retryReason === ProviderRetryReason.ReasoningTimeout ||
+                  error.diagnostics.retryReason === ProviderRetryReason.Exhausted)))) {
             // Interrupted drafts and unexecuted tool arguments are provisional.
             // Rebuild once from retained evidence without replaying completed actions.
             hasUsedStallRecovery = true
-            hasUsedContextRecovery = true
             isRecoveryAttempt = true
             isStallRecoveryAttempt = true
             isContextRecoveryAttempt = true
@@ -1143,7 +1203,7 @@ export async function runAgentLoop(
         )
       }
       if (!modelResult) {
-        if (hasUsedContextRecovery) {
+        if (hasUsedContextRecovery || hasUsedStallRecovery) {
           return createResumableAgentResult(
             'synthesis',
             transcript,
@@ -1174,6 +1234,20 @@ export async function runAgentLoop(
       hasUsedOutputRecovery = true
       isRecoveryAttempt = true
       isOutputRecoveryAttempt = Boolean(modelResult.isTruncated)
+      if (modelResult.isTruncated && !hasUsableOutput &&
+          (modelResult.reasoning || modelResult.reasoningItems?.length)) {
+        // A reasoning-only length stop needs a fresh evidence view, not the same
+        // deliberation again. Keep the owner's reasoning setting and output capacity.
+        hasUsedStallRecovery = true
+        isStallRecoveryAttempt = true
+        isContextRecoveryAttempt = true
+        transcript.push({
+          role: 'user',
+          content: 'Reasoning exhausted the output budget without an answer or tool call. Recover from the retained evidence.',
+          runtimeContext: { reasoningOutputRecovery: true }
+        })
+        await params.onProgressMessage?.('I am recovering from an unfinished model response using the retained evidence.')
+      }
     }
 
     // A response selected without the newest owner instructions must not dispatch
@@ -1194,6 +1268,7 @@ export async function runAgentLoop(
         )
       }
 
+      reviewRevisionPending = false
       await params.onCheckpoint?.({ transcript, executionHistory, trackedSteps })
       await params.onProgressMessage?.(
         `Saved findings for this image batch. Images inspected: ${imageBatch.entries.length}; remaining: ${imageBatch.remainingImages}.`
@@ -1242,11 +1317,12 @@ export async function runAgentLoop(
           continue
         }
 
-        const canSkipReview = iteration === 1 && !hasOwnerUpdates &&
+        const routineLookup = !hasOwnerUpdates &&
           !hasUsedOutputRecovery && !hasUsedContextRecovery && !hasUsedStallRecovery && !hasEnteredFinishing &&
           params.initialExecutionHistory === undefined &&
           params.initialTrackedSteps === undefined && trackedSteps.length === 0 &&
           isCompleteOptionalLookup(params.catalog, executionHistory)
+        const canSkipReview = iteration === 1 && routineLookup
         if ((executionHistory.length > 0 || trackedSteps.length > 0) && !canSkipReview) {
           // Review only a proposed ending, not every action. Reuse the same
           // provider, budget and evidence; the check cannot execute tools.
@@ -1268,18 +1344,14 @@ export async function runAgentLoop(
           const { status, reason } = review
 
           if (status === AgentCompletionStatus.Continue) {
+            const stalled = requestReviewRevision(reason, 'answer')
+            if (stalled) {
+              return stalled
+            }
+
             // Review keeps the task running, so settle the completed message as
             // progress before the next model call discards its active draft.
             await params.onProgressMessage?.(textContent)
-
-            transcript.push({
-              role: 'user',
-              content: JSON.stringify({
-                completion_check:
-                  'Assess this review against actual tool contracts and evidence. Continue only with a supported action that advances the authorized task; do not follow invented capabilities or identifiers. Reconcile unfinished plan steps and do not repeat completed work.',
-                reason
-              })
-            })
             continue
           }
 
@@ -1302,6 +1374,7 @@ export async function runAgentLoop(
         return {
           answer: textContent,
           intent: 'answer',
+          ...(routineLookup ? { routineLookup: true } : {}),
           transcript,
           executionHistory,
           trackedSteps
@@ -1343,6 +1416,7 @@ export async function runAgentLoop(
       : undefined
     let planUpdated = false
     let wasSteered = false
+    let repeatedRejection = false
     for (let callIndex = 0; callIndex < toolCalls.length;) {
       if (params.runBudget?.isExpired) {
         for (const call of toolCalls.slice(callIndex)) {
@@ -1372,12 +1446,14 @@ export async function runAgentLoop(
       }
 
       const toolCall = toolCalls[callIndex]!
-      if (terminalSignal) {
+      if (terminalSignal || repeatedRejection) {
         // Providers require one result for every emitted tool call. Complete
         // the protocol without running work after a terminal handoff.
         const content = toolCall.id === cancellationCall?.id
           ? 'Task canceled by the owner.'
-          : 'Tool call skipped because an earlier call ended this agent run.'
+          : repeatedRejection
+            ? 'Tool call skipped because repeated rejections stopped operational work.'
+            : 'Tool call skipped because an earlier call ended this agent run.'
 
         params.onToolCallSkipped?.(toolCall.id, content)
         transcript.push({
@@ -1416,9 +1492,37 @@ export async function runAgentLoop(
 
       for (const { call: toolCall, result: toolResult, records } of batch) {
         executionHistory.push(...records)
-        if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
-            toolResult.trackedSteps !== trackedSteps) {
+        if (records.some((record) => record.status === 'success') || toolResult.madeProgress) {
+          rejectedCalls.clear()
+          hasWarnedAboutRejections = false
+        } else if (toolResult.rejected || records.some((record) => record.status !== 'success')) {
+          const key = `${toolCall.function.name}:${normalizeToolInputForComparison(
+            extractToolCallInput(toolCall.function.arguments).toolInput
+          )}`
+          const count = (rejectedCalls.get(key) ?? 0) + 1
+          rejectedCalls.set(key, count)
+          if (count >= AGENT_REPEATED_REJECTION_LIMIT) {
+            if (hasWarnedAboutRejections) {
+              repeatedRejection = true
+            } else {
+              hasWarnedAboutRejections = true
+              toolResult.content += '\nRepeated unsuccessful operation. Correct the call or use existing evidence; another repetition stops execution.'
+            }
+          }
+        }
+        const isPlanUpdate = toolCall.function.name === AGENT_PLAN_TOOL_NAME
+        if (isPlanUpdate && toolResult.trackedSteps !== trackedSteps) {
           planUpdated = true
+        }
+        if (reviewRevisionPending) {
+          const hasNewEvidence = records.length > 0 || toolResult.madeProgress ||
+            (!isPlanUpdate && !toolResult.rejected && !toolResult.signal &&
+              !transcript.some((message) => message.role === 'tool' &&
+                message.toolName === toolCall.function.name && message.content === toolResult.content))
+          const planChanged = isPlanUpdate && !isDeepStrictEqual(toolResult.trackedSteps, trackedSteps)
+          if (hasNewEvidence || planChanged) {
+            reviewRevisionPending = false
+          }
         }
         trackedSteps = toolResult.trackedSteps
         transcript.push({
@@ -1447,6 +1551,16 @@ export async function runAgentLoop(
       return createResumableAgentResult('deadline', transcript, executionHistory, trackedSteps)
     }
 
+    if (repeatedRejection && !terminalSignal) {
+      // Settle all emitted calls before synthesis so protocol and completed work survive.
+      transcript.push({
+        role: 'user',
+        content: 'Repeated unsuccessful calls stopped execution. Answer from retained evidence and report unfinished work.',
+        runtimeContext: { repeatedCallRecovery: true }
+      })
+      return finalizeAgentLoopAtLimit(params, transcript, executionHistory, trackedSteps)
+    }
+
     if (terminalSignal) {
       if (wasSteered || await appendPendingOwnerMessages(params, transcript)) {
         hasOwnerUpdates = true
@@ -1471,13 +1585,11 @@ export async function runAgentLoop(
           )
         }
         if (review.status === AgentCompletionStatus.Continue) {
-          transcript.push({
-            role: 'user',
-            content: JSON.stringify({
-              clarification_check: 'The proposed pause was rejected. Continue the authorized task using existing evidence and available tools; ask only for required owner input that remains unavailable.',
-              reason: review.reason
-            })
-          })
+          const stalled = requestReviewRevision(review.reason, 'clarification')
+          if (stalled) {
+            return stalled
+          }
+
           continue
         }
         if (review.status === AgentCompletionStatus.Blocked) {
@@ -1600,6 +1712,95 @@ function isCompleteOptionalLookup(
 }
 
 /**
+ * Fits recent observations and older source references into a structured review payload.
+ */
+function buildCompletionReviewEvidence(
+  source: AgentToolTranscriptMessage[],
+  executionHistory: ExecutionRecord[]
+): { entries: Record<string, unknown>[], omittedCount: number } {
+  const requests = new Map(source.flatMap((message) => message.role === 'assistant'
+    ? (message.toolCalls ?? []).map((call) => [call.id, call.function.arguments] as const)
+    : []))
+  const observations = source.flatMap((message) =>
+    message.role === 'tool' && typeof message.content === 'string'
+    ? [{
+        function: message.toolName,
+        id: message.toolCallId,
+        requestedInput: requests.get(message.toolCallId),
+        observation: message.content
+      }]
+    : [])
+  const recorded = new Set(observations.map(({ id }) => id))
+  const evidence = [
+    ...executionHistory.filter((execution) =>
+      typeof execution.observation === 'string' &&
+      (!execution.toolCallId || !recorded.has(execution.toolCallId))
+    ).map((execution) => ({
+      function: execution.function,
+      id: execution.toolCallId,
+      requestedInput: execution.requestedToolInput,
+      observation: execution.observation
+    })),
+    ...observations
+  ].reverse().map(({ function: tool, id, requestedInput, observation }) => {
+    const result = parseToolCallArguments(observation)
+
+    return {
+      reference: {
+        tool,
+        id,
+        status: result?.['status'],
+        artifact: result?.['output_log_path'],
+        execution_id: (result?.['execution'] as { id?: unknown } | undefined)?.id
+      },
+      result,
+      observation,
+      requestedInput
+    }
+  })
+  let remainingChars = TOOL_RESULT_INLINE_MAX_CHARS - '[]'.length
+  const selected: typeof evidence = []
+  for (const item of evidence) {
+    const referenceChars = JSON.stringify(item.reference).length + Number(selected.length > 0)
+    if (remainingChars - referenceChars < TOOL_RESULT_INLINE_MAX_CHARS - AGENT_REVIEW_REFERENCE_BUDGET) {
+      break
+    }
+
+    selected.push(item)
+    remainingChars -= referenceChars
+  }
+
+  // Count serialized fields so escaping cannot force a second cut through the list.
+  const entries = selected.map(({ reference, result, observation, requestedInput }) => {
+    const preview = observation.length > AGENT_REVIEW_OBSERVATION_MAX_CHARS && result?.['data'] !== undefined
+      ? buildBoundedToolObservation(result, AGENT_REVIEW_OBSERVATION_MAX_CHARS)
+      : createAgentTextPreview(observation, AGENT_REVIEW_OBSERVATION_MAX_CHARS)
+    const input = requestedInput
+      ? createAgentTextPreview(requestedInput, Math.floor(AGENT_REVIEW_OBSERVATION_MAX_CHARS / 3))
+      : undefined
+    // Adding a field to the existing reference replaces the opening brace with a comma.
+    const observationChars = JSON.stringify({ observation: preview }).length - 1
+    const inputChars = JSON.stringify({ requested_input: input }).length - 1
+    const keepObservation = observationChars <= remainingChars
+    if (keepObservation) {
+      remainingChars -= observationChars
+    }
+    const keepInput = input !== undefined && inputChars <= remainingChars
+    if (keepInput) {
+      remainingChars -= inputChars
+    }
+
+    return {
+      ...reference,
+      ...(keepObservation ? { observation: preview } : {}),
+      ...(keepInput ? { requested_input: input } : {})
+    }
+  })
+
+  return { entries: entries.reverse(), omittedCount: evidence.length - entries.length }
+}
+
+/**
  * Reviews proposed answers and owner-input pauses, including at the budget boundary.
  */
 async function reviewAgentCompletion(
@@ -1610,9 +1811,19 @@ async function reviewAgentCompletion(
   state: Pick<AgentLoopResult, 'executionHistory' | 'trackedSteps'>,
   isContextRecoveryAttempt = false,
   intent: 'answer' | 'clarification' = 'answer'
-): Promise<{ status: AgentCompletionStatus, reason: string } | null> {
+): Promise<{ status: AgentCompletionStatus | null, reason: string } | null> {
+  const source = restoreCompactionSources(transcript)
+  const { entries, omittedCount } = buildCompletionReviewEvidence(source, state.executionHistory)
   const messages: AgentToolTranscriptMessage[] = [
-    ...transcript,
+    ...source.flatMap((message): AgentToolTranscriptMessage[] => {
+      if (message.role === 'user' && !message.runtimeContext) {
+        return [message]
+      }
+      if (message.role === 'assistant' && message.content && !message.toolCalls?.length) {
+        return [{ role: 'assistant', content: message.content }]
+      }
+      return []
+    }),
     { role: 'assistant', content: answer },
     {
       role: 'user',
@@ -1623,106 +1834,135 @@ async function reviewAgentCompletion(
           ? AGENT_CLARIFICATION_REVIEW_SYSTEM_PROMPT
           : AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
         remaining_operational_iterations: remainingIterations,
-        reported_plan: state.trackedSteps
+        reported_plan: state.trackedSteps,
+        available_toolkits: [...params.catalog.availableToolkitsById.keys()],
+        loaded_functions: [...params.catalog.functionsByToolName.values()].map((tool) => tool.qualifiedName),
+        tool_evidence: entries,
+        ...(omittedCount > 0 ? { omitted_tool_evidence_count: omittedCount } : {})
       })
     }
   ]
 
-  for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
-    try {
-      params.signal?.throwIfAborted()
-      params.runBudget?.throwIfExpired()
-      const response = await params.callModel(messages, params.catalog.tools, {
-        isRecoveryAttempt: false, isCompletionReview: true,
-        completionReviewIntent: intent,
-        isCompletionReviewRetry: attempt > 0,
-        ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
-      }, state)
-      params.signal?.throwIfAborted()
-      params.runBudget?.throwIfExpired()
-      if (response?.isTruncated && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-        // A fitted output budget may be too small for the complete verdict.
-        isContextRecoveryAttempt = true
-        continue
-      }
-      const review = response && !response.isTruncated && !response.toolCalls?.length
-        ? parseToolCallArguments(response.textContent || '')
-        : null
-      const status = review?.['status'] as AgentCompletionStatus
-      const reason = review?.['reason']
-      const outOfScopeSteps = review?.['out_of_scope_steps'] ?? []
-      if (
-        Object.values(AgentCompletionStatus).includes(status) &&
-        typeof reason === 'string' && reason.trim() &&
-        Array.isArray(outOfScopeSteps) && outOfScopeSteps.every((label) =>
-          typeof label === 'string' &&
-          state.trackedSteps.some((step) => step.label === label)
-        )
-      ) {
-        // Keep unrelated work pending without making its status a veto over
-        // this request. Active scope still requires recorded coverage/outcomes.
-        const unfinishedSteps = state.trackedSteps.filter((step) =>
-          !outOfScopeSteps.includes(step.label) && !isAgentPlanComplete([step])
-        )
-        if (intent === 'answer' && status === AgentCompletionStatus.Complete &&
-            unfinishedSteps.length > 0) {
+  const controller = new AbortController()
+  const timeoutError = new Error('Agent completion review timed out')
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  // One fixed deadline covers preparation, streaming and every review retry.
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutHandle = setTimeout(() => {
+      controller.abort(timeoutError)
+      reject(timeoutError)
+    }, AGENT_COMPLETION_REVIEW_TIMEOUT_MS)
+  })
+
+  try {
+    for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
+      try {
+        params.signal?.throwIfAborted()
+        params.runBudget?.throwIfExpired()
+        const response = await Promise.race([
+          params.callModel(messages, [], {
+            signal: controller.signal,
+            isRecoveryAttempt: false, isCompletionReview: true,
+            completionReviewIntent: intent,
+            isCompletionReviewRetry: attempt > 0,
+            ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
+          }, state),
+          timeout
+        ])
+        params.signal?.throwIfAborted()
+        params.runBudget?.throwIfExpired()
+        if (response?.isTruncated && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+          // A fitted output budget may be too small for the complete verdict.
+          isContextRecoveryAttempt = true
+          continue
+        }
+        const review = response && !response.isTruncated && !response.toolCalls?.length
+          ? parseToolCallArguments(response.textContent || '')
+          : null
+        const status = review?.['status'] as AgentCompletionStatus
+        const reason = review?.['reason']
+        const outOfScopeSteps = review?.['out_of_scope_steps'] ?? []
+        if (
+          Object.values(AgentCompletionStatus).includes(status) &&
+          typeof reason === 'string' && reason.trim() &&
+          Array.isArray(outOfScopeSteps) && outOfScopeSteps.every((label) =>
+            typeof label === 'string' &&
+            state.trackedSteps.some((step) => step.label === label)
+          )
+        ) {
+          // Keep unrelated work pending without making its status a veto over
+          // this request. Active scope still requires recorded coverage/outcomes.
+          const unfinishedSteps = state.trackedSteps.filter((step) =>
+            !outOfScopeSteps.includes(step.label) && !isAgentPlanComplete([step])
+          )
+          if (intent === 'answer' && status === AgentCompletionStatus.Complete &&
+              unfinishedSteps.length > 0) {
+            return {
+              status: AgentCompletionStatus.Continue,
+              reason: `${reason}\nThe active plan still has incomplete scope or unverified outcomes: ${unfinishedSteps.map((step) => step.label).join('; ')}. Reconcile these steps against existing evidence; perform only missing work.`
+            }
+          }
+
+          LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
+          return { status, reason }
+        }
+        LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
+      } catch (error) {
+        params.signal?.throwIfAborted()
+        if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
           return {
-            status: AgentCompletionStatus.Continue,
-            reason: `${reason}\nThe active plan still has incomplete scope or unverified outcomes: ${unfinishedSteps.map((step) => step.label).join('; ')}. Reconcile these steps against existing evidence; perform only missing work.`
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer('deadline', state.trackedSteps, true)
           }
         }
+        if (params.getOwnerMessageSignal?.().aborted) {
+          return null
+        }
 
-        LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
-        return { status, reason }
-      }
-      LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
-    } catch (error) {
-      params.signal?.throwIfAborted()
-      if (params.runBudget?.isExpired || error instanceof AgentRunDeadlineError) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer('deadline', state.trackedSteps, true)
+        if (controller.signal.aborted) {
+          // No verdict was obtained; release the draft without claiming review success.
+          LogHelper.warning('Agent completion review timed out; sending the drafted answer')
+          return { status: null, reason: '' }
         }
-      }
-      if (params.getOwnerMessageSignal?.().aborted) {
-        return null
-      }
 
-      if (error instanceof AgentModelResponseTimeoutError) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer(
-            CompletionFailureKind.Timeout, state.trackedSteps, true
-          )
+        if (error instanceof AgentModelResponseTimeoutError) {
+          return {
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer(
+              CompletionFailureKind.Timeout, state.trackedSteps, true
+            )
+          }
         }
-      }
-      if (error instanceof AgentModelProviderError && error.canRetryWithCompaction &&
-          !isContextRecoveryAttempt && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-        // Review adds the draft and instructions after operational admission.
-        // Retry the same evidence through compaction instead of enlarging it.
-        isContextRecoveryAttempt = true
-        continue
-      }
-      if (error instanceof AgentModelProviderError && (
-        error.failureKind === CompletionFailureKind.Unavailable ||
-        attempt === AGENT_COMPLETION_REVIEW_ATTEMPTS - 1
-      )) {
-        return {
-          status: AgentCompletionStatus.Blocked,
-          reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps, true)
+        if (error instanceof AgentModelProviderError && error.canRetryWithCompaction &&
+            !isContextRecoveryAttempt && attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+          // Review adds the draft and instructions after operational admission.
+          // Retry the same evidence through compaction instead of enlarging it.
+          isContextRecoveryAttempt = true
+          continue
         }
+        if (error instanceof AgentModelProviderError && (
+          error.failureKind === CompletionFailureKind.Unavailable ||
+          attempt === AGENT_COMPLETION_REVIEW_ATTEMPTS - 1
+        )) {
+          return {
+            status: AgentCompletionStatus.Blocked,
+            reason: buildResumableAgentAnswer(error.failureKind, state.trackedSteps, true)
+          }
+        }
+        LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
       }
-      LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
+      if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+        messages.push({
+          role: 'user',
+          content: 'The previous completion review response was unusable. Review the same evidence again and return only a JSON object with status and reason as requested.'
+        })
+      }
     }
-    if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
-      messages.push({
-        role: 'user',
-        content: 'The previous completion review response was unusable. Review the same evidence again and return only a JSON object with status and reason as requested.'
-      })
-    }
+    // An unavailable verifier must not turn unverified work into success.
+    return null
+  } finally {
+    clearTimeout(timeoutHandle)
   }
-  // An unavailable verifier must not turn unverified work into success.
-  return null
 }
 
 async function finalizeAgentLoopAtLimit(
@@ -1768,7 +2008,7 @@ async function finalizeAgentLoopAtLimit(
         )
       }
 
-      if (!review || review.status !== AgentCompletionStatus.Complete) {
+      if (!review || (review.status !== null && review.status !== AgentCompletionStatus.Complete)) {
         if (isClarification) {
           // A rejected pause cannot restart execution beyond the owner's cap.
           return createResumableAgentResult(
@@ -2235,6 +2475,8 @@ async function executeAgentToolCall(
   files?: NonNullable<ToolExecutionResult['modelFiles']>
   trackedSteps: TrackedPlanStep[]
   signal?: FinalResponseSignal
+  rejected?: boolean
+  madeProgress?: boolean
 }> {
   const visual = await executeAuroraToolCall(toolCall, params.catalog, params.onPresentUI)
   if (visual) {
@@ -2243,7 +2485,7 @@ async function executeAgentToolCall(
   if (toolCall.function.name === AGENT_CANCELLATION_TOOL_NAME) {
     const signal = getCancellationSignal(toolCall)
     if (!signal) {
-      return { content: 'Cancellation rejected: acknowledgment is required.', trackedSteps }
+      return { content: 'Cancellation rejected: acknowledgment is required.', trackedSteps, rejected: true }
     }
 
     return { content: 'Task canceled by the owner.', trackedSteps, signal }
@@ -2252,7 +2494,7 @@ async function executeAgentToolCall(
   if (toolCall.function.name === CONNECTION_SETUP_TOOL_NAME) {
     const input = parseToolCallArguments(toolCall.function.arguments) || {}
     if (!getPendingConnectionProviders(executionHistory).includes(String(input['provider']))) {
-      return { content: 'Connection setup is not needed for this provider in the current task.', trackedSteps }
+      return { content: 'Connection setup is not needed for this provider in the current task.', trackedSteps, rejected: true }
     }
 
     return {
@@ -2281,6 +2523,7 @@ async function executeAgentToolCall(
     if (!toolkitId) {
       return {
         content: 'Toolkit load rejected: toolkit_id is required.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2289,6 +2532,7 @@ async function executeAgentToolCall(
     if (!toolkit) {
       return {
         content: `Toolkit load rejected: "${toolkitId}" is not available.`,
+        rejected: true,
         trackedSteps
       }
     }
@@ -2297,8 +2541,19 @@ async function executeAgentToolCall(
     const toolId = args?.['tool_id']
     const names = args?.['functions']
     if (toolId !== undefined && (typeof toolId !== 'string' || !toolkit.tools.some((tool) => tool.id === toolId))) {
+      const selection = toolkit.tools.flatMap((tool) =>
+        Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkitId, tool.id) || {}).map((name) => ({
+          toolId: tool.id, functionName: `${tool.id}.${name}`
+        }))
+      ).find((entry) => entry.functionName === toolId)
       return {
-        content: `Toolkit load rejected: tool_id must identify an available tool in "${toolkitId}".`,
+        content: [
+          `Toolkit load rejected: tool_id identifies a tool, not a function. Available tool IDs in "${toolkitId}": ${toolkit.tools.map((tool) => tool.id).join(', ')}.`,
+          ...(selection ? [`Load the executable function with load_toolkit(${JSON.stringify({
+            toolkit_id: toolkitId, tool_id: selection.toolId, functions: [selection.functionName]
+          })}).`] : [])
+        ].join('\n'),
+        rejected: true,
         trackedSteps
       }
     }
@@ -2315,7 +2570,7 @@ async function executeAgentToolCall(
           }
         }
       }
-      return { content: 'I could not load this MCP server’s functions. Check its connection in Settings → Tools and connections, then retry.', trackedSteps }
+      return { content: 'I could not load this MCP server’s functions. Check its connection in Settings → Tools and connections, then retry.', trackedSteps, rejected: true }
     }
     const availableFunctions = new Set(selectedTools.flatMap((tool) =>
       Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkitId, tool.id) || {})
@@ -2324,6 +2579,7 @@ async function executeAgentToolCall(
     if (availableFunctions.size === 0) {
       return {
         content: `Toolkit "${toolkit.name}" has no callable functions in the selected scope.`,
+        rejected: true,
         trackedSteps
       }
     }
@@ -2335,11 +2591,13 @@ async function executeAgentToolCall(
           'Toolkit load rejected: functions must be a non-empty array of exact tool_id.function_name entries from this toolkit.',
           ...selectedTools.map((tool) => describeToolkitFunctions(toolkitId, tool.id, params.catalog)).filter(Boolean)
         ].join('\n'),
+        rejected: true,
         trackedSteps
       }
     }
 
     const wasToolkitLoaded = params.catalog.loadedToolkitIds.has(toolkitId)
+    const previousLoadedTools = params.catalog.loadedToolNames.size
     const loadedFunctionCount = loadToolkitFunctions(
       params.catalog,
       toolkitId,
@@ -2355,7 +2613,9 @@ async function executeAgentToolCall(
       : undefined
     return {
       content: [
-        `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} new function schema(s) are available on the next model turn.`,
+        loadedFunctionCount > 0
+          ? `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} new function schema(s) are available on the next model turn.`
+          : `Toolkit discovered: ${toolkit.name}. No new schemas loaded; select needed functions explicitly.`,
         // Explicit selections already have full schemas on the next turn.
         // Keep broad summaries available for discovery without repeating them
         // after every selected load into the growing conversation prefix.
@@ -2372,6 +2632,8 @@ async function executeAgentToolCall(
             ]),
         ...(toolkitContext ? ['', toolkitContext] : [])
       ].join('\n'),
+      madeProgress: loadedFunctionCount > 0 || params.catalog.loadedToolNames.size > previousLoadedTools,
+      rejected: loadedFunctionCount === 0 && params.catalog.loadedToolNames.size === previousLoadedTools,
       trackedSteps
     }
   }
@@ -2381,6 +2643,7 @@ async function executeAgentToolCall(
     if (!signal) {
       return {
         content: 'Clarification request rejected: question is required.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2389,7 +2652,7 @@ async function executeAgentToolCall(
       parseToolCallArguments(toolCall.function.arguments), params.catalog, Boolean(params.onPresentUI)
     )
     if (visual.error) {
-      return { content: visual.error, trackedSteps }
+      return { content: visual.error, trackedSteps, rejected: true }
     }
 
     return {
@@ -2404,6 +2667,7 @@ async function executeAgentToolCall(
     if (!nextSteps) {
       return {
         content: 'Plan update rejected: use unique stable step labels and valid statuses. Enumerate before processing; completed collections need coverage evidence and verified details for every item. Updates merge steps by label and items by id; omit unchanged steps or collections.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2430,6 +2694,7 @@ async function executeAgentToolCall(
     if (!skillId) {
       return {
         content: 'Agent Skill load rejected: skill_id is required.',
+        rejected: true,
         trackedSteps
       }
     }
@@ -2474,6 +2739,7 @@ async function executeAgentToolCall(
   if (!callable) {
     return {
       content: `Tool call rejected: "${toolCall.function.name}" is not available.`,
+      rejected: true,
       trackedSteps
     }
   }
@@ -2486,6 +2752,7 @@ async function executeAgentToolCall(
   if (!validation.isValid) {
     return {
       content: `Tool input rejected for ${callable.qualifiedName}: ${validation.message || 'arguments do not match the schema'}`,
+      rejected: true,
       trackedSteps
     }
   }
@@ -2498,7 +2765,7 @@ async function executeAgentToolCall(
     validatedInput
   )
   if (retryBlocker) {
-    return { content: retryBlocker, trackedSteps }
+    return { content: retryBlocker, trackedSteps, rejected: true }
   }
   // State changes expire read observations. Side-effect deduplication keeps
   // the full history so intervening operations cannot authorize a repeat.
@@ -2532,6 +2799,7 @@ async function executeAgentToolCall(
   if (duplicate) {
     return {
       content: `Duplicate call blocked: ${callable.qualifiedName} already ran with the same or an overlapping input in step ${duplicate.stepNumber}. Reuse its result from the transcript or request only the unread range.`,
+      rejected: true,
       trackedSteps
     }
   }

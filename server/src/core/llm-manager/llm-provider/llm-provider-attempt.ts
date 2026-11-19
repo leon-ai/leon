@@ -133,12 +133,17 @@ export async function runCompletionAttempt(
       : completionParams.timeout
   )
   const logAttempt = (outcome: string, error?: unknown): void => {
+    const failed = outcome !== 'started' && outcome !== 'completed'
     if (outcome !== 'started') {
       recordInferenceUsageOutcome(outcome)
     }
 
     const timing: CompletionAttemptTiming = {
-      ...activity.snapshot(),
+      ...activity.snapshot(failed),
+      ...(failed ? {
+        estimatedInputTokens: completionParams.estimatedInputTokens,
+        portableCompactionThresholdTokens: completionParams.portableCompactionThresholdTokens
+      } : {}),
       attemptId,
       startedAt: completionStartedAt,
       provider: providerName,
@@ -214,11 +219,11 @@ export async function runCompletionAttempt(
       accounting
     })
 
-    if (outcome === 'started' || outcome === 'completed') {
-      LogHelper.debug(`LLM attempt ${details}`)
-    } else {
+    if (failed) {
       // Keep failed-attempt identifiers and timings in the profile error log.
       LogHelper.error(`LLM attempt ${details}`)
+    } else {
+      LogHelper.debug(`LLM attempt ${details}`)
     }
 
     recordTurnInference(timing)

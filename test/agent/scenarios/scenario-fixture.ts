@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { setTimeout } from 'node:timers/promises'
 
 import assert from 'node:assert/strict'
@@ -39,27 +40,32 @@ export async function runMaintainedTurn(
   context: ScenarioContext,
   query: string,
   workspace: string,
-  existingSessionId?: string
-): Promise<RealScenarioTurn> {
+  existingSessionId?: string,
+  expectedIntent: RealScenarioTurn['finalIntent'] = 'answer'
+): Promise<RealScenarioTurn & { turnId: string }> {
   const { POST_TURN_MAINTENANCE_QUEUE } = await import('@/core')
   const { runTurnLifecycle } = await import('@/core/turn-lifecycle')
+  const { runTurnPhase } = await import('@/core/llm-manager/turn-timing')
+  const { TurnPhase } = await import('@/core/llm-manager/turn-timing-contract')
   const { CONVERSATION_SESSION_MANAGER } = await import('@/core/session-manager')
   const sessionId = existingSessionId ?? CONVERSATION_SESSION_MANAGER.createSession().id
+  const turnId = randomUUID()
   let turn!: RealScenarioTurn
 
-  await runTurnLifecycle({ sessionId, query }, async () => {
-    turn = await context.runTurn(query, sessionId)
-    assert.equal(turn.finalIntent, 'answer', turn.output)
+  await runTurnLifecycle({ sessionId, turnId, query }, async () => {
+    turn = await runTurnPhase(TurnPhase.Execution, () => context.runTurn(query, sessionId))
+    assert.equal(turn.finalIntent, expectedIntent, turn.output)
 
     return { output: turn.output, data: {
       finalIntent: turn.finalIntent, executionHistory: turn.executionHistory,
       agentResponseTrace: turn.responseTrace,
+      routineLookup: turn.routineLookup,
       hasExplicitMemoryWrite: turn.hasExplicitMemoryWrite, workspace
     } } as unknown as LLMDutyResult
   })
   await POST_TURN_MAINTENANCE_QUEUE.whenIdle()
 
-  return turn
+  return { ...turn, turnId }
 }
 
 /**

@@ -1,0 +1,93 @@
+.setup
+  max-width: var(--content-width)
+  margin: 0 auto
+  padding: 48px var(--space-xl)
+  display: flex
+  flex-direction: column
+  gap: var(--space-xl)
+
+  h1
+    font-size: var(--font-size-3xl)
+    font-weight: var(--font-weight-semi-bold)
+    margin-bottom: var(--space-md)
+
+  h2
+    font-size: var(--font-size-lg)
+    margin-bottom: var(--space-sm)
+
+  p
+    color: var(--color-text-secondary)
+    line-height: var(--line-height-md)
+    margin-bottom: var(--space-lg)
+
+  section
+    border: 1px solid var(--color-border)
+    border-radius: var(--border-radius-lg)
+    padding: var(--space-xl)
+
+  [role='alert']
+    color: var(--color-text)
+    border-left: 2px solid var(--color-danger)
+    padding-left: var(--space-md)
+    margin-top: var(--space-lg)
+
+.setup-actions
+  display: flex
+  flex-wrap: wrap
+  gap: var(--space-sm)
+
+.setup-path
+  overflow-wrap: anywhere
+  margin-top: var(--space-md)
+
+.setup-steps
+  list-style: none
+  margin: 0
+  padding: 0
+
+.setup-step
+  margin-top: var(--space-xl)
+
+  details
+    margin-top: var(--space-sm)
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+  summary
+    cursor: pointer
+    padding: var(--space-sm) 0
+
+  pre
+    white-space: pre-wrap
+    overflow-wrap: anywhere
+    max-height: 240px
+    overflow: auto
+    background: var(--color-surface)
+    padding: var(--space-md)
+    border-radius: var(--border-radius-sm)
+    font-family: var(--font-family-code)
+
+.setup-step-heading
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  margin-bottom: var(--space-sm)
+
+.setup-status
+  margin-left: auto
+  font-size: var(--font-size-sm)
+  color: var(--color-text-secondary)
+
+.setup-startup
+  display: flex
+  gap: var(--space-sm)
+  align-items: center
+  margin: var(--space-lg) 0
+
+body
+  overflow: auto
+
+@media (prefers-reduced-motion: reduce)
+  .setup *
+    animation: none !important
+    transition: none !important

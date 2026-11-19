@@ -72,7 +72,7 @@ test('keeps catalog navigation virtualized and applies only accepted management 
   await page.getByRole('link', { name: 'General', exact: true }).click()
   await expect(page.getByText('This section is being prepared.', { exact: false })).toBeVisible()
   await page.getByRole('link', { name: 'Appearance', exact: true }).click()
-  await page.getByRole('button', { name: 'Light', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 })
 

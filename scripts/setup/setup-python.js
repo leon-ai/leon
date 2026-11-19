@@ -11,6 +11,7 @@ import { SystemHelper } from '@/helpers/system-helper'
 import { setupRuntimeBinary } from './setup-runtime-binary'
 
 const { cpuArchitecture: CPU_ARCH } = SystemHelper.getInformation()
+const PYTHON_RELEASE = PYTHON_VERSION.split('+')[1]
 
 function getBinaryPath() {
   return SystemHelper.isWindows()
@@ -60,7 +61,7 @@ export default async function setupPython() {
     installPath: PYTHON_INSTALL_PATH,
     manifestPath: PYTHON_MANIFEST_PATH,
     binaryPath: getBinaryPath(),
-    downloadURL: `https://github.com/astral-sh/python-build-standalone/releases/download/20240415/${assetFileName}`,
+    downloadURL: `https://github.com/astral-sh/python-build-standalone/releases/download/${PYTHON_RELEASE}/${assetFileName}`,
     archiveFileName: assetFileName
   })
 }

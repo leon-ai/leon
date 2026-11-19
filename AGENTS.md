@@ -16,8 +16,9 @@ These are community expectations for agents, not license conditions. The unchang
 ## Workflow
 
 - For new goals, inspect the implementation and confirm the plan with the owner before changing code.
-- Build clean, modular solutions with proper architecture and separation of concerns. Choose the smallest coherent solution, not bolted-on features or architecture-compromising patches; avoid speculative refactors and overengineering. If a clean implementation needs refactoring, stop, explain and confirm the approach before implementing.
-- Use `pnpm`, never npm. Before implementing, search existing functions, methods, utilities, types, components and installed facilities, especially `server/src/helpers/` and SDK utilities; inspect implementations and call sites. Reuse directly or extend compatibly, not duplicate, rewrite or wrap equivalent behavior. Add code only for demonstrated gaps, respect runtime boundaries and remove superseded paths.
+- For a bug fix, start in the code that already owns the behavior. Trace the failing path through its callers and check the framework's built-in behavior. In the plan, name the code you'll change and the smallest check that verifies the fix. Propose a new abstraction, state field, dependency, or refactor only to fill a concrete gap in the approved behavior. Include any necessary refactor in the plan you confirm with the owner.
+- Use `pnpm`, never npm. Check relevant call sites, installed libraries and existing helpers, including `server/src/helpers/` and SDK utilities when the task needs shared logic. Reuse existing behavior directly or extend it compatibly. Add code only for demonstrated gaps, respect runtime boundaries and remove paths superseded by the approved change.
+- Keep shared CI setup and runtime behavior compatible with GitHub Actions and GitLab CI. Use their common `CI=true` convention for provider-independent behavior; reserve provider variables for actual provider integrations. Verification jobs must explicitly supply the runtimes they reuse, and cold-install checks must still exercise managed provisioning.
 - Keep registry dependencies at least 36 hours old through root pnpm/uv policy, including standalone installs. Exceptions require explicit owner approval, exact pins and package-scoped overrides; never disable the global cooldown.
 - Before updating any versioned component (package, tool binary, runtime, SDK, etc.), review official changelogs, release notes and migration guidance from the current version through the target, including intermediate releases. Inspect Leon's usage for required code/configuration changes and benefits, prioritizing speed, latency, throughput, memory use and startup time. Determine whether gains are automatic or need integration; implement relevant changes within agreed scope and validate applicable gains. Report benefits, compatibility impact and verification, distinguishing measurements from upstream claims.
 - Preserve unrelated changes and profile isolation. Reuse profile/path/runtime utilities; avoid hardcoded owner paths, runtime versions or shared owner state. Normalize both paths before comparison; test Windows separators and relative segments.
@@ -25,11 +26,23 @@ These are community expectations for agents, not license conditions. The unchang
 - Suggest a commit message matching `scripts/commit-msg.js`; commit only when asked.
 - Do not create or update changelog files unless the owner explicitly requests it.
 
+## Releases, publishing and distribution
+
+- Read [RELEASING.md](docs/reference/RELEASING.md) before changing versioning, publishing workflows, release content or update delivery. Keep the documented policy and implementation aligned, clearly distinguishing planned delivery from supported behavior.
+- For every Leon-owned versioned component (project, packages, tools, skills, bridges/SDKs, schemas, etc.), use the latest version already pushed upstream or published as the baseline. Apply one appropriate version bump for the combined unpublished changes and reuse that pending version across follow-up edits, review fixes and local commits. If the required SemVer level changes, recalculate from the same baseline. Inspect upstream history or release metadata when needed; local `HEAD` may already contain an unpublished bump. Preserve versions already pushed or published; subsequent changes use a new bump. Third-party dependency upgrades follow upstream releases.
+- Keep release tooling minimal and independent of the legacy release scripts. Validate agreement between source versions, tags and release metadata, preserve preview/stable channel continuity, and publish only after the applicable checks and required assets are complete.
+
+## Third-party downloads
+
+- Whenever adding or changing a third-party download, package installer or runtime bootstrap, always investigate maintained Chinese mirror alternatives. Verify availability of the exact version, platform and artifact, and record unsupported or unverified cases instead of assuming a mirror exists.
+- Regional download selection must use the downloading host's current network country, with a bounded, cached check and an explicit owner override. Prefer a verified Chinese equivalent in China and retain bounded fallback to the original source. Language, timezone and the owner's saved home address alone do not establish network location.
+- Reuse the shared downloader for Leon-owned transfers and supported native configuration for external installers. Preserve explicit source/proxy settings, pinned versions, TLS, trusted integrity checks and the 36-hour dependency cooldown, including required index upload timestamps. Never rewrite arbitrary URLs or switch to a different build merely because a mirror is faster.
+
 ## Testing
 
 - Add tests only for distinct observable contracts and real coverage gaps, expressed in names, fixtures and assertions without change history or incidental versions. Cover broad behavior/invariants for the failure class, not incident-specific reproductions, copied configuration assertions, private-wiring checks or mock passthrough smoke tests. Trivial changes need no new tests.
 - Never add test files/cases for SDKs, tools or skills without explicit owner request, wherever they would live. Run affected existing tests and adjust compatibility as needed.
-- Review affected tests/fixtures with each change. Remove obsolete, redundant or superseded tests/fixtures; preserve every distinct, relevant contract regardless of bug-fix origin, not tests merely because they exist. Keep cleanup within affected suites.
+- Review affected tests and fixtures. Keep cleanup tied to the approved change and preserve distinct contracts that still apply.
 - New Core concepts/mechanisms require real, behavior-named scenarios with isolated fixtures under `test/agent/scenarios/<suite>-scenarios/<mechanism>-scenarios/`, separate from the provider matrix.
 - Run `pnpm lint`, fix all warnings/errors, and run relevant checks.
 - Include validation in the implementation plan: identify affected behavior and the smallest checks that cover it. Inspect package scripts and runner argument handling before selecting files or cases; confirm the selection does not unintentionally include a whole suite.
@@ -50,7 +63,7 @@ These are community expectations for agents, not license conditions. The unchang
 
 ## Tools
 
-- Declare semver `version` in `tool.json`, starting at `1.0.0`; advance when the tool changes. Bundled tools ship with Leon; when release notes are explicitly requested, they belong in root `CHANGELOG.md`. MCP versions identify Leon's integration definition, not the remote service.
+- Declare semver `version` in `tool.json`, starting at `1.0.0`; advance when the tool changes, following the repository-wide versioning rule. Bundled tools ship with Leon; when release notes are explicitly requested, they belong in root `CHANGELOG.md`. MCP versions identify Leon's integration definition, not the remote service.
 - Keep application/device behavior in tools, orchestration in skills, generic execution/transport in Core. Inspect `tools/video_streaming/ffmpeg/` and parent SDK classes before implementing tools.
 - Keep tools self-contained, allowing small application-specific helper duplication; no toolkit-level source folders. Preserve existing layouts: Node.js implementations in `src/nodejs/` extend SDK `Tool` and export through `index.ts`; Python implementations in `src/python/` extend SDK `BaseTool` and follow package exports. Supporting scripts belong in the implementation's `lib/`, not another language folder implying an SDK implementation.
 - Use `ToolkitConfig` and inherited settings, validation, reporting, command and binary facilities. Keep connection checks tool-specific; no parallel settings loader or installer.

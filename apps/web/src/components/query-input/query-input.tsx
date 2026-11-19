@@ -492,12 +492,6 @@ export function QueryInput({
             height: `${formHeight}px`
           }}
           onSubmit={handleSubmit}
-          onPaste={(event) => {
-            if (event.clipboardData.files.length) {
-              event.preventDefault()
-              attachments.add(event.clipboardData.files)
-            }
-          }}
         >
           <input ref={fileInputRef} type="file" multiple hidden
             aria-label="Choose attachments" disabled={disabled || busy}

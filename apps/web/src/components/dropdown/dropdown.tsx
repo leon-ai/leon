@@ -6,25 +6,27 @@ import { clsx } from 'clsx'
 
 import { useExitCleanup } from '@/hooks/use-exit-cleanup'
 import { getListNavigationIndex } from '@/utils/list-navigation'
+import { DropdownItem, type DropdownItemVariant } from './dropdown-item'
 
 import './dropdown.sass'
 
 type DropdownPlacement = 'top' | 'bottom'
-type DropdownItemVariant = 'default' | 'danger'
-
-interface DropdownItem {
+interface DropdownItemDefinition {
   iconName: string
   label: string
   variant?: DropdownItemVariant
+  selected?: boolean
   onSelect?: () => void
 }
 
 interface DropdownProps {
   children: ReactNode | ((open: boolean, contentId: string) => ReactNode)
-  items?: DropdownItem[]
+  items?: DropdownItemDefinition[]
   content?: (close: () => void, open: boolean) => ReactNode
   contentLabel?: string
   className?: string
+  matchTriggerWidth?: boolean
+  openOnFocus?: boolean
   width?: number
   height?: number
   preferredPlacement?: DropdownPlacement
@@ -97,6 +99,8 @@ export function Dropdown({
   contentLabel,
   className,
   width = DROPDOWN_WIDTH,
+  matchTriggerWidth = false,
+  openOnFocus = false,
   height,
   preferredPlacement,
   disabled = false,
@@ -133,7 +137,7 @@ export function Dropdown({
 
     const nextPosition = getDropdownPosition(
       triggerRef.current.getBoundingClientRect(),
-      width,
+      matchTriggerWidth ? triggerRef.current.getBoundingClientRect().width : width,
       height ?? getDropdownHeight(items.length),
       preferredPlacement
     )
@@ -144,7 +148,7 @@ export function Dropdown({
 
     setPlacement(nextPosition.placement)
     setDropdownStyle(nextPosition.style)
-  }, [height, items.length, preferredPlacement, width])
+  }, [height, items.length, preferredPlacement, width, matchTriggerWidth])
 
   const closeDropdown = useCallback((restoreFocus = false): void => {
     if (!open) {
@@ -156,7 +160,7 @@ export function Dropdown({
       // original input method. Keep keyboard restoration visible without a
       // lingering ring on a pointer-opened control.
       setIsPointerFocusRestored(openedWithPointerRef.current)
-      triggerRef.current?.querySelector<HTMLElement>('button, a')?.focus({ preventScroll: true })
+      triggerRef.current?.querySelector<HTMLElement>('button, a, input, textarea')?.focus({ preventScroll: true })
     }
 
     setOpen(false)
@@ -287,7 +291,13 @@ export function Dropdown({
     <>
       <span
         ref={triggerRef}
+        onFocusCapture={() => {
+          if (openOnFocus && !disabled) {
+            setOpen(true)
+          }
+        }}
         className={clsx('dropdown-trigger', {
+          'dropdown-trigger-field': openOnFocus,
           'dropdown-trigger-pointer-focus': isPointerFocusRestored
         })}
         onBlurCapture={() => setIsPointerFocusRestored(false)}
@@ -315,7 +325,11 @@ export function Dropdown({
           openedWithPointerRef.current = event.detail > 0
           pendingMenuFocusRef.current = event.detail === 0 && content === undefined ? 'first' : null
           setIsPointerFocusRestored(false)
-          toggleDropdown()
+          if (openOnFocus) {
+            setOpen(!disabled)
+          } else {
+            toggleDropdown()
+          }
         }}
       >
         {typeof children === 'function' ? children(open, contentId) : children}
@@ -339,23 +353,19 @@ export function Dropdown({
           style={dropdownStyle}
         >
           {content === undefined ? items.map((item) => (
-            <button
-              type="button"
-              className={clsx(
-                'dropdown-item',
-                `dropdown-item-${item.variant ?? 'default'}`
-              )}
+            <DropdownItem
               key={item.label}
-              role="menuitem"
+              variant={item.variant ?? 'default'}
+              {...(item.selected === undefined ? {} : { selected: item.selected })}
+              icon={<Icon name={`${item.iconName}-line`} className="dropdown-item-icon" />}
               tabIndex={-1}
               onClick={() => {
                 item.onSelect?.()
                 closeDropdown(true)
               }}
             >
-              <Icon name={`${item.iconName}-line`} className="dropdown-item-icon" />
-              <span className="dropdown-item-label">{item.label}</span>
-            </button>
+              {item.label}
+            </DropdownItem>
           )) : content(() => closeDropdown(true), open)}
         </div>,
         document.body

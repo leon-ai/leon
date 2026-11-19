@@ -1,0 +1,93 @@
+# A version tag requests publication. Owners cannot discover the release until
+# source checks, a cold install, and the real Linux OTA/inference gate pass.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: leon-release
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: Validate release source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - name: Check version and content are committed
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import assert from "node:assert/strict";
+            const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const content = JSON.parse(fs.readFileSync("release.json", "utf8"));
+            assert.equal(process.env.GITHUB_REF_NAME, `v${version}`);
+            assert.equal(content.version, version);
+          '
+
+  verification:
+    name: Lint, build and tests
+    needs: candidate
+    uses: ./.github/workflows/build.yml
+    with:
+      platforms: '["ubuntu-24.04"]'
+
+  quick-evals:
+    name: Quick Evals
+    needs: candidate
+    uses: ./.github/workflows/quick-evals.yml
+    secrets:
+      LEON_DEEPSEEK_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+
+  installation-and-ota:
+    name: Fresh installation and OTA
+    needs: candidate
+    uses: ./.github/workflows/fresh-install.yml
+    with:
+      verify-ota: true
+    secrets:
+      LEON_DEEPSEEK_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+
+  publish:
+    name: Publish verified release
+    needs: [verification, quick-evals, installation-and-ota]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Read verified release content
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name verified-release --dir "$RUNNER_TEMP/leon-release"
+
+      - name: Read verified platform runtimes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'core-runtime-*' --dir "$RUNNER_TEMP/leon-runtimes"
+
+      - name: Publish completed draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEON_RELEASE_OUTPUT: ${{ runner.temp }}/leon-release
+          LEON_RUNTIME_ASSETS: ${{ runner.temp }}/leon-runtimes
+        run: node scripts/release/publish-distribution.js

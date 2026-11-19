@@ -1,50 +1,29 @@
-import fs from 'node:fs'
-
 import {
-  CACHE_PATH,
-  LEON_HOME_PATH,
-  LEON_PROFILES_PATH,
-  LEON_PROFILE_PATH,
-  LEON_TOOLKITS_PATH,
-  MODELS_PATH,
   LLM_DIR_PATH,
   LLM_MANIFEST_PATH,
-  PROFILE_CONTEXT_PATH,
-  PROFILE_AGENT_SKILLS_PATH,
-  PROFILE_LOGS_PATH,
-  PROFILE_MEMORY_PATH,
-  PROFILE_NATIVE_SKILLS_PATH,
-  PROFILE_SKILLS_PATH,
-  PROFILE_TOOLS_PATH,
-  TMP_PATH,
-  IS_GITHUB_ACTIONS
+  IS_CI
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
-import { ensureConnectionEncryptionKey } from '@/core/connections/connection-store'
 import { NetworkHelper } from '@/helpers/network-helper'
 import { readLLMManifest, resolveConfiguredLLMTarget } from '@/core/llm-manager/llm-routing'
 
 import buildApp from '../app/build-app'
 import buildServer from '../build-server'
 import train from '../train/train'
-import generateProfileToken from '../generate/generate-profile-token'
 import generateJSONSchemas from '../generate/generate-json-schemas'
 
-import setupDotenv, { updateDotEnvVariable } from './setup-dotenv'
-import setupConfig from './setup-config'
+import { updateDotEnvVariable } from './setup-dotenv'
 import { CONFIG_MANAGER } from '@/config'
 import setupCore from './setup-core'
+import { setupProfile } from './setup-profile'
+import { shouldUseCIRuntimes } from './setup-ci.js'
 import setupNode from './setup-node'
 import setupPNPM from './setup-pnpm'
 import setupPython from './setup-python'
 import setupUV from './setup-uv'
 import setupJQ from './setup-jq'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
-import setupPythonBridgeEnv from './setup-python-bridge-env'
-import setupMigrations from './setup-migrations'
 import setupToolsDependencies from './setup-tools-dependencies'
-import setupToolsSettings from './setup-tools-settings'
-import setupSkills from './setup-skills/setup-skills'
 import setupTCPServerEnv from './setup-tcp-server-env'
 import setupCMake from './setup-cmake'
 import setupNinja from './setup-ninja'
@@ -64,35 +43,10 @@ import { tellSetupCompletionJoke } from './setup-jokes'
 import setupPreferences from './setup-preferences'
 import { createSetupStatus } from './setup-status'
 import { SetupUI } from './setup-ui'
-import createInstanceID from './create-instance-id'
 import setFfprobePermissions from './set-ffprobe-permissions'
 import setupGitHooks from './setup-git-hooks'
 
-/**
- * Create Leon home directories that setup and runtime expect to exist.
- */
-async function ensureLeonHomeStructure() {
-  const status = createSetupStatus('Preparing Leon home...').start()
-
-  await Promise.all([
-    fs.promises.mkdir(LEON_HOME_PATH, { recursive: true }),
-    fs.promises.mkdir(LEON_PROFILES_PATH, { recursive: true }),
-    fs.promises.mkdir(LEON_PROFILE_PATH, { recursive: true }),
-    fs.promises.mkdir(CACHE_PATH, { recursive: true }),
-    fs.promises.mkdir(LEON_TOOLKITS_PATH, { recursive: true }),
-    fs.promises.mkdir(MODELS_PATH, { recursive: true }),
-    fs.promises.mkdir(TMP_PATH, { recursive: true }),
-    fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true }),
-    fs.promises.mkdir(PROFILE_MEMORY_PATH, { recursive: true }),
-    fs.promises.mkdir(PROFILE_LOGS_PATH, { recursive: true }),
-    fs.promises.mkdir(PROFILE_SKILLS_PATH, { recursive: true }),
-    fs.promises.mkdir(PROFILE_NATIVE_SKILLS_PATH, { recursive: true }),
-    fs.promises.mkdir(PROFILE_AGENT_SKILLS_PATH, { recursive: true }),
-    fs.promises.mkdir(PROFILE_TOOLS_PATH, { recursive: true })
-  ])
-
-  status.succeed('Leon home: ready')
-}
+const USE_CI_RUNTIMES = shouldUseCIRuntimes()
 
 function isExplicitLocalLLMTarget(value) {
   const normalizedValue = (value || '').trim()
@@ -245,12 +199,12 @@ async function syncLLMSetupChoice(preferences) {
 
   try {
     // Print the setup banner outside CI so the local install feels branded.
-    if (!IS_GITHUB_ACTIONS) {
+    if (!IS_CI) {
       printSetupBanner()
     }
 
     // Ask setup questions first so the rest of the install can run unattended.
-    if (!IS_GITHUB_ACTIONS) {
+    if (!USE_CI_RUNTIMES) {
       SetupUI.section('Quick Setup')
 
       currentStep = 'inspectLocalAICapability'
@@ -290,67 +244,58 @@ async function syncLLMSetupChoice(preferences) {
     // Prepare the local runtime, bridges, skills, and shared memory models.
     SetupUI.section('Base Setup')
 
-    currentStep = 'ensureLeonHomeStructure'
-    await ensureLeonHomeStructure()
-    currentStep = 'setupDotenv'
-    await setupDotenv()
     currentStep = 'generateJSONSchemas'
     await generateJSONSchemas()
-    currentStep = 'setupConfig'
-    await setupConfig()
-    currentStep = 'syncLLMSetupChoice'
-    await syncLLMSetupChoice(preferences)
-    currentStep = 'setupCore'
-    await setupCore()
-    if (!IS_GITHUB_ACTIONS) {
-      currentStep = 'setupNode'
-      await setupNode()
-      currentStep = 'setupPNPM'
-      await setupPNPM()
-      currentStep = 'setupPython'
-      await setupPython()
-      currentStep = 'setupUV'
-      await setupUV()
-    } else {
-      SetupUI.info(
-        'Skipping portable Node.js, pnpm, Python and uv setup because it is running in CI'
-      )
-    }
+    await setupProfile({
+      onStep(name) {
+        currentStep = name
+      },
+      async prepareRuntime() {
+        currentStep = 'syncLLMSetupChoice'
+        await syncLLMSetupChoice(preferences)
+        currentStep = 'setupCore'
+        await setupCore()
+        if (!USE_CI_RUNTIMES) {
+          currentStep = 'setupNode'
+          await setupNode()
+          currentStep = 'setupPNPM'
+          await setupPNPM()
+          currentStep = 'setupPython'
+          await setupPython()
+          currentStep = 'setupUV'
+          await setupUV()
+        } else {
+          SetupUI.info(
+            'Skipping portable Node.js, pnpm, Python and uv setup because CI supplies verification runtimes'
+          )
+        }
 
-    // Core queries retained results even in CI, where portable runtimes are skipped.
-    currentStep = 'setupJQ'
-    await setupJQ()
-
-    currentStep = 'setupNodejsBridgeEnv'
-    await setupNodejsBridgeEnv()
-    currentStep = 'setupPythonBridgeEnv'
-    await setupPythonBridgeEnv()
-    if (!IS_GITHUB_ACTIONS) {
-      currentStep = 'setupTCPServerEnv'
-      await setupTCPServerEnv()
-    } else {
-      SetupUI.info(
-        'Skipping Python TCP server setup because it is running in CI'
-      )
-    }
-    currentStep = 'setupMigrations'
-    await setupMigrations()
-    currentStep = 'setupToolsDependencies'
-    await setupToolsDependencies()
-    currentStep = 'setupToolsSettings'
-    await setupToolsSettings()
-    currentStep = 'setupSkills'
-    await setupSkills()
-    // CI can exercise full setup without the GitHub Actions marker.
-    // Local memory model downloads are unnecessary for those smoke checks.
-    if (!IS_GITHUB_ACTIONS && process.env.CI !== 'true') {
+        // Core queries retained results even in CI, where portable runtimes are skipped.
+        currentStep = 'setupJQ'
+        await setupJQ()
+        currentStep = 'setupNodejsBridgeEnv'
+        await setupNodejsBridgeEnv()
+        if (!USE_CI_RUNTIMES) {
+          currentStep = 'setupTCPServerEnv'
+          await setupTCPServerEnv()
+        } else {
+          SetupUI.info('Skipping Python TCP server setup because CI supplies verification runtimes')
+        }
+      },
+      async prepareTools() {
+        currentStep = 'setupToolsDependencies'
+        await setupToolsDependencies()
+      }
+    })
+    // CI installation checks do not need optional local memory models.
+    if (!IS_CI) {
       currentStep = 'setupQMDLLM'
       await setupQMDLLM()
     } else {
       SetupUI.info('Skipping QMD model setup because it is running in CI')
     }
 
-    if (!IS_GITHUB_ACTIONS) {
+    if (!USE_CI_RUNTIMES) {
       // Install local AI components based on the earlier capability check and answers.
       SetupUI.section('Local AI')
 
@@ -392,17 +337,10 @@ async function syncLLMSetupChoice(preferences) {
     // Finalize generated assets and instance-specific setup metadata.
     SetupUI.section('Finishing Up')
 
-    currentStep = 'generateProfileToken'
-    await generateProfileToken()
-    currentStep = 'generateConnectionEncryptionKey'
-    await ensureConnectionEncryptionKey()
-    SetupUI.success('Connection encryption key: ready')
     currentStep = 'train'
     await train()
     currentStep = 'setFfprobePermissions'
     await setFfprobePermissions()
-    currentStep = 'createInstanceID'
-    await createInstanceID()
     currentStep = 'setupGitHooks'
     await setupGitHooks()
     currentStep = 'buildApp'
@@ -431,7 +369,7 @@ async function syncLLMSetupChoice(preferences) {
       }
     }
 
-    if (!IS_GITHUB_ACTIONS) {
+    if (!IS_CI) {
       printSetupBanner()
     }
 

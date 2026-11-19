@@ -3,6 +3,9 @@ import http from 'node:http'
 import https from 'node:https'
 import path from 'node:path'
 import readline from 'node:readline'
+import { createHash } from 'node:crypto'
+
+import { getDownloadSources } from './download-sources.js'
 
 import type { FileHandle } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
@@ -25,6 +28,7 @@ const DOWNLOAD_PROGRESS_SPINNER_FRAMES = [
   '⣷'
 ]
 const DOWNLOAD_PROGRESS_SPINNER_INTERVAL_MS = 80
+const SETUP_DOWNLOAD_PROGRESS_DATA_EVENT = 'leon:setup-download-progress:data'
 const SETUP_DOWNLOAD_PROGRESS_START_EVENT = 'leon:setup-download-progress:start'
 const SETUP_DOWNLOAD_PROGRESS_END_EVENT = 'leon:setup-download-progress:end'
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
@@ -32,8 +36,10 @@ const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
 const DOWNLOAD_REQUEST_HEADERS = { 'accept-encoding': 'identity' }
 const DOWNLOAD_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const DOWNLOAD_MAX_REDIRECTS = 20
+const DOWNLOAD_SHA256_PATTERN = /^[a-f0-9]{64}$/i
 
 export interface DownloadFileOptions {
+  sha256?: string
   signal?: AbortSignal
   cliProgress?: boolean
   inactivityTimeoutMs?: number
@@ -92,8 +98,9 @@ type DownloadInfoRetryOptions = Required<
 >
 type ResolvedDownloadFileOptions = Omit<
   Required<DownloadFileOptions>,
-  'retry' | 'retryFetchDownloadInfo' | 'onProgress' | 'signal'
+  'retry' | 'retryFetchDownloadInfo' | 'onProgress' | 'signal' | 'sha256'
 > & {
+  sha256?: string
   signal?: AbortSignal
   onProgress?: DownloadFileOptions['onProgress']
   retry: RetryOptions
@@ -403,6 +410,9 @@ export class FileDownloader {
       if (options.onProgress) {
         options.onProgress(progress)
       }
+      if (process.listenerCount(SETUP_DOWNLOAD_PROGRESS_DATA_EVENT) > 0) {
+        process.emit(SETUP_DOWNLOAD_PROGRESS_DATA_EVENT, { fileName, ...progress })
+      }
 
       if (!options.cliProgress) {
         return
@@ -553,12 +563,21 @@ export class FileDownloader {
           url,
           { method, headers, signal },
           (response) => {
+            clearTimeout(headerTimeout)
             // A cancellation can arrive before the caller starts consuming the body.
             response.once('error', reject)
             resolve(response)
           }
         )
-        request.once('error', reject)
+        // Body inactivity is tracked by consumers; DNS, TLS and silent HEAD
+        // endpoints also need a bound before response streaming can begin.
+        const headerTimeout = setTimeout(() => {
+          request.destroy(new Error('Download response headers timed out'))
+        }, DOWNLOAD_INACTIVITY_TIMEOUT_MS)
+        request.once('error', (error) => {
+          clearTimeout(headerTimeout)
+          reject(error)
+        })
       })
       const location = response.headers.location
 
@@ -1114,8 +1133,6 @@ export class FileDownloader {
       options.signal?.addEventListener('abort', abortDownload, { once: true })
     }
 
-    this.activeDownloadControllers.add(abortController)
-
     try {
       for (
         let attempt = 0;
@@ -1175,6 +1192,16 @@ export class FileDownloader {
               )
 
           this.throwIfAborted(signal)
+          if (options.sha256) {
+            try {
+              await this.verifyChecksum(temporaryPath, options.sha256, signal)
+            } catch (error) {
+              await fs.promises.rm(temporaryPath, { force: true })
+              await fs.promises.rm(parallelStatePath, { force: true })
+              throw error
+            }
+          }
+
           await this.movePath(temporaryPath, destinationPath)
           await this.ensureDownloadedFilePath(destinationPath)
           await fs.promises.rm(parallelStatePath, { force: true })
@@ -1203,7 +1230,6 @@ export class FileDownloader {
       }
     } finally {
       options.signal?.removeEventListener('abort', abortDownload)
-      this.activeDownloadControllers.delete(abortController)
     }
   }
 
@@ -1216,6 +1242,86 @@ export class FileDownloader {
     await this.ensureDownloadedFilePath(destinationPath)
   }
 
+  private static async verifyChecksum(
+    filePath: string,
+    checksum: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const hash = createHash('sha256')
+
+    for await (const chunk of fs.createReadStream(filePath)) {
+      this.throwIfAborted(signal)
+      hash.update(chunk)
+    }
+
+    if (hash.digest('hex') !== checksum.toLowerCase()) {
+      throw new Error('Downloaded file checksum (SHA-256) does not match its trusted digest')
+    }
+  }
+
+  private static async downloadRegionalFile(
+    fileURL: string,
+    destinationPath: string,
+    options: ResolvedDownloadFileOptions
+  ): Promise<void> {
+    const controller = new AbortController()
+    const abort = (): void => controller.abort(options.signal?.reason)
+    const resolvedOptions = { ...options, signal: controller.signal }
+    options.signal?.addEventListener('abort', abort, { once: true })
+    this.activeDownloadControllers.add(controller)
+
+    try {
+      if (options.signal?.aborted) {
+        abort()
+      }
+
+      const sources = await getDownloadSources(fileURL, options.sha256)
+
+      for (const [index, source] of sources.entries()) {
+        resolvedOptions.signal.throwIfAborted()
+        // Separate partials by transport origin, while callers retain canonical
+        // cache identities. Bytes from a failed mirror must not seed the origin.
+        const target = sources.length > 1
+          ? `${destinationPath}.source-${createHash('sha256').update(source.url).digest('hex').slice(0, 12)}`
+          : destinationPath
+
+        try {
+          await this.downloadRemoteFile(source.url, target, {
+            ...resolvedOptions,
+            ...(source.sha256 ? { sha256: source.sha256 } : {}),
+            ...(index < sources.length - 1 ? {
+              retry: { ...resolvedOptions.retry, retries: 0 },
+              retryFetchDownloadInfo: { ...resolvedOptions.retryFetchDownloadInfo, retries: 0 }
+            } : {})
+          })
+
+          resolvedOptions.signal.throwIfAborted()
+
+          if (target !== destinationPath) {
+            await this.movePath(target, destinationPath)
+            await fs.promises.rm(`${destinationPath}.download`, { force: true })
+            await fs.promises.rm(this.getParallelDownloadStatePath(`${destinationPath}.download`), { force: true })
+          }
+
+          return
+        } catch (error) {
+          if (this.isAbortError(error) || resolvedOptions.signal.aborted ||
+              index === sources.length - 1) {
+            throw error
+          }
+
+          await fs.promises.rm(target, { force: true })
+          await fs.promises.rm(`${target}.download`, { force: true })
+          await fs.promises.rm(this.getParallelDownloadStatePath(`${target}.download`), { force: true })
+          this.warn('Download mirror unavailable; using the original source')
+        }
+      }
+    } finally {
+      options.signal?.removeEventListener('abort', abort)
+      this.activeDownloadControllers.delete(controller)
+    }
+  }
+
   /**
    * Download a file from either a remote URL or a local source path.
    */
@@ -1225,6 +1331,9 @@ export class FileDownloader {
     options?: DownloadFileOptions
   ): Promise<void> {
     options?.signal?.throwIfAborted()
+    if (options?.sha256 !== undefined && !DOWNLOAD_SHA256_PATTERN.test(options.sha256)) {
+      throw new Error('Invalid download SHA-256 declaration')
+    }
     const resolvedOptions: ResolvedDownloadFileOptions = {
       ...this.DEFAULT_DOWNLOAD_OPTIONS,
       ...options,
@@ -1243,16 +1352,28 @@ export class FileDownloader {
       fs.existsSync(destinationPath) &&
       (await fs.promises.stat(destinationPath)).isFile()
     ) {
+      if (resolvedOptions.sha256) {
+        await this.verifyChecksum(destinationPath, resolvedOptions.sha256, options?.signal)
+      }
+
       return
     }
 
     if (this.isRemoteURL(fileURL)) {
-      await this.downloadRemoteFile(fileURL, destinationPath, resolvedOptions)
+      await this.downloadRegionalFile(fileURL, destinationPath, resolvedOptions)
 
       return
     }
 
     await this.copyLocalFile(fileURL, destinationPath)
+    if (resolvedOptions.sha256) {
+      try {
+        await this.verifyChecksum(destinationPath, resolvedOptions.sha256, options?.signal)
+      } catch (error) {
+        await fs.promises.rm(destinationPath, { force: true })
+        throw error
+      }
+    }
   }
 
   /**

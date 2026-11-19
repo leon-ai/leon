@@ -134,9 +134,16 @@ export class WebSessionRuntime {
       CONVERSATION_REPOSITORY.finishCommand(id, status)
       publishAgentEvent(profileId, {
         session_id: sessionId, turn_id: id, response_id: `${id}:leon`,
-        type: 'turn_status', data: { status, consumed }
+        type: 'turn_status', data: { status, consumed, workspace_id: CONVERSATION_REPOSITORY.readSession(sessionId)?.workspaceId ?? null }
       })
     }
+  }
+
+  /**
+   * Lists only active browser identities for lightweight navigation status.
+   */
+  public getRunningSessionIds(): string[] {
+    return [...this.active.keys()]
   }
 
   /**

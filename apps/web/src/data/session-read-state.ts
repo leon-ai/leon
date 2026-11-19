@@ -6,11 +6,12 @@ import type { ConversationEvent } from './conversation'
 
 const STORAGE_PREFIX = 'leon.web-app.session-read-state.'
 const MAXIMUM_UNREAD_SESSIONS = 512
-const EMPTY_STATE: SessionReadState = { cursor: 0, unread: {} }
+const EMPTY_STATE: SessionReadState = { cursor: 0, unread: {}, workspaces: {} }
 
 interface SessionReadState {
   cursor: number
   unread: Record<string, number>
+  workspaces: Record<string, string>
 }
 
 function readStateKey(profile: string): readonly string[] {
@@ -28,7 +29,9 @@ function readStoredState(profile: string): SessionReadState {
         .sort((left, right) => right[1] - left[1])
         .slice(0, MAXIMUM_UNREAD_SESSIONS)
 
-      return { cursor: value.cursor, unread: Object.fromEntries(entries) }
+      return { cursor: value.cursor, unread: Object.fromEntries(entries),
+        workspaces: Object.fromEntries(entries.flatMap(([id]) => typeof value.workspaces?.[id] === 'string'
+          ? [[id, value.workspaces[id]]] : [])) }
     }
   } catch {
     // Invalid or blocked browser storage must not prevent session navigation.
@@ -76,7 +79,9 @@ export function markSessionRead(profile: string, sessionId: string): void {
   }
   const unread = { ...previous.unread }
   delete unread[sessionId]
-  saveReadState(profile, { ...previous, unread })
+  const workspaces = { ...previous.workspaces }
+  delete workspaces[sessionId]
+  saveReadState(profile, { ...previous, unread, workspaces })
 }
 
 /**
@@ -102,7 +107,12 @@ export function recordSessionCompletion(profile: string, viewedSessionId: string
   const retained = Object.entries(unread).sort((left, right) => right[1] - left[1])
     .slice(0, MAXIMUM_UNREAD_SESSIONS)
 
-  saveReadState(profile, { cursor: event.sequence, unread: Object.fromEntries(retained) })
+  const workspaces = { ...previous.workspaces }
+  if (typeof event.data['workspace_id'] === 'string') {
+    workspaces[event.session_id] = event.data['workspace_id']
+  }
+  saveReadState(profile, { cursor: event.sequence, unread: Object.fromEntries(retained),
+    workspaces: Object.fromEntries(retained.flatMap(([id]) => workspaces[id] ? [[id, workspaces[id]]] : [])) })
 }
 
 /**

@@ -1,4 +1,8 @@
-import type { CompletionStreamEvent, ProviderActivitySnapshot } from '@/core/llm-manager/types'
+import type {
+  CompletionStreamEvent,
+  ProviderActivitySnapshot,
+  ProviderEventTiming
+} from '@/core/llm-manager/types'
 import { ProviderConnectionErrorCode, ProviderRetryReason } from '@/core/llm-manager/types'
 import { getLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 
@@ -17,6 +21,7 @@ const CONNECTION_ERROR_CODES = new Set([
 ])
 
 const MAX_METADATA_CHARS = 256
+const MAX_RECENT_EVENTS = 8
 const CONTROL_EVENTS = new Set([
   'request-dispatched', 'request-upload-start', 'request-uploaded',
   'response-headers', 'transport-activity', 'transport-heartbeat', 'stream-open', 'stream-start',
@@ -33,6 +38,8 @@ export class ProviderRequestActivity {
     providerCompleted: false
   }
 
+  private readonly recentProviderEvents: ProviderEventTiming[] = []
+  private readonly recentStreamEvents: ProviderEventTiming[] = []
   private heartbeat: CompletionStreamEvent['heartbeat']
   private compactionStartedAt: number | undefined
 
@@ -63,6 +70,9 @@ export class ProviderRequestActivity {
     this.state.responseId = event.responseId?.slice(0, MAX_METADATA_CHARS) ?? this.state.responseId
     this.state.requestBytes = event.requestBytes ?? this.state.requestBytes
     this.state.uploadDurationMs = event.uploadDurationMs ?? this.state.uploadDurationMs
+    if (event.nativeCompactionThresholdTokens !== undefined) {
+      this.state.nativeCompactionThresholdTokens = event.nativeCompactionThresholdTokens
+    }
     if (event.requestAccepted) {
       this.state.requestAcceptedMs ??= now
     }
@@ -79,8 +89,27 @@ export class ProviderRequestActivity {
 
     this.state.firstProviderEventMs ??= now
     this.state.lastProviderEventMs = now
-    this.state.lastProviderEvent = (event.providerEventType ?? event.type).slice(0, MAX_METADATA_CHARS)
+    const eventType = (event.providerEventType ?? event.type).slice(0, MAX_METADATA_CHARS)
+    this.state.lastProviderEvent = eventType
     this.state.providerEventCount += 1
+
+    if (event.type === 'provider-event' && !event.providerEventType) {
+      return
+    }
+
+    const recentEvents = event.type === 'provider-event'
+      ? this.recentProviderEvents
+      : this.recentStreamEvents
+    const timing = { type: eventType, elapsedMs: now }
+    // Let consecutive deltas share one entry so they leave room for transitions.
+    if (recentEvents.at(-1)?.type === eventType) {
+      recentEvents[recentEvents.length - 1] = timing
+    } else {
+      recentEvents.push(timing)
+      if (recentEvents.length > MAX_RECENT_EVENTS) {
+        recentEvents.shift()
+      }
+    }
   }
 
   /**
@@ -100,11 +129,15 @@ export class ProviderRequestActivity {
   /**
    * Produces bounded metadata for logs, errors and agent continuation evidence.
    */
-  public snapshot(): ProviderActivitySnapshot {
+  public snapshot(includeRecentEvents = false): ProviderActivitySnapshot {
     const elapsedMs = Date.now() - this.startedAt
 
     return {
       ...this.state,
+      ...(includeRecentEvents ? {
+        recentProviderEvents: [...this.recentProviderEvents],
+        recentStreamEvents: [...this.recentStreamEvents]
+      } : {}),
       ...(this.compactionStartedAt === undefined ? {} : {
         // Failed requests retain the measured portion of unfinished compaction.
         compactionDurationMs: (this.state.compactionDurationMs ?? 0) +

@@ -177,6 +177,10 @@ export interface CompletionStreamEvent {
   type: string
   requestBytes?: number
   uploadDurationMs?: number
+  /**
+   * The threshold sent to Responses, or null when the request omitted it.
+   */
+  nativeCompactionThresholdTokens?: number | null
   providerEventType?: string
   transport?: 'http' | 'websocket'
   requestId?: string
@@ -274,6 +278,8 @@ export interface ProviderActivitySnapshot {
   firstProviderEventMs?: number | undefined
   lastProviderEvent?: string | undefined
   lastProviderEventMs?: number | undefined
+  recentProviderEvents?: ProviderEventTiming[] | undefined
+  recentStreamEvents?: ProviderEventTiming[] | undefined
   providerIdleMs?: number | undefined
   providerEventCount: number
   providerCompleted: boolean
@@ -282,6 +288,7 @@ export interface ProviderActivitySnapshot {
   outputPreliminary?: boolean | undefined
   firstCompactionMs?: number | undefined
   compactionCount?: number | undefined
+  nativeCompactionThresholdTokens?: number | null | undefined
   /**
    * Time between observed compaction markers, including an unfinished interval.
    * Provider computation before the first marker cannot be isolated from waiting.
@@ -303,6 +310,14 @@ export interface ProviderActivitySnapshot {
   elapsedMs: number
 }
 
+/**
+ * An event name and its observation time relative to attempt start.
+ */
+export interface ProviderEventTiming {
+  type: string
+  elapsedMs: number
+}
+
 export interface CompletionAttemptTiming extends ProviderActivitySnapshot {
   attemptId: string
   startedAt: number
@@ -318,6 +333,8 @@ export interface CompletionAttemptTiming extends ProviderActivitySnapshot {
   promptCache?: PromptCacheObservation | undefined
   inferenceTimeoutMs: number
   streamIdleTimeoutMs: number
+  estimatedInputTokens?: number | undefined
+  portableCompactionThresholdTokens?: number | undefined
   generationStartMs?: number | undefined
   requestDispatchMs?: number | undefined
   responseHeadersMs?: number | undefined
@@ -341,6 +358,11 @@ export interface CompletionParams {
   usagePurpose?: InferencePurpose
   systemPrompt: string
   maxTokens?: number | undefined
+  /**
+   * Context preparation measurements for failure diagnostics.
+   */
+  estimatedInputTokens?: number | undefined
+  portableCompactionThresholdTokens?: number | undefined
   thoughtTokensBudget?: number | undefined
   temperature?: number | undefined
   seed?: number | undefined
@@ -434,6 +456,10 @@ export interface CompletionParams {
    * Requests that execute provider-owned tools cannot use this recovery.
    */
   retryInterruptedResponse?: boolean
+  /**
+   * Lets the caller rebuild context before retrying a replay-safe reasoning stall.
+   */
+  recoverReasoningStallWithContext?: boolean
   /**
    * Reports each connection retry before waiting, without another model call.
    */

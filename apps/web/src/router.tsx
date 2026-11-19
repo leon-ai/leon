@@ -23,6 +23,8 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  validateSearch: (search: Record<string, unknown>): { workspace?: string } =>
+    typeof search['workspace'] === 'string' ? { workspace: search['workspace'] } : {},
   component: lazyRouteComponent(
     () => import('@/pages/new-session-page/new-session-page'),
     'NewSessionPage'

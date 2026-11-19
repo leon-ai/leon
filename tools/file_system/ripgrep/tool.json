@@ -2,8 +2,8 @@
   "$schema": "../../../schemas/tool-schemas/tool.json",
   "tool_id": "ripgrep",
   "toolkit_id": "file_system",
-  "name": "Ripgrep",
-  "version": "1.0.0",
+  "name": "ripgrep",
+  "version": "1.0.1",
   "description": "Fast, bounded, read-only local content search and file discovery with ripgrep. Prefer over shell rg/grep/find for filesystem search.",
   "icon_name": "file-search-line",
   "distribution": "built-in",
@@ -33,7 +33,7 @@
     "search": {
       "read_only": true,
       "description": "Search local file contents using ripgrep; return matching lines, 1-based line numbers, paths and byte-offset submatches.",
-      "progressive_guidance": "Choose files when only filenames are needed; rg stops after the first match in each file. Choose count for totals without collecting lines. Match records contain path, lines, line_number, absolute_offset and submatches. Use line_number with file.read startLine/endLine for surrounding text; absolute_offset is a byte offset, not a character offset. No multiline matching; recursively encountered binary content is skipped.",
+      "progressive_guidance": "Choose files when only filenames are needed; rg stops after the first match in each file. Choose count for totals without collecting lines. Match records contain path, lines, line_number, absolute_offset and submatches. Check preview.truncated and query the retained matches with tool_executions.read before repeating a search. Use line_number with file.read startLine/endLine for surrounding text; absolute_offset is a byte offset, not a character offset. No multiline matching; recursively encountered binary content is skipped.",
       "parameters": {
         "type": "object",
         "properties": {

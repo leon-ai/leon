@@ -37,6 +37,7 @@ import { toolsPlugin } from '@/core/http-server/api/tools'
 import { skillsPlugin } from '@/core/http-server/api/skills'
 import { ambientPlugin } from '@/core/http-server/api/ambient'
 import { faviconsPlugin } from '@/core/http-server/api/favicons'
+import { updatesPlugin } from '@/core/http-server/api/updates'
 import {
   authenticateProfileHTTPRequest,
   profileAuthRoutes
@@ -216,7 +217,7 @@ export default class HTTPServer {
       const isConversationMetadata = requestPath === sessionsPath ||
         requestPath.startsWith(`${sessionsPath}/`) ||
         requestPath === `/api/${API_VERSION}/conversation-history`
-      const isToolManagement = ['tools', 'connections', 'skills'].some((resource) =>
+      const isToolManagement = ['tools', 'connections', 'skills', 'updates'].some((resource) =>
         requestPath === `/api/${API_VERSION}/${resource}` || requestPath.startsWith(`/api/${API_VERSION}/${resource}/`))
 
       // Session browsing must remain usable while a model is booting or offline.
@@ -247,6 +248,7 @@ export default class HTTPServer {
     this.fastify.register(skillsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(ambientPlugin, { apiVersion: API_VERSION })
     this.fastify.register(faviconsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(updatesPlugin, { apiVersion: API_VERSION })
     await registerHTTPPlugins(this.fastify, { apiVersion: API_VERSION })
 
     await this.listen()

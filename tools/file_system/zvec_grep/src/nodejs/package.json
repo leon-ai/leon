@@ -1,0 +1,8 @@
+{
+  "name": "@leon-ai/zvec-grep-tool",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@zvec/zvec-grep": "0.3.0"
+  }
+}

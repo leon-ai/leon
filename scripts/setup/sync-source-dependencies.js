@@ -5,6 +5,11 @@ import { pathToFileURL } from 'node:url'
 
 import { execa } from 'execa'
 import YAML from 'yaml'
+import {
+  configureRegionalPnpm,
+  getDownloadRegion,
+  getRegionalInstallerEnvironment
+} from '../../bridges/runtime/nodejs/download-region.js'
 
 import {
   CODEBASE_PATH,
@@ -35,7 +40,8 @@ const PNPM_POLICY_ENV_KEYS = {
   overrides: 'pnpm_config_overrides',
   minimumReleaseAge: 'pnpm_config_minimum_release_age',
   minimumReleaseAgeStrict: 'pnpm_config_minimum_release_age_strict',
-  minimumReleaseAgeExclude: 'pnpm_config_minimum_release_age_exclude'
+  minimumReleaseAgeExclude: 'pnpm_config_minimum_release_age_exclude',
+  registriesByScope: 'pnpm_config_registries_by_scope'
 }
 
 const isFileEmpty = async (filePath) => {
@@ -77,7 +83,26 @@ const getSyncFingerprint = async (sourcePath, configPaths) => {
  */
 const getNodejsInstallEnvironment = async (workspacePath, hookPath, fingerprint) => {
   let config = YAML.parse(await fs.promises.readFile(workspacePath, 'utf8')) || {}
-  const environment = RuntimeHelper.getManagedNodeEnvironment()
+  const environment = await getRegionalInstallerEnvironment(RuntimeHelper.getManagedNodeEnvironment(), { python: false })
+
+  if (await getDownloadRegion() === 'cn') {
+    // Ask pnpm to resolve user/source .npmrc files before supplying defaults.
+    // Replacing their registry through an environment variable would bypass
+    // private routes and their URI-bound authentication.
+    const { stdout } = await execa(PNPM_RUNTIME_BIN_PATH, [
+      'config', 'list', '--json', '--ignore-workspace'
+    ], { cwd: path.dirname(hookPath), env: environment })
+    const settings = JSON.parse(stdout)
+    const registriesByScope = { default: settings.registry }
+
+    for (const [key, value] of Object.entries(settings)) {
+      if (key.startsWith('@') && key.endsWith(':registry')) {
+        registriesByScope[key.slice(0, -':registry'.length)] = value
+      }
+    }
+
+    config = await configureRegionalPnpm({ ...config, registriesByScope })
+  }
 
   if (fs.existsSync(hookPath)) {
     // Source configuration must be in place before pnpm discovers projects, so

@@ -48,12 +48,34 @@
     min-height: 44px
     border-top: 1px solid var(--color-border-secondary)
 
+    > .tooltip
+      flex: 0 0 44px
+
+  .sidebar-footer-settings
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 44px
+    height: 44px
+    color: var(--color-text)
+    border-right: 1px solid var(--color-border-secondary)
+    box-sizing: border-box
+
+    .app-icon
+      width: 20px
+      height: 20px
+
+    &:hover,
+    &:focus-visible
+      color: var(--color-text)
+      background: var(--color-surface-hover)
+
   .sidebar-footer-status-label
     display: flex
     flex: 1 1 auto
     align-items: center
     min-width: 0
-    padding-left: var(--space-lg)
+    padding-left: var(--space-sm)
     color: var(--color-text-tertiary)
     font-size: var(--font-size-sm)
     line-height: var(--line-height-sm)
@@ -65,7 +87,7 @@
   .sidebar-footer-mood
     position: relative
     display: flex
-    flex: 0 0 var(--sidebar-collapsed-width)
+    flex: 0 0 44px
     align-items: center
     justify-content: center
 
@@ -104,6 +126,26 @@
     mask-size: contain
 
 .sidebar.sidebar-collapsed
+  --sidebar-footer-height: 152px
+
+  .sidebar-footer-status
+    flex-direction: column
+    align-items: center
+    min-height: 88px
+
+  .sidebar-footer-settings
+    border-right: 0
+
+  .sidebar-footer-status-label
+    display: none
+
+  .sidebar-footer-mood
+    width: 44px
+    min-height: 44px
+
+    &::before
+      display: none
+
   .sidebar-footer-link
     gap: 0
 

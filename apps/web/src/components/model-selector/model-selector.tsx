@@ -1,3 +1,4 @@
+import { WebPreferenceKey, saveWebPreference } from '@/utils/web-preferences'
 import { useEffect, useMemo, useState } from 'react'
 
 import { Dropdown } from '@/components/dropdown'
@@ -20,7 +21,6 @@ const SELECTOR_HEIGHT_PX = 540
 const DEFAULT_SETTINGS: ModelSettings = { reasoning: 'auto', speed: 'auto' }
 const MAXIMUM_RECENT_MODELS = 3
 const MAXIMUM_MODEL_HISTORY = MAXIMUM_RECENT_MODELS + 1
-const RECENT_MODELS_STORAGE_KEY = 'leon.web-app.recent-models'
 
 enum SelectorPanel {
   Closed,
@@ -89,7 +89,7 @@ function getInitialChoice(): ModelChoice {
  * Shares one control for session model and supported inference settings.
  */
 export function ModelSelector({ disabled = false, binding }: ModelSelectorProps) {
-  const storageKey = `${RECENT_MODELS_STORAGE_KEY}.${binding?.profile ?? 'preview'}`
+  const storageKey = `${WebPreferenceKey.RecentModels}.${binding?.profile ?? 'preview'}` as const
   const providers = useMemo(() => {
     const catalog = binding?.providers ?? modelProviders
     const selection = binding?.selection
@@ -124,7 +124,7 @@ export function ModelSelector({ disabled = false, binding }: ModelSelectorProps)
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(
+      saveWebPreference(storageKey, JSON.stringify(
         modelHistory.map((recent) => ({
           provider: recent.provider.id,
           model: recent.model.model
@@ -189,6 +189,11 @@ export function ModelSelector({ disabled = false, binding }: ModelSelectorProps)
             type="button"
             className="button button-ghost button-md button-composer model-selector-trigger"
             disabled={disabled}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'mouse' && !disabled && panel !== SelectorPanel.Closed) {
+                setPanel(SelectorPanel.Models)
+              }
+            }}
             aria-label={`Choose model, current: ${choice.provider.label}, ${choice.model.label}`}
             aria-haspopup="dialog"
             aria-expanded={open}
@@ -206,6 +211,11 @@ export function ModelSelector({ disabled = false, binding }: ModelSelectorProps)
         disabled={disabled}
         open={panel === SelectorPanel.Settings}
         onOpenChange={(open) => changePanel(SelectorPanel.Settings, open)}
+        onPointerEnter={() => {
+          if (!disabled && panel !== SelectorPanel.Closed) {
+            setPanel(SelectorPanel.Settings)
+          }
+        }}
         onChange={(next) => {
           binding?.update(choice, { ...settings, ...next })
           setSettingsByModel((current) => ({

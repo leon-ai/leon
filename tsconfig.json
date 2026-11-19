@@ -24,6 +24,6 @@
     "declaration": true
   },
   "files": ["server/src/global.d.ts", "aurora/global.d.ts"],
-  "include": ["server/src/**/*"],
+  "include": ["server/src/**/*", "scripts/setup/migrations/**/*.js"],
   "exclude": ["node_modules", "server/dist", "bridges", "tcp_server"]
 }

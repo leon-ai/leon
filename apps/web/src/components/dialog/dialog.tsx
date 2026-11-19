@@ -23,6 +23,7 @@ interface DialogProps {
   actions?: DialogAction[]
   children?: ReactNode
   closeOnOverlayClick?: boolean
+  dismissible?: boolean
   hideFooter?: boolean
   hideHeader?: boolean
   description?: ReactNode
@@ -41,6 +42,7 @@ export function Dialog({
   children,
   centered = false,
   closeOnOverlayClick = true,
+  dismissible = true,
   description,
   footer,
   hideFooter = false,
@@ -73,12 +75,19 @@ export function Dialog({
       return undefined
     }
 
-    const focusable = (): HTMLElement[] => Array.from(overlayRef.current?.querySelectorAll<HTMLElement>(
+    // Input popups live in a portal to escape the scrolling body's clipping.
+    const ownedPopups = (): HTMLElement[] => Array.from(overlayRef.current?.querySelectorAll<HTMLElement>('[aria-controls]') ?? [])
+      .flatMap((control) => {
+        const popup = document.getElementById(control.getAttribute('aria-controls') ?? '')
+
+        return popup?.classList.contains('dropdown-content-open') ? [popup] : []
+      })
+    const focusable = (): HTMLElement[] => [overlayRef.current, ...ownedPopups()].flatMap((root) => Array.from(root?.querySelectorAll<HTMLElement>(
       'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]'
-    ) ?? []).filter((element) => element.getClientRects().length > 0 && !element.closest('[inert]'))
+    ) ?? [])).filter((element) => element.getClientRects().length > 0 && !element.closest('[inert]'))
     const focusFrame = requestAnimationFrame(() => {
       // Content updates must not steal focus from an active dialog control.
-      if (!overlayRef.current?.contains(document.activeElement)) {
+      if (!overlayRef.current?.contains(document.activeElement) && !ownedPopups().some((popup) => popup.contains(document.activeElement))) {
         focusable()[0]?.focus({ preventScroll: true })
       }
     })
@@ -90,7 +99,10 @@ export function Dialog({
         return
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && dismissible) {
+        if (ownedPopups().length > 0) {
+          return
+        }
         onClose()
       } else if (event.key === 'Tab') {
         const elements = focusable()
@@ -112,7 +124,7 @@ export function Dialog({
       cancelAnimationFrame(focusFrame)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onClose, open])
+  }, [dismissible, onClose, open])
 
   if (!mounted) {
     return null
@@ -126,7 +138,7 @@ export function Dialog({
         'dialog-overlay-centered': centered
       })}
       onMouseDown={(event) => {
-        if (closeOnOverlayClick && event.target === event.currentTarget) {
+        if (dismissible && closeOnOverlayClick && event.target === event.currentTarget) {
           onClose()
         }
       }}
@@ -148,6 +160,7 @@ export function Dialog({
               iconName="close"
               tone="muted"
               ariaLabel="Close dialog"
+              disabled={!dismissible}
               onClick={onClose}
             />
           </header>

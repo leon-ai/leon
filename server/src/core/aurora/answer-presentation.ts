@@ -82,9 +82,13 @@ export function finishAuroraAnswer(
       .flatMap((node) => node.type === 'Artifacts' ? node.props.artifactIds : [])))
     const remaining = retained.filter((artifact) => !referenced.has(artifact.id)).map((artifact) => artifact.id)
 
-    return [...ui,
-      ...(text && !(accepted && ui.some((part) => part.surface.purpose === 'clarification'))
-        ? [{ id: `${messageId}:text`, kind: 'text' as const, text }] : []),
+    const textParts = text ? [{ id: `${messageId}:text`, kind: 'text' as const, text }] : []
+    // Give the owner the decision context before the controls that submit it.
+    const body = accepted && ui.some((part) => part.surface.purpose === 'clarification')
+      ? [...textParts, ...ui]
+      : [...ui, ...textParts]
+
+    return [...body,
       ...(remaining.length ? [{ id: `${messageId}:files`, kind: 'artifacts' as const, artifactIds: remaining }] : [])]
   })
 }

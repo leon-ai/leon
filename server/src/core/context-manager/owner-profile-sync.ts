@@ -16,6 +16,7 @@ import {
 } from '@/core/context-manager/owner-profile'
 import { LLMDuties, InferencePurpose } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
+import { buildOwnerTurnEvidence } from './owner-evidence'
 
 const OWNER_DOCUMENT_TOKEN_BUDGET = 2_000
 const OWNER_DOCUMENT_UPDATE_TIMEOUT_MS = 30_000
@@ -469,8 +470,7 @@ async function rewriteOwnerDocumentFromTurn(
         ].join('\n')
       : '',
     'Latest turn:',
-    `User: ${userMessage}`,
-    assistantMessage ? `Assistant: ${assistantMessage}` : ''
+    JSON.stringify(buildOwnerTurnEvidence(userMessage, assistantMessage))
   ].filter(Boolean).join('\n')
 
   try {
@@ -554,7 +554,8 @@ async function compactOwnerDocument(
 async function verifyOwnerDocumentPreservesFacts(
   previousDocument: string,
   nextDocument: string,
-  userMessage = ''
+  userMessage = '',
+  assistantMessage = ''
 ): Promise<OwnerDocumentVerification | null> {
   const prompt = [
     'Compare the original OWNER.md and the revised OWNER.md.',
@@ -564,7 +565,7 @@ async function verifyOwnerDocumentPreservesFacts(
     'Removing out-of-scope material or duplicate facts is safe and desirable.',
     'A fact is preserved if it is still present explicitly or is clearly merged into an equivalent stronger line.',
     'Set safe=false for unexplained loss of valid facts, missed owner corrections, unsupported additions, or retained/new out-of-scope content. List the issues in missingFacts.',
-    `Latest owner message: ${userMessage}`,
+    `Latest turn: ${JSON.stringify(buildOwnerTurnEvidence(userMessage, assistantMessage))}`,
     'JSON only.',
     '',
     'Original OWNER.md:',
@@ -755,13 +756,15 @@ export async function syncOwnerProfileFromTurn(
     const verification = await verifyOwnerDocumentPreservesFacts(
       currentDocument,
       finalDocument,
-      normalizedUserMessage
+      normalizedUserMessage,
+      normalizedAssistantMessage
     )
     if (!verification?.safe) {
-      // Log the failing stage, not personal facts or credentials echoed by a model.
-      LogHelper.error(verification
-        ? 'Owner profile sync: revision rejected by curation/correction verification'
-        : 'Owner profile sync: revision verification failed or returned invalid output')
+      // The maintenance queue reports rejected drafts with a reason and issue count.
+      if (!verification) {
+        LogHelper.error('Owner profile sync: revision verification failed or returned invalid output')
+      }
+
       return {
         outcome: verification ? 'rejected' : 'failed',
         reason: verification ? OwnerProfileSyncReason.VerificationRejected : OwnerProfileSyncReason.VerificationFailed,

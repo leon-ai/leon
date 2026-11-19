@@ -8,7 +8,8 @@ import { runTurnPhase, TurnPhase } from '../../turn-timing'
 import { AGENT_IMAGE_BATCH_MAX_BYTES, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
-  isLocalLLMProvider
+  isLocalLLMProvider,
+  resolveAgentBudgetContextWindowTokens
 } from '@/core/llm-manager/model-context-windows'
 
 import {
@@ -19,8 +20,6 @@ import {
   AGENT_RECENT_TOOL_IMAGE_LIMIT,
   AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
-  AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
-  AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   CHARS_PER_TOKEN
 } from './agent-constants'
 
@@ -30,6 +29,8 @@ const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 const RETAINED_RESULT_PREVIEW_MAX_CHARS = 4_096
+const IMPLICIT_SOURCE_PAGE_MAX_CHARS = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 3)
+const COMMAND_OUTPUT_PREVIEW_MAX_CHARS = RETAINED_RESULT_PREVIEW_MAX_CHARS
 const MAX_RETAINED_TOOL_IMAGE_BYTES = 1_024 * 1_024
 
 interface AgentModelContextParams {
@@ -67,34 +68,33 @@ interface CompletedToolExchange {
 }
 
 /**
- * Resolves when deterministic context compaction should begin. Local models
- * follow their configured window while remote providers share a stable trigger.
+ * Leaves a quarter of the endpoint window for generation and estimation error
+ * when Leon manages the context itself.
  */
 export function resolveAgentContextCompactionTriggerTokens(
-  provider: LLMProviders
+  provider: LLMProviders,
+  contextWindowTokens?: number
 ): number {
-  if (!isLocalLLMProvider(provider)) {
-    return AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
-  }
-
   return Math.floor(
-    LOCAL_LLM_CONTEXT_WINDOW_TOKENS * AGENT_CONTEXT_WINDOW_BUDGET_RATIO
+    resolveAgentBudgetContextWindowTokens(provider, contextWindowTokens) *
+      AGENT_CONTEXT_WINDOW_BUDGET_RATIO
   )
 }
 
 /**
- * Returns the smaller target used for one provider context-pressure retry.
+ * Targets half the window at most and makes a meaningful reduction from the
+ * rejected or stalled request when its estimated size is available.
  */
 export function resolveAgentContextRecoveryTriggerTokens(
-  provider: LLMProviders
+  provider: LLMProviders,
+  contextWindowTokens?: number,
+  failedInputTokens?: number
 ): number {
-  if (!isLocalLLMProvider(provider)) {
-    return AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS
-  }
+  const capacity = resolveAgentBudgetContextWindowTokens(provider, contextWindowTokens)
 
-  return Math.floor(
-    LOCAL_LLM_CONTEXT_WINDOW_TOKENS * AGENT_CONTEXT_RECOVERY_BUDGET_RATIO
-  )
+  return Math.max(1, Math.floor(
+    Math.min(capacity, failedInputTokens ?? capacity) * AGENT_CONTEXT_RECOVERY_BUDGET_RATIO
+  ))
 }
 
 /**
@@ -131,7 +131,7 @@ function estimateTokens(value: string): number {
 /**
  * Estimates the complete request, excluding encoded image bytes.
  */
-function estimateAgentInputTokens(
+export function estimateAgentInputTokens(
   transcript: AgentToolTranscriptMessage[],
   systemPrompt: string,
   tools: OpenAITool[]
@@ -335,6 +335,86 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * Keeps the first implicit text page small while preserving its exact
+ * continuation offset and the source metadata. Call only for saved results.
+ */
+export function projectImplicitSourcePage(output: Record<string, unknown>): Record<string, unknown> {
+  const result = readRecord(output['result'])
+  const data = readRecord(result?.['data'])
+  const offset = data?.['offsetChars']
+  const total = data?.['totalChars']
+  const field = typeof data?.['content'] === 'string' ? 'content' : 'text'
+  const text = data?.[field]
+  if (!result || !data || typeof offset !== 'number' || offset !== 0 ||
+    typeof total !== 'number' || typeof text !== 'string' ||
+    text.length <= IMPLICIT_SOURCE_PAGE_MAX_CHARS || total < text.length) {
+    return output
+  }
+
+  const preview = text.slice(0, IMPLICIT_SOURCE_PAGE_MAX_CHARS)
+  const projected: Record<string, unknown> = {
+    ...data,
+    [field]: preview,
+    ...(typeof data['returnedChars'] === 'number' ? { returnedChars: preview.length } : {}),
+    truncated: true,
+    nextOffsetChars: preview.length
+  }
+  // The saved identity describes the complete original range.
+  delete projected['modelContextId']
+
+  return { ...output, result: { ...result, data: projected } }
+}
+
+/**
+ * Prioritizes the end of an archived command's output where status and
+ * diagnostics usually appear. Explicit session pages keep their requested range.
+ */
+export function projectCommandOutput(
+  output: Record<string, unknown>,
+  hasRequestedRange: boolean
+): Record<string, unknown> {
+  const result = readRecord(output['result'])
+  const data = readRecord(result?.['data'])
+  if (!result) {
+    return output
+  }
+
+  const { stdout, stderr, returncode } = result
+  if (typeof stdout === 'string' && typeof stderr === 'string' && typeof returncode === 'number' &&
+      stdout.length + stderr.length > COMMAND_OUTPUT_PREVIEW_MAX_CHARS) {
+    const stderrLimit = Math.max(COMMAND_OUTPUT_PREVIEW_MAX_CHARS - stdout.length,
+      Math.floor(COMMAND_OUTPUT_PREVIEW_MAX_CHARS / 2))
+    const stderrPreview = stderr.slice(-stderrLimit)
+    const stdoutPreview = stdout.slice(-(COMMAND_OUTPUT_PREVIEW_MAX_CHARS - stderrPreview.length))
+    const retained = typeof readRecord(output['execution'])?.['id'] === 'string'
+
+    return { ...output, result: {
+      ...result,
+      stdout: stdoutPreview,
+      stderr: stderrPreview,
+      output_truncated: true,
+      output_note: retained
+        ? 'Output shows the tail of each stream. If omitted lines are needed, query the retained result by execution.id with system_utilities.tool_executions.read.'
+        : 'Output shows the tail of each stream. If omitted lines are needed, read the original at output_log_path.'
+    } }
+  }
+
+  if (!hasRequestedRange && data && typeof data['sessionId'] === 'string' &&
+      typeof data['offsetChars'] === 'number' && typeof data['nextOffsetChars'] === 'number' &&
+      typeof data['output'] === 'string' && data['output'].length > COMMAND_OUTPUT_PREVIEW_MAX_CHARS) {
+    // Keep the earliest unread page so the next read resumes without a gap.
+    return { ...output, result: { ...result, data: {
+      ...data,
+      output: data['output'].slice(0, COMMAND_OUTPUT_PREVIEW_MAX_CHARS),
+      nextOffsetChars: data['offsetChars'] + COMMAND_OUTPUT_PREVIEW_MAX_CHARS,
+      hasMore: true
+    } } }
+  }
+
+  return output
+}
+
+/**
  * Keeps a complete tool result in its artifact log while placing only a
  * bounded, useful observation in the model transcript.
  */
@@ -448,6 +528,56 @@ function findCompletedToolExchanges(
   }
 
   return exchanges
+}
+
+/**
+ * Limits replay of archived results at a completed turn or after a substantial
+ * batch of older evidence has accrued. Keep recent exchanges and source handles.
+ */
+export function projectSettledAgentEvidence(
+  transcript: AgentToolTranscriptMessage[],
+  atTurnBoundary = false
+): AgentToolTranscriptMessage[] {
+  const recentExchanges = atTurnBoundary ? 1 : SUMMARY_RECENT_EXCHANGES
+  const exchanges = findCompletedToolExchanges(transcript).slice(0, -recentExchanges)
+  const replacements = new Map<ToolTranscriptMessage, ToolTranscriptMessage>()
+  let savedChars = 0
+
+  for (const exchange of exchanges) {
+    for (const message of exchange.toolMessages) {
+      if (message.files?.length || typeof message.content !== 'string' ||
+        message.content.length <= RETAINED_RESULT_PREVIEW_MAX_CHARS) {
+        continue
+      }
+
+      let observation: Record<string, unknown> | null
+      try {
+        observation = readRecord(JSON.parse(message.content))
+      } catch {
+        continue
+      }
+      if (!observation || observation['status'] !== 'success' ||
+        observation['observation_compacted'] || observation['observed_tool_failure'] ||
+        (typeof observation['output_log_path'] !== 'string' &&
+          typeof readRecord(observation['execution'])?.['id'] !== 'string')) {
+        continue
+      }
+
+      const content = buildBoundedToolObservation(observation, RETAINED_RESULT_PREVIEW_MAX_CHARS)
+      replacements.set(message, { ...message, content })
+      savedChars += message.content.length - content.length
+    }
+  }
+
+  // Preserve the reusable prefix between batches. The projected view is used
+  // as the canonical transcript after a checkpoint so it never shrinks twice.
+  if (savedChars <= 0 || (!atTurnBoundary && savedChars < TOOL_RESULT_INLINE_MAX_CHARS)) {
+    return transcript
+  }
+
+  return transcript.map((message) =>
+    message.role === 'tool' ? replacements.get(message) ?? message : message
+  )
 }
 
 /**
@@ -591,26 +721,27 @@ export function reuseToolContext(
         return value
       }
 
-      if (typeof record['modelContextId'] === 'string' &&
-          typeof record['content'] === 'string') {
+      const { content, ...metadata } = record
+      if (typeof record['modelContextId'] === 'string' && typeof content === 'string') {
         const key = JSON.stringify([message.toolName, record['modelContextId']])
         const previous = nextVisible.get(key)
+        const projectedMetadata = Object.fromEntries(Object.entries(metadata).map(([key, child]) =>
+          [key, project(child)]
+        ))
 
-        if (previous?.content === record['content']) {
-          const reference = { ...record }
-          delete reference['content']
+        if (previous?.content === content) {
           changed = true
           return {
-            ...reference,
+            ...projectedMetadata,
             contentReference: `Unchanged context; complete content is in tool call ${previous.callId}.`
           }
         }
 
         nextVisible.set(key, {
-          content: record['content'],
+          content,
           callId: message.toolCallId
         })
-        return record
+        return { ...projectedMetadata, content }
       }
 
       return Object.fromEntries(Object.entries(record).map(([key, child]) =>

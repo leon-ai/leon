@@ -3,7 +3,6 @@ import path from 'node:path'
 import { homedir } from 'node:os'
 
 import { FileHelper } from '@/helpers/file-helper'
-import { NetworkHelper } from '@/helpers/network-helper'
 
 import { createSetupStatus } from './setup-status'
 
@@ -83,11 +82,9 @@ async function downloadModel(model, onProgress) {
     return 'renamed'
   }
 
-  const resolvedURL = await NetworkHelper.setHuggingFaceURL(model.url)
-
   // Model files are large enough that transient CDN failures are common.
   // Keep resumable downloads alive longer than the general file default.
-  await FileHelper.downloadFile(resolvedURL, destinationPath, {
+  await FileHelper.downloadFile(model.url, destinationPath, {
     cliProgress: !onProgress,
     onProgress,
     retry: QMD_DOWNLOAD_RETRY_OPTIONS,

@@ -2,10 +2,10 @@
   "$schema": "../../../schemas/tool-schemas/tool.json",
   "tool_id": "browser-use",
   "toolkit_id": "browser_use",
-  "name": "Browser Use CLI",
-  "version": "1.2.1",
+  "name": "browser-use",
+  "version": "1.3.0",
   "description": "Operate the configured signed-in browser through the upstream Browser Use CLI and its persistent Browser Harness session.",
-  "progressive_guidance": "Prefer inspect/act when a step needs a new decision. Once targets or selection criteria are grounded, use one bounded run for the dependent actions and their checks, deriving any later targets from fresh observations inside that run. Reuse observed targets and the configured browser; avoid returning to the model between predictable steps. Helpers activate the working tab and record outcomes for shared recovery. A changed page is not task completion; inspect failure evidence before retrying or switching tools. After failure, not_sent means no input was delivered; unverifiable means it may have taken effect. Reinspect rather than replaying blindly. Leave dependency installation and daemon management to Leon.\nReactive results: leon_fill verifies only the entered field value. Before inspecting or choosing results, wait for the page's observed completion signal for that value, such as an advertised aria-busy becoming false, and verify the result identity. Existing text may also belong to the previous query; text presence alone does not establish refresh. leon_observe items include busy (boolean) and controls (controlled element IDs) only when the page advertises those ARIA attributes; absence is unknown. Use the observed field selector and controls relationship to scope readiness checks. If no completion signal exists, wait for a task-relevant change grounded in the page rather than an arbitrary delay or a guessed title.\nNavigation: derive the expected destination from an observed link and verify that URL/route plus any required visible content. Do not invent page sentences or require unrelated text as a completion condition. A successful navigation followed by a failed content check needs inspection, not another click.\nFor research and comparisons, prefer structured data already exposed by the relevant page or an observed read-only endpoint over repeated card scraping. Ground endpoints and request parameters in page evidence; do not guess routes or bypass access controls. Verify active search parameters before comparing results. Use run to extract, filter, sort and summarize records in one bounded call; do not manipulate UI sorting when the available data can be sorted locally. Retain source URLs, record identities, units and coverage evidence with the requested fields. Distinguish advertised result counts from records actually retrieved; follow observed pagination only within the task scope. Missing fields remain unknown, not false or excluded. Return a useful shortlist with unresolved terms rather than exhaustively collecting unrelated offers.",
+  "progressive_guidance": "Prefer inspect/act when a step needs a new decision. Once targets or selection criteria are grounded, use one bounded run for the dependent actions and their checks, deriving any later targets from fresh observations inside that run. Use record for a browser demonstration within one observed tab. Reuse observed targets and the configured browser; avoid returning to the model between predictable steps. Helpers activate the working tab and record outcomes for shared recovery. A changed page is not task completion; inspect failure evidence before retrying or switching tools. After failure, not_sent means no input was delivered; unverifiable means it may have taken effect. Reinspect rather than replaying blindly. Leave dependency installation and daemon management to Leon.\nReactive results: leon_fill verifies only the entered field value. Before inspecting or choosing results, wait for the page's observed completion signal for that value, such as an advertised aria-busy becoming false, and verify the result identity. Existing text may also belong to the previous query; text presence alone does not establish refresh. leon_observe items include busy (boolean) and controls (controlled element IDs) only when the page advertises those ARIA attributes; absence is unknown. Use the observed field selector and controls relationship to scope readiness checks. If no completion signal exists, wait for a task-relevant change grounded in the page rather than an arbitrary delay or a guessed title.\nNavigation: derive the expected destination from an observed link and verify that URL/route plus any required visible content. Do not invent page sentences or require unrelated text as a completion condition. A successful navigation followed by a failed content check needs inspection, not another click.\nFor research and comparisons, prefer structured data already exposed by the relevant page or an observed read-only endpoint over repeated card scraping. Ground endpoints and request parameters in page evidence; do not guess routes or bypass access controls. Verify active search parameters before comparing results. Use run to extract, filter, sort and summarize records in one bounded call; do not manipulate UI sorting when the available data can be sorted locally. Retain source URLs, record identities, units and coverage evidence with the requested fields. Distinguish advertised result counts from records actually retrieved; follow observed pagination only within the task scope. Missing fields remain unknown, not false or excluded. Return a useful shortlist with unresolved terms rather than exhaustively collecting unrelated offers.",
   "icon_name": "window-line",
   "distribution": "built-in",
   "maintenance": "official",
@@ -55,6 +55,39 @@
       },
       "timeout": {
         "idleMs": 60000
+      }
+    },
+    "record": {
+      "description": "Run a grounded browser demonstration while recording the observed tab directly without a desktop picker. Returns a source videoPath for OpenScreen composition.",
+      "progressive_guidance": "Use an observed targetId and one bounded Python batch with the helpers from run. The recording follows the demonstrated tab through navigation. Keep the demonstration in that tab and verify each required outcome. Use leon_click or click_at_xy so delivered clicks are captured in the cursor track. Leave enough time to read each demonstrated result. Import videoPath using OpenScreen createProject and export with OpenScreen for the wallpaper, framing, cursor and zooms. This uses the existing authorized browser connection and requires Chromium tab recording support. A desktop recording is a separate capture choice.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Observed targetId of the tab to record."
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Python using Browser Use helpers to demonstrate and verify the sequence."
+          }
+        },
+        "required": [
+          "tab_id",
+          "code"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "timeout": {
+        "idleMs": 60000,
+        "totalMs": 120000
       }
     },
     "screenshot": {

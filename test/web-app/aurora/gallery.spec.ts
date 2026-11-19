@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import { AURORA_QUERY_EXAMPLES } from '../../fixtures/aurora'
 import { createConnectionPreview } from '../../fixtures/connections'
-import { finishFiniteAnimations } from '../e2e/fixtures'
+import { finishFiniteAnimations, expectTrailingSelection } from '../e2e/fixtures'
 import { createFeedPreviewExamples } from '../../fixtures/feed-preview'
 
 const CONNECTIONS = [...fs.globSync('tools/*/*/tool.json')].flatMap((file) => {
@@ -458,21 +458,94 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await expect(page.getByRole('heading', { name: 'Buttons', exact: true })).toBeVisible()
     const buttons = page.getByRole('region', { name: 'Buttons', exact: true })
-    const enabledBorder = await buttons.getByRole('button', { name: 'Save for later', exact: true })
-      .evaluate((button) => getComputedStyle(button).backgroundImage)
-    await expect(buttons.getByRole('button', { name: 'Unavailable', exact: true })).not.toHaveCSS('background-image', enabledBorder)
+    const disabled = buttons.getByRole('button', { name: 'Unavailable', exact: true })
+    expect(await disabled.evaluate((button) => getComputedStyle(button, '::before').opacity)).toBe('0')
     const saving = buttons.getByRole('button', { name: 'Saving…', exact: true })
     const primaryColor = await buttons.getByRole('button', { name: 'Continue', exact: true })
       .evaluate((button) => getComputedStyle(button).color)
     await expect(saving).toBeDisabled()
-    await expect(saving).toHaveCSS('background-image', /none$/)
-    await expect(saving).toHaveCSS('background-clip', 'border-box, border-box, border-box')
+    await expect(saving).toHaveCSS('background-clip', 'border-box, border-box')
+    expect(await saving.evaluate((button) => getComputedStyle(button, '::before').opacity)).toBe('0')
     await expect(saving).toHaveCSS('cursor', 'wait')
     await expect(saving).toHaveCSS('color', primaryColor)
     await expect(saving.locator('.loader-indicator')).toHaveCSS('color', primaryColor)
+    const availability = buttons.getByRole('button', { name: 'Ready when you are', exact: true })
+    await expect(availability).toHaveCSS('color', theme === 'light' ? 'rgba(245, 245, 247, 0.66)' : 'rgba(245, 245, 247, 0.33)')
+    const disabledBounds = (await availability.boundingBox())!
+    await buttons.getByRole('button', { name: 'Toggle availability', exact: true }).click()
+    await expect(availability).toBeEnabled()
+    if (reducedMotion === 'no-preference') {
+      const borderOpacity = await availability.evaluate((button) => {
+        const transition = button.getAnimations({ subtree: true }).find((animation) =>
+          animation instanceof CSSTransition && animation.transitionProperty === 'opacity')
+        if (!transition?.effect) {
+          return null
+        }
+        transition.pause()
+        transition.currentTime = Number(transition.effect.getComputedTiming().duration) / 2
+        const opacity = Number(getComputedStyle(button, '::before').opacity)
+        transition.finish()
+
+        return opacity
+      })
+      expect(borderOpacity).toBeGreaterThan(0)
+      expect(borderOpacity).toBeLessThan(1)
+    }
+    const enabledBounds = (await availability.boundingBox())!
+    expect(enabledBounds.width).toBe(disabledBounds.width)
+    expect(enabledBounds.height).toBe(disabledBounds.height)
+    await expect(availability).toHaveCSS('font-weight', '400')
+    const views = buttons.getByRole('button', { name: 'Choose a view', exact: true })
+    await views.press('Enter')
+    const choices = page.getByRole('menu', { name: 'Choose a view', exact: true })
+    await expectTrailingSelection(choices.getByRole('menuitem', { name: 'Notes', exact: true }))
+    await expect(choices.getByRole('menuitem', { name: 'Ideas', exact: true })).toBeFocused()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await expect(choices).toBeHidden()
+    await expect(views).toBeFocused()
+    await views.press('Enter')
+    const longChoice = choices.getByRole('menuitem', { name: 'Project planning notes and useful references for later', exact: true })
+    await expect(longChoice).toHaveAttribute('aria-current', 'true')
+    await expectTrailingSelection(longChoice)
+    expect(await longChoice.locator('.dropdown-item-label').evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+    await choices.screenshot({ path: testInfo.outputPath(`dropdown-selection-${theme}.png`) })
+    await page.keyboard.press('Escape')
+    const compact = buttons.getByRole('button', { name: 'Compact action', exact: true })
+    await compact.hover()
+    await expect(compact).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    const updateAvailable = buttons.getByRole('button', { name: 'New update available!', exact: true })
+    const updateCheck = buttons.getByRole('button', { name: 'Check for updates', exact: true })
+    await expect(updateAvailable).toHaveText('New')
+    await expect(updateCheck).toHaveText('')
+    await expect(updateCheck.locator('.app-icon')).toBeVisible()
+    expect((await updateAvailable.boundingBox())!.height).toBe((await updateCheck.boundingBox())!.height)
+    const updateAccent = await page.getByRole('region', { name: 'Status', exact: true }).locator('.status-primary.status-md')
+      .evaluate((element) => ({ text: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }))
+    await expect(updateAvailable).toHaveCSS('background-color', updateAccent.background)
+    await expect(updateAvailable.locator('.app-icon')).toHaveCSS('color', updateAccent.text)
+    await expect(updateAvailable.locator('.button-label')).toHaveCSS('color', updateAccent.text)
+    await expect(updateAvailable.locator('.button-label')).toHaveCSS('font-size', '12px')
+    await expect(updateCheck).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await compact.hover()
+    const iconHoverColor = await compact.locator('.app-icon').evaluate((element) => getComputedStyle(element).color)
+    await updateAvailable.hover()
+    await expect(updateAvailable.locator('.app-icon')).toHaveCSS('color', iconHoverColor)
+    await expect(updateAvailable.locator('.button-label')).toHaveCSS('color', iconHoverColor)
+    await expect(page.getByRole('tooltip', { name: 'New update available!', exact: true })).toBeVisible()
+    await updateCheck.hover()
+    await expect(page.getByRole('tooltip', { name: 'Check for updates', exact: true })).toBeVisible()
+
+    await buttons.getByRole('button', { name: 'Preview release notes', exact: true }).click()
+    const releaseDialog = page.getByRole('dialog', { name: 'A little more room for your projects', exact: true })
+    await expect(releaseDialog.getByRole('heading', { name: 'Full changelog', exact: true })).toBeVisible()
+    await expect(releaseDialog.getByRole('region', { name: 'New', exact: true }).getByRole('listitem')).toHaveCount(1)
+    await releaseDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(releaseDialog).toHaveCount(0)
+
     const statuses = page.getByRole('region', { name: 'Status', exact: true })
     for (const variant of ['primary', 'secondary', 'success', 'error', 'warning']) {
-      const status = statuses.locator(`.status-${variant}`)
+      const status = statuses.locator(`.status-${variant}.status-md`)
       await expect(status).toBeVisible()
       await expect(status.locator('.status-dot')).toHaveCount(variant === 'secondary' ? 0 : 1)
       if (variant !== 'secondary') {
@@ -483,7 +556,30 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
     for (const label of ['New', 'Soon']) {
       await expect(statuses.getByText(label, { exact: true })).toHaveCSS('width', '56px')
     }
+    const smallStatus = statuses.getByText('Small', { exact: true })
+    await expect(smallStatus).toHaveClass(/status-sm/)
+    const smallBounds = (await smallStatus.boundingBox())!
+    const regularBounds = (await statuses.getByText('New', { exact: true }).boundingBox())!
+    expect(smallBounds.height).toBeLessThan(regularBounds.height)
+    expect(smallBounds.width).toBeLessThan(regularBounds.width)
     await statuses.screenshot({ path: testInfo.outputPath(`statuses-${theme}.png`) })
+    const callouts = page.getByRole('region', { name: 'Callouts', exact: true })
+    await expect(callouts.getByRole('complementary')).toHaveCount(3)
+    for (const [variant, icon, statusVariant] of [
+      ['info', 'lightbulb', null], ['warning', 'error-warning', 'warning'], ['danger', 'hand', 'error']
+    ] as const) {
+      const callout = callouts.locator(`.callout-${variant}`)
+      await expect(callout.locator(`[data-icon="${icon}"] path`).first()).toBeVisible()
+      await expect(callout).toHaveCSS('font-size', '14px')
+      if (statusVariant) {
+        const colors = await statuses.locator(`.status-${statusVariant}`).evaluate((element) => ({
+          color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor
+        }))
+        await expect(callout).toHaveCSS('color', colors.color)
+        await expect(callout).toHaveCSS('background-color', colors.background)
+      }
+    }
+    await callouts.screenshot({ path: testInfo.outputPath(`callouts-${theme}.png`) })
     for (const [variant, label] of [['success', 'Success'], ['error', 'Error'], ['warning', 'Warning']] as const) {
       await statuses.getByRole('button', { name: `${label} toast`, exact: true }).click()
       const toast = page.locator(`.toast-${variant}`)
@@ -893,3 +989,98 @@ test('embeds artifacts in answer order with image enlargement and a local docume
   await answer.locator('figure').filter({ hasText: 'Attention is all you need.pdf' }).getByRole('link', { name: 'Download', exact: true }).click()
   expect((await download).suggestedFilename()).toBe('Attention_is_all_you_need.pdf')
 })
+
+for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preference']] as const) {
+  test(`reviews actual application icons, folder morphs and the completion cue inside Aurora (${theme})`, async ({ page }, testInfo) => {
+    const errors: string[] = []
+    const privateRequests: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/api/')) {
+        privateRequests.push(request.url())
+      }
+    })
+    await page.emulateMedia({ reducedMotion })
+    await page.goto('/aurora.html')
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    await page.getByRole('button', { name: 'Icons', exact: true }).click()
+    const icons = page.getByRole('region', { name: 'Icons preview', exact: true })
+    await icons.getByRole('searchbox', { name: 'Find an icon', exact: true }).fill('folder')
+    for (const name of ['folder', 'folder-open', 'folder-add']) {
+      await expect(icons.locator(`[data-preview-icon="${name}"] svg`)).toBeVisible()
+    }
+    const morph = icons.getByRole('article', { name: 'Workspace folder', exact: true })
+    const toggle = morph.getByRole('button', { name: 'Toggle workspace folder preview', exact: true })
+    const closed = await toggle.locator('path').first().getAttribute('d')
+    await toggle.click()
+    await expect(toggle.locator('path').first()).not.toHaveAttribute('d', closed!)
+    await toggle.click()
+    await expect(toggle.locator('path').first()).toHaveAttribute('d', closed!)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await morph.screenshot({ path: testInfo.outputPath(`folder-morph-${theme}.png`) })
+    await page.getByRole('button', { name: 'Sounds', exact: true }).click()
+    const sounds = page.getByRole('region', { name: 'Sounds preview', exact: true })
+    await expect(sounds.locator('audio')).toHaveCount(1)
+    await expect(sounds.getByRole('link', { name: 'turn-complete.wav', exact: true })).toHaveAttribute('download', '')
+    const decoded = await page.evaluate(async () => {
+      const audio = new AudioContext()
+      try {
+        return await Promise.all([...document.querySelectorAll<HTMLAudioElement>('audio')].map(async (element) => {
+          const response = await fetch(element.src)
+          const buffer = await audio.decodeAudioData(await response.arrayBuffer())
+          return { duration: buffer.duration, channels: buffer.numberOfChannels }
+        }))
+      } finally {
+        await audio.close()
+      }
+    })
+    expect(decoded.every((sample) => sample.duration > 0 && sample.duration < 2 && sample.channels === 1)).toBe(true)
+    expect(privateRequests).toEqual([])
+    expect(errors).toEqual([])
+  })
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`previews Core stages, desktop restart and setup states with production views (${theme})`, async ({ page }, testInfo) => {
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/aurora.html')
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    await page.getByRole('button', { name: 'Updates', exact: true }).click()
+    await page.getByLabel('Core update state', { exact: true }).selectOption('preparing')
+    await page.getByRole('button', { name: 'Preview Leon update', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('list', { name: 'Core update progress' })).toBeVisible()
+    await dialog.getByText('Details', { exact: true }).click()
+    await expect(dialog.getByText('Applying pending profile migrations.', { exact: true })).toBeVisible()
+    await dialog.getByText('Release notes', { exact: true }).click()
+    await expect(dialog.getByText('Full changelog', { exact: true })).toBeVisible()
+    await expect(dialog).toHaveCSS('opacity', '1')
+    await dialog.screenshot({ path: testInfo.outputPath(`core-update-${theme}.png`) })
+    await dialog.getByLabel('Core update state', { exact: true }).selectOption('completed')
+    await expect(dialog.getByRole('progressbar')).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByLabel('Update preview', { exact: true }).selectOption('desktop')
+    await page.getByLabel('Desktop update state', { exact: true }).selectOption('ready')
+    await page.getByRole('button', { name: 'Preview Leon update', exact: true }).click()
+    await expect(dialog.getByRole('tab')).toHaveCount(0)
+    await expect(dialog.getByRole('list', { name: 'Core update progress' })).toHaveCount(0)
+    await expect(dialog).toHaveCSS('opacity', '1')
+    await dialog.screenshot({ path: testInfo.outputPath(`desktop-update-${theme}.png`) })
+    await page.getByRole('button', { name: 'Update Leon', exact: true }).click()
+    await expect(page.getByText('Restarting Leon', { exact: true })).toBeVisible()
+    await page.reload()
+    await page.getByRole('button', { name: 'Updates', exact: true }).click()
+    await page.getByLabel('Update preview', { exact: true }).selectOption('setup')
+    await page.getByLabel('Setup state', { exact: true }).selectOption('failed')
+    await expect(page.getByRole('button', { name: 'Retry setup', exact: true })).toBeVisible()
+    await page.setViewportSize({ width: 390, height: 800 })
+    await page.screenshot({ path: testInfo.outputPath(`updates-${theme}.png`), fullPage: true })
+    expect(errors).toEqual([])
+  })
+}

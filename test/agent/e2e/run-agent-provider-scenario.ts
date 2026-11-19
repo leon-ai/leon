@@ -84,6 +84,7 @@ export interface AgentTurnResult {
 
 export interface RealScenarioTurn extends AgentTurnResult {
   sessionId: string
+  routineLookup: boolean
   historyBeforeTurn: number
   progressMessages: NonNullable<AgentResponseTrace['progressMessages']>
   responseTrace: AgentResponseTrace
@@ -667,6 +668,7 @@ async function main(): Promise<void> {
               sessionId, historyBeforeTurn, input: ownerInput, output,
               progressMessages, artifacts,
               responseTrace: result.data?.['agentResponseTrace'] as AgentResponseTrace,
+              routineLookup: result.data?.['routineLookup'] === true,
               hasExplicitMemoryWrite: result.data?.['hasExplicitMemoryWrite'] === true,
               finalIntent: typeof result.data?.['finalIntent'] === 'string' ? result.data['finalIntent'] : null,
               executionHistory: Array.isArray(result.data?.['executionHistory'])

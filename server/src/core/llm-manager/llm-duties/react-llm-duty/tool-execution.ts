@@ -21,7 +21,7 @@ import { PreparationStatus, type ToolPreparationSnapshot } from '@@/aurora/src/v
 import type { ToolExecutionInput } from '@/core/tool-manager/tool-executor'
 
 import { DUTY_NAME } from './agent-constants'
-import { buildBoundedToolObservation } from './agent-context-budget'
+import { buildBoundedToolObservation, projectCommandOutput, projectImplicitSourcePage } from './agent-context-budget'
 import type { AgentRunProgressEvent, ToolExecutionResult } from './agent-types'
 import {
   extractFinalAnswerFromToolResult,
@@ -38,6 +38,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 const COMMAND_OUTPUT_MAX_TRACE_CHARS = 80_000
+const COMMAND_OUTPUT_TRACE_INTERVAL_MS = 100
 const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
   'bridges.tools.creating_bins_directory',
   'bridges.tools.binary_not_found',
@@ -456,6 +457,8 @@ export async function runToolExecution(
   let didObservePreparationStarted = false
   let didFinishToolCall = false
   let commandOutput = ''
+  let lastOutputAt = 0
+  let lastOutputTraceAt = -Infinity
   let progressStream: ToolRuntimeProgress['stream']
   let completedStreamProgress: ToolRuntimeProgress | undefined
   let lastPreparationProgress: ToolRuntimeProgress | undefined
@@ -558,6 +561,7 @@ export async function runToolExecution(
           output,
           durationMs,
           commandOutput,
+          ...(lastOutputAt ? { lastOutputAt } : {}),
           progressMessage: progress.message,
           ...(preparation ? { preparation } : {}),
           ...(toolCallTitle ? { toolCallTitle } : {}),
@@ -566,8 +570,6 @@ export async function runToolExecution(
         return
       }
     }
-
-
     const isOutputDelta = progress.key === 'bridges.tools.command_output_delta' ||
       progress.key === 'bridges.tools.output_delta'
     const outputDelta = isOutputDelta
@@ -578,30 +580,41 @@ export async function runToolExecution(
     if (outputDelta) {
       // Keep a bounded tail for reconnects without growing every saved turn.
       commandOutput = (commandOutput + outputDelta).slice(-COMMAND_OUTPUT_MAX_TRACE_CHARS)
+      lastOutputAt = Date.now()
     }
 
-    onProgressEvent?.({
-      id: toolGroupId,
-      name: qualifiedName,
-      toolkitName: toolDisplayContext.toolkitName,
-      toolName: toolDisplayContext.toolName,
-      ...(toolCallTitle ? { toolCallTitle } : {}),
-      status: 'running',
-      ...(toolDisplayContext.toolkitIconName
-        ? { toolkitIconName: toolDisplayContext.toolkitIconName }
-        : {}),
-      ...(toolDisplayContext.toolIconName
-        ? { toolIconName: toolDisplayContext.toolIconName }
-        : {}),
-      ...(toolDisplayContext.toolLogo ? { toolLogo: toolDisplayContext.toolLogo } : {}),
-      input: requestedToolInput,
-      output: progress.data || progress.message,
-      ...(preparation ? { preparation } : {}),
-      ...(outputDelta
-        ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving tool output...' }
-        : { progressMessage: progress.message }),
-      ...(stepLabel ? { stepLabel } : {})
-    })
+    // The legacy stream sends deltas. Durable progress sends occasional
+    // snapshots and the final update always carries the latest tail.
+    const publishSnapshot = !outputDelta ||
+      lastOutputAt - lastOutputTraceAt >= COMMAND_OUTPUT_TRACE_INTERVAL_MS
+    if (outputDelta && publishSnapshot) {
+      lastOutputTraceAt = lastOutputAt
+    }
+
+    if (publishSnapshot) {
+      onProgressEvent?.({
+        id: toolGroupId,
+        name: qualifiedName,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
+        ...(toolCallTitle ? { toolCallTitle } : {}),
+        status: 'running',
+        ...(toolDisplayContext.toolkitIconName
+          ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+          : {}),
+        ...(toolDisplayContext.toolIconName
+          ? { toolIconName: toolDisplayContext.toolIconName }
+          : {}),
+        ...(toolDisplayContext.toolLogo ? { toolLogo: toolDisplayContext.toolLogo } : {}),
+        input: requestedToolInput,
+        output: progress.data || progress.message,
+        ...(preparation ? { preparation } : {}),
+        ...(outputDelta
+          ? { commandOutput, lastOutputAt, progressMessage: 'Receiving tool output...' }
+          : { progressMessage: progress.message }),
+        ...(stepLabel ? { stepLabel } : {})
+      })
+    }
     if (isOutputDelta) {
       emitToolExecutionOutputDeltaToWebApp({
         toolkitId,
@@ -715,6 +728,7 @@ export async function runToolExecution(
       durationMs,
       input: requestedToolInput,
       errorMessage: message,
+      ...(lastOutputAt ? { commandOutput, lastOutputAt } : {}),
       ...(preparation ? { preparation } : {}),
       ...(stepLabel ? { stepLabel } : {})
     })
@@ -760,6 +774,15 @@ export async function runToolExecution(
   const effectiveMessage =
     (hasObservedToolFailure && (nestedResultError || toolOutputError)) ||
     toolExecutionResult.message
+  const requestedOptions = asRecord(toolExecutionInput.parsedInput?.['options'])
+  if (outputLogPath && !modelFiles?.length) {
+    const hasRequestedRange = requestedOptions?.['maxChars'] !== undefined ||
+      requestedOptions?.['offsetChars'] !== undefined
+    observationData.output = projectCommandOutput(toolOutput, hasRequestedRange)
+    if (effectiveStatus === 'success' && (!requestedOptions || !Object.keys(requestedOptions).length)) {
+      observationData.output = projectImplicitSourcePage(observationData.output)
+    }
+  }
 
   LogHelper.title(`${DUTY_NAME} / execution`)
   if (hasObservedToolFailure) {
@@ -821,6 +844,7 @@ export async function runToolExecution(
     ...(toolDisplayContext.toolLogo ? { toolLogo: toolDisplayContext.toolLogo } : {}),
     input: requestedToolInput,
     output: displayedOutput,
+    ...(lastOutputAt ? { commandOutput, lastOutputAt } : {}),
     ...(preparation ? { preparation } : {}),
     ...(stepLabel ? { stepLabel } : {}),
     ...(effectiveStatus === 'error'

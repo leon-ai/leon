@@ -1,16 +1,19 @@
 from typing import Any, Dict, Optional
 from enum import Enum
+from time import monotonic
+from threading import Event
 
 from bridges.python.src.sdk.base_tool import BaseTool
 from bridges.python.src.sdk.toolkit_config import ToolkitConfig
-from bridges.python.src.sdk.network import Network, NetworkError
+from bridges.python.src.sdk.network import NetworkError
+
+from .lib.open_meteo_network import OpenMeteoNetwork
 
 DEFAULT_SETTINGS = {}
 REQUIRED_SETTINGS = []
 
 
 DEFAULT_FORECAST_DAYS = 1
-REQUEST_TIMEOUT_MS = 8_000
 
 
 class WeatherDetail(str, Enum):
@@ -140,10 +143,8 @@ class OpenMeteoTool(BaseTool):
         )
         self.required_settings = REQUIRED_SETTINGS
         self._check_required_settings(self.tool_name)
-        self.geocoding_network = Network(
-            {"base_url": "https://geocoding-api.open-meteo.com"}
-        )
-        self.weather_network = Network({"base_url": "https://api.open-meteo.com"})
+        self.geocoding_network = OpenMeteoNetwork("https://geocoding-api.open-meteo.com")
+        self.weather_network = OpenMeteoNetwork("https://api.open-meteo.com")
 
     @property
     def tool_name(self) -> str:
@@ -172,7 +173,12 @@ class OpenMeteoTool(BaseTool):
             return {"success": False, "error": "Unsupported forecast detail."}
 
         try:
-            geocoding = self._geocode(location.strip())
+            # Geocoding and forecast recovery share the host-owned execution budget.
+            context = self.execution_context
+            timeout = (context.timeout or {}).get("totalMs") if context else None
+            deadline = monotonic() + timeout / 1_000 if timeout else float("inf")
+            signal = context.signal if context else None
+            geocoding = self._geocode(location.strip(), deadline, signal)
             if not geocoding:
                 return {"success": False, "error": "Location not found."}
 
@@ -182,6 +188,8 @@ class OpenMeteoTool(BaseTool):
                 start_date,
                 end_date,
                 detail,
+                deadline,
+                signal,
             )
             daily = weather.get("daily", {})
             hourly = weather.get("hourly", {})
@@ -222,7 +230,9 @@ class OpenMeteoTool(BaseTool):
                 result["statusCode"] = error.response.get("status_code")
             return result
 
-    def _geocode(self, location: str) -> Optional[Dict[str, Any]]:
+    def _geocode(
+        self, location: str, deadline: float, signal: Event | None
+    ) -> Optional[Dict[str, Any]]:
         from urllib.parse import urlencode
 
         query_params = urlencode(
@@ -234,15 +244,11 @@ class OpenMeteoTool(BaseTool):
             }
         )
 
-        response = self.geocoding_network.request(
-            {
-                "url": f"/v1/search?{query_params}",
-                "method": "GET",
-                "timeout_ms": REQUEST_TIMEOUT_MS,
-            }
+        response = self.geocoding_network.get(
+            f"/v1/search?{query_params}", deadline, signal
         )
 
-        results = response.get("data", {}).get("results", [])
+        results = response.get("results", [])
         if not results:
             return None
 
@@ -264,9 +270,11 @@ class OpenMeteoTool(BaseTool):
         self,
         latitude: float,
         longitude: float,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        detail: str = WeatherDetail.SUMMARY,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        detail: str,
+        deadline: float,
+        signal: Event | None,
     ) -> Dict[str, Any]:
         from urllib.parse import urlencode
 
@@ -293,12 +301,4 @@ class OpenMeteoTool(BaseTool):
 
         query_params = urlencode(query_params_object)
 
-        response = self.weather_network.request(
-            {
-                "url": f"/v1/forecast?{query_params}",
-                "method": "GET",
-                "timeout_ms": REQUEST_TIMEOUT_MS,
-            }
-        )
-
-        return response.get("data", {})
+        return self.weather_network.get(f"/v1/forecast?{query_params}", deadline, signal)

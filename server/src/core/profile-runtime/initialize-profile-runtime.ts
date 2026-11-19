@@ -13,11 +13,12 @@ export async function refreshActiveProfileLLMRuntime(): Promise<void> {
   await runWithConversationSession({
     sessionId: getActiveConversationSessionId() || ''
   }, async () => {
-    const { LLM_PROVIDER, LLM_MANAGER } = await import('@/core')
+    const { LLM_PROVIDER, LLM_MANAGER, PULSE_MANAGER } = await import('@/core')
     const isProviderReady = await LLM_PROVIDER.init()
 
     if (isProviderReady) {
       await LLM_MANAGER.init()
+      PULSE_MANAGER.start()
     }
   })
 }
@@ -28,7 +29,6 @@ export async function refreshActiveProfileLLMRuntime(): Promise<void> {
 export async function ensureActiveProfileRuntime(): Promise<void> {
   await PROFILE_RUNTIME_MANAGER.ensureInitialized(async () => {
     const { LLM_MANAGER, LLM_PROVIDER, PULSE_MANAGER } = await import('@/core')
-    PULSE_MANAGER.start()
     const hasEnabledTarget = CONFIG_STATE.getModelState().hasEnabledTarget()
 
     if (!hasEnabledTarget) {
@@ -46,5 +46,6 @@ export async function ensureActiveProfileRuntime(): Promise<void> {
     if (!LLM_MANAGER.isLLMEnabled) {
       await LLM_MANAGER.init()
     }
+    PULSE_MANAGER.start()
   })
 }

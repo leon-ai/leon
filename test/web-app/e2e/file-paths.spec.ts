@@ -1,5 +1,5 @@
 import type { Route } from '@playwright/test'
-import { test, expect, finishFiniteAnimations, SESSION_ID, SESSION_URL } from './fixtures'
+import { setFixtureTheme, test, expect, finishFiniteAnimations, SESSION_ID, SESSION_URL } from './fixtures'
 
 const PATH = '/workspace/My notes & ideas/config.json'
 const WINDOWS_PATH = String.raw`C:\Work\my_project\notes.txt`
@@ -25,7 +25,7 @@ for (const [theme, reducedMotion] of [['dark', 'no-preference'], ['light', 'redu
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     if (theme === 'light') {
-      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+      await setFixtureTheme(page, 'light')
     }
     const body = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
     const open = body.getByRole('button', { name: `Open ${PATH} on Leon’s host`, exact: true })

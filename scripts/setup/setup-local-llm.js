@@ -30,7 +30,8 @@ export async function downloadLocalLLM(selected) {
     const pendingPath = `${targetPath}.download`
     try {
       await FileHelper.downloadFile(selected.downloadURL, pendingPath, {
-        skipExisting: false
+        skipExisting: false,
+        sha256: selected.checksum
       })
       if (!await isLocalLLMFileVerified(pendingPath, selected)) {
         throw new Error(`The downloaded ${selected.fileName} did not match its published checksum.`)

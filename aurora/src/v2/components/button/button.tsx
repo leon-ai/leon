@@ -23,6 +23,8 @@ export interface ButtonProps {
   size?: typeof BUTTON_SIZES[number]
   cursorStyle?: CSSProperties['cursor']
   disabled?: boolean
+  feedback?: 'background' | 'color'
+  compact?: boolean
   loading?: boolean
   type?: 'button' | 'submit' | undefined
   form?: string
@@ -56,12 +58,12 @@ export function Button({
   children, className, icon, iconPosition = 'left', ariaLabel, ariaPressed,
   ariaBusy, ariaExpanded, ariaControls, ariaHasPopup, tone = 'default',
   variant = 'ghost', size = 'md', cursorStyle = 'pointer', disabled = false,
-  loading = false, type = 'button', form, href, target, rel, download, onClick, renderLink
+  loading = false, compact = false, feedback = 'background', type = 'button', form, href, target, rel, download, onClick, renderLink
 }: ButtonProps) {
   const isDisabled = disabled || loading
   const isIconOnly = children === undefined
   const common = {
-    className: getButtonClassName({ variant, size, tone, iconOnly: isIconOnly, ...(className ? { className } : {}) }),
+    className: getButtonClassName({ variant, size, tone, iconOnly: isIconOnly, className: clsx(className, { 'button-compact': compact, 'button-color-feedback': feedback === 'color' }) }),
     'aria-label': ariaLabel,
     'aria-pressed': ariaPressed,
     'aria-busy': ariaBusy ?? loading,

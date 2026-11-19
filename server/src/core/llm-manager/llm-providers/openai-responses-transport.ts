@@ -257,12 +257,22 @@ export class OpenAIResponsesTransport {
     }
 
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+    // Report the final wire value after SDK serialization and account filtering.
+    const contextManagement = body['context_management']
+    const compactThreshold: unknown = Array.isArray(contextManagement)
+      ? contextManagement.find((entry) => entry?.['type'] === 'compaction')?.['compact_threshold']
+      : undefined
+    const nativeCompactionThresholdTokens = typeof compactThreshold === 'number'
+      ? compactThreshold
+      : null
     // Concurrent requests must not share one socket's event stream or lineage.
     if (responseTransport !== 'http' && connection.signature === signature && !connection.http &&
       !connection.socket.busy && body['stream'] === true) {
       try {
         this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
-        onStreamEvent?.({ type: 'request-dispatched', transport: 'websocket' })
+        onStreamEvent?.({
+          type: 'request-dispatched', transport: 'websocket', nativeCompactionThresholdTokens
+        })
         const response = await connection.socket.fetch(body, init?.signal ?? undefined, onStreamEvent)
         init?.signal?.throwIfAborted()
 
@@ -284,7 +294,9 @@ export class OpenAIResponsesTransport {
     }
 
     this.onDispatch?.(String(input))
-    onStreamEvent?.({ type: 'request-dispatched', transport: 'http' })
+    onStreamEvent?.({
+      type: 'request-dispatched', transport: 'http', nativeCompactionThresholdTokens
+    })
     const response = await globalThis.fetch(input, init)
 
     return { response, transport: 'http' }

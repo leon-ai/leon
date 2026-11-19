@@ -30,7 +30,7 @@ it('keeps native Cua action arguments compatible with the installed driver', asy
       get_desktop_state: ['settle_ms'],
       zoom: ['purpose', 'scope'],
       move_cursor: ['capture_after', 'settle_ms'],
-      click: ['capture_after', 'settle_ms'],
+      click: ['capture_after', 'settle_ms', ...(process.platform === 'linux' ? ['action'] : [])],
       drag: ['capture_after', 'settle_ms'],
       scroll: ['capture_after', 'settle_ms'],
       type_text: ['capture_after', 'settle_ms', 'mode', 'method'],

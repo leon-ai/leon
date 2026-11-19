@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "version": "2.0.0-alpha.0.5",
+  "title": "A new era begins",
+  "summary": "A new web app, shared context for related conversations, and Core updates you can review and install when you choose.",
+  "highlights": [
+    {
+      "title": "A workspace for each project",
+      "body": "Group conversations with a shared brief and resource references while keeping their histories separate."
+    },
+    {
+      "title": "Updates on your terms",
+      "body": "Read release notes before updating my Core, follow installation progress, and keep your profiles separate from application code."
+    }
+  ],
+  "changes": {
+    "new": [
+      "Browse conversations and project workspaces in the new web app.",
+      "Review and install published Core releases from the update dialog."
+    ],
+    "improvements": [
+      "Stage verified Core archives before restarting the server.",
+      "Show measured download progress and profile preparation details during updates.",
+      "Keep accepted Core updates running when the browser page closes."
+    ],
+    "fixes": [
+      "Preserve the working runtime when a replacement download or extraction fails."
+    ],
+    "removed": []
+  }
+}

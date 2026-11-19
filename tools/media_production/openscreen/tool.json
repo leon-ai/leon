@@ -3,7 +3,7 @@
   "tool_id": "openscreen",
   "toolkit_id": "media_production",
   "name": "OpenScreen",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Record a selected desktop display or window, retain editable cursor data and export polished MP4/GIF recordings with automatic focus zoom.",
   "icon_name": "record-circle-line",
   "distribution": "built-in",
@@ -30,7 +30,7 @@
       "sha256": "6439650cedf119e017ad81fb4382bddf22ae321bd11d446c8dc0de52d72ff773"
     }
   },
-  "progressive_guidance": "Use sources then start with exactly one unique windowTitle, displayIndex, or a Wayland systemPicker. No silent whole-screen default. Capture runs on a graphical desktop with owner-granted OS permissions. Managed binaries provision automatically where declared; Windows needs an installed app. Microphone, system audio and camera remain off unless requested. Sessions and project IDs are conversation-owned. Always stop; duration is bounded to 120 seconds by default, maximum 3600. For browser automation, link the exact recorded window to browserTabId at start. If window selection fails, refresh sources and resolve the ambiguity; do not drop browserTabId or switch to a whole display to bypass the failure. Browser Use records timestamped pointer events; stop imports only that tab's events from this conversation and asks upstream to generate cursor motion and zooms. Capture should stay on that tab; a new tab needs its own take or an explicitly supplied combined setPointerTrack. External scripts can supply observed events manually with setPointerTrack. Never invent coordinates, timestamps or clicks. Auto-zoom needs clicks; no regions is a valid outcome to report. First seconds and stopping clicks may remain wide. stop applies configured trimming to linked browser takes and returns optimization status plus a projectId for info, settings, captions, preview and exportRecording. optimizeRecording can repeat that analysis using saved evidence; cuts preserve original footage and existing edits. Its videoPath is raw capture: it has no rendered background, editable cursor or project zooms. Always use exportRecording for delivery and import that composed export into FilmCraft or another editor when further editing is needed. MP4 defaults to source resolution at 60 fps to preserve UI text; choose a smaller quality only when requested or justified by delivery limits. Project IDs persist in this conversation's app storage but active recordings and pointer registration cannot survive worker loss. info returns the current document, zoomRanges, settings and supported settingsContext. New projects use profile tool editor defaults; wallpaper=empty automatically chooses a bundled background. Explicit project settings are preserved until changed. setEditorSettings passes only supplied settings through upstream validation. captions transcribes speech locally and enables captions; the first call downloads a Whisper model. A silent recording has no speech to caption. preview supplies composed ruler-time frames; inspect relevant frames and actual zoom regions before delivery. exportRecording returns zoomRegions and warnings as well as a successful MP4/GIF artifact. autoZoom=false preserves existing project zooms; it does not remove them. Exports use new absolute directories with existing parents. quality/fps apply only to MP4; gifFps/gifSize/gifLoop apply only to GIF. Cancellation stops the app and partial outputs are never delivered as complete. pack accepts only legacy CLI .openscreen files, not the retained editor projects. No provider or second AI loop is used.",
+  "progressive_guidance": "On Wayland, select systemPicker. Elsewhere, select one unique windowTitle or displayIndex from sources. Tell the owner which source to select before opening the Wayland picker. Capture runs on a graphical desktop with owner-granted OS permissions. Managed binaries provision automatically where declared; Windows needs an installed app. Microphone, system audio and camera remain off unless requested. Sessions and project IDs are conversation-owned. Always stop; duration is bounded to 120 seconds by default, maximum 3600. For browser automation, keep browserTabId linked to its recorded window. On Wayland, pass browserTabId with systemPicker and have the owner select that browser window. On other desktops, pass browserTabId with a unique windowTitle from sources. If the first stop returns browserWindowVerificationRequired, use preview to verify the full browser window and the demonstrated tab are visible, then call stop again with browserWindowVerified=true. If the picker selected the wrong window or a display, ask the owner to select the intended window on a new take. If the preview is clipped, report the capture problem. Browser Use records timestamped pointer events. After source verification, stop imports only that tab's events from this conversation and asks upstream to generate cursor motion and zooms. Check that the cursor and zoom land on the demonstrated control in the composed preview. Capture should stay on that tab; a new tab needs its own take or an explicitly supplied combined setPointerTrack. External scripts can supply observed events manually with setPointerTrack. Never invent coordinates, timestamps or clicks. Auto-zoom needs clicks; no regions is a valid outcome to report. First seconds and stopping clicks may remain wide. stop applies configured trimming to linked browser takes and returns optimization status plus a projectId for info, settings, captions, preview and exportRecording. optimizeRecording can repeat that analysis using saved evidence; cuts preserve original footage and existing edits. Its videoPath is raw capture: it has no rendered background, editable cursor or project zooms. Always use exportRecording for delivery and import that composed export into FilmCraft or another editor when further editing is needed. MP4 defaults to source resolution at 60 fps to preserve UI text; choose a smaller quality only when requested or justified by delivery limits. Project IDs persist in this conversation's app storage but active recordings and pointer registration cannot survive worker loss. info returns the current document, zoomRanges, settings and supported settingsContext. New projects use profile tool editor defaults; wallpaper=empty automatically chooses a bundled background. Explicit project settings are preserved until changed. setEditorSettings passes only supplied settings through upstream validation. captions transcribes speech locally and enables captions; the first call downloads a Whisper model. A silent recording has no speech to caption. preview supplies composed ruler-time frames; inspect relevant frames and actual zoom regions before delivery. exportRecording returns zoomRegions and warnings as well as a successful MP4/GIF artifact. autoZoom=false preserves existing project zooms; it does not remove them. Exports use new absolute directories with existing parents. quality/fps apply only to MP4; gifFps/gifSize/gifLoop apply only to GIF. Cancellation stops the app and partial outputs are never delivered as complete. pack accepts only legacy CLI .openscreen files, not the retained editor projects. No provider or second AI loop is used.",
   "functions": {
     "sources": {
       "description": "List display indices, window titles, microphone labels and camera labels from the retained OpenScreen session.",
@@ -60,7 +60,7 @@
               },
               "systemPicker": {
                 "type": "boolean",
-                "description": "Linux portal capture; owner must choose the source."
+                "description": "Wayland portal capture. The owner chooses the source. For browser demonstrations, select the window containing browserTabId."
               },
               "durationSeconds": {
                 "type": "integer",
@@ -102,7 +102,7 @@
               "browserTabId": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Exact browser tab shown in the recorded window; imports this tab's pointer events at stop."
+                "description": "Exact tab shown in the recorded browser window. Use with windowTitle or a Wayland systemPicker."
               }
             },
             "additionalProperties": false
@@ -138,13 +138,17 @@
       "deduplicate_calls": false
     },
     "stop": {
-      "description": "Finalize capture, import pointer timing and apply configured silent idle trims. Returns projectId, raw videoPath, zoom count and optimization results; exportRecording renders the edited project.",
+      "description": "Finalize capture and save the editable project. Wayland browser takes require a preview and a second stop call to confirm the selected window before importing pointer timing and applying silent idle trims.",
       "parameters": {
         "type": "object",
         "properties": {
           "sessionId": {
             "type": "string",
             "minLength": 1
+          },
+          "browserWindowVerified": {
+            "type": "boolean",
+            "description": "Pass true after stop reports browserWindowVerificationRequired and preview shows the complete browser window with the linked tab."
           }
         },
         "required": [

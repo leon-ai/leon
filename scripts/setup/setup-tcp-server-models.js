@@ -16,7 +16,6 @@ import {
   TTS_BERT_BASE_MODEL_FILES
 } from '@/core/voice/voice-resource-state'
 import { FileHelper } from '@/helpers/file-helper'
-import { NetworkHelper } from '@/helpers/network-helper'
 
 import { createSetupStatus } from './setup-status'
 
@@ -29,18 +28,13 @@ import { createSetupStatus } from './setup-status'
 
 async function installTTSModel() {
   const destPath = PYTHON_TCP_SERVER_TTS_MODEL_PATH
-  const pythonTCPServerTTSModelDownloadURL = await NetworkHelper.setHuggingFaceURL(
-    PYTHON_TCP_SERVER_TTS_MODEL_HF_DOWNLOAD_URL
-  )
+  const pythonTCPServerTTSModelDownloadURL = PYTHON_TCP_SERVER_TTS_MODEL_HF_DOWNLOAD_URL
 
   await FileHelper.downloadFile(pythonTCPServerTTSModelDownloadURL, destPath)
 }
 async function installASRModel() {
   for (const modelFile of ASR_MODEL_FILES) {
-    const pythonTCPServerASRModelDownloadURL =
-      await NetworkHelper.setHuggingFaceURL(
-        PYTHON_TCP_SERVER_ASR_MODEL_HF_PREFIX_DOWNLOAD_URL
-      )
+    const pythonTCPServerASRModelDownloadURL = PYTHON_TCP_SERVER_ASR_MODEL_HF_PREFIX_DOWNLOAD_URL
     const modelInstallationFileURL = `${pythonTCPServerASRModelDownloadURL}/${modelFile}?download=true`
     const destPath = path.join(PYTHON_TCP_SERVER_ASR_MODEL_DIR_PATH, modelFile)
 
@@ -73,10 +67,7 @@ async function installASRModel() {
 }*/
 async function installTTSBERTBaseModel() {
   for (const modelFile of TTS_BERT_BASE_MODEL_FILES) {
-    const pythonTCPServerTTSBERTBaseModelPrefixDownloadURL =
-      await NetworkHelper.setHuggingFaceURL(
-        PYTHON_TCP_SERVER_TTS_BERT_BASE_MODEL_HF_PREFIX_DOWNLOAD_URL
-      )
+    const pythonTCPServerTTSBERTBaseModelPrefixDownloadURL = PYTHON_TCP_SERVER_TTS_BERT_BASE_MODEL_HF_PREFIX_DOWNLOAD_URL
     const modelInstallationFileURL = `${pythonTCPServerTTSBERTBaseModelPrefixDownloadURL}/${modelFile}?download=true`
     const destPath = path.join(PYTHON_TCP_SERVER_TTS_BERT_BASE_DIR_PATH, modelFile)
 

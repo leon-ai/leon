@@ -16,6 +16,8 @@ import type { FeedEntry } from './feed'
 import { AMBIENT_CONDITIONS_QUERY_KEY } from './ambient-conditions'
 import { queryHistoryKey } from './query-history'
 import { recordSessionCompletion } from './session-read-state'
+import { workspacesQueryKey } from './workspaces'
+import { playTurnCompletionSound } from '@/utils/sounds'
 import { prefetchAnswerRendering } from '@/components/aurora-answer/preload'
 import { assertSendMessageActive, releaseSendMessageFiles, uploadOwnerAttachments, type SendMessageInput } from './owner-attachments'
 
@@ -330,6 +332,7 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
           metadataTimer = undefined
           if (source.readyState !== EventSource.CLOSED) {
             void queryClient.invalidateQueries({ queryKey: [...sessionsQueryKey, profile] })
+            void queryClient.invalidateQueries({ queryKey: [...workspacesQueryKey, profile] })
           }
         }, METADATA_REFRESH_DELAY_MS)
       }
@@ -359,6 +362,10 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
       }
       const event = notification
       recordSessionCompletion(profile, sessionId, event)
+      if (event.sequence > (snapshot?.event_cursor ?? sidebarCursor ?? 0) && event.type === 'turn_status'
+        && event.data['status'] === 'completed' && event.data['consumed'] !== true) {
+        playTurnCompletionSound(profile, event.sequence)
+      }
       if (event.type === 'owner_message' || event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {
         void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, event.session_id || sessionId || ''), exact: true })
       }

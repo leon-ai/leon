@@ -9,9 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConversationLogger } from '@/conversation-logger'
 import { POST_TURN_MAINTENANCE_QUEUE } from '@/core'
+import { postFileSystemList } from '@/core/http-server/api/file-system-list/post'
 import { sessionsPlugin } from '@/core/http-server/api/sessions'
-import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { CONVERSATION_SESSION_MANAGER, ConversationSessionManager } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
+import { getWorkspaceGrounding } from '@/core/session-manager/workspace-context'
 import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { enterProfileContext, getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import type { ReactLLMDutyParams } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
@@ -33,11 +35,17 @@ import { readArtifact } from '@/core/artifacts/artifact-store'
 import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
 import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { presentAurora } from '@/core/aurora/answer-presentation'
+
+interface FixtureAnswer {
+  output: string
+  finalIntent: 'answer' | 'clarification'
+}
 
 const fixture = vi.hoisted(() => ({
   root: '',
   logger: null as ConversationLogger | null,
-  executions: [] as { profile: string, session: string, query: string, target: string, files: ReactLLMDutyParams['files'], release: () => void }[]
+  executions: [] as { profile: string, session: string, query: string, target: string, files: ReactLLMDutyParams['files'], release: (answer?: FixtureAnswer) => void }[]
 }))
 
 vi.mock('@/core', () => ({
@@ -94,23 +102,24 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
       }, { sessionId: session, activity: true })
       this.params.onTextStream?.('reasoning', { token: 'Public reasoning', generationId: `${query}:thought` })
       try {
-        await new Promise<void>((resolve, reject) => {
+        const answer = await new Promise<FixtureAnswer | undefined>((resolve, reject) => {
           const signal = this.params.signal!
           const abort = (): void => reject(signal.reason)
           signal.addEventListener('abort', abort, { once: true })
           fixture.executions.push({ profile: getActiveProfileName(), session, query, files: this.params.files,
-            target: CONFIG_STATE.getModelState().getAgentTarget().label, release: () => {
+            target: CONFIG_STATE.getModelState().getAgentTarget().label, release: (result) => {
             signal.removeEventListener('abort', abort)
-            resolve()
+              resolve(result)
           } })
           if (signal.aborted) {
             abort()
           }
         })
-        this.params.onTextStream?.('answer', { token: `Done: ${query}`, generationId: query })
+        const output = answer?.output ?? `Done: ${query}`
+        this.params.onTextStream?.('answer', { token: output, generationId: query })
 
-        return { output: `Done: ${query}`, data: {
-          agentResponseTrace: trace, llmMetrics: { durationMs: 250 }, finalIntent: 'answer'
+        return { output, data: {
+          agentResponseTrace: trace, llmMetrics: { durationMs: 250 }, finalIntent: answer?.finalIntent ?? 'answer'
         } }
       } finally {
         turn.close()
@@ -123,7 +132,7 @@ describe('web conversation runtime', () => {
   let profile = ''
   let app = Fastify()
 
-  const request = (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown): ReturnType<typeof app.inject> =>
+  const request = (method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: unknown): ReturnType<typeof app.inject> =>
     app.inject({ method, url, headers: { 'x-test-profile': profile }, ...(payload ? { payload } : {}) })
 
   beforeEach(async () => {
@@ -140,6 +149,7 @@ describe('web conversation runtime', () => {
     })
     await app.register(sessionsPlugin, { apiVersion: 'v1' })
     await app.register(artifactsPlugin, { apiVersion: 'v1' })
+    await app.register(postFileSystemList, { apiVersion: 'v1' })
     await app.ready()
   })
 
@@ -155,6 +165,108 @@ describe('web conversation runtime', () => {
     })
     await app.close()
     await fs.rm(fixture.root, { recursive: true, force: true })
+  })
+
+  it('attaches validated context to sessions, refreshes edited briefs and preserves conversations after workspace removal', async () => {
+    const input = { name: 'Leon', brief: 'Build my assistant', resources: [
+      { kind: 'folder', label: 'Source', location: fixture.root },
+      { kind: 'link', label: 'Planning', location: 'https://www.notion.so/' }
+    ] }
+    const created = await request('POST', '/api/v1/workspaces', input)
+    expect(created.statusCode).toBe(200)
+    const workspace = created.json().workspace
+    const id = randomUUID()
+    expect((await request('POST', '/api/v1/sessions?compact=true', { id, workspace_id: workspace.id })).statusCode).toBe(200)
+    await runWithProfileContext({ profileName: profile }, () => {
+      const restored = new ConversationSessionManager()
+      expect(restored.findSession(id)?.workspaceId).toBe(workspace.id)
+      restored.updateSession(id, { title: 'Restored project conversation' })
+      expect(CONVERSATION_REPOSITORY.readSession(id)?.workspaceId).toBe(workspace.id)
+    })
+    const context = (): Record<string, unknown> => runWithProfileContext({ profileName: profile }, () => getWorkspaceGrounding(id))
+    expect(context()).toMatchObject({ id: workspace.id, brief: input.brief, resources: [
+      { location: syncFs.realpathSync(fixture.root) }, { location: 'https://www.notion.so/' }
+    ] })
+    const edited = await request('PUT', `/api/v1/workspaces/${workspace.id}`, { ...input, name: 'Leon at home', brief: 'Keep Leon cozy' })
+    expect(edited.statusCode).toBe(200)
+    expect(context()['brief']).toBe('Keep Leon cozy')
+    expect(context()).toMatchObject({ name: 'Leon at home', brief: 'Keep Leon cozy', resources: [
+      { location: syncFs.realpathSync(fixture.root) }, { location: 'https://www.notion.so/' }
+    ] })
+    expect((await request('POST', '/api/v1/workspaces', { ...input, name: '  ' })).statusCode).toBe(400)
+    const turn = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.openAgentTurn(id))
+    expect((await request('DELETE', `/api/v1/workspaces/${workspace.id}`)).statusCode).toBe(409)
+    turn.close()
+    expect((await request('DELETE', `/api/v1/workspaces/${workspace.id}`)).statusCode).toBe(200)
+    expect((await request('GET', `/api/v1/sessions/${id}`)).json().session).not.toHaveProperty('workspaceId')
+    expect(context()).not.toHaveProperty('brief')
+    const session = await runWithProfileContext({ profileName: profile }, () => CONVERSATION_SESSION_MANAGER.findSession(id))
+    expect(session).not.toHaveProperty('workspaceId')
+  })
+
+  it('limits workspace folders independently of links on creation and editing', async () => {
+    const resources = ['source', 'notes', 'media'].map((name) => ({
+      kind: 'folder', label: name, location: path.join(fixture.root, name)
+    }))
+    const input = { name: 'Leon', brief: '', resources: [
+      ...resources, { kind: 'link', label: 'Planning', location: 'https://example.com/' }
+    ] }
+    const created = await request('POST', '/api/v1/workspaces', input)
+    expect(created.statusCode).toBe(200)
+    const workspace = created.json().workspace
+    expect(workspace.resources).toHaveLength(4)
+
+    const overflow = { ...input, resources: [...input.resources, {
+      kind: 'folder', label: 'Extra', location: path.join(fixture.root, 'extra')
+    }] }
+    expect((await request('POST', '/api/v1/workspaces', overflow)).statusCode).toBe(400)
+    expect((await request('PUT', `/api/v1/workspaces/${workspace.id}`, overflow)).statusCode).toBe(400)
+    expect((await request('PUT', `/api/v1/workspaces/${workspace.id}`, input)).statusCode).toBe(200)
+    expect((await request('GET', '/api/v1/workspaces')).json().workspaces[0].resources).toHaveLength(4)
+  })
+
+  it('limits pinned conversations across workspaces while preserving existing pins and rejected metadata', async () => {
+    const workspace = (await request('POST', '/api/v1/workspaces', { name: 'Leon', brief: '', resources: [] })).json().workspace
+    expect((await request('PATCH', `/api/v1/workspaces/${workspace.id}`, { is_pinned: true })).statusCode).toBe(200)
+    const ids: string[] = []
+    for (let index = 0; index < 17; index++) {
+      const id = randomUUID()
+      ids.push(id)
+      await request('POST', '/api/v1/sessions?compact=true', { id, ...(index % 2 ? { workspace_id: workspace.id } : {}) })
+      const pinned = await request('PATCH', `/api/v1/sessions/${id}?compact=true`, { is_pinned: true, title: 'Pinned title' })
+      expect(pinned.statusCode).toBe(index < 16 ? 200 : 409)
+    }
+    const rejected = await request('GET', `/api/v1/sessions/${ids[16]}`)
+    expect(rejected.json().session).toMatchObject({ isPinned: false, title: 'New session' })
+    expect((await request('PATCH', `/api/v1/sessions/${ids[0]}?compact=true`, { is_pinned: true })).statusCode).toBe(200)
+    await request('PATCH', `/api/v1/sessions/${ids[0]}?compact=true`, { is_pinned: false })
+    expect((await request('PATCH', `/api/v1/sessions/${ids[16]}?compact=true`, { is_pinned: true })).statusCode).toBe(200)
+    await request('PATCH', `/api/v1/workspaces/${workspace.id}`, { is_pinned: false })
+    expect((await request('GET', '/api/v1/workspaces')).json().workspaces[0]).toMatchObject({ isPinned: true, isExplicitlyPinned: false })
+  })
+
+  it('browses folders from home with parent paths, filtering and recoverable errors without changing legacy file results', async () => {
+    const folder = path.join(fixture.root, 'Projects')
+    await fs.mkdir(path.join(folder, 'Leon'), { recursive: true })
+    await fs.mkdir(path.join(folder, 'Notes'))
+    await fs.writeFile(path.join(folder, 'readme.txt'), 'Notes')
+    const home = vi.spyOn(os, 'homedir').mockReturnValue(fixture.root)
+    try {
+      const browse = async (value: string): Promise<{ success: boolean, directory?: string, parent?: string, entries: { name: string }[] }> =>
+        (await request('POST', '/api/v1/file-system/list', { value, folders_only: true })).json()
+      expect(await browse('~/')).toMatchObject({ success: true, directory: fixture.root + path.sep,
+        parent: path.dirname(fixture.root) + path.sep, entries: [{ name: 'Projects', type: 'folder' }] })
+      const nested = await browse('~/Projects/../Projects/')
+      expect(nested['entries'].map((entry: { name: string }) => entry.name)).toEqual(['Leon', 'Notes'])
+      expect((await browse('~\\Projects\\Le'))['entries'].map((entry: { name: string }) => entry.name)).toEqual(['Leon'])
+      expect(await browse(path.parse(folder).root)).toMatchObject({ success: true, directory: path.parse(folder).root,
+        parent: path.parse(folder).root })
+      expect(await browse('~/missing/')).toMatchObject({ success: false, entries: [] })
+      const legacy = (await request('POST', '/api/v1/file-system/list', { value: '@Projects/' })).json()
+      expect(legacy.entries.map((entry: { name: string }) => entry.name)).toContain('readme.txt')
+    } finally {
+      home.mockRestore()
+    }
   })
 
   async function create(): Promise<string> {
@@ -445,6 +557,36 @@ describe('web conversation runtime', () => {
     await expect.poll(() => runWithProfileContext({ profileName: profile }, () => WEB_SESSION_RUNTIME.isRunning(sessionId))).toBe(false)
     expect((await request('POST', endpoint, body)).statusCode).toBe(202)
     expect(fixture.executions).toHaveLength(1)
+  })
+
+  it.each([
+    { purpose: 'clarification', spec: AURORA_CHOICE_SPEC, order: ['text', 'ui'] },
+    { purpose: 'answer', spec: AURORA_GENERATED_SPEC, order: ['ui', 'text'] }
+  ] as const)('keeps $purpose Markdown and visual parts in order in live delivery and history', async ({ purpose, spec, order }) => {
+    const sessionId = await create()
+    const id = randomUUID()
+    const messageId = `${id}:leon`
+    const output = 'A quiet morning leaves more time for a walk.'
+    expect((await request('POST', `/api/v1/sessions/${sessionId}/messages`, { id, query: 'Help me choose.' })).statusCode).toBe(202)
+    await expect.poll(() => fixture.executions.length).toBe(1)
+    await runWithProfileContext({ profileName: profile }, () => presentAurora(sessionId, messageId, spec, purpose))
+    fixture.executions[0]!.release({ output, finalIntent: purpose })
+
+    await expect.poll(async () => (await request('GET', `/api/v1/sessions/${sessionId}`)).json().is_running).toBe(false)
+    const page = (await request('GET', `/api/v1/sessions/${sessionId}`)).json() as { messages: ConversationRecord[] }
+    const answer = page.messages.find((record) => record.messageId === messageId)
+    expect(answer?.message).toBe(output)
+    expect(answer?.answerParts?.map((part) => part.kind)).toEqual(order)
+    expect(answer?.answerParts).toContainEqual({ id: `${messageId}:text`, kind: 'text', text: output })
+    expect(answer?.answerParts).toContainEqual(expect.objectContaining({ kind: 'ui',
+      surface: expect.objectContaining({ status: 'ready', ownerMessageId: id }) }))
+
+    await runWithProfileContext({ profileName: profile }, () => {
+      const event = CONVERSATION_REPOSITORY.readEvents<ConversationEvent>(0).items.find((item) =>
+        item.type === 'final_answer' && item.response_id === messageId
+      )
+      expect(event?.data['answer_parts']).toEqual(answer?.answerParts)
+    })
   })
 
   it('does not present an unavailable retained preparation as live after recovery', async () => {

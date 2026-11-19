@@ -58,6 +58,7 @@ export interface SessionSearchOptions {
   contextWindow?: number
   includeCurrentSession?: boolean
   currentSessionId?: string
+  workspaceId?: string
 }
 
 export interface SessionSearchMessage {
@@ -214,7 +215,8 @@ async function readJSONFile(filePath: string): Promise<unknown | null> {
 async function readSessionDocuments(
   sessionsPath: string,
   includeCurrentSession: boolean,
-  currentSessionId?: string
+  currentSessionId?: string,
+  workspaceId?: string
 ): Promise<SessionDocument[]> {
   const databasePath = path.join(sessionsPath, CONVERSATION_DATABASE_FILENAME)
   if (fs.existsSync(databasePath)) {
@@ -223,7 +225,9 @@ async function readSessionDocuments(
       const active = db.prepare('SELECT value FROM conversation_state WHERE key = ?')
         .get('active_session_id')
       const excluded = currentSessionId || String(active?.['value'] ?? '')
-      const rows = db.prepare('SELECT id, payload FROM conversation_sessions').all()
+      const rows = workspaceId
+        ? db.prepare('SELECT id, payload FROM conversation_sessions WHERE json_extract(payload, \'$.workspaceId\') = ?').all(workspaceId)
+        : db.prepare('SELECT id, payload FROM conversation_sessions').all()
 
       return rows.flatMap((row): SessionDocument[] => {
         const id = String(row['id'])
@@ -246,6 +250,10 @@ async function readSessionDocuments(
     }
   }
 
+  // Legacy archives predate workspace membership and cannot satisfy its scope.
+  if (workspaceId) {
+    return []
+  }
   const index = parseSessionIndex(
     await readJSONFile(path.join(sessionsPath, SESSION_INDEX_FILENAME))
   )
@@ -399,7 +407,8 @@ export async function searchConversationSessions(
   const documents = await readSessionDocuments(
     options.sessionsPath,
     options.includeCurrentSession === true,
-    options.currentSessionId
+    options.currentSessionId,
+    options.workspaceId
   )
   const queryTerms = getSessionSearchTerms(query)
   const normalizedQuery = normalizeText(query)

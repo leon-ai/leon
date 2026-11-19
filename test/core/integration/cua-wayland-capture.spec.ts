@@ -14,9 +14,10 @@ import {
 import type { ComputerUseDriver, CuaToolResult } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
 import { ComputerUseArtifactStore } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-artifact-store'
 
-const LAYOUT = { width: 600, height: 450, serial: 1 }
+const LAYOUT = { width: 600, height: 450, serial: 1, unscaledSingleMonitor: false }
 const BOUNDS = { x: 300, y: 150, width: 150, height: 150 }
 let desktop: Buffer
+let nativeWindow: Buffer
 
 beforeAll(async () => {
   // Render a fixture, not a live desktop: physical (400,200), logical (300,150).
@@ -26,6 +27,12 @@ beforeAll(async () => {
     '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'
   ], { encoding: 'buffer' })
   desktop = Buffer.from(result.stdout)
+  const windowResult = await execa(ffmpegStatic!, [
+    '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'color=blue:s=75x75,format=rgb24',
+    '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'
+  ], { encoding: 'buffer' })
+  nativeWindow = Buffer.from(windowResult.stdout)
 })
 
 async function centerPixel(image: Buffer, x = 'iw/2', y = 'ih/2'): Promise<number[]> {
@@ -45,17 +52,29 @@ function result(state: Record<string, unknown>, image?: Buffer): CuaToolResult {
   }
 }
 
-function driver(windowBounds = BOUNDS, otherWindows: Record<string, unknown>[] = []): ComputerUseDriver {
+function driver(
+  windowBounds = BOUNDS,
+  otherWindows: Record<string, unknown>[] = [],
+  observedBounds = BOUNDS
+): ComputerUseDriver {
   return {
     isAvailable: () => true, shutdown: async (): Promise<void> => {}, uniffiDestroy: (): void => {},
     listToolsJson: async () => '{}',
-    callTool: vi.fn(async (name: string) => {
+    callTool: vi.fn(async (name: string, args: string) => {
       if (name === 'get_desktop_state') return result({ screenshot_width: 800, screenshot_height: 600 }, desktop)
       if (name === 'list_windows') return result({ windows: [
         { pid: 10, window_id: 20, bounds: windowBounds, is_on_screen: true, z_index: 10 }, ...otherWindows
       ] })
       if (name === 'zoom') return result({ width: 140, height: 140 }, desktop)
-      return result({ window_bounds: BOUNDS, screenshot_width: 75, screenshot_height: 75 }, desktop)
+      const target = { pid: 10, window_id: 20, window_bounds: observedBounds }
+      if (JSON.parse(args)['include_screenshot'] === false) {
+        return result(target)
+      }
+
+      return result({
+        ...target, screenshot_frame_valid: true, frame_scale: 0.5,
+        screenshot_width: 75, screenshot_height: 75
+      }, nativeWindow)
     })
   }
 }
@@ -108,7 +127,7 @@ describe('GNOME coordinate normalization', () => {
     expect(png.readUInt32BE(20)).toBe(450)
   })
 
-  it('does not reinterpret native input coordinates or clipboard calls', async () => {
+  it('passes through input, clipboard, and accessibility-only observations without reading the layout', async () => {
     const native = driver()
     const read = vi.fn(async () => LAYOUT)
     const adapter = new CuaWaylandCaptureAdapter(native, read)
@@ -117,6 +136,10 @@ describe('GNOME coordinate normalization', () => {
       await adapter.callTool(name, args)
       expect(native.callTool).toHaveBeenLastCalledWith(name, args)
     }
+    const args = '{"pid":10,"window_id":20,"include_screenshot":false}'
+    const observation = await adapter.callTool('get_window_state', args)
+    expect(observation.images).toEqual([])
+    expect(native.callTool).toHaveBeenLastCalledWith('get_window_state', args)
     expect(read).not.toHaveBeenCalled()
   })
 
@@ -134,14 +157,20 @@ describe('GNOME coordinate normalization', () => {
     expect(capture.images).toEqual([])
   })
 
-  it('allows windows behind the target, outside its bounds, or on another workspace', async () => {
+  it('keeps the native frame on an unscaled output with no covering window', async () => {
     const native = driver(BOUNDS, [
       { bounds: BOUNDS, is_on_screen: true, z_index: 5 },
       { bounds: { ...BOUNDS, x: 0 }, is_on_screen: true, z_index: 20 },
       { bounds: BOUNDS, is_on_screen: false, z_index: 30 }
     ])
-    const adapter = new CuaWaylandCaptureAdapter(native, async () => LAYOUT)
-    expect((await adapter.callTool('get_window_state', '{"pid":10,"window_id":20}')).isError).toBe(false)
+    const adapter = new CuaWaylandCaptureAdapter(native, async () => ({
+      ...LAYOUT, unscaledSingleMonitor: true
+    }))
+    const capture = await adapter.callTool('get_window_state', '{"pid":10,"window_id":20}')
+    expect(capture.isError).toBe(false)
+    expect(capture.images[0]?.dataBase64).toBe(nativeWindow.toString('base64'))
+    expect(vi.mocked(native.callTool).mock.calls.map(([name]) => name))
+      .toEqual(['get_window_state', 'list_windows'])
   })
 
   it('rejects a display change during capture', async () => {
@@ -160,15 +189,13 @@ describe('GNOME coordinate normalization', () => {
     expect(native.callTool).toHaveBeenCalledTimes(1)
   })
 
-  it('undoes window resizing before native zoom at 133% display scale', async () => {
+  it('leaves window resize translation to native zoom and aligns the corrected crop with input', async () => {
     const native = driver()
     const adapter = new CuaWaylandCaptureAdapter(native, async () => LAYOUT)
     await adapter.callTool('get_window_state', '{"pid":10,"window_id":20}')
     const args = '{"pid":10,"window_id":20,"x1":12.5,"y1":12.5,"x2":62.5,"y2":62.5}'
     const capture = await adapter.callTool('zoom', args)
-    expect(native.callTool).toHaveBeenCalledWith('zoom', JSON.stringify({
-      pid: 10, window_id: 20, x1: 25, y1: 25, x2: 125, y2: 125
-    }))
+    expect(native.callTool).toHaveBeenCalledWith('zoom', args)
     expect(capture.images[0]!.mimeType).toBe('image/png')
     const png = Buffer.from(capture.images[0]!.dataBase64, 'base64')
     expect(png.readUInt32BE(16)).toBe(140)
@@ -193,7 +220,7 @@ describe('GNOME coordinate normalization', () => {
     await expect(adapter.callTool('zoom', JSON.stringify(args))).rejects.toThrow('Observe the full window')
   })
 
-  it('handles native zoom without session support, but refuses ambiguous conversation ownership', async () => {
+  it('requires an unambiguous window observation when zoom omits the session', async () => {
     const adapter = new CuaWaylandCaptureAdapter(driver(), async () => LAYOUT)
     const args = { pid: 10, window_id: 20, x1: 10, y1: 10, x2: 50, y2: 50 }
     await adapter.callTool('get_window_state', JSON.stringify({ ...args, session: 'first' }))
@@ -204,12 +231,16 @@ describe('GNOME coordinate normalization', () => {
   })
 
   it('leaves an unscaled desktop unchanged', async () => {
-    expect(await normalizeGnomeCapture(desktop, { width: 800, height: 600, serial: 1 })).toBe(desktop)
+    expect(await normalizeGnomeCapture(desktop, {
+      width: 800, height: 600, serial: 1, unscaledSingleMonitor: true
+    })).toBe(desktop)
   })
 
   it('refuses incompatible geometry and partially off-screen windows', async () => {
     await expect(normalizeGnomeCapture(desktop, { ...LAYOUT, width: 500 })).rejects.toThrow('display layout')
-    await expect(normalizeGnomeCapture(desktop, LAYOUT, { ...BOUNDS, x: -1 })).rejects.toThrow('outside')
+    const bounds = { ...BOUNDS, x: -1 }
+    const adapter = new CuaWaylandCaptureAdapter(driver(bounds, [], bounds), async () => LAYOUT)
+    await expect(adapter.callTool('get_window_state', '{"pid":10,"window_id":20}')).rejects.toThrow('outside')
   })
 })
 
@@ -221,7 +252,10 @@ describe('Mutter display layout', () => {
       [[0, 0, scale, 0, true, [spec], {}]],
       { 'layout-mode': { data: 1 } }
     ] }
-    expect(parseGnomeCaptureLayout(response)).toEqual({ width: Math.round(2_400 / scale), height: Math.round(1_800 / scale), serial: 1 })
+    expect(parseGnomeCaptureLayout(response)).toEqual({
+      width: Math.round(2_400 / scale), height: Math.round(1_800 / scale),
+      serial: 1, unscaledSingleMonitor: scale === 1
+    })
   })
 
   it('accounts for rotated outputs and monitor offsets', () => {
@@ -231,6 +265,8 @@ describe('Mutter display layout', () => {
       [[0, 0, 1, 0, true, [first], {}], [1_920, 0, 1, 1, false, [second], {}]],
       { 'layout-mode': { data: 1 } }
     ] }
-    expect(parseGnomeCaptureLayout(response)).toEqual({ width: 3_000, height: 1_920, serial: 2 })
+    expect(parseGnomeCaptureLayout(response)).toEqual({
+      width: 3_000, height: 1_920, serial: 2, unscaledSingleMonitor: false
+    })
   })
 })

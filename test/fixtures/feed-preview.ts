@@ -22,7 +22,7 @@ export function createFeedPreviewExamples(now: number): FeedPreviewExample[] {
 
   function tool(id: string, title: string, status: FeedToolCall['status'], details: Partial<FeedToolCall> = {}): FeedToolCall {
     return {
-      id, toolCallTitle: title, toolkitName: 'Operating system control', toolName: 'Shell',
+      id, toolCallTitle: title, toolkitId: 'operating_system_control', toolName: 'Shell',
       toolIconName: 'terminal-line', functionName: 'executeCommand', status,
       startedAt, input: { command: 'pnpm lint' },
       ...details

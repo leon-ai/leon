@@ -70,6 +70,7 @@ export interface ManagedComputerUseRuntime {
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
   zoomCapableActions: Set<string>
+  supportsExplicitClickAction: boolean
   initializedSessions: Set<string>
   activityOverlaySessions: Set<string>
   /**

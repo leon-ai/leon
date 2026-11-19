@@ -8,8 +8,8 @@ import { test, expect, SESSION_URL, finishFiniteAnimations } from './fixtures'
 const IMAGE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
 const TEXT = { name: 'Notes.txt', mimeType: 'text/plain', buffer: Buffer.from('A quiet afternoon.') }
 
-async function pasteFiles(page: Page, files: { name: string, type: string, size?: number }[]): Promise<void> {
-  await page.getByRole('textbox', { name: 'Message Leon' }).evaluate((element, entries) => {
+async function pasteFiles(page: Page, files: { name: string, type: string, size?: number }[], target = '[aria-label="Message Leon"]'): Promise<void> {
+  await page.locator(target).evaluate((element, entries) => {
     const clipboard = new DataTransfer()
     for (const entry of entries) {
       const file = new File(['notes'], entry.name, { type: entry.type })
@@ -322,6 +322,29 @@ test('pastes files without interrupting text input and can remove and reselect a
   await expect.poll(() => page.evaluate(() => (Reflect.get(window, 'attachmentPreviewUrls') as Set<string>).size)).toBe(0)
 })
 
+test('attaches pasted files throughout session pages and releases the listener outside them', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await composer.fill('Keep my draft')
+  const newSession = page.getByRole('link', { name: 'New session', exact: true })
+  await newSession.focus()
+  await pasteFiles(page, [{ name: 'Session paste.txt', type: 'text/plain' }], ':focus')
+  await expect(page.getByRole('button', { name: 'Remove Session paste.txt' })).toBeVisible()
+  await expect(composer).toHaveValue('Keep my draft')
+  await newSession.click()
+  await expect(page.getByRole('button', { name: 'Remove Session paste.txt' })).toHaveCount(0)
+  await newSession.focus()
+  await pasteFiles(page, [{ name: 'New session paste.txt', type: 'text/plain' }], ':focus')
+  await expect(page.getByRole('button', { name: 'Remove New session paste.txt' })).toBeVisible()
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'New session', exact: true }).focus()
+  await pasteFiles(page, [{ name: 'Outside session.txt', type: 'text/plain' }], ':focus')
+  await newSession.click()
+  await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  expect(ui.uploads).toHaveLength(0)
+})
+
 test('shows a stable drop zone throughout the main body and excludes the sidebar and text drags', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   const data = await page.evaluateHandle(() => {
@@ -604,6 +627,7 @@ for (const landing of ['session', 'new'] as const) {
     await page.goto(SESSION_URL)
     if (landing === 'new') {
       await page.getByRole('link', { name: 'New session', exact: true }).click()
+      await expect(page.locator('.new-session-page')).toBeVisible()
     }
     await page.getByLabel('Choose attachments', { exact: true }).setInputFiles(TEXT)
     // Load the preview route before taking the browser offline; asset-loading

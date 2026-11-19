@@ -19,6 +19,9 @@ const state = vi.hoisted(() => ({
 }))
 
 vi.mock('@/constants', () => ({ CODEBASE_PATH: process.cwd(), MEMORY_EXTRACTION_MAX_BATCH_TURNS: 3 }))
+vi.mock('@/config', () => ({
+  CONFIG_MANAGER: { getConfig: (): { time_zone: string } => ({ time_zone: 'UTC' }) }
+}))
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: { title: vi.fn(), info: vi.fn(), success: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
@@ -301,14 +304,14 @@ describe('memory lifecycle', () => {
 
   it('extracts new owner facts and replaces corrected facts with their evidence', async () => {
     const old = await remember('Owner prefers quiet work sessions with no interruptions in the morning.')
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
+    state.prompt.mockResolvedValueOnce({ output: { items: [{ sourceSubject: 'owner', subject: 'owner',
       content: 'Owner prefers quiet work sessions with no interruptions in the evening.',
       evidence: 'My quiet work sessions are now in the evening.', supersedesItemId: old.id
     }] } })
     expect(await manager.saveMemoryCandidatesFromTurn('My quiet work sessions are now in the evening.', 'Noted.', Date.now())).toBe(1)
     expect(repository.getActiveMemoryItem(old.id)).toBeNull()
     expect(state.prompt.mock.calls[0]?.[0]).toContain(old.id)
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
+    state.prompt.mockResolvedValueOnce({ output: { items: [{ sourceSubject: 'owner', subject: 'owner',
       content: 'Owner lives in Lyon.', evidence: 'I moved to Lyon.'
     }] } })
     expect(await manager.saveMemoryCandidatesFromTurn('I moved to Lyon.', 'Noted.', 1_000)).toBe(1)
@@ -322,7 +325,7 @@ describe('memory lifecycle', () => {
     const old = await remember('Caldera contact is Mira.')
     state.prompt.mockImplementationOnce(async () => {
       await remember('Caldera contact is Nora.', { supersedesItemId: old.id })
-      return { output: { items: [{
+      return { output: { items: [{ sourceSubject: 'owner', subject: 'owner',
         content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.',
         supersedesItemId: old.id
       }] } }
@@ -332,7 +335,7 @@ describe('memory lifecycle', () => {
 
     // A queued older turn can start extraction after the newer record already exists.
     const current = repository.listPersistentMirrorRecords()[0]!
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
+    state.prompt.mockResolvedValueOnce({ output: { items: [{ sourceSubject: 'owner', subject: 'owner',
       content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.',
       supersedesItemId: current.id
     }] } })
@@ -352,10 +355,10 @@ describe('memory lifecycle', () => {
     const old = await remember('Caldera contact is Mira.')
     const sentAt = Date.now()
     state.prompt.mockResolvedValueOnce({ output: { items: [
-      { turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: old.id },
-      { turnIndex: 1, content: 'Borealis reviews are Friday.', evidence: 'Borealis reviews are Friday.' },
-      { turnIndex: 2, content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.', supersedesItemId: old.id },
-      { turnIndex: 2, content: 'Unsupported fact.', evidence: 'Borealis reviews are Friday.' }
+      { sourceSubject: 'owner', subject: 'owner', turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: old.id },
+      { sourceSubject: 'owner', subject: 'owner', turnIndex: 1, content: 'Borealis reviews are Friday.', evidence: 'Borealis reviews are Friday.' },
+      { sourceSubject: 'owner', subject: 'owner', turnIndex: 2, content: 'Caldera contact is Tomas.', evidence: 'Caldera contact is Tomas.', supersedesItemId: old.id },
+      { sourceSubject: 'owner', subject: 'owner', turnIndex: 2, content: 'Unsupported fact.', evidence: 'Borealis reviews are Friday.' }
     ] } })
     expect(await manager.saveMemoryCandidatesFromTurns([
       { userMessage: 'Caldera contact is Nora.', assistantMessage: 'Noted.', sentAt, sourceRef: 'source:first' },
@@ -373,7 +376,7 @@ describe('memory lifecycle', () => {
   it('preserves newer explicit memory when an older backlog begins extraction', async () => {
     const current = await remember('Caldera contact is Tomas.')
     state.prompt.mockResolvedValueOnce({ output: { items: [
-      { turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: current.id }
+      { sourceSubject: 'owner', subject: 'owner', turnIndex: 0, content: 'Caldera contact is Nora.', evidence: 'Caldera contact is Nora.', supersedesItemId: current.id }
     ] } })
     expect(await manager.saveMemoryCandidatesFromTurns([
       { userMessage: 'Caldera contact is Nora.', assistantMessage: 'Noted.', sentAt: current.updatedAt - 1 },
@@ -385,8 +388,8 @@ describe('memory lifecycle', () => {
   it('retains independent temporary circumstances from every turn in a batch', async () => {
     const sentAt = Date.now() - 1_000
     state.prompt.mockResolvedValueOnce({ output: { items: [
-      { turnIndex: 0, scope: 'temporary', content: 'Owner is visiting Lyon.', evidence: 'I am visiting Lyon.' },
-      { turnIndex: 1, scope: 'temporary', content: 'Owner has a slow connection this week.', evidence: 'My connection is slow this week.' }
+      { sourceSubject: 'owner', subject: 'owner', turnIndex: 0, scope: 'temporary', content: 'Owner is visiting Lyon.', evidence: 'I am visiting Lyon.' },
+      { sourceSubject: 'owner', subject: 'owner', turnIndex: 1, scope: 'temporary', content: 'Owner has a slow connection this week.', evidence: 'My connection is slow this week.' }
     ] } })
     expect(await manager.saveMemoryCandidatesFromTurns([
       { userMessage: 'I am visiting Lyon.', assistantMessage: 'Noted.', sentAt },
@@ -398,7 +401,7 @@ describe('memory lifecycle', () => {
   it('preserves unrelated project facts when applying an inferred correction', async () => {
     const caldera = await remember('Caldera invoices are fortnightly.')
     const borealis = await remember('Borealis invoices are fortnightly.')
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
+    state.prompt.mockResolvedValueOnce({ output: { items: [{ sourceSubject: 'owner', subject: 'owner',
       content: 'Caldera invoices are weekly.', evidence: 'Caldera invoices are weekly.',
       supersedesItemId: caldera.id
     }] } })
@@ -408,7 +411,7 @@ describe('memory lifecycle', () => {
   })
 
   it.each([
-    { items: [{ content: 'Owner lives in Paris.', evidence: 'You live in Paris.' }] },
+    { items: [{ sourceSubject: 'owner', subject: 'owner', content: 'Owner lives in Paris.', evidence: 'You live in Paris.' }] },
     { items: [{ content: 'Owner lives in Paris.' }] },
     '- Owner lives in Paris.',
     '{"items":[{"content":"Owner lives in Paris."',
@@ -417,6 +420,50 @@ describe('memory lifecycle', () => {
     state.prompt.mockResolvedValue({ output })
     expect(await manager.saveMemoryCandidatesFromTurn('Thanks.', 'You live in Paris.', 1_000)).toBe(0)
     expect(repository.listPersistentMirrorRecords()).toEqual([])
+  })
+
+  it.each(['persistent', 'temporary'])('rejects a subject swap before any %s mutation', async (scope) => {
+    const evidence = 'Leon, you are still learning Italian.'
+    const existing = await remember('The owner speaks Italian.')
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      scope, evidence, content: 'The owner is still learning Italian.',
+      sourceSubject: 'assistant', subject: 'owner',
+      ...(scope === 'persistent' ? { supersedesItemId: existing.id } : {})
+    }] } })
+
+    expect(await manager.saveMemoryCandidatesFromTurn(evidence, 'I am still learning.', Date.now())).toBe(0)
+    expect(repository.getActiveMemoryItem(existing.id)?.content).toBe(existing.content)
+    expect(repository.listPersistentMirrorRecords()).toHaveLength(1)
+    expect(repository.listTemporaryItems(DEFAULT_TEMPORARY_MEMORY_POLICY.maxItems)).toEqual([])
+    expect(state.prompt).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    { sourceSubject: 'assistant', subject: 'assistant' },
+    { sourceSubject: 'unclear', subject: 'owner' },
+    { sourceSubject: 'owner', subject: 'other' },
+    { sourceSubject: 'owner', subject: null },
+    { subject: 'owner' }
+  ])('rejects unsupported or incomplete subject attribution: %j', async (attribution) => {
+    const evidence = 'I was quoting someone else.'
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'The owner teaches Italian.', evidence, ...attribution
+    }] } })
+
+    expect(await manager.saveMemoryCandidatesFromTurn(evidence, 'Understood.', Date.now())).toBe(0)
+    expect(repository.listPersistentMirrorRecords()).toEqual([])
+  })
+
+  it('preserves correctly attributed owner-related third-party facts in one extraction', async () => {
+    const evidence = 'My partner teaches Italian.'
+    state.prompt.mockResolvedValueOnce({ output: { items: [{
+      content: 'The owner\'s partner teaches Italian.', evidence,
+      sourceSubject: 'other', subject: 'other'
+    }] } })
+
+    expect(await manager.saveMemoryCandidatesFromTurn(evidence, 'Noted.', Date.now())).toBe(1)
+    expect(repository.listPersistentMirrorRecords()[0]?.content).toBe('The owner\'s partner teaches Italian.')
+    expect(state.prompt).toHaveBeenCalledOnce()
   })
 
   it('upgrades an existing database automatically without losing chunks or fact provenance', async () => {
@@ -559,7 +606,7 @@ describe('memory lifecycle', () => {
 
   it('extracts temporary circumstances with multilingual owner evidence in the existing background call', async () => {
     const evidence = '这周我住在株洲。'
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
+    state.prompt.mockResolvedValueOnce({ output: { items: [{ sourceSubject: 'owner', subject: 'owner',
       scope: 'temporary', content: evidence, evidence, expiresAt: null,
       currentLocation: { city: '株洲', country: 'China' }
     }] } })
@@ -638,7 +685,7 @@ describe('memory lifecycle', () => {
       scope: 'temporary', metadata: { evidence: 'Staying in Lyon.' }
     })
     const correction = 'Je suis maintenant à Nantes.'
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
+    state.prompt.mockResolvedValueOnce({ output: { items: [{ sourceSubject: 'owner', subject: 'owner',
       scope: 'temporary', content: correction, evidence: correction, supersedesItemId: first.id
     }] } })
     expect(await manager.saveMemoryCandidatesFromTurn(correction, 'Noted.', Date.now() + 1_000)).toBe(1)
@@ -647,7 +694,7 @@ describe('memory lifecycle', () => {
     expect(current.content).toBe(correction)
 
     const end = 'My stay is over.'
-    state.prompt.mockResolvedValueOnce({ output: { items: [{
+    state.prompt.mockResolvedValueOnce({ output: { items: [{ sourceSubject: 'owner', subject: 'owner',
       scope: 'temporary', content: end, evidence: end, forgetItemId: current.id
     }] } })
     expect(await manager.saveMemoryCandidatesFromTurn(end, 'Noted.', Date.now() + 2_000)).toBe(1)

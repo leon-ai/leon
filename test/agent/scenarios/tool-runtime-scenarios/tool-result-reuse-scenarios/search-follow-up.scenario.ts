@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
-import { inScenarioWorkspace, scenarioWeather } from '../../scenario-fixture'
+import { inScenarioWorkspace, runMaintainedTurn, scenarioWeather } from '../../scenario-fixture'
 
 let searches = 0
 const scenario: RealAgentScenario = {
@@ -24,12 +24,14 @@ const scenario: RealAgentScenario = {
     }
   },
   async run(context) {
-    return inScenarioWorkspace(context.profilePath, async () => {
-      const first = await context.runTurn('Run exactly one web search for the Caldera pilot update. Keep its results available for my next question, but do not write them to files or memory. Just tell me when the search is ready.')
-      assert.equal(first.finalIntent, 'answer', first.output)
+    return inScenarioWorkspace(context.profilePath, async (workspace) => {
+      const first = await runMaintainedTurn(context,
+        'Run exactly one web search for the Caldera pilot update. Keep its results available for my next question, but do not write them to files or memory. Just tell me when the search is ready.',
+        workspace)
       assert.equal(searches, 1)
-      const second = await context.runTurn('Without another search or lookup, tell me the number of sites inspected and the next milestone from that search result.', first.sessionId)
-      assert.equal(second.finalIntent, 'answer', second.output)
+      const second = await runMaintainedTurn(context,
+        'Without another search or lookup, tell me the number of sites inspected and the next milestone from that search result.',
+        workspace, first.sessionId)
       assert.equal(searches, 1, 'The follow-up must reuse the original search result.')
       assert.ok(second.output.includes('42') && second.output.includes('September'))
       assert.ok(!second.executionHistory.some((execution) => execution.function.startsWith('search_web.')))

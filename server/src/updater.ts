@@ -1,42 +1,36 @@
-import axios from 'axios'
-
-import { LEON_VERSION } from '@/constants'
-import { SOCKET_SERVER } from '@/core'
+import { UPDATE_SERVICE } from '@/core/ota/update-service'
 import { LogHelper } from '@/helpers/log-helper'
+import { UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_JITTER_MS } from '@@/bridges/runtime/contracts/update-status.js'
 
+/**
+ * Shares scheduled release checks with the browser's explicit update action.
+ */
 export class Updater {
-  private static readonly currentVersion = LEON_VERSION
-  private static readonly isDevelopment = (LEON_VERSION || '').includes('+dev')
-  private static readonly gitBranch = this.isDevelopment ? 'develop' : 'master'
-  private static readonly axios = axios.create({
-    baseURL: 'https://raw.githubusercontent.com/leon-ai/leon',
-    timeout: 7_000
-  })
+  private static timer: NodeJS.Timeout | undefined
 
+  /**
+   * Spaces discovery independently of UI polling and spreads owners' requests.
+   */
+  public static start(): void {
+    clearTimeout(this.timer)
+    const run = async (): Promise<void> => {
+      await this.checkForUpdates()
+      this.timer = setTimeout(() => {
+        void run()
+      }, UPDATE_CHECK_INTERVAL_MS + Math.floor(Math.random() * UPDATE_CHECK_JITTER_MS))
+      this.timer.unref()
+    }
+    void run()
+  }
+
+  /**
+   * Keeps background failures in server logs; explicit checks use request feedback.
+   */
   public static async checkForUpdates(): Promise<void> {
-    LogHelper.title('Updater')
-    LogHelper.info('Checking for updates...')
-
     try {
-      const { data } = await this.axios.get(`/${this.gitBranch}/package.json`)
-      const latestVersion = data.version
-
-      LogHelper.title('Updater')
-
-      if (latestVersion !== this.currentVersion) {
-        LogHelper.warning(`A new version is available: ${latestVersion}`)
-        LogHelper.warning(`Current version: ${this.currentVersion}`)
-        LogHelper.warning(
-          `Run the following command to update me and benefit from the latest features: "pnpm add @leon-ai/leon@${latestVersion}"`
-        )
-
-        SOCKET_SERVER.emitToChatClients('new-update', latestVersion)
-      } else {
-        const releaseMode = this.isDevelopment ? 'development' : 'stable'
-
-        LogHelper.success(
-          `I’m already on the latest ${releaseMode} version`
-        )
+      const check = await UPDATE_SERVICE.check()
+      if (check.release) {
+        LogHelper.info(`A new version is available: ${check.release.version}`)
       }
     } catch (e) {
       LogHelper.warning(`Failed to check for updates: ${e}`)

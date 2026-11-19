@@ -8,7 +8,7 @@ import type {
   OpenAIToolCall,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
-import { LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
+import { InferencePurpose, LLMDuties, LLMProviders, ProviderConnectionErrorCode } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
@@ -263,6 +263,44 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   })
 
+  it.each([InferencePurpose.PulsePlanning, InferencePurpose.PulseReaction])('keeps %s behind the whole owner turn while allowing active inference to finish', async (usagePurpose) => {
+    const provider = new LlamaCPPLLMProvider({ ...TARGET, provider: LLMProviders.LlamaCPP, model: 'local-model' })
+    let releaseActive: (() => void) | undefined
+    let releaseOwner: (() => void) | undefined
+    let endTurn: (() => void) | undefined
+    try {
+      releaseActive = await provider.acquireInference({ dutyType: LLMDuties.Inference, usagePurpose })
+      endTurn = provider.beginForegroundTurn()
+      let ownerStarted = false
+      let nextPulseStarted = false
+      const owner = provider.acquireInference({ dutyType: LLMDuties.ReAct }).then((release) => {
+        ownerStarted = true
+        return release
+      })
+      const nextPulse = provider.acquireInference({ dutyType: LLMDuties.Inference, usagePurpose }).then((release) => {
+        nextPulseStarted = true
+        release()
+      })
+      await Promise.resolve()
+      expect(ownerStarted).toBe(false)
+      releaseActive()
+      releaseOwner = await owner
+      expect(ownerStarted).toBe(true)
+      expect(nextPulseStarted).toBe(false)
+      releaseOwner()
+      await Promise.resolve()
+      expect(nextPulseStarted).toBe(false)
+      endTurn()
+      await nextPulse
+      expect(nextPulseStarted).toBe(true)
+    } finally {
+      releaseActive?.()
+      releaseOwner?.()
+      endTurn?.()
+      provider.dispose()
+    }
+  })
+
   it.each([false, true])('preserves llama.cpp schemas, explicit thinking controls and native output capacity (stream=%s)', async (shouldStream) => {
     const model = path.resolve('local-model')
     const log = vi.spyOn(LlamaCPPLLMProvider as unknown as {
@@ -376,7 +414,11 @@ describe('AISDKRemoteLLMProvider', () => {
     const context = normalized.compactionContext!
     const body = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
 
-    expect(body.context_management).toEqual([{ type: 'compaction', compact_threshold: 96_000 }])
+    expect(body.context_management).toEqual([{ type: 'compaction', compact_threshold: 945_000 }])
+    expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'request-dispatched',
+      nativeCompactionThresholdTokens: body.context_management[0].compact_threshold
+    }))
     expect(body.store).toBe(false)
     expect(context.output).toEqual(output.slice(1))
     expect(context.sourceTranscript[0]).toEqual(transcript[0])
@@ -491,11 +533,43 @@ describe('AISDKRemoteLLMProvider', () => {
       output: [], usage: { input_tokens: 100, output_tokens: 0, total_tokens: 100 }
     }))
     const provider = new OpenAILLMProvider({ ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
+    const onStreamEvent = vi.fn()
     await provider.runChatCompletion([{ role: 'user', content: 'Continue.' }], {
-      ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream: false, disableContextCompaction: true
+      ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream: false, disableContextCompaction: true,
+      onStreamEvent
     })
     expect(JSON.parse(websocketMocks.fetch.mock.calls[0]![1].body).context_management).toBeUndefined()
+    expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'request-dispatched', nativeCompactionThresholdTokens: null
+    }))
     provider.dispose()
+  })
+
+  it.each([
+    { model: 'gpt-5.4-mini', maxTokens: undefined, expected: 360_000 },
+    { model: 'gpt-6.1-sol', maxTokens: 128_000, expected: 922_000 },
+    { model: 'gpt-6.2-astra', maxTokens: undefined, expected: 922_000 },
+    { model: 'gpt-6.2-sol', maxTokens: 4_000, expected: 922_000 },
+    { model: 'uncatalogued-model', maxTokens: undefined, expected: undefined }
+  ])('uses the endpoint window and output allowance for native compaction ($model)', async ({ model, maxTokens, expected }) => {
+    websocketMocks.fetch.mockResolvedValueOnce(Response.json({
+      id: 'resp', created_at: 1, model, status: 'completed',
+      output: [], usage: { input_tokens: 100, output_tokens: 0, total_tokens: 100 }
+    }))
+    const provider = new OpenAILLMProvider({ ...TARGET, provider: LLMProviders.OpenAI, model })
+
+    try {
+      await provider.runChatCompletion([{ role: 'user', content: 'Continue.' }], {
+        ...PARAMS, shouldStream: false, maxTokens
+      })
+      const body = JSON.parse(websocketMocks.fetch.mock.calls[0]![1].body)
+      expect(body.context_management).toEqual(expected === undefined
+        ? undefined
+        : [{ type: 'compaction', compact_threshold: expected }]
+      )
+    } finally {
+      provider.dispose()
+    }
   })
 
   it.each(['connection', 'legacy endpoint', 'workspace'])('restores source evidence when compaction belongs to a different %s', async (difference) => {
@@ -731,9 +805,19 @@ describe('AISDKRemoteLLMProvider', () => {
   })
 
   it.each([
-    [LLMProviders.Groq, 'groq', 'qwen/qwen3.8-27b'],
-    [LLMProviders.Cerebras, 'cerebras', 'qwen-3.8-27b']
-  ] as const)('honors explicit reasoning controls on %s models that can disable thinking', async (providerName, flavor, model) => {
+    [LLMProviders.Groq, 'groq', 'qwen/qwen3.8-27b', 'none'],
+    [LLMProviders.Cerebras, 'cerebras', 'qwen-3.8-27b', 'none'],
+    [LLMProviders.OpenAI, 'openai-responses', 'gpt-6.2-astra', 'low'],
+    [LLMProviders.OpenRouter, 'openrouter', 'openai/gpt-6.2-sol', 'low']
+  ] as const)('honors explicit reasoning controls within the limits of %s/%s', async (providerName, flavor, model, minimum) => {
+    if (providerName === LLMProviders.OpenRouter) {
+      const actual = await vi.importActual<typeof import('@openrouter/ai-sdk-provider')>('@openrouter/ai-sdk-provider')
+      openRouterMocks.createOpenRouter.mockImplementationOnce((...args: unknown[]) =>
+        actual.createOpenRouter(args[0] as Parameters<typeof actual.createOpenRouter>[0]) as unknown as
+          ReturnType<typeof openRouterMocks.createOpenRouter>
+      )
+    }
+
     const fetch = vi.fn().mockImplementation(async (url) => Response.json(
       String(url).endsWith('/responses')
         ? {
@@ -745,7 +829,7 @@ describe('AISDKRemoteLLMProvider', () => {
         : {
             id: 'chat_reasoning', created: 1, model,
             choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
-            usage: { prompt_tokens: 10, completion_tokens: 2 }
+            usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 }
           }
     ))
     vi.stubGlobal('fetch', fetch)
@@ -759,7 +843,8 @@ describe('AISDKRemoteLLMProvider', () => {
       { reasoningMode: 'on', disableThinking: true },
       { reasoningMode: 'on', reasoningEffort: 'none' },
       { reasoningMode: 'on', reasoningEffort: 'high' },
-      { disableThinking: true }
+      { disableThinking: true },
+      ...(minimum === 'low' ? [{ reasoningEffort: 'minimal' as const }] : [])
     ] as const
 
     for (const control of controls) {
@@ -770,7 +855,10 @@ describe('AISDKRemoteLLMProvider', () => {
       const body = JSON.parse(request.body)
 
       return body.reasoning?.effort ?? body.reasoning_effort
-    })).toEqual(['none', 'none', 'none', 'high', 'none'])
+    })).toEqual([
+      minimum, minimum, minimum, 'high', minimum,
+      ...(minimum === 'low' ? ['low'] : [])
+    ])
   })
 
   it.each([
@@ -1604,7 +1692,7 @@ describe('AISDKRemoteLLMProvider', () => {
       .toBe('Checking the note.\n\n**Preparing the reply**\n\nKeep it clear.')
     expect(provider.transport).toBe('websocket')
     expect(onStreamEvent.mock.calls.filter(([event]) => event.type !== 'prompt-cache').slice(0, 3).map(([event]) => event)).toEqual([
-      { type: 'request-dispatched', transport: 'websocket' },
+      expect.objectContaining({ type: 'request-dispatched', transport: 'websocket' }),
       { type: 'response-headers', transport: 'websocket' },
       { type: 'transport-activity', transport: 'websocket' }
     ])

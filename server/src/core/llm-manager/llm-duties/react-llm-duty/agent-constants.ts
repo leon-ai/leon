@@ -39,15 +39,15 @@ export const AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME = '_leonToolCallTitle'
 export const AGENT_TOOL_CALL_TITLE_MAX_CHARS = 72
 export const AGENT_TEMPERATURE = 0.2
 export const AGENT_INFERENCE_TIMEOUT_MS = 120_000
+export const AGENT_COMPLETION_REVIEW_TIMEOUT_MS = 30_000
 // Productive output and new attempts renew the response deadline within a hard cap.
 export const AGENT_MODEL_RESPONSE_TIMEOUT_MS = 180_000
 export const AGENT_MODEL_RESPONSE_MAX_DURATION_MS = 600_000
 export const AGENT_TIMEOUT_MAX_RETRIES = 2
+// Claude's 150k compaction default leaves a quarter of a 200k window free.
 export const AGENT_CONTEXT_WINDOW_BUDGET_RATIO = 0.75
 export const AGENT_CONTEXT_RECOVERY_BUDGET_RATIO = 0.5
 export const AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO = 0.05
-export const AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS = 96_000
-export const AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS = 64_000
 export const AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT = 1
 export const AGENT_RECENT_TOOL_IMAGE_LIMIT = 2
 export const AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE = 2

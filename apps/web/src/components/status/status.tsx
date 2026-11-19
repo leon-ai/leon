@@ -1,1 +1,1 @@
-export { Status, type StatusProps, type StatusVariant } from '../../../../../aurora/src/v2/components/status/status'
+export { Status, type StatusProps, type StatusSize, type StatusVariant } from '../../../../../aurora/src/v2/components/status/status'

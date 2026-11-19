@@ -34,7 +34,7 @@ export interface FeedToolCall extends FeedActivityTime {
   preparationStartedAt?: number | undefined
   id: string
   toolCallTitle: string
-  toolkitName: string
+  toolkitId: string
   toolName: string
   toolIconName: string
   toolLogo?: import('../../../../aurora/src/contracts/package-logo').MaskedPackageLogo

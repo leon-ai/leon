@@ -14,7 +14,7 @@ import {
 } from './agent-ui-contract'
 
 const MODE_ORDER = [AuroraMode.Input, AuroraMode.Native, AuroraMode.Generated]
-const INPUT_GUIDANCE = 'Use request_clarification.input with BooleanChoice for yes/no, Choice for options (multiple:true for several), or Form for related missing fields. Ask only what the task needs; reuse supplied details. Single choices submit immediately; multiple choices and forms require confirmation. Never request credentials here. Clarification review publishes the input before pausing the task.'
+const INPUT_GUIDANCE = 'Use request_clarification.confirmation for ordinary yes/no questions, or request_clarification.input with Choice for options (multiple:true for several) or Form for related missing fields. Ask only what the task needs; reuse supplied details. Single choices submit immediately; multiple choices and forms require confirmation. Never request credentials here. Clarification review publishes the input before pausing the task.'
 const NATIVE_GUIDANCE = `Build the spec using preview_ui's schema, then publish its preview_id with present_ui, or request_clarification.preview_id for a composed required question. Do not repeat the spec. Previews check source/schema only, not browser appearance; regenerate expired IDs after resuming. Artifacts reference retained IDs, never paths or URLs.
 Chart shows grounded trends/comparisons: line for change, bar for magnitudes, pie for parts of one total. Preserve values and units; distinguish missing data from zero and partial periods from complete ones. Chart includes a View data disclosure. DataTable is for useful search/sorting/pagination; small static tables stay Markdown. Comparison contrasts meaningful attributes of a few options. Use Mermaid for static relationship diagrams, or load_ui mode generated for bespoke layouts/interactions. Include every declared column/criterion in each row/option. Widgets change local presentation, never execute tools.`
 const GENERATED_GUIDANCE = `Compose a useful visual answer, not a miniature website: clear hierarchy, restrained accent, few containers, and a readable overview rather than essential information hidden in tabs. Keep the composition cozy and calm, responsive at feed width, keyboard-accessible and reduced-motion aware. Use --font-size-md with --line-height-md for body text; smaller type is for captions. Use spacing tokens and avoid redundant outer cards/backgrounds, decorative branding and tiny dashboards. Diagram connectors must express the actual relationships. Ground all data and provide a readable fallback with values/units.
@@ -46,7 +46,7 @@ export function createClarificationTool(mode?: AuroraMode): OpenAITool {
     function: {
       name: AGENT_CLARIFICATION_TOOL_NAME,
       description:
-        'Pause for one required question after inspecting tool results. Call this alone, never alongside other calls or for draft text. Yes/no decisions, choices and related fields require native input: first load_ui with mode input, then supply input. Plain questions are for open-ended text or owner actions. The reply resumes the same plan, evidence and artifacts.',
+        'Pause for one required question after inspecting tool results. Call this alone, never alongside other calls or for draft text. Set confirmation for a yes/no decision. For choices or related fields, first load_ui with mode input, then supply input. Plain questions are for open-ended text or owner actions. The reply resumes the same plan, evidence and artifacts.',
       parameters: {
         type: 'object',
         properties: {
@@ -57,6 +57,10 @@ export function createClarificationTool(mode?: AuroraMode): OpenAITool {
           question: {
             type: 'string',
             description: 'One concise question that unblocks the current task.'
+          },
+          confirmation: {
+            type: 'boolean',
+            description: 'Set true to present this question as a yes/no decision. Use without input or preview_id.'
           },
           explanation: {
             type: 'string',
@@ -269,8 +273,21 @@ export function resolveAuroraClarification(
   const input = args?.['input']
   let ui = args?.['ui']
   const previewId = args?.['preview_id']
-  if ([input, ui, previewId].filter((value) => value !== undefined).length > 1) {
+  const confirmation = args?.['confirmation'] === true
+  if ([input, ui, previewId, confirmation || undefined].filter((value) => value !== undefined).length > 1) {
     return { error: 'Clarification rejected: provide input or one composed visual, not both.' }
+  }
+  if (confirmation) {
+    const question = args?.['question']
+    if (available && typeof question === 'string') {
+      const spec = createAuroraInputSpec({ type: 'BooleanChoice', props: { title: question.trim() } })
+      if (spec) {
+        return { ui: spec }
+      }
+    }
+
+    // The owner can still answer the same question in a text-only client.
+    return {}
   }
   if (input === undefined && ui === undefined && previewId === undefined) {
     return {}

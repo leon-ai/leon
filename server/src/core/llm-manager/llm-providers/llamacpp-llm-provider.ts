@@ -46,6 +46,11 @@ const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
 const LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
   enable_thinking: true
 }
+const BACKGROUND_INFERENCE_PURPOSES = new Set<InferencePurpose>([
+  InferencePurpose.SessionTitle,
+  InferencePurpose.PulsePlanning,
+  InferencePurpose.PulseReaction
+])
 
 function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
@@ -238,7 +243,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   public async acquireInference(params: CompletionParams): Promise<() => void> {
     const purpose = params.usagePurpose ?? getActiveInferencePurpose()
     const priority = getTurnTimingContext()?.stage === TurnStage.PostTurn ||
-      purpose === InferencePurpose.SessionTitle
+      (purpose !== undefined && BACKGROUND_INFERENCE_PURPOSES.has(purpose as InferencePurpose))
       ? LocalInferencePriority.Background
       : LocalInferencePriority.Foreground
     const signal = params.cancellationSignal

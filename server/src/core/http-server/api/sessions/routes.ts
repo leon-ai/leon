@@ -27,12 +27,22 @@ const SESSION_ID_PARAM_NAME = 'session_id'
  */
 function projectSessionMessage(sessionId: string, record: MessageLog): MessageLog {
   if (record.agentResponseTrace) {
-    record = { ...record, agentResponseTrace: ConversationHistoryHelper.resolveAgentTraceToolIcons(
+    record = { ...record, agentResponseTrace: ConversationHistoryHelper.resolveAgentTraceToolDisplay(
       record.agentResponseTrace, (name) => {
         const [toolkitId, toolId] = name.split('.')
-        const toolLogo = toolkitId && toolId ? TOOLKIT_REGISTRY.getToolIconLogo(toolkitId, toolId) : undefined
+        if (!toolkitId || !toolId) {
+          return null
+        }
 
-        return toolLogo ? { toolLogo } : null
+        const tool = TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)
+        const toolLogo = TOOLKIT_REGISTRY.getToolIconLogo(toolkitId, toolId)
+
+        return tool || toolLogo
+          ? {
+              ...(tool ? { toolName: tool.toolName } : {}),
+              ...(toolLogo ? { toolLogo } : {})
+            }
+          : null
       }
     ) }
   }
@@ -71,7 +81,8 @@ const sessionParamsSchema = Type.Object({
 const pageQuerySchema = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
   cursor: Type.Optional(Type.String({ maxLength: 512 })),
-  query: Type.Optional(Type.String({ maxLength: 256 }))
+  query: Type.Optional(Type.String({ maxLength: 256 })),
+  workspace_id: Type.Optional(Type.String({ format: 'uuid' }))
 })
 
 const historyQuerySchema = Type.Object({
@@ -93,7 +104,8 @@ const archiveSearchBodySchema = Type.Object({
   topK: Type.Optional(Type.Number()),
   contextWindow: Type.Optional(Type.Number()),
   includeCurrentSession: Type.Optional(Type.Boolean()),
-  currentSessionId: Type.Optional(Type.String())
+  currentSessionId: Type.Optional(Type.String()),
+  workspaceId: Type.Optional(Type.String({ format: 'uuid' }))
 }, { additionalProperties: false })
 const archiveReadQuerySchema = Type.Object({
   offset: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER - 1 })),
@@ -104,7 +116,10 @@ const archiveSessionQuerySchema = Type.Object({
   limit: archiveReadQuerySchema.properties.limit,
   role: archiveSearchBodySchema.properties.role
 }, { additionalProperties: false })
-const createSessionBodySchema = Type.Object({ id: Type.Optional(Type.String({ format: 'uuid' })) })
+const createSessionBodySchema = Type.Object({
+  id: Type.Optional(Type.String({ format: 'uuid' })),
+  workspace_id: Type.Optional(Type.String({ format: 'uuid' }))
+})
 
 const updateSessionSchema = {
   params: sessionParamsSchema,
@@ -115,7 +130,7 @@ const updateSessionSchema = {
     model_target: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     provider: Type.Optional(Type.String()),
     model: Type.Optional(Type.String())
-  })
+  }, { additionalProperties: false })
 } satisfies FastifySchema
 
 const deleteSessionSchema = {
@@ -195,7 +210,8 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
         CONVERSATION_SESSION_MANAGER.ensureReady()
       }
       try {
-        const page = CONVERSATION_REPOSITORY.listSessions(request.query)
+        const page = CONVERSATION_REPOSITORY.listSessions({ ...request.query,
+          ...(request.query.workspace_id ? { workspaceId: request.query.workspace_id } : {}) })
 
         return reply.send({
           success: true,
@@ -344,7 +360,14 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
     url: `/api/${options.apiVersion}/sessions`,
     schema: { querystring: compactQuerySchema, body: Type.Optional(createSessionBodySchema) },
     handler: async (request, reply) => {
-      const session = CONVERSATION_SESSION_MANAGER.createSession(request.body?.id)
+      if (request.body?.workspace_id && !CONVERSATION_REPOSITORY.workspaces.get(request.body.workspace_id)) {
+        return reply.code(404).send({ message: 'Workspace not found.' })
+      }
+      const existing = request.body?.id ? CONVERSATION_REPOSITORY.readSession(request.body.id) : null
+      if (existing && existing.workspaceId !== request.body?.workspace_id) {
+        return reply.code(409).send({ message: 'This session already belongs to another workspace. Start a new session in the desired workspace.' })
+      }
+      const session = CONVERSATION_SESSION_MANAGER.createSession(request.body?.id, request.body?.workspace_id)
 
       LogHelper.title('POST /sessions')
       LogHelper.success('Session created.')
