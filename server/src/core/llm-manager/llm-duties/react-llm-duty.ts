@@ -240,6 +240,7 @@ export class ReActLLMDuty extends LLMDuty {
   private completionCount = 0
   private continuationSummaryFailed = false
   private automaticCompactionFailed = false
+  private useOpenAIHttpForTurn = false
   private lastDispatchedInputTokens: number | undefined
   private rejectedContextBudgetTokens: number | undefined
   private totalInputTokens = 0
@@ -377,6 +378,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.completionCount = 0
     this.continuationSummaryFailed = false
     this.automaticCompactionFailed = false
+    this.useOpenAIHttpForTurn = false
     this.lastDispatchedInputTokens = undefined
     this.rejectedContextBudgetTokens = undefined
     this.totalInputTokens = 0
@@ -1261,6 +1263,9 @@ export class ReActLLMDuty extends LLMDuty {
           timeout: this.runBudget?.capTimeout(AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS) ?? AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
           maxRetries: 0,
           remoteProviderErrorRetries: 0,
+          ...(this.useOpenAIHttpForTurn && getLLMProviderName() === LLMProviders.OpenAI
+            ? { responseTransport: 'http' as const }
+            : {}),
           shouldStream: false,
           disableThinking: true,
           trackProviderErrors: false,
@@ -1384,6 +1389,8 @@ export class ReActLLMDuty extends LLMDuty {
     ].join('\n\n')
     const providerName = getLLMProviderName()
     const agentTarget = CONFIG_STATE.getModelState().getAgentTarget()
+    const useOpenAIHttp = providerName === LLMProviders.OpenAI &&
+      (options.isStallRecoveryAttempt || this.useOpenAIHttpForTurn)
     if (!options.isCompletionReview && providerName === LLMProviders.OpenAI &&
       (options.isContextRecoveryAttempt || options.isStallRecoveryAttempt)) {
       this.automaticCompactionFailed = true
@@ -1830,9 +1837,7 @@ export class ReActLLMDuty extends LLMDuty {
             : Math.min(timeoutMs, Math.max(0, remaining - (this.runBudget?.finishingReserveMs ?? 0)))
         },
         ...(isFinishingCall ? { remoteProviderErrorRetries: 0, connectionErrorRetries: 0 } : {}),
-        ...(options.isStallRecoveryAttempt && providerName === LLMProviders.OpenAI
-          ? { responseTransport: 'http' as const }
-          : {}),
+        ...(useOpenAIHttp ? { responseTransport: 'http' as const } : {}),
         // This loop executes local tools only after the whole response succeeds.
         retryInterruptedResponse: true,
         recoverReasoningStallWithContext: !isPrivateResponse && !options.isFinalizationAttempt,
@@ -2110,6 +2115,10 @@ export class ReActLLMDuty extends LLMDuty {
       // Productive recovery makes the model available for later compaction.
       // A subsequent failed summary still suppresses repeated auxiliary calls.
       this.continuationSummaryFailed = false
+      if (useOpenAIHttp) {
+        // Reuse the working transport while this turn still has work to finish.
+        this.useOpenAIHttpForTurn = true
+      }
     }
 
     const completionEndedAt = Date.now()

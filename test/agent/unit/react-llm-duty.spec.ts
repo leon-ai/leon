@@ -7070,6 +7070,10 @@ describe('model response status', () => {
     const followupAttempts = attempts.slice(stalledAttempts + 1).filter(({ params }) =>
       params.usagePurpose !== InferencePurpose.ContextCompaction
     )
+    expect(attempts[0]?.params.responseTransport).toBeUndefined()
+    expect(followupAttempts.map(({ params }) => params.responseTransport)).toEqual(
+      followupAttempts.map(() => 'http')
+    )
     expect(followupAttempts.some(({ prompt }) => prompt.length > attempts[0]!.prompt.length)).toBe(true)
     expect(attempts.slice(0, stalledAttempts).every(({ params }) => params.signal?.aborted)).toBe(true)
     const emitted = coreMocks.emitToChatClients.mock.calls
