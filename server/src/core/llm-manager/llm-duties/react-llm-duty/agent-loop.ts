@@ -4,9 +4,13 @@ import { ToolCompletionReview, ToolConcurrency, SkillOrigin } from '@/types'
 import { ToolExecutionState } from '@/core/tool-manager/tool-execution-manager'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
-import { EXPERIENCE_SEARCH_TOOL_NAME } from '@/core/experience-manager'
+import {
+  EXPERIENCE_SEARCH_TOOL_NAME,
+  ExperienceLoadLimit,
+  type ExperienceCard,
+  type ExperienceLoadResult
+} from '@/core/experience-manager'
 import { CATALOG_SEARCH_TOOL_NAME, createCatalogSearchTool } from '@/core/tool-manager/catalog/agent-catalog'
-import type { ExperienceCard } from '@/core/experience-manager'
 import {
   CONNECTION_SETUP_TOOL_NAME,
   setupConnection,
@@ -451,7 +455,7 @@ export interface AgentLoopParams {
     toolCallTitle?: string,
     toolCallId?: string
   ) => Promise<AgentFunctionExecutionResult>
-  loadAgentSkill: (skillId: string) => Promise<AgentSkillContext | null>
+  loadAgentSkill: (skillId: string) => Promise<ExperienceLoadResult>
   searchExperiences?: (query: string) => ExperienceCard[]
   loadToolkitContext?: (toolkitId: string) => string
   onAgentSkillLoaded?: (context: AgentSkillContext) => void | Promise<void>
@@ -2780,7 +2784,7 @@ async function executeAgentToolCall(
       }
     }
 
-    let context: AgentSkillContext | null
+    let context: ExperienceLoadResult
     try {
       context = await params.loadAgentSkill(skillId)
     } catch (error) {
@@ -2792,6 +2796,16 @@ async function executeAgentToolCall(
     if (!context) {
       return {
         content: `Agent Skill "${skillId}" is not available.`,
+        trackedSteps
+      }
+    }
+    if (typeof context === 'string') {
+      const reason = context === ExperienceLoadLimit.Count
+        ? 'This task is at its active experience limit.'
+        : 'This experience is too large for the task’s remaining guidance budget.'
+
+      return {
+        content: `${reason} Continue with loaded guidance or use tools.`,
         trackedSteps
       }
     }

@@ -454,7 +454,7 @@ export class ReActLLMDuty extends LLMDuty {
         const skill = continuation.activeSkillId.startsWith(EXPERIENCE_PREFIX)
           ? EXPERIENCE_MANAGER.load(continuation.activeSkillId, this.experienceTaskId)
           : await SkillDomainHelper.getAgentSkillExecutionContext(continuation.activeSkillId)
-        if (!skill) {
+        if (!skill || typeof skill === 'string') {
           throw new Error('The active Agent Skill is no longer available.')
         }
         caller.setAgentSkillContext(skill)
@@ -467,7 +467,7 @@ export class ReActLLMDuty extends LLMDuty {
       if (Array.isArray(restoredExperiences)) {
         for (const entry of restoredExperiences) {
           const context = EXPERIENCE_MANAGER.load(String(entry.id), this.experienceTaskId)
-          if (context) {
+          if (context && typeof context !== 'string') {
             this.activeExperiences.set(context.id, context)
             await this.emitSkillActivity(context, SkillActivityStatus.Loaded)
           }

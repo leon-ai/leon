@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import ExperienceManager from '@/core/experience-manager'
+import ExperienceManager, { ExperienceLoadLimit } from '@/core/experience-manager'
 import { runInference } from '@/core/llm-manager/inference'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
@@ -104,19 +104,19 @@ describe('experience retention and adoption', () => {
     expect(fs.existsSync(path.join(fixture.root, 'skills', 'agent', 'experiences', record.id.split(':')[1]!, 'SKILL.md'))).toBe(false)
   })
 
-  it('bounds active procedure bytes and count independently of archive capacity', () => {
-    const records = ['first', 'second', 'third'].map((name) => manager.save({
-      name, description: 'Inspect a service.', instructions: 'Inspect status. '.repeat(40)
-    }, 'session:fixture', ['fixture.inspect'])!)
-    expect(manager.load(records[0]!.id, 'task')).not.toBeNull()
-    expect(manager.load(records[1]!.id, 'task')).not.toBeNull()
-    expect(manager.load(records[2]!.id, 'task')).toBeNull()
-    manager.releaseTask('task')
+  it('loads two full-size procedures in a task and refuses a third', () => {
+    const records = [
+      { name: 'restore-connection', instructions: '恢复连接。'.repeat(100) },
+      { name: 'verify-output', instructions: '验证输出。'.repeat(100) },
+      { name: 'restart-service', instructions: 'Restart the service.' }
+    ].map((procedure) => manager.save({
+      ...procedure, description: 'Recover the service.'
+    }, 'session:fixture', ['fixture.recovery.run'])!)
 
-    manager.save({ ...records[1]!, instructions: 'Inspect status. '.repeat(70) }, 'session:update', [])
-    expect(manager.load(records[0]!.id, 'large-task')).not.toBeNull()
-    expect(manager.load(records[1]!.id, 'large-task')).toBeNull()
-    expect(manager.list().find((record) => record.id === records[1]!.id)!.loadCount).toBe(1)
+    expect(manager.load(records[0]!.id, 'task')).toMatchObject({ id: records[0]!.id })
+    expect(manager.load(records[1]!.id, 'task')).toMatchObject({ id: records[1]!.id })
+    expect(manager.load(records[2]!.id, 'task')).toBe(ExperienceLoadLimit.Count)
+    expect(manager.load(records[0]!.id, 'task')).toMatchObject({ id: records[0]!.id })
   })
 
   it('bounds discovery independently of archive size and respects workspace applicability', () => {

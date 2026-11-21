@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { EXPERIENCE_PREFIX, ExperienceLoadLimit } from '@/core/experience-manager'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ConversationSessionManager } from '@/core/session-manager'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
@@ -4099,6 +4100,49 @@ describe('continuous agent loop', () => {
     ])
     expect(onAgentSkillLoaded).toHaveBeenCalledOnce()
     expect(result.answer).toBe('Workflow complete.')
+  })
+
+  it.each([
+    {
+      reason: 'the active experience limit',
+      result: ExperienceLoadLimit.Count,
+      observation: 'This task is at its active experience limit. Continue with loaded guidance or use tools.'
+    },
+    {
+      reason: 'the remaining byte budget',
+      result: ExperienceLoadLimit.Bytes,
+      observation: 'This experience is too large for the task’s remaining guidance budget. Continue with loaded guidance or use tools.'
+    },
+    {
+      reason: 'an unavailable experience',
+      result: null,
+      observation: `Agent Skill "${EXPERIENCE_PREFIX}service-recovery" is not available.`
+    }
+  ])('reports $reason in the experience load result', async ({ result, observation }) => {
+    const skillId = `${EXPERIENCE_PREFIX}service-recovery`
+
+    const loop = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Recover the service.' }],
+      catalog: createCatalog(),
+      callModel: async (messages) => {
+        if (messages.at(-1)?.role === 'user') {
+          return {
+            toolCalls: [toolCall('experience-load', AGENT_SKILL_TOOL_NAME, { skill_id: skillId })]
+          }
+        }
+
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          toolCallId: 'experience-load',
+          content: observation
+        })
+        return { textContent: 'I’ll continue with the available guidance.' }
+      },
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => result
+    })
+
+    expect(loop.answer).toBe('I’ll continue with the available guidance.')
   })
 
   it('blocks an identical tool call and reuses its prior observation', async () => {

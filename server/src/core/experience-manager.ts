@@ -33,7 +33,7 @@ const MAXIMUM_REVIEW_CHARS = 16_000
 const MAXIMUM_CANDIDATES = 3
 const DISCOVERY_BYTE_BUDGET = 500
 const MAXIMUM_ACTIVE_EXPERIENCES = 2
-const MAXIMUM_ACTIVE_PROCEDURE_BYTES = 1_500
+const MAXIMUM_ACTIVE_PROCEDURE_BYTES = 3_000
 const MINIMUM_WORKFLOW_EXECUTIONS = 2
 const EXPERIENCE_SCHEMA = {
   type: 'object',
@@ -89,6 +89,13 @@ export interface ExperienceCard {
   id: string
   description: string
 }
+
+export enum ExperienceLoadLimit {
+  Count = 'count',
+  Bytes = 'bytes'
+}
+
+export type ExperienceLoadResult = AgentSkillContext | ExperienceLoadLimit | null
 
 /**
  * Single lookups do not warrant another background procedure-extraction call.
@@ -237,13 +244,13 @@ export default class ExperienceManager {
   }
 
   /**
-   * Load a full procedure once per task/revision, protecting it during execution.
+   * Load a full procedure once per task/revision and report which task limit blocks it.
    */
   public load(
     id: string,
     taskId: string,
     workspace = process.cwd()
-  ): AgentSkillContext | null {
+  ): ExperienceLoadResult {
     if (!this.enabled) {
       return null
     }
@@ -260,10 +267,16 @@ export default class ExperienceManager {
 
       if (!loaded.has(key)) {
         const active = this.list().filter((item) => loaded.has(`${item.id}:${item.revision}`))
-        if (active.length >= MAXIMUM_ACTIVE_EXPERIENCES ||
-            active.reduce((size, item) => size + Buffer.byteLength(item.instructions, 'utf8'), 0) +
-              Buffer.byteLength(record.instructions, 'utf8') > MAXIMUM_ACTIVE_PROCEDURE_BYTES) {
-          return null
+        if (active.length >= MAXIMUM_ACTIVE_EXPERIENCES) {
+          return ExperienceLoadLimit.Count
+        }
+
+        const activeBytes = active.reduce(
+          (size, item) => size + Buffer.byteLength(item.instructions, 'utf8'),
+          0
+        )
+        if (activeBytes + Buffer.byteLength(record.instructions, 'utf8') > MAXIMUM_ACTIVE_PROCEDURE_BYTES) {
+          return ExperienceLoadLimit.Bytes
         }
 
         record.loadCount += 1
