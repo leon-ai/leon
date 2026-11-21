@@ -49,6 +49,7 @@ type QueuedAnswer =
       messageId?: string
       shouldSkipParaphrase?: boolean
       responseRoute?: 'controlled' | 'react' | 'pulse'
+      pulse?: { reason: string, completed: boolean }
     }
 
 interface QueuedSuggestions {
@@ -232,6 +233,9 @@ export default class Brain {
         answer && typeof answer === 'object' && 'responseRoute' in answer
           ? answer.responseRoute || NLU.currentResponseRoute
           : NLU.currentResponseRoute
+      const pulse = answer && typeof answer === 'object' && 'pulse' in answer
+        ? answer.pulse
+        : undefined
       const shouldSkipParaphrase =
         answer &&
         typeof answer === 'object' &&
@@ -377,6 +381,7 @@ export default class Brain {
             isAddedToHistory: true,
             ...(messageId ? { messageId } : {}),
             ...(responseRoute === 'pulse' ? { origin: 'pulse' as const } : {}),
+            ...(pulse ? { pulseReason: pulse.reason } : {}),
             ...(artifacts?.length ? { artifacts } : {}),
             ...(llmMetrics ? { llmMetrics } : {}),
             ...(agentResponseTrace ? { agentResponseTrace } : {})
@@ -391,6 +396,16 @@ export default class Brain {
                   message: record
                 }
               })
+              // A completion cue belongs to the delivered answer, even if it queued behind speech.
+              if (pulse?.completed) {
+                publishAgentEvent(getActiveProfileName(), {
+                  session_id: sessionId,
+                  turn_id: messageId,
+                  response_id: messageId,
+                  type: 'turn_status',
+                  data: { status: 'completed', origin: 'pulse' }
+                })
+              }
             }
           }
           // Owner-agent turns schedule titles through their shared lifecycle.

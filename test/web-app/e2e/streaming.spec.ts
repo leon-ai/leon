@@ -9,38 +9,49 @@ import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/c
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
 
-test('labels Pulse progress and its saved reply in one turn', async ({ page, ui }) => {
+test('shows the Pulse reason before work begins and keeps it with the saved reply', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   const answers = page.getByRole('region', { name: 'Leon’s final answer', exact: true })
   await expect(answers.last()).toBeVisible()
   const sentAt = Date.now()
   const messageId = 'pulse-reading-list'
+  const reason = 'I’m checking for new articles to add to your reading list.'
   const step = { id: 'sources', label: 'Check for new reading material', status: 'in_progress' as const }
   const event = (type: string, sequence: number, data: Record<string, unknown>): ConversationEvent => ({
     type, sequence, session_id: SESSION_ID, turn_id: messageId, response_id: messageId,
     created_at: sentAt + sequence, data: { ...data, origin: 'pulse' }
   })
-  await ui.emit([
-    event('session_changed', 1, { is_running: true }),
-    event('plan_step', 2, { step })
-  ])
+  await ui.emit([event('turn_status', 1, { status: 'accepted', pulse_reason: reason })])
   const label = page.getByText('Pulse', { exact: true })
   await expect(label).toBeVisible()
+  await expect(label.locator('[data-icon="heart-pulse"][data-icon-variant="line"]:not([data-icon-fallback])')).toBeVisible()
   const turn = page.locator('.leon-message').filter({ has: label })
-  await expect(turn.getByRole('region', { name: 'Leon’s execution plan' })).toBeVisible()
+  const explanation = turn.getByText(reason, { exact: true })
+  const plan = turn.getByRole('region', { name: 'Leon’s execution plan' })
+  await expect(explanation).toBeVisible()
+  await expect(plan).toHaveCount(0)
+
+  await ui.emit([event('plan_step', 2, { step })])
+  await expect(plan).toBeVisible()
+  const intro = await explanation.elementHandle()
+  expect(await plan.evaluate((activity, intro) =>
+    activity.getBoundingClientRect().top >= intro.getBoundingClientRect().bottom, intro)).toBe(true)
   const saved: ConversationRecord = {
-    origin: 'pulse', who: 'leon', messageId, message: 'I found two new articles for your reading list.',
+    origin: 'pulse', pulseReason: reason,
+    who: 'leon', messageId, message: 'I found two new articles for your reading list.',
     sentAt: sentAt + 3, isAddedToHistory: true, llmMetrics: { durationMs: 2_000 },
     agentResponseTrace: { id: messageId, planSteps: [{ ...step, status: 'completed' }], toolCalls: [] }
   }
   ui.history.get(SESSION_ID)!.push(saved)
   await ui.emit([
-    event('final_answer', 3, { message: saved }),
-    event('session_changed', 4, { is_running: false })
+    event('session_changed', 3, { is_running: false }),
+    event('final_answer', 4, { message: saved })
   ])
   await expect(turn.getByText(saved.message)).toBeVisible()
+  await expect(explanation).toBeVisible()
   await page.reload()
   await expect(turn.getByText(saved.message)).toBeVisible()
+  await expect(explanation).toBeVisible()
   await expect(label).toHaveCount(1)
 })
 

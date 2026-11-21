@@ -53,6 +53,7 @@ export interface ReactLLMDutyParams extends LLMDutyParams {
   additionalInstructions?: string
   onProgressEvent?: (event: AgentRunProgressEvent) => void
   responseId?: string
+  pulseReason?: string
   onTextStream?: (kind: 'answer' | 'reasoning', payload: LeonClientInterfaceTokenPayload) => void
 }
 

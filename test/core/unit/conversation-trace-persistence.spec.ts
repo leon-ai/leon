@@ -143,6 +143,7 @@ describe('conversation trace persistence', () => {
         }
       }
       const responseId = 'pulse-matter'
+      const reason = 'I’m preparing notes for your upcoming meeting.'
       const agentResponseTrace = { id: responseId, metrics: llmMetrics, planSteps: [], toolCalls: [] }
       Object.assign(pulse, {
         persist: vi.fn(),
@@ -175,7 +176,7 @@ describe('conversation trace persistence', () => {
       const matter = {
         id: responseId, fingerprint: 'meeting-notes', intentKey: 'prepare',
         targetScope: 'calendar', turnPrompt: 'Prepare meeting notes.',
-      summary: 'Prepare meeting notes', why: 'An upcoming meeting',
+        summary: 'Prepare meeting notes', why: reason,
         notifyOwner
       } as Parameters<PulseManager['executeMatter']>[1]
       const state = {
@@ -185,8 +186,14 @@ describe('conversation trace persistence', () => {
       await pulse['executeMatter'](state, matter)
 
       const events = sessions.repository!.readEvents<HTTPPluginAgentEvent>(0, 'pulse-session').items
-      expect(events.filter((event) => event.type === 'plan_step')).toHaveLength(notifyOwner ? 1 : 0)
       const surfaced = notifyOwner || finalIntent === 'cancelled'
+      expect(events.map(({ type }) => type)).toEqual(notifyOwner
+        ? ['turn_status', 'plan_step', 'session_changed', 'final_answer', 'turn_status']
+        : surfaced ? ['final_answer'] : [])
+      expect(events.filter((event) => event.type === 'turn_status')).toMatchObject(notifyOwner ? [
+        { response_id: responseId, data: { status: 'accepted', origin: 'pulse', pulse_reason: reason } },
+        { response_id: responseId, data: { status: 'completed', origin: 'pulse' } }
+      ] : [])
       const history = ConversationHistoryHelper.toHistoryItems(
         await logger.loadAll({ sessionId: 'pulse-session' }), { supportsWidgets: false }
       )
@@ -196,10 +203,11 @@ describe('conversation trace persistence', () => {
           .toHaveBeenCalledExactlyOnceWith({ answer: output, messageId: responseId, llmMetrics, agentResponseTrace })
         expect(history[0]).toMatchObject({ messageId: responseId, originalString: output, llmMetrics, agentResponseTrace })
         expect(events.filter((event) => event.type === 'final_answer')).toMatchObject([
-          { response_id: responseId, data: { message: { messageId: responseId, origin: 'pulse', message: output } } }
+          { response_id: responseId, data: { message: { messageId: responseId, origin: 'pulse', pulseReason: reason, message: output } } }
         ])
-      } else {
-        expect(events).toEqual([])
+        expect(sessions.repository!.readSnapshot('pulse-session').messages.items).toMatchObject([
+          { messageId: responseId, origin: 'pulse', pulseReason: reason, message: output }
+        ])
       }
       expect(paraphrase).not.toHaveBeenCalled()
       expect(await logger.loadAll({ sessionId: 'other-session' })).toEqual([])

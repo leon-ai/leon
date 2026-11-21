@@ -88,7 +88,9 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
       ? { ...candidate, sentAt: message.sentAt + 1 } : candidate)
   }
   const id = event.response_id
-  if (!id || event.type === 'session_changed' || event.type === 'turn_status') {
+  const isPulseStart = event.type === 'turn_status' &&
+    event.data['origin'] === 'pulse' && event.data['status'] === 'accepted'
+  if (!id || event.type === 'session_changed' || (event.type === 'turn_status' && !isPulseStart)) {
     return messages
   }
   const index = messages.findIndex((record) => record.messageId === id)
@@ -161,7 +163,11 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   record.agentResponseTrace = trace
   const data = event.data
 
-  if (event.type === 'inference_activity') {
+  if (isPulseStart) {
+    if (typeof data['pulse_reason'] === 'string') {
+      record.pulseReason = data['pulse_reason']
+    }
+  } else if (event.type === 'inference_activity') {
     const activity = data['activity'] as InferenceActivity
     const timing = { ...activity, kind: activity.kind ?? 'inference' as const }
     const found = trace.timings?.some((item) => item.id === timing.id)

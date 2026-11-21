@@ -327,7 +327,15 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
 
   return (
     <div className="leon-message">
-      {entry.origin === 'pulse' ? <div className="leon-message-origin">Pulse</div> : null}
+      {entry.origin === 'pulse' ? (
+        <div>
+          <div className="leon-message-origin">
+            <Icon name="heart-pulse-line" />
+            Pulse
+          </div>
+          {entry.pulseReason ? <p className="leon-message-pulse-reason">{entry.pulseReason}</p> : null}
+        </div>
+      ) : null}
       {entry.status === FeedTurnStatus.Completed && !entry.isMaintenance && !entry.continues && (activities.length > 0 || entry.hasTurnWork) ? (
         <ProcessGroup
           active={false}

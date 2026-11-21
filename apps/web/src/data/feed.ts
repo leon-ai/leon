@@ -202,6 +202,7 @@ export interface OwnerFeedEntry {
 
 export interface LeonFeedEntry {
   origin?: 'pulse'
+  pulseReason?: string
   connections?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor[]
   connection?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor
   answerParts?: import('../../../../aurora/src/v2/contracts/answer').AnswerPart[]

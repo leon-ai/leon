@@ -527,6 +527,7 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
     id: record.messageId,
     role: 'leon',
     ...(record.origin ? { origin: record.origin } : {}),
+    ...(record.pulseReason ? { pulseReason: record.pulseReason } : {}),
     sentAt: record.sentAt,
     metrics,
     status: active ? FeedTurnStatus.InProgress : FeedTurnStatus.Completed,

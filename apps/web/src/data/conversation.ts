@@ -72,6 +72,7 @@ export interface ConversationTrace {
 
 export interface ConversationRecord {
   origin?: 'pulse'
+  pulseReason?: string
   answerParts?: import('../../../../aurora/src/v2/contracts/answer').AnswerPart[]
   fyi?: import('../../../../server/src/core/fyi/fyi-contract').Fyi
   who: 'owner' | 'leon'

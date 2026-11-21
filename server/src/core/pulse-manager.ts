@@ -947,7 +947,7 @@ export default class PulseManager {
         '      "intent_key": "stable_snake_case_identifier",',
         '      "target_scope": "stable_scope_identifier",',
         '      "summary": "short user-facing matter summary",',
-        '      "why": "short evidence-based reason",',
+        '      "why": "short first-person reason shown to the owner when I start",',
         '      "turn_prompt": "concise autonomous task instruction",',
         '      "confidence": 0.0,',
         '      "sources": ["memory"|"context"|"self_model"],',
@@ -959,6 +959,7 @@ export default class PulseManager {
         '- Return at most 3 items.',
         '- "intent_key" and "target_scope" must be stable identifiers for deduplication.',
         '- "summary", "why", and "turn_prompt" must be concise and concrete.',
+        '- In "why", explain what prompted the follow-up in plain language without exposing private self-model details or secrets.',
         '- "sources" must only contain memory, context, and/or self_model.',
         '- Prefer matters supported by multiple signals.',
         '- If there is nothing useful to do, return {"items":[]}.'
@@ -1161,11 +1162,13 @@ export default class PulseManager {
         input,
         responseId: matter.id,
         ...(matter.notifyOwner ? {
+          pulseReason: matter.why,
           onProgressEvent: (event: AgentRunProgressEvent): void => {
             if (!announced) {
               announced = true
-              publish('session_changed', { is_running: true })
+              publish('turn_status', { status: 'accepted', pulse_reason: matter.why })
             }
+
             publish(event.type, pulseProgressData(event))
           }
         } : {})
@@ -1256,11 +1259,13 @@ export default class PulseManager {
       )
     }
 
+    const completed = finalIntent === 'answer' && Boolean(output)
+
     if (!output && shouldNotifyOwner) {
       output = 'I couldn’t finish this Pulse follow-up.'
     }
     if (output && (shouldNotifyOwner || finalIntent === 'cancelled')) {
-      await this.surfacePulseMessage(state, matter, output, answerMetadata)
+      await this.surfacePulseMessage(state, matter, output, answerMetadata, completed)
     }
 
     state.matters = state.matters.filter((entry) => entry.id !== matter.id)
@@ -1289,7 +1294,8 @@ export default class PulseManager {
     state: PulseState,
     matter: PulseMatter,
     output: string,
-    answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace' | 'artifacts'>
+    answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace' | 'artifacts'>,
+    completed: boolean
   ): Promise<void> {
     const core = await this.loadCoreNodes()
     await core.BRAIN.talk(
@@ -1297,6 +1303,7 @@ export default class PulseManager {
         text: output,
         speech: output,
         responseRoute: 'pulse',
+        pulse: { reason: matter.why, completed },
         messageId: matter.id,
         ...answerMetadata
       },

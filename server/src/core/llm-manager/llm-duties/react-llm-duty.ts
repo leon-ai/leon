@@ -302,6 +302,7 @@ export class ReActLLMDuty extends LLMDuty {
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
   private readonly responseId: string | undefined
+  private readonly pulseReason: string | undefined
   private readonly onTextStream: ReactLLMDutyParams['onTextStream']
 
   constructor(params: ReactLLMDutyParams) {
@@ -324,6 +325,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.additionalInstructions = params.additionalInstructions?.trim() || ''
     this.onProgressEvent = params.onProgressEvent
     this.responseId = params.responseId
+    this.pulseReason = params.pulseReason
     this.onTextStream = params.onTextStream
     this.systemPrompt = this.appendAdditionalInstructions(
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
@@ -415,6 +417,7 @@ export class ReActLLMDuty extends LLMDuty {
         messageId: traceId,
         isAddedToHistory: false,
         ...(isPulse ? { origin: 'pulse' as const } : {}),
+        ...(this.pulseReason ? { pulseReason: this.pulseReason } : {}),
         agentResponseTrace: this.responseTraceCollector.snapshot({})
       }, { sessionId, activity: true })
     }

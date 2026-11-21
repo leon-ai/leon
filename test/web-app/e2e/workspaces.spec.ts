@@ -350,14 +350,19 @@ test('plays only live turn completion and keeps routine actions, replay and mute
     created_at: 1, data: { status: 'completed' } }
   await ui.emit([completed])
   await expect.poll(count).toBe(1)
-  await ui.emit([completed])
-  await expect.poll(count).toBe(1)
+  const pulse = {
+    ...completed, sequence: 11, turn_id: 'reading-list', response_id: 'reading-list',
+    data: { ...completed.data, origin: 'pulse' }
+  }
+  await ui.emit([completed, pulse])
+  await expect.poll(count).toBe(2)
+  await ui.emit([pulse])
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
   await page.getByRole('link', { name: 'Appearance', exact: true }).click()
   await page.getByRole('button', { name: 'Mute sounds', exact: true }).click()
-  await ui.emit([{ ...completed, sequence: 11 }])
+  await ui.emit([{ ...pulse, sequence: 12 }])
   await expect(page.getByRole('button', { name: 'Unmute sounds', exact: true })).toBeVisible()
-  expect(await count()).toBe(1)
+  expect(await count()).toBe(2)
 })
 
 test('matches workspace row geometry and keeps collapsed unread results', async ({ page, ui }) => {
