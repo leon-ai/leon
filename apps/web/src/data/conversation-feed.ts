@@ -7,6 +7,7 @@ import { getProcessingCategory } from './processing-categories'
 import { getActivityLabel, getProcessingLabel } from './activity-labels'
 import { getConnectionSetupDescriptor } from './connection-setup-contract'
 import { readMaskedPackageLogo } from '../../../../aurora/src/contracts/package-logo'
+import { PreparationStatus } from '../../../../aurora/src/v2/contracts/preparation'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
@@ -160,7 +161,6 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     status: !active && !call.preparation?.executionId && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
     startedAt: call.startedAt,
     preparationStartedAt: call.preparationStartedAt,
-    ...(call.preparation ? { preparation: call.preparation } : {}),
     ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }),
     input: call.input ?? null,
     ...(call.commandOutput === undefined ? {} : { commandOutput: call.commandOutput }),
@@ -221,10 +221,24 @@ function toActivities(
     } })
   }
   for (const call of trace.toolCalls) {
-    items.push({ timestamp: call.preparationStartedAt ?? call.startedAt ?? sentAt, activity: {
-      id: call.id, type: 'tools', toolCalls: [toFeedTool(call, active)],
-      startedAt: call.preparationStartedAt ?? call.startedAt
+    const tool = toFeedTool(call, active)
+    const startedAt = tool.preparationStartedAt ?? tool.startedAt
+    const timestamp = startedAt ?? sentAt
+    const preparation = call.preparation
+
+    items.push({ timestamp, activity: {
+      id: call.id, type: 'tools', toolCalls: [tool], startedAt
     } })
+    if (preparation) {
+      // The snapshot updates in place under the tool's original start time,
+      // including retained work that outlives the call or the answer.
+      const isActive = (preparation.status === PreparationStatus.Preparing || preparation.status === PreparationStatus.Downloading) &&
+        (Boolean(preparation.executionId) || tool.status === 'preparing' || tool.status === 'running')
+
+      items.push({ timestamp, activity: {
+        id: `${call.id}:preparation`, type: 'preparation', toolCallId: call.id, startedAt, preparation, isActive
+      } })
+    }
   }
   items.sort((left, right) => left.timestamp - right.timestamp)
   const activities: LeonFeedActivity[] = []
@@ -382,7 +396,8 @@ function attachPlanActivities(
       summaries.push(activity)
       continue
     }
-    const tool = activity.type === 'tools' ? tools.get(activity.toolCalls[0]!.id) : undefined
+    const tool = activity.type === 'tools' ? tools.get(activity.toolCalls[0]!.id)
+      : activity.type === 'preparation' ? tools.get(activity.toolCallId) : undefined
     const explicitStep = tool?.stepLabel
       ? trace.planSteps.find((step) => step.label === tool.stepLabel)?.id : undefined
     timeline.push({ activity, timestamp: activity.startedAt ?? sentAt,

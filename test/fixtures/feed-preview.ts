@@ -107,18 +107,22 @@ export function createFeedPreviewExamples(now: number): FeedPreviewExample[] {
   return [
     {
       id: 'tools', title: 'Tool calls', kind: 'activity',
-      description: 'Preparing, running, succeeded and failed calls. Expand a call to read its output or open its details.',
+      description: 'Preparing, running, succeeded and failed calls, with a separate download progress card. Expand a call to inspect its output.',
       entries: [response('tools-example', [{ id: 'tools', type: 'tools', toolCalls: [
         tool('tool-preparing', 'Prepare the project check', 'preparing'), running, succeeded, failed,
-        tool('tool-download', 'Prepare the speech model', 'preparing', {
-          preparation: { status: PreparationStatus.Downloading, detail: 'Downloading the speech model', completed: 36, total: 100 }
-        }),
         tool('tool-edit', 'Update the example greeting', 'success', {
           toolName: 'Files', toolIconName: 'file-text-line', functionName: 'editFile', durationMs: 180,
           input: { path: 'src/greeting.ts', changes: [{ oldText: 'export const greeting = \'Hello\'', newText: 'export const greeting = \'Welcome home\'' }] },
           output: { changed: true, diff: '-export const greeting = \'Hello\'\n+export const greeting = \'Welcome home\'' }
-        })
-      ] }])]
+        }),
+        tool('tool-download', 'Download the speech model', 'running')
+      ] }, {
+        id: 'tool-download:preparation', type: 'preparation', toolCallId: 'tool-download', startedAt, isActive: true,
+        preparation: { purpose: 'download', status: PreparationStatus.Downloading, detail: 'Downloading the speech model', downloads: [
+          { id: 'configuration', fileName: 'config.json', status: 'complete', downloadedBytes: 1_024, totalBytes: 1_024, etaMs: null },
+          { id: 'model', fileName: 'model.safetensors', status: 'downloading', downloadedBytes: 36_000_000, totalBytes: 100_000_000, etaMs: 12_000 }
+        ] }
+      }])]
     },
     {
       id: 'plan', title: 'Plan steps', kind: 'activity',

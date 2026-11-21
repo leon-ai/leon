@@ -11,7 +11,7 @@ import type {
   LeonFeedActivity,
   LeonFeedEntry
 } from '@/data/feed'
-import { FeedTurnStatus, isToolCallVisible } from '@/data/feed'
+import { FeedTurnStatus, hasActiveActivityPreparation, isToolCallVisible } from '@/data/feed'
 import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { BonusResponse } from '@/components/bonus-response'
 import { FinalAnswer } from '@/components/final-answer'
@@ -22,42 +22,13 @@ import { MarkdownContent } from '@/components/markdown-content'
 import { TaskList } from '@/components/task-list'
 import { ThinkingMessage } from '@/components/thinking-message'
 import { ToolCallList } from '@/components/tool-call-list'
+import { ToolPreparation } from '@/components/tool-call/tool-preparation'
 import { WorkingMessage } from '@/components/working-message'
 import { ActivityTimestamp } from '@/components/activity-timestamp'
 
 import './leon-message.sass'
 
 const ConnectionSetupCard = lazy(() => import('@/components/connection-setup/connection-setup'))
-
-/**
- * Collects call-owned widgets outside activity disclosures, including planned calls.
- */
-function getPreparations(activities: LeonFeedActivity[]): { id: string, preparation: NonNullable<FeedToolCall['preparation']> }[] {
-  const preparations = new Map<string, NonNullable<FeedToolCall['preparation']>>()
-
-  function visit(items: LeonFeedActivity[]): void {
-    for (const activity of items) {
-      const calls = activity.type === 'tools' ? activity.toolCalls
-        : activity.type === 'plan' ? activity.steps.flatMap((step) => step.toolCalls) : []
-
-      for (const call of calls) {
-        if (call.preparation) {
-          preparations.set(call.id, call.preparation)
-        }
-      }
-
-      if (activity.type === 'plan') {
-        for (const step of activity.steps) {
-          visit(step.activities ?? [])
-        }
-      }
-    }
-  }
-
-  visit(activities)
-
-  return Array.from(preparations, ([id, preparation]) => ({ id, preparation }))
-}
 
 interface LeonMessageProps {
   entry: LeonFeedEntry
@@ -103,6 +74,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
       })}>
         <ProcessGroup
           active={planIsActive}
+          defaultExpanded={planIsActive || hasActiveActivityPreparation(activity)}
           activeLabel="Executing plan..."
           ariaLabel="Leon’s execution plan"
           className="activity-timeline-parent"
@@ -295,6 +267,14 @@ function renderActivity(activity: LeonFeedActivity) {
     )
   }
 
+  if (activity.type === 'preparation') {
+    return (
+      <div key={activity.id} className="leon-message-summary">
+        <ToolPreparation key={activity.preparation.executionId} preparation={activity.preparation} />
+      </div>
+    )
+  }
+
   if (activity.type === 'summary') {
     if (activity.iconName) {
       const duration = formatToolDuration(activity.memory?.durationMs)
@@ -343,7 +323,6 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
   }
   const bonusResponse = entry.bonusResponse
   const activities = entry.activities.map(renderActivity)
-  const preparations = getPreparations(entry.activities)
   const duration = formatToolDuration(entry.durationMs, DurationFormat.Compact)
 
   return (
@@ -352,6 +331,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
       {entry.status === FeedTurnStatus.Completed && !entry.isMaintenance && !entry.continues && (activities.length > 0 || entry.hasTurnWork) ? (
         <ProcessGroup
           active={false}
+          defaultExpanded={entry.activities.some(hasActiveActivityPreparation)}
           activeLabel="Working..."
           ariaLabel="Leon’s completed work"
           className="leon-message-work"
@@ -360,13 +340,12 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
           {activities.length > 0 ? <div className="leon-message-activities">{activities}</div> : undefined}
         </ProcessGroup>
       ) : activities}
-      {(preparations.length > 0 || entry.finalAnswer.trim().length > 0 || entry.answerParts?.length || entry.artifacts?.length || entry.connections?.length) ? (
+      {(entry.finalAnswer.trim().length > 0 || entry.answerParts?.length || entry.artifacts?.length || entry.connections?.length) ? (
         <FinalAnswer animationId={`${entry.id}:${entry.answerGenerationId ?? 'accepted'}:final-answer`}
           active={entry.status !== FeedTurnStatus.Completed}
           parts={entry.answerParts}
           artifacts={entry.artifacts}
           connections={entry.connections}
-          preparations={preparations}
           timestamp={entry.sentAt} metrics={entry.metrics}
           footer={bonusResponse !== undefined && bonusResponse.trim().length > 0 ? (
             <BonusResponse animationId={`${entry.id}:bonus-response`}>

@@ -24,6 +24,7 @@ interface ProcessGroupProps {
   children?: ReactNode
   className?: string
   completedLabel: string
+  defaultExpanded?: boolean
   indicator?: ReactNode
   onExpandedChange?: (expanded: boolean) => void
   startedAt?: number | undefined
@@ -49,25 +50,26 @@ export function ProcessGroup({
   children,
   className,
   completedLabel,
+  defaultExpanded = active,
   indicator,
   onExpandedChange,
   startedAt
 }: ProcessGroupProps) {
   const contentId = useId()
-  const previousActiveRef = useRef(active)
-  const [isExpanded, setIsExpanded] = useState(active)
-  const [expandNestedByDefault, setExpandNestedByDefault] = useState(active)
+  const previousDefaultExpanded = useRef(defaultExpanded)
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const [expandNestedByDefault, setExpandNestedByDefault] = useState(defaultExpanded)
 
   useEffect(() => {
-    if (previousActiveRef.current === active) {
+    if (previousDefaultExpanded.current === defaultExpanded) {
       return
     }
 
-    // Active work stays visible; the completed snapshot starts collapsed.
-    setIsExpanded(active)
-    setExpandNestedByDefault(active)
-    previousActiveRef.current = active
-  }, [active])
+    // Ongoing child work can keep the group open under its completed heading.
+    setIsExpanded(defaultExpanded)
+    setExpandNestedByDefault(defaultExpanded)
+    previousDefaultExpanded.current = defaultExpanded
+  }, [defaultExpanded])
 
   function handleToggle(): void {
     if (isExpanded) {

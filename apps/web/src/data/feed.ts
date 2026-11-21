@@ -2,6 +2,7 @@ import type { MemoryActivitySnapshot } from '../../../../server/src/core/llm-man
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
 import type { ConversationMetrics } from './conversation'
 import type { AgentSkillSnapshot } from '../../../../server/src/core/llm-manager/agent-progress-contract'
+import type { ToolPreparationSnapshot } from '../../../../aurora/src/v2/contracts/preparation'
 
 export enum FeedTurnStatus {
   InProgress = 'in_progress',
@@ -30,7 +31,6 @@ interface FeedActivityTime {
 }
 
 export interface FeedToolCall extends FeedActivityTime {
-  preparation?: import('../../../../aurora/src/v2/contracts/preparation').ToolPreparationSnapshot
   preparationStartedAt?: number | undefined
   id: string
   toolCallTitle: string
@@ -65,6 +65,21 @@ export interface FeedPlanStep {
   startedAt?: number | undefined
 }
 
+/**
+ * Finds ongoing preparation in the step's progress activities.
+ */
+export function hasActiveStepPreparation(step: FeedPlanStep): boolean {
+  return step.activities?.some(hasActiveActivityPreparation) ?? false
+}
+
+/**
+ * Detects ongoing preparation so the disclosures above its card open by default.
+ */
+export function hasActiveActivityPreparation(activity: LeonFeedActivity): boolean {
+  return activity.type === 'preparation' ? activity.isActive
+    : activity.type === 'plan' && activity.steps.some(hasActiveStepPreparation)
+}
+
 export interface FeedThinkingActivity extends FeedActivityTime {
   id: string
   type: 'thinking'
@@ -80,6 +95,14 @@ export interface FeedSummaryActivity extends FeedActivityTime {
   iconName?: string
   skill?: AgentSkillSnapshot
   memory?: MemoryActivitySnapshot
+}
+
+export interface FeedPreparationActivity extends FeedActivityTime {
+  id: string
+  type: 'preparation'
+  toolCallId: string
+  preparation: ToolPreparationSnapshot
+  isActive: boolean
 }
 
 export interface FeedPlanActivity extends FeedActivityTime {
@@ -159,6 +182,7 @@ export type LeonFeedActivity =
   | FeedWorkingActivity
   | FeedThinkingActivity
   | FeedSummaryActivity
+  | FeedPreparationActivity
   | FeedPlanActivity
   | FeedToolsActivity
   | FeedReviewActivity
