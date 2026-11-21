@@ -97,6 +97,11 @@ These are community expectations for agents, not license conditions. The unchang
 - Maintain generated context via generators in `server/src/core/context-manager/context-files/` and regenerate through the context manager; no hand-edited generated copies.
 - Keep `LEON.md`/`ARCHITECTURE.md` to major behavioral/architectural facts; tool usage belongs in tool guidance, workflows in skills.
 
+## System prompts
+
+- Review related instructions before editing a system prompt. Prefer clarifying or merging existing guidance. Add a separate rule only when the behavior cannot be covered clearly by existing guidance.
+- Keep frequently sent instructions concise and easy to scan.
+
 ## Comments and documentation
 
 - Leon's user-facing messages use first person (“I”, “me”, “my”); preserve branding, technical identifiers and neutral descriptive/accessibility labels.
