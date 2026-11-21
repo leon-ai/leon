@@ -4,7 +4,7 @@ import { ActivityDetailsDialog } from '@/components/activity-details/activity-de
 import { Button } from '@/components/button'
 import { useToolCallContents } from '@/data/conversation-details'
 import type { FeedToolCall } from '@/data/feed'
-import { getToolOutputFormat, toToolContent, toToolDisplayContent, toToolInput } from '@/utils/tool-content'
+import { getToolOutputFormat, getToolOutputProgress, toToolContent, toToolDisplayContent, toToolInput } from '@/utils/tool-content'
 import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
 import { ToolChanges, ToolOutput } from './tool-output'
 import { getListNavigationIndex } from '@/utils/list-navigation'
@@ -45,10 +45,13 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
   const tabs = [ToolDetailsTab.Input, ToolDetailsTab.Output, ...(changes.length ? [ToolDetailsTab.Changes] : [])]
   const tab = selectedTab === ToolDetailsTab.Changes && !changes.length
     ? ToolDetailsTab.Output : selectedTab ?? (changes.length ? ToolDetailsTab.Changes : ToolDetailsTab.Output)
+  const outputProgress = active && tab === ToolDetailsTab.Output
+    ? getToolOutputProgress(output, toolCall.progressMessage) : undefined
   const content = tab === ToolDetailsTab.Input ? input : output
   const contentName = tab === ToolDetailsTab.Input ? 'input' : 'output'
   // Reading a document must not discard the original evidence envelope.
-  const actionContent = tab === ToolDetailsTab.Output && output?.language === 'markdown' ? result : content
+  const actionContent = outputProgress ? undefined
+    : tab === ToolDetailsTab.Output && output?.language === 'markdown' ? result : content
 
   function handleTabsKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     const next = getListNavigationIndex(event, {
@@ -83,7 +86,7 @@ export function ToolDetailsDialog({ open, toolCall, technicalTitle, onClose, onA
           <ToolChanges changes={changes} truncated={contents.data?.diffTruncated ?? false}
             fallback={<ToolOutput content={output} label="Tool output" />} />
         ) : (
-          <ToolOutput key={tab} content={content}
+          <ToolOutput key={tab} content={content} progressMessage={outputProgress}
             {...(contents.isError || contents.fetchStatus === 'paused' ? { emptyMessage: null }
               : tab === ToolDetailsTab.Input ? { emptyMessage: 'This tool function does not take input.' } : {})}
             label={tab === ToolDetailsTab.Input ? 'Input JSON' : content?.language === 'markdown' ? 'Output' : 'Output JSON'}

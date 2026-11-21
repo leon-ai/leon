@@ -175,7 +175,7 @@ for (const legacy of [false, true]) {
     const tool = { id: 'rich-search', name: 'search_web.hosted.searchWeb', toolCallTitle: 'Read useful guidance',
       toolkitName: 'Search & Web', toolName: 'hosted', toolLogo: logo,
       status: 'running' as const, input: { query: 'Useful guidance' },
-      output: { output: text, format: 'markdown' }, commandOutput: text }
+      progressMessage: 'Searching the web...', output: { format: 'markdown' } }
     const saved: ConversationRecord = {
       who: 'leon', messageId: responseId, message: '', sentAt: Date.now(), isAddedToHistory: false,
       agentResponseTrace: { id: responseId, planSteps: [], toolCalls: [tool], metrics: { durationMs: 1_000 } }
@@ -188,10 +188,10 @@ for (const legacy of [false, true]) {
       turn_id: 'rich-search-turn', response_id: responseId, created_at: Date.now()
     }])
     await emit('turn_status', { status: 'accepted' })
-    const toolMetadata = { toolkit_name: tool.toolkitName, tool_name: tool.toolName,
+    const toolMetadata = { id: tool.id, name: tool.name, toolkit_name: tool.toolkitName, tool_name: tool.toolName,
       tool_logo: logo, tool_call_title: tool.toolCallTitle }
     const toolPath = 'search_web > hosted > searchWeb()'
-    await emit('tool_call', { tool_call: { ...tool, ...toolMetadata, command_output: text } })
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: tool.status, progress_message: tool.progressMessage } })
     const call = page.locator('.tool-call').filter({ hasText: 'Read useful guidance' })
     const revealTool = async (): Promise<void> => {
       const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true }).last()
@@ -206,7 +206,31 @@ for (const legacy of [false, true]) {
       await expect(call.locator('.activity-details-title')).toHaveText(toolPath)
       await expect(call.locator('.activity-wave-content .package-icon-mask')).toHaveAttribute('data-logo-mask', LogoMaskMode.Alpha)
     }
+    const previewResponse = page.waitForResponse(`**/tools/${tool.id}?complete=false`)
     await revealTool()
+    expect((await previewResponse).ok()).toBe(true)
+    await expect(call.getByRole('status')).toHaveText(tool.progressMessage)
+    await expect(call.locator('.code-view')).toHaveCount(0)
+
+    const detailsResponse = page.waitForResponse(`**/tools/${tool.id}?complete=true`)
+    await call.getByRole('button', { name: 'View details', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: tool.toolCallTitle, exact: true })
+    expect((await detailsResponse).ok()).toBe(true)
+    await expect(dialog.getByRole('status')).toHaveText(tool.progressMessage)
+    await expect(dialog.getByRole('button', { name: 'Copy output', exact: true })).toBeDisabled()
+
+    const preparing = { ...tool, progressMessage: 'Preparing search results...' }
+    saved.agentResponseTrace!.toolCalls = [preparing]
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: tool.status, progress_message: preparing.progressMessage } })
+    await expect(dialog.getByRole('status')).toHaveText(preparing.progressMessage)
+
+    const streaming = { ...tool, progressMessage: 'Receiving tool output...', output: { output: text, format: 'markdown' }, commandOutput: text }
+    saved.agentResponseTrace!.toolCalls = [streaming]
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: tool.status, progress_message: streaming.progressMessage } })
+    await expect(dialog.getByRole('region', { name: 'Output', exact: true }).getByRole('table')).toContainText('Take your time')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+
     const preview = call.getByRole('region', { name: 'Tool output', exact: true })
     await expect(preview.getByRole('heading', { name: 'A useful guide' })).toBeVisible()
     await expect(preview.getByRole('table')).toContainText('Take your time')
@@ -215,13 +239,12 @@ for (const legacy of [false, true]) {
       result: { content: text, sources, ...(legacy ? {} : { format: 'markdown' }) }
     }, commandOutput: `Searching the web...\nSource: https://example.com/guide\n${text}` }
     saved.agentResponseTrace!.toolCalls = [finished]
-    await emit('tool_call', { tool_call: { ...finished, ...toolMetadata, command_output: finished.commandOutput } })
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: finished.status } })
     await revealTool()
     await expect(preview.getByRole('heading')).toHaveText('A useful guide')
     await expect(preview).not.toContainText('Source:')
     await expect(preview).not.toContainText('Searching the web...')
     await call.getByRole('button', { name: 'View details', exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: tool.toolCallTitle, exact: true })
     await expect(dialog.locator('.activity-details-path')).toHaveText(toolPath)
     await expect(dialog.getByRole('region', { name: 'Output', exact: true }).getByRole('table')).toContainText('Take your time')
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])

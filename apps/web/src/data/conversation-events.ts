@@ -60,6 +60,7 @@ export function readEventTool(value: Record<string, unknown>): ConversationTool 
     ...(value['input'] === undefined ? {} : { input: value['input'] as NonNullable<ConversationTool['input']> }),
     ...(value['output'] === undefined ? {} : { output: value['output'] as NonNullable<ConversationTool['output']> }),
     ...(value['command_output'] === undefined ? {} : { commandOutput: String(value['command_output']) }),
+    ...(typeof value['progress_message'] === 'string' ? { progressMessage: value['progress_message'] } : {}),
     ...(value['error_message'] ? { errorMessage: String(value['error_message']) } : {})
   }
 }

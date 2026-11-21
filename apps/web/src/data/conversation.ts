@@ -26,6 +26,7 @@ export interface ConversationTool {
   input?: JsonValue
   output?: JsonValue
   commandOutput?: string
+  progressMessage?: string
   errorMessage?: string
 }
 

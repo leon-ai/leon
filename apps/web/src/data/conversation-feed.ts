@@ -164,6 +164,7 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }),
     input: call.input ?? null,
     ...(call.commandOutput === undefined ? {} : { commandOutput: call.commandOutput }),
+    ...(call.progressMessage === undefined ? {} : { progressMessage: call.progressMessage }),
     ...(call.output === undefined && call.commandOutput === undefined && call.errorMessage === undefined
       ? {} : { output: call.output ?? call.commandOutput ?? call.errorMessage ?? null })
   }
