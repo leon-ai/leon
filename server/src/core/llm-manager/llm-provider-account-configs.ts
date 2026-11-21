@@ -104,6 +104,14 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: 'https://console.celeris.ai'
     },
     {
+      label: 'Atlas Cloud',
+      value: LLMProviders.AtlasCloud,
+      aliases: ['atlas-cloud', 'atlas'],
+      baseURL: 'https://api.atlascloud.ai/v1',
+      apiKeyEnv: 'LEON_ATLASCLOUD_API_KEY',
+      apiKeyURL: 'https://console.atlascloud.ai/api-keys'
+    },
+    {
       label: 'Hugging Face',
       value: LLMProviders.HuggingFace,
       baseURL: 'https://router.huggingface.co/v1',

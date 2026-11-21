@@ -99,6 +99,10 @@ llm:
       api_key:
         # The value is read from LEON_CELERIS_API_KEY in your profile .env file.
         env: LEON_CELERIS_API_KEY
+    atlascloud:
+      api_key:
+        # The value is read from LEON_ATLASCLOUD_API_KEY in your profile .env file.
+        env: LEON_ATLASCLOUD_API_KEY
 
 mood:
   # Mood mode: auto | default | tired | cocky | sad | angry
