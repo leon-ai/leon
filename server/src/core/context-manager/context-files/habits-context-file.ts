@@ -6,7 +6,7 @@ import {
   ContextProbeHelper,
   RunningProcessEntry
 } from '@/core/context-manager/context-probe-helper'
-import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import { ContextStateStore, normalizeSampleTime } from '@/core/context-manager/context-state-store'
 
 type DayBucket =
   | 'monday'
@@ -21,6 +21,7 @@ type TimeBucket = 'night' | 'morning' | 'afternoon' | 'evening'
 interface HabitsState {
   trackingStartedAt: string
   lastSampleAt: string
+  sampledSeconds: number
   timeBuckets: Record<TimeBucket, Record<string, number>>
   dayBuckets: Record<DayBucket, Record<string, number>>
 }
@@ -41,8 +42,9 @@ const EMPTY_DAY_BUCKETS: Record<DayBucket, Record<string, number>> = {
   sunday: {}
 }
 const FALLBACK_STATE: HabitsState = {
-  trackingStartedAt: new Date(0).toISOString(),
-  lastSampleAt: new Date(0).toISOString(),
+  trackingStartedAt: '',
+  lastSampleAt: '',
+  sampledSeconds: 0,
   timeBuckets: EMPTY_TIME_BUCKETS,
   dayBuckets: EMPTY_DAY_BUCKETS
 }
@@ -50,6 +52,8 @@ const FALLBACK_STATE: HabitsState = {
 const MAX_APP_LINES = 20
 const MAX_BUCKET_LINES = 16
 const MAX_STATE_APPS_PER_BUCKET = 250
+const MEDIUM_CONFIDENCE_SECONDS = 6 * 3_600
+const HIGH_CONFIDENCE_SECONDS = 24 * 3_600
 
 export class HabitsContextFile extends ContextFile {
   public readonly filename = 'HABITS.md'
@@ -70,13 +74,12 @@ export class HabitsContextFile extends ContextFile {
 
   public generate(): string {
     const now = new Date()
-    const nowIso = now.toISOString()
     const currentTimeBucket = this.getTimeBucket(now)
     const currentDayBucket = this.getDayBucket(now)
     const runningProcesses = this.probeHelper.probeRunningProcesses(120)
     const activeApps = this.aggregateActiveApps(runningProcesses.entries)
 
-    const currentState = this.normalizeState(this.stateStore.load(), nowIso)
+    const currentState = this.normalizeState(this.stateStore.load())
     const updatedState = this.updateState(
       currentState,
       activeApps,
@@ -93,18 +96,18 @@ export class HabitsContextFile extends ContextFile {
     const currentDayTopApps = this.getTopAppsFromSingleBucket(
       updatedState.dayBuckets[currentDayBucket]
     )
-    const totalObservedSeconds = globalTopApps.reduce(
-      (total, entry) => total + entry.seconds,
-      0
-    )
+    const { sampledSeconds } = updatedState
     const confidence =
-      totalObservedSeconds >= 24 * 60 * 60
+      sampledSeconds >= HIGH_CONFIDENCE_SECONDS
         ? 'high'
-        : totalObservedSeconds >= 6 * 60 * 60
+        : sampledSeconds >= MEDIUM_CONFIDENCE_SECONDS
           ? 'medium'
           : 'low'
+    const trackingStartedAt = updatedState.trackingStartedAt
+      ? DateHelper.getDateTime(updatedState.trackingStartedAt)
+      : 'awaiting first sample'
 
-    const summary = `Habits tracking sees ${activeApps.length} active app group(s) now; learned ${globalTopApps.length} recurring app signal(s) with ${confidence} confidence from ${this.probeHelper.formatUptime(totalObservedSeconds)} of observed usage.`
+    const summary = `Habits tracking sees ${activeApps.length} running app group(s) now and ${globalTopApps.length} recurring app signal(s), with ${confidence} confidence from ${this.probeHelper.formatUptime(sampledSeconds)} of process monitoring.`
 
     const globalLines =
       globalTopApps.length > 0
@@ -131,11 +134,12 @@ export class HabitsContextFile extends ContextFile {
       `> Overall habits, time-window habits, weekday habits. ${summary}`,
       '# HABITS',
       `- Generated at: ${DateHelper.getDateTime()}`,
-      `- Tracking started at: ${DateHelper.getDateTime(updatedState.trackingStartedAt)}`,
+      `- Tracking started at: ${trackingStartedAt}`,
       `- Current time bucket: ${currentTimeBucket}`,
       `- Current weekday bucket: ${currentDayBucket}`,
-      `- Current active app groups: ${activeApps.length}`,
+      `- Current running app groups: ${activeApps.length}`,
       `- Habits confidence: ${confidence}`,
+      '- App durations estimate process presence from periodic snapshots.',
       '## Top App Habits (Overall)',
       ...globalLines,
       `## Top App Habits (${currentTimeBucket})`,
@@ -149,12 +153,16 @@ export class HabitsContextFile extends ContextFile {
     return [...new Set(entries.map((entry) => this.normalizeProcessName(entry.name)))]
   }
 
-  private normalizeState(state: HabitsState, nowIso: string): HabitsState {
+  private normalizeState(state: HabitsState): HabitsState {
+    const hasSampledSeconds = Number.isFinite(state.sampledSeconds) &&
+      state.sampledSeconds >= 0
+
+    // Per-app totals include overlapping intervals, so they cannot seed the
+    // coverage counter when loading existing habits without one.
     return {
-      trackingStartedAt: this.isValidDate(state.trackingStartedAt)
-        ? state.trackingStartedAt
-        : nowIso,
-      lastSampleAt: this.isValidDate(state.lastSampleAt) ? state.lastSampleAt : nowIso,
+      trackingStartedAt: normalizeSampleTime(state.trackingStartedAt, ''),
+      lastSampleAt: hasSampledSeconds ? normalizeSampleTime(state.lastSampleAt, '') : '',
+      sampledSeconds: hasSampledSeconds ? state.sampledSeconds : 0,
       timeBuckets: this.normalizeBuckets(state.timeBuckets, EMPTY_TIME_BUCKETS),
       dayBuckets: this.normalizeBuckets(state.dayBuckets, EMPTY_DAY_BUCKETS)
     }
@@ -168,7 +176,8 @@ export class HabitsContextFile extends ContextFile {
     now: Date
   ): HabitsState {
     const nowIso = now.toISOString()
-    const deltaSeconds = this.computeDeltaSeconds(state.lastSampleAt, now)
+    const sampledAt = activeApps.length > 0 ? nowIso : ''
+    const deltaSeconds = sampledAt ? this.computeDeltaSeconds(state.lastSampleAt, now) : 0
     const updatedTimeBuckets = { ...state.timeBuckets }
     const updatedDayBuckets = { ...state.dayBuckets }
 
@@ -194,8 +203,9 @@ export class HabitsContextFile extends ContextFile {
     }
 
     return {
-      trackingStartedAt: state.trackingStartedAt,
-      lastSampleAt: nowIso,
+      trackingStartedAt: state.trackingStartedAt || sampledAt,
+      lastSampleAt: sampledAt,
+      sampledSeconds: state.sampledSeconds + deltaSeconds,
       timeBuckets: updatedTimeBuckets,
       dayBuckets: updatedDayBuckets
     }
@@ -289,12 +299,12 @@ export class HabitsContextFile extends ContextFile {
       return 0
     }
 
-    const rawDelta = Math.floor((now.getTime() - lastTimestamp) / 1000)
+    const rawDelta = Math.floor((now.getTime() - lastTimestamp) / 1_000)
     if (rawDelta <= 0) {
       return 0
     }
 
-    return Math.min(rawDelta, Math.floor((this.ttlMs * 2) / 1000))
+    return Math.min(rawDelta, Math.floor((this.ttlMs * 2) / 1_000))
   }
 
   private normalizeProcessName(rawName: string): string {
@@ -304,9 +314,5 @@ export class HabitsContextFile extends ContextFile {
     }
 
     return base.replace(/\.exe$/i, '')
-  }
-
-  private isValidDate(value: string): boolean {
-    return Number.isFinite(Date.parse(value || ''))
   }
 }

@@ -18,6 +18,7 @@ export interface InferenceOptions {
 
 export interface InferenceResult {
   output: string
+  finishReason?: string
   reasoning?: string
   usedInputTokens: number
   usedOutputTokens: number
@@ -65,6 +66,9 @@ export async function runInference(
     usedOutputTokens: result.usedOutputTokens
   }
 
+  if (result.finishReason !== undefined) {
+    inferenceResult.finishReason = result.finishReason
+  }
   if (result.reasoning !== undefined) {
     inferenceResult.reasoning = result.reasoning
   }

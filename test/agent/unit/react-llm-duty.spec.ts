@@ -578,6 +578,87 @@ describe('continuous agent loop', () => {
     expect(result.answer).toContain('no write was performed')
   })
 
+  it.each([false, true])('bounds overlapping reads and allows a corrected write when offered: %s', async (correctsCall) => {
+    const outputLogPath = '/tmp/tool-output.log'
+    const reader: AgentCallableFunction = {
+      ...callable,
+      qualifiedName: 'test.lookup.readArtifact',
+      functionName: 'readArtifact',
+      functionConfig: {
+        description: 'Read an artifact range.',
+        read_only: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            outputLogPath: { type: 'string' },
+            options: { type: 'object' }
+          },
+          required: ['outputLogPath']
+        }
+      }
+    }
+    const writer: AgentCallableFunction = {
+      ...callable,
+      qualifiedName: 'test.lookup.write',
+      functionName: 'write',
+      functionConfig: { ...callable.functionConfig, description: 'Write the result.' }
+    }
+    const readName = 'test__lookup__readArtifact'
+    const writeName = 'test__lookup__write'
+    const catalog = createCatalog()
+    catalog.functionsByToolName = new Map([[readName, reader], [writeName, writer]])
+    catalog.tools = [...catalog.functionsByToolName].map(([name, entry]) => ({
+      type: 'function',
+      function: {
+        name,
+        description: entry.functionConfig.description,
+        parameters: entry.functionConfig.parameters
+      }
+    }))
+    const executeFunction = vi.fn(async (entry: AgentCallableFunction, input: string) => ({
+      execution: {
+        function: entry.qualifiedName,
+        status: 'success' as const,
+        observation: entry === reader ? 'Artifact prefix read.' : 'Result written.',
+        requestedToolInput: input
+      }
+    }))
+    let readsEmitted = 0
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Read the artifact prefix and write a summary.' }],
+      catalog,
+      executeFunction,
+      loadAgentSkill: async () => null,
+      callModel: async (_messages, _tools, options, state) => {
+        if (options.isFinalizationAttempt) {
+          return { textContent: 'I read the artifact. The summary is unfinished.' }
+        }
+        if (correctsCall && readsEmitted === 4) {
+          if (state.executionHistory.some((entry) => entry.function === writer.qualifiedName)) {
+            return { textContent: 'I wrote the summary.' }
+          }
+
+          return { toolCalls: [toolCall('write-summary', writeName, { query: 'Artifact summary' })] }
+        }
+
+        readsEmitted += 1
+        return {
+          toolCalls: [toolCall(`read-${readsEmitted}`, readName, {
+            outputLogPath,
+            options: { offset: readsEmitted, maxChars: 3_000 }
+          })]
+        }
+      }
+    })
+
+    expect(result.transcript.some((entry) => entry.content.includes('Repeated unsuccessful operation'))).toBe(true)
+    expect(executeFunction.mock.calls.map(([entry]) => entry.qualifiedName)).toEqual(
+      correctsCall ? [reader.qualifiedName, writer.qualifiedName] : [reader.qualifiedName]
+    )
+    expect(readsEmitted).toBe(correctsCall ? 4 : 5)
+    expect(result.answer).toContain(correctsCall ? 'wrote the summary' : 'summary is unfinished')
+  })
+
   it('allows a corrected operation after repeated argument rejection', async () => {
     const executeFunction = vi.fn(async () => ({ execution: {
       function: callable.qualifiedName, status: 'success', observation: 'Corrected lookup completed.'

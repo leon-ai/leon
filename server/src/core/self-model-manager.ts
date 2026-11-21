@@ -123,8 +123,8 @@ const MAX_THEORY_ITEMS = 4
 const MAX_INITIATIVE_CANDIDATES = 5
 const MIN_BEHAVIORAL_PRINCIPLE_SEEN_COUNT = 2
 const MIN_BEHAVIORAL_PRINCIPLE_CONFIDENCE = 0.72
-// Allow the structured envelope and complete replacement lists to fit together.
-const REFLECTION_MAX_TOKENS = 512
+// Leave room for complete replacement lists in the bounded reflection request.
+const REFLECTION_MAX_TOKENS = 1_024
 const REFLECTION_SCHEMA = {
   type: 'object',
   properties: {
@@ -730,6 +730,7 @@ export default class SelfModelManager {
         this.buildToolExecutionSummary(toolExecutions)
       ].join('\n')
 
+      const startedAt = performance.now()
       const result = await runInference({
         usagePurpose: InferencePurpose.SelfModel,
         prompt,
@@ -746,7 +747,14 @@ export default class SelfModelManager {
         trackProviderErrors: false
       })
       const patch = this.parseReflectionPatch(result?.output)
-      LogHelper.debug(`Self-model reflection: ${patch ? 'accepted' : 'rejected invalid output'}`)
+
+      LogHelper.debug([
+        `Self-model reflection: ${patch ? 'accepted' : 'rejected invalid output'}`,
+        `finishReason=${result?.finishReason ?? 'unknown'}`,
+        `outputTokens=${result?.usedOutputTokens ?? 'unknown'}`,
+        `maxTokens=${REFLECTION_MAX_TOKENS}`,
+        `elapsedMs=${Math.round(performance.now() - startedAt)}`
+      ].join(' | '))
       return patch
     } catch (error) {
       LogHelper.title('Self Model Manager')

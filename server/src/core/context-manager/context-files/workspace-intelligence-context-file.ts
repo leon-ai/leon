@@ -5,7 +5,7 @@ import path from 'node:path'
 import { DateHelper } from '@/helpers/date-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
 import { ContextProbeHelper } from '@/core/context-manager/context-probe-helper'
-import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import { ContextStateStore, normalizeSampleTime } from '@/core/context-manager/context-state-store'
 
 interface RepositoryStateEntry {
   lastSeenAt: string
@@ -34,8 +34,8 @@ interface ToolchainEntry {
 }
 
 const FALLBACK_STATE: WorkspaceState = {
-  trackingStartedAt: new Date(0).toISOString(),
-  lastSampleAt: new Date(0).toISOString(),
+  trackingStartedAt: '',
+  lastSampleAt: '',
   repositories: {}
 }
 
@@ -101,7 +101,7 @@ export class WorkspaceIntelligenceContextFile extends ContextFile {
       .map((entry, index) => `- ${index + 1}. ${entry.name}: ${entry.availability}`)
 
     return [
-      `> Repositories, language distribution, toolchain availability. ${summary}`,
+      `> Repositories, language distribution, toolchain command probes. ${summary}`,
       '# WORKSPACE_INTELLIGENCE',
       `- Generated at: ${DateHelper.getDateTime()}`,
       `- Tracking started at: ${DateHelper.getDateTime(updatedState.trackingStartedAt)}`,
@@ -111,7 +111,7 @@ export class WorkspaceIntelligenceContextFile extends ContextFile {
       ...repoLines,
       '## Language Distribution',
       ...languageDistributionLines,
-      '## Toolchain Availability',
+      '## Toolchain Commands in Leon’s Environment',
       ...toolchainLines
     ].join('\n')
   }
@@ -320,10 +320,8 @@ export class WorkspaceIntelligenceContextFile extends ContextFile {
 
   private normalizeState(state: WorkspaceState, nowIso: string): WorkspaceState {
     return {
-      trackingStartedAt: this.isValidDate(state.trackingStartedAt)
-        ? state.trackingStartedAt
-        : nowIso,
-      lastSampleAt: this.isValidDate(state.lastSampleAt) ? state.lastSampleAt : nowIso,
+      trackingStartedAt: normalizeSampleTime(state.trackingStartedAt, nowIso),
+      lastSampleAt: normalizeSampleTime(state.lastSampleAt, nowIso),
       repositories:
         state.repositories && typeof state.repositories === 'object'
           ? state.repositories
@@ -410,15 +408,15 @@ export class WorkspaceIntelligenceContextFile extends ContextFile {
       { name: 'code', args: ['--version'] }
     ]
 
-    return probes.map((probe) => ({
-      name: probe.name,
-      availability: this.probeHelper.formatCommandProbe(
-        this.probeHelper.probeCommandVersion(probe.name, probe.args)
-      )
-    }))
-  }
+    return probes.map(({ name, args }) => {
+      const result = this.probeHelper.probeCommandVersion(name, args)
 
-  private isValidDate(value: string): boolean {
-    return Number.isFinite(Date.parse(value || ''))
+      return {
+        name: [name, ...args].join(' '),
+        availability: result.available
+          ? this.probeHelper.formatCommandProbe(result)
+          : 'command probe unsuccessful'
+      }
+    })
   }
 }

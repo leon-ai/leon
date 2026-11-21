@@ -1508,9 +1508,13 @@ export async function runAgentLoop(
           rejectedCalls.clear()
           hasWarnedAboutRejections = false
         } else if (toolResult.rejected || records.some((record) => record.status !== 'success')) {
-          const key = `${toolCall.function.name}:${normalizeToolInputForComparison(
-            extractToolCallInput(toolCall.function.arguments).toolInput
-          )}`
+          // Overlapping reads reuse the same earlier observation even when
+          // the model varies the requested range.
+          const key = toolResult.duplicateReadStepNumber === undefined
+            ? `input:${toolCall.function.name}:${normalizeToolInputForComparison(
+                extractToolCallInput(toolCall.function.arguments).toolInput
+              )}`
+            : `read-step:${toolResult.duplicateReadStepNumber}`
           const count = (rejectedCalls.get(key) ?? 0) + 1
           rejectedCalls.set(key, count)
           if (count >= AGENT_REPEATED_REJECTION_LIMIT) {
@@ -2561,6 +2565,7 @@ async function executeAgentToolCall(
   trackedSteps: TrackedPlanStep[]
   signal?: FinalResponseSignal
   rejected?: boolean
+  duplicateReadStepNumber?: number
   madeProgress?: boolean
 }> {
   const visual = await executeAuroraToolCall(toolCall, params.catalog, params.onPresentUI)
@@ -2895,6 +2900,9 @@ async function executeAgentToolCall(
     return {
       content: `Duplicate call blocked: ${callable.qualifiedName} already ran with the same or an overlapping input in step ${duplicate.stepNumber}. Reuse its result from the transcript or request only the unread range.`,
       rejected: true,
+      ...(callable.functionConfig.read_only === true
+        ? { duplicateReadStepNumber: duplicate.stepNumber }
+        : {}),
       trackedSteps
     }
   }

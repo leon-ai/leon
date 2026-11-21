@@ -9,7 +9,7 @@ import {
   ContextProbeHelper,
   RunningProcessEntry
 } from '@/core/context-manager/context-probe-helper'
-import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import { ContextStateStore, normalizeSampleTime } from '@/core/context-manager/context-state-store'
 
 interface LocalInventoryAppStateEntry {
   observedSeconds: number
@@ -52,8 +52,8 @@ const MAX_SUMMARY_CATEGORIES = 6
 const MAX_SUMMARY_APPS_PER_CATEGORY = 3
 
 const FALLBACK_STATE: LocalInventoryState = {
-  trackingStartedAt: new Date(0).toISOString(),
-  lastSampleAt: new Date(0).toISOString(),
+  trackingStartedAt: '',
+  lastSampleAt: '',
   apps: {}
 }
 
@@ -86,11 +86,11 @@ export class LocalInventoryContextFile extends ContextFile {
     const updatedState = this.updateState(currentState, activeApps, now)
     this.stateStore.save(updatedState)
 
-    const rankedByUsage = this.getAppsRankedByUsage(updatedState.apps)
-    const categoryCounts = this.buildCategoryCounts([
-      ...installedApps,
-      ...activeApps.map((entry) => entry.appName)
-    ])
+    const rankedByPresence = this.getAppsRankedByPresence(updatedState.apps)
+    const installedCategories = this.formatCategoryLines(installedApps)
+    const runningCategories = this.formatCategoryLines(
+      activeApps.map((entry) => entry.appName)
+    )
     const installedAppHighlights =
       this.buildInstalledAppHighlights(installedApps)
 
@@ -101,42 +101,37 @@ export class LocalInventoryContextFile extends ContextFile {
           })
         : ['- No installed app entries detected']
 
-    const topUsageLines =
-      rankedByUsage.length > 0
-        ? rankedByUsage.slice(0, MAX_RUNNING_APPS).map((entry, index) => {
-            return `- ${index + 1}. ${entry.appName} | observed ${this.probeHelper.formatUptime(entry.observedSeconds)} | last seen ${DateHelper.getDateTime(entry.lastSeenAt) || entry.lastSeenAt} | seen ${entry.seenCount} sample(s)`
+    const topPresenceLines =
+      rankedByPresence.length > 0
+        ? rankedByPresence.slice(0, MAX_RUNNING_APPS).map((entry, index) => {
+            return `- ${index + 1}. ${entry.appName} | estimated process presence ${this.probeHelper.formatUptime(entry.observedSeconds)} | last seen ${DateHelper.getDateTime(entry.lastSeenAt) || entry.lastSeenAt} | seen ${entry.seenCount} sample(s)`
           })
-        : ['- No usage history collected yet']
-
-    const categoryLines =
-      categoryCounts.length > 0
-        ? categoryCounts.slice(0, MAX_CATEGORY_LINES).map((entry, index) => {
-            return `- ${index + 1}. ${entry.category}: ${entry.count} app(s)`
-          })
-        : ['- No category signals yet']
+        : ['- No process presence history collected yet']
 
     const summary = [
-      `Local inventory tracks ${installedApps.length} installed app entry(ies), usage signals across ${rankedByUsage.length} app(s), and peripherals (${peripherals.keyboards.length} keyboard(s), ${peripherals.pointers.length} pointer(s), ${peripherals.webcams.length} webcam(s)).`,
+      `Local inventory tracks ${installedApps.length} installed app entry(ies), process presence across ${rankedByPresence.length} app group(s), and peripherals (${peripherals.keyboards.length} keyboard(s), ${peripherals.pointers.length} pointer(s), ${peripherals.webcams.length} webcam(s)).`,
       ...(installedAppHighlights
         ? [`Installed app highlights: ${installedAppHighlights}.`]
         : [])
     ].join(' ')
 
     return [
-      `> Usage-ranked apps, installed apps, categories, peripherals. ${summary}`,
+      `> Process presence, installed apps, categories, peripherals. ${summary}`,
       '# LOCAL_INVENTORY',
       `- Generated at: ${DateHelper.getDateTime()}`,
-      `- Usage sample source: ${runningSnapshot.source}`,
+      `- Process sample source: ${runningSnapshot.source}`,
       `- Peripherals probe source: ${peripherals.source}`,
       `- Tracking started at: ${DateHelper.getDateTime(updatedState.trackingStartedAt)}`,
-      `- Running processes sampled for usage estimation: ${runningSnapshot.entries.length}`,
+      `- Running processes sampled: ${runningSnapshot.entries.length}`,
       `- Installed app entries: ${installedApps.length}`,
-      '## Most Used / Recently Seen Apps',
-      ...topUsageLines,
+      '## Apps Seen Running in Periodic Snapshots',
+      ...topPresenceLines,
       '## Installed Apps Snapshot',
       ...installedAppLines,
-      '## App Category Signals',
-      ...categoryLines,
+      '## Installed App Entry Categories',
+      ...installedCategories,
+      '## Current Running App Group Categories',
+      ...runningCategories,
       '## Peripherals and I/O',
       `- Keyboards (${peripherals.keyboards.length}): ${this.formatList(peripherals.keyboards, MAX_PERIPHERAL_ITEMS)}`,
       `- Pointers (${peripherals.pointers.length}): ${this.formatList(peripherals.pointers, MAX_PERIPHERAL_ITEMS)}`,
@@ -558,14 +553,9 @@ $audio = Get-CimInstance Win32_SoundDevice | Select-Object Name
   }
 
   private normalizeState(state: LocalInventoryState, nowIso: string): LocalInventoryState {
-    const trackingStartedAt = this.isIsoDate(state.trackingStartedAt)
-      ? state.trackingStartedAt
-      : nowIso
-    const lastSampleAt = this.isIsoDate(state.lastSampleAt) ? state.lastSampleAt : nowIso
-
     return {
-      trackingStartedAt,
-      lastSampleAt,
+      trackingStartedAt: normalizeSampleTime(state.trackingStartedAt, nowIso),
+      lastSampleAt: normalizeSampleTime(state.lastSampleAt, nowIso),
       apps: state.apps && typeof state.apps === 'object' ? state.apps : {}
     }
   }
@@ -579,19 +569,17 @@ $audio = Get-CimInstance Win32_SoundDevice | Select-Object Name
     const deltaSeconds = this.computeDeltaSeconds(state.lastSampleAt, now)
     const apps = { ...state.apps }
 
-    if (deltaSeconds > 0) {
-      for (const app of activeApps) {
-        const current = apps[app.appName] || {
-          observedSeconds: 0,
-          lastSeenAt: nowIso,
-          seenCount: 0
-        }
+    for (const app of activeApps) {
+      const current = apps[app.appName] || {
+        observedSeconds: 0,
+        lastSeenAt: nowIso,
+        seenCount: 0
+      }
 
-        apps[app.appName] = {
-          observedSeconds: current.observedSeconds + deltaSeconds,
-          lastSeenAt: nowIso,
-          seenCount: current.seenCount + 1
-        }
+      apps[app.appName] = {
+        observedSeconds: current.observedSeconds + deltaSeconds,
+        lastSeenAt: nowIso,
+        seenCount: current.seenCount + 1
       }
     }
 
@@ -614,12 +602,12 @@ $audio = Get-CimInstance Win32_SoundDevice | Select-Object Name
 
     return {
       trackingStartedAt: state.trackingStartedAt,
-      lastSampleAt: nowIso,
+      lastSampleAt: activeApps.length > 0 ? nowIso : '',
       apps: compactedApps
     }
   }
 
-  private getAppsRankedByUsage(
+  private getAppsRankedByPresence(
     apps: Record<string, LocalInventoryAppStateEntry>
   ): Array<{
     appName: string
@@ -644,7 +632,11 @@ $audio = Get-CimInstance Win32_SoundDevice | Select-Object Name
       })
   }
 
-  private buildCategoryCounts(appNames: string[]): Array<{ category: string, count: number }> {
+  private formatCategoryLines(appNames: string[]): string[] {
+    if (appNames.length === 0) {
+      return ['- No category signals yet']
+    }
+
     const categoryMap = new Map<string, number>()
 
     for (const appName of appNames) {
@@ -653,8 +645,9 @@ $audio = Get-CimInstance Win32_SoundDevice | Select-Object Name
     }
 
     return [...categoryMap.entries()]
-      .map(([category, count]) => ({ category, count }))
-      .sort((entryA, entryB) => entryB.count - entryA.count)
+      .sort(([, countA], [, countB]) => countB - countA)
+      .slice(0, MAX_CATEGORY_LINES)
+      .map(([category, count], index) => `- ${index + 1}. ${category}: ${count}`)
   }
 
   private buildInstalledAppHighlights(appNames: string[]): string {
@@ -713,14 +706,6 @@ $audio = Get-CimInstance Win32_SoundDevice | Select-Object Name
     }
 
     return Math.min(rawDelta, Math.floor((this.ttlMs * 2) / 1000))
-  }
-
-  private isIsoDate(value: string): boolean {
-    if (!value) {
-      return false
-    }
-
-    return Number.isFinite(Date.parse(value))
   }
 
   private normalizeProcessName(rawName: string): string {
