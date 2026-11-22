@@ -157,6 +157,11 @@ vi.mock('@/core', () => ({
     needsToolConnection: coreMocks.needsToolConnection,
     getFlattenedTools: coreMocks.getFlattenedTools,
     getToolFunctions: coreMocks.getToolFunctions,
+    getToolTelemetryLabel: (
+      _toolkit: string, _tool: string, _function: string,
+      counts: { calls: number, failed: number, durationMs?: number }
+    ): { kind: 'tool', source: 'other', calls: number, failed: number, durationMs?: number } =>
+      ({ kind: 'tool', source: 'other', ...counts }),
     getToolConcurrency: (): ToolConcurrency => ToolConcurrency.Parallel,
     resolveToolById: coreMocks.resolveToolById,
     getToolIconLogo: (): undefined => undefined
@@ -6515,18 +6520,22 @@ describe('model response status', () => {
     expect(statuses().find((status) => status.sessionId === firstContext.sessionId)
       ?.contextUsage?.contextUsageEstimated).toBe(true)
     expect(statuses().findLast((status) => status.sessionId === firstContext.sessionId)
-      ?.contextUsage).toEqual({
+      ?.contextUsage).toMatchObject({
       contextUsedTokens: 105_000,
       contextWindowTokens: 1_050_000,
       contextUsagePercent: 10,
-      contextUsageEstimated: false
+      contextUsageEstimated: false,
+      contextTarget: { provider: 'openai', model: 'gpt-6.1-sol' },
+      contextTokenBreakdown: { system: expect.any(Number), tools: expect.any(Number) }
     })
     expect(statuses().findLast((status) => status.sessionId === secondContext.sessionId)
-      ?.contextUsage).toEqual({
+      ?.contextUsage).toMatchObject({
       contextUsedTokens: 200_000,
       contextWindowTokens: 1_000_000,
       contextUsagePercent: 20,
-      contextUsageEstimated: false
+      contextUsageEstimated: false,
+      contextTarget: { provider: 'minimax', model: 'MiniMax-M3' },
+      contextTokenBreakdown: { system: expect.any(Number), tools: expect.any(Number) }
     })
 
     await runWithConversationSession(firstContext, () =>
