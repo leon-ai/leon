@@ -21,7 +21,8 @@ import type {
 import type { MCPSource, MCPManifest, MCPFunction } from './tool-source'
 import { readMCPCache } from './mcp/installations'
 import { isCatalogInstalled } from '@/core/catalog/activation'
-import type { CatalogDistribution } from '@/schemas/catalog-metadata-schemas'
+import { CatalogDistribution, CatalogMaintenance } from '@/schemas/catalog-metadata-schemas'
+import type { CapabilityUsage } from '@/core/telemetry/report-contract'
 import type { LogoMaskMode, MaskedPackageLogo } from '@@/aurora/src/contracts/package-logo'
 
 const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
@@ -39,6 +40,7 @@ interface ToolkitToolDefinition {
   logo?: string
   logo_mask?: LogoMaskMode
   distribution?: CatalogDistribution
+  maintenance?: CatalogMaintenance
   source?: MCPSource
   tool_id: string
   toolkit_id: string
@@ -139,6 +141,7 @@ export default class ToolkitRegistry {
     SatelliteToolkitDefinition[]
   >()
   private readonly satelliteToolTargets = new Map<string, string>()
+  private readonly publicTelemetryTools = new WeakSet<ToolkitToolDefinition>()
   private _isLoaded = false
 
   constructor() {
@@ -401,6 +404,20 @@ export default class ToolkitRegistry {
    */
   public getToolSource(toolkitId: string, toolId: string): MCPSource | undefined {
     return this._localToolkits.find((toolkit) => toolkit.id === toolkitId)?.tools?.[toolId]?.source
+  }
+
+  /**
+   * Labels the actual loaded function without exposing owner or Satellite manifests.
+   */
+  public getToolTelemetryLabel(toolkitId: string, toolId: string, functionName: string,
+    counts: Pick<CapabilityUsage, 'calls' | 'failed' | 'durationMs'>): CapabilityUsage {
+    const tool = this._toolkits.find(({ id }) => id === toolkitId)?.tools?.[toolId]
+    if (tool && this.publicTelemetryTools.has(tool) && Object.hasOwn(tool.functions ?? {}, functionName)) {
+      return { kind: 'tool', source: 'built_in', toolkit: toolkitId, tool: toolId, function: functionName, ...counts }
+    }
+
+    const source = tool?.source?.type === 'mcp' ? 'mcp' : tool ? 'extension' : 'other'
+    return { kind: 'tool', source, ...counts }
   }
 
   /**
@@ -867,6 +884,10 @@ export default class ToolkitRegistry {
         // Source changes invalidate cached schemas; remote definitions remain
         // separate from the owner's editable manifest.
         toolConfig.functions = readMCPCache(path.dirname(toolConfigPath), toolConfig.source)?.functions ?? {}
+      }
+      if (bundled && toolConfig.distribution !== CatalogDistribution.Extension &&
+        toolConfig.maintenance === CatalogMaintenance.Official && !toolConfig.source) {
+        this.publicTelemetryTools.add(toolConfig)
       }
       toolkit.tools = {
         ...(toolkit.tools || {}),
