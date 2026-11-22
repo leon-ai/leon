@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "2.0.0-alpha.0.9",
+  "version": "2.0.0-alpha.0.10",
   "title": "A new era begins",
   "summary": "A new web app, shared context for related conversations, and Core updates you can review and install when you choose.",
   "highlights": [
@@ -16,7 +16,8 @@
   "changes": {
     "new": [
       "Browse conversations and project workspaces in the new web app.",
-      "Review and install published Core releases from the update dialog."
+      "Review and install published Core releases from the update dialog.",
+      "Explore activity and usage in your profile."
     ],
     "improvements": [
       "Stage verified Core archives before restarting the server.",
