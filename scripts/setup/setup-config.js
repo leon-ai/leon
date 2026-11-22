@@ -274,7 +274,6 @@ async function migrateLegacyConfigValues(document, shouldOverwriteScalarValues) 
     ['LEON_TTS_PROVIDER', ['voice', 'tts', 'provider'], (value) => value.trim()],
     ['LEON_TIME_ZONE', ['time_zone'], toOptionalString],
     ['LEON_AFTER_SPEECH', ['after_speech_enabled'], toBoolean],
-    ['LEON_TELEMETRY', ['telemetry_enabled'], toBoolean],
     [
       'LEON_PY_TCP_SERVER_HOST',
       ['python_tcp_server', 'host'],
@@ -351,7 +350,9 @@ async function mergeMissingConfigKeys() {
     return 'config.yml: skipped invalid YAML document'
   }
 
-  const migrationCount = await migrateLegacyConfigValues(configDocument, false)
+  const migrationCount = Number(configDocument.delete('telemetry_endpoint')) +
+    Number(configDocument.delete('telemetry_share_timezone')) +
+    await migrateLegacyConfigValues(configDocument, false)
   const addedCount = mergeMissingMapPairs(
     configDocument.contents,
     sampleDocument.contents,

@@ -1,0 +1,163 @@
+import { Type, type Static } from '@sinclair/typebox'
+import { Value } from '@sinclair/typebox/value'
+
+import { getLLMModelCatalogEntries } from '../llm-manager/llm-model-catalog'
+import { LLMProviders } from '../llm-manager/types'
+import { OWNER_TURN_FAILURE_CODES } from '../llm-manager/turn-timing-contract'
+
+export const DAILY_REPORT_PATH = '/v1/daily'
+export const PRESENCE_REPORT_PATH = '/v1/presence'
+export const TELEMETRY_EVENT_PATH = '/v2/event'
+export const TELEMETRY_EVENTS_HEADER = 'x-leon-telemetry-events'
+export const TELEMETRY_EVENTS_VERSION = 2
+export const TELEMETRY_SCHEMA_HEADER = 'x-leon-telemetry-version'
+export const TELEMETRY_FLEET_HEADER = 'x-leon-telemetry-fleet'
+export const TELEMETRY_ACTIVATION_HEADER = 'x-leon-telemetry-activation'
+export const TELEMETRY_SCHEMA_VERSION = 1
+export const TELEMETRY_DAY_MS = 86_400_000
+export const TELEMETRY_RETRY_DAYS = 7
+export const TELEMETRY_MINUTE_MS = 60_000
+export const TELEMETRY_MAX_MODEL_BUCKETS = 100
+export const OTHER_MODEL = 'other'
+export const OTHER_PROVIDER = 'other'
+export const PRESENCE_INTERVAL_MS = 5 * 60_000
+export const LATENCY_BUCKETS_MS = [250, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 45_000, 90_000, 180_000] as const
+export const INSTALLATION_MILESTONES = ['setup', 'first_query', 'ten_queries', 'first_answer', 'returning', 'day_7', 'day_30'] as const
+
+const identifier = Type.String({ pattern: '^[a-f0-9]{64}$' })
+const count = Type.Integer({ minimum: 0, maximum: 1_000_000_000_000 })
+const total = Type.Number({ minimum: 0, maximum: 1_000_000_000_000 })
+const utcDay = Type.Integer({ minimum: 0, maximum: 100_000 })
+const histogram = Type.Array(count, { minItems: LATENCY_BUCKETS_MS.length + 1, maxItems: LATENCY_BUCKETS_MS.length + 1 })
+const provider = Type.Enum(LLMProviders)
+const modelProperties = {
+  provider: Type.Union([provider, Type.Literal(OTHER_PROVIDER)]),
+  model: Type.String({ maxLength: 128 }),
+  calls: count,
+  failedCalls: count,
+  inputTokens: count,
+  outputTokens: count,
+  cachedInputTokens: count,
+  cacheReportedCalls: count
+}
+
+export const dailyReportSchema = Type.Object({
+  schemaVersion: Type.Literal(TELEMETRY_SCHEMA_VERSION),
+  installation: identifier,
+  profile: identifier,
+  day: utcDay,
+  version: Type.String({ pattern: '^(?:(?:unknown|mixed)|\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(?:-(?:alpha|beta|rc)(?:\\.\\d{1,5}){0,3})?)$' }),
+  firstReportingDay: Type.Boolean(),
+  turns: count,
+  answered: count,
+  failed: count,
+  canceled: count,
+  clarifications: count,
+  measuredTurns: count,
+  measuredTurnTokens: count,
+  toolCalls: count,
+  toolDurationMs: count,
+  modelDurationMs: count,
+  durationMs: count,
+  firstOutputMs: count,
+  firstOutputCount: count,
+  contextPercent: total,
+  contextCount: count,
+  models: Type.Array(Type.Object(modelProperties, { additionalProperties: false }), { maxItems: TELEMETRY_MAX_MODEL_BUCKETS }),
+  fleet: Type.Optional(Type.Object({
+    os: Type.Union([Type.Literal('linux'), Type.Literal('darwin'), Type.Literal('win32'), Type.Literal('other')]),
+    architecture: Type.Union([Type.Literal('arm64'), Type.Literal('x64'), Type.Literal('other')]),
+    buildCommit: Type.Optional(Type.String({ pattern: '^[a-f0-9]{40}$' })),
+    timezoneOffset: Type.Optional(Type.Integer({ minimum: -12, maximum: 14 })),
+    turnLatency: histogram,
+    firstOutputLatency: histogram,
+    recoveredTurns: count,
+    failures: Type.Array(Type.Object({
+      code: Type.Union(OWNER_TURN_FAILURE_CODES.map((code) => Type.Literal(code))),
+      count
+    }, { additionalProperties: false }), { maxItems: OWNER_TURN_FAILURE_CODES.length }),
+    activation: Type.Optional(Type.Object({
+      setupDay: Type.Optional(utcDay),
+      firstAnswerMs: Type.Optional(Type.Integer({
+        minimum: 0, maximum: (TELEMETRY_RETRY_DAYS + 2) * TELEMETRY_DAY_MS, multipleOf: TELEMETRY_MINUTE_MS
+      }))
+    }, { additionalProperties: false })),
+    milestones: Type.Optional(Type.Array(Type.Object({
+      name: Type.Union(INSTALLATION_MILESTONES.map((name) => Type.Literal(name))),
+      day: utcDay,
+      cohort: utcDay,
+      newSetup: Type.Optional(Type.Boolean()),
+      firstAnswerMs: Type.Optional(count)
+    }, { additionalProperties: false }), { maxItems: INSTALLATION_MILESTONES.length }))
+  }, { additionalProperties: false }))
+}, { additionalProperties: false })
+
+export type DailyReport = Static<typeof dailyReportSchema>
+export type FleetReport = NonNullable<DailyReport['fleet']>
+export type InstallationMilestone = NonNullable<FleetReport['milestones']>[number]
+const timeZone = Type.String({ maxLength: 64 })
+export const presenceReportSchema = Type.Object({
+  installation: identifier, timeZone: Type.Optional(timeZone)
+}, { additionalProperties: false })
+export type PresenceReport = Static<typeof presenceReportSchema>
+const telemetryEventSchema = Type.Object({
+  id: identifier,
+  kind: Type.Union([Type.Literal('profile_started'), Type.Literal('turn_finished')]),
+  at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }),
+  timeZone,
+  report: dailyReportSchema
+}, { additionalProperties: false })
+export type TelemetryEventReport = Static<typeof telemetryEventSchema>
+
+/**
+ * Resolves IANA names and aliases while excluding numeric offsets and locale abbreviations.
+ */
+export function getIanaTimeZone(value: string): string | undefined {
+  if (value !== 'UTC' && !value.includes('/')) {
+    return undefined
+  }
+  try {
+    return Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Checks the shape and timezone of an event sent by Core.
+ */
+export function isTelemetryEventReport(value: unknown): value is TelemetryEventReport {
+  return Value.Check(telemetryEventSchema, value) && getIanaTimeZone(value.timeZone) !== undefined
+}
+
+/**
+ * Checks that a daily report contains only the fields in Leon's telemetry contract.
+ */
+export function isDailyReport(report: unknown): report is DailyReport {
+  return Value.Check(dailyReportSchema, report)
+}
+
+/**
+ * Checks the installation-only presence payload.
+ */
+export function isPresenceReport(report: unknown): report is PresenceReport {
+  return Value.Check(presenceReportSchema, report) &&
+    (report.timeZone === undefined || getIanaTimeZone(report.timeZone) !== undefined)
+}
+
+const knownModels = new Map<string, Set<string>>(
+  Object.values(LLMProviders).map((value) => [
+    value, new Set(getLLMModelCatalogEntries(value).map((entry) => entry.model))
+  ])
+)
+
+/**
+ * Only canonical catalog names leave Core. Private model aliases share one bucket.
+ */
+export function getPublicModel(provider: string, model: string): Pick<DailyReport['models'][number], 'provider' | 'model'> {
+  const models = knownModels.get(provider)
+  return {
+    provider: models ? provider as LLMProviders : OTHER_PROVIDER,
+    model: models?.has(model) ? model : OTHER_MODEL
+  }
+}

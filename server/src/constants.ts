@@ -504,7 +504,6 @@ export const HAS_WAKE_WORD = PROFILE_CONFIG.voice.wake_word_enabled
 export const PYTHON_TCP_SERVER_HOST = PROFILE_CONFIG.python_tcp_server.host
 export const PYTHON_TCP_SERVER_PORT = PROFILE_CONFIG.python_tcp_server.port
 
-export const IS_TELEMETRY_ENABLED = PROFILE_CONFIG.telemetry_enabled
 
 export const LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH = path.join(
   LEON_PROFILE_PATH,
@@ -591,6 +590,7 @@ export const AGENT_LLM_TARGET = resolveConfiguredLLMTarget(
  * Misc
  */
 export const MINIMUM_REQUIRED_RAM = 4
+export const TELEMETRY_COLLECTOR_ORIGIN = 'https://telemetry.getleon.ai'
 export const INSTANCE_ID = fs.existsSync(LEON_FILE_PATH)
   ? JSON.parse(fs.readFileSync(LEON_FILE_PATH, 'utf8')).instanceID
   : null

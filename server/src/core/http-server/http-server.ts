@@ -13,7 +13,6 @@ import {
   API_VERSION,
   LEON_VERSION,
   LEON_NODE_ENV,
-  IS_TELEMETRY_ENABLED,
   OWNER_ATTACHMENT_BODY_LIMIT,
   TMP_PATH
 } from '@/constants'
@@ -167,9 +166,6 @@ export default class HTTPServer {
       `Graphics compute API: ${await SystemHelper.getGraphicsComputeAPI()}`
     )
     LogHelper.info(`Total VRAM: ${await SystemHelper.getTotalVRAM()} GB`)
-
-    const isTelemetryEnabled = IS_TELEMETRY_ENABLED ? 'enabled' : 'disabled'
-    LogHelper.info(`Telemetry: ${isTelemetryEnabled}`)
 
     await this.bootstrap()
   }

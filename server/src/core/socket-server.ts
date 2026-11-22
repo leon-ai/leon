@@ -30,7 +30,6 @@ import {
 import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
-import { Telemetry } from '@/telemetry'
 import { InferencePurpose, LLMProviders } from '@/core/llm-manager/types'
 import { getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { StringHelper } from '@/helpers/string-helper'
@@ -904,7 +903,7 @@ export default class SocketServer {
 
           BRAIN.isMuted = false
           const prepared = await prepareOwnerAttachments(utterance, utteranceData.attachments, sessionId)
-          const processedData = await NLU.process(prepared.query, {
+          await NLU.process(prepared.query, {
             ownerMessageId,
             files: prepared.files,
             hasAttachments: Boolean(utteranceData.attachments?.length),
@@ -927,10 +926,6 @@ export default class SocketServer {
                 }
               : {})
           })
-
-          if (processedData) {
-            void Telemetry.utterance(processedData)
-          }
 
           LogHelper.title('Execution Time')
           LogHelper.timeEnd('Utterance processed in')
