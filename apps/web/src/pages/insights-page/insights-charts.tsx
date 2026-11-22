@@ -71,7 +71,7 @@ export function InsightsChart({
     series: series.map((item) => ({
       name: item.label, data: item.values, type: kind,
       ...(stacked ? { stack: 'total' } : {}),
-      ...(kind === 'line' ? { showSymbol: labels.length <= 1 } : {}),
+      ...(kind === 'line' ? { symbol: 'circle', symbolSize: 7, showSymbol: true, showAllSymbol: true } : {}),
       ...(kind === 'line' && !item.previous ? { areaStyle: {} } : {}),
       ...(item.previous ? { lineStyle: { type: 'dashed' }, itemStyle: { opacity: 0.65 } } : {})
     }))

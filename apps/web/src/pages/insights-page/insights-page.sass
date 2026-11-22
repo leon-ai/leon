@@ -2,6 +2,7 @@
   display: grid
   gap: var(--space-lg)
   min-width: 0
+  container-type: inline-size
 
   .insights-filters, .insights-values
     display: grid
@@ -66,7 +67,10 @@
     padding-top: var(--space-md)
 
   .insights-chart-grid
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 248px), 1fr))
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+
+    @container (max-width: 560px)
+      grid-template-columns: minmax(0, 1fr)
 
   .insights-trend
     background: var(--color-surface-elevated)
