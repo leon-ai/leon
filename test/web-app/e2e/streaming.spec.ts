@@ -2099,7 +2099,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
-test('settles hidden and reduced-motion arrivals while preserving selected text', async ({ page, ui }) => {
+test('reveals visible arrivals without focus and settles hidden or reduced-motion text', async ({ page, ui }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto(SESSION_URL)
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
@@ -2150,6 +2150,10 @@ test('settles hidden and reduced-motion arrivals while preserving selected text'
   await expect(characters).toHaveCount(0)
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await expect(characters).toHaveCount(0)
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => false })
+    window.dispatchEvent(new Event('blur'))
+  })
   // Browser media-query change events settle at the next rendering opportunity.
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
   const visibleToken = ' New visible text.'

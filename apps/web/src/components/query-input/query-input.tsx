@@ -179,23 +179,18 @@ export function QueryInput({
       }
     }
 
-    function handleWindowBlur(): void {
-      clearFocusIntent()
-      setShowFocusWave(false)
-    }
-
     // Focus events alone also include autofocus and browser-tab restoration.
     // Consume keyboard intent at its next focus target; pointer focus is local.
     document.addEventListener('keydown', handleKeyDown, true)
     document.addEventListener('focusin', handleFocus, true)
     document.addEventListener('pointerdown', clearFocusIntent, true)
-    window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('blur', clearFocusIntent)
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
       document.removeEventListener('focusin', handleFocus, true)
       document.removeEventListener('pointerdown', clearFocusIntent, true)
-      window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('blur', clearFocusIntent)
     }
   }, [playFocusWave])
 

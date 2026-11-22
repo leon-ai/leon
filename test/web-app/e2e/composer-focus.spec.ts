@@ -100,7 +100,7 @@ test('keeps autofocus, refresh, navigation and browser focus restoration silent'
   await otherPage.close()
 })
 
-test('plays on a blurred-to-focused pointer transition, not clicks while already focused', async ({ page }) => {
+test('plays one wave on pointer focus and finishes it after window blur', async ({ page }) => {
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   await expect(composer).toBeFocused()
@@ -108,8 +108,15 @@ test('plays on a blurred-to-focused pointer transition, not clicks while already
   expect(await countWaves(page)).toBe(0)
   await page.getByRole('button', { name: 'Add files' }).click()
   await composer.click()
+  const wave = page.locator('.query-input-focus-wave')
+  await wave.evaluate(async (element) => {
+    const [animation] = element.getAnimations()
+
+    window.dispatchEvent(new Event('blur'))
+    await animation!.finished
+  })
   await expect.poll(() => countWaves(page)).toBe(1)
-  await expect(page.locator('.query-input-focus-wave')).toHaveCount(0)
+  await expect(wave).toHaveCount(0)
   await composer.fill('Typing does not restart the wave')
   await composer.click()
   expect(await countWaves(page)).toBe(1)
