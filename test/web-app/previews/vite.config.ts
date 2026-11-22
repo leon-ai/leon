@@ -9,6 +9,7 @@ import { auroraSandbox } from '../../../apps/web/vite/aurora-sandbox.ts'
 import { createConnectionPreview } from '../../fixtures/connection-preview.ts'
 
 const TOOLS_ROOT = fileURLToPath(new URL('../../../tools/', import.meta.url))
+const PREVIEW_PAGE = '/aurora.html'
 // Discover metadata at build time so the browser never loads tool implementations
 // or the full function schemas merely to populate the connection chooser.
 const CONNECTIONS = [...globSync('*/*/tool.json', { cwd: TOOLS_ROOT })].flatMap((file) => {
@@ -37,6 +38,25 @@ function previewFavicons(): Plugin {
   }
 
   return { name: 'preview-favicons', configureServer: install, configurePreviewServer: install }
+}
+
+/**
+ * Opens the gallery at the preview server's root while keeping its named HTML entry.
+ */
+function previewRoot(): Plugin {
+  const install = (server: ViteDevServer | PreviewServer): void => {
+    server.middlewares.use((request, response, next) => {
+      const url = new URL(request.url ?? '/', 'http://preview.local')
+      if (url.pathname !== '/' || request.method !== 'GET' && request.method !== 'HEAD') {
+        next()
+        return
+      }
+
+      response.writeHead(302, { Location: `${PREVIEW_PAGE}${url.search}` }).end()
+    })
+  }
+
+  return { name: 'aurora-preview-root', configureServer: install, configurePreviewServer: install }
 }
 
 // Design studies use real app components, without profile configuration or API access.
@@ -79,5 +99,5 @@ export default defineConfig({
       }
     }
   },
-  plugins: [previewFavicons(), auroraSandbox(), react()]
+  plugins: [previewRoot(), previewFavicons(), auroraSandbox(), react()]
 })
