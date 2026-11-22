@@ -12,6 +12,7 @@ export interface AgentSkillContext {
   rootPath: string
   skillPath: string
   instructions: string
+  publicTelemetryId?: string
 }
 
 export type AgentRunProgressEvent =

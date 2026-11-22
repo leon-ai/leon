@@ -21,7 +21,7 @@ import { FileHelper } from '@/helpers/file-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ajv } from '@/ajv'
-import type { CatalogMetadata } from '@/schemas/catalog-metadata-schemas'
+import { CatalogDistribution, CatalogMaintenance, type CatalogMetadata } from '@/schemas/catalog-metadata-schemas'
 import { agentSkillSchemaObject, type AgentSkillManifest } from '@/schemas/agent-skill-schemas'
 import { isCatalogInstalled } from '@/core/catalog/activation'
 
@@ -84,6 +84,7 @@ export interface AgentSkillExecutionContext {
   rootPath: string
   skillPath: string
   instructions: string
+  publicTelemetryId?: string
 }
 
 const SKILL_NAME_SUFFIX = '_skill'
@@ -585,7 +586,9 @@ export class SkillDomainHelper {
       rootPath: descriptor.path,
       skillPath,
       instructions,
-      origin: descriptor.origin
+      origin: descriptor.origin,
+      ...(descriptor.origin === SkillOrigin.BuiltIn && descriptor.catalog?.maintenance === CatalogMaintenance.Official &&
+        descriptor.catalog.distribution !== CatalogDistribution.Extension ? { publicTelemetryId: descriptor.id } : {})
     }
   }
 

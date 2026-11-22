@@ -142,7 +142,10 @@ import {
 import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/agent-loop'
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
-import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings } from '../turn-timing'
+import {
+  runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings,
+  recordCapabilityUsage
+} from '../turn-timing'
 import { getActiveInferencePurpose } from '../llm-usage/usage-context'
 import { isToolPreparationPhase } from '../turn-timing-contract'
 import { CATALOG_SEARCH_TOOL_NAME } from '@/core/tool-manager/catalog/agent-catalog'
@@ -2552,6 +2555,11 @@ export class ReActLLMDuty extends LLMDuty {
     const createdAt = previous?.createdAt ?? Date.now()
     this.skillActivities.set(skill.id, { createdAt, status })
     const isExperience = skill.id.startsWith(EXPERIENCE_PREFIX)
+    if (!previous && !isExperience) {
+      recordCapabilityUsage(skill.publicTelemetryId
+        ? { kind: 'agent_skill', source: 'built_in', skill: skill.publicTelemetryId, calls: 1, failed: 0 }
+        : { kind: 'agent_skill', source: 'extension', calls: 1, failed: 0 })
+    }
     const label = isExperience ? 'experience' : 'skill'
     const prefix = isExperience ? 'experience-activity' : 'agent-skill-activity'
 
