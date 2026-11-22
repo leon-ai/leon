@@ -5,14 +5,17 @@ import path from 'node:path'
 import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 import { inScenarioWorkspace, runMaintainedTurn } from '../../scenario-fixture'
 
-const COMMAND = 'node verify.mjs'
+const SCRIPT_NAME = 'verify.mjs'
+const COMMAND = `node ${SCRIPT_NAME}`
 const CHECKED_COUNT = 37
 const DIAGNOSTIC = '[check] Source map matches generated asset; no action needed.'
 
 const scenario: RealAgentScenario = {
   async run(context) {
     return inScenarioWorkspace(context.profilePath, async (workspace) => {
-      await fs.writeFile(path.join(workspace, 'verify.mjs'), [
+      const scriptPath = path.resolve(workspace, SCRIPT_NAME)
+
+      await fs.writeFile(scriptPath, [
         `for (let index = 0; index < 360; index++) console.log(${JSON.stringify(DIAGNOSTIC)})`,
         `console.log('Verification passed for ${CHECKED_COUNT} assets.')`
       ].join('\n'))
@@ -28,7 +31,21 @@ const scenario: RealAgentScenario = {
       )
       assert.equal(commands.length, 1, 'Run the check once using the finite command tool.')
       assert.equal(commands[0]?.status, 'success')
-      assert.equal(turn.toolCalls.length, 1, 'The command output must provide the requested result.')
+      const { toolCalls } = turn
+      assert.ok(toolCalls.length <= 2, 'Allow at most one script read before running the check.')
+      const commandCall = toolCalls.at(-1)
+      assert.equal(commandCall?.toolkitId, 'operating_system_control')
+      assert.equal(commandCall?.toolId, 'shell')
+      assert.equal(commandCall?.functionName, 'executeCommand')
+      if (toolCalls.length === 2) {
+        const [read] = toolCalls
+        const readPath = read?.parsedInput?.['path']
+        assert.ok(
+          read?.toolkitId === 'file_system' && read.toolId === 'file' && read.functionName === 'read' &&
+            typeof readPath === 'string' && path.resolve(workspace, readPath) === scriptPath,
+          'Only a read of the verification script may precede the command.'
+        )
+      }
 
       return { turn }
     })
