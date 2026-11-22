@@ -148,6 +148,43 @@ describe('inference usage', () => {
     }
   })
 
+  it('keeps capability and context reduction counts on the originating owner turn', async () => {
+    const {
+      onCompletedOwnerTurn, recordCapabilityUsage, recordForegroundContextReduction, recordOwnerTurn
+    } = await import('@/core/llm-manager/turn-timing')
+    const observed = vi.fn()
+    const unsubscribe = onCompletedOwnerTurn(observed)
+
+    try {
+      await runWithProfileContext({ profileName: 'activity-owner' }, async () => {
+        await runWithTurnTiming('owner-turn', null, async () => {
+          await runTurnPhase(TurnPhase.Execution, async () => {
+            const entry = { kind: 'tool', source: 'mcp', calls: 1, failed: 0, durationMs: 10 } as const
+            recordCapabilityUsage(entry)
+            recordCapabilityUsage({ ...entry, failed: 1, durationMs: 5 })
+            recordForegroundContextReduction(300)
+            recordForegroundContextReduction(0)
+
+            await runWithTurnTiming('background-turn', null, async () => {
+              recordCapabilityUsage({ kind: 'agent_skill', source: 'extension', calls: 1, failed: 0 })
+            }, { stage: TurnStage.PostTurn, taskId: 'background' })
+          })
+          recordOwnerTurn('answered')
+        })
+      })
+
+      expect(observed).toHaveBeenCalledTimes(1)
+      expect(observed).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'owner-turn',
+        profile: 'activity-owner',
+        capabilities: [{ kind: 'tool', source: 'mcp', calls: 2, failed: 1, durationMs: 15 }],
+        contextReduction: { count: 1, estimatedTokensReclaimed: 300 }
+      }))
+    } finally {
+      unsubscribe()
+    }
+  })
+
   it('keeps readable activity when a journal entry is damaged', async () => {
     const profileName = 'activity-history-owner'
     const { readUsageTurns, summarizeUsage } = await import('@/core/insights/usage')

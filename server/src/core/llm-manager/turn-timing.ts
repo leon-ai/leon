@@ -14,6 +14,7 @@ import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type Tur
 import { readContextUsage, type ContextUsageMetrics } from './llm-usage/context-usage'
 import type { InferenceUsage } from './llm-usage/usage-context'
 import type { InferenceUsageRecord } from './llm-usage/usage-ledger'
+import { TELEMETRY_MAX_CAPABILITY_BUCKETS, type CapabilityUsage } from '@/core/telemetry/report-contract'
 
 export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
 
@@ -32,6 +33,8 @@ export interface CompletedOwnerTurn {
   measurement: OwnerTurnMeasurement
   timings: readonly TurnTiming[]
   inferenceUsage: readonly ForegroundInferenceUsage[]
+  capabilities: readonly CapabilityUsage[]
+  contextReduction: { count: number, estimatedTokensReclaimed: number }
 }
 
 type ForegroundInferenceUsage = Pick<InferenceUsageRecord, 'provider' | 'model' | 'outcome' | 'usage'>
@@ -56,12 +59,15 @@ interface TurnTimingScope extends TurnTimingContext {
     omitted: number
     ownerTurn?: OwnerTurnMeasurement
     inferenceUsage?: ForegroundInferenceUsage[]
+    capabilities?: Map<string, CapabilityUsage>
+    contextReduction?: CompletedOwnerTurn['contextReduction']
   }
 }
 
 const storage = new AsyncLocalStorage<TurnTimingScope | undefined>()
 const pendingWrites = new Map<string, Promise<void>>()
 const ownerTurnListeners = new Set<(turn: CompletedOwnerTurn) => void>()
+const standaloneSkillListeners = new Set<(profile: string, entry: CapabilityUsage) => void>()
 
 /**
  * Observes completed foreground owner turns without awaiting subscriber work.
@@ -71,6 +77,62 @@ export function onCompletedOwnerTurn(listener: (turn: CompletedOwnerTurn) => voi
   return () => {
     ownerTurnListeners.delete(listener)
   }
+}
+
+/**
+ * Observes controlled skill actions that run outside the agent loop.
+ */
+export function onStandaloneSkill(listener: (profile: string, entry: CapabilityUsage) => void): () => void {
+  standaloneSkillListeners.add(listener)
+  return () => {
+    standaloneSkillListeners.delete(listener)
+  }
+}
+
+/**
+ * Counts only capability labels already classified against the public catalog.
+ */
+export function recordCapabilityUsage(entry: CapabilityUsage): void {
+  const scope = storage.getStore()
+  if (!scope && entry.kind === 'native_skill') {
+    const profile = getActiveProfileName()
+    for (const listener of standaloneSkillListeners) {
+      queueMicrotask(() => listener(profile, entry))
+    }
+    return
+  }
+  if (!scope || scope.state.closed || scope.taskId || scope.stage === TurnStage.PostTurn || !ownerTurnListeners.size) {
+    return
+  }
+
+  scope.state.capabilities ??= new Map()
+  const { calls, failed, durationMs, ...label } = entry
+  const key = JSON.stringify(label)
+  const previous = scope.state.capabilities.get(key)
+  if (previous) {
+    previous.calls += calls
+    previous.failed += failed
+    if (durationMs !== undefined) {
+      previous.durationMs = (previous.durationMs ?? 0) + durationMs
+    }
+  } else if (scope.state.capabilities.size < TELEMETRY_MAX_CAPABILITY_BUCKETS) {
+    scope.state.capabilities.set(key, { ...entry })
+  }
+}
+
+/**
+ * Measures local prompt reduction using the same estimate before and after preparation.
+ */
+export function recordForegroundContextReduction(tokensReclaimed: number): void {
+  const scope = storage.getStore()
+  if (!ownerTurnListeners.size || !scope || scope.state.closed || scope.stage !== TurnStage.AgentLoop ||
+    !Number.isSafeInteger(tokensReclaimed) || tokensReclaimed <= 0) {
+    return
+  }
+
+  const reduction = scope.state.contextReduction ??= { count: 0, estimatedTokensReclaimed: 0 }
+  reduction.count++
+  reduction.estimatedTokensReclaimed += tokensReclaimed
 }
 
 /**
@@ -478,7 +540,9 @@ export async function runWithTurnTiming<T>(
         const turn = {
           id: turnId, profile: scope.profile, startedAt: root.startedAt,
           durationMs: root.durationMs, measurement: owner, timings,
-          inferenceUsage: scope.state.inferenceUsage ?? []
+          inferenceUsage: scope.state.inferenceUsage ?? [],
+          capabilities: [...(scope.state.capabilities?.values() ?? [])],
+          contextReduction: scope.state.contextReduction ?? { count: 0, estimatedTokensReclaimed: 0 }
         }
         // Reporting can use finalized counters as soon as the turn closes.
         runOutsideTurnTiming(() => {
