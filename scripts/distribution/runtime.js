@@ -274,6 +274,7 @@ export function runtimeEnvironment(runtime, installation, environment = process.
     LEON_NODE_PATH: runtime.node, LEON_PNPM_PATH: runtime.pnpm,
     LEON_PYTHON_PATH: runtime.python, LEON_UV_PATH: runtime.uv, LEON_JQ_PATH: runtime.jq,
     LEON_MANAGED_LAUNCHER: 'true', LEON_NODE_ENV: 'production', LEON_OPEN_BROWSER: 'false',
+    LEON_PUBLIC_BUILD_COMMIT: runtime.manifest.buildCommit ?? '',
     npm_package_version: runtime.manifest.version,
     [pathKey]: [path.dirname(runtime.node), path.dirname(runtime.pnpm), environment[pathKey] ?? ''].join(path.delimiter) }
 }

@@ -74,8 +74,11 @@ export async function buildRuntime({ source = process.cwd(), output, home = proc
     await fs.cp(packages, path.join(payload, 'runtime/python-bridge/site-packages'), { recursive: true })
     // Restore links as junctions on Windows; extracting symlinks needs privileges.
     const links = await runtimeDependencyLinks(payload)
+    const revision = process.env.GITHUB_REPOSITORY === 'leon-ai/leon' && process.env.GITHUB_REF_TYPE === 'tag'
+      ? process.env.GITHUB_SHA : undefined
     await fs.writeFile(path.join(payload, RUNTIME_MANIFEST), JSON.stringify({ schemaVersion: RUNTIME_SCHEMA_VERSION,
-      version: manifest.version, platform, nodeVersion: versions.node, links }, null, 2))
+      version: manifest.version, platform, nodeVersion: versions.node, links,
+      ...(/^[a-f0-9]{40}$/.test(revision ?? '') ? { buildCommit: revision } : {}) }, null, 2))
     const name = `leon-core-${manifest.version}-${platform}.tar.gz`
     const archive = path.join(output, name)
     await create({ file: archive, cwd: payload, gzip: true, portable: true, filter: (_name, info) => !info.isSymbolicLink() },
