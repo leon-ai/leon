@@ -1,7 +1,10 @@
+import path from 'node:path'
+
 import { Type, type Static } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 
 import { getLLMModelCatalogEntries } from '../llm-manager/llm-model-catalog'
+import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '../llm-manager/local-model-catalog'
 import { LLMProviders } from '../llm-manager/types'
 import { OWNER_TURN_FAILURE_CODES } from '../llm-manager/turn-timing-contract'
 
@@ -34,6 +37,7 @@ const provider = Type.Enum(LLMProviders)
 const modelProperties = {
   provider: Type.Union([provider, Type.Literal(OTHER_PROVIDER)]),
   model: Type.String({ maxLength: 128 }),
+  quantization: Type.Optional(Type.Union(LOCAL_LLM_PRECISIONS.map(({ name }) => Type.Literal(name)))),
   calls: count,
   failedCalls: count,
   inputTokens: count,
@@ -170,14 +174,50 @@ const knownModels = new Map<string, Set<string>>(
     value, new Set(getLLMModelCatalogEntries(value).map((entry) => entry.model))
   ])
 )
+type PublicModelLabel = Pick<DailyReport['models'][number], 'provider' | 'model' | 'quantization'>
+
+const localPublicNames = new Map<string, string>(LOCAL_LLM_MODELS.flatMap(({ id, name }) => [
+  [id, name], [name, name]
+]))
+const localGGUFLabels = new Map<string, Pick<PublicModelLabel, 'model' | 'quantization'>>(
+  LOCAL_LLM_MODELS.flatMap(({ name, filePrefix }) => LOCAL_LLM_PRECISIONS.map(({ name: quantization }) => [
+    `${filePrefix}-${quantization}.gguf`.toLowerCase(), { model: name, quantization }
+  ]))
+)
+const MANAGED_GGUF_CHECKSUM = /-[a-f0-9]{64}(?=\.gguf$)/i
 
 /**
  * Only canonical catalog names leave Core. Private model aliases share one bucket.
  */
-export function getPublicModel(provider: string, model: string): Pick<DailyReport['models'][number], 'provider' | 'model'> {
+export function getPublicModel(provider: string, model: string): PublicModelLabel {
+  if (provider === LLMProviders.LlamaCPP || provider === LLMProviders.SGLang) {
+    const publicName = localPublicNames.get(model)
+    if (publicName) {
+      return { provider, model: publicName }
+    }
+    if (provider === LLMProviders.LlamaCPP) {
+      // Windows and POSIX filenames both follow the managed catalog's naming convention.
+      const filename = path.win32.basename(model).replace(MANAGED_GGUF_CHECKSUM, '').toLowerCase()
+      const label = localGGUFLabels.get(filename)
+      if (label) {
+        return { provider, ...label }
+      }
+    }
+  }
+
   const models = knownModels.get(provider)
   return {
     provider: models ? provider as LLMProviders : OTHER_PROVIDER,
     model: models?.has(model) ? model : OTHER_MODEL
   }
+}
+
+/**
+ * Checks that a received label contains only public model metadata.
+ */
+export function isPublicModelLabel(label: PublicModelLabel): boolean {
+  const canonical = getPublicModel(label.provider, label.model)
+  return label.provider === canonical.provider && label.model === canonical.model &&
+    (label.quantization === undefined ||
+      (label.provider === LLMProviders.LlamaCPP && localPublicNames.has(label.model)))
 }
