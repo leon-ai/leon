@@ -322,7 +322,7 @@ test('pastes files without interrupting text input and can remove and reselect a
   await expect.poll(() => page.evaluate(() => (Reflect.get(window, 'attachmentPreviewUrls') as Set<string>).size)).toBe(0)
 })
 
-test('attaches pasted files throughout session pages and releases the listener outside them', async ({ page, ui }) => {
+test('attaches pasted files in session pages while a settings dialog keeps the draft inactive', async ({ page, ui }) => {
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   await composer.fill('Keep my draft')
@@ -337,11 +337,12 @@ test('attaches pasted files throughout session pages and releases the listener o
   await pasteFiles(page, [{ name: 'New session paste.txt', type: 'text/plain' }], ':focus')
   await expect(page.getByRole('button', { name: 'Remove New session paste.txt' })).toBeVisible()
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
-  await expect(page.getByRole('textbox', { name: 'Message Leon' })).toHaveCount(0)
-  await page.getByRole('link', { name: 'New session', exact: true }).focus()
+  await expect(page.locator('.page-container')).toHaveAttribute('inert', '')
+  await expect(page.getByRole('combobox', { name: 'Search settings' })).toBeFocused()
   await pasteFiles(page, [{ name: 'Outside session.txt', type: 'text/plain' }], ':focus')
-  await newSession.click()
-  await expect(page.getByRole('list', { name: 'Attached files' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Remove New session paste.txt' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Remove Outside session.txt' })).toHaveCount(0)
   expect(ui.uploads).toHaveLength(0)
 })
 

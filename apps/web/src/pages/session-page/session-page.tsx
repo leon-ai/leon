@@ -22,7 +22,9 @@ const CONVERSATION_LOADING_DELAY_MS = 1_000
 export function SessionPage() {
   const { sessionId } = useParams({ from: '/session/$sessionId' })
   // A history key also identifies selecting the already-active session.
-  const navigationKey = useLocation({ select: (location) => location.state['__TSR_key'] }) ?? sessionId
+  const navigationKey = useLocation({ select: (location) =>
+    location.state.leonDialog?.backgroundKey ?? location.state['__TSR_key']
+  }) ?? sessionId
 
   return <SessionContent key={sessionId} sessionId={sessionId} navigationKey={navigationKey} />
 }

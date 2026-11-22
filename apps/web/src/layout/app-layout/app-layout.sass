@@ -52,3 +52,18 @@
   .app-layout,
   .app-layout > .app-main
     transition: none
+
+.routed-dialog
+  height: min(820px, 100%)
+  width: min(1120px, 100%)
+
+  .dialog-body
+    flex: 1 1 auto
+
+@media (max-width: 680px)
+  .routed-dialog
+    height: 100%
+
+    .dialog-header,
+    .dialog-body
+      padding-inline: var(--space-md)

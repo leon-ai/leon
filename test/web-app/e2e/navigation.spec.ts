@@ -86,7 +86,6 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.goto(SESSION_URL)
     await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeVisible()
     await page.getByRole('link', { name: 'Settings', exact: true }).click()
-    await page.getByRole('link', { name: 'Appearance', exact: true }).click()
     const mute = page.getByRole('button', { name: 'Mute sounds', exact: true })
     const unmute = page.getByRole('button', { name: 'Unmute sounds', exact: true })
     const initial = await mute.locator('animate[attributeName="d"]').first().getAttribute('from')
@@ -121,6 +120,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.reload()
     await expect(mute).toBeVisible()
     expect(await mute.locator('animate[attributeName="d"]').first().getAttribute('from')).toBeNull()
+    await page.keyboard.press('Escape')
     const sidebar = page.locator('.sidebar')
     const sidebarIcon = sidebar.locator('.sidebar-controls [data-icon="sidebar-fold"], .sidebar-controls [data-icon="sidebar-unfold"]')
     const frame = await sidebarIcon.locator('path').first().getAttribute('d')
@@ -168,6 +168,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(sidebarIcon.locator('path').first()).toHaveAttribute('d', frame!)
     await finishFiniteAnimations(sidebar)
     await sidebar.locator('.sidebar-header').screenshot({ path: testInfo.outputPath(`sidebar-expanded-${reducedMotion}.png`) })
+    await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    await page.getByRole('link', { name: 'Appearance', exact: true }).click()
     const logo = Promise.withResolvers<Route>()
     await page.route('**/img/logo-for-light-bg-text.svg', (route) => logo.resolve(route))
     const transitionStyles = await page.addStyleTag({ content: `
@@ -176,7 +178,8 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       html[data-theme-transition]::view-transition-new(root) { animation-duration: 1s; }
     ` })
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: `Apply ${theme} theme`, exact: true }).click()
+      const option = page.getByRole('button', { name: theme === 'light' ? 'Light' : 'Dark', exact: true })
+      await option.click()
       await expect(page.locator(`.sidebar-theme-toggle [data-icon-state="${theme === 'light' ? 'sun' : 'moon'}"]`)).toBeVisible()
       if (theme === 'light') {
         const pending = await logo.promise
@@ -190,10 +193,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
         }
         await pending.abort()
         await page.unroute('**/img/logo-for-light-bg-text.svg')
-        await expect(page.getByRole('button', { name: 'Apply light theme', exact: true })).toBeVisible()
+        await expect(option).toBeVisible()
         await expect(page.locator('.sidebar-theme-toggle [data-icon-state="moon"]')).toBeVisible()
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-        await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+        await option.click()
       }
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       if (reducedMotion === 'no-preference') {

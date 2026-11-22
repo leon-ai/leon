@@ -87,7 +87,10 @@ function shouldReduceMotion(): boolean {
   return window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
 }
 
-export function Sidebar() {
+export function Sidebar({ inert, onSettings }: {
+  inert?: boolean
+  onSettings: () => void
+}) {
   const navigate = useNavigate()
   const sidebarScrollAreaRef = useRef<HTMLDivElement>(null)
   const searchReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -181,10 +184,22 @@ export function Sidebar() {
       const key = event.key.toLowerCase()
 
       if (
+        event.defaultPrevented ||
+        event.isComposing ||
         event.repeat ||
         event.altKey ||
         !modifierKeyPressed
       ) {
+        return
+      }
+
+      if (!event.shiftKey && key === ',') {
+        event.preventDefault()
+        onSettings()
+        return
+      }
+
+      if (inert) {
         return
       }
 
@@ -212,12 +227,12 @@ export function Sidebar() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [navigate])
+  }, [inert, navigate, onSettings])
 
   const logoSrc = theme === 'dark' ? DARK_THEME_LOGO_SRC : LIGHT_THEME_LOGO_SRC
 
   return (
-    <aside className={clsx(
+    <aside inert={inert} className={clsx(
       'sidebar',
       sidebarExpanded ? 'sidebar-expanded' : 'sidebar-collapsed',
       {
@@ -277,7 +292,7 @@ export function Sidebar() {
         aria-label="Open sidebar"
         onClick={() => updateSidebarExpanded(true)}
       />
-      <SidebarFooter />
+      <SidebarFooter onSettings={onSettings} />
       <Dialog
         hideHeader
         open={searchSessionsDialogOpen}

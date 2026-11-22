@@ -121,7 +121,8 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
     // The composer's lifetime scopes these handlers to session/new-session
     // pages. File paste works with focus anywhere on that page; text stays native.
     const paste = (event: ClipboardEvent): void => {
-      if (!document.hidden && !event.defaultPrevented && event.clipboardData?.files.length) {
+      if (!document.hidden && !event.defaultPrevented && event.clipboardData?.files.length &&
+        !container.current?.closest('[inert]')) {
         event.preventDefault()
         add(event.clipboardData.files)
       }
@@ -133,7 +134,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       }
       const files = detail.files.filter(isDesktopAttachmentFile)
       const issues = new Set(detail.issues ?? [])
-      if (document.hidden) {
+      if (document.hidden || container.current?.closest('[inert]')) {
         files.forEach(releaseDesktopAttachment)
         return
       }
@@ -153,7 +154,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       document.removeEventListener('paste', paste)
       window.removeEventListener(DESKTOP_FILES_EVENT, nativePaste)
     }
-  }, [add, disabled, reportIssues])
+  }, [add, container, disabled, reportIssues])
 
   useEffect(() => {
     const target = container.current?.closest<HTMLElement>('.app-main')
@@ -174,7 +175,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
         ? current : AttachmentDropPhase.Idle)
     }
     const enter = (event: DragEvent): void => {
-      if (isFileDrag(event)) {
+      if (isFileDrag(event) && !container.current?.closest('[inert]')) {
         event.preventDefault()
         depth += 1
         feedbackVersion += 1
@@ -182,7 +183,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       }
     }
     const over = (event: DragEvent): void => {
-      if (isFileDrag(event)) {
+      if (isFileDrag(event) && !container.current?.closest('[inert]')) {
         event.preventDefault()
         event.dataTransfer!.dropEffect = 'copy'
       }
@@ -196,7 +197,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       }
     }
     const drop = (event: DragEvent): void => {
-      if (isFileDrag(event)) {
+      if (isFileDrag(event) && !container.current?.closest('[inert]')) {
         event.preventDefault()
         depth = 0
         const version = ++feedbackVersion

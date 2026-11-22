@@ -24,7 +24,7 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 export function NewSessionPage() {
   const navigate = useNavigate()
   const profile = useProfile()
-  const { workspace } = useSearch({ from: '/' })
+  const { workspace } = useSearch({ strict: false })
   const workspaceId = workspace ?? null
   const model = useComposerModel()
   const [intent, setIntent] = useState(() => ({ sessionId: createUUID(), workspaceId }))

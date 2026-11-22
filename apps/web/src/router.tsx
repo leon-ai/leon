@@ -2,13 +2,15 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  lazyRouteComponent
+  lazyRouteComponent,
+  notFound
 } from '@tanstack/react-router'
 
 import { AppLayout } from '@/layout/app-layout'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { queryClient } from '@/query-client'
 import { PROFILE_AUTH_QUERY_KEY } from '@/data/profile'
+import { isSettingsPath } from '@/data/settings-sections'
 import { prefetchConversation, prepareConversationForNavigation } from '@/data/conversation-queries'
 import {
   parseVibesPreviewSearch,
@@ -20,15 +22,14 @@ const rootRoute = createRootRoute({
   notFoundComponent: NotFoundPage
 })
 
+const NewSessionPage = lazyRouteComponent(() => import('@/pages/new-session-page/new-session-page'), 'NewSessionPage')
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   validateSearch: (search: Record<string, unknown>): { workspace?: string } =>
     typeof search['workspace'] === 'string' ? { workspace: search['workspace'] } : {},
-  component: lazyRouteComponent(
-    () => import('@/pages/new-session-page/new-session-page'),
-    'NewSessionPage'
-  )
+  component: NewSessionPage
 })
 
 const sessionRoute = createRoute({
@@ -53,10 +54,11 @@ const sessionRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   sessionRoute,
-  createRoute({ getParentRoute: () => rootRoute, path: '/settings',
-    component: lazyRouteComponent(() => import('@/pages/settings-page/settings-page'), 'SettingsPage') }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: NewSessionPage }),
   createRoute({ getParentRoute: () => rootRoute, path: '/settings/$section',
-    component: lazyRouteComponent(() => import('@/pages/settings-page/settings-page'), 'SettingsPage') }),
+    beforeLoad: ({ params }) => validateSettingsPath(params), component: NewSessionPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/settings/$section/$target',
+    beforeLoad: ({ params }) => validateSettingsPath(params), component: NewSessionPage }),
   ...(import.meta.env.DEV
     ? [createRoute({
         getParentRoute: () => rootRoute,
@@ -69,6 +71,12 @@ const routeTree = rootRoute.addChildren([
       })]
     : [])
 ])
+
+function validateSettingsPath({ section, target }: { section: string, target?: string }): void {
+  if (!isSettingsPath(section, target)) {
+    throw notFound()
+  }
+}
 
 export const router = createRouter({
   routeTree,
