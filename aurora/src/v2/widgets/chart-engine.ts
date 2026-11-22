@@ -1,4 +1,4 @@
-import { init, use } from 'echarts/core'
+import { color, init, use } from 'echarts/core'
 import { DatasetComponent, GridComponent, LegendComponent, TooltipComponent, DataZoomComponent, VisualMapComponent, AriaComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { EChartsType } from 'echarts/core'
@@ -8,9 +8,11 @@ import { MAXIMUM_GENERATED_HEIGHT } from '../contracts/generated'
 use([DatasetComponent,
   GridComponent, LegendComponent, TooltipComponent, DataZoomComponent, VisualMapComponent, AriaComponent, CanvasRenderer])
 
-const instances = new Map<EChartsType, { observer: ResizeObserver, option: Record<string, unknown> }>()
+const CHART_LIMITS = { surface: 8, insights: 10 } as const
+type ChartScope = keyof typeof CHART_LIMITS
+
+const instances = new Map<EChartsType, { observer: ResizeObserver, option: Record<string, unknown>, scope: ChartScope }>()
 const PALETTE_TOKENS = ['--color-accent', '--color-accent-pink', '--color-purple', '--color-success', '--color-yellow']
-const MAXIMUM_CHARTS_PER_SURFACE = 8
 const MAXIMUM_CHART_WIDTH = 2_048
 
 function chartSize(element: HTMLElement): { width: number, height: number } {
@@ -37,19 +39,22 @@ function themedAxes(value: unknown, text: string, border: string, fontSize: numb
   }
 }
 
-function themed(option: Record<string, unknown>): Record<string, unknown> {
+function themed(option: Record<string, unknown>, scope: ChartScope): Record<string, unknown> {
   const styles = getComputedStyle(document.documentElement)
   const text = styles.getPropertyValue('--color-text-secondary').trim()
   const border = styles.getPropertyValue('--color-border-secondary').trim()
   const fontSize = Number.parseFloat(styles.getPropertyValue('--font-size-sm'))
   const radius = Number.parseFloat(styles.getPropertyValue('--border-radius-sm'))
   const legend = option['legend']
+  const palette = PALETTE_TOKENS.map((name) => styles.getPropertyValue(name).trim())
   const legendStyle = (value: object): object => ({ ...value, textStyle: { color: text, fontSize } })
-  const styleSeries = (value: unknown): unknown => {
+  const styleSeries = (value: unknown, index = 0): unknown => {
     if (!value || typeof value !== 'object') {
       return value
     }
     const series = value as Record<string, unknown>
+    const area = series['areaStyle'] as { color?: unknown } | undefined
+    const seriesColor = palette[index % palette.length]
 
     // Shared defaults also apply to bespoke charts without overriding authored
     // data, deliberate series styles or the chart's numerical scale.
@@ -57,6 +62,14 @@ function themed(option: Record<string, unknown>): Record<string, unknown> {
       ...(series['type'] === 'bar' ? { barMaxWidth: 40 } : {}),
       ...(series['type'] === 'line' ? { symbolSize: 6, showSymbol: false } : {}),
       ...series,
+      ...(scope === 'insights' && area && !area.color && seriesColor ? {
+        areaStyle: { ...area, color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: color.modifyAlpha(seriesColor, 0.27) },
+            { offset: 1, color: color.modifyAlpha(seriesColor, 0) }
+          ]
+        } }
+      } : {}),
       // Transparent chart surfaces cannot provide a matching automatic text halo.
       label: { textBorderColor: 'transparent', ...(series['label'] as object) },
       ...(series['type'] === 'bar'
@@ -65,7 +78,7 @@ function themed(option: Record<string, unknown>): Record<string, unknown> {
     }
   }
 
-  return { ...option, color: PALETTE_TOKENS.map((name) => styles.getPropertyValue(name).trim()),
+  return { ...option, color: palette,
     backgroundColor: 'transparent', darkMode: styles.colorScheme === 'dark', animation: false,
     textStyle: { fontFamily: styles.getPropertyValue('--font-family').trim(), color: text, fontSize },
     tooltip: { trigger: 'item', ...(option['tooltip'] as object), renderMode: 'richText',
@@ -81,13 +94,13 @@ function themed(option: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
-function refreshChart(chart: EChartsType, option: Record<string, unknown>): void {
+function refreshChart(chart: EChartsType, option: Record<string, unknown>, scope: ChartScope): void {
   // Theme changes must preserve the owner's legend and zoom choices.
   const current = chart.getOption()
   chart.setOption(themed({ ...option,
     ...(current['legend'] ? { legend: current['legend'] } : {}),
     ...(current['dataZoom'] ? { dataZoom: current['dataZoom'] } : {})
-  }))
+  }, scope))
 }
 
 /**
@@ -95,7 +108,7 @@ function refreshChart(chart: EChartsType, option: Record<string, unknown>): void
  * Callers load this engine on demand and dispose each instance when it leaves.
  */
 export const chartEngine = {
-  async create(element: HTMLElement, option: Record<string, unknown>): Promise<ChartInstance> {
+  async create(element: HTMLElement, option: Record<string, unknown>, scope: ChartScope = 'surface'): Promise<ChartInstance> {
     // Series stay outside the initial engine graph, rather than shipping one
     // indivisible chart bundle for every generated interface.
     await import('./chart-series')
@@ -105,17 +118,17 @@ export const chartEngine = {
       instances.delete(previous[0])
       previous[0].dispose()
     }
-    if (instances.size >= MAXIMUM_CHARTS_PER_SURFACE) {
+    if ([...instances.values()].filter((instance) => instance.scope === scope).length >= CHART_LIMITS[scope]) {
       throw new Error('Use fewer charts in one interface.')
     }
     const chart = init(element, undefined, { ...chartSize(element), devicePixelRatio: Math.min(devicePixelRatio, 2) })
     const resize = (): void => chart.resize(chartSize(element))
     const observer = new ResizeObserver(resize)
     observer.observe(element)
-    const record = { observer, option }
+    const record = { observer, option, scope }
     instances.set(chart, record)
     try {
-      chart.setOption(themed(option))
+      chart.setOption(themed(option, scope))
     } catch (error) {
       observer.disconnect()
       instances.delete(chart)
@@ -126,10 +139,10 @@ export const chartEngine = {
     return {
       setOption(next): void {
         record.option = next
-        chart.setOption(themed(next), true)
+        chart.setOption(themed(next, scope), true)
       },
       resize,
-      refresh: (): void => refreshChart(chart, record.option),
+      refresh: (): void => refreshChart(chart, record.option, scope),
       on: (event, handler): void => { chart.on(event, handler) },
       dispose: (): void => {
         observer.disconnect()
@@ -140,7 +153,7 @@ export const chartEngine = {
   },
   refresh(): void {
     for (const [chart, record] of instances) {
-      refreshChart(chart, record.option)
+      refreshChart(chart, record.option, record.scope)
     }
   },
   /**
