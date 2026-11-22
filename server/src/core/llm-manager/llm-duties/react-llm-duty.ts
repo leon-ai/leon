@@ -144,7 +144,7 @@ import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-l
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
 import {
   runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings,
-  recordCapabilityUsage
+  recordCapabilityUsage, recordForegroundContextReduction
 } from '../turn-timing'
 import { getActiveInferencePurpose } from '../llm-usage/usage-context'
 import { isToolPreparationPhase } from '../turn-timing-contract'
@@ -1463,6 +1463,7 @@ export class ReActLLMDuty extends LLMDuty {
         ? false
         : options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
+    const estimatedTokensBeforeReduction = preparedContext.estimatedInputTokensBeforePreparation
     let hasAttemptedSummary = false
     // Rejected requests need a fresh reduction even if estimates look small.
     // Later productive calls retain their evidence until pressure grows again.
@@ -1523,6 +1524,7 @@ export class ReActLLMDuty extends LLMDuty {
     // serialized request fits, including output space and template overhead.
     // A stream stall supplies no size rejection. A bounded retry can still
     // proceed when required evidence is larger than the reduction target.
+    recordForegroundContextReduction(estimatedTokensBeforeReduction - preparedContext.estimatedInputTokens)
     const admissionLimitTokens = stallRecoveryAdmissionTokens ?? contextCompactionTriggerTokens
     if (
       !providerManagesContext &&
