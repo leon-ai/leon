@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHmac, randomBytes, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -9,7 +9,7 @@ import { LEON_HOME_PATH, LEON_PROFILES_PATH, isValidProfileName } from '@/leon-r
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { summarizeCompletedOwnerTurn, summarizeUsage } from '@/core/insights/usage'
-import { onCompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
+import { onCompletedOwnerTurn, onStandaloneSkill, type CompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
 import type { OwnerTurnFailureCode } from '@/core/llm-manager/turn-timing-contract'
 import type { TelemetrySetting } from '@/core/insights/insights-contract'
 import { DateHelper } from '@/helpers/date-helper'
@@ -18,7 +18,7 @@ import {
   DAILY_REPORT_PATH, getIanaTimeZone, getPublicModel, isTelemetryEventReport, OTHER_MODEL, OTHER_PROVIDER,
   LATENCY_BUCKETS_MS, PRESENCE_INTERVAL_MS, PRESENCE_REPORT_PATH, TELEMETRY_DAY_MS, TELEMETRY_EVENT_PATH,
   TELEMETRY_MAX_MODEL_BUCKETS, TELEMETRY_MINUTE_MS, TELEMETRY_RETRY_DAYS, TELEMETRY_SCHEMA_VERSION,
-  type DailyReport, type FleetReport, type PresenceReport, type TelemetryEventReport
+  type CapabilityUsage, type DailyReport, type FleetReport, type PresenceReport, type TelemetryEventReport
 } from './report-contract'
 
 const REPORT_ENDPOINT = new URL(DAILY_REPORT_PATH, TELEMETRY_COLLECTOR_ORIGIN).href
@@ -42,6 +42,9 @@ interface PendingEvent {
   profile: string
   at: number
   activity?: Activity
+  capabilities?: readonly CapabilityUsage[]
+  contextReduction?: CompletedOwnerTurn['contextReduction']
+  skillEventId?: string
   retryAt: number
   event?: TelemetryEventReport
 }
@@ -315,20 +318,23 @@ async function prepareProfile(profile: string, at: number): Promise<DeliveryStat
 function buildEvent(job: PendingEvent, state: DeliveryState, identity: ReportingInstallation): TelemetryEventReport {
   const { key, installation } = identity
   const pseudonym = createHmac('sha256', key).update('telemetry:profile:').update(installation).update(state.seed).digest('hex')
-  const start = job.activity === undefined
+  const kind = job.skillEventId ? 'skill_finished' : job.activity ? 'turn_finished' : 'profile_started'
   const day = Math.floor(job.at / TELEMETRY_DAY_MS)
   const activity = job.activity ? [job.activity] : []
   const report = buildReport(day, installation, pseudonym,
-    start && day === Math.floor(state.firstReportingAt / TELEMETRY_DAY_MS), activity)
+    kind === 'profile_started' && day === Math.floor(state.firstReportingAt / TELEMETRY_DAY_MS), activity)
   report.fleet = buildFleetReport(report, activity, identity.birthDate)
 
   const zone = runWithProfileContext({ profileName: job.profile }, () => DateHelper.getTimeZone())
   return {
-    id: createHmac('sha256', key).update(start ? 'telemetry:profile-start:' : 'telemetry:turn:')
-      .update(pseudonym).update(job.activity?.id ?? String(state.enabledAt)).digest('hex'),
-    kind: start ? 'profile_started' : 'turn_finished',
+    id: createHmac('sha256', key)
+      .update(job.skillEventId ? 'telemetry:skill:' : job.activity ? 'telemetry:turn:' : 'telemetry:profile-start:')
+      .update(pseudonym).update(job.skillEventId ?? job.activity?.id ?? String(state.enabledAt)).digest('hex'),
+    kind,
     at: job.at,
     timeZone: getIanaTimeZone(zone) ?? getIanaTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone) ?? 'UTC',
+    ...(job.capabilities?.length ? { capabilities: [...job.capabilities] } : {}),
+    ...(job.contextReduction ? { contextReduction: job.contextReduction } : {}),
     report
   }
 }
@@ -433,10 +439,24 @@ export function startProfileTelemetry(): () => void {
       if (!closed && getTelemetrySetting(profile).enabled && pending.length < MAXIMUM_PENDING_EVENTS) {
         const at = startedAt + durationMs
         announceProfile(profile, at)
-        enqueue({ profile, at, activity: summarizeCompletedOwnerTurn(completed), retryAt: 0 })
+        enqueue({
+          profile, at, activity: summarizeCompletedOwnerTurn(completed), retryAt: 0,
+          capabilities: completed.capabilities, contextReduction: completed.contextReduction
+        })
       }
     } catch {
       // Reporting is best-effort and never owns the outcome of a turn.
+    }
+  })
+  const unsubscribeSkill = onStandaloneSkill((profile, entry) => {
+    try {
+      if (!closed && getTelemetrySetting(profile).enabled) {
+        const at = Date.now()
+        announceProfile(profile, at)
+        enqueue({ profile, at, capabilities: [entry], skillEventId: randomUUID(), retryAt: 0 })
+      }
+    } catch {
+      // Reporting is best-effort and never owns the outcome of a skill action.
     }
   })
 
@@ -485,6 +505,7 @@ export function startProfileTelemetry(): () => void {
   return () => {
     closed = true
     unsubscribe()
+    unsubscribeSkill()
     pending.length = 0
     clearInterval(retryTimer)
     clearTimeout(presenceTimer)
