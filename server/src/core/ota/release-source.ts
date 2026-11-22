@@ -21,6 +21,11 @@ interface ReleaseCache<T> {
   fallbackBackoffMs?: number
 }
 
+interface ReleaseSource {
+  <T>(url: string): Promise<T>
+  cached<T>(url: string): Promise<T | undefined>
+}
+
 function rateLimitError(retryAt: number): Error {
   const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1_000))
 
@@ -60,16 +65,38 @@ function rateLimitDeadline(response: AxiosResponse<unknown>, now: number): numbe
  * transferred bytes; GitHub's unauthenticated IP limit still applies to them.
  * Rate-limited checks wait for the server's reset instead of retrying in a loop.
  */
-export function createReleaseSource(directory: string): <T>(url: string) => Promise<T> {
+export function createReleaseSource(directory: string, {
+  maximumResponseBytes = MAXIMUM_RESPONSE_BYTES,
+  validateData
+}: { maximumResponseBytes?: number, validateData?: (value: unknown) => boolean } = {}): ReleaseSource {
   const memory = new Map<string, ReleaseCache<unknown>>()
+  const loading = new Map<string, Promise<ReleaseCache<unknown>>>()
+  const filenameFor = (url: string): string =>
+    path.join(directory, `releases-${createHash('sha256').update(url).digest('hex')}.json`)
 
-  return async <T>(url: string): Promise<T> => {
-    const filename = path.join(directory, `releases-${createHash('sha256').update(url).digest('hex')}.json`)
-    let cached = memory.get(url) as ReleaseCache<T> | undefined
-    if (!cached) {
-      cached = await fs.readFile(filename, 'utf8').then((value) => JSON.parse(value) as ReleaseCache<T>).catch(() => ({ checkedAt: 0, retryAt: 0 }))
-      memory.set(url, cached)
+  async function load<T>(url: string): Promise<ReleaseCache<T>> {
+    const cached = memory.get(url)
+    if (cached) {
+      return cached as ReleaseCache<T>
     }
+    let task = loading.get(url)
+    if (!task) {
+      task = fs.readFile(filenameFor(url), 'utf8')
+        .then((value) => JSON.parse(value) as ReleaseCache<unknown>)
+        .catch(() => ({ checkedAt: 0, retryAt: 0 }))
+        .then((value) => {
+          memory.set(url, value)
+          loading.delete(url)
+          return value
+        })
+      loading.set(url, task)
+    }
+    return await task as ReleaseCache<T>
+  }
+
+  async function refresh<T>(url: string): Promise<T> {
+    const filename = filenameFor(url)
+    const cached = await load<T>(url)
     if (cached.retryAt > Date.now()) {
       throw rateLimitError(cached.retryAt)
     }
@@ -78,7 +105,7 @@ export function createReleaseSource(directory: string): <T>(url: string) => Prom
     }
     const response = await axios.get<T>(url, {
       timeout: REQUEST_TIMEOUT_MS,
-      maxContentLength: MAXIMUM_RESPONSE_BYTES,
+      maxContentLength: maximumResponseBytes,
       headers: { Accept: 'application/vnd.github+json', ...(cached.etag ? { 'If-None-Match': cached.etag } : {}) },
       validateStatus: () => true
     }).catch((cause: unknown) => {
@@ -87,6 +114,9 @@ export function createReleaseSource(directory: string): <T>(url: string) => Prom
     if (response.status === 304 && cached.data !== undefined) {
       cached.checkedAt = Date.now()
     } else if (response.status === 200) {
+      if (validateData && !validateData(response.data)) {
+        throw new Error('I received an invalid response from GitHub.')
+      }
       cached.data = response.data
       cached.etag = response.headers['etag'] as string | undefined
       cached.checkedAt = Date.now()
@@ -118,4 +148,6 @@ export function createReleaseSource(directory: string): <T>(url: string) => Prom
     await FileHelper.writeAtomicJSON(filename, cached)
     return cached.data as T
   }
+
+  return Object.assign(refresh, { cached: async <T>(url: string): Promise<T | undefined> => (await load<T>(url)).data })
 }
