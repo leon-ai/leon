@@ -20,6 +20,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { corsMidd } from '@/core/http-server/plugins/cors'
 import { otherMidd } from '@/core/http-server/plugins/other'
+import { insightsPlugin } from '@/core/http-server/api/insights'
 import { infoPlugin } from '@/core/http-server/api/info'
 import { inferencePlugin } from '@/core/http-server/api/inference'
 import { runActionPlugin } from '@/core/http-server/api/run-action'
@@ -213,7 +214,7 @@ export default class HTTPServer {
       const isConversationMetadata = requestPath === sessionsPath ||
         requestPath.startsWith(`${sessionsPath}/`) ||
         requestPath === `/api/${API_VERSION}/conversation-history`
-      const isToolManagement = ['tools', 'connections', 'skills', 'updates'].some((resource) =>
+      const isToolManagement = ['tools', 'connections', 'skills', 'updates', 'insights'].some((resource) =>
         requestPath === `/api/${API_VERSION}/${resource}` || requestPath.startsWith(`/api/${API_VERSION}/${resource}/`))
 
       // Session browsing must remain usable while a model is booting or offline.
@@ -230,6 +231,7 @@ export default class HTTPServer {
     })
     this.fastify.register(systemWidgetsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(sessionsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(insightsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(infoPlugin, { apiVersion: API_VERSION })
     this.fastify.register(commandPlugin, { apiVersion: API_VERSION })
     this.fastify.register(mediaGenerationPlugin, { apiVersion: API_VERSION })
