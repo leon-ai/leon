@@ -7,7 +7,8 @@ export enum PulseDecision {
   Silent = 'silent',
   Save = 'save',
   Notify = 'notify',
-  Failed = 'failed'
+  Failed = 'failed',
+  ResolvedInChat = 'resolved_in_chat'
 }
 
 export interface PulseResult {
@@ -43,10 +44,12 @@ interface OpenPulseMatter {
   lead: PulseMatterLead
   checkAt: number
   expiresAt: number
+  updatedAt: number
 }
 
 export enum PulseArchiveReason {
   Resolved = 'resolved',
+  ResolvedInChat = 'resolved_in_chat',
   CheckFailed = 'check_failed',
   Expired = 'expired',
   Displaced = 'displaced',
@@ -81,6 +84,12 @@ export class PulseResultRepository {
   ): boolean {
     const db = this.database()
     return db.transaction(() => {
+      if (scheduledCheckAt !== undefined && !db.prepare(`
+        SELECT 1 FROM matters WHERE id = ? AND check_at = ? AND archive_reason IS NULL
+      `).get(result.matterId, scheduledCheckAt)) {
+        return false
+      }
+
       const knownFinding = result.findingKey && db.prepare(`
         SELECT 1 FROM results WHERE matter_id = ? AND finding_key = ? LIMIT 1
       `).get(result.matterId, result.findingKey)
@@ -140,11 +149,11 @@ export class PulseResultRepository {
    */
   public openMatters(now: number): OpenPulseMatter[] {
     const rows = this.existingDatabase()?.prepare(`
-      SELECT lead, check_at AS checkAt, expires_at AS expiresAt
+      SELECT lead, check_at AS checkAt, expires_at AS expiresAt, updated_at AS updatedAt
       FROM matters WHERE archive_reason IS NULL AND expires_at > @now
       ORDER BY check_at > @now, CASE WHEN check_at <= @now THEN expires_at ELSE check_at END,
         priority DESC, id
-    `).all({ now }) as Array<{ lead: string, checkAt: number, expiresAt: number }> | undefined
+    `).all({ now }) as Array<Omit<OpenPulseMatter, 'lead'> & { lead: string }> | undefined
 
     return rows?.map((row) => ({
       ...row, lead: JSON.parse(row.lead) as PulseMatterLead
@@ -154,19 +163,55 @@ export class PulseResultRepository {
   /**
    * Supplies existing identities when a previously closed subject becomes relevant again.
    */
-  public recentArchivedMatters(): PulseMatterLead[] {
+  public recentArchivedMatters(): Array<PulseMatterLead & { archiveReason: PulseArchiveReason }> {
     const rows = this.existingDatabase()?.prepare(`
-      SELECT lead FROM matters WHERE archive_reason IS NOT NULL
+      SELECT lead, archive_reason AS archiveReason FROM matters WHERE archive_reason IS NOT NULL
       ORDER BY updated_at DESC, id LIMIT ?
-    `).all(RECENT_ARCHIVED_MATTERS_LIMIT) as Array<{ lead: string }> | undefined
+    `).all(RECENT_ARCHIVED_MATTERS_LIMIT) as Array<{ lead: string, archiveReason: PulseArchiveReason }> | undefined
 
-    return rows?.map((row) => JSON.parse(row.lead) as PulseMatterLead) ?? []
+    return rows?.map((row) => ({
+      ...(JSON.parse(row.lead) as PulseMatterLead), archiveReason: row.archiveReason
+    })) ?? []
   }
 
   public archive(id: string, reason: PulseArchiveReason, now: number): void {
     this.existingDatabase()?.prepare(`
       UPDATE matters SET archive_reason = ?, updated_at = ? WHERE id = ? AND archive_reason IS NULL
     `).run(reason, now, id)
+  }
+
+  /**
+   * Closes the exact open revision reviewed in chat and records the original turn.
+   */
+  public resolveInChat(
+    matter: OpenPulseMatter,
+    source: { sessionId: string, messageId: string, quote: string },
+    now: number
+  ): boolean {
+    const db = this.database()
+    const { lead, updatedAt } = matter
+
+    return db.transaction(() => {
+      const changed = db.prepare(`
+        UPDATE matters SET archive_reason = ?, updated_at = ?
+        WHERE id = ? AND archive_reason IS NULL AND updated_at = ? AND expires_at > ?
+      `).run(PulseArchiveReason.ResolvedInChat, now, lead.fingerprint, updatedAt, now).changes
+      if (!changed) {
+        return false
+      }
+
+      db.prepare(`
+        INSERT INTO results (id, matter_id, session_id, source_message_id, summary, reason, decision, output, checked_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `chat:${lead.fingerprint}:${source.sessionId}:${source.messageId}`,
+        lead.fingerprint, source.sessionId, source.messageId, lead.summary,
+        'I found the answer to this matter in our conversation.',
+        PulseDecision.ResolvedInChat, source.quote, new Date(now).toISOString()
+      )
+
+      return true
+    })()
   }
 
   private updateMatter(lead: PulseMatterLead, followUp: PulseFollowUp | null, now: number): void {
@@ -224,7 +269,7 @@ export class PulseResultRepository {
     return this.database().prepare(`
       SELECT decision, finding_key AS findingKey, output
       FROM results
-      WHERE matter_id = ? AND decision IN ('save', 'notify')
+      WHERE matter_id = ? AND decision IN ('save', 'notify', 'resolved_in_chat')
       ORDER BY checked_at DESC
       LIMIT ?
     `).all(matterId, RECENT_FINDINGS_LIMIT) as Array<Pick<PulseResult, 'decision' | 'findingKey' | 'output'>>
@@ -243,6 +288,7 @@ export class PulseResultRepository {
           id TEXT PRIMARY KEY,
           matter_id TEXT NOT NULL,
           session_id TEXT NOT NULL,
+          source_message_id TEXT,
           summary TEXT NOT NULL,
           reason TEXT NOT NULL,
           decision TEXT NOT NULL,
@@ -269,6 +315,9 @@ export class PulseResultRepository {
         CREATE INDEX IF NOT EXISTS archived_matters_by_age
           ON matters (updated_at DESC) WHERE archive_reason IS NOT NULL;
       `)
+      if (!db.prepare('SELECT 1 FROM pragma_table_info(\'results\') WHERE name = \'source_message_id\'').get()) {
+        db.exec('ALTER TABLE results ADD COLUMN source_message_id TEXT')
+      }
       this.db = db
     }
 

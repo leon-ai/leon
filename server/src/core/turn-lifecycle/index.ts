@@ -96,7 +96,7 @@ export async function runTurnLifecycle(
             return { outcome: fyi ? 'completed' : 'skipped' }
           }, TurnStage.PostTurn)
         }
-        schedulePostTurn({ ...context, result, onActivity: (activity) => {
+        schedulePostTurn({ ...context, ...(responseId ? { responseId } : {}), result, onActivity: (activity) => {
           if (!responseId) {
             return
           }

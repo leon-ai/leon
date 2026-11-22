@@ -57,7 +57,9 @@ vi.mock('@/core', () => ({
   CONVERSATION_LOGGER: {
     upsert: (...args: Parameters<ConversationLogger['upsert']>): Promise<void> => fixture.logger!.upsert(...args)
   },
-  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn(), enqueueBatch: vi.fn(), startConcurrent: vi.fn() }
+  POST_TURN_MAINTENANCE_QUEUE: {
+    enqueue: vi.fn(), enqueueBatch: vi.fn(), enqueueIfNeeded: vi.fn(), startConcurrent: vi.fn()
+  }
 }))
 vi.mock('@/core/fyi', () => ({
   generateFyi: vi.fn(async () => ({ kind: FyiKind.Fact, text: 'FYI, a related fact can add a little context.' }))

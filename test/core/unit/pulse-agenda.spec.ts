@@ -108,4 +108,28 @@ describe('Pulse agenda', () => {
       db.close()
     }
   })
+
+  it('keeps the resolving conversation and ignores a scheduled result that finishes after it', () => {
+    const matter = lead('showcase', 0.9)
+    const next = followUp()
+    record(repository, matter, 'follow-up', 'schedule', NOW, next)
+    const [open] = repository.openMatters(NOW)
+    expect(open).toBeDefined()
+
+    const source = { sessionId: 'owner-chat', messageId: 'owner-answer', quote: 'The showcase organizer confirmed the demo.' }
+    expect(repository.resolveInChat(open!, source, next.checkAt)).toBe(true)
+    record(repository, matter, 'stale-research-result', 'new-slot', next.checkAt + 1_000, next, next.checkAt)
+    expect(repository.openMatters(next.checkAt)).toEqual([])
+    expect(repository.recentFindings(matter.fingerprint)).toHaveLength(2)
+
+    const db = new SQLite(path.join(directory, 'pulse.sqlite'), { readonly: true })
+    try {
+      expect(db.prepare('SELECT session_id, source_message_id FROM results WHERE decision = ?')
+        .get(PulseDecision.ResolvedInChat)).toEqual({
+        session_id: source.sessionId, source_message_id: source.messageId
+      })
+    } finally {
+      db.close()
+    }
+  })
 })

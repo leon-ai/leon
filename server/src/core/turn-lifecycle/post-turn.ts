@@ -2,7 +2,7 @@ import { performance } from 'node:perf_hooks'
 import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import { createMemoryActivity } from '@/core/memory-manager/memory-activity'
 import type { MemoryChange } from '@/core/llm-manager/memory-activity-contract'
-import { MEMORY_MANAGER, SELF_MODEL_MANAGER, EXPERIENCE_MANAGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
+import { MEMORY_MANAGER, SELF_MODEL_MANAGER, EXPERIENCE_MANAGER, POST_TURN_MAINTENANCE_QUEUE, PULSE_MANAGER } from '@/core'
 import type { ExecutionRecord, FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import { hasExperienceLearningEvidence } from '@/core/experience-manager/experience-manager'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
@@ -15,6 +15,7 @@ import { getTurnTimingContext } from '@/core/llm-manager/turn-timing'
 export interface CompletedAgentTurn {
   onActivity?: (activity: AgentProgressMessage) => void
   sessionId: string
+  responseId?: string
   query: string
   result: LLMDutyResult | null
 }
@@ -31,7 +32,7 @@ export function scheduleHistoryCompaction(prepare: PostTurnMaintenanceTaskPrepar
  * Schedules owner-turn maintenance after the answer has been persisted and delivered.
  * Explicit memory mutations must not be repeated by automatic extraction.
  */
-export function schedulePostTurn({ sessionId, query, result, onActivity }: CompletedAgentTurn): void {
+export function schedulePostTurn({ sessionId, responseId, query, result, onActivity }: CompletedAgentTurn): void {
   const output = result?.output as unknown
   if (typeof output !== 'string' || !output.trim()) {
     return
@@ -42,6 +43,12 @@ export function schedulePostTurn({ sessionId, query, result, onActivity }: Compl
   const finalIntent = result?.data?.['finalIntent'] as FinalPhaseIntent | undefined
 
   const executions = (result?.data?.['executionHistory'] ?? []) as ExecutionRecord[]
+  if (finalIntent === 'answer' && responseId) {
+    POST_TURN_MAINTENANCE_QUEUE.enqueueIfNeeded('Pulse chat resolution', () =>
+      PULSE_MANAGER.prepareChatResolution({ sessionId, responseId, query, answer: output, executions })
+    )
+  }
+
   if (finalIntent === 'answer' && hasExperienceLearningEvidence(executions)) {
     const workspace = typeof result?.data?.['workspace'] === 'string' ? result.data['workspace'] : process.cwd()
     POST_TURN_MAINTENANCE_QUEUE.enqueue('experience learning', () => EXPERIENCE_MANAGER.observeTurn({

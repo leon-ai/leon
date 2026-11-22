@@ -99,6 +99,7 @@ vi.mock('@/core/tool-manager/tool-settings', () => ({
 }))
 vi.mock('@/core', () => ({
   EXPERIENCE_MANAGER: { observeTurn: vi.fn(async () => undefined) },
+  PULSE_MANAGER: { prepareChatResolution: (): null => null },
   MEMORY_MANAGER: new Proxy({}, { get: (_target, key): unknown => {
     const service = fixture.services.get(getActiveProfileName())!.memory
     const value = Reflect.get(service, key)

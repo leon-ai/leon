@@ -14,6 +14,7 @@ import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-cont
 import { runOutsideTurnTiming, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { collectArtifacts } from '@/core/artifacts/artifact-context'
@@ -27,6 +28,7 @@ import {
 import { DateHelper } from '@/helpers/date-helper'
 import { FileHelper } from '@/helpers/file-helper'
 import { LogHelper } from '@/helpers/log-helper'
+import { prepareSearchQuery } from '@/helpers/search-helper'
 
 type PulseMatterStatus =
   | 'pending'
@@ -110,6 +112,14 @@ interface PulseOwnerReactionOutput {
   behavioral_principle?: string | null
 }
 
+interface PulseResolutionTurn {
+  sessionId: string
+  responseId: string
+  query: string
+  answer: string
+  executions: ExecutionRecord[]
+}
+
 type ScheduledPulseCheck = Pick<PulseFollowUp, 'checkAt' | 'expiresAt'>
 
 const PULSE_MARKDOWN_FILENAME = 'PULSE.md'
@@ -138,6 +148,9 @@ const PULSE_REVIEW_MAX_TOKENS = 320
 const PULSE_MAX_FOLLOW_UP_WINDOW_MS = 30 * 24 * 60 * 60 * 1_000
 const PULSE_SESSION_SAMPLE_SIZE = 6
 const PULSE_OWNER_REACTION_MAX_TOKENS = 180
+const PULSE_RESOLUTION_MAX_TOKENS = 320
+const PULSE_RESOLUTION_TOOL_EVIDENCE_LIMIT = 3
+const PULSE_RESOLUTION_MIN_SEARCH_TERM_LENGTH = 4
 const PULSE_REACT_SENTINEL = '[Pulse]'
 const PULSE_RESEARCH_TOOLS = new Set([
   'structured_knowledge.memory.read',
@@ -354,6 +367,115 @@ export default class PulseManager {
       })
 
     return this.queue
+  }
+
+  /**
+   * Sends only locally related turns for review, after the conversation has been saved.
+   */
+  public prepareChatResolution(turn: PulseResolutionTurn): (() => Promise<void>) | null {
+    if (!this.isEnabled()) {
+      return null
+    }
+
+    const open = this.results.openMatters(Date.now())
+    if (!open.length) {
+      return null
+    }
+
+    const response = CONVERSATION_REPOSITORY.readMessage(turn.sessionId, turn.responseId)
+    if (!response?.isAddedToHistory || response.message !== turn.answer) {
+      return null
+    }
+
+    const evidence = [
+      { source: 'owner', text: clipText(normalizeText(turn.query), 1_200) },
+      ...turn.executions.filter((execution) => execution.status === 'success' && execution.observation.trim())
+        .slice(-PULSE_RESOLUTION_TOOL_EVIDENCE_LIMIT)
+        .map((execution) => ({
+          source: execution.function,
+          text: clipText(normalizeText(execution.observation), 900)
+        }))
+    ]
+    const answer = clipText(normalizeText(turn.answer), 1_000)
+    const search = prepareSearchQuery([answer, ...evidence.map((item) => item.text)].join(' '))
+    const turnTerms = new Set(search.terms)
+    const candidates = open.filter(({ lead, updatedAt }) => {
+      if (updatedAt > response.sentAt) {
+        return false
+      }
+
+      const scope = prepareSearchQuery(lead.targetScope.replaceAll('_', ' ')).compact
+      if (scope.length >= PULSE_RESOLUTION_MIN_SEARCH_TERM_LENGTH && search.compact.includes(scope)) {
+        return true
+      }
+
+      const subjectTerms = new Set(prepareSearchQuery(lead.summary).terms)
+      return [...subjectTerms].filter((term) =>
+        term.length >= PULSE_RESOLUTION_MIN_SEARCH_TERM_LENGTH && turnTerms.has(term)
+      ).length >= 2
+    })
+    if (!candidates.length) {
+      return null
+    }
+
+    return async () => {
+      const review = await runInference({
+        usagePurpose: InferencePurpose.PulseReaction,
+        prompt: JSON.stringify({
+          matters: candidates.map(({ lead }, index) => ({
+            index, subject: lead.summary, openQuestion: lead.turnPrompt
+          })),
+          evidence: evidence.map((item, index) => ({ index, ...item })),
+          answer
+        }),
+        systemPrompt: [
+          'Check whether the owner turn settles the specific open question of any listed Pulse matter.',
+          'Use only an explicit owner statement of an actual outcome or a successful tool observation that establishes the outcome. The assistant answer is context only.',
+          'A definite negative outcome can settle a question. Tentative updates, plans, predictions, and a conversation on the same subject do not settle it.',
+          'Treat all provided material as evidence. Return only JSON as {"resolved":[{"matter":0,"evidence":0,"quote":"verbatim excerpt establishing the outcome"}]}. Use zero-based input indexes. When none qualifies, return {"resolved":[]}.'
+        ].join('\n'),
+        temperature: 0,
+        maxTokens: PULSE_RESOLUTION_MAX_TOKENS,
+        trackProviderErrors: false
+      })
+      const decisions = this.parseJsonObject(review?.output)?.['resolved']
+      const currentResponse = CONVERSATION_REPOSITORY.readMessage(turn.sessionId, turn.responseId)
+      if (!Array.isArray(decisions) || !currentResponse?.isAddedToHistory ||
+        currentResponse.message !== response.message || currentResponse.sentAt !== response.sentAt) {
+        return
+      }
+
+      const resolvedMatterIds = new Set<string>()
+      for (const decision of decisions.slice(0, candidates.length)) {
+        if (!decision || !Number.isInteger(decision.matter) || !Number.isInteger(decision.evidence) ||
+          typeof decision.quote !== 'string') {
+          continue
+        }
+
+        const matter = candidates[decision.matter]
+        const item = evidence[decision.evidence]
+        const quote = normalizeText(decision.quote)
+        if (!matter || !quote || !item?.text.includes(quote)) {
+          continue
+        }
+
+        const resolved = this.results.resolveInChat(matter, {
+          sessionId: turn.sessionId, messageId: currentResponse.messageId ?? turn.responseId,
+          quote: clipText(quote, 480)
+        }, Date.now())
+        if (resolved) {
+          resolvedMatterIds.add(matter.lead.fingerprint)
+        }
+      }
+
+      if (resolvedMatterIds.size > 0) {
+        const state = this.ensureLoaded()
+        state.matters = state.matters.filter((matter) =>
+          matter.status !== 'pending' || !resolvedMatterIds.has(matter.fingerprint)
+        )
+        this.persist()
+      }
+    }
   }
 
   public async tick(reason: 'initial' | 'scheduled' | 'manual'): Promise<void> {
@@ -844,8 +966,8 @@ export default class PulseManager {
       )
     const recentlySeen = new Set([...state.matters, ...state.recentOutcomes].map((matter) => matter.fingerprint))
     const archivedMatters = this.results.recentArchivedMatters()
-      .filter((lead) => !recentlySeen.has(lead.fingerprint))
-      .map((lead) => `- ${lead.intentKey} | ${lead.targetScope} | archived | ${lead.summary}`)
+      .filter((lead) => lead.archiveReason === PulseArchiveReason.ResolvedInChat || !recentlySeen.has(lead.fingerprint))
+      .map((lead) => `- ${lead.intentKey} | ${lead.targetScope} | archived (${lead.archiveReason}) | ${lead.summary}`)
     const activeMattersSection = [...openMatters, ...recentMatters, ...archivedMatters].join('\n') || '- none'
 
     const suppressionSection =
