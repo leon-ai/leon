@@ -303,13 +303,15 @@ export async function recordMaintenanceEvent(
  * Streams a profile's recorded lifecycle without rerunning model calls or mutations.
  * Old records without stage/task metadata remain readable by their turn identity.
  */
-export async function* readTurnHistory(query: {
+export async function* readTurnHistory({ from, until, ...query }: {
+  from?: number
+  until?: number
   turnId?: string
   sessionId?: string
   stage?: TurnStage
   taskId?: string
-}): AsyncGenerator<Record<string, unknown>> {
-  const directory = path.join(getProfilePaths().logs, 'turns')
+}, profilePaths = getProfilePaths(), onUnreadableRecord?: () => void): AsyncGenerator<Record<string, unknown>> {
+  const directory = path.join(profilePaths.logs, 'turns')
   let filenames: string[]
   try {
     filenames = await fs.readdir(directory)
@@ -320,8 +322,11 @@ export async function* readTurnHistory(query: {
     throw error
   }
 
+  const firstDay = from === undefined ? '' : new Date(from).toISOString().slice(0, 10)
+  const lastDay = until === undefined ? '' : new Date(until - 1).toISOString().slice(0, 10)
   for (const filename of filenames.sort()) {
-    if (!filename.endsWith('.jsonl')) {
+    const day = filename.slice(0, 10)
+    if (!filename.endsWith('.jsonl') || (firstDay && day < firstDay) || (lastDay && day > lastDay)) {
       continue
     }
     const stream = createReadStream(path.join(directory, filename), { encoding: 'utf8' })
@@ -331,7 +336,25 @@ export async function* readTurnHistory(query: {
         if (!line.trim()) {
           continue
         }
-        const record = JSON.parse(line) as Record<string, unknown>
+        let record: Record<string, unknown>
+        try {
+          record = JSON.parse(line) as Record<string, unknown>
+          if (!record || typeof record !== 'object' || Array.isArray(record)) {
+            throw new SyntaxError('The timing record is missing its event data.')
+          }
+        } catch (error) {
+          if (!onUnreadableRecord || !(error instanceof SyntaxError)) {
+            throw error
+          }
+          onUnreadableRecord()
+          continue
+        }
+
+        const timestamp = Number(record['startedAt'])
+        if ((from !== undefined && !(timestamp >= from)) ||
+          (until !== undefined && !(timestamp < until))) {
+          continue
+        }
         if (Object.entries(query).every(([key, value]) => value === undefined || record[key] === value)) {
           yield record
         }
