@@ -256,8 +256,8 @@ export function ModelSelectorMenu({
         ariaLabel="Search models"
         className="model-selector-search"
         fieldRef={searchRef}
-        iconName="search"
         placeholder="Search models..."
+        variant="header"
         autoComplete="off"
         spellCheck={false}
         role="combobox"

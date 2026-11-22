@@ -134,10 +134,10 @@ export function SearchSessionsDialog({
       <Input
         ariaLabel="Search sessions"
         autoFocus
-        iconName="search"
         placeholder="Search sessions..."
         size="large"
         type="search"
+        variant="header"
         role="combobox"
         aria-expanded={sessions.length > 0}
         aria-autocomplete="list"

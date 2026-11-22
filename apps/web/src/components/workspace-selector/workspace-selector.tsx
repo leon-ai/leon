@@ -94,7 +94,7 @@ function WorkspaceMenu({ open, workspaces, value, onChoose, onCreate }: {
       setFocused(next)
     }
   }}>
-    <Input fieldRef={input} type="search" iconName="search" ariaLabel="Find a workspace"
+    <Input fieldRef={input} type="search" variant="header" ariaLabel="Find a workspace"
       placeholder="Search workspaces…" value={query}
       onChange={(event) => {
         setQuery(event.target.value)

@@ -12,7 +12,7 @@ import { InputEffects, type TextField } from './input-effects'
 import './input.sass'
 
 type InputSize = 'medium' | 'large'
-type InputVariant = 'default' | 'embedded'
+type InputVariant = 'default' | 'embedded' | 'header'
 
 interface InputSharedProps {
   ariaLabel: string

@@ -50,7 +50,8 @@ export function CatalogList<T extends CatalogRow>({ entries, category, loading, 
 
   return <div className="catalog-list">
     <div className="catalog-list-toolbar">
-      <Input type="search" ariaLabel={`Search ${category}`} iconName="search" placeholder={`Find a ${category === 'tools' ? 'tool or connection' : 'skill'}…`}
+      <Input type="search" variant="header" ariaLabel={`Search ${category}`}
+        placeholder={`Find a ${category === 'tools' ? 'tool or connection' : 'skill'}…`}
         value={query} onChange={(event) => {
           setQuery(event.target.value)
           viewport.current?.scrollTo({ top: 0 })
