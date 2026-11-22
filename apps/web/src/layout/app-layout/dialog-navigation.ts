@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 
 import { isSettingsPath } from '@/data/settings-sections'
 
-export const INSIGHTS_TABS = ['overview', 'context-window', 'repeated-queries'] as const
+export const INSIGHTS_TABS = ['overview', 'context-window', 'repeated-queries', 'evaluations'] as const
 export type InsightsTab = (typeof INSIGHTS_TABS)[number]
 export const DEFAULT_SETTINGS_CATEGORY = 'general'
 

@@ -1,5 +1,7 @@
 import { test, expect, SESSION_URL } from './fixtures'
 import type { ToolCatalogEntry } from '../../../server/src/core/tool-manager/tool-source'
+import type { EvaluationRun, EvaluationQuery } from '../../../server/src/core/insights/insights-contract'
+import { projectEvaluationHistory } from '../../../server/src/core/insights/evaluation-view'
 import { SETTINGS_SECTIONS } from '../../../apps/web/src/data/settings-sections'
 import { CONNECTION_PREVIEWS, connectionPreviewView } from '../../fixtures/connections'
 import { ConnectionSetupActionId as Action, ConnectionSetupStep as Step } from '../../../aurora/src/contracts/connection-setup'
@@ -269,6 +271,176 @@ for (const theme of ['light', 'dark']) {
     expect(inputs).toEqual([{ name: 'My workspace', url: 'https://example.com/mcp' }])
   })
 }
+
+test('compares measured turns and controlled evaluations while sharing is off', async ({ page, ui }) => {
+  const day = Date.UTC(2030, 1, 1)
+  const summary = {
+    turns: 2, finishedTurns: 1, tokenMeasuredTurns: 1, measuredTurnTokens: 15_000,
+    fullyMeasuredTurns: 2, fullyMeasuredTokens: 35_000, medianTurnTokens: 17_500, p95TurnTokens: 20_000,
+    modelCalls: 3, meteredCalls: 3, tokenReportedCalls: 3, failedModelCalls: 0,
+    inputTokens: 30_000, outputTokens: 5_000, cachedInputTokens: 15_000, cacheReportedCalls: 3,
+    cacheComparableCalls: 3, cacheComparableInputTokens: 30_000, cacheComparableCachedTokens: 15_000,
+    toolCalls: 1, durationMs: 3_000, failedTurns: 0, canceledTurns: 0, clarificationTurns: 1,
+    medianAnswerMs: 1_500, p95AnswerMs: 1_500, toolDurationMs: 500, modelDurationMs: 1_500,
+    firstOutputMs: 1_000, firstOutputCount: 1, contextPercent: 4, contextCount: 1,
+    medianContextPercent: 4, p95ContextPercent: 4
+  }
+  const model = { provider: 'openai', model: 'example-model' }
+  const turn = {
+    ...summary, ...model, modelCalls: 1, meteredCalls: 1, tokenReportedCalls: 1,
+    inputTokens: 14_000, outputTokens: 1_000, startedAt: day, version: '2.0.0-alpha.0.10',
+    outcome: 'answered',
+    context: { contextUsagePercent: 40, contextUsedTokens: 14_000, contextWindowTokens: 35_000,
+      contextUsageEstimated: false, contextTarget: model,
+      contextTokenBreakdown: { transcript: 5_000, system: 5_000, tools: 3_000, images: 1_000, compaction: 0 } }
+  }
+  const ownerQuery = 'What’s the weather like in Shenzhen?'
+  const repeated = { message: ownerQuery, occurrences: 2, turns: [
+    { ...turn, startedAt: day + 3_600_000, inputTokens: 19_000 }, turn
+  ] }
+  let sharing = false
+  await page.route('**/api/v1/insights?**', async (route) => {
+    expect(route.request().headers()['x-leon-insights-profile']).toBe(ui.profile)
+    const url = new URL(route.request().url())
+    await route.fulfill({ json: {
+      firstOwnerMessageAt: day, unreadableRecords: 1,
+      current: summary, previous: summary, series: [
+        { day: day - 86_400_000, ...summary, previous: summary },
+        { day, ...summary, previous: summary, fullyMeasuredTokens: 29_000 }
+      ], recentTurns: [turn],
+      models: [{ ...summary, ...model }], contextModels: [model], contextPage: 0, contextPages: 1,
+      repeatedQueries: url.searchParams.has('repeated') ? [repeated] : []
+    } })
+  })
+  await page.route('**/api/v1/insights/telemetry', async (route) => {
+    if (route.request().method() === 'PUT') {
+      expect(route.request().headers()['x-leon-insights-profile']).toBe(ui.profile)
+      sharing = Boolean(route.request().postDataJSON().enabled)
+    }
+    await route.fulfill({ json: { enabled: sharing } })
+  })
+  const requestedEvaluations: EvaluationQuery[] = []
+  const measured = {
+    inputTokens: 2_000, cachedInputTokens: 800, uncachedInputTokens: 1_200, peakInputTokens: 1_400,
+    outputTokens: 300, modelCalls: 2, failedCalls: 0, foregroundInputTokens: 1_900,
+    maintenanceInputTokens: 100, turnLatencyMs: 1_500
+  }
+  const evaluation: EvaluationRun = {
+    id: 'test-eval', recordedAt: day, sha: 'abcdef123456', model: 'deepseek/deepseek-flash',
+    reasoning: 'high', cases: [
+      { scenario: 'selected-lookup', status: 'Passed', baseline: measured, measured, samples: 1 },
+      ...Array.from({ length: 5 }, (_, index) => ({
+        scenario: `fixture-${index + 1}`, status: 'Warning' as const, baseline: measured, measured, samples: 1
+      }))
+    ]
+  }
+  const archived: EvaluationRun = { ...evaluation, id: 'archived-eval', sha: '1234abcdef56', source: 'development',
+    committedAt: Date.UTC(2030, 0, 29, 12) }
+  await page.route('**/api/v1/insights/evaluations**', async (route) => {
+    expect(route.request().headers()['x-leon-insights-profile']).toBe(ui.profile)
+    expect(route.request().method()).toBe('GET')
+    const query = new URL(route.request().url()).searchParams
+    const filters: EvaluationQuery = {
+      source: query.get('source') === 'development' ? 'development' : undefined,
+      scenario: query.get('scenario') ?? undefined
+    }
+    requestedEvaluations.push(filters)
+    await route.fulfill({ json: projectEvaluationHistory([evaluation, archived], filters) })
+  })
+
+  await page.addInitScript(() => {
+    localStorage.setItem('leon.web-app.theme', 'dark')
+    const gradient = CanvasRenderingContext2D.prototype.createLinearGradient
+    CanvasRenderingContext2D.prototype.createLinearGradient = function (...points): CanvasGradient {
+      if (this.canvas.closest('.insights-chart-canvas')) {
+        this.canvas.dataset['areaGradient'] = 'true'
+      }
+      return gradient.apply(this, points)
+    }
+  })
+  await page.goto('')
+  await page.getByRole('link', { name: 'Insights', exact: true }).click()
+  const insights = page.getByRole('dialog', { name: 'Insights', exact: true })
+  await expect(insights).toBeVisible()
+  expect((await insights.boundingBox())!.width).toBeGreaterThan(772)
+  expect(requestedEvaluations).toHaveLength(0)
+  await expect(page.getByText('I first met you on', { exact: false })).toBeVisible()
+  await expect(page.getByText('Some saved activity could not be read.', { exact: false })).toBeVisible()
+  await expect(page.getByRole('figure', { name: 'Tokens per turn', exact: true }).locator('canvas')).toBeVisible()
+  await expect(page.getByRole('figure', { name: 'Tokens per turn', exact: true }).locator('canvas')).toHaveAttribute('data-area-gradient', 'true')
+  await expect(page.getByRole('figure', { name: 'Answer latency', exact: true }).locator('canvas')).toBeVisible()
+  await expect(page.getByRole('figure', { name: 'Prompt cache share', exact: true }).locator('canvas')).toBeVisible()
+  const providerChart = page.getByRole('figure', { name: 'Usage by provider', exact: true })
+  await expect(providerChart.locator('canvas')).toBeVisible()
+  await providerChart.getByText('View data').click()
+  await expect(providerChart.getByRole('row', { name: 'openai 3 100%' })).toBeVisible()
+  await expect(page.getByRole('figure', { name: 'Usage by model', exact: true }).locator('canvas')).toBeVisible()
+  await page.getByLabel('Chart interval').selectOption('month')
+  expect(sharing).toBe(false)
+
+  await page.getByRole('tab', { name: 'Context window' }).click()
+  await expect(page.getByRole('figure', { name: 'Prepared prompt composition', exact: true }).locator('canvas')).toBeVisible()
+  await expect(page.getByRole('figure', { name: 'Context window used and available', exact: true }).locator('canvas')).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Context component breakdown' }).getByRole('row', {
+    name: 'Tool definitions 3,000 21.4% 8.6%'
+  })).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Repeated queries' }).click()
+  await page.getByLabel('Find a repeated query').fill('  SHENZHEN  ')
+  await expect(page.getByLabel('Repeated wording')).toContainText(ownerQuery)
+  await expect(page.getByRole('figure', { name: 'Output rate for the same query', exact: true }).locator('canvas')).toBeVisible()
+  await expect(page.getByText(/baseline 15,000 tokens · \+33\.3%/u)).toBeVisible()
+  await page.getByLabel('Baseline occurrence').selectOption('1')
+  await expect(page.getByText(/baseline 20,000 tokens · 0%/u)).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Evaluations' }).click()
+  await expect(page).toHaveURL(/\/insights\/evaluations$/)
+  const tokens = page.getByRole('figure', { name: 'Evaluation token usage', exact: true })
+  const evaluations = page.getByRole('table', { name: 'Evaluation runs' })
+  const scenario = page.getByRole('combobox', { name: 'Scenario', exact: true })
+  await expect(tokens.locator('canvas')).toBeVisible()
+  await expect(scenario).toHaveValue('')
+  await expect(evaluations).toContainText('abcdef123456')
+  const archivedRow = evaluations.getByRole('row').filter({ hasText: '1234abcdef56' })
+  await expect(archivedRow).toContainText('Jan 29, 2030')
+  await expect(archivedRow).toContainText('1 passed · 5 warning')
+  await tokens.getByText('View data').click()
+  await expect(tokens.getByRole('row').filter({ hasText: '1234abcdef56' }).getByRole('cell', { name: '12,000' })).toHaveCount(2)
+  await scenario.selectOption('selected-lookup')
+  await expect(tokens.getByRole('row').filter({ hasText: '1234abcdef56' }).getByRole('cell', { name: '2,000' })).toHaveCount(2)
+  await scenario.selectOption('')
+  await page.getByRole('combobox', { name: 'Source', exact: true }).selectOption('development')
+  await expect(page.getByRole('table', { name: 'Evaluation runs' }).getByRole('row')).toHaveCount(2)
+  await page.getByRole('tab', { name: 'Overview' }).click()
+  await page.getByRole('tab', { name: 'Evaluations' }).click()
+  await expect(page.getByRole('table', { name: 'Evaluation runs' })).toContainText('1234abcdef56')
+  expect(requestedEvaluations).toEqual([{}, { scenario: 'selected-lookup' }, { source: 'development' }])
+
+  await page.keyboard.press('Escape')
+  await expect(insights).toHaveCount(0)
+  await page.goForward()
+  await expect(insights.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('Escape')
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await page.getByRole('link', { name: 'Privacy and security', exact: true }).click()
+  await page.getByRole('button', { name: 'Share usage', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Stop sharing usage' })).toBeVisible()
+  await page.getByRole('button', { name: 'Stop sharing usage' }).click()
+  await expect(page.getByRole('button', { name: 'Share usage', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Appearance', exact: true }).click()
+  await page.getByRole('button', { name: 'Light', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('insights/overview')
+  await expect(page.locator('.new-session-page')).toBeVisible()
+  const mobileChart = page.getByRole('figure', { name: 'Tokens per turn', exact: true })
+  await expect(mobileChart.locator('canvas')).toBeVisible()
+  const chartBounds = await mobileChart.boundingBox()
+  expect(chartBounds).not.toBeNull()
+  expect(chartBounds!.x + chartBounds!.width).toBeLessThanOrEqual(390)
+
+  expect(sharing).toBe(false)
+})
 
 test('keeps the dialog trigger tooltip closed until a fresh hover or keyboard focus', async ({ page, ui }) => {
   void ui

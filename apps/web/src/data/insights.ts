@@ -2,13 +2,14 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutati
 
 import { useToast } from '@/components/toast'
 import type {
-  InsightsInterval, InsightsUsage, TelemetrySetting
+  InsightsInterval, InsightsUsage, EvaluationHistoryView, EvaluationQuery, TelemetrySetting
 } from '../../../../server/src/core/insights/insights-contract'
 
 import { requestAPI } from './api'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
 
 const INSIGHTS_STALE_MS = 60_000
+const EVALUATION_STALE_MS = 5 * 60_000
 const INSIGHTS_ENDPOINT = 'insights'
 const PROFILE_HEADER = 'x-leon-insights-profile'
 
@@ -47,6 +48,31 @@ export function useInsightsUsage(
     staleTime: INSIGHTS_STALE_MS,
     placeholderData: keepPreviousData,
     enabled: Boolean(profile) && enabled
+  })
+}
+
+/**
+ * Requests only the selected evaluation series and page for the active profile.
+ */
+export function useInsightsEvaluations(filters: EvaluationQuery): UseQueryResult<EvaluationHistoryView> {
+  const profile = useProfile()
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined) {
+      query.set(key, String(value))
+    }
+  }
+
+  return useQuery({
+    queryKey: ['insights-evaluations', profile, filters],
+    queryFn: ({ signal }) => requestAPI<EvaluationHistoryView>(`${INSIGHTS_ENDPOINT}/evaluations?${query}`, {
+      signal, headers: { [PROFILE_HEADER]: profile }
+    }),
+    enabled: Boolean(profile),
+    staleTime: EVALUATION_STALE_MS,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+    retry: 1
   })
 }
 
