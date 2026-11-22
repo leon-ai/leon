@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -35,6 +36,11 @@ const CASE_TIMEOUT_MS = 90_000
 const RESULT_PREFIX = '__AGENT_RESULT__'
 const BASELINE_PATH = 'scripts/ci/quick-evals-baseline.json'
 const DEFAULT_REPORT_PATH = 'tmp/quick-evals/report.json'
+const SUITE_INPUTS = [
+  BASELINE_PATH, 'config.sample.yml', 'scripts/ci/quick-evals.ts',
+  'test/agent/scenario-home.ts', 'test/agent/e2e/run-agent-provider-scenario.ts', 'test/agent/scenarios/scenario-fixture.ts',
+  ...CASES.map(({ suite, name }) => `test/agent/scenarios/${suite}/${name}.scenario.ts`)
+]
 
 interface Metrics {
   inputTokens: number
@@ -277,6 +283,15 @@ async function evaluateCase(
 
 async function main(): Promise<void> {
   const startedAt = performance.now()
+  const recordedAt = Date.now()
+  const sha = process.env['GITHUB_SHA'] || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const committedAt = Number(execFileSync('git', ['show', '-s', '--format=%ct', sha], { encoding: 'utf8' }).trim()) * 1_000
+  const version = (JSON.parse(await fs.readFile('package.json', 'utf8')) as { version: string }).version
+  const suite = createHash('sha256')
+  const suiteFiles = await Promise.all(SUITE_INPUTS.map((filename) => fs.readFile(filename)))
+  for (const [index, contents] of suiteFiles.entries()) {
+    suite.update(JSON.stringify([SUITE_INPUTS[index], createHash('sha256').update(contents).digest('hex')]))
+  }
   const calibrate = process.argv.includes('--calibrate')
   const maxGrowth = Number(process.env['LEON_EVAL_MAX_GROWTH_PERCENT']?.trim() || DEFAULT_MAX_GROWTH)
   assert(process.env['LEON_DEEPSEEK_API_KEY'], 'LEON_DEEPSEEK_API_KEY is required')
@@ -331,13 +346,13 @@ async function main(): Promise<void> {
     for (const finding of [...failures, ...warnings]) {
       findings.push(`- ${scenario} · ${finding}`)
     }
-    results.push({ scenario, status, baseline: expected, samples, failures, warnings })
+    results.push({ scenario, status, baseline: expected, measured: actual, samples, failures, warnings })
   }
   const durationMs = Math.round(performance.now() - startedAt)
   const report = process.env['LEON_EVAL_REPORT'] || DEFAULT_REPORT_PATH
   await fs.mkdir(path.dirname(report), { recursive: true })
   await fs.writeFile(report, JSON.stringify({
-    sha: process.env['GITHUB_SHA'] || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+    sha, version, recordedAt, committedAt, suiteRevision: suite.digest('hex'),
     model: MODEL_TARGET, reasoning: REASONING, maxGrowth, durationMs, results,
     ...(calibrate && !process.exitCode ? { proposedBaseline: collected } : {})
   }, null, 2) + '\n')
