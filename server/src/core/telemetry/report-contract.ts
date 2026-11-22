@@ -18,6 +18,7 @@ export const TELEMETRY_DAY_MS = 86_400_000
 export const TELEMETRY_RETRY_DAYS = 7
 export const TELEMETRY_MINUTE_MS = 60_000
 export const TELEMETRY_MAX_MODEL_BUCKETS = 100
+export const TELEMETRY_MAX_CAPABILITY_BUCKETS = 64
 export const OTHER_MODEL = 'other'
 export const OTHER_PROVIDER = 'other'
 export const PRESENCE_INTERVAL_MS = 5 * 60_000
@@ -100,11 +101,30 @@ export const presenceReportSchema = Type.Object({
   installation: identifier, timeZone: Type.Optional(timeZone)
 }, { additionalProperties: false })
 export type PresenceReport = Static<typeof presenceReportSchema>
+const capabilityName = Type.String({ minLength: 1, maxLength: 96, pattern: '^[a-zA-Z0-9_-]+$' })
+const capabilityCounts = { calls: Type.Integer({ minimum: 1, maximum: 10_000 }), failed: count, durationMs: Type.Optional(count) }
+const skillKinds = Type.Union([Type.Literal('agent_skill'), Type.Literal('native_skill')])
+const unnamedSource = Type.Union([Type.Literal('extension'), Type.Literal('mcp'), Type.Literal('other')])
+const capabilityUsage = Type.Union([
+  Type.Object({
+    kind: Type.Literal('tool'), source: Type.Literal('built_in'),
+    toolkit: capabilityName, tool: capabilityName, function: capabilityName, ...capabilityCounts
+  }, { additionalProperties: false }),
+  Type.Object({
+    kind: skillKinds, source: Type.Literal('built_in'), skill: capabilityName, ...capabilityCounts
+  }, { additionalProperties: false }),
+  Type.Object({
+    kind: Type.Union([Type.Literal('tool'), skillKinds]), source: unnamedSource, ...capabilityCounts
+  }, { additionalProperties: false })
+])
+export type CapabilityUsage = Static<typeof capabilityUsage>
 const telemetryEventSchema = Type.Object({
   id: identifier,
-  kind: Type.Union([Type.Literal('profile_started'), Type.Literal('turn_finished')]),
+  kind: Type.Union([Type.Literal('profile_started'), Type.Literal('turn_finished'), Type.Literal('skill_finished')]),
   at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }),
   timeZone,
+  capabilities: Type.Optional(Type.Array(capabilityUsage, { maxItems: TELEMETRY_MAX_CAPABILITY_BUCKETS })),
+  contextReduction: Type.Optional(Type.Object({ count, estimatedTokensReclaimed: count }, { additionalProperties: false })),
   report: dailyReportSchema
 }, { additionalProperties: false })
 export type TelemetryEventReport = Static<typeof telemetryEventSchema>
