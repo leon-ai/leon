@@ -1,0 +1,33 @@
+name: Quick Evals history
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'server/src/core/llm-manager/**'
+      - 'server/src/core/turn-lifecycle/**'
+      - 'server/src/core/context-manager/**'
+      - 'server/src/core/memory-manager/**'
+      - 'server/src/core/session-manager/**'
+      - 'server/src/core/tool-manager/**'
+      - 'server/src/core/experience-manager.ts'
+      - 'server/src/core/post-turn-maintenance-queue.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    if: github.ref == 'refs/heads/develop'
+    uses: ./.github/workflows/quick-evals.yml
+    secrets:
+      LEON_DEEPSEEK_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+
+  archive:
+    if: ${{ !cancelled() && needs.evaluate.outputs.report != '' }}
+    needs: evaluate
+    uses: ./.github/workflows/archive-quick-eval.yml
+    permissions:
+      contents: write
+      actions: read
