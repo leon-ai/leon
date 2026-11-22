@@ -1662,8 +1662,11 @@ export class ReActLLMDuty extends LLMDuty {
     const modelResponseStartedAt = Date.now()
     const modelResponseMaximumDeadlineAt = modelResponseStartedAt +
       (this.runBudget?.capTimeout(AGENT_MODEL_RESPONSE_MAX_DURATION_MS) ?? AGENT_MODEL_RESPONSE_MAX_DURATION_MS)
+    const contextTarget = agentTarget.model ? { provider: providerName, model: agentTarget.model } : undefined
     const contextUsage = captureContextUsage({
+      contextTarget,
       estimatedInputTokens: preparedContext.estimatedInputTokens,
+      contextTokenBreakdown: preparedContext.contextTokenBreakdown,
       contextWindowTokens
     })
     if (!options.isCompletionReview) {
@@ -2054,10 +2057,12 @@ export class ReActLLMDuty extends LLMDuty {
       }))
       if (completionResult) {
         const observedContextUsage = captureContextUsage({
+          contextTarget,
           // Agent prompts include system instructions. A zero count from an
           // adapter means usage is unavailable, rather than an empty prompt.
           usedInputTokens: completionResult.usedInputTokens || undefined,
           estimatedInputTokens: preparedContext.estimatedInputTokens,
+          contextTokenBreakdown: preparedContext.contextTokenBreakdown,
           contextWindowTokens
         })
         if (!options.isCompletionReview) {
