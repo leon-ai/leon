@@ -14,7 +14,7 @@ export const LOCAL_LLM_MODELS = [
     filePrefix: 'Qwen3.8-27B',
     fullPrecisionRepository: 'ggml-org/Qwen3.8-27B-GGUF'
   }
-]
+] as const
 
 // Quality deductions follow the pinned llmfit quantization policy. BF16 remains
 // a candidate even though llmfit's automatic quantization ladder starts at Q8.
@@ -24,4 +24,4 @@ export const LOCAL_LLM_PRECISIONS = [
   { name: 'Q6_K', qualityPenalty: 1 },
   { name: 'Q5_K_M', qualityPenalty: 2 },
   { name: 'Q4_K_M', qualityPenalty: 5 }
-]
+] as const
