@@ -4,7 +4,7 @@ import { Network, NetworkError } from '@sdk/network'
 
 import { createDnsQuery, readDnsAddresses } from './dns-message'
 
-const REQUEST_TIMEOUT_MS = 4_000
+const REQUEST_TIMEOUT_MS = 8_000
 const DNS_TIMEOUT_MS = 1_500
 const MAX_FALLBACK_ATTEMPTS = 2
 const RETRYABLE_STATUSES = new Set([0, 500, 502, 503, 504])
