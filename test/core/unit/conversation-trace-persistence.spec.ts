@@ -8,12 +8,12 @@ import { ConversationLogger } from '@/conversation-logger'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import Brain from '@/core/brain/brain'
 import PulseManager from '@/core/pulse-manager/pulse-manager'
+import { PulseDecision, PulseResultRepository } from '@/core/pulse-manager/pulse-result-repository'
 import { CONFIG_MANAGER } from '@/config'
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import type { LLMAnswerMetrics, MessageLog } from '@/types'
 import type { HTTPPluginAgentEvent } from '@/core/http-server/http-plugins/types'
-import type { ReactLLMDutyParams } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import {
   getActiveTurnInference,
   getActiveConversationSessionId,
@@ -81,7 +81,7 @@ vi.mock('@/core/session-manager', () => ({
   }
 }))
 vi.mock('@/helpers/log-helper', () => ({
-  LogHelper: { title: vi.fn(), success: vi.fn(), info: vi.fn(), error: vi.fn() }
+  LogHelper: { title: vi.fn(), success: vi.fn(), info: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
 describe('conversation trace persistence', () => {
@@ -105,13 +105,9 @@ describe('conversation trace persistence', () => {
     await fs.rm(sessions.root, { recursive: true, force: true })
   })
 
-  it.each([
-    { finalIntent: 'answer', notifyOwner: true },
-    { finalIntent: 'answer', notifyOwner: false },
-    { finalIntent: 'cancelled', notifyOwner: false }
-  ])(
-    'settles a Pulse $finalIntent in its owning session (notify owner: $notifyOwner)',
-    async ({ finalIntent, notifyOwner }) => {
+  it.each([PulseDecision.Notify, PulseDecision.Save])(
+    'keeps Pulse %s findings bound to the owning session',
+    async (decision) => {
       vi.useFakeTimers()
       const config = CONFIG_MANAGER.getConfig()
       vi.spyOn(CONFIG_MANAGER, 'getConfig').mockReturnValue({
@@ -126,9 +122,7 @@ describe('conversation trace persistence', () => {
       const brain = new Brain()
       const pulse = new PulseManager()
       const paraphrase = vi.spyOn(ParaphraseLLMDuty.prototype, 'execute')
-      const output = finalIntent === 'cancelled'
-        ? 'Stopped.'
-        : 'I checked your upcoming calendar and prepared your meeting notes.'
+      const output = 'I checked your upcoming calendar and prepared your meeting notes.'
       const llmMetrics: LLMAnswerMetrics = {
         contextUsedTokens: 50,
         contextWindowTokens: 1_000,
@@ -146,39 +140,27 @@ describe('conversation trace persistence', () => {
       const reason = 'I’m preparing notes for your upcoming meeting.'
       const agentResponseTrace = { id: responseId, metrics: llmMetrics, planSteps: [], toolCalls: [] }
       Object.assign(pulse, {
+        results: new PulseResultRepository(sessions.root),
         persist: vi.fn(),
-        loadCoreNodes: async () => ({
-          ...answerRuntime,
-          BRAIN: brain,
-          MEMORY_MANAGER: { observeTurn: vi.fn() }
-        }),
-        loadReActLLMDuty: async () => ({
-          ReActLLMDuty: class {
-            constructor(private readonly params: ReactLLMDutyParams) {}
+        loadCoreNodes: async () => ({ BRAIN: brain }),
+        researchMatter: async () => {
+          expect(getActiveConversationSessionId()).toBe('pulse-session')
+          sessions.selectedSession = 'other-session'
 
-            public async init(): Promise<void> {
-              return
-            }
-
-            public async execute(): Promise<unknown> {
-              expect(getActiveConversationSessionId()).toBe('pulse-session')
-              sessions.selectedSession = 'other-session'
-              this.params.onProgressEvent?.({
-                type: 'plan_step',
-                step: { id: 'sources', label: 'Review the meeting notes', status: 'in_progress' }
-              })
-
-              return { output, data: { finalIntent, llmMetrics, agentResponseTrace } }
-            }
+          return {
+            decision, findingKey: 'meeting_notes_prepared', output, followUp: null,
+            answerMetadata: { llmMetrics, agentResponseTrace }
           }
-        })
+        }
       })
-      const matter = {
+      const now = new Date().toISOString()
+      const matter: Parameters<PulseManager['executeMatter']>[1] = {
         id: responseId, fingerprint: 'meeting-notes', intentKey: 'prepare',
         targetScope: 'calendar', turnPrompt: 'Prepare meeting notes.',
-        summary: 'Prepare meeting notes', why: reason,
-        notifyOwner
-      } as Parameters<PulseManager['executeMatter']>[1]
+        summary: 'Prepare meeting notes', why: reason, confidence: 0.9,
+        sessionId: null, sources: [], status: 'pending', createdAt: now, updatedAt: now,
+        completedAt: null, surfacedAt: null, outcome: null, ownerFeedback: null, ownerFeedbackAt: null
+      }
       const state = {
         matters: [matter], recentOutcomes: [], suppressionPolicies: [], recentTicks: []
       } as Parameters<PulseManager['executeMatter']>[0]
@@ -186,12 +168,9 @@ describe('conversation trace persistence', () => {
       await pulse['executeMatter'](state, matter)
 
       const events = sessions.repository!.readEvents<HTTPPluginAgentEvent>(0, 'pulse-session').items
-      const surfaced = notifyOwner || finalIntent === 'cancelled'
-      expect(events.map(({ type }) => type)).toEqual(notifyOwner
-        ? ['turn_status', 'plan_step', 'session_changed', 'final_answer', 'turn_status']
-        : surfaced ? ['final_answer'] : [])
-      expect(events.filter((event) => event.type === 'turn_status')).toMatchObject(notifyOwner ? [
-        { response_id: responseId, data: { status: 'accepted', origin: 'pulse', pulse_reason: reason } },
+      const surfaced = decision === PulseDecision.Notify
+      expect(events.map(({ type }) => type)).toEqual(surfaced ? ['final_answer', 'turn_status'] : [])
+      expect(events.filter((event) => event.type === 'turn_status')).toMatchObject(surfaced ? [
         { response_id: responseId, data: { status: 'completed', origin: 'pulse' } }
       ] : [])
       const history = ConversationHistoryHelper.toHistoryItems(
@@ -211,17 +190,7 @@ describe('conversation trace persistence', () => {
       }
       expect(paraphrase).not.toHaveBeenCalled()
       expect(await logger.loadAll({ sessionId: 'other-session' })).toEqual([])
-      expect(matter.status).toBe(finalIntent === 'cancelled' ? 'declined' : 'completed')
-      if (finalIntent === 'cancelled') {
-        expect(state.suppressionPolicies[0]).toMatchObject({
-          lastOutcome: 'declined',
-          declineCount: 1
-        })
-        expect(Date.parse(state.suppressionPolicies[0]!.suppressedUntil!)).toBeGreaterThan(Date.now())
-      }
-
-      expect(answerRuntime.POST_TURN_MAINTENANCE_QUEUE.enqueue.mock.calls.map(([label]) => label))
-        .toEqual(surfaced ? ['pulse self-model reflection', 'session title generation'] : ['pulse self-model reflection'])
+      expect(matter.status).toBe('completed')
     }
   )
 

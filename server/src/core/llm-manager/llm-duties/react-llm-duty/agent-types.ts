@@ -52,6 +52,10 @@ export interface ReactLLMDutyParams extends LLMDutyParams {
   forcedToolName?: string | null
   allowDirectAnswerHandoff?: boolean
   additionalInstructions?: string
+  /**
+   * Runs independently of owner turns with only these external tool functions.
+   */
+  backgroundTools?: ReadonlySet<string>
   onProgressEvent?: (event: AgentRunProgressEvent) => void
   responseId?: string
   pulseReason?: string

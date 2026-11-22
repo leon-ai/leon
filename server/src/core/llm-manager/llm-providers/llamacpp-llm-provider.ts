@@ -48,6 +48,7 @@ const LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
 }
 const BACKGROUND_INFERENCE_PURPOSES = new Set<InferencePurpose>([
   InferencePurpose.SessionTitle,
+  InferencePurpose.Pulse,
   InferencePurpose.PulsePlanning,
   InferencePurpose.PulseReaction
 ])

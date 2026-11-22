@@ -338,6 +338,7 @@ export interface AgentToolCatalog extends AgentUICatalog {
   loadedToolkitIds: Set<string>
   loadedToolNames: Set<string>
   loadedProgressiveGuidance: Map<string, AgentProgressiveGuidance>
+  restricted?: boolean
   planTracking?: boolean
 }
 
@@ -503,7 +504,8 @@ export function buildAgentToolCatalog(
   progressiveToolkitLoading = true,
   initiallyLoadedFunctionNames?: Iterable<string>,
   initiallyLoadedToolNames?: Iterable<string>,
-  previous?: { toolOrder: string[], planTracking: boolean, auroraMode?: AuroraMode }
+  previous?: { toolOrder: string[], planTracking: boolean, auroraMode?: AuroraMode },
+  backgroundTools?: ReadonlySet<string>
 ): AgentToolCatalog {
   const tools: OpenAITool[] = []
   const functionsByToolName = new Map<string, AgentCallableFunction>()
@@ -521,6 +523,19 @@ export function buildAgentToolCatalog(
     loadedToolNames: new Set(),
     loadedProgressiveGuidance
   }
+  if (backgroundTools) {
+    catalog.restricted = true
+    const toolkitIds = new Set([...backgroundTools].map((name) => name.split('.')[0]!))
+    for (const toolkitId of toolkitIds) {
+      loadToolkitFunctions(catalog, toolkitId, undefined, {
+        functionNames: backgroundTools
+      })
+    }
+    tools.push(createAgentPlanTool(AGENT_PLAN_TOOL_NAME))
+
+    return catalog
+  }
+
   const forcedTool = forcedToolName
     ? TOOLKIT_REGISTRY.resolveToolById(forcedToolName)
     : null
@@ -799,7 +814,7 @@ function loadToolkitFunctions(
   catalog: AgentToolCatalog,
   toolkitId: string,
   onlyToolId?: string,
-  options: { discover?: boolean, functionNames?: Set<string>, toolNames?: Set<string> } = {}
+  options: { discover?: boolean, functionNames?: ReadonlySet<string>, toolNames?: Set<string> } = {}
 ): number {
   let loadedFunctionCount = 0
   let remainingDirectLoadChars = AGENT_DIRECT_TOOL_LOAD_MAX_CHARS
@@ -2568,6 +2583,14 @@ async function executeAgentToolCall(
   duplicateReadStepNumber?: number
   madeProgress?: boolean
 }> {
+  if (
+    params.catalog.restricted &&
+    toolCall.function.name !== AGENT_PLAN_TOOL_NAME &&
+    !params.catalog.functionsByToolName.has(toolCall.function.name)
+  ) {
+    return { content: 'This tool is unavailable in background work.', rejected: true, trackedSteps }
+  }
+
   const visual = await executeAuroraToolCall(toolCall, params.catalog, params.onPresentUI)
   if (visual) {
     return { ...visual, trackedSteps }
@@ -2845,6 +2868,15 @@ async function executeAgentToolCall(
   }
 
   const toolCallInput = extractToolCallInput(toolCall.function.arguments)
+  if (params.catalog.restricted && callable.qualifiedName === 'search_web.crawlberg.fetchUrl') {
+    const toolOptions = parseToolCallArguments(toolCallInput.toolInput)?.['options']
+    if (
+      toolOptions && typeof toolOptions === 'object' &&
+      'allowInvalidCertificates' in toolOptions && toolOptions.allowInvalidCertificates === true
+    ) {
+      return { content: 'Background research requires TLS certificate verification.', rejected: true, trackedSteps }
+    }
+  }
   const validation = validateToolInput(
     toolCallInput.toolInput,
     callable.functionConfig.parameters

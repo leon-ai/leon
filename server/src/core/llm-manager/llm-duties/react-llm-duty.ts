@@ -296,6 +296,7 @@ export class ReActLLMDuty extends LLMDuty {
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
+  private readonly backgroundTools: ReactLLMDutyParams['backgroundTools']
   private readonly signal: AbortSignal | undefined
   private readonly deadlineAt: number | undefined
   private runBudget: AgentRunBudget | undefined
@@ -326,6 +327,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
     this.additionalInstructions = params.additionalInstructions?.trim() || ''
+    this.backgroundTools = params.backgroundTools
     this.onProgressEvent = params.onProgressEvent
     this.responseId = params.responseId
     this.pulseReason = params.pulseReason
@@ -427,7 +429,7 @@ export class ReActLLMDuty extends LLMDuty {
     // Background duties without a bound conversation must not consume messages
     // addressed to the profile's currently selected chat session.
     const activeSessionId = getActiveConversationSessionId()
-    const agentTurn = activeSessionId
+    const agentTurn = activeSessionId && !this.backgroundTools
       ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId, isVisible)
       : null
     this.getOwnerMessageSignal = agentTurn?.getOwnerMessageSignal
@@ -443,9 +445,13 @@ export class ReActLLMDuty extends LLMDuty {
       })
 
       const ownerInput = this.getInputAsText(this.input)
-      const { messageLogs: history, conversationState } =
-        await runTurnPhase(TurnPhase.History, () => ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput))
-      const continuation = this.loadValidAgentLoopContinuation()
+      // Background research grounds itself through tools and never owns the chat checkpoint.
+      const { messageLogs: history, conversationState } = this.backgroundTools
+        ? { messageLogs: [], conversationState: null }
+        : await runTurnPhase(TurnPhase.History, () =>
+          ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput)
+        )
+      const continuation = this.backgroundTools ? null : this.loadValidAgentLoopContinuation()
       const loadedState = continuation ?? conversationState
       const originalInput = continuation?.originalInput || ownerInput
       const planWidgetIdValue =
@@ -497,9 +503,11 @@ export class ReActLLMDuty extends LLMDuty {
         }))
 
         const dutyResult = this.makeDutyResult(answer, routineLookup)
-        scheduleHistoryCompaction(
-          () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(!isPulse)
-        )
+        if (!this.backgroundTools) {
+          scheduleHistoryCompaction(
+            () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(!isPulse)
+          )
+        }
 
         return dutyResult
       }
@@ -507,6 +515,7 @@ export class ReActLLMDuty extends LLMDuty {
       const progressiveToolkitLoading =
         CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
       const matchedSelection =
+        !this.backgroundTools &&
         !continuation &&
         !conversationState &&
         !this.activeForcedToolName &&
@@ -526,7 +535,8 @@ export class ReActLLMDuty extends LLMDuty {
               planTracking: loadedState.planTracking ?? false,
               ...(loadedState.auroraMode ? { auroraMode: loadedState.auroraMode } : {})
             }
-          : undefined
+          : undefined,
+        this.backgroundTools
       ))
 
       let preloadedToolkitContext = ''
@@ -682,6 +692,10 @@ export class ReActLLMDuty extends LLMDuty {
         state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>,
         reason: string
       ): void => {
+        if (this.backgroundTools) {
+          return
+        }
+
         this.saveAgentLoopContinuation(createAgentLoopContinuationState({
           originalInput,
           clarificationQuestion: reason,
@@ -969,7 +983,7 @@ export class ReActLLMDuty extends LLMDuty {
 
       if (result.intent !== 'answer' && result.intent !== 'cancelled') {
         saveCheckpoint({ transcript: result.transcript, trackedSteps, executionHistory }, result.answer)
-      } else {
+      } else if (!this.backgroundTools) {
         await ReActLLMDuty.historyManager.saveConversationState(
           {
             transcript: retainRecentToolImages(result.transcript),
@@ -992,7 +1006,7 @@ export class ReActLLMDuty extends LLMDuty {
     } catch (error) {
       this.answerStream.discard()
       this.responseTraceCollector.interrupt()
-      if (this.signal?.aborted || agentTurn?.signal.aborted) {
+      if (!this.backgroundTools && (this.signal?.aborted || agentTurn?.signal.aborted)) {
         ReActLLMDuty.sessionState.getContinuationStore().save(null)
       }
       this.signal?.throwIfAborted()
