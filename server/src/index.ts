@@ -249,7 +249,7 @@ async function bootstrap(): Promise<void> {
     }
 
     isShuttingDown = true
-    stopTelemetry()
+    stopTelemetry?.()
     LLM_PROVIDER.dispose()
     PROVIDER_REQUESTS.close()
 

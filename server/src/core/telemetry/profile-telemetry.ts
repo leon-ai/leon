@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import PACKAGE from '@@/package.json' with { type: 'json' }
 import { CONFIG_MANAGER } from '@/config'
-import { LEON_FILE_PATH, TELEMETRY_COLLECTOR_ORIGIN } from '@/constants'
+import { IS_CI, LEON_FILE_PATH, TELEMETRY_COLLECTOR_ORIGIN } from '@/constants'
 import { LEON_HOME_PATH, LEON_PROFILES_PATH, isValidProfileName } from '@/leon-roots'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -343,7 +343,12 @@ function buildEvent(job: PendingEvent, state: DeliveryState, identity: Reporting
  * Reports finished owner turns and profile starts in the background. Only
  * recent installation presence needs a periodic signal from idle Core servers.
  */
-export function startProfileTelemetry(): () => void {
+export function startProfileTelemetry(): (() => void) | undefined {
+  // Disposable CI profiles must not contribute to installation or usage metrics.
+  if (IS_CI) {
+    return
+  }
+
   const startedAt = Date.now()
   const pending: PendingEvent[] = []
   const announced = new Set<string>()
