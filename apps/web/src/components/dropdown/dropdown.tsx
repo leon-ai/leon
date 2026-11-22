@@ -6,6 +6,7 @@ import { clsx } from 'clsx'
 
 import { useExitCleanup } from '@/hooks/use-exit-cleanup'
 import { getListNavigationIndex } from '@/utils/list-navigation'
+import { restoreOverlayFocus } from '@/utils/overlay-focus'
 import { DropdownItem, type DropdownItemVariant } from './dropdown-item'
 
 import './dropdown.sass'
@@ -160,7 +161,7 @@ export function Dropdown({
       // original input method. Keep keyboard restoration visible without a
       // lingering ring on a pointer-opened control.
       setIsPointerFocusRestored(openedWithPointerRef.current)
-      triggerRef.current?.querySelector<HTMLElement>('button, a, input, textarea')?.focus({ preventScroll: true })
+      restoreOverlayFocus(triggerRef.current?.querySelector<HTMLElement>('button, a, input, textarea'))
     }
 
     setOpen(false)

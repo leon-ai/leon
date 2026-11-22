@@ -10,6 +10,44 @@ const notion: ToolCatalogEntry = { id: 'productivity_collaboration.notion', cata
   name: 'Notion', description: 'Work with Notion pages through its official MCP server.', iconName: 'plug-line',
   kind: 'mcp', installed: false, enabled: false, connected: false, canConnect: true }
 
+test('restores menu trigger focus without reopening its tooltip', async ({ page, ui }) => {
+  void ui
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.route('**/api/v1/tools/catalog', (route) => route.fulfill({ json: {
+    tools: [{ ...notion, installed: true, enabled: true }]
+  } }))
+  await page.goto('settings/tools')
+  const trigger = page.getByRole('button', { name: 'Tool options', exact: true })
+  const menu = page.getByRole('menu', { name: 'Notion options', exact: true })
+  const tooltip = page.getByRole('tooltip').filter({ hasText: 'Tool options' })
+
+  await trigger.hover()
+  await expect(tooltip).toBeVisible()
+  await trigger.click()
+  await expect(menu).toBeVisible()
+  await menu.hover()
+  await trigger.hover()
+  await expect(tooltip).toHaveCount(0)
+  await menu.hover()
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await expect(tooltip).toHaveCount(0)
+
+  await trigger.hover()
+  await expect(tooltip).toBeVisible()
+  await page.keyboard.press('ArrowDown')
+  await expect(menu.getByRole('menuitem', { name: 'Disable', exact: true })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await expect(tooltip).toHaveCount(0)
+  await page.keyboard.press('Shift+Tab')
+  await page.keyboard.press('Tab')
+  await expect(trigger).toBeFocused()
+  await expect(tooltip).toBeVisible()
+})
+
 test('keeps catalog navigation virtualized and applies only accepted management changes', async ({ page, ui }) => {
   void ui
   const entries = [{ ...notion }, ...Array.from({ length: 180 }, (_, index): ToolCatalogEntry => ({

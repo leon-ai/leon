@@ -11,6 +11,7 @@ import { prefetchModule } from '@/utils/prefetch'
 import { useToast } from '@/components/toast'
 import { useTheme } from '@/hooks/use-theme'
 import { loadImage } from '@/utils/load-image'
+import { restoreOverlayFocus } from '@/utils/overlay-focus'
 import {
   getStoredSidebarExpanded,
   saveSidebarExpanded,
@@ -170,9 +171,7 @@ export function Sidebar() {
 
   function closeSearchSessionsDialog(): void {
     setSearchSessionsDialogOpen(false)
-    if (searchReturnFocusRef.current?.isConnected) {
-      searchReturnFocusRef.current.focus({ preventScroll: true })
-    }
+    restoreOverlayFocus(searchReturnFocusRef.current)
     searchReturnFocusRef.current = null
   }
 
