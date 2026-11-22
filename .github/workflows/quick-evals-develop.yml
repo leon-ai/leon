@@ -5,6 +5,7 @@ on:
     branches: [develop]
     paths:
       - 'server/src/core/llm-manager/**'
+      - '!server/src/core/llm-manager/local-model-catalog.ts'
       - 'server/src/core/turn-lifecycle/**'
       - 'server/src/core/context-manager/**'
       - 'server/src/core/memory-manager/**'

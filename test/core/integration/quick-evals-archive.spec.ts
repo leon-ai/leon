@@ -26,7 +26,8 @@ it('archives concurrent eval attempts on a single branch and skips identical ret
         recordedAt: 1_800_000_000_000 + attempt, committedAt: 1_799_000_000_000,
         durationMs: 40_000, suiteRevision: 'b'.repeat(64),
         model: 'deepseek/deepseek-flash', reasoning: 'high',
-        results: [{ scenario: 'selected-lookup', status: 'Failed', samples: [], failures: ['Private diagnostic'] }]
+        results: [{ scenario: 'selected-lookup', status: 'Failed', samples: [], failures: ['Private diagnostic'],
+          failedSample: { reason: 'Scenario assertion failed', diagnostics: { tools: ['fixture.tool'], calls: [] } } }]
       }))
       return filename
     }))

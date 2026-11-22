@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { TurnStage } from '@/core/llm-manager/turn-timing-contract'
 import type { InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
-import { compareQuickEval, summarizeQuickEvalUsage } from '../../../scripts/ci/quick-evals'
+import { compareQuickEval, evaluateQuickEvalCase, summarizeQuickEvalUsage, type Evaluation } from '../../../scripts/ci/quick-evals'
 
 function record(inputTokens: number, cachedInputTokens: number, stage = TurnStage.AgentLoop): InferenceUsageRecord {
   return {
@@ -10,6 +10,13 @@ function record(inputTokens: number, cachedInputTokens: number, stage = TurnStag
     startedAt: 0, finishedAt: 20, sessionId: 'fixture', purpose: 'fixture', outcome: 'completed',
     usage: { inputTokens, cachedInputTokens, outputTokens: 1 }
   }
+}
+
+function sample(inputTokens: number, cachedInputTokens: number): { evaluation: Evaluation } {
+  return { evaluation: {
+    metrics: summarizeQuickEvalUsage([record(inputTokens, cachedInputTokens)], 100),
+    turns: [], diagnostics: { tools: [], calls: [] }
+  } }
 }
 
 describe('Quick Evals release budgets', () => {
@@ -38,5 +45,55 @@ describe('Quick Evals release budgets', () => {
       expect.stringContaining('inputTokens'), expect.stringContaining('peakInputTokens'),
       expect.stringContaining('modelCalls')
     ])
+  })
+
+  it('accepts one clean sample', async () => {
+    const { evaluation: { metrics: baseline } } = sample(100, 50)
+    const run = vi.fn().mockResolvedValue(sample(100, 50))
+    const result = await evaluateQuickEvalCase(run, 15, 0, baseline)
+
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ actual: baseline, failures: [], warnings: [] })
+  })
+
+  it.each([
+    { cachedTokens: [35, 55, 50], median: 50, breaches: 1, warnings: [] },
+    { cachedTokens: [35, 55, 40], median: 60, breaches: 2,
+      warnings: ['Uncached input growth persisted across samples'] }
+  ])('summarizes uncached input after $breaches outlying samples', async ({ cachedTokens, median, breaches, warnings }) => {
+    const run = vi.fn()
+    for (const cached of cachedTokens) {
+      run.mockResolvedValueOnce(sample(100, cached))
+    }
+    const result = await evaluateQuickEvalCase(run, 15, 0, sample(100, 50).evaluation.metrics)
+
+    expect(run).toHaveBeenCalledTimes(3)
+    expect(result).toMatchObject({
+      actual: { uncachedInputTokens: median }, failures: [], warnings,
+      notes: [`Uncached input median ${median} tokens, range 45–65 (${breaches}/3 above +15%)`]
+    })
+    expect(result.samples.map(({ metrics }) => metrics.uncachedInputTokens)).toEqual(cachedTokens.map((cached) => 100 - cached))
+  })
+
+  it('blocks on a repeated hard budget breach during uncached-input resampling', async () => {
+    const run = vi.fn().mockResolvedValueOnce(sample(100, 35)).mockResolvedValue(sample(120, 80))
+    const result = await evaluateQuickEvalCase(run, 15, 0, sample(100, 50).evaluation.metrics)
+
+    expect(run).toHaveBeenCalledTimes(3)
+    expect(result.failures).toEqual([
+      expect.stringContaining('inputTokens'), expect.stringContaining('peakInputTokens')
+    ])
+  })
+
+  it('retains the failing child’s reason and diagnostics without retrying a failed assertion', async () => {
+    const failedSample = {
+      reason: 'AssertionError: expected the verification line', exitCode: 1, timedOut: false,
+      diagnostics: { tools: ['operating_system_control.shell.executeCommand'], calls: [] }
+    }
+    const run = vi.fn().mockResolvedValue({ failedSample })
+    const result = await evaluateQuickEvalCase(run, 15, 0, sample(100, 50).evaluation.metrics)
+
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ samples: [], failures: [failedSample.reason], warnings: [], failedSample })
   })
 })

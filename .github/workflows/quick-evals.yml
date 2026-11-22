@@ -48,7 +48,7 @@ jobs:
           LEON_EVAL_MAX_GROWTH_PERCENT: ${{ inputs.max-input-growth }}
           LEON_EVAL_REPORT: ${{ runner.temp }}/quick-evals.json
         run: pnpm exec tsx scripts/ci/quick-evals.ts
-      - name: Retain metrics
+      - name: Retain detailed measurements and diagnostics
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:

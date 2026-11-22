@@ -34,6 +34,8 @@ const MAX_BUDGET_SAMPLES = 3
 const BUDGET_VOTES_REQUIRED = 2
 const CASE_TIMEOUT_MS = 90_000
 const RESULT_PREFIX = '__AGENT_RESULT__'
+const PROGRESS_PREFIX = '__AGENT_PROGRESS__'
+const MAXIMUM_DIAGNOSTIC_LENGTH = 4_000
 const BASELINE_PATH = 'scripts/ci/quick-evals-baseline.json'
 const DEFAULT_REPORT_PATH = 'tmp/quick-evals/report.json'
 const SUITE_INPUTS = [
@@ -55,9 +57,30 @@ interface Metrics {
   turnLatencyMs: number
 }
 
-interface Evaluation {
+export interface Evaluation {
   metrics: Metrics
   turns: Array<Metrics & { toolCalls: number, firstToolInputMs?: number }>
+  diagnostics: ScenarioDiagnostics
+}
+
+interface ScenarioDiagnostics {
+  tools: string[]
+  calls: Array<Pick<InferenceUsageRecord, 'purpose' | 'stage' | 'outcome'> &
+    Pick<InferenceUsageRecord['usage'], 'inputTokens' | 'cachedInputTokens' | 'outputTokens'>>
+}
+
+interface FailedSample {
+  reason: string
+  exitCode?: number
+  timedOut: boolean
+  stderr?: string
+  diagnostics: ScenarioDiagnostics
+}
+
+interface ScenarioChildResult {
+  skipped: boolean
+  reason?: string
+  evidence?: Record<string, unknown>
 }
 
 interface Baseline {
@@ -69,6 +92,16 @@ interface Baseline {
 type QuickEvalCase = (typeof CASES)[number]
 type MaintainedTurn = Awaited<ReturnType<typeof runMaintainedTurn>>
 type EvaluationSample = Evaluation & ReturnType<typeof compareQuickEval>
+type ScenarioSample = { evaluation: Evaluation } | { failedSample: FailedSample }
+
+interface EvaluationResult {
+  samples: EvaluationSample[]
+  actual?: Metrics
+  failures: string[]
+  warnings: string[]
+  notes?: string[]
+  failedSample?: FailedSample
+}
 
 /**
  * Measures every recorded request, including maintenance and failed attempts.
@@ -123,7 +156,7 @@ export function compareQuickEval(
   baseline: Metrics,
   maxGrowth: number,
   callAllowance: number
-): { failures: string[], warnings: string[] } {
+): { failures: string[], warnings: string[], uncachedWarning?: string } {
   const failures: string[] = []
   const warnings: string[] = []
   for (const key of ['inputTokens', 'peakInputTokens', 'modelCalls', 'turnLatencyMs'] as const) {
@@ -140,20 +173,39 @@ export function compareQuickEval(
   if (observed.failedCalls) {
     warnings.push(`${observed.failedCalls} provider call(s) did not complete`)
   }
-  if (observed.uncachedInputTokens * 100 > baseline.uncachedInputTokens * (100 + maxGrowth)) {
-    warnings.push(`uncachedInputTokens grew from ${baseline.uncachedInputTokens} to ${observed.uncachedInputTokens}`)
-  }
+  const uncachedWarning = observed.uncachedInputTokens * 100 > baseline.uncachedInputTokens * (100 + maxGrowth)
+    ? `uncachedInputTokens grew from ${baseline.uncachedInputTokens} to ${observed.uncachedInputTokens}`
+    : undefined
   if (observed.turnLatencyMs > baseline.turnLatencyMs * (1 + maxGrowth / 100)) {
     warnings.push(`turnLatencyMs grew from ${baseline.turnLatencyMs} to ${observed.turnLatencyMs}`)
   }
 
-  return { failures, warnings }
+  return { failures, warnings, ...(uncachedWarning ? { uncachedWarning } : {}) }
+}
+
+function scenarioDiagnostics(lines: string[], rows: InferenceUsageRecord[]): ScenarioDiagnostics {
+  const tools = lines.filter((line) => line.startsWith(PROGRESS_PREFIX)).flatMap((line) => {
+    const event = JSON.parse(line.slice(PROGRESS_PREFIX.length)) as { stage: string, data?: { toolName?: string } }
+    return event.stage === 'tool_call' && event.data?.toolName ? [event.data.toolName] : []
+  })
+  const calls = rows.map(({ purpose, stage, outcome, usage: { inputTokens, cachedInputTokens, outputTokens } }) => ({
+    purpose, stage, outcome, inputTokens, cachedInputTokens, outputTokens
+  }))
+
+  return { tools, calls }
+}
+
+function redactDiagnostic(text: string): string {
+  // GitHub's console masking does not apply to uploaded files.
+  const apiKey = process.env['LEON_DEEPSEEK_API_KEY']
+
+  return apiKey ? text.replaceAll(apiKey, '[redacted]') : text
 }
 
 /**
  * Runs an existing quality-asserting scenario without loading any owner state.
  */
-async function runCase(scenario: QuickEvalCase, jqPath: string): Promise<Evaluation> {
+async function runCase(scenario: QuickEvalCase, jqPath: string): Promise<ScenarioSample> {
   return withAgentScenarioHome(async (home) => {
     const configPath = path.join(home, 'config.yml')
     const config = YAML.parseDocument(await fs.readFile('config.sample.yml', 'utf8'))
@@ -178,28 +230,42 @@ async function runCase(scenario: QuickEvalCase, jqPath: string): Promise<Evaluat
 
     try {
       const run = await child
-      const line = run.all?.split('\n').findLast((entry) => entry.startsWith(RESULT_PREFIX))
-      const result = line ? JSON.parse(line.slice(RESULT_PREFIX.length)) as {
-        skipped: boolean
-        evidence?: Record<string, unknown>
-      } : undefined
-      assert(run.exitCode === 0 && result && !result.skipped, `${scenario.name} did not pass its scenario assertions (${run.timedOut ? 'timeout' : 'child failed or skipped'})`)
+      const lines = run.all?.split('\n') ?? []
+      const line = lines.findLast((entry) => entry.startsWith(RESULT_PREFIX))
+      const result = line ? JSON.parse(line.slice(RESULT_PREFIX.length)) as ScenarioChildResult : undefined
+      const profilesDirectory = path.join(home, 'profiles')
+      const [profile] = await fs.readdir(profilesDirectory).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') {
+          return []
+        }
+        throw error
+      })
+      const rows: InferenceUsageRecord[] = []
+      if (profile) {
+        for await (const row of readInferenceUsage({}, {
+          ...getProfilePaths(profile), logs: path.join(profilesDirectory, profile, 'logs')
+        })) {
+          rows.push(row)
+        }
+      }
+      const diagnostics = scenarioDiagnostics(lines, rows)
+      if (run.exitCode !== 0 || !result || result.skipped) {
+        const reason = result?.reason ?? (run.timedOut ? `Scenario timed out after ${CASE_TIMEOUT_MS / 1_000}s` :
+          (run.failed ? run.shortMessage : undefined))
+        const stderr = redactDiagnostic(run.stderr).trim().slice(-MAXIMUM_DIAGNOSTIC_LENGTH)
+
+        return { failedSample: {
+          reason: redactDiagnostic(reason || 'No scenario result was produced').slice(0, MAXIMUM_DIAGNOSTIC_LENGTH),
+          exitCode: run.exitCode, timedOut: run.timedOut, ...(stderr ? { stderr } : {}), diagnostics
+        } }
+      }
+
       const turns = Object.values(result.evidence ?? {}).filter((value): value is MaintainedTurn =>
         !!value && typeof value === 'object' && 'turnId' in value && typeof value.turnId === 'string'
       )
       const turnIds = new Set(turns.map((turn) => turn.turnId))
       assert(turns.length === scenario.turns && turnIds.size === scenario.turns, 'Unexpected turn count')
-      const [profile] = await fs.readdir(path.join(home, 'profiles'))
-      assert(profile, 'Scenario profile not found')
-      const paths = getProfilePaths(profile)
-      const rows: InferenceUsageRecord[] = []
-      for await (const row of readInferenceUsage({}, {
-        ...paths, logs: path.join(home, 'profiles', profile, 'logs')
-      })) {
-        if (row.turnId && turnIds.has(row.turnId)) {
-          rows.push(row)
-        }
-      }
+      const measuredRows = rows.filter((row) => row.turnId && turnIds.has(row.turnId))
       const measurements = turns.map((turn) => {
         const duration = turn.responseTrace.metrics?.durationMs
         assert(typeof duration === 'number' && duration > 0, 'Missing turn latency')
@@ -208,7 +274,7 @@ async function runCase(scenario: QuickEvalCase, jqPath: string): Promise<Evaluat
         )?.firstToolInputMs
 
         return {
-          ...summarizeQuickEvalUsage(rows.filter((row) =>
+          ...summarizeQuickEvalUsage(measuredRows.filter((row) =>
             row.turnId === turn.turnId && row.sessionId === turn.sessionId
           ), duration),
           toolCalls: turn.toolCalls.length,
@@ -216,12 +282,12 @@ async function runCase(scenario: QuickEvalCase, jqPath: string): Promise<Evaluat
         }
       })
       assert.equal(measurements.reduce((total, turn) => total + turn.modelCalls, 0),
-        rows.length, 'Unexpected inference session attribution')
+        measuredRows.length, 'Unexpected inference session attribution')
 
-      return {
-        metrics: summarizeQuickEvalUsage(rows, measurements.reduce((total, turn) => total + turn.turnLatencyMs, 0)),
-        turns: measurements
-      }
+      return { evaluation: {
+        metrics: summarizeQuickEvalUsage(measuredRows, measurements.reduce((total, turn) => total + turn.turnLatencyMs, 0)),
+        turns: measurements, diagnostics
+      } }
     } finally {
       stopScenarioProcesses(child.pid)
     }
@@ -229,54 +295,68 @@ async function runCase(scenario: QuickEvalCase, jqPath: string): Promise<Evaluat
 }
 
 /**
- * Accepts a passing first sample and checks a budget breach for repeatability.
+ * Repeats the affected scenario only when a hard budget or uncached input exceeds the threshold.
  */
-async function evaluateCase(
-  scenario: QuickEvalCase,
-  jqPath: string,
-  calibrate: boolean,
+export async function evaluateQuickEvalCase(
+  runSample: () => Promise<ScenarioSample>,
   maxGrowth: number,
+  callAllowance: number,
   baseline?: Metrics
-): Promise<{
-  samples: EvaluationSample[]
-  actual?: Metrics
-  failures: string[]
-  warnings: string[]
-}> {
+): Promise<EvaluationResult> {
   const samples: EvaluationSample[] = []
   try {
-    assert(calibrate || baseline, `Missing baseline for ${scenario.name}`)
-    const sampleLimit = calibrate ? CALIBRATION_SAMPLES : MAX_BUDGET_SAMPLES
-    let breaches = 0
+    const sampleLimit = baseline ? MAX_BUDGET_SAMPLES : CALIBRATION_SAMPLES
+    let budgetBreaches = 0
+    let uncachedBreaches = 0
     for (let index = 0; index < sampleLimit; index += 1) {
-      const sample = await runCase(scenario, jqPath)
+      const attempt = await runSample()
+      if ('failedSample' in attempt) {
+        const { failedSample } = attempt
+        return { samples, failures: [failedSample.reason], warnings: [], failedSample }
+      }
+
+      const sample = attempt.evaluation
       const comparison = baseline
-        ? compareQuickEval(sample.metrics, baseline, maxGrowth, scenario.callAllowance)
+        ? compareQuickEval(sample.metrics, baseline, maxGrowth, callAllowance)
         : { failures: [], warnings: [] }
       samples.push({ ...sample, ...comparison })
 
-      breaches += Number(comparison.failures.length > 0)
-      if (!calibrate && (breaches === 0 || breaches >= BUDGET_VOTES_REQUIRED ||
-        samples.length - breaches >= BUDGET_VOTES_REQUIRED)) {
+      budgetBreaches += Number(comparison.failures.length > 0)
+      uncachedBreaches += Number(comparison.uncachedWarning !== undefined)
+      // An uncached spike needs three samples for a median and a range. Hard
+      // budget checks alone can finish as soon as two samples agree.
+      if (baseline && uncachedBreaches === 0 && (budgetBreaches === 0 || budgetBreaches >= BUDGET_VOTES_REQUIRED ||
+        samples.length - budgetBreaches >= BUDGET_VOTES_REQUIRED)) {
         break
       }
     }
 
     let representative = samples.at(-1)!
-    if (calibrate) {
-      const ranked = samples.toSorted((left, right) => left.metrics.inputTokens - right.metrics.inputTokens)
+    const notes: string[] = []
+    if (!baseline || uncachedBreaches) {
+      const key = baseline ? 'uncachedInputTokens' : 'inputTokens'
+      const ranked = samples.toSorted((left, right) => left.metrics[key] - right.metrics[key])
       representative = ranked[Math.floor(ranked.length / 2)]!
-    }
-    const { metrics: actual, failures, warnings: sampleWarnings } = representative
-    const warnings = [...sampleWarnings]
-    if (!calibrate && !failures.length && samples.length > 1) {
-      warnings.push('One sample exceeded the budget before two samples passed')
+      if (uncachedBreaches) {
+        const [first] = ranked
+        const last = ranked.at(-1)!
+        notes.push(`Uncached input median ${representative.metrics[key]} tokens, range ${first!.metrics[key]}–${last.metrics[key]} (${uncachedBreaches}/${samples.length} above +${maxGrowth}%)`)
+      }
     }
 
-    return { samples, actual, failures, warnings }
+    const failures = budgetBreaches >= BUDGET_VOTES_REQUIRED ? [...new Set(samples.flatMap((sample) => sample.failures))] : []
+    const warnings = [...representative.warnings]
+    if (budgetBreaches === 1) {
+      warnings.push('One sample exceeded the budget before two samples passed')
+    }
+    if (uncachedBreaches >= BUDGET_VOTES_REQUIRED) {
+      warnings.push('Uncached input growth persisted across samples')
+    }
+
+    return { samples, actual: representative.metrics, failures, warnings, ...(notes.length ? { notes } : {}) }
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'Scenario failed'
-    console.error(`${scenario.name}: ${reason}`)
+    const reason = error instanceof Error ? redactDiagnostic(error.message) : 'Scenario failed'
+
     return { samples, failures: [reason], warnings: [] }
   }
 }
@@ -301,6 +381,9 @@ async function main(): Promise<void> {
   if (baseline) {
     assert.equal(baseline.target, MODEL_TARGET)
     assert.equal(baseline.reasoning, REASONING)
+    for (const { name } of CASES) {
+      assert(baseline.cases[name], `Missing baseline for ${name}`)
+    }
   }
   const collected: Baseline = { target: MODEL_TARGET, reasoning: REASONING, cases: {} }
   const results: Array<Record<string, unknown>> = []
@@ -314,7 +397,7 @@ async function main(): Promise<void> {
     '|---|---:|---:|---:|---:|---:|---:|---|'
   ]
   const pending = CASES.entries()
-  const evaluated: Array<Awaited<ReturnType<typeof evaluateCase>> & {
+  const evaluated: Array<EvaluationResult & {
     scenario: string
     expected: Metrics | undefined
   }> = []
@@ -323,12 +406,12 @@ async function main(): Promise<void> {
   await Promise.all(Array.from({ length: MAX_CONCURRENT_CASES }, async () => {
     for (const [index, scenario] of pending) {
       const expected = baseline?.cases[scenario.name]
-      const outcome = await evaluateCase(scenario, jqPath, calibrate, maxGrowth, expected)
+      const outcome = await evaluateQuickEvalCase(() => runCase(scenario, jqPath), maxGrowth, scenario.callAllowance, expected)
       evaluated[index] = { scenario: scenario.name, expected, ...outcome }
     }
   }))
 
-  for (const { scenario, expected, actual, samples, failures, warnings } of evaluated) {
+  for (const { scenario, expected, actual, samples, failures, warnings, notes, failedSample } of evaluated) {
     if (failures.length) {
       process.exitCode = 1
     }
@@ -343,10 +426,11 @@ async function main(): Promise<void> {
       return expected ? `${expected[key]} → ${actual[key]}` : String(actual[key])
     }
     summary.push(`| ${scenario} | ${metricText('inputTokens')} | ${metricText('cachedInputTokens')} | ${metricText('uncachedInputTokens')} | ${metricText('peakInputTokens')} | ${metricText('modelCalls')} | ${actual ? `${metricText('turnLatencyMs')} ms` : '—'} | ${status} |`)
-    for (const finding of [...failures, ...warnings]) {
-      findings.push(`- ${scenario} · ${finding}`)
+    for (const finding of [...failures, ...warnings, ...(notes ?? [])]) {
+      findings.push(`- ${scenario} · ${finding.split('\n', 1)[0]}`)
     }
-    results.push({ scenario, status, baseline: expected, measured: actual, samples, failures, warnings })
+    results.push({ scenario, status, baseline: expected, measured: actual, samples, failures, warnings,
+      ...(notes ? { notes } : {}), ...(failedSample ? { failedSample } : {}) })
   }
   const durationMs = Math.round(performance.now() - startedAt)
   const report = process.env['LEON_EVAL_REPORT'] || DEFAULT_REPORT_PATH
