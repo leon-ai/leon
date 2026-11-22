@@ -5,14 +5,23 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
 
+import PACKAGE from '@@/package.json' with { type: 'json' }
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LogHelper } from '@/helpers/log-helper'
 import type { CompletionAttemptTiming } from './types'
-import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type TurnTimingContext, type InferenceActivity } from './turn-timing-contract'
+import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type TurnTimingContext, type InferenceActivity, OwnerTurnFailureCode  } from './turn-timing-contract'
+import { readContextUsage, type ContextUsageMetrics } from './llm-usage/context-usage'
 import type { InferenceUsage } from './llm-usage/usage-context'
 
 export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
+
+interface OwnerTurnMeasurement {
+  version: string
+  outcome: 'answered' | 'clarification' | 'failed' | 'canceled'
+  context?: ContextUsageMetrics
+  failure?: OwnerTurnFailureCode
+}
 
 const MAXIMUM_TURN_TIMINGS = 10_000
 
@@ -27,12 +36,17 @@ interface TurnTimingScope extends TurnTimingContext {
   profile: string
   parentId?: string
   onActivity?: (activity: InferenceActivity) => void
-  state: { sessionId: string | null, timings: Map<string, TurnTiming>, closed: boolean, omitted: number }
+  state: {
+    sessionId: string | null
+    timings: Map<string, TurnTiming>
+    closed: boolean
+    omitted: number
+    ownerTurn?: OwnerTurnMeasurement
+  }
 }
 
 const storage = new AsyncLocalStorage<TurnTimingScope | undefined>()
 const pendingWrites = new Map<string, Promise<void>>()
-
 /**
  * Observes only this foreground execution. Fresh background timing scopes do not
  * inherit the listener, and detached work cannot emit after execution finishes.
@@ -109,6 +123,22 @@ export function setTurnTimingSession(sessionId: string): void {
   const scope = storage.getStore()
   if (scope) {
     scope.state.sessionId = sessionId
+  }
+}
+
+/**
+ * Distinguishes accepted owner answers from background work and failed dispatches.
+ */
+export function recordOwnerTurn(
+  outcome: OwnerTurnMeasurement['outcome'],
+  metrics?: unknown,
+  failure?: OwnerTurnFailureCode
+): void {
+  const scope = storage.getStore()
+  if (scope && !scope.state.closed) {
+    const context = readContextUsage(metrics)
+    scope.state.ownerTurn = { version: PACKAGE.version, outcome, ...(context ? { context } : {}),
+      ...(failure && outcome === 'failed' ? { failure } : {}) }
   }
 }
 
@@ -410,6 +440,8 @@ export async function runWithTurnTiming<T>(
           entries.push(JSON.stringify({
             profile: scope.profile, sessionId: scope.state.sessionId,
             ...getTurnTimingContext(), ...timing,
+            ...(timing.goal === TurnPhase.Turn && !timing.parentId && scope.state.ownerTurn
+              ? { ownerTurn: scope.state.ownerTurn } : {}),
             endedAt: timing.startedAt + timing.durationMs
           }))
           records.set(date, entries)

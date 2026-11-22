@@ -1,4 +1,7 @@
 // This metadata contract is shared with browser clients and must remain dependency-free.
+export const OWNER_TURN_FAILURE_CODES = ['timeout', 'connection', 'rate_limit', 'authorization', 'no_output', 'unknown'] as const
+export type OwnerTurnFailureCode = typeof OWNER_TURN_FAILURE_CODES[number]
+
 export enum TurnPhase {
   Turn = 'turn',
   PostTurn = 'post-turn',

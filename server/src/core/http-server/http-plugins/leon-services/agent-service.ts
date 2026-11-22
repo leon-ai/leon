@@ -158,6 +158,7 @@ export async function runAgent(
     })
     const result = await runTurnLifecycle(
       { sessionId, query, turnId: requestId ?? messageId, responseId: messageId,
+        ...(input.signal ? { signal: input.signal } : {}),
         onFyi: (fyi) => emit('fyi', { fyi }),
         onActivity: (activity) => emit('progress_message', {
           message: serializeProgressMessage(activity), background: true

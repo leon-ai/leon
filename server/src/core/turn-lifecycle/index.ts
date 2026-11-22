@@ -9,7 +9,8 @@ import { isFyiEligible, type Fyi } from '@/core/fyi/fyi-contract'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import { LLM_PROVIDER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
-import { getTurnTimingContext, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
+import { getTurnTimingContext, recordOwnerTurn, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
+import type { OwnerTurnFailureCode } from '@/core/llm-manager/turn-timing-contract'
 import { schedulePostTurn } from './post-turn'
 
 interface AgentTurnContext {
@@ -19,6 +20,25 @@ interface AgentTurnContext {
   onActivity?: (activity: AgentProgressMessage) => void
   onFyi?: (fyi: Fyi, messageId: string) => void
   turnId?: string
+  signal?: AbortSignal
+}
+
+function classifyFailure(error: unknown): OwnerTurnFailureCode {
+  const detail = error as { name?: string, code?: string, status?: number, statusCode?: number, response?: { status?: number } } | null
+  const status = detail?.status ?? detail?.statusCode ?? detail?.response?.status
+  if (status === 429) {
+    return 'rate_limit'
+  }
+  if (status === 401 || status === 403) {
+    return 'authorization'
+  }
+  if (status === 408 || status === 504 || detail?.name === 'TimeoutError' || detail?.code === 'ETIMEDOUT') {
+    return 'timeout'
+  }
+  if (detail?.code === 'ECONNREFUSED' || detail?.code === 'ECONNRESET' || detail?.code === 'ENOTFOUND') {
+    return 'connection'
+  }
+  return 'unknown'
 }
 
 /**
@@ -38,7 +58,20 @@ export async function runTurnLifecycle(
             CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(context.sessionId, context.query), TurnStage.PreTurn
           )
         }
-        const result = await executeAndDeliver()
+        let result: LLMDutyResult | null
+        try {
+          result = await executeAndDeliver()
+        } catch (error) {
+          const canceled = context.signal?.aborted || (error instanceof Error && error.name === 'AbortError')
+          recordOwnerTurn(canceled ? 'canceled' : 'failed', undefined, classifyFailure(error))
+          throw error
+        }
+        const intent = result?.data?.['finalIntent']
+        recordOwnerTurn(
+          result?.output ? (intent === 'clarification' ? 'clarification' : 'answered') : 'failed',
+          result?.data?.['llmMetrics'],
+          result?.output ? undefined : 'no_output'
+        )
         const trace = result?.data?.['agentResponseTrace'] as AgentResponseTrace | undefined
         const responseId = context.responseId ?? trace?.id ?? (context.turnId ? `${context.turnId}:leon` : undefined)
         const answer: unknown = result?.output
