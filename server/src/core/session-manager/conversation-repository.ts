@@ -708,6 +708,17 @@ export class ConversationRepository {
   }
 
   /**
+   * Reads saved answer measurements for activity without loading message or trace content.
+   */
+  public readAnswerMetrics(sessionId: string, turnId: string): unknown {
+    const row = this.db.prepare(`SELECT json_extract(summary, '$.agentResponseTrace.metrics') AS metrics
+      FROM conversation_messages WHERE session_id = ? AND id = ? AND role = 'leon'`)
+      .get(sessionId, `${turnId}:leon`)
+
+    return typeof row?.['metrics'] === 'string' ? JSON.parse(row['metrics']) : undefined
+  }
+
+  /**
    * Captures the owner-message frontier accepted by a completed visual answer.
    */
   public getLatestOwnerMessageId(sessionId: string): string | undefined {
@@ -1086,6 +1097,16 @@ export class ConversationRepository {
           ? path.extname(String(row['source_path'])).slice(1).toLocaleLowerCase() || 'text' : 'markdown')
       })
     }
+  }
+
+  /**
+   * Returns the earliest owner interaction still retained by this profile.
+   */
+  public readFirstOwnerMessageAt(): number | null {
+    const row = this.db.prepare(`
+      SELECT min(sent_at) AS sent_at FROM conversation_messages WHERE role = 'owner' AND visible = 1
+    `).get()
+    return typeof row?.['sent_at'] === 'number' ? row['sent_at'] : null
   }
 
   /**
