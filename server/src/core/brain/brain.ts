@@ -13,7 +13,7 @@ import type { NLUProcessResult } from '@/core/nlp/types'
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
 import type { BrainProcessResult } from '@/core/brain/types'
 import { SkillActionTypes } from '@/core/brain/types'
-import { GLOBAL_DATA_PATH, HAS_TTS } from '@/constants'
+import { GLOBAL_DATA_PATH, HAS_TTS, NATIVE_SKILLS_PATH } from '@/constants'
 import {
   CONVERSATION_LOGGER,
   NLU,
@@ -24,6 +24,8 @@ import {
 } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
+import { CatalogDistribution, CatalogMaintenance } from '@/schemas/catalog-metadata-schemas'
+import { recordCapabilityUsage } from '@/core/llm-manager/turn-timing'
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
 import { AnswerQueue } from '@/core/brain/answer-queue'
 import { LogicActionSkillHandler } from '@/core/brain/logic-action-skill-handler'
@@ -559,6 +561,16 @@ export default class Brain {
     const executionTimeStart = Date.now()
     const utteranceId = `${Date.now()}-${StringHelper.random(4)}`
     const actionType = nluProcessResult.actionConfig?.type
+    const { skillName, skillConfig, skillConfigPath } = nluProcessResult
+    const isPublicSkill = skillConfig.maintenance === CatalogMaintenance.Official &&
+      skillConfig.distribution !== CatalogDistribution.Extension &&
+      path.relative(path.join(NATIVE_SKILLS_PATH, skillName, 'skill.json'), skillConfigPath) === ''
+    const recordSkill = (failed: number): void => {
+      const counts = { calls: 1, failed, durationMs: Math.max(0, Date.now() - executionTimeStart) }
+      recordCapabilityUsage(isPublicSkill
+        ? { kind: 'native_skill', source: 'built_in', skill: skillName, ...counts }
+        : { kind: 'native_skill', source: 'extension', ...counts })
+    }
 
     // Reset skill output
     this.skillOutput = ''
@@ -586,6 +598,7 @@ export default class Brain {
 
       const executionTimeEnd = Date.now()
       const executionTime = executionTimeEnd - executionTimeStart
+      recordSkill(0)
 
       return {
         ...brainExecutionResult,
@@ -594,6 +607,7 @@ export default class Brain {
     } catch (e) {
       const executionTimeEnd = Date.now()
       const executionTime = executionTimeEnd - executionTimeStart
+      recordSkill(1)
 
       LogHelper.title('Brain')
       LogHelper.error(
