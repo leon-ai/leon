@@ -15,7 +15,7 @@ function record(inputTokens: number, cachedInputTokens: number, stage = TurnStag
 function sample(inputTokens: number, cachedInputTokens: number): { evaluation: Evaluation } {
   return { evaluation: {
     metrics: summarizeQuickEvalUsage([record(inputTokens, cachedInputTokens)], 100),
-    turns: [], diagnostics: { tools: [], calls: [] }
+    turns: [], diagnostics: { tools: [], calls: [], completionReviews: [] }
   } }
 }
 
@@ -88,7 +88,7 @@ describe('Quick Evals release budgets', () => {
   it('retains the failing child’s reason and diagnostics without retrying a failed assertion', async () => {
     const failedSample = {
       reason: 'AssertionError: expected the verification line', exitCode: 1, timedOut: false,
-      diagnostics: { tools: ['operating_system_control.shell.executeCommand'], calls: [] }
+      diagnostics: { tools: ['operating_system_control.shell.executeCommand'], calls: [], completionReviews: [] }
     }
     const run = vi.fn().mockResolvedValue({ failedSample })
     const result = await evaluateQuickEvalCase(run, 15, 0, sample(100, 50).evaluation.metrics)

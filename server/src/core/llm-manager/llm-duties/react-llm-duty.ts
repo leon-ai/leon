@@ -305,6 +305,7 @@ export class ReActLLMDuty extends LLMDuty {
   private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
+  private readonly onCompletionReview: ReactLLMDutyParams['onCompletionReview']
   private readonly responseId: string | undefined
   private readonly pulseReason: string | undefined
   private readonly onTextStream: ReactLLMDutyParams['onTextStream']
@@ -329,6 +330,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.additionalInstructions = params.additionalInstructions?.trim() || ''
     this.backgroundTools = params.backgroundTools
     this.onProgressEvent = params.onProgressEvent
+    this.onCompletionReview = params.onCompletionReview
     this.responseId = params.responseId
     this.pulseReason = params.pulseReason
     this.onTextStream = params.onTextStream
@@ -727,6 +729,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.closeStreamedToolCalls()
         },
         ...(this.signal ? { signal: this.signal } : {}),
+        ...(this.onCompletionReview ? { onCompletionReview: this.onCompletionReview } : {}),
         runBudget: this.runBudget,
         transcript,
         catalog,

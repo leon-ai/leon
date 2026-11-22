@@ -2565,6 +2565,7 @@ describe('continuous agent loop', () => {
     const firstDraft = 'I verified the first archive.'
     const revisedDraft = 'The first archive has been checked.'
     const onProgressMessage = vi.fn()
+    const onCompletionReview = vi.fn()
     const executeFunction = vi.fn(async () => ({
       execution: {
         function: callable.qualifiedName,
@@ -2588,10 +2589,15 @@ describe('continuous agent loop', () => {
       catalog: createCatalog(),
       executeFunction,
       onProgressMessage,
+      onCompletionReview,
       callModel,
       loadAgentSkill: async () => null
     })
 
+    expect(onCompletionReview.mock.calls).toEqual([
+      [{ intent: 'answer', verdict: status, revisionRequested: true }],
+      [{ intent: 'answer', verdict: status, revisionRequested: true }]
+    ])
     expect(result.intent).toBe(intent)
     expect(result.answer).toBe(finalAnswer)
     expect(result.transcript.at(-1)).toEqual({ role: 'assistant', content: finalAnswer })

@@ -229,7 +229,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 <response_policy>
 - During extended work, accompany tool calls with brief owner-facing progress at meaningful milestones, changed approaches after obstacles, or otherwise prolonged waits. State verified findings and the next action. Do not narrate every click, expose private reasoning, claim unverified progress, or stop to announce future work. Progress is intermediate only alongside tool calls.
 - Keep the final answer concise and proportionate to the request; avoid recapping execution details unless asked.
-- Follow the owner's requested answer format, including JSON when requested. Default to natural prose with Markdown as needed. Use short paragraphs, emphasis, lists, descriptive links and language-tagged code fences when useful. Keep formatting simple and avoid raw HTML.
+- Follow the owner's requested answer format, including JSON when requested. For confirmation-only requests, report readiness without giving the findings, even in summary. Default to natural prose with Markdown as needed. Use short paragraphs, emphasis, lists, descriptive links and language-tagged code fences when useful. Keep formatting simple and avoid raw HTML.
 - Use a compact native chart alongside the explanation when the relationship between numbers helps answer the question, even for two or three values such as consecutive gains and losses. Keep isolated figures, prose and small reference tables in Markdown. Use diagrams for relationships and custom visuals when interaction or layout improves understanding. Load the needed UI mode without asking display permission; do not create dashboards or extra questions merely to use UI.
 - Use request_clarification.confirmation for yes/no decisions. For explicit choices or related missing fields, use load_ui mode input, then request_clarification.input. Open-ended questions stay plain text. Use native mode for standard visual widgets or generated for bespoke visuals; their controls never directly execute tools.
 - When citing sources, use descriptive inline links rather than a separate sources list unless the owner requests one.
@@ -252,6 +252,15 @@ export enum AgentCompletionStatus {
   Revise = 'revise',
   Continue = 'continue',
   Blocked = 'blocked'
+}
+
+/**
+ * Reports how completion review resolved a draft without exposing its content.
+ */
+export interface AgentCompletionReviewDecision {
+  intent: 'answer' | 'clarification'
+  verdict: AgentCompletionStatus | null
+  revisionRequested: boolean
 }
 
 export const AGENT_COMPLETION_REVIEW_SCHEMA = {
@@ -462,6 +471,7 @@ export interface AgentLoopParams {
   onAgentSkillLoaded?: (context: AgentSkillContext) => void | Promise<void>
   onPlanUpdated?: (steps: TrackedPlanStep[]) => void
   onProgressMessage?: (message: string) => Promise<void> | void
+  onCompletionReview?: (decision: AgentCompletionReviewDecision) => void
   /**
    * Settles previews with the result of a call handled without tool dispatch.
    */
@@ -1367,8 +1377,11 @@ export async function runAgentLoop(
               'review', transcript, executionHistory, trackedSteps, true
             )
           }
-          if ((review.status === AgentCompletionStatus.Continue || review.status === AgentCompletionStatus.Revise) &&
-              requestReviewRevision(review.reason, 'answer') && remainingIterations > 1) {
+          const revisionRequested = review.status === AgentCompletionStatus.Continue ||
+            review.status === AgentCompletionStatus.Revise
+          params.onCompletionReview?.({ intent: 'answer', verdict: review.status, revisionRequested })
+
+          if (revisionRequested && requestReviewRevision(review.reason, 'answer') && remainingIterations > 1) {
             // Review keeps the task running, so settle the completed message as
             // progress before the next model call discards its active draft.
             await params.onProgressMessage?.(textContent)
@@ -1615,8 +1628,12 @@ export async function runAgentLoop(
             'review', transcript, executionHistory, trackedSteps
           )
         }
-        if (review.status === AgentCompletionStatus.Continue) {
-          if (!requestReviewRevision(review.reason, 'clarification')) {
+        const needsRevision = review.status === AgentCompletionStatus.Continue
+        const revisionRequested = needsRevision && requestReviewRevision(review.reason, 'clarification')
+        params.onCompletionReview?.({ intent: 'clarification', verdict: review.status, revisionRequested })
+
+        if (needsRevision) {
+          if (!revisionRequested) {
             return createResumableAgentResult('review', transcript, executionHistory, trackedSteps)
           }
 
@@ -2106,6 +2123,17 @@ async function finalizeAgentLoopAtLimit(
         )
       }
 
+      if (review) {
+        const revisionRequested = !isClarification && (
+          review.status === AgentCompletionStatus.Continue ||
+          review.status === AgentCompletionStatus.Revise
+        )
+        params.onCompletionReview?.({
+          intent: isClarification ? 'clarification' : 'answer',
+          verdict: review.status,
+          revisionRequested
+        })
+      }
       if (!review || (isClarification && review.status !== null &&
           review.status !== AgentCompletionStatus.Complete)) {
         // A rejected pause cannot restart execution beyond the owner's cap.

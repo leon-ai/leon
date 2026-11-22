@@ -4,6 +4,7 @@ import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-con
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import type { LeonClientInterfaceTokenPayload } from '@/core/leon-interface/types'
 import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
+import type { AgentCompletionReviewDecision } from './agent-loop'
 export interface AgentSkillContext {
   origin?: SkillOrigin
   id: string
@@ -57,6 +58,7 @@ export interface ReactLLMDutyParams extends LLMDutyParams {
    */
   backgroundTools?: ReadonlySet<string>
   onProgressEvent?: (event: AgentRunProgressEvent) => void
+  onCompletionReview?: (decision: AgentCompletionReviewDecision) => void
   responseId?: string
   pulseReason?: string
   onTextStream?: (kind: 'answer' | 'reasoning', payload: LeonClientInterfaceTokenPayload) => void

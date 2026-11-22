@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { execa } from 'execa'
 import YAML from 'yaml'
 
+import type { AgentCompletionReviewDecision } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
 import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { TurnStage } from '@/core/llm-manager/turn-timing-contract'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -67,6 +68,7 @@ interface ScenarioDiagnostics {
   tools: string[]
   calls: Array<Pick<InferenceUsageRecord, 'purpose' | 'stage' | 'outcome'> &
     Pick<InferenceUsageRecord['usage'], 'inputTokens' | 'cachedInputTokens' | 'outputTokens'>>
+  completionReviews: Array<AgentCompletionReviewDecision & { turn: number }>
 }
 
 interface FailedSample {
@@ -184,15 +186,30 @@ export function compareQuickEval(
 }
 
 function scenarioDiagnostics(lines: string[], rows: InferenceUsageRecord[]): ScenarioDiagnostics {
-  const tools = lines.filter((line) => line.startsWith(PROGRESS_PREFIX)).flatMap((line) => {
-    const event = JSON.parse(line.slice(PROGRESS_PREFIX.length)) as { stage: string, data?: { toolName?: string } }
-    return event.stage === 'tool_call' && event.data?.toolName ? [event.data.toolName] : []
+  const events = lines.filter((line) => line.startsWith(PROGRESS_PREFIX)).map((line) =>
+    JSON.parse(line.slice(PROGRESS_PREFIX.length)) as {
+      stage: string
+      turn?: number
+      data?: { toolName?: string, review?: AgentCompletionReviewDecision }
+    }
+  )
+  const tools = events.flatMap(({ stage, data }) =>
+    stage === 'tool_call' && data?.toolName ? [data.toolName] : []
+  )
+  const completionReviews = events.flatMap(({ stage, turn, data }) => {
+    if (stage !== 'completion_review' || turn === undefined || !data?.review) {
+      return []
+    }
+
+    const { intent, verdict, revisionRequested } = data.review
+
+    return [{ turn, intent, verdict, revisionRequested }]
   })
   const calls = rows.map(({ purpose, stage, outcome, usage: { inputTokens, cachedInputTokens, outputTokens } }) => ({
     purpose, stage, outcome, inputTokens, cachedInputTokens, outputTokens
   }))
 
-  return { tools, calls }
+  return { tools, calls, completionReviews }
 }
 
 function redactDiagnostic(text: string): string {

@@ -53,6 +53,7 @@ interface AgentProgressEvent {
     | 'bootstrap'
     | 'turn_start'
     | 'tool_call'
+    | 'completion_review'
     | 'turn_result'
     | 'scenario_complete'
     | 'cleanup'
@@ -651,6 +652,15 @@ async function main(): Promise<void> {
             const duty = new ReActLLMDuty({
               input: ownerInput,
               ...options,
+              onCompletionReview: (review): void => {
+                printProgress({
+                  provider,
+                  stage: 'completion_review',
+                  turn: currentTurn,
+                  message: scenario.id,
+                  data: { review }
+                })
+              },
               onProgressEvent: (event): void => {
                 if (event.type === 'progress_message') {
                   progressMessages.push(structuredClone(event.message))
