@@ -13,6 +13,7 @@ import type { CompletionAttemptTiming } from './types'
 import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type TurnTimingContext, type InferenceActivity, OwnerTurnFailureCode  } from './turn-timing-contract'
 import { readContextUsage, type ContextUsageMetrics } from './llm-usage/context-usage'
 import type { InferenceUsage } from './llm-usage/usage-context'
+import type { InferenceUsageRecord } from './llm-usage/usage-ledger'
 
 export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
 
@@ -22,6 +23,18 @@ interface OwnerTurnMeasurement {
   context?: ContextUsageMetrics
   failure?: OwnerTurnFailureCode
 }
+
+export interface CompletedOwnerTurn {
+  id: string
+  profile: string
+  startedAt: number
+  durationMs: number
+  measurement: OwnerTurnMeasurement
+  timings: readonly TurnTiming[]
+  inferenceUsage: readonly ForegroundInferenceUsage[]
+}
+
+type ForegroundInferenceUsage = Pick<InferenceUsageRecord, 'provider' | 'model' | 'outcome' | 'usage'>
 
 const MAXIMUM_TURN_TIMINGS = 10_000
 
@@ -42,11 +55,24 @@ interface TurnTimingScope extends TurnTimingContext {
     closed: boolean
     omitted: number
     ownerTurn?: OwnerTurnMeasurement
+    inferenceUsage?: ForegroundInferenceUsage[]
   }
 }
 
 const storage = new AsyncLocalStorage<TurnTimingScope | undefined>()
 const pendingWrites = new Map<string, Promise<void>>()
+const ownerTurnListeners = new Set<(turn: CompletedOwnerTurn) => void>()
+
+/**
+ * Observes completed foreground owner turns without awaiting subscriber work.
+ */
+export function onCompletedOwnerTurn(listener: (turn: CompletedOwnerTurn) => void): () => void {
+  ownerTurnListeners.add(listener)
+  return () => {
+    ownerTurnListeners.delete(listener)
+  }
+}
+
 /**
  * Observes only this foreground execution. Fresh background timing scopes do not
  * inherit the listener, and detached work cannot emit after execution finishes.
@@ -307,6 +333,20 @@ export function recordTurnInferenceUsage(attemptId: string, usageId: string, usa
 }
 
 /**
+ * Counts foreground inference attempts even when no matching timing interval was emitted.
+ */
+export function recordForegroundInferenceUsage(entry: ForegroundInferenceUsage): void {
+  const scope = storage.getStore()
+  if (!ownerTurnListeners.size || !scope || scope.state.closed || scope.stage !== TurnStage.AgentLoop) {
+    return
+  }
+  scope.state.inferenceUsage ??= []
+  if (scope.state.inferenceUsage.length < MAXIMUM_TURN_TIMINGS) {
+    scope.state.inferenceUsage.push(entry)
+  }
+}
+
+/**
  * Records maintenance transitions for audit replay, never automatic re-execution.
  */
 export async function recordMaintenanceEvent(
@@ -430,9 +470,25 @@ export async function runWithTurnTiming<T>(
           timing.outcome = 'detached'
         }
       }
+      const timings = getTurnTimings()
+      const owner = scope.state.ownerTurn
+      const root = owner && !scope.taskId && timings.find((timing) =>
+        timing.goal === TurnPhase.Turn && !timing.parentId)
+      if (owner && root && ownerTurnListeners.size) {
+        const turn = {
+          id: turnId, profile: scope.profile, startedAt: root.startedAt,
+          durationMs: root.durationMs, measurement: owner, timings,
+          inferenceUsage: scope.state.inferenceUsage ?? []
+        }
+        // Reporting can use finalized counters as soon as the turn closes.
+        runOutsideTurnTiming(() => {
+          for (const listener of ownerTurnListeners) {
+            queueMicrotask(() => listener(turn))
+          }
+        })
+      }
       try {
         const directory = path.join(getProfilePaths(scope.profile).logs, 'turns')
-        const timings = getTurnTimings()
         const records = new Map<string, string[]>()
         for (const timing of timings) {
           const date = new Date(timing.startedAt).toISOString().slice(0, 10)

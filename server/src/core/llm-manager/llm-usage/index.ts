@@ -5,7 +5,7 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 import { LogHelper } from '@/helpers/log-helper'
 import { inferenceUsageStorage, type InferenceUsageContext } from './usage-context'
 import { appendInferenceUsage } from './usage-ledger'
-import { getTurnTimingContext, recordTurnInferenceUsage } from '../turn-timing'
+import { getTurnTimingContext, recordForegroundInferenceUsage, recordTurnInferenceUsage } from '../turn-timing'
 
 /**
  * Isolates each attempt's route and counters across parallel work and retries.
@@ -31,6 +31,14 @@ export async function trackInferenceUsage<T>(
         recordTurnInferenceUsage(context.attemptId, id, context.usage)
       }
 
+      const usage = {
+        provider: context.inference?.provider ?? target.provider,
+        model: context.inference?.model ?? target.model,
+        outcome: context.outcome,
+        usage: { ...context.usage }
+      }
+      recordForegroundInferenceUsage(usage)
+
       try {
         await appendInferenceUsage(profileName, {
           id,
@@ -40,11 +48,8 @@ export async function trackInferenceUsage<T>(
           ...turn,
           ...(context.attemptId ? { attemptId: context.attemptId } : {}),
           ...target,
-          provider: context.inference?.provider ?? target.provider,
-          model: context.inference?.model ?? target.model,
           ...(context.inference ? { inference: context.inference } : {}),
-          outcome: context.outcome,
-          usage: { ...context.usage }
+          ...usage
         })
       } catch (error) {
         LogHelper.warning(`Could not save inference usage: ${String(error)}`)

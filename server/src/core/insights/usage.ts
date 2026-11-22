@@ -1,6 +1,6 @@
 import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { readContextUsage } from '@/core/llm-manager/llm-usage/context-usage'
-import { readTurnHistory, TurnPhase, TurnStage } from '@/core/llm-manager/turn-timing'
+import { readTurnHistory, TurnPhase, TurnStage, type CompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
 import { OWNER_TURN_FAILURE_CODES, type OwnerTurnFailureCode } from '@/core/llm-manager/turn-timing-contract'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
@@ -87,6 +87,42 @@ function addInference(turn: ActivityTurn, entry: Pick<InferenceUsageRecord, 'pro
   if (!turn.primaryModel || model.modelCalls > turn.primaryModel.modelCalls) {
     turn.primaryModel = model
   }
+}
+
+/**
+ * Uses finalized in-memory measurements so reporting never needs to reread the profile history.
+ */
+export function summarizeCompletedOwnerTurn(completed: CompletedOwnerTurn): ActivityTurn {
+  const { id, startedAt, durationMs, measurement, timings } = completed
+  const turn = makeTurn(id, null, startedAt, durationMs, measurement.outcome)
+  turn.version = measurement.version
+  if (measurement.context) {
+    turn.context = measurement.context
+  }
+  if (measurement.failure) {
+    turn.failure = measurement.failure
+  }
+
+  for (const timing of timings) {
+    if (timing.stage !== TurnStage.AgentLoop) {
+      continue
+    }
+    if (timing.kind === 'inference') {
+      turn.modelDurationMs += timing.durationMs
+      if (timing.firstOutputMs !== undefined) {
+        const elapsed = Math.max(0, timing.startedAt + timing.firstOutputMs - startedAt)
+        turn.firstOutputMs = Math.min(turn.firstOutputMs ?? elapsed, elapsed)
+      }
+    } else if (timing.goal === TurnPhase.Tool) {
+      turn.toolCalls++
+      turn.toolDurationMs += timing.durationMs
+    }
+  }
+  for (const usage of completed.inferenceUsage) {
+    addInference(turn, usage)
+  }
+
+  return turn
 }
 
 /**

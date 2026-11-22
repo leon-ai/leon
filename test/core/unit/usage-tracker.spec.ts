@@ -110,6 +110,86 @@ describe('inference usage', () => {
     vi.useRealTimers()
   })
 
+  it('measures all foreground turn outcomes separately from answered turns', async () => {
+    const profileName = 'insights-owner'
+    const from = Date.now() - 2_000
+    const { readUsageTurns, summarizeCompletedOwnerTurn, summarizeUsage } = await import('@/core/insights/usage')
+    const { onCompletedOwnerTurn, recordOwnerTurn } = await import('@/core/llm-manager/turn-timing')
+    const liveTurns: ReturnType<typeof summarizeCompletedOwnerTurn>[] = []
+    const unsubscribe = onCompletedOwnerTurn((turn) => {
+      liveTurns.push(summarizeCompletedOwnerTurn(turn))
+    })
+
+    try {
+      await runWithProfileContext({ profileName }, async () => {
+        for (const [index, outcome] of (['answered', 'answered', 'clarification', 'failed'] as const).entries()) {
+          await runWithTurnTiming(`owner-turn-${index}`, 'local-session', async () => {
+            await runTurnPhase(TurnPhase.Execution, () => trackInferenceUsage(TARGET, async () => {
+              recordInferenceUsage(index === 1
+                ? { input_tokens: 200 }
+                : { input_tokens: 100 * (index + 1), output_tokens: 20 })
+              recordInferenceUsageOutcome(outcome === 'failed' ? 'failed' : 'completed')
+            }))
+            recordOwnerTurn(outcome)
+          })
+        }
+
+        const activity = await readUsageTurns(from, Date.now() + 1, { explicitOwnerOnly: true })
+        expect(summarizeUsage(activity)).toMatchObject({
+          turns: 4, finishedTurns: 2, modelCalls: 4, meteredCalls: 3, failedModelCalls: 1,
+          inputTokens: 1_000, outputTokens: 60, tokenMeasuredTurns: 1, measuredTurnTokens: 120,
+          fullyMeasuredTurns: 3, fullyMeasuredTokens: 860, medianTurnTokens: 320, p95TurnTokens: 420
+        })
+        expect(summarizeUsage(activity.filter(({ outcome }) => outcome !== 'failed')).medianTurnTokens).toBe(220)
+        expect(summarizeUsage(liveTurns)).toEqual(summarizeUsage(activity))
+      })
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('keeps readable activity when a journal entry is damaged', async () => {
+    const profileName = 'activity-history-owner'
+    const { readUsageTurns, summarizeUsage } = await import('@/core/insights/usage')
+    const { recordOwnerTurn } = await import('@/core/llm-manager/turn-timing')
+
+    await runWithProfileContext({ profileName }, async () => {
+      const from = Date.now() - 1_000
+      const recordTurn = async (id: string): Promise<void> => {
+        await runWithTurnTiming(id, 'local-session', async () => {
+          await runTurnPhase(TurnPhase.Execution, () => trackInferenceUsage(TARGET, async () => {
+            recordInferenceUsage({ input_tokens: 100, output_tokens: 20 })
+            recordInferenceUsageOutcome('completed')
+          }))
+          recordOwnerTurn('answered')
+        })
+      }
+      await recordTurn('first-turn')
+
+      const logs = path.join(runtime.directory, profileName, 'logs')
+      for (const journal of ['usage', 'turns']) {
+        const directory = path.join(logs, journal)
+        const [filename] = await fs.readdir(directory)
+        await fs.appendFile(path.join(directory, filename!), Buffer.from([0, 0, 10]))
+      }
+
+      await recordTurn('second-turn')
+      const until = Date.now() + 1
+      let unreadableRecords = 0
+      const activity = await readUsageTurns(from, until, {
+        onUnreadableRecord: () => {
+          unreadableRecords++
+        }
+      })
+
+      expect(unreadableRecords).toBe(2)
+      expect(summarizeUsage(activity)).toMatchObject({
+        turns: 2, modelCalls: 2, tokenMeasuredTurns: 2, measuredTurnTokens: 240
+      })
+      await expect(readUsageTurns(from, until, { explicitOwnerOnly: true })).rejects.toThrow(SyntaxError)
+    })
+  })
+
   it('persists concurrent profile and session attribution without credential contents', async () => {
     await Promise.all(['owner-a', 'owner-b'].map((profileName) =>
       runWithProfileContext({ profileName }, () => runWithConversationSession(
