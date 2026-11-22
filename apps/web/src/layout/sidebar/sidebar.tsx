@@ -87,8 +87,9 @@ function shouldReduceMotion(): boolean {
   return window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
 }
 
-export function Sidebar({ inert, onSettings }: {
+export function Sidebar({ inert, onInsights, onSettings }: {
   inert?: boolean
+  onInsights: () => void
   onSettings: () => void
 }) {
   const navigate = useNavigate()
@@ -292,7 +293,7 @@ export function Sidebar({ inert, onSettings }: {
         aria-label="Open sidebar"
         onClick={() => updateSidebarExpanded(true)}
       />
-      <SidebarFooter onSettings={onSettings} />
+      <SidebarFooter onInsights={onInsights} onSettings={onSettings} />
       <Dialog
         hideHeader
         open={searchSessionsDialogOpen}

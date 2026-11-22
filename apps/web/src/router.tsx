@@ -11,6 +11,7 @@ import { NotFoundPage } from '@/pages/not-found-page'
 import { queryClient } from '@/query-client'
 import { PROFILE_AUTH_QUERY_KEY } from '@/data/profile'
 import { isSettingsPath } from '@/data/settings-sections'
+import { isInsightsTab } from '@/layout/app-layout/dialog-navigation'
 import { prefetchConversation, prepareConversationForNavigation } from '@/data/conversation-queries'
 import {
   parseVibesPreviewSearch,
@@ -59,6 +60,13 @@ const routeTree = rootRoute.addChildren([
     beforeLoad: ({ params }) => validateSettingsPath(params), component: NewSessionPage }),
   createRoute({ getParentRoute: () => rootRoute, path: '/settings/$section/$target',
     beforeLoad: ({ params }) => validateSettingsPath(params), component: NewSessionPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/insights', component: NewSessionPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/insights/$tab',
+    beforeLoad: ({ params }) => {
+      if (!isInsightsTab(params.tab)) {
+        throw notFound()
+      }
+    }, component: NewSessionPage }),
   ...(import.meta.env.DEV
     ? [createRoute({
         getParentRoute: () => rootRoute,

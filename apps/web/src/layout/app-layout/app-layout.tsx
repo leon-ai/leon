@@ -20,6 +20,7 @@ import {
 import './app-layout.sass'
 
 const SettingsPage = lazy(() => import('@/pages/settings-page/settings-page').then(({ SettingsPage }) => ({ default: SettingsPage })))
+const Insights = lazy(() => import('@/pages/insights-page/insights-page').then(({ Insights }) => ({ default: Insights })))
 
 export function AppLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
@@ -82,14 +83,17 @@ function AuthenticatedAppLayout({ previewOnly = false }: { previewOnly?: boolean
           if (dialog?.kind !== 'settings') {
             openDialog({ kind: 'settings', section: DEFAULT_SETTINGS_CATEGORY })
           }
-        }} />
+        }}
+        onInsights={() => openDialog({ kind: 'insights', tab: 'overview' })} />
       <main className="app-main">
         {previewOnly ? <PageContainer><Outlet /></PageContainer> : <ProfileAccessGate>
           <PageContainer inert={Boolean(dialog)}><Outlet /></PageContainer>
-          {dialog && <Dialog title="Settings" onClose={close}
-            open centered size="wide" hideFooter className="routed-dialog routed-dialog-settings">
-            <Suspense fallback={<Loader size="md" label="Opening settings…" />}>
-              <SettingsPage view={dialog} open={open} />
+          {dialog && <Dialog title={dialog.kind === 'settings' ? 'Settings' : 'Insights'} onClose={close}
+            open centered size="wide" hideFooter className={`routed-dialog routed-dialog-${dialog.kind}`}>
+            <Suspense fallback={<Loader size="md" label={dialog.kind === 'settings' ? 'Opening settings…' : 'Opening insights…'} />}>
+              {dialog.kind === 'settings'
+                ? <SettingsPage view={dialog} open={open} />
+                : <Insights tab={dialog.tab} selectTab={(tab) => open({ kind: 'insights', tab })} />}
             </Suspense>
           </Dialog>}
         </ProfileAccessGate>}

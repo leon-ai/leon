@@ -26,6 +26,7 @@ type MoodIconStyle = CSSProperties & {
 
 interface SidebarFooterProps {
   mood?: Mood
+  onInsights: () => void
   onSettings: () => void
 }
 
@@ -37,7 +38,7 @@ function openDialog(event: MouseEvent<HTMLAnchorElement>, open: () => void): voi
 }
 
 export function SidebarFooter({
-  mood: previewMood, onSettings
+  mood: previewMood, onInsights, onSettings
 }: SidebarFooterProps) {
   const ambient = useAmbientConditions()
   const currentMood = ambient.data?.mood
@@ -66,6 +67,12 @@ export function SidebarFooter({
           <Link to="/settings" className="sidebar-footer-settings" aria-label="Settings" aria-keyshortcuts="Control+, Meta+,"
             onClick={(event) => openDialog(event, onSettings)}>
             <Icon name="settings-line" />
+          </Link>
+        </Tooltip>
+        <Tooltip message="Insights" position="right">
+          <Link to="/insights" className="sidebar-footer-settings" aria-label="Insights"
+            onClick={(event) => openDialog(event, onInsights)}>
+            <Icon name="trend-chart-line" />
           </Link>
         </Tooltip>
         <span className="sidebar-footer-status-label">
