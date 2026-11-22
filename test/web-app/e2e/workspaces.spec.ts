@@ -182,7 +182,7 @@ for (const { theme, motion, width } of [
     await expect(save).toBeDisabled()
     await editor.getByRole('textbox', { name: 'Workspace name' }).fill('Leon')
     await editor.getByRole('textbox', { name: 'Workspace brief' }).fill('I am building my open-source AI assistant.')
-    const pink = editor.getByRole('button', { name: 'Leon pink', exact: true })
+    const pink = editor.getByRole('button', { name: 'Leonie pink', exact: true })
     await pink.click()
     if (motion === 'no-preference') {
       const ring = await pink.evaluate((element) => {

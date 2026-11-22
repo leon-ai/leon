@@ -8,7 +8,7 @@ export enum WorkspaceResourceKind {
 
 export const ACCENT_COLORS = [
   { id: 'blue', label: 'Leon blue' },
-  { id: 'pink', label: 'Leon pink' },
+  { id: 'pink', label: 'Leonie pink' },
   { id: 'green', label: 'Green' },
   { id: 'violet', label: 'Violet' },
   { id: 'orange', label: 'Orange' },
