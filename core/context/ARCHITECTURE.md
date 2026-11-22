@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-11-17T23:22:43+08:00
+- Generated at: 2026-11-23T06:03:17+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -61,8 +61,11 @@
 - Model failures use bounded recovery before reporting an unresolved blocker.
 - Leon has a living personality and a changing mood that influence its tone and behavior.
 - A bounded private self-model/diary is updated after turns, promotes repeated habits into stable behavioral principles, and injects only a compact snapshot into the first agent request.
-- A periodic pulse manager can generate autonomous agent matters from memory, context deltas, and the private self-model, persist them to `PULSE.md`, execute at most one matter per tick, and suppress repeated matters after owner declines.
-- Pulse work uses the owning conversation's ordinary agent turn, transcript, tool execution and answer lifecycle. Owner messages interrupt stale work to redirect or cancel the task; cancellation ends execution without completion review or automatic continuation.
+## Pulse
+- Pulse considers memory, context changes, prior conversations and the private self-model to select at most one proactive matter per tick. It investigates through the agent loop with read-only tools, then separately decides whether to stay quiet, save the result or deliver it.
+- Pulse research runs independently of owner turns and their checkpoints. Local inference prioritizes owner turns. Profile-local SQLite associates each run with a stable matter ID and deduplicates reported findings. `PULSE.md` is a readable view of recent queue activity.
+- Pulse keeps a bounded agenda of evidence-backed follow-ups. Due matters go first, expired or displaced matters retain their findings, and new evidence can reopen the same matter. Routine silent history ages out.
+- After a related owner turn, Pulse can archive an open matter when owner confirmation or tool evidence settles its question. The archived result references the resolving conversation.
 ## Context Intelligence
 - Leon maintains runtime context files (system, activity, browser, network, workspace, habits, inventory, media, architecture, identity).
 - Leon uses `structured_knowledge.context.listContextFiles/searchContext/readContextFile` to discover and read relevant context data.
