@@ -12,7 +12,7 @@ const scenario: RealAgentScenario = {
   async run() {
     const { CONFIG_MANAGER } = await import('@/config')
     await CONFIG_MANAGER.setValue(['runtime', 'private_diary_enabled'], true)
-    const { default: SelfModelManager } = await import('@/core/self-model-manager')
+    const { default: SelfModelManager } = await import('@/core/self-model-manager/self-model-manager')
     const { readInferenceUsage } = await import('@/core/llm-manager/llm-usage/usage-ledger')
     const { InferencePurpose } = await import('@/core/llm-manager/types')
     const { getProfilePaths } = await import('@/core/profile-runtime/profile-paths')

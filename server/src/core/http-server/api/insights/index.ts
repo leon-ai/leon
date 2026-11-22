@@ -4,7 +4,7 @@ import { getInsightsUsage } from '@/core/insights/usage'
 import { INSIGHTS_INTERVALS, INSIGHTS_RANGES, EVALUATION_SOURCES,
   type InsightsInterval, type EvaluationQuery } from '@/core/insights/insights-contract'
 import { getTelemetrySetting, setTelemetrySetting } from '@/core/telemetry/profile-telemetry'
-import { authenticateProfileCredential, readProfileCredentialFromHeaders } from '@/core/profile-auth'
+import { authenticateProfileCredential, readProfileCredentialFromHeaders } from '@/core/profile-runtime/profile-auth'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { readEvaluationHistory } from '@/core/insights/evaluation-index'
 import { projectEvaluationHistory } from '@/core/insights/evaluation-view'

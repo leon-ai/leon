@@ -32,9 +32,9 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import { artifactsPlugin } from '@/core/http-server/api/artifacts'
 import type { Artifact } from '@/core/artifacts/artifact-types'
 import { readArtifact } from '@/core/artifacts/artifact-store'
-import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
-import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
-import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachments/owner-attachment-contract'
+import { prepareStoredOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
+import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 import { presentAurora } from '@/core/aurora/answer-presentation'
 
 interface FixtureAnswer {

@@ -34,7 +34,7 @@ import {
   TOOL_CALL_LOGGER
 } from '@/core'
 import { scheduleHistoryCompaction } from '@/core/turn-lifecycle/post-turn'
-import { createExperienceSearchTool, EXPERIENCE_PREFIX } from '@/core/experience-manager'
+import { createExperienceSearchTool, EXPERIENCE_PREFIX } from '@/core/experience-manager/experience-manager'
 import {
   LLMDuties,
   LLMProviders,

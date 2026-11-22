@@ -1625,10 +1625,10 @@ export default class PulseManager {
   }
 
   private async loadModule<T>(relativePathFromCore: string): Promise<T> {
-    const currentDir = path.dirname(fileURLToPath(import.meta.url))
+    const coreDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
     const candidatePaths = [
-      path.join(currentDir, `${relativePathFromCore}.js`),
-      path.join(currentDir, `${relativePathFromCore}.ts`)
+      path.join(coreDir, `${relativePathFromCore}.js`),
+      path.join(coreDir, `${relativePathFromCore}.ts`)
     ]
     const modulePath = candidatePaths.find((candidate) => fs.existsSync(candidate))
     if (!modulePath) {

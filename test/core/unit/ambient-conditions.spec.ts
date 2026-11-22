@@ -5,7 +5,7 @@ import AmbientConditionsManager, {
   AmbientWeatherCondition,
   type AmbientConditionsSnapshot,
   type AmbientWeatherSnapshot
-} from '@/core/ambient-conditions-manager'
+} from '@/core/ambient/ambient-conditions-manager'
 
 const fixture = vi.hoisted(() => ({
   cache: null as { locationQuery: string | null, weather: AmbientWeatherSnapshot | null } | null,

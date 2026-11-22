@@ -2,7 +2,7 @@ import type { HTTPPluginReply, HTTPPluginRequest } from './types'
 import {
   authenticateProfileCredential,
   readProfileCredentialFromHeaders
-} from '@/core/profile-auth'
+} from '@/core/profile-runtime/profile-auth'
 import { enterProfileContext } from '@/core/profile-runtime/profile-context'
 
 /**

@@ -7,7 +7,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { finishAuroraAnswer, publishAnswerParts } from '@/core/aurora/answer-presentation'
 import type { AnswerPart } from '@@/aurora/src/v2/contracts/answer'
 import type { Artifact } from '@/core/artifacts/artifact-types'
-import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
+import { prepareStoredOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
 
 import { CONVERSATION_SESSION_MANAGER } from './index'
 import { CONVERSATION_REPOSITORY } from './conversation-repository'

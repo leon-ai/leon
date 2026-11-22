@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { parse, stringify } from 'yaml'
 
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { readStoredProfileToken, PROFILE_TOKEN_HEADER_NAME } from '@/core/profile-auth'
+import { readStoredProfileToken, PROFILE_TOKEN_HEADER_NAME } from '@/core/profile-runtime/profile-auth'
 import { LEON_PROFILE_NAME, PROFILE_TOKEN_SEPARATOR } from '@/leon-roots'
 import { UpdatePhase, type UpdateSnapshot } from '../../bridges/runtime/contracts/updates'
 import { RELEASE_ASSET_NAME, RELEASE_SOURCE_NAME, formatReleaseNotes, isPreviewVersion, selectPreviousDistribution,

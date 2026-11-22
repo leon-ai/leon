@@ -1,6 +1,6 @@
 import { readArtifact, registerArtifact } from '@/core/artifacts/artifact-store'
 import { recordArtifacts } from '@/core/artifacts/artifact-context'
-import { readStoredProfileToken } from '@/core/profile-auth'
+import { readStoredProfileToken } from '@/core/profile-runtime/profile-auth'
 import { attachArtifacts } from '@/core/artifacts/artifact-service'
 import type { ArtifactFile } from '@/core/artifacts/artifact-types'
 import fs from 'node:fs'

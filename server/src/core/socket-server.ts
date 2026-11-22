@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import axios from 'axios'
-import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 
 import {
   LANG,
@@ -57,7 +57,7 @@ import {
   authenticateProfileCredential,
   readProfileCredentialFromHeaders,
   readStoredProfileToken
-} from '@/core/profile-auth'
+} from '@/core/profile-runtime/profile-auth'
 import {
   getActiveProfileName,
   runWithProfileContext

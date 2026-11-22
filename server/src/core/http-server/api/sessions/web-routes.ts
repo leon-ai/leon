@@ -16,8 +16,8 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
 import { LLM_DIR_PATH } from '@/constants'
 import { listInstalledLLMModels } from '@/core/llm-manager/llm-routing'
-import { resolveOwnerAttachments } from '@/core/stored-owner-attachments'
-import { OWNER_ATTACHMENT_MAX_COUNT } from '@/core/owner-attachment-contract'
+import { resolveOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
+import { OWNER_ATTACHMENT_MAX_COUNT } from '@/core/owner-attachments/owner-attachment-contract'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 const MAXIMUM_STREAM_BACKLOG_BYTES = 1_024 * 1_024

@@ -6,11 +6,11 @@ import type { Artifact } from '@/core/artifacts/artifact-types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getLLMModelCatalogEntry } from '@/core/llm-manager/llm-model-catalog'
 import type { AgentModelFile } from '@/core/llm-manager/types'
-import { withOwnerAttachmentReferences } from '@/core/owner-attachments'
+import { withOwnerAttachmentReferences } from './owner-attachments'
 import {
   OWNER_ATTACHMENT_SOURCE, OWNER_ATTACHMENT_MAX_COUNT,
   getOwnerAttachmentFormat, getOwnerAttachmentSizeLimit
-} from '@/core/owner-attachment-contract'
+} from './owner-attachment-contract'
 
 const MAX_ATTACHMENT_BYTES = OWNER_ATTACHMENT_MAX_BYTES
 

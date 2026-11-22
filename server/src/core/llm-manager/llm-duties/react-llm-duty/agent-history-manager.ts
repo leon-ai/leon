@@ -9,7 +9,7 @@ import {
   type LLMProviders,
   type AgentToolTranscriptMessage
 } from '@/core/llm-manager/types'
-import type { PostTurnMaintenanceTask } from '@/core/post-turn-maintenance-queue'
+import type { PostTurnMaintenanceTask } from '@/core/turn-lifecycle/post-turn-maintenance-queue'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import type { MessageLog } from '@/types'

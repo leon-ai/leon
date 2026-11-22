@@ -6,7 +6,7 @@ import { createUUID } from '@/utils/create-uuid'
 import { AttachmentUploadState, type AttachmentUploadListener, type AttachmentUploadProgress, type OwnerAttachmentDraft } from '@/data/owner-attachments'
 import {
   OWNER_ATTACHMENT_MAX_COUNT, getOwnerAttachmentFormat, getOwnerAttachmentSizeLimit
-} from '../../../../../server/src/core/owner-attachment-contract'
+} from '../../../../../server/src/core/owner-attachments/owner-attachment-contract'
 import { AttachmentDropZone, AttachmentDropPhase } from './attachment-drop-zone'
 import { DESKTOP_FILES_EVENT, type DesktopAttachmentFile, type DesktopFilesEvent } from '../../../../../bridges/runtime/contracts/desktop-client'
 import { isDesktopAttachmentFile, releaseDesktopAttachment } from '@/data/desktop-attachments'

@@ -23,7 +23,7 @@ import {
 import {
   parseProfileCredential,
   readStoredProfileToken
-} from '@/core/profile-auth'
+} from '@/core/profile-runtime/profile-auth'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'

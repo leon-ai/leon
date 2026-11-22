@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import SelfModelManager from '@/core/self-model-manager'
+import SelfModelManager from '@/core/self-model-manager/self-model-manager'
 import { buildOwnerDocument, normalizeOwnerProfile, getOwnerContextPath } from '@/core/context-manager/owner-profile'
 import { LogHelper } from '@/helpers/log-helper'
 

@@ -9,7 +9,7 @@ import {
   ExperienceLoadLimit,
   type ExperienceCard,
   type ExperienceLoadResult
-} from '@/core/experience-manager'
+} from '@/core/experience-manager/experience-manager'
 import { CATALOG_SEARCH_TOOL_NAME, createCatalogSearchTool } from '@/core/tool-manager/catalog/agent-catalog'
 import {
   CONNECTION_SETUP_TOOL_NAME,

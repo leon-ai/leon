@@ -7,7 +7,7 @@ import { io, type Socket } from 'socket.io-client'
 import { parse } from 'yaml'
 
 import { LEON_PROFILE_NAME, PROFILE_CONFIG_PATH } from '@/leon-roots'
-import { readStoredProfileToken } from '@/core/profile-auth'
+import { readStoredProfileToken } from '@/core/profile-runtime/profile-auth'
 import { CONFIG_MANAGER } from '@/config'
 import { PROFILE_TOKEN_SEPARATOR } from '@/core/profile-runtime/profile-paths'
 import {

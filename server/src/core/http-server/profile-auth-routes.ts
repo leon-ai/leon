@@ -9,7 +9,7 @@ import {
   authenticateProfileCredential,
   buildProfileAuthCookie,
   readProfileCredentialFromHeaders
-} from '@/core/profile-auth'
+} from '@/core/profile-runtime/profile-auth'
 import { enterProfileContext } from '@/core/profile-runtime/profile-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { IS_CLIENT_INTERFACE_AUTH_ENABLED } from '@/constants'

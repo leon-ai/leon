@@ -1,4 +1,4 @@
-import { isPortableArtifactFilename } from './artifacts/artifact-types'
+import { isPortableArtifactFilename } from '../artifacts/artifact-types'
 
 export const OWNER_ATTACHMENT_MAX_COUNT = 20
 export const OWNER_ATTACHMENT_SOURCE = 'owner-attachment'

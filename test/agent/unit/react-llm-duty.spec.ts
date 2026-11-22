@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { EXPERIENCE_PREFIX, ExperienceLoadLimit } from '@/core/experience-manager'
+import { EXPERIENCE_PREFIX, ExperienceLoadLimit } from '@/core/experience-manager/experience-manager'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ConversationSessionManager } from '@/core/session-manager'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'

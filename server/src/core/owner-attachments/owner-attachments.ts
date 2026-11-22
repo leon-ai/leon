@@ -5,10 +5,10 @@ import { randomUUID } from 'node:crypto'
 import { OWNER_ATTACHMENT_MAX_BYTES } from '@/constants'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { validateOwnerAttachmentContent } from '@/core/owner-attachment-validation'
+import { validateOwnerAttachmentContent } from './owner-attachment-validation'
 import {
   OWNER_ATTACHMENT_FORMATS, OWNER_ATTACHMENT_MAX_COUNT, getOwnerAttachmentFormat
-} from '@/core/owner-attachment-contract'
+} from './owner-attachment-contract'
 
 const MAX_ATTACHMENT_BYTES = OWNER_ATTACHMENT_MAX_BYTES
 const ATTACHMENT_EXTENSIONS = new Map(OWNER_ATTACHMENT_FORMATS.map((format) => [format.mediaType, format.extensions[0]!]))

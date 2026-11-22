@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { updatesPlugin } from '@/core/http-server/api/updates'
 import { authenticateProfileHTTPRequest } from '@/core/http-server/profile-auth-routes'
-import { PROFILE_AUTH_COOKIE_NAME, PROFILE_TOKEN_ENV_NAME } from '@/core/profile-auth'
+import { PROFILE_AUTH_COOKIE_NAME, PROFILE_TOKEN_ENV_NAME } from '@/core/profile-runtime/profile-auth'
 import { setShutdownHandler } from '@/core/server-lifecycle'
 import { LEON_UPDATE_EXIT_CODE } from '../../../bridges/runtime/contracts/updates'
 import { createGitUpdateFixture, type GitUpdateFixture } from '../../fixtures/git-update'

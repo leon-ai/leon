@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import ExperienceManager, { ExperienceLoadLimit } from '@/core/experience-manager'
+import ExperienceManager, { ExperienceLoadLimit } from '@/core/experience-manager/experience-manager'
 import { runInference } from '@/core/llm-manager/inference'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 

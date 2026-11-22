@@ -21,7 +21,7 @@ import {
 import {
   AMBIENT_WEATHER_REFRESH_INTERVAL_MS,
   type AmbientWeatherSnapshot
-} from '@/core/ambient-conditions-manager'
+} from '@/core/ambient/ambient-conditions-manager'
 
 /**
  * @see https://llama.meta.com/docs/how-to-guides/prompting/

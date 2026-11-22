@@ -4,7 +4,7 @@ import { clsx } from 'clsx'
 import { Icon } from '@/components/icon'
 import { useExitCleanup } from '@/hooks/use-exit-cleanup'
 import { useTheme } from '@/hooks/use-theme'
-import { OWNER_ATTACHMENT_MAX_COUNT } from '../../../../../server/src/core/owner-attachment-contract'
+import { OWNER_ATTACHMENT_MAX_COUNT } from '../../../../../server/src/core/owner-attachments/owner-attachment-contract'
 
 import './attachment-drop-zone.sass'
 

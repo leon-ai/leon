@@ -9,7 +9,7 @@ import {
 import {
   PROFILE_AUTHORIZATION_HEADER_NAME,
   PROFILE_TOKEN_HEADER_NAME
-} from '@/core/profile-auth'
+} from '@/core/profile-runtime/profile-auth'
 
 const ALLOWED_REQUEST_HEADERS = [
   'Origin',

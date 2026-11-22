@@ -11,7 +11,7 @@ import { webAppPlugin } from '@/core/http-server/web-app'
 import { renderWebAppDocument } from '@/core/http-server/web-app-document'
 import { PROFILE_AUTH_BOOTSTRAP_ID, type ProfileAuthentication } from '@/core/http-server/profile-auth-contract'
 import { profileAuthRoutes } from '@/core/http-server/profile-auth-routes'
-import { PROFILE_AUTH_COOKIE_NAME, PROFILE_TOKEN_ENV_NAME } from '@/core/profile-auth'
+import { PROFILE_AUTH_COOKIE_NAME, PROFILE_TOKEN_ENV_NAME } from '@/core/profile-runtime/profile-auth'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 
 const fixture = vi.hoisted(() => ({ root: '', authEnabled: true, initialize: vi.fn() }))

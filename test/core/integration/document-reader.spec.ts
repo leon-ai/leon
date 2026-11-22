@@ -9,7 +9,7 @@ import { LocalOcr } from '@@/tools/file_system/file/src/nodejs/lib/local-ocr'
 import { prepareDocumentSearch } from '@@/tools/file_system/file/src/nodejs/lib/document-search'
 import { UrlReader } from '@@/tools/search_web/crawlberg/src/nodejs/lib/url-reader'
 import { sliceLayout } from '@@/tools/file_system/file/src/nodejs/lib/document-layout'
-import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 import { LEON_TOOLKITS_PATH } from '@bridge/constants'
 
 const profile = vi.hoisted(() => ({ sessions: '' }))
