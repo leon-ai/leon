@@ -85,9 +85,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'core-runtime-*' --dir "$RUNNER_TEMP/leon-runtimes"
 
+      - name: Read verified Quick Evals
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name leon-quick-evals --dir "$RUNNER_TEMP/leon-release"
+
       - name: Publish completed draft
         env:
           GH_TOKEN: ${{ github.token }}
           LEON_RELEASE_OUTPUT: ${{ runner.temp }}/leon-release
           LEON_RUNTIME_ASSETS: ${{ runner.temp }}/leon-runtimes
         run: node scripts/release/publish-distribution.js
+
+  archive-quick-evals:
+    needs: publish
+    uses: ./.github/workflows/archive-quick-eval.yml
+    permissions:
+      contents: write
+      actions: read

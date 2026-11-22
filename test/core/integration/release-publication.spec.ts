@@ -15,6 +15,7 @@ let commit: string
 let api: http.Server
 let env: NodeJS.ProcessEnv
 let statePath: string
+let evaluationPath: string
 const git = async (...args: string[]): Promise<string> =>
   (await execute('git', args, { cwd: root })).stdout.trim()
 
@@ -35,6 +36,13 @@ beforeEach(async () => {
   await fs.writeFile(path.join(directory, 'release-notes.md'), 'My latest improvements.\n')
   await fs.writeFile(path.join(directory, 'verification.json'), JSON.stringify({ commit, tag: TAG, version: VERSION,
     runId: '42', mode: 'upgrade' }))
+  evaluationPath = path.join(directory, 'leon-quick-evals.json')
+  await fs.writeFile(evaluationPath, JSON.stringify({
+    schemaVersion: 1, sha: commit, version: VERSION, runId: '42', attempt: 1, source: 'release',
+    recordedAt: 1_800_000_000_000, durationMs: 40_000, suiteRevision: 'a'.repeat(64),
+    model: 'deepseek/deepseek-flash', reasoning: 'high',
+    results: [{ scenario: 'selected-lookup', status: 'Passed', samples: [] }]
+  }))
   statePath = path.join(root, 'published.json')
   const executable = path.join(root, 'bin', 'gh')
   await fs.mkdir(path.dirname(executable))
@@ -53,6 +61,8 @@ beforeEach(async () => {
     if (action === 'upload') {
       const content = JSON.parse(fs.readFileSync(args[3]));
       if (content.version !== '${VERSION}') process.exit(1);
+      const evaluation = JSON.parse(fs.readFileSync(args[4]));
+      if (evaluation.sha !== process.env.GITHUB_SHA || evaluation.version !== '${VERSION}') process.exit(1);
       state.uploaded = true;
     }
     if (action === 'edit') {
@@ -108,4 +118,12 @@ it.skipIf(process.platform === 'win32')('blocks unverified content, changed tags
   await fs.writeFile(statePath, JSON.stringify({ draft: false, uploaded: true }))
   await expect(publish()).rejects.toThrow('already published')
   expect(JSON.parse(await fs.readFile(statePath, 'utf8'))).toEqual({ draft: false, uploaded: true })
+})
+
+it.skipIf(process.platform === 'win32')('rejects evaluation measurements from a different commit before creating a release', async () => {
+  const evaluation = JSON.parse(await fs.readFile(evaluationPath, 'utf8'))
+  await fs.writeFile(evaluationPath, JSON.stringify({ ...evaluation, sha: 'b'.repeat(40) }))
+
+  await expect(publish()).rejects.toThrow('evaluation must match the release commit')
+  await expect(fs.access(statePath)).rejects.toThrow()
 })
