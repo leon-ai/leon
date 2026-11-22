@@ -18,6 +18,8 @@ import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-rep
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { collectArtifacts } from '@/core/artifacts/artifact-context'
+import { measurePulse, withPulseStage } from '@/core/telemetry/pulse-measurements'
+import { PulseStage, PulseTimingMetric } from '@/core/telemetry/report-contract'
 import {
   PulseArchiveReason,
   PulseDecision,
@@ -419,7 +421,7 @@ export default class PulseManager {
     }
 
     return async () => {
-      const review = await runInference({
+      const review = await withPulseStage(PulseStage.Resolution, () => runInference({
         usagePurpose: InferencePurpose.PulseReaction,
         prompt: JSON.stringify({
           matters: candidates.map(({ lead }, index) => ({
@@ -437,7 +439,7 @@ export default class PulseManager {
         temperature: 0,
         maxTokens: PULSE_RESOLUTION_MAX_TOKENS,
         trackProviderErrors: false
-      })
+      }))
       const decisions = this.parseJsonObject(review?.output)?.['resolved']
       const currentResponse = CONVERSATION_REPOSITORY.readMessage(turn.sessionId, turn.responseId)
       if (!Array.isArray(decisions) || !currentResponse?.isAddedToHistory ||
@@ -465,6 +467,10 @@ export default class PulseManager {
         }, Date.now())
         if (resolved) {
           resolvedMatterIds.add(matter.lead.fingerprint)
+          measurePulse({ counter: 'resolved_in_chat', count: 1 })
+          if (Date.now() < matter.checkAt) {
+            measurePulse({ counter: 'resolved_before_check', count: 1 })
+          }
         }
       }
 
@@ -493,6 +499,7 @@ export default class PulseManager {
         await runOutsideTurnTiming(() => this.tickInternal(reason))
       })
       .catch((error: unknown) => {
+        measurePulse({ counter: 'tick_failed', count: 1 })
         LogHelper.title('Pulse Manager')
         LogHelper.warning(`Pulse tick failed: ${String(error)}`)
       })
@@ -775,6 +782,7 @@ export default class PulseManager {
 
     const executionCooldownRemainingMs = this.getExecutionCooldownRemainingMs(state)
     if (executionCooldownRemainingMs > 0) {
+      measurePulse({ counter: 'cooldown', count: 1 })
       const remainingMinutes = Math.ceil(executionCooldownRemainingMs / 60_000)
       this.pushTickRecord(
         state,
@@ -787,6 +795,7 @@ export default class PulseManager {
 
     const core = await this.loadCoreNodes()
     if (!core.LLM_PROVIDER.isLLMProviderReady) {
+      measurePulse({ counter: 'provider_unavailable', count: 1 })
       this.pushTickRecord(state, 'skipped', 'Skipped pulse until the model provider is ready')
       this.persist()
       return
@@ -799,6 +808,7 @@ export default class PulseManager {
       WEB_SESSION_RUNTIME.isRunning(CONVERSATION_SESSION_MANAGER.getCurrentSessionId()) ||
       this.hasRecentOwnerActivity(recentConversation)
     ) {
+      measurePulse({ counter: 'active_conversation', count: 1 })
       this.pushTickRecord(
         state,
         'skipped',
@@ -827,6 +837,7 @@ export default class PulseManager {
     }
 
     if (!nextMatter) {
+      measurePulse({ counter: 'idle', count: 1 })
       this.pushTickRecord(state, 'idle', `No pulse matter selected (${reason})`)
       this.persist()
       return
@@ -1080,7 +1091,7 @@ export default class PulseManager {
       evidence.suppressionSection
     ].join('\n')
 
-    const result = await runInference({
+    const result = await withPulseStage(PulseStage.Planning, () => runInference({
       usagePurpose: InferencePurpose.PulsePlanning,
       prompt,
       systemPrompt: [
@@ -1096,7 +1107,7 @@ export default class PulseManager {
       temperature: 0,
       maxTokens: PULSE_PLANNER_MAX_TOKENS,
       trackProviderErrors: false
-    })
+    }))
     const payload = this.parseJsonObject(result?.output) as PulsePlannerOutput | null
     const lead = Array.isArray(payload?.items) ? payload.items[0] : undefined
     if (!lead || typeof lead !== 'object') {
@@ -1227,7 +1238,16 @@ export default class PulseManager {
     matter.updatedAt = new Date().toISOString()
     this.persist()
 
+    const startedAt = Date.now()
+    const source = scheduled ? 'followup' : 'discovery'
+    measurePulse({ counter: `${source}_checked`, count: 1 })
+    if (scheduled) {
+      const ms = Math.max(0, startedAt - scheduled.checkAt)
+      measurePulse({ counter: ms < LEON_PULSE_INTERVAL_MS ? 'followup_on_time' : 'followup_late', count: 1 })
+      measurePulse({ metric: PulseTimingMetric.FollowUpLateness, ms, pulseActive: false })
+    }
     let decision = PulseDecision.Failed
+    let suppressed = false
 
     try {
       const research = await runWithConversationSession(
@@ -1255,6 +1275,7 @@ export default class PulseManager {
       }
       if (!this.results.record(result, matter, followUp, scheduled?.checkAt)) {
         decision = PulseDecision.Silent
+        suppressed = true
       }
       matter.outcome = decision === PulseDecision.Silent ? null : output
 
@@ -1265,6 +1286,7 @@ export default class PulseManager {
             this.surfacePulseMessage(state, matter, output, answerMetadata, true)
           )
         } catch (error) {
+          measurePulse({ counter: 'delivery_failed', count: 1 })
           this.results.saveUndelivered(matter.id)
           throw error
         }
@@ -1274,6 +1296,10 @@ export default class PulseManager {
       LogHelper.title('Pulse Manager')
       LogHelper.warning(`Could not complete pulse matter: ${String(error)}`)
     } finally {
+      const outcome = suppressed ? 'duplicate' : decision === PulseDecision.Notify ? 'delivered' :
+        decision === PulseDecision.Save ? 'saved' : decision === PulseDecision.Failed ? 'failed' : 'silent'
+      measurePulse({ counter: `${source}_${outcome}`, count: 1 })
+      measurePulse({ metric: PulseTimingMetric.Investigation, ms: Date.now() - startedAt, pulseActive: false })
       const completedAt = new Date().toISOString()
       matter.updatedAt = completedAt
       matter.completedAt = completedAt
@@ -1337,22 +1363,24 @@ export default class PulseManager {
         backgroundTools: PULSE_RESEARCH_TOOLS
       })
       const { value: result, artifacts } = await collectArtifacts(() =>
-        runWithInferencePurpose(InferencePurpose.Pulse, async () => {
+        withPulseStage(PulseStage.Research, () => runWithInferencePurpose(InferencePurpose.Pulse, async () => {
           await duty.init()
 
           return duty.execute()
-        })
+        }))
       )
 
       const output = typeof result?.output === 'string' ? result.output.trim() : ''
       const data = result?.data
+      const executions = Array.isArray(data?.['executionHistory'])
+        ? data['executionHistory'] as ExecutionRecord[]
+        : []
+      if (executions.length) {
+        measurePulse({ counter: 'tool_calls', count: executions.length })
+      }
       if (data?.['finalIntent'] !== 'answer' || !output) {
         return failure
       }
-
-      const executions = Array.isArray(data['executionHistory'])
-        ? data['executionHistory'] as ExecutionRecord[]
-        : []
       const evidence = executions
         .filter((record) => record.status === 'success' && PULSE_RESEARCH_TOOLS.has(record.function))
         .slice(-6)
@@ -1366,7 +1394,7 @@ export default class PulseManager {
         return silence
       }
 
-      const review = await runInference({
+      const review = await withPulseStage(PulseStage.Review, () => runInference({
         usagePurpose: InferencePurpose.PulsePlanning,
         prompt: JSON.stringify({
           matter: matter.summary, reason: matter.why, now: new Date().toISOString(),
@@ -1387,7 +1415,7 @@ export default class PulseManager {
         timeout: remainingMs,
         maxRetries: 0,
         trackProviderErrors: false
-      })
+      }))
       const payload = this.parseJsonObject(review?.output)
       const decision = payload?.['decision']
       const findingKey = typeof payload?.['finding_key'] === 'string'
@@ -1495,6 +1523,7 @@ export default class PulseManager {
     const nowIso = new Date().toISOString()
     matter.ownerFeedback = reaction.reaction === 'accept' ? 'accept' : 'decline'
     matter.ownerFeedbackAt = nowIso
+    measurePulse({ counter: reaction.reaction === 'accept' ? 'accepted' : 'declined', count: 1 })
 
     if (reaction.reaction === 'decline') {
       const policy = this.upsertSuppressionPolicy(state, matter, 'declined', nowIso)
@@ -1579,7 +1608,7 @@ export default class PulseManager {
       ownerMessage
     ].join('\n')
 
-    const result = await runInference({
+    const result = await withPulseStage(PulseStage.Feedback, () => runInference({
       usagePurpose: InferencePurpose.PulseReaction,
       prompt,
       systemPrompt: [
@@ -1602,7 +1631,7 @@ export default class PulseManager {
       temperature: 0,
       maxTokens: PULSE_OWNER_REACTION_MAX_TOKENS,
       trackProviderErrors: false
-    })
+    }))
     return this.parseJsonObject(result?.output) as PulseOwnerReactionOutput | null
   }
 

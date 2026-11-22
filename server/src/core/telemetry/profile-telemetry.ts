@@ -14,11 +14,13 @@ import type { OwnerTurnFailureCode } from '@/core/llm-manager/turn-timing-contra
 import type { TelemetrySetting } from '@/core/insights/insights-contract'
 import { DateHelper } from '@/helpers/date-helper'
 import { FileHelper } from '@/helpers/file-helper'
+import { LLMProviders } from '@/core/llm-manager/types'
+import { measurePulse, startPulseMeasurements, takePulseMeasurements } from './pulse-measurements'
 import {
-  DAILY_REPORT_PATH, getIanaTimeZone, getPublicModel, isTelemetryEventReport, OTHER_MODEL, OTHER_PROVIDER,
+  DAILY_REPORT_PATH, getIanaTimeZone, getPublicModel, isPulseReport, isTelemetryEventReport, OTHER_MODEL, OTHER_PROVIDER,
   LATENCY_BUCKETS_MS, PRESENCE_INTERVAL_MS, PRESENCE_REPORT_PATH, TELEMETRY_DAY_MS, TELEMETRY_EVENT_PATH,
   TELEMETRY_MAX_MODEL_BUCKETS, TELEMETRY_MINUTE_MS, TELEMETRY_RETRY_DAYS, TELEMETRY_SCHEMA_VERSION,
-  type CapabilityUsage, type DailyReport, type FleetReport, type PresenceReport, type TelemetryEventReport
+  PulseTimingMetric, type CapabilityUsage, type DailyReport, type FleetReport, type PresenceReport, type PulseReport, type TelemetryEventReport
 } from './report-contract'
 
 const REPORT_ENDPOINT = new URL(DAILY_REPORT_PATH, TELEMETRY_COLLECTOR_ORIGIN).href
@@ -45,8 +47,9 @@ interface PendingEvent {
   capabilities?: readonly CapabilityUsage[]
   contextReduction?: CompletedOwnerTurn['contextReduction']
   skillEventId?: string
+  pulse?: NonNullable<ReturnType<typeof takePulseMeasurements>>
   retryAt: number
-  event?: TelemetryEventReport
+  event?: TelemetryEventReport | PulseReport
 }
 
 interface DeliveryState {
@@ -83,7 +86,7 @@ async function readDeliveryState(profile: string): Promise<DeliveryState | undef
 }
 
 async function sendReport(
-  endpoint: string, report: TelemetryEventReport | PresenceReport, signal: AbortSignal
+  endpoint: string, report: TelemetryEventReport | PresenceReport | PulseReport, signal: AbortSignal
 ): Promise<boolean> {
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -156,6 +159,7 @@ export async function setTelemetrySetting(enabled: boolean, profile = getActiveP
     if (!enabled) {
       presenceAbort?.abort()
     }
+    takePulseMeasurements(profile)
     await syncDeliveryState(profile, enabled, Date.now())
   })
 
@@ -315,9 +319,13 @@ async function prepareProfile(profile: string, at: number): Promise<DeliveryStat
   }
 }
 
-function buildEvent(job: PendingEvent, state: DeliveryState, identity: ReportingInstallation): TelemetryEventReport {
+function buildEvent(job: PendingEvent, state: DeliveryState, identity: ReportingInstallation): TelemetryEventReport | PulseReport {
   const { key, installation } = identity
   const pseudonym = createHmac('sha256', key).update('telemetry:profile:').update(installation).update(state.seed).digest('hex')
+  if (job.pulse) {
+    return { kind: 'pulse_metrics', at: job.at, installation, profile: pseudonym, version: PACKAGE.version,
+      id: createHmac('sha256', key).update('telemetry:pulse:').update(pseudonym).update(randomUUID()).digest('hex'), ...job.pulse }
+  }
   const kind = job.skillEventId ? 'skill_finished' : job.activity ? 'turn_finished' : 'profile_started'
   const day = Math.floor(job.at / TELEMETRY_DAY_MS)
   const activity = job.activity ? [job.activity] : []
@@ -356,6 +364,7 @@ export function startProfileTelemetry(): (() => void) | undefined {
   let closed = false
   let presenceTimer: NodeJS.Timeout | undefined
   let identity: Promise<ReportingInstallation | undefined> | undefined
+  const stopPulseMeasurements = startPulseMeasurements((profile) => getTelemetrySetting(profile).enabled)
 
   const getIdentity = (): Promise<ReportingInstallation | undefined> => {
     identity ??= getReportingInstallation().then((value) => {
@@ -389,7 +398,7 @@ export function startProfileTelemetry(): (() => void) | undefined {
     if (job.event === undefined) {
       job.event = buildEvent(job, state, installation)
     }
-    if (!isTelemetryEventReport(job.event)) {
+    if (job.event.kind === 'pulse_metrics' ? !isPulseReport(job.event) : !isTelemetryEventReport(job.event)) {
       return true
     }
     controller.signal.throwIfAborted()
@@ -444,8 +453,18 @@ export function startProfileTelemetry(): (() => void) | undefined {
       if (!closed && getTelemetrySetting(profile).enabled && pending.length < MAXIMUM_PENDING_EVENTS) {
         const at = startedAt + durationMs
         announceProfile(profile, at)
+        const activity = summarizeCompletedOwnerTurn(completed)
+        if (completed.pulseQueue) {
+          const { model, waitMs, pulseActive } = completed.pulseQueue
+          const provider = LLMProviders.LlamaCPP
+          measurePulse({ metric: PulseTimingMetric.ForegroundQueue, ms: waitMs, pulseActive, provider, model }, profile)
+          if (activity.firstOutputMs !== undefined && activity.primaryModel?.provider === provider &&
+            activity.primaryModel.model === model) {
+            measurePulse({ metric: PulseTimingMetric.ForegroundOutput, ms: activity.firstOutputMs, pulseActive, provider, model }, profile)
+          }
+        }
         enqueue({
-          profile, at, activity: summarizeCompletedOwnerTurn(completed), retryAt: 0,
+          profile, at, activity, retryAt: 0,
           capabilities: completed.capabilities, contextReduction: completed.contextReduction
         })
       }
@@ -479,8 +498,15 @@ export function startProfileTelemetry(): (() => void) | undefined {
           if (getTelemetrySetting(profile.name).enabled) {
             sharing = true
             announceProfile(profile.name, Date.now())
+            if (pending.length < MAXIMUM_PENDING_EVENTS) {
+              const pulse = takePulseMeasurements(profile.name)
+              if (pulse) {
+                enqueue({ profile: profile.name, at: Date.now(), pulse, retryAt: 0 })
+              }
+            }
           } else {
             announced.delete(profile.name)
+            takePulseMeasurements(profile.name)
           }
         } catch {
           continue
@@ -509,6 +535,7 @@ export function startProfileTelemetry(): (() => void) | undefined {
 
   return () => {
     closed = true
+    stopPulseMeasurements()
     unsubscribe()
     unsubscribeSkill()
     pending.length = 0

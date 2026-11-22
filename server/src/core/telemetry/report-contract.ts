@@ -33,6 +33,7 @@ const count = Type.Integer({ minimum: 0, maximum: 1_000_000_000_000 })
 const total = Type.Number({ minimum: 0, maximum: 1_000_000_000_000 })
 const utcDay = Type.Integer({ minimum: 0, maximum: 100_000 })
 const histogram = Type.Array(count, { minItems: LATENCY_BUCKETS_MS.length + 1, maxItems: LATENCY_BUCKETS_MS.length + 1 })
+const version = Type.String({ pattern: '^(?:(?:unknown|mixed)|\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(?:-(?:alpha|beta|rc)(?:\\.\\d{1,5}){0,3})?)$' })
 const provider = Type.Enum(LLMProviders)
 const modelProperties = {
   provider: Type.Union([provider, Type.Literal(OTHER_PROVIDER)]),
@@ -51,7 +52,7 @@ export const dailyReportSchema = Type.Object({
   installation: identifier,
   profile: identifier,
   day: utcDay,
-  version: Type.String({ pattern: '^(?:(?:unknown|mixed)|\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(?:-(?:alpha|beta|rc)(?:\\.\\d{1,5}){0,3})?)$' }),
+  version,
   firstReportingDay: Type.Boolean(),
   turns: count,
   answered: count,
@@ -132,6 +133,47 @@ const telemetryEventSchema = Type.Object({
   report: dailyReportSchema
 }, { additionalProperties: false })
 export type TelemetryEventReport = Static<typeof telemetryEventSchema>
+
+export const PULSE_COUNTERS = [
+  'idle', 'active_conversation', 'cooldown', 'provider_unavailable', 'tick_failed',
+  'discovery_checked', 'followup_checked', 'followup_on_time', 'followup_late',
+  'discovery_silent', 'followup_silent', 'discovery_duplicate', 'followup_duplicate',
+  'discovery_saved', 'followup_saved', 'discovery_delivered', 'followup_delivered',
+  'discovery_failed', 'followup_failed', 'delivery_failed', 'tool_calls',
+  'new_findings', 'accepted', 'declined', 'scheduled', 'expired', 'displaced', 'resolved_in_chat', 'resolved_before_check'
+] as const
+export type PulseCounter = (typeof PULSE_COUNTERS)[number]
+export enum PulseStage {
+  Planning = 'planning', Research = 'research', Review = 'review', Feedback = 'feedback', Resolution = 'resolution'
+}
+export enum PulseTimingMetric {
+  FollowUpLateness = 'followup_lateness', Investigation = 'investigation',
+  ForegroundQueue = 'foreground_queue', ForegroundOutput = 'foreground_output'
+}
+export const PULSE_TIMING_BUCKETS_MS = [50, 100, ...LATENCY_BUCKETS_MS, 300_000, 900_000, 1_800_000, 3_600_000, TELEMETRY_DAY_MS] as const
+export const TELEMETRY_MAX_PULSE_BUCKETS = 48
+const pulseReportSchema = Type.Object({
+  kind: Type.Literal('pulse_metrics'), id: identifier, installation: identifier, profile: identifier, version,
+  at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }),
+  counters: Type.Partial(Type.Object(Object.fromEntries(PULSE_COUNTERS.map((key) => [key, count])), { additionalProperties: false })),
+  usage: Type.Array(Type.Object({ ...modelProperties, stage: Type.Enum(PulseStage), costMicros: count, costSamples: count },
+    { additionalProperties: false }), { maxItems: TELEMETRY_MAX_PULSE_BUCKETS }),
+  timings: Type.Array(Type.Object({
+    metric: Type.Enum(PulseTimingMetric), pulseActive: Type.Boolean(), provider: modelProperties.provider, model: modelProperties.model,
+    buckets: Type.Array(count, { minItems: PULSE_TIMING_BUCKETS_MS.length + 1, maxItems: PULSE_TIMING_BUCKETS_MS.length + 1 })
+  }, { additionalProperties: false }), { maxItems: TELEMETRY_MAX_PULSE_BUCKETS })
+}, { additionalProperties: false })
+export type PulseReport = Static<typeof pulseReportSchema>
+
+/**
+ * Accepts only counts, fixed Pulse categories, and public model dimensions.
+ */
+export function isPulseReport(value: unknown): value is PulseReport {
+  return Value.Check(pulseReportSchema, value) && value.usage.every((row) =>
+    isPublicModelLabel(row) && row.calls > 0 && row.failedCalls <= row.calls && row.costSamples <= row.calls &&
+    row.cacheReportedCalls <= row.calls && row.cachedInputTokens <= row.inputTokens) &&
+    value.timings.every((row) => isPublicModelLabel(row) && row.buckets.some((count) => count > 0))
+}
 
 /**
  * Resolves IANA names and aliases while excluding numeric offsets and locale abbreviations.

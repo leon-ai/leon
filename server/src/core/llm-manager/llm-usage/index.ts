@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { LogHelper } from '@/helpers/log-helper'
+import { getActivePulseStage, measurePulse } from '@/core/telemetry/pulse-measurements'
 import { inferenceUsageStorage, type InferenceUsageContext } from './usage-context'
 import { appendInferenceUsage } from './usage-ledger'
 import { getTurnTimingContext, recordForegroundInferenceUsage, recordTurnInferenceUsage } from '../turn-timing'
@@ -38,6 +39,10 @@ export async function trackInferenceUsage<T>(
         usage: { ...context.usage }
       }
       recordForegroundInferenceUsage(usage)
+      const pulseStage = getActivePulseStage()
+      if (pulseStage) {
+        measurePulse({ stage: pulseStage, usage }, profileName)
+      }
 
       try {
         await appendInferenceUsage(profileName, {

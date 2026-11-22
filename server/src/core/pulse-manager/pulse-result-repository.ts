@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import SQLite, { type Database } from 'better-sqlite3'
+import { measurePulse } from '@/core/telemetry/pulse-measurements'
 
 export enum PulseDecision {
   Silent = 'silent',
@@ -83,11 +84,11 @@ export class PulseResultRepository {
     scheduledCheckAt?: number
   ): boolean {
     const db = this.database()
-    return db.transaction(() => {
+    const { recorded, newFinding, agenda, expired } = db.transaction(() => {
       if (scheduledCheckAt !== undefined && !db.prepare(`
         SELECT 1 FROM matters WHERE id = ? AND check_at = ? AND archive_reason IS NULL
       `).get(result.matterId, scheduledCheckAt)) {
-        return false
+        return { recorded: false, newFinding: false }
       }
 
       const knownFinding = result.findingKey && db.prepare(`
@@ -107,24 +108,41 @@ export class PulseResultRepository {
       }
 
       const now = Date.parse(result.checkedAt)
-      if (recorded && result.findingKey && !knownFinding) {
-        this.updateMatter(lead, followUp, now)
-      } else if (scheduledCheckAt !== undefined) {
-        db.prepare(`
+      const newFinding = Boolean(recorded && result.findingKey && !knownFinding)
+      if (newFinding) {
+        return { recorded, newFinding, agenda: this.updateMatter(lead, followUp, now) }
+      }
+      if (scheduledCheckAt !== undefined) {
+        const matter = db.prepare(`
           UPDATE matters SET archive_reason = CASE WHEN expires_at <= @now THEN @expired ELSE @finished END,
             updated_at = @now
           WHERE id = @id AND archive_reason IS NULL AND check_at = @checkAt
-        `).run({
+          RETURNING archive_reason
+        `).get({
           id: result.matterId, checkAt: scheduledCheckAt, now,
           expired: PulseArchiveReason.Expired,
           finished: result.decision === PulseDecision.Failed
             ? PulseArchiveReason.CheckFailed
             : PulseArchiveReason.Resolved
         })
+        return { recorded, newFinding, expired: matter?.['archive_reason'] === PulseArchiveReason.Expired }
       }
 
-      return recorded
+      return { recorded, newFinding }
     })()
+    if (newFinding) {
+      measurePulse({ counter: 'new_findings', count: 1 })
+    }
+    if (agenda?.scheduled) {
+      measurePulse({ counter: 'scheduled', count: 1 })
+    }
+    if (agenda?.displaced) {
+      measurePulse({ counter: 'displaced', count: 1 })
+    }
+    if (expired) {
+      measurePulse({ counter: 'expired', count: 1 })
+    }
+    return recorded
   }
 
   /**
@@ -136,10 +154,13 @@ export class PulseResultRepository {
       return
     }
 
-    db.prepare(`
+    const expired = db.prepare(`
       UPDATE matters SET archive_reason = ?, updated_at = ?
       WHERE archive_reason IS NULL AND expires_at <= ?
     `).run(PulseArchiveReason.Expired, now, now)
+    if (expired.changes) {
+      measurePulse({ counter: 'expired', count: Number(expired.changes) })
+    }
     db.prepare('DELETE FROM results WHERE decision = ? AND checked_at < ?')
       .run(PulseDecision.Silent, new Date(now - SILENT_RESULT_RETENTION_MS).toISOString())
   }
@@ -214,17 +235,19 @@ export class PulseResultRepository {
     })()
   }
 
-  private updateMatter(lead: PulseMatterLead, followUp: PulseFollowUp | null, now: number): void {
+  private updateMatter(lead: PulseMatterLead, followUp: PulseFollowUp | null, now: number): { scheduled: boolean, displaced: boolean } {
     const db = this.database()
     const existing = db.prepare('SELECT archive_reason FROM matters WHERE id = ?')
       .get(lead.fingerprint)
     let archiveReason: PulseArchiveReason | null = PulseArchiveReason.Resolved
+    let displaced = false
 
     if (followUp) {
       archiveReason = null
       if (existing?.['archive_reason'] !== null) {
         const open = this.openMatters(now)
         if (open.length >= MAX_OPEN_PULSE_MATTERS) {
+          displaced = true
           // A due check already has a reason to run. Replace only lower-value deferred work.
           const weakest = open.filter((matter) => matter.checkAt > now)
             .sort((left, right) => left.lead.confidence - right.lead.confidence ||
@@ -258,6 +281,7 @@ export class PulseResultRepository {
       lead.fingerprint, JSON.stringify(nextLead), lead.confidence,
       followUp?.checkAt ?? null, followUp?.expiresAt ?? null, archiveReason, now
     )
+    return { scheduled: archiveReason === null, displaced }
   }
 
   public saveUndelivered(id: string): void {

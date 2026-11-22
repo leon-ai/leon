@@ -35,8 +35,10 @@ export interface CompletedOwnerTurn {
   inferenceUsage: readonly ForegroundInferenceUsage[]
   capabilities: readonly CapabilityUsage[]
   contextReduction: { count: number, estimatedTokensReclaimed: number }
+  pulseQueue?: PulseQueueSample
 }
 
+interface PulseQueueSample { model: string, waitMs: number, pulseActive: boolean }
 type ForegroundInferenceUsage = Pick<InferenceUsageRecord, 'provider' | 'model' | 'outcome' | 'usage'>
 
 const MAXIMUM_TURN_TIMINGS = 10_000
@@ -61,6 +63,7 @@ interface TurnTimingScope extends TurnTimingContext {
     inferenceUsage?: ForegroundInferenceUsage[]
     capabilities?: Map<string, CapabilityUsage>
     contextReduction?: CompletedOwnerTurn['contextReduction']
+    pulseQueue?: PulseQueueSample
   }
 }
 
@@ -86,6 +89,16 @@ export function onStandaloneSkill(listener: (profile: string, entry: CapabilityU
   standaloneSkillListeners.add(listener)
   return () => {
     standaloneSkillListeners.delete(listener)
+  }
+}
+
+/**
+ * Measures the first local admission within a foreground turn.
+ */
+export function recordPulseQueueSample(sample: PulseQueueSample): void {
+  const scope = storage.getStore()
+  if (ownerTurnListeners.size && scope?.stage === TurnStage.AgentLoop && !scope.taskId && !scope.state.closed) {
+    scope.state.pulseQueue ??= sample
   }
 }
 
@@ -542,7 +555,8 @@ export async function runWithTurnTiming<T>(
           durationMs: root.durationMs, measurement: owner, timings,
           inferenceUsage: scope.state.inferenceUsage ?? [],
           capabilities: [...(scope.state.capabilities?.values() ?? [])],
-          contextReduction: scope.state.contextReduction ?? { count: 0, estimatedTokensReclaimed: 0 }
+          contextReduction: scope.state.contextReduction ?? { count: 0, estimatedTokensReclaimed: 0 },
+          ...(scope.state.pulseQueue ? { pulseQueue: scope.state.pulseQueue } : {})
         }
         // Reporting can use finalized counters as soon as the turn closes.
         runOutsideTurnTiming(() => {
