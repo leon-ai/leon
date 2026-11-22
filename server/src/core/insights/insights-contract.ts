@@ -83,6 +83,7 @@ export interface TelemetrySetting {
 
 export const EVALUATION_STATUSES = ['Passed', 'Warning', 'Failed'] as const
 export const EVALUATION_SOURCES = ['development', 'release', 'local'] as const
+export const EVALUATION_UNKNOWN_SUITE = 'unrecorded'
 export type EvaluationStatus = typeof EVALUATION_STATUSES[number]
 export type EvaluationSource = Exclude<typeof EVALUATION_SOURCES[number], 'local'>
 
@@ -145,13 +146,19 @@ export interface EvaluationHistoryView {
   pages: number
   refreshFailed: boolean
   points: {
+    id: string
     sha: string
     date: number
+    model: string
+    reasoning: string
+    suite: string
     baseline: EvaluationMetrics | null
     measured: EvaluationMetrics | null
     outcomes: Record<EvaluationStatus, number>
   }[]
-  rows: (Pick<EvaluationRun, 'id' | 'sha' | 'recordedAt' | 'committedAt' | 'source' | 'version' | 'runId' | 'runUrl'> & {
+  rows: (Pick<EvaluationRun,
+    'id' | 'sha' | 'recordedAt' | 'committedAt' | 'source' | 'version' | 'runId' | 'runUrl' | 'suiteRevision'
+  > & {
     outcomes: Record<EvaluationStatus, number>
     samples: number
   })[]

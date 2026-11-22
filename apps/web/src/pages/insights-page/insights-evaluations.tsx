@@ -3,13 +3,16 @@ import { useState } from 'react'
 import { Button } from '@/components/button'
 import { Loader } from '@/components/loader'
 import { useInsightsEvaluations } from '@/data/insights'
-import { INSIGHTS_RANGES, EVALUATION_STATUSES, type EvaluationMetrics, type EvaluationQuery }
+import { INSIGHTS_RANGES, EVALUATION_STATUSES, EVALUATION_UNKNOWN_SUITE, type EvaluationMetrics, type EvaluationQuery }
   from '../../../../../server/src/core/insights/insights-contract'
 
 import { INSIGHTS_DATE, InsightsChart } from './insights-charts'
 
 const SOURCE_LABELS = { development: 'Development', release: 'Published releases', local: 'Local files' } as const
-const UNKNOWN_SUITE = 'unrecorded'
+
+function suiteLabel(suite: string): string {
+  return suite === EVALUATION_UNKNOWN_SUITE ? 'Unrecorded' : suite.slice(0, 12)
+}
 
 /**
  * Displays the selected suite or scenario and pages through its checkpoints.
@@ -19,8 +22,19 @@ export default function InsightsEvaluations() {
   const { data, isFetching, isPending, isError } = useInsightsEvaluations(filters)
   const points = data?.points ?? []
   const scenario = data?.scenario
-  const labels = points.map(({ date }) => INSIGHTS_DATE.format(date))
-  const details = points.map(({ sha }, index) => `${labels[index]} · ${sha.slice(0, 12)}`)
+  const runsPerCommit = new Map<string, number>()
+  for (const { sha } of points) {
+    runsPerCommit.set(sha, (runsPerCommit.get(sha) ?? 0) + 1)
+  }
+  const commitRuns = new Map<string, number>()
+  const labels = points.map(({ sha }) => {
+    const number = (commitRuns.get(sha) ?? 0) + 1
+    commitRuns.set(sha, number)
+    return (runsPerCommit.get(sha) ?? 0) > 1 ? `${sha.slice(0, 12)} · ${number}` : sha.slice(0, 12)
+  })
+  const details = points.map((point, index) =>
+    `${INSIGHTS_DATE.format(point.date)} · ${labels[index]} · Suite ${suiteLabel(point.suite)} · ${point.model} / ${point.reasoning}`)
+  const mixedSettings = new Set(points.map(({ suite, model, reasoning }) => JSON.stringify([suite, model, reasoning]))).size > 1
   const series = (label: string, key: keyof EvaluationMetrics, baseline = false) => ({
     label, previous: baseline, values: points.map((point) => {
       const metrics = baseline ? point.baseline : point.measured
@@ -33,7 +47,8 @@ export default function InsightsEvaluations() {
   })
 
   return <div className="insights-panel" aria-busy={isFetching}>
-    <p className="insights-note">Compare commits with matching model, reasoning, and suite settings. The suite view shows usage totals, highest input peak, and median scenario duration.</p>
+    <p className="insights-note">Each point is one evaluation run in commit order. All scenarios shows usage totals, highest input peak, and median scenario duration.</p>
+    {mixedSettings && <p className="insights-note">These runs use different evaluation settings. Filter by model, reasoning, or suite revision to compare like for like.</p>}
     {isPending && <Loader size="md" label="Loading evaluations…" />}
     {(isError || data?.refreshFailed) && <p className="insights-note" role="status">
       {data?.rows.length ? 'I couldn’t check for new evaluations. Showing saved results.' : 'I couldn’t load evaluations from GitHub.'}
@@ -43,7 +58,7 @@ export default function InsightsEvaluations() {
         <label>Source
           <select value={filters.source ?? ''} onChange={(event) => {
             const source = event.currentTarget.value as EvaluationQuery['source'] | ''
-            setFilters({ ...filters, source: source || undefined, page: undefined })
+            setFilters({ days: filters.days, source: source || undefined })
           }}>
             <option value="">All sources</option>
             {Object.entries(SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -51,12 +66,19 @@ export default function InsightsEvaluations() {
         </label>
         {data.models.length > 0 && <>
           <label>Evaluation model
-            <select value={data.model} onChange={(event) => setFilters({ ...filters, model: event.currentTarget.value || undefined, page: undefined })}>
+            <select value={data.model} onChange={(event) => setFilters({
+              days: filters.days, source: filters.source, model: event.currentTarget.value || undefined
+            })}>
+              <option value="">All models</option>
               {data.models.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
           <label>Reasoning
-            <select value={data.reasoning} onChange={(event) => setFilters({ ...filters, reasoning: event.currentTarget.value || undefined, page: undefined })}>
+            <select value={data.reasoning} onChange={(event) => setFilters({
+              days: filters.days, source: filters.source, model: filters.model,
+              reasoning: event.currentTarget.value || undefined
+            })}>
+              <option value="">All reasoning levels</option>
               {data.reasons.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
@@ -66,13 +88,14 @@ export default function InsightsEvaluations() {
               {data.scenarios.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
-          {data.suites.length > 1 && <label>Suite revision
-            <select value={data.suite} onChange={(event) => setFilters({ ...filters, suite: event.currentTarget.value || undefined, page: undefined })}>
-              {data.suites.map((item) => <option key={item} value={item}>
-                {item === UNKNOWN_SUITE ? 'Unrecorded' : item.slice(0, 12)}
-              </option>)}
+          <label>Suite revision
+            <select value={data.suite} onChange={(event) => setFilters({
+              ...filters, suite: event.currentTarget.value || undefined, scenario: undefined, page: undefined
+            })}>
+              <option value="">All suite revisions</option>
+              {data.suites.map((item) => <option key={item} value={item}>{suiteLabel(item)}</option>)}
             </select>
-          </label>}
+          </label>
         </>}
         <label>Commit date range
           <select value={filters.days ?? ''} onChange={(event) => {
@@ -110,7 +133,7 @@ export default function InsightsEvaluations() {
         </div>
         <div className="insights-table-scroll">
           <table aria-label="Evaluation runs">
-            <thead><tr><th scope="col">Commit date</th><th scope="col">Commit</th><th scope="col">Source</th>
+            <thead><tr><th scope="col">Commit date</th><th scope="col">Commit</th><th scope="col">Source</th><th scope="col">Suite revision</th>
               <th scope="col">Result</th><th scope="col">Samples</th></tr></thead>
             <tbody>{data.rows.map((run) => <tr key={run.id}>
               <th scope="row" title={`Evaluated ${INSIGHTS_DATE.format(run.recordedAt)}`}>
@@ -120,6 +143,7 @@ export default function InsightsEvaluations() {
               <td>{run.source === 'release' && run.version ? `Leon ${run.version}` : SOURCE_LABELS[run.source ?? 'local']}
                 {run.runUrl && <small><a href={run.runUrl} target="_blank" rel="noreferrer">CI run {run.runId}</a></small>}
               </td>
+              <td><code title={run.suiteRevision}>{suiteLabel(run.suiteRevision ?? EVALUATION_UNKNOWN_SUITE)}</code></td>
               <td>{EVALUATION_STATUSES.flatMap((status) => run.outcomes[status]
                 ? [scenario ? status : `${run.outcomes[status]} ${status.toLowerCase()}`] : []).join(' · ')}</td>
               <td>{run.samples}</td>

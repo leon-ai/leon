@@ -31,7 +31,8 @@ it('returns filtered chart points and a bounded checkpoint page without case pay
     maintenanceInputTokens: 0, turnLatencyMs: 1_500
   }
   const runs: EvaluationRun[] = Array.from({ length: 35 }, (_, index) => ({
-    id: String(index), sha: String(index), model: 'fixture', reasoning: 'high',
+    id: String(index), sha: String(index), model: index === 34 ? 'second-model' : 'fixture',
+    reasoning: index === 34 ? 'low' : 'high', suiteRevision: (index < 20 ? 'a' : 'b').repeat(64),
     recordedAt: Date.UTC(2030, 0, 1) + index, committedAt: Date.UTC(2029, 11, 31) + index,
     cases: [
       { scenario: 'lookup', status: 'Passed', baseline: measured, measured, samples: 1 },
@@ -44,6 +45,7 @@ it('returns filtered chart points and a bounded checkpoint page without case pay
   expect(suite.rows).toHaveLength(10)
   expect(suite.rows[0]).not.toHaveProperty('cases')
   expect(suite.points).toHaveLength(35)
+  expect(suite.points.at(-1)).toMatchObject({ id: '34', model: 'second-model', reasoning: 'low', suite: 'b'.repeat(64) })
   expect(suite.points[0]).toMatchObject({ sha: '0', measured: null })
   expect(suite.points[1]).toMatchObject({
     sha: '1', date: runs[1]?.committedAt,
@@ -53,6 +55,8 @@ it('returns filtered chart points and a bounded checkpoint page without case pay
   const scenario = projectEvaluationHistory(runs, { scenario: 'lookup' })
   expect(scenario.rows).toHaveLength(25)
   expect(scenario.points[0]).toMatchObject({ measured, outcomes: { Passed: 1, Warning: 0 } })
+  expect(projectEvaluationHistory(runs, { suite: 'b'.repeat(64) }).points).toHaveLength(15)
+  expect(projectEvaluationHistory(runs, { model: 'fixture', reasoning: 'high' }).points).toHaveLength(34)
 })
 
 it('shares one conditional evaluation-index refresh while retaining profile-specific history', async () => {

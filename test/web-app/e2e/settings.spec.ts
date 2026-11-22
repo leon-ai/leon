@@ -327,7 +327,7 @@ test('compares measured turns and controlled evaluations while sharing is off', 
   }
   const evaluation: EvaluationRun = {
     id: 'test-eval', recordedAt: day, sha: 'abcdef123456', model: 'deepseek/deepseek-flash',
-    reasoning: 'high', cases: [
+    reasoning: 'high', suiteRevision: 'a'.repeat(64), cases: [
       { scenario: 'selected-lookup', status: 'Passed', baseline: measured, measured, samples: 1 },
       ...Array.from({ length: 5 }, (_, index) => ({
         scenario: `fixture-${index + 1}`, status: 'Warning' as const, baseline: measured, measured, samples: 1
@@ -336,6 +336,8 @@ test('compares measured turns and controlled evaluations while sharing is off', 
   }
   const archived: EvaluationRun = { ...evaluation, id: 'archived-eval', sha: '1234abcdef56', source: 'development',
     committedAt: Date.UTC(2030, 0, 29, 12) }
+  const releaseRun: EvaluationRun = { ...evaluation, id: 'release-eval', sha: 'fedcba654321', source: 'release',
+    committedAt: Date.UTC(2030, 0, 30, 12), suiteRevision: 'b'.repeat(64) }
   await page.route('**/api/v1/insights/evaluations**', async (route) => {
     expect(route.request().headers()['x-leon-insights-profile']).toBe(ui.profile)
     expect(route.request().method()).toBe('GET')
@@ -345,7 +347,7 @@ test('compares measured turns and controlled evaluations while sharing is off', 
       scenario: query.get('scenario') ?? undefined
     }
     requestedEvaluations.push(filters)
-    await route.fulfill({ json: projectEvaluationHistory([evaluation, archived], filters) })
+    await route.fulfill({ json: projectEvaluationHistory([releaseRun, evaluation, archived], filters) })
   })
 
   await page.addInitScript(() => {
@@ -401,10 +403,13 @@ test('compares measured turns and controlled evaluations while sharing is off', 
   await expect(tokens.locator('canvas')).toBeVisible()
   await expect(scenario).toHaveValue('')
   await expect(evaluations).toContainText('abcdef123456')
+  await expect(evaluations).toContainText('fedcba654321')
+  await expect(page.getByRole('combobox', { name: 'Suite revision' })).toHaveValue('')
   const archivedRow = evaluations.getByRole('row').filter({ hasText: '1234abcdef56' })
   await expect(archivedRow).toContainText('Jan 29, 2030')
   await expect(archivedRow).toContainText('1 passed · 5 warning')
   await tokens.getByText('View data').click()
+  await expect(tokens.getByRole('row').filter({ hasText: 'fedcba654321' }).getByRole('cell', { name: '12,000' })).toHaveCount(2)
   await expect(tokens.getByRole('row').filter({ hasText: '1234abcdef56' }).getByRole('cell', { name: '12,000' })).toHaveCount(2)
   await scenario.selectOption('selected-lookup')
   await expect(tokens.getByRole('row').filter({ hasText: '1234abcdef56' }).getByRole('cell', { name: '2,000' })).toHaveCount(2)

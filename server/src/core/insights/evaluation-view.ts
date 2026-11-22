@@ -1,8 +1,8 @@
-import type { EvaluationRun, EvaluationHistoryView, EvaluationMetrics, EvaluationQuery } from './insights-contract'
+import { EVALUATION_UNKNOWN_SUITE, type EvaluationRun, type EvaluationHistoryView,
+  type EvaluationMetrics, type EvaluationQuery } from './insights-contract'
 
 const RUNS_PER_PAGE = 25
 const DAY_MS = 86_400_000
-const UNKNOWN_SUITE = 'unrecorded'
 type Case = EvaluationRun['cases'][number]
 type CaseSummary = Pick<EvaluationHistoryView['points'][number], 'outcomes' | 'baseline' | 'measured'> & { samples: number }
 
@@ -46,7 +46,7 @@ function summarize(cases: Case[]): CaseSummary {
 const summaries = new WeakMap<Case[], CaseSummary>()
 
 function option(values: string[], selected?: string): string {
-  return selected && values.includes(selected) ? selected : values[0] ?? ''
+  return selected && values.includes(selected) ? selected : ''
 }
 
 /**
@@ -58,16 +58,19 @@ export function projectEvaluationHistory(
   const runs = query.source ? history.filter((run) => (run.source ?? 'local') === query.source) : history
   const models = [...new Set(runs.map((run) => run.model))]
   const model = option(models, query.model)
-  const reasons = [...new Set(runs.filter((run) => run.model === model).map((run) => run.reasoning))]
+  const matchedModel = model ? runs.filter((run) => run.model === model) : runs
+  const reasons = [...new Set(matchedModel.map((run) => run.reasoning))]
   const reasoning = option(reasons, query.reasoning)
-  const matchedModel = runs.filter((run) => run.model === model && run.reasoning === reasoning)
-  const suites = [...new Set(matchedModel.map((run) => run.suiteRevision ?? UNKNOWN_SUITE))]
+  const matchedReasoning = reasoning ? matchedModel.filter((run) => run.reasoning === reasoning) : matchedModel
+  const suites = [...new Set(matchedReasoning.map((run) => run.suiteRevision ?? EVALUATION_UNKNOWN_SUITE))]
   const suite = option(suites, query.suite)
-  const comparable = matchedModel.filter((run) => (run.suiteRevision ?? UNKNOWN_SUITE) === suite)
-  const scenarios = [...new Set(comparable.flatMap((run) => run.cases.map((entry) => entry.scenario)))]
+  const matchedSuite = suite
+    ? matchedReasoning.filter((run) => (run.suiteRevision ?? EVALUATION_UNKNOWN_SUITE) === suite)
+    : matchedReasoning
+  const scenarios = [...new Set(matchedSuite.flatMap((run) => run.cases.map((entry) => entry.scenario)))]
   const scenario = query.scenario && scenarios.includes(query.scenario) ? query.scenario : ''
   const cutoff = query.days === undefined ? 0 : Date.now() - query.days * DAY_MS
-  const selected = comparable.flatMap((run) => {
+  const selected = matchedSuite.flatMap((run) => {
     const date = run.committedAt ?? run.recordedAt
     if (date < cutoff) {
       return []
@@ -88,17 +91,19 @@ export function projectEvaluationHistory(
   const pages = Math.max(1, Math.ceil(selected.length / RUNS_PER_PAGE))
   const page = Math.min(query.page ?? 0, pages - 1)
   const points = selected.toReversed().map(({ run, date, summary: { baseline, measured, outcomes } }) => ({
-    sha: run.sha, date, baseline, measured, outcomes
+    id: run.id, sha: run.sha, date, model: run.model, reasoning: run.reasoning,
+    suite: run.suiteRevision ?? EVALUATION_UNKNOWN_SUITE, baseline, measured, outcomes
   }))
   const rows = selected.slice(page * RUNS_PER_PAGE, (page + 1) * RUNS_PER_PAGE).map(({
-    run: { id, sha, recordedAt, committedAt, source, version, runId, runUrl }, summary: { outcomes, samples }
+    run: { id, sha, recordedAt, committedAt, source, version, runId, runUrl, suiteRevision }, summary: { outcomes, samples }
   }) => ({
     id, sha, recordedAt, outcomes, samples,
     ...(committedAt !== undefined ? { committedAt } : {}),
     ...(source !== undefined ? { source } : {}),
     ...(version !== undefined ? { version } : {}),
     ...(runId !== undefined ? { runId } : {}),
-    ...(runUrl !== undefined ? { runUrl } : {})
+    ...(runUrl !== undefined ? { runUrl } : {}),
+    ...(suiteRevision !== undefined ? { suiteRevision } : {})
   }))
 
   return { models, reasons, suites, scenarios, model, reasoning, suite, scenario, page, pages, refreshFailed, points, rows }
