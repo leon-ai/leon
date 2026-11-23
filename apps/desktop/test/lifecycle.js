@@ -20,6 +20,13 @@ void (async () => {
     }
     checks.push('Native title-bar geometry reserves space without overflowing the viewport')
     const initial = await action('status')
+    const expectedBounds = window.leonDiagnosticConfig.expected_bounds
+    if (expectedBounds) {
+      if (!Object.entries(expectedBounds).every(([key, value]) => initial.bounds[key] === value)) {
+        throw new Error(`Window geometry was not restored: ${JSON.stringify(initial.bounds)}`)
+      }
+      checks.push('Window position and size survive a complete application restart')
+    }
     if (document.documentElement.dataset.theme !== 'dark' || initial.background.slice(-6).toLowerCase() !== '000000') {
       throw new Error('The initial native window must match the shared default theme')
     }
@@ -40,6 +47,10 @@ void (async () => {
     }
     button('Close dialog').click()
     await waitFor(() => !document.querySelector('[role="dialog"]'), 'closed settings')
+    const resized = await action('resize')
+    if (!Object.entries(window.leonDiagnosticConfig.window_bounds).every(([key, value]) => resized.bounds[key] === value)) {
+      throw new Error('The hidden window did not accept its new position and size')
+    }
     const draft = 'A draft retained while the desktop window is closed.'
     fill(composer, draft)
     const before = await action('status')
@@ -54,7 +65,7 @@ void (async () => {
       }
       checks.push('macOS close keeps the window alive and preserves the draft', 'Dock activation reuses the same renderer without diagnostic focus')
     }
-    await report({ passed: true, phase: 'complete', checks })
+    await report({ passed: true, phase: 'complete', checks, bounds: before.bounds })
     // macOS is terminated externally through its native Dock Quit path.
     if (!window.leonDiagnosticConfig.native_quit) {
       void action('quit').catch(() => undefined)

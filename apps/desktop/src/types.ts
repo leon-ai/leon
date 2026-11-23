@@ -28,6 +28,7 @@ export interface ServiceConfiguration {
  */
 export interface DiagnosticConfiguration {
   viewport?: { width: number, height: number }
+  window_bounds?: import('electron').Rectangle
   paint_when_hidden?: boolean
   clipboard_files?: string[]
   bootstrap?: { asset: import('../runtime/bootstrap-runtime.mjs').RuntimeAsset }

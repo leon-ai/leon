@@ -28,7 +28,8 @@ export async function swiftHelper(name) {
 /**
  * Owns an explicitly diagnostic app instance without changing window focus.
  */
-export async function launchDiagnostic({ name, script, server, configuration = {}, environment = {}, nativeThrottling = false }) {
+export async function launchDiagnostic({ name, script, server, configuration = {}, environment = {}, nativeThrottling = false,
+  dataDirectory: retainedDataDirectory }) {
   await mkdir(ARTIFACTS, { recursive: true })
   const build = JSON.parse(await readFile(path.join(ARTIFACTS, 'diagnostics-build.json'), 'utf8'))
   const report = path.join(ARTIFACTS, `${name}.json`)
@@ -40,8 +41,8 @@ export async function launchDiagnostic({ name, script, server, configuration = {
   await writeFile(config, JSON.stringify({ ...configuration, background: true }))
   // Delete Chromium's isolated data after exit, outside the host's quit path.
   // Extra diagnostic I/O during shutdown would conceal promise timing races.
-  const dataDirectory = await mkdtemp(path.join(os.tmpdir(), 'leon-desktop-'))
-  const env = { ...process.env, ...environment,
+  const dataDirectory = retainedDataDirectory ?? await mkdtemp(path.join(os.tmpdir(), 'leon-desktop-'))
+  const env = { ...process.env, LEON_HOME: path.join(dataDirectory, 'core-home'), ...environment,
     LEON_DESKTOP_SERVER: server,
     LEON_DESKTOP_SMOKE_SCRIPT: combined,
     LEON_DESKTOP_REPORT_PATH: report,
@@ -133,7 +134,9 @@ export async function launchDiagnostic({ name, script, server, configuration = {
       } finally {
         clearTimeout(kill)
         log.end()
-        await rm(dataDirectory, { recursive: true, force: true })
+        if (!retainedDataDirectory) {
+          await rm(dataDirectory, { recursive: true, force: true })
+        }
       }
     }
   }

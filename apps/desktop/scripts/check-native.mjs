@@ -23,14 +23,18 @@ assert(!values.only || ['transport', 'bootstrap', 'lifecycle'].includes(values.o
 
 async function lifecycle() {
   const fixture = await createFixture()
+  const dataDirectory = await mkdtemp(path.join(os.tmpdir(), 'leon-window-state-'))
   let app
   try {
+    let expectedBounds
     const quitPaths = process.platform === 'darwin' ? ['application', 'native'] : ['application']
     for (const quitPath of quitPaths) {
       const nativeQuit = quitPath === 'native'
-      app = await launchDiagnostic({ name: `lifecycle-${quitPath}`, script: 'lifecycle.js', server: fixture.origin,
-        configuration: { paint_when_hidden: true, native_quit: nativeQuit } })
+      app = await launchDiagnostic({ name: `lifecycle-${quitPath}`, script: 'lifecycle.js', server: fixture.origin, dataDirectory,
+        configuration: { paint_when_hidden: true, native_quit: nativeQuit,
+          window_bounds: { x: 60, y: 90, width: 860, height: 620 }, expected_bounds: expectedBounds } })
       const result = await app.wait('complete')
+      expectedBounds = result.bounds
       if (nativeQuit) {
         await app.quit()
       }
@@ -42,6 +46,7 @@ async function lifecycle() {
   } finally {
     await app?.close()
     await fixture.close()
+    await rm(dataDirectory, { recursive: true, force: true })
   }
 }
 

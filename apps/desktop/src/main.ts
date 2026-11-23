@@ -35,6 +35,7 @@ const icons = fileURLToPath(new URL('../icons/', import.meta.url))
 // Match the shared themes while the renderer prepares its first painted frame.
 const WINDOW_BACKGROUNDS = { dark: '#000', light: '#FFF' }
 const TITLE_BAR_HEIGHT = 36
+const MAIN_WINDOW_NAME = 'leon-main'
 // Display-name changes must not move existing sessions and preferences. Native
 // diagnostics also get an isolated Chromium cache, not just ephemeral app state.
 const dataDirectory = diagnostics ? process.env['LEON_DESKTOP_DIAGNOSTIC_DATA']!
@@ -149,6 +150,10 @@ function updateWindowAppearance(): void {
 function createWindow(clientSession: Session): BrowserWindow {
   const theme = clientTheme()
   const target = new BrowserWindow({
+    name: MAIN_WINDOW_NAME,
+    // Electron persists geometry and handles changes to the display layout.
+    // Hidden checks restore bounds without activating a saved fullscreen mode.
+    windowStatePersistence: { bounds: true, displayMode: !background },
     title: manifest.productName,
     width: configuration.viewport?.width ?? 1_230,
     height: configuration.viewport?.height ?? 820,
@@ -294,10 +299,13 @@ async function showClient(server: string): Promise<void> {
         app.emit('activate')
       } else if (action === 'quit') {
         setImmediate(() => app.quit())
+      } else if (action === 'resize' && configuration.window_bounds) {
+        window?.setBounds(configuration.window_bounds)
       }
       const alive = Boolean(window && !window.isDestroyed())
       return { alive, visible: alive && window!.isVisible(), focused: alive && window!.isFocused(), platform: process.platform,
         background: alive ? window!.getBackgroundColor() : null,
+        bounds: alive ? window!.getBounds() : null,
         systemDark: nativeTheme.shouldUseDarkColors }
     } : undefined,
     onDiagnosticPaste: diagnostics ? (): Promise<void> => pasteAttachments(window, gateway, { diagnostic: true,
