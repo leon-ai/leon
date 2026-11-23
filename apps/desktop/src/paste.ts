@@ -117,10 +117,17 @@ export function installPasteMenu(window: BrowserWindow, paste: () => Promise<voi
       ...(process.platform === 'darwin' ? [{ role: 'zoom' as const }, { type: 'separator' as const },
         { role: 'front' as const }, { role: 'window' as const }] : [])] }
   ]))
-  window.webContents.on('context-menu', (_event, parameters) => {
-    if (parameters.isEditable) {
-      Menu.buildFromTemplate([{ role: 'cut' }, { role: 'copy' }, pasteItem,
-        { role: 'selectAll' }]).popup({ window })
+  window.webContents.on('context-menu', (_event, { editFlags, isEditable, selectionText }) => {
+    if (!isEditable && !selectionText) {
+      return
     }
+
+    Menu.buildFromTemplate([
+      { role: 'cut', enabled: editFlags.canCut, visible: isEditable },
+      { role: 'copy', enabled: editFlags.canCopy },
+      // Native file references go through Leon's attachment flow.
+      { ...pasteItem, visible: isEditable },
+      { role: 'selectAll', enabled: editFlags.canSelectAll }
+    ]).popup({ window })
   })
 }
