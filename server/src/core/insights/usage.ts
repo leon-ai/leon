@@ -338,15 +338,17 @@ function toTurnView(turn: ActivityTurn): UsageTurnView {
   }
 }
 
-function findRepeatedQueries(turns: ActivityTurn[]): InsightsUsage['repeatedQueries'] {
+function findRepeatedFirstTurns(turns: ActivityTurn[]): InsightsUsage['repeatedQueries'] {
   const groups = new Map<string, { message: string, turns: UsageTurnView[] }>()
   for (const turn of turns.slice(0, REPEAT_CANDIDATE_LIMIT)) {
     if (!turn.sessionId) {
       continue
     }
-    // The browser's request ID is also its retained owner message ID. Only use
-    // messages still present in the conversation; deleted text is never indexed.
-    const owner = CONVERSATION_REPOSITORY.readMessage(turn.sessionId, turn.id, { summary: true })
+    // Resolve the browser request ID in the full session so the Insights date
+    // and model filters cannot make a follow-up look like a first turn.
+    const owner = CONVERSATION_REPOSITORY.readMessage(turn.sessionId, turn.id, {
+      summary: true, firstOwnerOnly: true
+    })
     if (owner?.who !== 'owner' || !owner.message) {
       continue
     }
@@ -407,7 +409,7 @@ function contextModel(turn: ActivityTurn): Pick<ModelUsage, 'provider' | 'model'
 }
 
 /**
- * Compares equal UTC periods and keeps exact repeated wording in the profile API.
+ * Compares equal UTC periods and matches repeated wording from first turns in the profile.
  */
 export async function getInsightsUsage({
   days = 30, provider, model, repeated = false, interval = 'day', contextPage
@@ -495,6 +497,6 @@ export async function getInsightsUsage({
     contextPage: page, contextPages,
     recentTurns: (contextPage === undefined ? history : snapshots)
       .slice(offset, offset + RECENT_TURN_LIMIT).map(toTurnView),
-    repeatedQueries: repeated ? findRepeatedQueries(history) : []
+    repeatedQueries: repeated ? findRepeatedFirstTurns(history) : []
   }
 }

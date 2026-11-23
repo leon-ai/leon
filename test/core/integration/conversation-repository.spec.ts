@@ -9,7 +9,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CONVERSATION_REPOSITORY, ConversationRepository } from '@/core/session-manager/conversation-repository'
-import { getInsightsUsage } from '@/core/insights/usage'
+import { getInsightsUsage, UTC_DAY_MS } from '@/core/insights/usage'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import * as profilePaths from '@/core/profile-runtime/profile-paths'
 import { recordOwnerTurn, runTurnPhase, runWithTurnTiming, TurnPhase } from '@/core/llm-manager/turn-timing'
@@ -55,7 +55,7 @@ describe('profile conversation archive', () => {
     directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-conversation-archive-'))
   })
 
-  it('compares normalized owner queries and recovers saved context without inventing component data', async () => {
+  it('compares matching first turns and recovers saved context without inventing component data', async () => {
     const profileName = 'activity-owner'
     const paths = profilePaths.getProfilePaths(profileName)
     vi.spyOn(profilePaths, 'getProfilePaths').mockReturnValue({
@@ -64,15 +64,28 @@ describe('profile conversation archive', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     const historical = { contextUsedTokens: 600, contextWindowTokens: 1_500, contextUsageEstimated: false }
     const breakdown = { system: 250, transcript: 250, tools: 100, images: 0, compaction: 0 }
-    const queries = ['\tCheck my calendar ', 'check MY CALENDAR', 'check  my calendar', 'check my calendar?']
+    const queries = [
+      { sessionId: 'first', message: '\tCheck my calendar ' },
+      { sessionId: 'second', message: 'check MY CALENDAR' },
+      { sessionId: 'spacing', message: 'check  my calendar' },
+      { sessionId: 'punctuation', message: 'check my calendar?' },
+      { sessionId: 'older', message: 'Check my calendar' }
+    ]
     const day = new Date('2030-01-02T06:00:00Z').getTime()
 
     try {
       await runWithProfileContext({ profileName }, async () => {
-        const sessionId = 'owner-session'
-        CONVERSATION_REPOSITORY.saveSession(session(sessionId))
-        for (const [index, message] of queries.entries()) {
+        const earlier = day - 90 * UTC_DAY_MS
+        CONVERSATION_REPOSITORY.saveSession(session('older', earlier))
+        CONVERSATION_REPOSITORY.upsertMessage('older', {
+          who: 'owner', message: 'Hello', messageId: 'earlier-message', isAddedToHistory: true
+        }, { sentAt: earlier })
+
+        for (const [index, { sessionId, message }] of queries.entries()) {
           vi.setSystemTime(day + index * 1_000)
+          if (sessionId !== 'older') {
+            CONVERSATION_REPOSITORY.saveSession(session(sessionId))
+          }
           const turnId = `owner-turn-${index}`
           CONVERSATION_REPOSITORY.upsertMessage(sessionId, {
             who: 'owner', message, messageId: turnId, isAddedToHistory: true
@@ -97,6 +110,7 @@ describe('profile conversation archive', () => {
         expect(usage.current.contextCount).toBe(2)
         expect(usage.repeatedQueries).toHaveLength(1)
         expect(usage.repeatedQueries[0]).toMatchObject({ message: 'check MY CALENDAR', occurrences: 2 })
+        expect(usage.repeatedQueries[0]?.turns.map((turn) => turn.startedAt)).toEqual([day + 1_000, day])
         expect(usage.recentTurns[0]?.context).toMatchObject({ contextTokenBreakdown: breakdown, contextUsagePercent: 40 })
         expect(usage.recentTurns[1]?.context).toEqual({ ...historical, contextUsagePercent: 40 })
       })

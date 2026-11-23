@@ -8,7 +8,7 @@ import { Tabs } from '../../../../../aurora/src/v2/components/tabs'
 import { INSIGHTS_RANGES, type InsightsInterval } from '../../../../../server/src/core/insights/insights-contract'
 
 import { InsightsOverview } from './insights-overview'
-import { InsightsContextWindow, InsightsRepeatedQueries } from './insights-turns'
+import { InsightsContextWindow, InsightsRepeatedFirstTurns } from './insights-turns'
 
 import './insights-page.sass'
 
@@ -19,7 +19,7 @@ const INTERVAL_LABELS = {
 } as const
 
 /**
- * Keeps the owner’s usage, context, repeated queries and controlled evals in dedicated views.
+ * Keeps the owner’s usage, context, repeated first turns and controlled evals in dedicated views.
  */
 export function Insights({ tab, selectTab }: { tab: InsightsTab, selectTab: (tab: InsightsTab) => void }) {
   const [days, setDays] = useState(30)
@@ -95,8 +95,8 @@ export function Insights({ tab, selectTab }: { tab: InsightsTab, selectTab: (tab
           usage={usage} interval={interval} changePage={setContextPage} />
       },
       {
-        value: 'repeated-queries', label: 'Repeated queries',
-        content: usage && !query.isPlaceholderData && <InsightsRepeatedQueries usage={usage} />
+        value: 'repeated-queries', label: 'Repeated first turns',
+        content: usage && !query.isPlaceholderData && <InsightsRepeatedFirstTurns usage={usage} />
       },
       {
         value: 'evaluations', label: 'Evaluations',

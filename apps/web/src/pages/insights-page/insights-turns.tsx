@@ -142,7 +142,7 @@ function RepeatedComparison({ group }: { group: RepeatedGroup }) {
       </select>
     </label>
     <p className="insights-note">
-      {group.occurrences} matches in the scanned history.
+      {group.occurrences} matching first turns in the scanned history.
       {delta !== null && ` Latest measured occurrence ${formatMetric(latestTokens)} tokens · baseline ${formatMetric(baselineTokens)} tokens · ${delta > 0 ? '+' : ''}${formatMetric(delta, '%')}.`}
     </p>
     <div className="insights-chart-grid">
@@ -175,18 +175,20 @@ function RepeatedComparison({ group }: { group: RepeatedGroup }) {
 }
 
 /**
- * Selects a wording already present in this profile and compares its saved turns.
+ * Compares saved first turns with matching wording in this profile.
  */
-export function InsightsRepeatedQueries({ usage }: { usage: InsightsUsage }) {
+export function InsightsRepeatedFirstTurns({ usage }: { usage: InsightsUsage }) {
   const [search, setSearch] = useState('')
   const [selection, setSelection] = useState(0)
   const groups = usage.repeatedQueries.filter((group) => group.message.toLowerCase().includes(search.trim().toLowerCase()))
   const selected = groups[selection] ?? groups[0]
 
   return <div className="insights-panel">
-    <p className="insights-note">Queries match when their wording is identical after ignoring case and trimming surrounding whitespace.</p>
-    <label>Find a repeated query
-      <Input ariaLabel="Find a repeated query" value={search} onChange={(event) => {
+    <p className="insights-note">
+      I only compare the first message you send in each session. Queries match after trimming surrounding whitespace and ignoring case.
+    </p>
+    <label>Find a first-turn query
+      <Input ariaLabel="Find a first-turn query" value={search} onChange={(event) => {
         setSearch(event.currentTarget.value)
         setSelection(0)
       }} />
@@ -198,6 +200,6 @@ export function InsightsRepeatedQueries({ usage }: { usage: InsightsUsage }) {
         </select>
       </label>
       <RepeatedComparison key={`${selection}-${selected.turns.at(-1)?.startedAt}-${selected.turns.length}`} group={selected} />
-    </> : <p>No matching repeats in the retained turns scanned for this period.</p>}
+    </> : <p>No repeated first-turn queries found for this period.</p>}
   </div>
 }

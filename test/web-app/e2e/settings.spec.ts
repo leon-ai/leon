@@ -398,8 +398,8 @@ test('compares measured turns and controlled evaluations while sharing is off', 
     name: 'Tool definitions 3,000 21.4% 8.6%'
   })).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Repeated queries' }).click()
-  await page.getByLabel('Find a repeated query').fill('  SHENZHEN  ')
+  await page.getByRole('tab', { name: 'Repeated first turns' }).click()
+  await page.getByLabel('Find a first-turn query').fill('  SHENZHEN  ')
   await expect(page.getByLabel('Repeated wording')).toContainText(ownerQuery)
   await expect(page.getByRole('figure', { name: 'Output rate for the same query', exact: true }).locator('canvas')).toBeVisible()
   await expect(page.getByText(/baseline 15,000 tokens · \+33\.3%/u)).toBeVisible()

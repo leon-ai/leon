@@ -697,12 +697,18 @@ export class ConversationRepository {
   }
 
   /**
-   * Reads one message, with disclosure bodies omitted when requested.
+   * Reads one message, with options for a summary or a first-owner-message match.
    */
-  public readMessage(sessionId: string, messageId: string, options: { summary?: boolean } = {}): MessageLog | null {
+  public readMessage(
+    sessionId: string, messageId: string, options: { summary?: boolean, firstOwnerOnly?: boolean } = {}
+  ): MessageLog | null {
     const row = this.db.prepare(`SELECT ${options.summary ? 'summary' : 'payload'} AS value FROM conversation_messages
-      WHERE session_id = ? AND (id = ? OR trace_id = ?) LIMIT 1`)
-      .get(sessionId, messageId, messageId)
+      WHERE session_id = @sessionId AND (id = @messageId OR trace_id = @messageId)
+      ${options.firstOwnerOnly ? `AND sequence = (
+        SELECT sequence FROM conversation_messages
+        WHERE session_id = @sessionId AND role = 'owner' ORDER BY sequence LIMIT 1
+      )` : ''} LIMIT 1`)
+      .get({ sessionId, messageId })
 
     return row ? JSON.parse(String(row['value'])) as MessageLog : null
   }
