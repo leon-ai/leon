@@ -1,0 +1,25 @@
+{
+  "name": "leon-desktop",
+  "productName": "Leon (Alpha)",
+  "appId": "ai.getleon.desktop",
+  "dataDirectoryName": "Leon",
+  "private": true,
+  "type": "module",
+  "description": "Leon desktop host",
+  "license": "MIT",
+  "dependencies": {
+    "electron-updater": "6.8.12"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1"
+  },
+  "scripts": {
+    "build": "pnpm --dir ../.. build:web-app && node scripts/build.mjs",
+    "start": "node scripts/start.mjs",
+    "build:diagnostics": "node scripts/build.mjs --diagnostics",
+    "test": "tsx --tsconfig ../../tsconfig.json scripts/build-contracts.ts && node scripts/build-runtime.mjs && node scripts/build-host.mjs && node scripts/test.mjs",
+    "check": "node scripts/check-native.mjs",
+    "bench": "node scripts/check-performance.mjs"
+  }
+}

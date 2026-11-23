@@ -1,4 +1,10 @@
 # Leon setup depends on native/binary packages whose install scripts must run
+packages:
+  - apps/desktop
+
+# Server and browser installs do not need Electron's development dependencies.
+recursiveInstall: false
+
 dangerouslyAllowAllBuilds: true
 
 # Restore package sources instead of trusting machine-global cached build output.

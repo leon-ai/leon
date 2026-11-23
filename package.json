@@ -1,6 +1,6 @@
 {
   "name": "leon",
-  "version": "2.0.0-alpha.0.13",
+  "version": "2.0.0-alpha.0.14",
   "description": "Server, skills and web app of the Leon personal assistant",
   "author": {
     "name": "Louis Grenard",
@@ -76,7 +76,12 @@
     "train": "tsx scripts/train/run-train.js",
     "release": "tsx scripts/release/release.ts",
     "check": "tsx scripts/check.js",
-    "kill": "tsx scripts/kill.js"
+    "kill": "tsx scripts/kill.js",
+    "build:desktop": "pnpm --filter leon-desktop install --frozen-lockfile --ignore-scripts && pnpm --filter leon-desktop build",
+    "start:desktop": "node apps/desktop/scripts/start.mjs",
+    "test:desktop": "pnpm --filter leon-desktop test",
+    "check:desktop": "node apps/desktop/scripts/check-native.mjs",
+    "bench:desktop": "node apps/desktop/scripts/check-performance.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",

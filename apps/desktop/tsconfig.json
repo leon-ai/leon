@@ -1,0 +1,11 @@
+{
+  "extends": "../web/tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@/*": ["../web/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "runtime/**/*.d.mts", "scripts/**/*.ts"],
+  "exclude": ["dist", "node_modules", ".generated", ".artifacts"]
+}
