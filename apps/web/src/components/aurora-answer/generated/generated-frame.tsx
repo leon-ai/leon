@@ -26,7 +26,7 @@ const FRAME_STARTUP_TIMEOUT_MS = 5_000
 const FRAME_RENDER_TIMEOUT_MS = 30_000
 const MAXIMUM_FRAME_MESSAGE_CHARACTERS = MAXIMUM_GENERATED_STATE_CHARACTERS + 1_024
 const STYLE_PREFIXES = ['--color-', '--space-', '--font-', '--line-height-', '--border-radius-', '--shadow-', '--duration-', '--gradient-', '--transition-', '--ease-']
-const CSP = 'default-src \'none\'; script-src \'unsafe-inline\' blob:; style-src \'unsafe-inline\'; img-src data: blob:; font-src data:; connect-src \'none\'; form-action \'none\'; base-uri \'none\'; object-src \'none\'; frame-src \'none\''
+const CSP = 'default-src \'none\'; script-src blob:; style-src \'unsafe-inline\'; img-src data: blob:; font-src data:; connect-src \'none\'; form-action \'none\'; base-uri \'none\'; object-src \'none\'; frame-src \'none\''
 
 function themeContext() {
   const computed = getComputedStyle(document.documentElement)
@@ -37,11 +37,15 @@ function themeContext() {
 }
 
 function createDocument(): string {
+  // Blob documents inherit the parent's CSP. Reuse its trusted bootstrap nonce
+  // when present; ordinary web deployments still get a fresh frame-only nonce.
+  const nonce = document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce || createUUID()
+  const policy = CSP.replace('script-src ', `script-src 'nonce-${nonce}' `)
   // The document contains trusted bootstrap code only. Model content arrives
   // after an authenticated frame handshake, never inside this HTML envelope.
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}">` +
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}">` +
     `<meta name="referrer" content="no-referrer"><style>${VISUAL_FONT_CSS}${styles}</style></head>` +
-    `<body><div id="aurora-content"></div><div id="aurora-root"></div><script>${runtime.replaceAll('</script', '<\\/script')}</script></body></html>`
+    `<body><div id="aurora-content"></div><div id="aurora-root"></div><script nonce="${nonce}">${runtime.replaceAll('</script', '<\\/script')}</script></body></html>`
 }
 
 interface GeneratedFrameProps {
