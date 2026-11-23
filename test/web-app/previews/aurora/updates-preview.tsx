@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Button } from '@/components/button'
 import { UpdateDialog } from '@/components/update-dialog/update-dialog'
 import { DesktopSetupView, SetupPhase, type SetupState } from '@/components/desktop-setup/desktop-setup'
+import { DesktopStartupView } from '@/components/desktop-setup/desktop-startup'
 import { UpdatePhase, UpdateStage, type UpdateState, type DesktopUpdateSnapshot } from '../../../../bridges/runtime/contracts/updates'
 import { UPDATE_FIXTURE } from '../../../fixtures/updates'
 
@@ -24,6 +25,7 @@ export default function UpdatesPreview() {
   const [external, setExternal] = useState(false)
   const [supported, setSupported] = useState(true)
   const [includeCore, setIncludeCore] = useState(false)
+  const releaseView = view === 'core' || view === 'desktop'
   const running = STAGES.includes(stage) || stage === 'reconnecting'
   const current = stage === 'failed' ? 1 : STAGES.indexOf(stage)
   const state: UpdateState | null = stage === 'available' ? null : {
@@ -51,10 +53,11 @@ export default function UpdatesPreview() {
       setOpen(false)
       setView(event.target.value)
     }}>
-      <option value="core">Browser update</option><option value="desktop">Desktop update</option><option value="setup">Core setup</option>
+      <option value="core">Browser update</option><option value="desktop">Desktop update</option><option value="setup">Core setup</option><option value="startup">Desktop startup</option>
     </select></label>
     <p>{view === 'core' ? 'Update Leon from a browser.' : view === 'desktop'
       ? 'One update action prepares the available server and app updates.'
+      : view === 'startup' ? 'The first startup view, with no artificial delay.'
       : 'First-time Core installation and background startup.'}</p>
     {(view === 'core' || view === 'desktop' && includeCore) && <div className="demo-controls">
       <label>Core update state <select aria-label="Core update state" value={stage} onChange={(event) => setStage(event.target.value)}>
@@ -69,10 +72,10 @@ export default function UpdatesPreview() {
       <label><input type="checkbox" checked={supported} onChange={(event) => setSupported(event.target.checked)} />Automatic desktop updates supported</label>
       <label><input type="checkbox" checked={includeCore} onChange={(event) => setIncludeCore(event.target.checked)} />Server update also available</label>
     </div>}
-    {view !== 'setup' && <Button variant="primary" onClick={() => setOpen(true)}>
+    {releaseView && <Button variant="primary" onClick={() => setOpen(true)}>
       Preview Leon update
     </Button>}
-    {view !== 'setup' && <UpdateDialog key={view} check={view === 'core' || includeCore ? UPDATE_FIXTURE.check! : null}
+    {releaseView && <UpdateDialog key={view} check={view === 'core' || includeCore ? UPDATE_FIXTURE.check! : null}
       state={view === 'core' || includeCore ? state : null} desktop={view === 'desktop' ? desktop : null}
       open={open} reconnecting={(view === 'core' || includeCore) && stage === 'reconnecting'}
       updating={(view === 'core' || includeCore) && running}
@@ -96,9 +99,9 @@ export default function UpdatesPreview() {
       setExternal(event.target.checked)
       setSetupPhase(SetupPhase.Complete)
     }} />Connect to an already running Core</label>
-    <DesktopSetupView data={setup} pending={false} choosing={false} onStart={() => setSetupPhase(SetupPhase.Running)}
-      onChoose={noop} onCancel={() => setSetupPhase(SetupPhase.Cancelled)} onConnect={noop} onStartup={noop}
-      onLogs={noop} onStop={() => setSetupPhase(SetupPhase.Idle)} />
+    <DesktopSetupView data={setup} pending={false} onStart={() => setSetupPhase(SetupPhase.Running)}
+      onCancel={() => setSetupPhase(SetupPhase.Cancelled)} onLogs={noop} />
     </>}
+    {view === 'startup' && <DesktopStartupView />}
   </div>
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { infiniteQueryOptions, useInfiniteQuery, useMutation, type InfiniteData,
   type UseInfiniteQueryOptions, type UseInfiniteQueryResult, type UseMutationResult } from '@tanstack/react-query'
 
+import { notifyDesktopTurnCompleted } from './desktop-notifications'
 import { queryClient } from '@/query-client'
 import { useToast } from '@/components/toast'
 import { canPrefetch, prefetchModule } from '@/utils/prefetch'
@@ -366,6 +367,9 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
       if (event.sequence > (snapshot?.event_cursor ?? sidebarCursor ?? 0) && event.type === 'turn_status'
         && event.data['status'] === 'completed' && event.data['consumed'] !== true) {
         playTurnCompletionSound(profile, event.sequence)
+        if (event.session_id) {
+          notifyDesktopTurnCompleted({ profile, sessionId: event.session_id, sequence: event.sequence })
+        }
       }
       if (event.type === 'owner_message' || event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {
         void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, event.session_id || sessionId || ''), exact: true })
