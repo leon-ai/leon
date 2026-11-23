@@ -39,6 +39,10 @@ export function distributionConfig({ root, staging, output, manifest, contract, 
       verifyUpdateCodeSignature: true, signtoolOptions: { signingHashAlgorithms: ['sha256'] } },
     nsis: { oneClick: true, perMachine: false, differentialPackage: true, deleteAppDataOnUninstall: false },
     deb: { maintainer: `${contract.author.name} <${contract.author.email}>` },
-    linux: { target: release ? ['AppImage', 'deb'] : ['dir'], category: 'Utility' }
+    linux: {
+      target: release ? ['AppImage', 'deb'] : ['dir'],
+      category: 'Utility',
+      syncDesktopName: true
+    }
   }
 }

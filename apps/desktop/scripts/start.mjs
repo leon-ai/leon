@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
-import { access, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
@@ -23,6 +23,50 @@ function run(command, args, options, inspectStderr) {
     child.once('error', reject)
     child.once('close', (code) => resolve(code ?? 1))
   })
+}
+
+function desktopValue(value) {
+  return value.replaceAll('\\', '\\\\').replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r').replaceAll('\t', '\\t')
+}
+
+/**
+ * Registers the unpacked checkout so Linux can resolve its display name and icon.
+ */
+async function registerCheckoutLauncher({ desktopName, name, icon }, binary) {
+  const dataHome = process.env.XDG_DATA_HOME || ''
+  const directory = path.join(path.isAbsolute(dataHome) ? dataHome : path.join(homedir(), '.local/share'), 'applications')
+  const launcher = path.join(directory, desktopName)
+  // Exec applies desktop string escaping before unquoting arguments and expanding field codes.
+  const command = [process.execPath, fileURLToPath(import.meta.url)]
+    .map((argument) => `"${desktopValue(argument.replace(/["`$\\]/g, '\\$&').replaceAll('%', '%%'))}"`)
+    .join(' ')
+  const entry = [
+    '[Desktop Entry]',
+    'Type=Application',
+    `Name=${desktopValue(name)}`,
+    `Exec=${command}`,
+    `TryExec=${desktopValue(binary)}`,
+    `Icon=${desktopValue(icon)}`,
+    `StartupWMClass=${path.basename(desktopName, '.desktop')}`,
+    'Categories=Utility;',
+    ''
+  ].join('\n')
+
+  if (await readFile(launcher, 'utf8').catch(() => null) === entry) {
+    return
+  }
+
+  await mkdir(directory, { recursive: true })
+  const temporary = await mkdtemp(path.join(directory, '.leon-'))
+  try {
+    const source = path.join(temporary, desktopName)
+
+    await writeFile(source, entry)
+    await rename(source, launcher)
+  } finally {
+    await rm(temporary, { recursive: true, force: true })
+  }
 }
 
 async function offerSandboxSetup(binary) {
@@ -109,6 +153,12 @@ try {
   if (process.platform !== 'linux') {
     process.exitCode = await run(binary, [], options)
   } else {
+    if (build.linuxLauncher) {
+      await registerCheckoutLauncher(build.linuxLauncher, binary).catch((error) => {
+        console.warn(`I could not register my desktop launcher: ${error.message}`)
+      })
+    }
+
     let sandboxFailed = false
     let stderrTail = ''
     const status = await run(binary, [], { ...options, stdio: ['inherit', 'inherit', 'pipe'] }, (chunk) => {

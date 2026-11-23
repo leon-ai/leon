@@ -63,6 +63,13 @@ await import('./build-runtime.mjs')
 await import('./build-updater.mjs')
 await import('./build-host.mjs')
 
+const { default: contract } = await import('../.generated/runtime/bootstrap-contract.mjs')
+const config = distributionConfig({ root: ROOT, staging, output,
+  manifest: desktop, contract, diagnostics, release, channel })
+// A checkout launcher must not shadow an installed copy in the app menu.
+const desktopName = process.platform === 'linux'
+  ? `${config.appId}${release || diagnostics ? '' : '.checkout'}.desktop`
+  : undefined
 const electronDirectory = path.dirname(require.resolve('electron/package.json'))
 const electronVersion = desktop.devDependencies.electron
 const archive = `electron-v${electronVersion}-${process.platform}-${process.arch}.zip`
@@ -119,7 +126,8 @@ try {
   await writeFile(path.join(staging, 'package.json'), JSON.stringify({
     name: desktop.name,
     productName: desktop.productName,
-    appId: diagnostics ? `${desktop.appId}.diagnostics` : desktop.appId,
+    appId: config.appId,
+    desktopName,
     dataDirectoryName: desktop.dataDirectoryName,
     version: manifest.version,
     main: 'src/main.js',
@@ -134,9 +142,6 @@ try {
     nativeMacIcon,
     dependencies: {}
   }, null, 2))
-  const { default: contract } = await import('../.generated/runtime/bootstrap-contract.mjs')
-  const config = distributionConfig({ root: ROOT, staging, output,
-    manifest: desktop, contract, diagnostics, release, channel })
   if (process.platform === 'darwin' && !nativeMacIcon) {
     let fallbackIcon = 'icon.icns'
     try {
@@ -168,10 +173,14 @@ try {
       throw new Error('The packaged macOS app is missing its compiled icon catalog.')
     }
   }
+
   await writeFile(path.join(ROOT, '.artifacts', diagnostics ? 'diagnostics-build.json' : 'build.json'),
     JSON.stringify({ platform: process.platform, arch: process.arch, electron: electronVersion,
       version: manifest.version, output: directory, bundleName: executableName,
       executableName, iconFormat: path.extname(config[platform]?.icon ?? config.icon).slice(1),
+      ...(desktopName && !release && !diagnostics ? {
+        linuxLauncher: { desktopName, name: config.productName, icon: config.icon }
+      } : {}),
       diagnostics, release, channel }, null, 2) + '\n')
   console.log(`Desktop ready: ${directory}`)
 } finally {
