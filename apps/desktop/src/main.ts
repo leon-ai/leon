@@ -170,7 +170,7 @@ function createWindow(clientSession: Session): BrowserWindow {
     titleBarOverlay: { height: TITLE_BAR_HEIGHT, color: WINDOW_BACKGROUNDS[theme],
       symbolColor: WINDOW_BACKGROUNDS[theme === 'dark' ? 'light' : 'dark'] },
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 11 } } : {}),
-    ...(process.platform !== 'darwin' ? { icon: path.join(icons, 'light.png') } : {}),
+    ...(process.platform !== 'darwin' ? { icon: path.join(icons, 'dark.png') } : {}),
     webPreferences: {
       session: clientSession,
       nodeIntegration: false,

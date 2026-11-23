@@ -8,9 +8,11 @@ import path from 'node:path'
 export function distributionConfig({ root, staging, output, manifest, contract, diagnostics, release, channel }) {
   assert(['preview', 'stable'].includes(channel), 'Unknown desktop release channel')
   const appId = diagnostics ? `${manifest.appId}.diagnostics` : manifest.appId
+  const icon = path.join(root, 'packaging/icons/linux.png')
+
   return {
     appId, productName: manifest.productName, executableName: manifest.name,
-    icon: path.join(root, 'packaging/icons/light.png'),
+    icon,
     directories: { app: staging, output, buildResources: path.join(root, 'packaging') },
     electronVersion: manifest.devDependencies.electron,
     artifactName: 'leon-desktop-${version}-${os}-${arch}.${ext}',
@@ -42,6 +44,8 @@ export function distributionConfig({ root, staging, output, manifest, contract, 
     linux: {
       target: release ? ['AppImage', 'deb'] : ['dir'],
       category: 'Utility',
+      // Linux installers need a raster source for their icon theme entries.
+      icon,
       syncDesktopName: true
     }
   }

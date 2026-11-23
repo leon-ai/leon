@@ -116,10 +116,12 @@ try {
   }
   await cp(path.join(REPOSITORY, 'LICENSE.md'), path.join(staging, 'LICENSE.md'))
   if (process.platform !== 'darwin' || !nativeMacIcon) {
+    const darkIcon = process.platform === 'linux' ? config.icon : path.join(ROOT, 'packaging/icons/dark.png')
+
     await mkdir(path.join(staging, 'icons'))
-    await cp(path.join(ROOT, 'packaging/icons/light.png'), path.join(staging, 'icons/light.png'))
+    await cp(darkIcon, path.join(staging, 'icons/dark.png'))
     if (process.platform === 'darwin') {
-      await cp(path.join(ROOT, 'packaging/icons/dark.png'), path.join(staging, 'icons/dark.png'))
+      await cp(path.join(ROOT, 'packaging/icons/light.png'), path.join(staging, 'icons/light.png'))
     }
   }
   await cp(path.join(REPOSITORY, 'apps/web/dist'), path.join(staging, 'web'), { recursive: true })

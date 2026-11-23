@@ -9,9 +9,8 @@ import { CHINA_BINARY_BASE, getDownloadRegion, isDownloadMirrorAvailable } from 
 const OUTPUT = new URL('../packaging/icons/', import.meta.url)
 const COMPOSER = new URL('../packaging/Leon.icon/', import.meta.url)
 const SIZE = 1_024
-const TILE_SIZE = 896
-const LOGO_FRACTION = 0.76
-const CORNER_RADIUS = TILE_SIZE / 4
+const INSET_TILE_SIZE = 896
+const LOGO_FRACTION = 0.8
 const RIM_WIDTH = 6
 const BEVEL_WIDTH = 30
 const FALLBACK_LIGHTING = {
@@ -25,9 +24,11 @@ const FALLBACK_LIGHTING = {
   }
 }
 const composer = JSON.parse(await readFile(new URL('icon.json', COMPOSER), 'utf8'))
-const APPEARANCES = [
-  { name: 'light', fill: composer['fill-specializations'].find((item) => !item.appearance).value },
-  { name: 'dark', fill: composer['fill-specializations'].find((item) => item.appearance === 'dark').value }
+const RASTER_ICONS = [
+  { name: 'light', theme: 'light', size: INSET_TILE_SIZE },
+  { name: 'dark', theme: 'dark', size: INSET_TILE_SIZE },
+  // Linux desktop shells pad the surrounding button separately.
+  { name: 'linux', theme: 'dark', size: SIZE }
 ]
 // Matches the checksum-pinned toolset in the installed electron-builder.
 const ICON_TOOL_RELEASE = 'icons@1.2.3'
@@ -65,22 +66,24 @@ try {
     return new XMLSerializer().serializeToString(canvas)
   }, { source: logo, size: SIZE, fraction: LOGO_FRACTION })
   await writeFile(new URL('Assets/logo.svg', COMPOSER), artwork + '\n')
-  for (const { name, fill } of APPEARANCES) {
+  for (const { name, theme, size } of RASTER_ICONS) {
     // Use the Icon Composer document as the single owner of appearance colors.
+    const appearance = theme === 'dark' ? theme : undefined
+    const { value: fill } = composer['fill-specializations'].find((item) => item.appearance === appearance)
     const [space, value] = fill.solid.split(':')
     const channels = value.split(',')
     const alpha = channels.pop()
     const background = `color(${space} ${channels.join(' ')} / ${alpha})`
-    const lighting = FALLBACK_LIGHTING[name]
+    const lighting = FALLBACK_LIGHTING[theme]
     await page.setContent(`<html><head><style>
       html,body{margin:0;background:transparent}body{width:${SIZE}px;height:${SIZE}px;display:grid;place-items:center}
-      .tile{position:relative;width:${TILE_SIZE}px;height:${TILE_SIZE}px;border-radius:${CORNER_RADIUS}px;
+      .tile{position:relative;width:${size}px;height:${size}px;border-radius:${size / 4}px;
         background:${background};display:grid;place-items:center;isolation:isolate}
       .tile::before,.tile::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none}
       .tile::before{box-shadow:${lighting.bevel}}
       .tile::after{padding:${RIM_WIDTH}px;background:${lighting.rim};
         mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude}
-      svg{position:relative;width:${TILE_SIZE * LOGO_FRACTION}px;height:auto}
+      svg{position:relative;width:${size * LOGO_FRACTION}px;height:auto}
       </style></head><body><div class="tile">${logo}</div></body></html>`)
     await page.screenshot({ path: fileURLToPath(new URL(`${name}.png`, OUTPUT)), omitBackground: true })
   }
@@ -96,7 +99,7 @@ if (regionalMirror) {
   process.env.ELECTRON_BUILDER_BINARIES_MIRROR = mirror
 }
 try {
-  for (const [appearance, format] of [['dark', 'icns'], ['light', 'icns'], ['light', 'ico']]) {
+  for (const [appearance, format] of [['dark', 'icns'], ['light', 'icns'], ['dark', 'ico']]) {
     const convert = () => runIconsTool({ inputFile: fileURLToPath(new URL(`${appearance}.png`, OUTPUT)),
       outputFormat: format, outDir: fileURLToPath(OUTPUT) })
     try {
@@ -109,7 +112,7 @@ try {
       delete process.env.ELECTRON_BUILDER_BINARIES_MIRROR
       await convert()
     }
-    if (appearance === 'dark') {
+    if (appearance === 'dark' && format === 'icns') {
       // Keep both fallback appearances; the packager selects one before signing.
       await rename(new URL('icon.icns', OUTPUT), new URL('dark.icns', OUTPUT))
     }
