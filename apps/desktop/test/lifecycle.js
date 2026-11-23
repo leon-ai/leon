@@ -40,6 +40,8 @@ void (async () => {
         const color = theme === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'
         return localStorage.getItem('leon.web-app.theme') === scheme && document.documentElement.dataset.theme === theme &&
           getComputedStyle(bar).backgroundColor === color &&
+          getComputedStyle(bar).borderBottomColor === getComputedStyle(document.querySelector('.sidebar')).borderRightColor &&
+          getComputedStyle(bar).borderBottomWidth === '1px' &&
           host.background.slice(-6).toLowerCase() === (theme === 'dark' ? '000000' : 'ffffff') &&
           !host.visible && !host.focused
       }, `${label} native and rendered appearance`)
