@@ -98,7 +98,8 @@ export async function release({ root = process.cwd(), dryRun = false } = {}): Pr
       return
     }
     content = content ? { ...content, version } : {
-      schemaVersion: 1, version, title: `Leon ${version}`, summary: '', highlights: [],
+      schemaVersion: 1, version, desktop: { minimumCoreVersion: version },
+      title: `Leon ${version}`, summary: '', highlights: [],
       changes: { new: [], improvements: [], fixes: [], removed: [] }
     }
     await fs.writeFile(filename, JSON.stringify(content, null, 2) + '\n')

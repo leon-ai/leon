@@ -11,6 +11,7 @@ import { release } from '../../../scripts/release/release'
 
 const execute = promisify(execFile)
 const VERSION = '2.0.0-alpha.0.2'
+const PREVIOUS_VERSION = '2.0.0-alpha.0.1'
 let home: string
 let root: string
 let remote: string
@@ -19,7 +20,8 @@ let apiStatus: number
 const git = async (...args: string[]): Promise<string> =>
   (await execute('git', args, { cwd: root })).stdout.trim()
 const content = {
-  schemaVersion: 1, version: VERSION, title: 'A quieter update', summary: 'Keep my profiles and projects close.',
+  schemaVersion: 1, version: VERSION, desktop: { minimumCoreVersion: PREVIOUS_VERSION },
+  title: 'A quieter update', summary: 'Keep my profiles and projects close.',
   highlights: [], changes: { new: [], improvements: ['Preserve owner data.'], fixes: [], removed: [] }
 }
 
@@ -53,7 +55,7 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_API_URL', `http://127.0.0.1:${(api.address() as { port: number }).port}`)
   vi.stubEnv('GH_TOKEN', '')
   vi.stubEnv('LEON_RELEASE_FIXTURE_RELEASES', JSON.stringify([[{
-    tag_name: 'v2.0.0-alpha.0.1', draft: false, prerelease: true, assets: []
+    tag_name: `v${PREVIOUS_VERSION}`, draft: false, prerelease: true, assets: []
   }]]))
 })
 
@@ -71,7 +73,9 @@ const commitContent = async (): Promise<void> => {
 
 it.skipIf(process.platform === 'win32')('prepares reviewable content before tagging only a clean, pushed release commit', async () => {
   await release({ root })
-  expect(JSON.parse(await fs.readFile(path.join(root, 'release.json'), 'utf8'))).toMatchObject({ version: VERSION, summary: '' })
+  expect(JSON.parse(await fs.readFile(path.join(root, 'release.json'), 'utf8'))).toMatchObject({
+    version: VERSION, desktop: { minimumCoreVersion: VERSION }, summary: ''
+  })
   expect(await git('ls-remote', '--tags', 'origin')).toBe('')
   await commitContent()
   await release({ root, dryRun: true })
@@ -79,6 +83,18 @@ it.skipIf(process.platform === 'win32')('prepares reviewable content before tagg
   await release({ root })
   expect(await git('ls-remote', '--tags', 'origin')).toContain(`refs/tags/v${VERSION}`)
   await expect(release({ root })).rejects.toThrow('already exists upstream')
+})
+
+it.skipIf(process.platform === 'win32')('carries Desktop compatibility forward when preparing new release metadata', async () => {
+  const filename = path.join(root, 'release.json')
+  await fs.writeFile(filename, JSON.stringify({ ...content, version: PREVIOUS_VERSION }))
+
+  await release({ root })
+
+  expect(JSON.parse(await fs.readFile(filename, 'utf8'))).toMatchObject({
+    version: VERSION, desktop: { minimumCoreVersion: PREVIOUS_VERSION }
+  })
+  expect(await git('ls-remote', '--tags', 'origin')).toBe('')
 })
 
 it.skipIf(process.platform === 'win32')('refuses reused versions, unreviewed edits and commits missing from origin', async () => {

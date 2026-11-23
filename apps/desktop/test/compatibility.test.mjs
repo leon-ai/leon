@@ -20,6 +20,7 @@ const manifest = (version, protocol = DESKTOP_CORE_PROTOCOL_VERSION) => ({
 
 test('accepts supported Core versions and rejects unknown protocols, older code and breaking releases', () => {
   assertCoreCompatibility({ version: contract.sourceVersion, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
+  assertCoreCompatibility({ version: contract.minimumVersion, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
   assertCoreCompatibility({ version: compatible, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
   for (const value of [{}, { version: compatible },
     { version: compatible, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION + 1 },

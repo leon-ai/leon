@@ -13,7 +13,8 @@ import { REQUIRED_RUNTIME_PLATFORMS, RUNTIME_RELEASE_ASSET, DESKTOP_CORE_PROTOCO
 
 const VERSION = '2.0.0-alpha.0.2'
 const content: ReleaseContent = {
-  schemaVersion: 1, version: VERSION, title: 'A place for each project', summary: 'Keep **shared context** close.',
+  schemaVersion: 1, version: VERSION, desktop: { minimumCoreVersion: '2.0.0-alpha.0.1' },
+  title: 'A place for each project', summary: 'Keep **shared context** close.',
   highlights: [{ title: 'Workspaces', body: 'Group related conversations and folders.' }],
   changes: { new: ['Create workspaces.'], improvements: ['Find folders faster.'], fixes: ['Keep dialogs scrollable.'], removed: [] }
 }
@@ -39,6 +40,13 @@ describe('release distribution content', () => {
     }
     expect(() => validateReleaseContent(content, VERSION, 'v2.0.0')).toThrow('tag')
     expect(() => validateReleaseContent(content, `${VERSION}+dev`, `v${VERSION}+dev`)).toThrow('without build metadata')
+  })
+
+  it('requires a Core compatibility floor covered by the Desktop release', () => {
+    for (const desktop of [undefined, {}, { minimumCoreVersion: '1.9.0' },
+      { minimumCoreVersion: '2.0.0-alpha.0.3' }, { minimumCoreVersion: `${VERSION}+dev` }]) {
+      expect(() => validateReleaseContent({ ...content, desktop }, VERSION, `v${VERSION}`)).toThrow()
+    }
   })
 
   it('selects the newest published OTA-capable baseline in the requested channel', () => {
