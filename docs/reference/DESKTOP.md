@@ -29,6 +29,8 @@ Desktop requires Core at or above its build version, below the next major, and w
 
 After normal repository setup, run `pnpm build:server`, `pnpm build:desktop`, then `pnpm start:desktop`. The repository launcher supplies its checkout through `LEON_CODEBASE_PATH`; `pnpm start:desktop --server http://127.0.0.1:5366` connects without managing that server. Desktop has its own workspace manifest and shares the root version/lockfile.
 
+On Linux, if AppArmor prevents Electron from initializing its sandbox, run `pnpm start:desktop` from an interactive terminal. The launcher offers to install an AppArmor profile with `sudo` and retries as your regular user. The profile applies to the built executable's exact path and continues to work across rebuilds in the same checkout.
+
 `pnpm test:desktop` checks host contracts. After building diagnostics with `node apps/desktop/scripts/build.mjs --diagnostics`, `pnpm check:desktop` runs hidden checks with disposable profiles. `pnpm bench:desktop --runs 3` measures macOS host resources, excluding Core/models; it does not establish visible GPU performance or other-platform results. Generated output and signing material stay out of Git.
 
 macOS uses layered `packaging/Leon.icon` artwork with Xcode 26+; local fallback builds select full-resolution light/dark images with a static shiny rim. Their bundled ICNS matches macOS appearance at build time to prevent a different icon on exit; rebuild that fallback after changing OS appearance. The native layered source has no baked lighting. OS icon rendering, notification delivery and signed installer/update behavior require native verification.
