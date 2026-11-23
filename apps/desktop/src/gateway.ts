@@ -22,7 +22,7 @@ interface GatewayOptions {
   backendSession?: Session
   reportPath?: string | undefined
   onDiagnosticPaste?: (() => Promise<void>) | undefined
-  onDiagnosticWindow?: ((action: 'status' | 'close' | 'activate' | 'quit' | 'resize') => object) | undefined
+  onDiagnosticWindow?: ((action: 'status' | 'close' | 'activate' | 'quit' | 'resize' | 'hide' | 'hide-popup') => object) | undefined
   state?: Awaited<ReturnType<typeof createDesktopState>>
   bootstrap?: HostAPI
   desktopUpdates?: HostAPI
@@ -285,7 +285,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
     }
     if (reportPath && onDiagnosticWindow && request.method === 'POST' && url.pathname === '/__desktop/test/window') {
       const { action } = JSON.parse((await readBody(request, 4_096)).toString())
-      if (!['status', 'close', 'activate', 'quit', 'resize'].includes(action)) {
+      if (!['status', 'close', 'activate', 'quit', 'resize', 'hide', 'hide-popup'].includes(action)) {
         throw Object.assign(new Error('Invalid diagnostic window action'), { status: 400 })
       }
       response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })

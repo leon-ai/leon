@@ -496,6 +496,9 @@ test('keeps the dialog trigger tooltip closed until a fresh hover or keyboard fo
 
 test('opens searchable Settings by keyboard and preserves the conversation draft behind routed dialogs', async ({ page, ui }) => {
   void ui
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: { platform: 'Windows' } })
+  })
   await page.goto(SESSION_URL)
   const composer = page.getByRole('textbox', { name: 'Message Leon' })
   await composer.fill('Keep this draft')
@@ -552,7 +555,7 @@ test('opens searchable Settings by keyboard and preserves the conversation draft
   await expect(page).toHaveURL(/\/web-app\/$/)
   await expect(composer).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.keyboard.press('Meta+Comma')
+  await page.keyboard.press('Control+Comma')
   await expect(search).toBeFocused()
   const bounds = (await settings.boundingBox())!
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390)

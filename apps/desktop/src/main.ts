@@ -13,7 +13,7 @@ import { createGateway } from './gateway.js'
 import { configureNavigation, configurePermissions } from './navigation.js'
 import { createDesktopState } from './state.js'
 import { loadClientURL } from './startup.js'
-import { installPasteMenu, pasteAttachments } from './paste.js'
+import { HIDE_WINDOW_MENU_ID, installPasteMenu, pasteAttachments } from './paste.js'
 import type { Session } from 'electron'
 import type { Gateway } from './gateway.js'
 import type { DesktopUpdater } from './updates.js'
@@ -301,9 +301,13 @@ async function showClient(server: string): Promise<void> {
         setImmediate(() => app.quit())
       } else if (action === 'resize' && configuration.window_bounds) {
         window?.setBounds(configuration.window_bounds)
+      } else if (action === 'hide' || action === 'hide-popup') {
+        const target = action === 'hide-popup' ? BrowserWindow.getAllWindows().find((current) => current !== window) : window
+        Menu.getApplicationMenu()?.getMenuItemById(HIDE_WINDOW_MENU_ID)?.click({}, target, target?.webContents)
       }
       const alive = Boolean(window && !window.isDestroyed())
       return { alive, visible: alive && window!.isVisible(), focused: alive && window!.isFocused(), platform: process.platform,
+        minimized: alive && window!.isMinimized(),
         background: alive ? window!.getBackgroundColor() : null,
         bounds: alive ? window!.getBounds() : null,
         systemDark: nativeTheme.shouldUseDarkColors }

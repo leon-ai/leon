@@ -937,7 +937,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(last).toHaveAttribute('aria-selected', 'true')
     await expect(search).toHaveAttribute('aria-activedescendant', await last.getAttribute('id') ?? '')
     expect(await results.getByRole('option').count()).toBeLessThan(30)
-    await search.press('Home')
+    await search.press(process.platform === 'darwin' ? 'Meta+ArrowLeft' : 'Home')
     expect(await search.evaluate((field: HTMLInputElement) => field.selectionStart)).toBe(0)
     await expect(last).toHaveAttribute('aria-selected', 'true')
     await search.fill('no-matching-session')

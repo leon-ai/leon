@@ -23,6 +23,8 @@ UI preferences use the renderer's `localStorage`, backed by `servers/<server-has
 
 Electron retains the main window's size, position and display state across launches. The draggable title bar follows Leon's saved Light/Dark/System preference, keeps native window controls and shares the sidebar border color. The macOS Dock icon follows the OS appearance independently.
 
+Desktop uses Cmd/Ctrl+O for a new session (Shift+O remains an alias), Cmd/Ctrl+K for search and Cmd/Ctrl+, for settings. Cmd/Ctrl+W hides the main window on macOS or minimizes it on Windows/Linux; account and artifact popups close normally. Native menus retain editing, zoom and full-screen controls. Browser new-session shortcuts keep Shift to leave Open to the browser.
+
 Desktop requires Core at or above its build version, below the next major, and with the same desktop protocol. Download selection skips unsupported platforms/protocols; incompatible running servers are rejected. Desktop-initiated updates validate compatibility before installation. Independently updating Core can require a newer Desktop. See [releases and OTA](RELEASING.md) and [download sources](DOWNLOADS.md).
 
 After normal repository setup, run `pnpm build:server`, `pnpm build:desktop`, then `pnpm start:desktop`. The repository launcher supplies its checkout through `LEON_CODEBASE_PATH`; `pnpm start:desktop --server http://127.0.0.1:5366` connects without managing that server. Desktop has its own workspace manifest and shares the root version/lockfile.

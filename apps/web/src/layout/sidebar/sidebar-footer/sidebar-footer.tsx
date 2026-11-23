@@ -5,6 +5,7 @@ import { Link } from '@tanstack/react-router'
 import { Tooltip } from '@/components/tooltip'
 import { getPublicAssetPath, LEON_VERSION } from '@/config'
 import { useAmbientConditions } from '@/data/ambient-conditions'
+import { AppShortcutKey, getAppShortcutAria } from '@/utils/keyboard-shortcuts'
 
 import './sidebar-footer.sass'
 
@@ -64,7 +65,7 @@ export function SidebarFooter({
       </a>
       <div className="sidebar-footer-status">
         <Tooltip message="Settings" position="right">
-          <Link to="/settings" className="sidebar-footer-settings" aria-label="Settings" aria-keyshortcuts="Control+, Meta+,"
+          <Link to="/settings" className="sidebar-footer-settings" aria-label="Settings" aria-keyshortcuts={getAppShortcutAria(AppShortcutKey.Settings)}
             onClick={(event) => openDialog(event, onSettings)}>
             <Icon name="settings-line" />
           </Link>

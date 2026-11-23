@@ -6,6 +6,7 @@ import type { createGateway } from './gateway.js'
 import type { FileGrants } from './types.js'
 
 const MAXIMUM_URI_LIST_BYTES = 65_536
+export const HIDE_WINDOW_MENU_ID = 'hide-window'
 
 /**
  * Reads native file references only when Paste is explicitly invoked. Electron
@@ -77,8 +78,8 @@ export async function pasteAttachments(window: BrowserWindow | undefined,
 }
 
 /**
- * Shares one Paste action between the native menu, keyboard shortcut and context
- * menu. No global shortcut or clipboard observer runs while the app is idle.
+ * Owns app-local window, view and editing actions. Paste shares its native menu,
+ * shortcut and context action without an idle clipboard observer or global keys.
  */
 export function installPasteMenu(window: BrowserWindow, paste: () => Promise<void>): void {
   const pasteItem = { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: (): void => {
@@ -91,9 +92,30 @@ export function installPasteMenu(window: BrowserWindow, paste: () => Promise<voi
   } }
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    { label: 'File', submenu: [
+      { id: HIDE_WINDOW_MENU_ID, label: process.platform === 'darwin' ? 'Hide window' : 'Minimize window',
+        accelerator: 'CmdOrCtrl+W', click: (_item, focused): void => {
+          const target = focused ?? BrowserWindow.getFocusedWindow() ?? window
+          if (target.isDestroyed()) {
+            return
+          }
+          // Account and artifact popups keep their ordinary close behaviour.
+          if (target !== window || process.platform === 'darwin') {
+            target.close()
+          } else {
+            target.minimize()
+          }
+        } },
+      ...(process.platform === 'darwin' ? [] : [{ type: 'separator' as const }, { role: 'quit' as const }])
+    ] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' },
       { role: 'cut' }, { role: 'copy' }, pasteItem, { type: 'separator' }, { role: 'selectAll' }] },
-    { role: 'windowMenu' }
+    { label: 'View', submenu: [{ role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' },
+      { type: 'separator' }, { role: 'togglefullscreen' }] },
+    // Avoid the default Windows/Linux Close accelerator competing with Cmd/Ctrl+W.
+    { role: 'windowMenu', submenu: [{ role: 'minimize' },
+      ...(process.platform === 'darwin' ? [{ role: 'zoom' as const }, { type: 'separator' as const },
+        { role: 'front' as const }, { role: 'window' as const }] : [])] }
   ]))
   window.webContents.on('context-menu', (_event, parameters) => {
     if (parameters.isEditable) {

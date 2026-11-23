@@ -12,6 +12,7 @@ import { useToast } from '@/components/toast'
 import { useTheme } from '@/hooks/use-theme'
 import { loadImage } from '@/utils/load-image'
 import { restoreOverlayFocus } from '@/utils/overlay-focus'
+import { AppShortcutKey, hasAppModifier, NEW_SESSION_REQUIRES_SHIFT } from '@/utils/keyboard-shortcuts'
 import {
   getStoredSidebarExpanded,
   saveSidebarExpanded,
@@ -181,7 +182,7 @@ export function Sidebar({ inert, onInsights, onSettings }: {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
-      const modifierKeyPressed = event.ctrlKey || event.metaKey
+      const modifierKeyPressed = hasAppModifier(event)
       const key = event.key.toLowerCase()
 
       if (
@@ -194,7 +195,7 @@ export function Sidebar({ inert, onInsights, onSettings }: {
         return
       }
 
-      if (!event.shiftKey && key === ',') {
+      if (!event.shiftKey && key === AppShortcutKey.Settings) {
         event.preventDefault()
         onSettings()
         return
@@ -204,7 +205,7 @@ export function Sidebar({ inert, onInsights, onSettings }: {
         return
       }
 
-      if (event.shiftKey && key === 'o') {
+      if (key === AppShortcutKey.NewSession && (event.shiftKey || !NEW_SESSION_REQUIRES_SHIFT)) {
         event.preventDefault()
         searchReturnFocusRef.current = null
         setSearchSessionsDialogOpen(false)
@@ -214,7 +215,7 @@ export function Sidebar({ inert, onInsights, onSettings }: {
 
       if (
         event.shiftKey ||
-        key !== 'k'
+        key !== AppShortcutKey.SearchSessions
       ) {
         return
       }

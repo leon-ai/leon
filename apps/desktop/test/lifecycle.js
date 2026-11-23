@@ -68,6 +68,18 @@ void (async () => {
     const draft = 'A draft retained while the desktop window is closed.'
     fill(composer, draft)
     const before = await action('status')
+    const popup = window.open('about:blank', '_blank', 'popup,width=560,height=720')
+    if (!popup) {
+      throw new Error('The isolated account popup did not open')
+    }
+    await action('hide-popup')
+    await waitFor(() => popup.closed, 'closed account popup')
+    const hidden = await action('hide')
+    if (!hidden.alive || hidden.focused || composer.value !== draft ||
+      (before.platform === 'darwin' ? hidden.visible : !hidden.minimized)) {
+      throw new Error('The native window shortcut must preserve the main renderer and its draft')
+    }
+    checks.push('Native window menu action preserves the draft and closes account popups normally')
     if (before.platform === 'darwin') {
       const closed = await action('close')
       if (!closed.alive || closed.visible || closed.focused || composer.value !== draft) {
