@@ -25,11 +25,20 @@ async function lifecycle() {
   const fixture = await createFixture()
   let app
   try {
-    app = await launchDiagnostic({ name: 'lifecycle-native', script: 'lifecycle.js', server: fixture.origin,
-      configuration: { paint_when_hidden: true } })
-    const result = await app.wait('complete')
-    await app.waitForExit()
-    console.log(`Desktop lifecycle: ${result.checks.length} window checks passed; explicit quit exits`)
+    const quitPaths = process.platform === 'darwin' ? ['application', 'native'] : ['application']
+    for (const quitPath of quitPaths) {
+      const nativeQuit = quitPath === 'native'
+      app = await launchDiagnostic({ name: `lifecycle-${quitPath}`, script: 'lifecycle.js', server: fixture.origin,
+        configuration: { paint_when_hidden: true, native_quit: nativeQuit } })
+      const result = await app.wait('complete')
+      if (nativeQuit) {
+        await app.quit()
+      }
+      await app.waitForExit()
+      console.log(`Desktop lifecycle: ${result.checks.length} window checks passed; ${quitPath} quit exits`)
+      await app.close()
+      app = undefined
+    }
   } finally {
     await app?.close()
     await fixture.close()

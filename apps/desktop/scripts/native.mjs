@@ -1,10 +1,12 @@
-import { spawn, execFileSync } from 'node:child_process'
+import { spawn, execFile, execFileSync } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { mkdir, readFile, stat, writeFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, stat, writeFile, rm } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import { setTimeout as delay } from 'node:timers/promises'
 import path from 'node:path'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 export const ROOT = fileURLToPath(new URL('../', import.meta.url))
 export const ARTIFACTS = path.join(ROOT, '.artifacts')
@@ -36,11 +38,15 @@ export async function launchDiagnostic({ name, script, server, configuration = {
     .map((filename) => readFile(path.join(ROOT, 'test', filename), 'utf8')))).join('\n'))
   const config = path.join(ARTIFACTS, `${name}.config.json`)
   await writeFile(config, JSON.stringify({ ...configuration, background: true }))
+  // Delete Chromium's isolated data after exit, outside the host's quit path.
+  // Extra diagnostic I/O during shutdown would conceal promise timing races.
+  const dataDirectory = await mkdtemp(path.join(os.tmpdir(), 'leon-desktop-'))
   const env = { ...process.env, ...environment,
     LEON_DESKTOP_SERVER: server,
     LEON_DESKTOP_SMOKE_SCRIPT: combined,
     LEON_DESKTOP_REPORT_PATH: report,
     LEON_DESKTOP_DIAGNOSTIC_CONFIG: config,
+    LEON_DESKTOP_DIAGNOSTIC_DATA: dataDirectory,
     LEON_DESKTOP_BACKGROUND: '1',
     LEON_DESKTOP_NATIVE_THROTTLING: nativeThrottling ? '1' : '0' }
   const bundle = path.join(build.output, `${build.bundleName}.app`)
@@ -77,6 +83,12 @@ export async function launchDiagnostic({ name, script, server, configuration = {
     })
   }
   return { pid, report,
+    async quit() {
+      if (process.platform !== 'darwin') {
+        throw new Error('Native application termination is available only on macOS')
+      }
+      await promisify(execFile)(binary, ['--quit', String(pid)], { timeout: 10_000 })
+    },
     async waitForExit(timeout = 10_000) {
       let timer
       try {
@@ -121,6 +133,7 @@ export async function launchDiagnostic({ name, script, server, configuration = {
       } finally {
         clearTimeout(kill)
         log.end()
+        await rm(dataDirectory, { recursive: true, force: true })
       }
     }
   }

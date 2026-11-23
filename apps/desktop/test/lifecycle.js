@@ -55,8 +55,10 @@ void (async () => {
       checks.push('macOS close keeps the window alive and preserves the draft', 'Dock activation reuses the same renderer without diagnostic focus')
     }
     await report({ passed: true, phase: 'complete', checks })
-    // The external harness verifies that app.quit exits instead of hiding again.
-    void action('quit').catch(() => undefined)
+    // macOS is terminated externally through its native Dock Quit path.
+    if (!window.leonDiagnosticConfig.native_quit) {
+      void action('quit').catch(() => undefined)
+    }
   } catch (error) {
     await report({ passed: false, phase: 'complete', error: String(error) })
   }

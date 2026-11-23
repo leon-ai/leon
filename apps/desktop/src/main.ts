@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, Menu, MenuItem, nativeTheme, Notification, safeStorage, session, shell } from 'electron'
 import path from 'node:path'
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 import { bootstrapAPI } from './bootstrap-api.js'
@@ -37,7 +37,7 @@ const WINDOW_BACKGROUNDS = { dark: '#000', light: '#FFF' }
 const TITLE_BAR_HEIGHT = 36
 // Display-name changes must not move existing sessions and preferences. Native
 // diagnostics also get an isolated Chromium cache, not just ephemeral app state.
-const dataDirectory = diagnostics ? mkdtempSync(path.join(app.getPath('temp'), 'leon-desktop-'))
+const dataDirectory = diagnostics ? process.env['LEON_DESKTOP_DIAGNOSTIC_DATA']!
   : path.join(app.getPath('appData'), manifest.dataDirectoryName)
 mkdirSync(dataDirectory, { recursive: true })
 app.setPath('userData', dataDirectory)
@@ -119,12 +119,11 @@ app.on('will-quit', (event) => {
       notification.close()
     }
     notifications.clear()
-    void Promise.all([state?.close(), bootstrapController?.close()]).finally(async () => {
+    void Promise.all([state?.close(), bootstrapController?.close()]).finally(() => {
       gateway?.close()
-      if (diagnostics) {
-        await rm(dataDirectory, { recursive: true, force: true }).catch(console.error)
-      }
-      app.quit()
+      // Electron resets its quit guard after this callback returns. Resuming
+      // inside a resolved promise can otherwise leave a windowless app alive.
+      setImmediate(() => app.quit())
     })
   }
 })
