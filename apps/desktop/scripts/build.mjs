@@ -8,6 +8,7 @@ import { build as packageElectron } from 'electron-builder'
 import semver from 'semver'
 
 import { distributionConfig } from './distribution-config.mjs'
+import { fileDigest } from './file-digest.mjs'
 import { getDownloadRegion, CHINA_BINARY_BASE, isDownloadMirrorAvailable } from '../../../bridges/runtime/nodejs/download-region.js'
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url))
@@ -176,13 +177,22 @@ try {
     }
   }
 
+  let linuxLauncher
+  if (desktopName && !release && !diagnostics) {
+    const artwork = path.join(staging, 'icons/dark.png')
+    const digest = await fileDigest(artwork, 'sha256')
+    // Give the shell a new icon path when the packaged artwork changes.
+    const icon = path.join(directory, 'resources', `leon-icon-${digest}.png`)
+
+    await cp(artwork, icon)
+    linuxLauncher = { desktopName, name: config.productName, icon }
+  }
+
   await writeFile(path.join(ROOT, '.artifacts', diagnostics ? 'diagnostics-build.json' : 'build.json'),
     JSON.stringify({ platform: process.platform, arch: process.arch, electron: electronVersion,
       version: manifest.version, output: directory, bundleName: executableName,
       executableName, iconFormat: path.extname(config[platform]?.icon ?? config.icon).slice(1),
-      ...(desktopName && !release && !diagnostics ? {
-        linuxLauncher: { desktopName, name: config.productName, icon: config.icon }
-      } : {}),
+      ...(linuxLauncher ? { linuxLauncher } : {}),
       diagnostics, release, channel }, null, 2) + '\n')
   console.log(`Desktop ready: ${directory}`)
 } finally {
