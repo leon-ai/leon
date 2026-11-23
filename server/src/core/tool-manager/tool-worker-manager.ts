@@ -24,6 +24,7 @@ import {
 } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
+const WORKER_IDLE_TIMEOUT_MS = 60_000
 const DIAGNOSTIC_LIMIT = 16_000
 const TSX_LOADER_URL = import.meta.resolve('tsx')
 
@@ -35,6 +36,9 @@ interface Worker {
   log?: (line: string) => void
   diagnostics: string
   approvePreparation?: (request: Extract<ToolWorkerResponse, { type: 'prepared' }>) => void
+  lifetime?: ToolRuntimeLifetime
+  idleTimer?: NodeJS.Timeout
+  idleRetirement?: Promise<void>
   progress: Map<string, {
     receive: (progress: ToolRuntimeProgress) => void
     streams: Set<string>
@@ -92,7 +96,7 @@ export class ToolWorkerManager {
    */
   public async dispose(): Promise<void> {
     this.closing = true
-    await Promise.all([...this.workers.values()].map((worker) => this.stop(worker)))
+    await Promise.all([...this.workers.values()].map((worker) => worker.idleRetirement ?? this.stop(worker)))
     await Promise.all(this.tails.values())
     this.workers.clear()
   }
@@ -163,11 +167,13 @@ export class ToolWorkerManager {
         subscription.receive(message.progress)
         if (subscription.returned && subscription.streams.size === 0) {
           worker.progress.delete(message.requestId)
+          this.scheduleIdleRetirement(worker)
         }
       }
     })
     child.on('error', (error) => worker.fail?.(error.message))
     child.on('close', () => {
+      clearTimeout(worker.idleTimer)
       for (const subscription of worker.progress.values()) {
         for (const id of subscription.streams) {
           subscription.receive({
@@ -203,8 +209,19 @@ export class ToolWorkerManager {
       process.cwd(),
       ...(isolated ? [randomUUID()] : [])
     ])
+    let current = this.workers.get(key)
+    if (current?.idleRetirement) {
+      await current.idleRetirement
+      if (this.closing || context.signal?.aborted) {
+        return this.failure('Tool execution canceled before dispatch.')
+      }
+
+      current = undefined
+    }
+
     const timeout = context.timeout ? new ToolTimeout(context.timeout) : undefined
-    const worker = this.workers.get(key) ?? this.create(context, key)
+    const worker = current ?? this.create(context, key)
+    clearTimeout(worker.idleTimer)
     const requestId = randomUUID()
     let preparing = false
     let forceStopTimer: NodeJS.Timeout | undefined
@@ -284,7 +301,11 @@ export class ToolWorkerManager {
         finish(this.failure(message, worker.diagnostics))
       }
       worker.result = (message): void => {
-        retire = isolated || message.lifetime !== ToolRuntimeLifetime.Persistent
+        worker.lifetime = message.lifetime
+        retire = isolated || (
+          message.lifetime !== ToolRuntimeLifetime.Persistent &&
+          message.lifetime !== ToolRuntimeLifetime.Idle
+        )
         finish(message.result)
       }
       worker.approvePreparation = (request): void => {
@@ -324,6 +345,8 @@ export class ToolWorkerManager {
     if (retire || context.signal?.aborted) {
       this.workers.delete(key)
       await this.stop(worker)
+    } else {
+      this.scheduleIdleRetirement(worker)
     }
     delete worker.log
     if (context.signal?.aborted) {
@@ -340,7 +363,19 @@ export class ToolWorkerManager {
     return result
   }
 
+  private scheduleIdleRetirement(worker: Worker): void {
+    // An active call or retained output keeps its progress subscription until it finishes.
+    if (this.closing || worker.lifetime !== ToolRuntimeLifetime.Idle || worker.progress.size > 0) {
+      return
+    }
+
+    worker.idleTimer = setTimeout(() => {
+      worker.idleRetirement = this.stop(worker)
+    }, WORKER_IDLE_TIMEOUT_MS).unref()
+  }
+
   private async stop(worker: Worker, graceMs = SHUTDOWN_TIMEOUT_MS): Promise<void> {
+    clearTimeout(worker.idleTimer)
     const timer = setTimeout(() => {
       // A non-cooperative call can retain command children. Killing only the
       // worker would orphan them and leave their output pipes open.

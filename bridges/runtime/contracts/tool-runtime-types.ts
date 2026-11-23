@@ -90,6 +90,7 @@ export interface ToolRuntimeResult {
  */
 export enum ToolRuntimeLifetime {
   Call = 'call',
+  Idle = 'idle',
   Persistent = 'persistent'
 }
 
