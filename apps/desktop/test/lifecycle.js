@@ -49,6 +49,18 @@ void (async () => {
     }
     button('Close dialog').click()
     await waitFor(() => !document.querySelector('[role="dialog"]'), 'closed settings')
+    const content = document.querySelector('.app-main')
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['notes'], 'notes.txt', { type: 'text/plain' }))
+    content.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+    const dropZone = await waitFor(() => document.querySelector('.attachment-drop-zone'), 'file drop zone')
+    const dropBounds = dropZone.getBoundingClientRect()
+    if (dropBounds.top <= bounds.bottom || dropBounds.bottom > innerHeight || getComputedStyle(dropZone).borderTopWidth !== '2px') {
+      throw new Error('The file drop-zone border must remain fully below the native title bar')
+    }
+    content.dispatchEvent(new DragEvent('dragleave', { dataTransfer: transfer, bubbles: true }))
+    await waitFor(() => !document.querySelector('.attachment-drop-zone'), 'cleared drag feedback')
+    checks.push('File drop feedback stays clear of the native title bar')
     const resized = await action('resize')
     if (!Object.entries(window.leonDiagnosticConfig.window_bounds).every(([key, value]) => resized.bounds[key] === value)) {
       throw new Error('The hidden window did not accept its new position and size')
