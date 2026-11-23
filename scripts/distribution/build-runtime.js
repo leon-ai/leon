@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { create } from 'tar'
 import { copyRuntimeDependencies, runtimeDependencyLinks } from './dependencies.js'
 import { RUNTIME_MANIFEST, RUNTIME_SCHEMA_VERSION, RUNTIME_RELEASE_ASSET, runtimePlatform } from './runtime.js'
+import { DESKTOP_CORE_PROTOCOL_VERSION } from '../../bridges/runtime/contracts/distribution.js'
 
 const execute = promisify(execFile)
 const SOURCE_DIRECTORIES = ['bin', 'core', 'tools', 'skills', 'bridges', 'tcp_server', 'schemas']
@@ -77,7 +78,7 @@ export async function buildRuntime({ source = process.cwd(), output, home = proc
     const revision = process.env.GITHUB_REPOSITORY === 'leon-ai/leon' && process.env.GITHUB_REF_TYPE === 'tag'
       ? process.env.GITHUB_SHA : undefined
     await fs.writeFile(path.join(payload, RUNTIME_MANIFEST), JSON.stringify({ schemaVersion: RUNTIME_SCHEMA_VERSION,
-      version: manifest.version, platform, nodeVersion: versions.node, links,
+      version: manifest.version, platform, nodeVersion: versions.node, links, desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION,
       ...(/^[a-f0-9]{40}$/.test(revision ?? '') ? { buildCommit: revision } : {}) }, null, 2))
     const name = `leon-core-${manifest.version}-${platform}.tar.gz`
     const archive = path.join(output, name)
@@ -89,7 +90,7 @@ export async function buildRuntime({ source = process.cwd(), output, home = proc
     }
     const asset = { platform, name, sha256: hash.digest('hex'), bytes: (await fs.stat(archive)).size }
     await fs.writeFile(path.join(output, RUNTIME_RELEASE_ASSET), JSON.stringify({ schemaVersion: RUNTIME_SCHEMA_VERSION,
-      version: manifest.version, assets: [asset] }, null, 2))
+      version: manifest.version, desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION, assets: [asset] }, null, 2))
     return asset
   } finally {
     await fs.rm(staging, { recursive: true, force: true })

@@ -30,3 +30,18 @@ export interface DesktopFilesEvent {
 export const DESKTOP_UPDATES_PATH = '/__desktop/updates/'
 
 export const DESKTOP_UPDATES_META_NAME = 'leon-desktop-updates'
+
+export { DESKTOP_CORE_PROTOCOL_VERSION } from './distribution.js'
+export const DESKTOP_BOOTSTRAP_META_NAME = 'leon-desktop-bootstrap'
+export const DESKTOP_BOOTSTRAP_PATH = '/__desktop/bootstrap/'
+export const DESKTOP_NOTIFICATION_PATH = '/__desktop/notifications'
+export const DESKTOP_NOTIFICATION_EVENT = 'leon:desktop-notification'
+
+/**
+ * Native notifications identify a completed turn without exposing its content.
+ */
+export interface DesktopTurnNotification {
+  profile: string
+  sessionId: string
+  sequence: number
+}

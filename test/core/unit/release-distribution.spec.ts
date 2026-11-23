@@ -9,7 +9,7 @@ import { RELEASE_ASSET_NAME, formatReleaseNotes, selectPreviousDistribution,
 import { parseReleaseNotes } from '@/core/ota/release-notes'
 
 import { collectRuntimeAssets } from '../../../scripts/distribution/collect-assets.js'
-import { REQUIRED_RUNTIME_PLATFORMS, RUNTIME_RELEASE_ASSET } from '../../../bridges/runtime/contracts/distribution.js'
+import { REQUIRED_RUNTIME_PLATFORMS, RUNTIME_RELEASE_ASSET, DESKTOP_CORE_PROTOCOL_VERSION } from '../../../bridges/runtime/contracts/distribution.js'
 
 const VERSION = '2.0.0-alpha.0.2'
 const content: ReleaseContent = {
@@ -71,7 +71,7 @@ describe('verified Core runtime publication', () => {
       const asset = { name, platform, sha256, bytes: content.length }
       const receipt = { ...verified, platform, sha256 }
       await fs.writeFile(path.join(folder, name), content)
-      await fs.writeFile(path.join(folder, RUNTIME_RELEASE_ASSET), JSON.stringify({ schemaVersion: 1, version: VERSION, assets: [asset] }))
+      await fs.writeFile(path.join(folder, RUNTIME_RELEASE_ASSET), JSON.stringify({ schemaVersion: 1, version: VERSION, desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION, assets: [asset] }))
       await fs.writeFile(path.join(folder, 'runtime-verification.json'), JSON.stringify({ ...receipt, isolatedStartup: true }))
       await fs.writeFile(path.join(folder, 'runtime-ota-verification.json'), JSON.stringify({ ...receipt,
         artifactOTA: true, profilePreserved: true, profilesVerified: 2, sessionsVerified: 2,

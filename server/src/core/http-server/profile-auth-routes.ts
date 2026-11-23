@@ -12,7 +12,8 @@ import {
 } from '@/core/profile-runtime/profile-auth'
 import { enterProfileContext } from '@/core/profile-runtime/profile-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
-import { IS_CLIENT_INTERFACE_AUTH_ENABLED } from '@/constants'
+import { IS_CLIENT_INTERFACE_AUTH_ENABLED, LEON_VERSION } from '@/constants'
+import { DESKTOP_CORE_PROTOCOL_VERSION } from '@@/bridges/runtime/contracts/distribution.js'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import type { ProfileAuthentication } from './profile-auth-contract'
 
@@ -95,6 +96,8 @@ export const profileAuthRoutes: FastifyPluginAsync<APIOptions> = async (
     reply.send({
       success: true,
       status: 200,
+      version: LEON_VERSION,
+      desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION,
       ...auth
     })
   })

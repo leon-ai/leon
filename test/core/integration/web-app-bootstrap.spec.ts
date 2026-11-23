@@ -13,6 +13,7 @@ import { PROFILE_AUTH_BOOTSTRAP_ID, type ProfileAuthentication } from '@/core/ht
 import { profileAuthRoutes } from '@/core/http-server/profile-auth-routes'
 import { PROFILE_AUTH_COOKIE_NAME, PROFILE_TOKEN_ENV_NAME } from '@/core/profile-runtime/profile-auth'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
+import { DESKTOP_CORE_PROTOCOL_VERSION } from '../../../bridges/runtime/contracts/distribution.js'
 
 const fixture = vi.hoisted(() => ({ root: '', authEnabled: true, initialize: vi.fn() }))
 const DOCUMENT = '<!doctype html><html><head><title>Leon</title></head><body><div id="root"></div></body></html>'
@@ -21,6 +22,7 @@ const ICON_VERSION = createHash('sha256').update(ICON).digest('hex')
 let app: FastifyInstance
 
 vi.mock('@/constants', () => ({
+  LEON_VERSION: '2.0.0',
   get IS_CLIENT_INTERFACE_AUTH_ENABLED(): boolean {
     return fixture.authEnabled
   }
@@ -117,6 +119,7 @@ it.each(['/web-app/', '/web-app/index.html', '/web-app/session/example'])(
     expect(fixture.initialize).not.toHaveBeenCalled()
     const probe = await app.inject({ url: '/api/v1/profile-auth', headers: { cookie: cookie('alice') } })
     expect(probe.json()).toMatchObject(readBootstrap(response.body))
+    expect(probe.json()).toMatchObject({ version: '2.0.0', desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
   }
 )
 

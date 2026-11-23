@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 
 import dotenv from 'dotenv'
+import { PROFILE_AUTH_COOKIE_NAME } from '@/core/http-server/profile-auth-contract'
 
 import {
   getProfilePaths,
@@ -10,7 +11,7 @@ import {
 } from '@/core/profile-runtime/profile-paths'
 
 export const PROFILE_TOKEN_ENV_NAME = 'LEON_PROFILE_TOKEN'
-export const PROFILE_AUTH_COOKIE_NAME = 'leon_profile_token'
+export { PROFILE_AUTH_COOKIE_NAME } from '@/core/http-server/profile-auth-contract'
 export const PROFILE_AUTHORIZATION_HEADER_NAME = 'authorization'
 export const PROFILE_TOKEN_HEADER_NAME = 'x-leon-profile-token'
 
