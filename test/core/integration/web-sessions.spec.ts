@@ -36,6 +36,8 @@ import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTE
 import { prepareStoredOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
 import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 import { presentAurora } from '@/core/aurora/answer-presentation'
+import { onCompletedOwnerTurn, type CompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
+import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER } from '../../../bridges/runtime/contracts/turn-client'
 
 interface FixtureAnswer {
   output: string
@@ -739,6 +741,43 @@ describe('web conversation runtime', () => {
     }
     expect((await request('GET', '/api/v1/sessions/missing/queries')).statusCode).toBe(404)
     expect(fixture.executions).toHaveLength(0)
+  })
+
+  it('keeps client labels with the originating turn across concurrent sessions in one profile', async () => {
+    const sessions = [await create(), await create(), await create()]
+    const sources = [
+      { type: 'web', os: 'android' },
+      { type: 'desktop', os: 'macos' },
+      { type: 'custom device name', os: 'macOS 26.0' }
+    ]
+    const completed: CompletedOwnerTurn[] = []
+    const stop = onCompletedOwnerTurn((turn) => {
+      completed.push(turn)
+    })
+
+    try {
+      const ids = sessions.map(() => randomUUID())
+      const responses = await Promise.all(sessions.map((session, index) => app.inject({
+        method: 'POST', url: `/api/v1/sessions/${session}/messages`,
+        headers: {
+          'x-test-profile': profile,
+          [TURN_CLIENT_TYPE_HEADER]: sources[index]!.type,
+          [TURN_CLIENT_OS_HEADER]: sources[index]!.os
+        },
+        payload: { id: ids[index], query: `Message from client ${index}` }
+      })))
+      expect(responses.map(({ statusCode }) => statusCode)).toEqual([202, 202, 202])
+      await vi.waitFor(() => expect(fixture.executions).toHaveLength(3))
+      for (const execution of fixture.executions) {
+        execution.release()
+      }
+      await vi.waitFor(() => expect(completed).toHaveLength(3))
+      expect(ids.map((id) => completed.find((turn) => turn.id === id)?.measurement.client)).toEqual([
+        sources[0], sources[1], { type: 'unknown', os: 'unknown' }
+      ])
+    } finally {
+      stop()
+    }
   })
 
   it('runs different sessions concurrently, deduplicates delivery, and stops only the addressed session', async () => {

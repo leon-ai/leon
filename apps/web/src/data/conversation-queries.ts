@@ -11,6 +11,7 @@ import { requestAPI } from './api'
 import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
 import { applyConversationEvent, mergeAnswerParts } from './conversation-events'
 import { toFeedEntries } from './conversation-feed'
+import { turnClientHeaders } from './turn-client'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
 import { ConnectionError, requestErrors } from './request-errors'
 import { sessionsQueryKey, SESSION_PAGE_SIZE, SessionStatus, type SessionsPage } from './sessions'
@@ -243,7 +244,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
 
       return requestAPI<{ command: ConversationCommand }>(`sessions/${encodeURIComponent(sessionId)}/messages`, {
         ...(input.signal ? { signal: input.signal } : {}),
-        method: 'POST', body: JSON.stringify({ id: input.id, query: input.query,
+        method: 'POST', headers: turnClientHeaders(), body: JSON.stringify({ id: input.id, query: input.query,
           ...(attachments.length ? { attachments: attachments.map((file) => file.id) } : {}) })
       })
     },

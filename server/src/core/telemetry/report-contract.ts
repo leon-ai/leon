@@ -3,6 +3,8 @@ import path from 'node:path'
 import { Type, type Static } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 
+import { TurnClientOS, TurnClientType } from '../../../../bridges/runtime/contracts/turn-client'
+
 import { getLLMModelCatalogEntries } from '../llm-manager/llm-model-catalog'
 import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '../llm-manager/local-model-catalog'
 import { LLMProviders } from '../llm-manager/types'
@@ -128,6 +130,10 @@ const telemetryEventSchema = Type.Object({
   kind: Type.Union([Type.Literal('profile_started'), Type.Literal('turn_finished'), Type.Literal('skill_finished')]),
   at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }),
   timeZone,
+  client: Type.Optional(Type.Object({
+    type: Type.Enum(TurnClientType),
+    os: Type.Enum(TurnClientOS)
+  }, { additionalProperties: false })),
   capabilities: Type.Optional(Type.Array(capabilityUsage, { maxItems: TELEMETRY_MAX_CAPABILITY_BUCKETS })),
   contextReduction: Type.Optional(Type.Object({ count, estimatedTokensReclaimed: count }, { additionalProperties: false })),
   report: dailyReportSchema
@@ -193,7 +199,9 @@ export function getIanaTimeZone(value: string): string | undefined {
  * Checks the shape and timezone of an event sent by Core.
  */
 export function isTelemetryEventReport(value: unknown): value is TelemetryEventReport {
-  return Value.Check(telemetryEventSchema, value) && getIanaTimeZone(value.timeZone) !== undefined
+  return Value.Check(telemetryEventSchema, value) &&
+    (value.client === undefined || value.kind === 'turn_finished') &&
+    getIanaTimeZone(value.timeZone) !== undefined
 }
 
 /**

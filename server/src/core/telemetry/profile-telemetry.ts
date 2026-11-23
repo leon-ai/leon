@@ -46,6 +46,7 @@ interface PendingEvent {
   activity?: Activity
   capabilities?: readonly CapabilityUsage[]
   contextReduction?: CompletedOwnerTurn['contextReduction']
+  client?: TelemetryEventReport['client']
   skillEventId?: string
   pulse?: NonNullable<ReturnType<typeof takePulseMeasurements>>
   retryAt: number
@@ -343,6 +344,7 @@ function buildEvent(job: PendingEvent, state: DeliveryState, identity: Reporting
     timeZone: getIanaTimeZone(zone) ?? getIanaTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone) ?? 'UTC',
     ...(job.capabilities?.length ? { capabilities: [...job.capabilities] } : {}),
     ...(job.contextReduction ? { contextReduction: job.contextReduction } : {}),
+    ...(job.client ? { client: job.client } : {}),
     report
   }
 }
@@ -465,6 +467,7 @@ export function startProfileTelemetry(): (() => void) | undefined {
         }
         enqueue({
           profile, at, activity, retryAt: 0,
+          client: completed.measurement.client,
           capabilities: completed.capabilities, contextReduction: completed.contextReduction
         })
       }

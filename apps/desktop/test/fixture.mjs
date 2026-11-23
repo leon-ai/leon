@@ -35,6 +35,7 @@ export async function createFixture({ requireLogin = false, historyTurns = 0, st
   ]).flat()]])
   sessions.get('welcome').messageCount = historyTurns * 2
   const uploads = []
+  const ownerCommands = []
   const streams = new Set()
   const events = []
   const jobs = new Set()
@@ -144,7 +145,7 @@ export async function createFixture({ requireLogin = false, historyTurns = 0, st
         messages.set(value.id, [])
         json(response, { session: value })
       } else if (route.startsWith('sessions/')) {
-        const [, id, action] = route.split('/')
+        const [, id, action, messageId, submission] = route.split('/')
         const value = sessions.get(id)
         if (!value) {
           json(response, { message: 'Unknown fixture session' }, 404)
@@ -152,6 +153,15 @@ export async function createFixture({ requireLogin = false, historyTurns = 0, st
           json(response, { queries: [], next_cursor: null })
         } else if (action === 'messages' && request.method === 'POST') {
           const command = await body(request)
+          ownerCommands.push({
+            kind: messageId && submission === 'ui' ? 'ui' : 'message',
+            clientType: request.headers['x-leon-client-type'],
+            clientOS: request.headers['x-leon-client-os']
+          })
+          if (messageId && submission === 'ui') {
+            json(response, { command: { id: command.id, status: 'accepted' }, answerParts: [] }, 202)
+            return
+          }
           const responseId = `${command.id}:leon`
           const record = { who: 'owner', messageId: command.id, message: command.query, sentAt: Date.now(), isAddedToHistory: true }
           messages.get(id).push(record)
@@ -196,7 +206,7 @@ export async function createFixture({ requireLogin = false, historyTurns = 0, st
     })
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  return { origin: `http://127.0.0.1:${server.address().port}`, uploads,
+  return { origin: `http://127.0.0.1:${server.address().port}`, uploads, ownerCommands,
     async close() {
       await Promise.allSettled(jobs)
       server.closeAllConnections()

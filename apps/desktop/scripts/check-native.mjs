@@ -77,6 +77,12 @@ async function transport() {
       'Native file bytes must arrive unchanged at Core')
     assert(fixture.uploads.some((upload) => !upload.complete && upload.bytes < bytes),
       'Cancelling a native upload must stop delivery')
+    const clientOS = { darwin: 'macos', linux: 'linux', win32: 'windows' }[process.platform] ?? 'other'
+    assert.deepEqual(fixture.ownerCommands, [
+      { kind: 'message', clientType: 'desktop', clientOS },
+      { kind: 'ui', clientType: 'desktop', clientOS }
+    ], 'Messages and interactive replies must carry the native client type and OS to Core')
+    result.checks.push('Native client type and OS reach Core for both owner turn routes')
     await writeFile(app.report, JSON.stringify({ ...result, transport: { native_bytes: bytes, sha256_verified: true } }, null, 2) + '\n')
     console.log(`Desktop transport: ${result.checks.length} checks passed; ${bytes} native bytes verified`)
   } finally {

@@ -8,6 +8,38 @@ import { setFixtureTheme, test, expect, SESSION_ID, SESSION_URL, toolContentsFix
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
+import { DESKTOP_META_NAME } from '../../../bridges/runtime/contracts/desktop-client'
+import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER } from '../../../bridges/runtime/contracts/turn-client'
+
+for (const { desktop, platform, type, os } of [
+  { desktop: false, platform: 'Android', type: 'web', os: 'android' },
+  { desktop: true, platform: 'macOS', type: 'desktop', os: 'macos' }
+]) {
+  test(`sends the ${type} client and ${os} OS family with an owner message`, async ({ page, ui }) => {
+    await page.addInitScript((platform) => {
+      Object.defineProperty(navigator, 'userAgentData', { get: () => ({ platform }) })
+      Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 })
+    }, platform)
+    await page.goto(SESSION_URL)
+    if (desktop) {
+      await page.evaluate((name) => {
+        const marker = document.createElement('meta')
+        marker.name = name
+        document.head.append(marker)
+      }, DESKTOP_META_NAME)
+    }
+
+    const messages = `/api/v1/sessions/${ui.sessions[0]!.id}/messages`
+    const request = page.waitForRequest((request) =>
+      request.method() === 'POST' && new URL(request.url()).pathname === messages)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    await composer.fill('Hello Leon')
+    await composer.press('Enter')
+    const headers = (await request).headers()
+    expect(headers[TURN_CLIENT_TYPE_HEADER]).toBe(type)
+    expect(headers[TURN_CLIENT_OS_HEADER]).toBe(os)
+  })
+}
 
 test('shows the Pulse reason before work begins and keeps it with the saved reply', async ({ page, ui }) => {
   await page.goto(SESSION_URL)

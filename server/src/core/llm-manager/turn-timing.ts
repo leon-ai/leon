@@ -15,11 +15,14 @@ import { readContextUsage, type ContextUsageMetrics } from './llm-usage/context-
 import type { InferenceUsage } from './llm-usage/usage-context'
 import type { InferenceUsageRecord } from './llm-usage/usage-ledger'
 import { TELEMETRY_MAX_CAPABILITY_BUCKETS, type CapabilityUsage } from '@/core/telemetry/report-contract'
+import { getTurnClient } from '@/core/leon-interface/turn-client'
+import type { TurnClient } from '@@/bridges/runtime/contracts/turn-client'
 
 export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
 
 interface OwnerTurnMeasurement {
   version: string
+  client: TurnClient
   outcome: 'answered' | 'clarification' | 'failed' | 'canceled'
   context?: ContextUsageMetrics
   failure?: OwnerTurnFailureCode
@@ -238,7 +241,7 @@ export function recordOwnerTurn(
   const scope = storage.getStore()
   if (scope && !scope.state.closed) {
     const context = readContextUsage(metrics)
-    scope.state.ownerTurn = { version: PACKAGE.version, outcome, ...(context ? { context } : {}),
+    scope.state.ownerTurn = { version: PACKAGE.version, client: getTurnClient(), outcome, ...(context ? { context } : {}),
       ...(failure && outcome === 'failed' ? { failure } : {}) }
   }
 }

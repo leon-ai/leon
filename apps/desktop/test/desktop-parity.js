@@ -66,6 +66,18 @@ void (async () => {
     await waitFor(() => document.body.textContent.includes('Hello from the fixture.'), 'native attachment accepted')
     await waitFor(() => !document.querySelector('[aria-label="Attached files"]'), 'submitted draft released')
     checks.push('Native file larger than 8 MB uploads through the real composer with progress')
+    const interactive = await fetch(`/api/v1/sessions/${created.session.id}/messages/fixture-reply/ui`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-leon-client-type': 'mobile',
+        'x-leon-client-os': 'android'
+      },
+      body: JSON.stringify({ id: crypto.randomUUID(), surfaceId: 'fixture', nodeId: 'choice', revision: 1, values: true })
+    })
+    if (interactive.status !== 202) {
+      throw new Error('Desktop could not send an interactive reply to Core')
+    }
     await waitFor(async () => (await fetch('/__desktop/notifications').then((response) => response.json())).length === 1,
       'live native completion notification')
     checks.push('Live turn completion reaches native notifications without an OS banner')

@@ -1,6 +1,7 @@
 import type { RoutingMode } from '@/types'
 import type { AgentModelFile, CompletionFailureKind } from '@/core/llm-manager/types'
 import type { ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
+import type { TurnClientOS } from '@@/bridges/runtime/contracts/turn-client'
 
 export const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
 
@@ -32,6 +33,7 @@ export interface LeonClientCapabilities {
 export interface LeonClientDescriptor {
   id?: string
   type?: string
+  os?: TurnClientOS
   name?: string
   version?: string
 }

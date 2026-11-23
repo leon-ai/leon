@@ -1,4 +1,4 @@
-import { WebPreferenceKey } from '../../../../bridges/runtime/contracts/desktop-client'
+import { DESKTOP_META_NAME, WebPreferenceKey } from '../../../../bridges/runtime/contracts/desktop-client'
 
 export { WebPreferenceKey }
 
@@ -39,7 +39,7 @@ export function saveWebPreference(key: WebPreferenceStorageKey, value: string): 
     return
   }
   window.localStorage.setItem(key, value)
-  if (document.querySelector('meta[name="leon-desktop"]')) {
+  if (document.querySelector(`meta[name="${DESKTOP_META_NAME}"]`)) {
     pending.set(key, value)
     queueMicrotask(() => {
       void flush()

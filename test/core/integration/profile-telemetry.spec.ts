@@ -31,6 +31,8 @@ it.each([
       import { startProfileTelemetry } from './server/src/core/telemetry/profile-telemetry.ts'
       import { measurePulse } from './server/src/core/telemetry/pulse-measurements.ts'
       import { PulseStage } from './server/src/core/telemetry/report-contract.ts'
+      import { runWithTurnClient } from './server/src/core/leon-interface/turn-client.ts'
+      import { recordOwnerTurn, runWithTurnTiming } from './server/src/core/llm-manager/turn-timing.ts'
 
       const reports = new Set()
       const events = new Map()
@@ -42,7 +44,7 @@ it.each([
           const event = JSON.parse(options.body)
           events.set(event.kind, event)
         }
-        if (reports.has('/v1/presence') && events.has('profile_started') && events.has('pulse_metrics')) {
+        if (reports.has('/v1/presence') && events.has('profile_started') && events.has('pulse_metrics') && events.has('turn_finished')) {
           delivery.resolve()
         }
         return Promise.resolve(new Response(null, { status: 204 }))
@@ -55,11 +57,17 @@ it.each([
         provider: 'llamacpp', model: '/private/owner-model.gguf', outcome: 'completed', usage: { inputTokens: 50, outputTokens: 10 }
       } })
       try {
+        await runWithTurnClient('mobile', 'ios', () => runWithTurnTiming('fixture-turn', 'fixture-session', async () => {
+          recordOwnerTurn('answered')
+        }))
         if (${sendsReports}) {
           await delivery.promise
           assert.deepEqual(reports, new Set(['/v1/presence', '/v2/event']))
           assert.deepEqual(events.get('pulse_metrics').counters, { discovery_checked: 3 })
           assert.equal(events.get('pulse_metrics').profile, events.get('profile_started').report.profile)
+          assert.deepEqual(events.get('turn_finished').client, { type: 'mobile', os: 'ios' })
+          assert.equal(events.get('turn_finished').report.fleet.os, process.platform)
+          assert.equal(events.get('profile_started').client, undefined)
           assert.deepEqual(events.get('pulse_metrics').usage, [{
             provider: 'llamacpp', model: 'other', stage: 'research', calls: 1, failedCalls: 0,
             inputTokens: 50, outputTokens: 10, cachedInputTokens: 0, cacheReportedCalls: 0, costMicros: 0, costSamples: 0

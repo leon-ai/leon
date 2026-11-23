@@ -34,6 +34,7 @@ export interface DesktopFilesEvent {
 
 export const DESKTOP_UPDATES_PATH = '/__desktop/updates/'
 
+export const DESKTOP_META_NAME = 'leon-desktop'
 export const DESKTOP_UPDATES_META_NAME = 'leon-desktop-updates'
 
 export { DESKTOP_CORE_PROTOCOL_VERSION } from './distribution.js'

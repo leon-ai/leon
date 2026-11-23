@@ -53,6 +53,8 @@ import {
   type LeonClientInterfaceTypingPayload,
   type LeonClientInterfaceUtterancePayload
 } from '@/core/leon-interface/types'
+import { runWithTurnClient } from '@/core/leon-interface/turn-client'
+import { TurnClientType, type TurnClientOS } from '@@/bridges/runtime/contracts/turn-client'
 import {
   authenticateProfileCredential,
   readProfileCredentialFromHeaders,
@@ -129,12 +131,20 @@ interface ConnectedChatClient {
   id: string
   client: string
   clientType: string
+  clientOS?: TurnClientOS
   capabilities: LeonClientCapabilities
   protocol: LeonClientInterfaceProtocol
   profileName: string
   sessionId: string
   socket: Socket
 }
+
+const SOCKET_CLIENT_TYPES = new Map<string, TurnClientType>([
+  ['web_app', TurnClientType.Web],
+  ['desktop_app', TurnClientType.Desktop],
+  ['mobile_app', TurnClientType.Mobile],
+  [LEON_CLIENT_INTERFACE_DEFAULT_CLIENT_TYPE, TurnClientType.Other]
+])
 
 export default class SocketServer {
   private static instance: SocketServer
@@ -247,6 +257,7 @@ export default class SocketServer {
       id: client.id,
       client: client.name || client.id,
       clientType: client.type,
+      ...(typeof initData.client !== 'string' && initData.client.os ? { clientOS: initData.client.os } : {}),
       capabilities: {
         ...DEFAULT_CLIENT_CAPABILITIES,
         ...(initData.capabilities || {})
@@ -903,7 +914,8 @@ export default class SocketServer {
 
           BRAIN.isMuted = false
           const prepared = await prepareOwnerAttachments(utterance, utteranceData.attachments, sessionId)
-          await NLU.process(prepared.query, {
+          const clientType = chatClient?.clientType ?? TurnClientType.Unknown
+          await runWithTurnClient(SOCKET_CLIENT_TYPES.get(clientType) ?? clientType, chatClient?.clientOS, () => NLU.process(prepared.query, {
             ownerMessageId,
             files: prepared.files,
             hasAttachments: Boolean(utteranceData.attachments?.length),
@@ -925,7 +937,7 @@ export default class SocketServer {
                     utteranceData.commandContext.forcedToolName
                 }
               : {})
-          })
+          }))
 
           LogHelper.title('Execution Time')
           LogHelper.timeEnd('Utterance processed in')

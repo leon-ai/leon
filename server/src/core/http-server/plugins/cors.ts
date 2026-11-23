@@ -1,5 +1,6 @@
 import type { onRequestHookHandler } from 'fastify'
 
+import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER } from '@@/bridges/runtime/contracts/turn-client'
 import {
   CLIENT_INTERFACE_ALLOWED_ORIGINS,
   HOST,
@@ -17,7 +18,9 @@ const ALLOWED_REQUEST_HEADERS = [
   'Content-Type',
   'Accept',
   PROFILE_AUTHORIZATION_HEADER_NAME,
-  PROFILE_TOKEN_HEADER_NAME
+  PROFILE_TOKEN_HEADER_NAME,
+  TURN_CLIENT_TYPE_HEADER,
+  TURN_CLIENT_OS_HEADER
 ].join(', ')
 
 function getAllowedOrigins(): string[] {

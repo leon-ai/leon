@@ -12,6 +12,7 @@ import { createFileStore } from './files.js'
 import { assertCoreUpdateCompatibility } from './compatibility.js'
 import contract from '../runtime/desktop-contract.mjs'
 import { DESKTOP_BOOTSTRAP_META_NAME, DESKTOP_BOOTSTRAP_PATH, DESKTOP_NOTIFICATION_PATH } from '../../../bridges/runtime/contracts/desktop-client'
+import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER, TurnClientOS, TurnClientType } from '../../../bridges/runtime/contracts/turn-client'
 import type { Session } from 'electron'
 import type { HostAPI, HostError, FileGrants } from './types.js'
 import type { createDesktopState } from './state.js'
@@ -38,6 +39,12 @@ export interface Gateway {
 
 const MAXIMUM_REQUEST_BYTES = 8 * 1_024 * 1_024
 const SESSION_COOKIE = 'leon-desktop-session'
+const OWNER_TURN_PATH = /^\/api\/v1\/sessions\/[^/]+\/messages(?:\/[^/]+\/ui)?$/
+const CLIENT_OS_BY_PLATFORM: Readonly<Partial<Record<NodeJS.Platform, TurnClientOS>>> = {
+  darwin: TurnClientOS.MacOS,
+  linux: TurnClientOS.Linux,
+  win32: TurnClientOS.Windows
+}
 // Aurora's opaque Blob frames inherit this policy and additionally restrict
 // their own resources. Only trusted bootstrap scripts receive the page nonce.
 const CONTENT_SECURITY_POLICY = 'default-src \'self\'; script-src \'self\' blob: \'wasm-unsafe-eval\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data: blob:; font-src \'self\' data:; media-src \'self\' blob:; worker-src \'self\' blob:; connect-src \'self\'; frame-src blob:; frame-ancestors \'none\'; object-src \'none\'; base-uri \'self\'; form-action \'self\''
@@ -103,6 +110,11 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
       if (request.headers[name] !== undefined) {
         headers[name] = request.headers[name]
       }
+    }
+    if (request.method === 'POST' && OWNER_TURN_PATH.test(url.pathname)) {
+      // Core may be remote, so label the turn using the native client's platform.
+      headers[TURN_CLIENT_TYPE_HEADER] = TurnClientType.Desktop
+      headers[TURN_CLIENT_OS_HEADER] = CLIENT_OS_BY_PLATFORM[process.platform] ?? TurnClientOS.Other
     }
     if (request.headers.origin) {
       headers['origin'] = backend.origin
