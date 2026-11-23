@@ -1,0 +1,82 @@
+name: Desktop build and tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, develop]
+    paths: &desktop-paths
+      - '.github/workflows/desktop-build.yml'
+      - 'apps/desktop/**'
+      - 'apps/web/**'
+      - 'aurora/**'
+      - 'bridges/runtime/**'
+      - 'server/src/**'
+      - 'bin/**/versions.json'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.pnpmfile.mjs'
+      - '.nvmrc'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
+  pull_request:
+    branches: [master, develop]
+    paths: *desktop-paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Desktop (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: darwin-arm64, runner: macos-15 }
+          - { platform: linux-x64, runner: ubuntu-24.04 }
+          - { platform: linux-arm64, runner: ubuntu-24.04-arm }
+          - { platform: win32-x64, runner: windows-2022 }
+    env:
+      CI: 'true'
+      # Verification packages are unsigned and never publish or enable updates.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.1
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # The image's default Xcode predates layered icons; use its installed compiler.
+      - name: Use Xcode for native icons
+        if: runner.os == 'macOS'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+        run: |
+          xcrun actool --version
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+
+      # The host uses bundled Core leaves, not Core setup or Python tooling.
+      - name: Install build dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install desktop dependencies
+        run: pnpm --filter leon-desktop install --frozen-lockfile --ignore-scripts
+      - name: Check desktop lint and types
+        if: matrix.platform == 'linux-x64'
+        run: pnpm run lint --scope desktop
+      - name: Check desktop host lifecycle and updates
+        run: pnpm run test:desktop
+      - name: Build desktop application
+        run: pnpm run build:desktop

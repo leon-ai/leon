@@ -14,7 +14,8 @@ import js from '@eslint/js'
 
 export default [
   {
-    ignores: ['**/*.spec.js', 'aurora/dist/**', 'test/web-app/previews/dist/**', 'test/web-app/**/results/**', 'test/web-app/**/report/**']
+    ignores: ['**/*.spec.js', 'aurora/dist/**', 'test/web-app/previews/dist/**', 'test/web-app/**/results/**', 'test/web-app/**/report/**',
+      'apps/desktop/dist/**', 'apps/desktop/.generated/**', 'apps/desktop/.artifacts/**']
   },
   js.configs.recommended,
   ...typescriptEslint.configs['flat/recommended'],
@@ -103,6 +104,24 @@ export default [
       'import-x/resolver-next': [
         createTypeScriptImportResolver({
           project: 'test/web-app/tsconfig.json'
+        }),
+        createNodeResolver()
+      ]
+    }
+  },
+  {
+    files: ['apps/desktop/**/*.{js,mjs}'],
+    rules: {
+      // Packaging emits these host-only bundles; lint must also work before a build.
+      'import-x/no-unresolved': ['error', { ignore: ['^\\.\\./\\.generated/'] }]
+    }
+  },
+  {
+    files: ['apps/desktop/**/*.{ts,tsx}'],
+    settings: {
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          project: 'apps/desktop/tsconfig.json'
         }),
         createNodeResolver()
       ]

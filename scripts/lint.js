@@ -1,4 +1,5 @@
 import { execa } from 'execa'
+import { parseArgs } from 'node:util'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
@@ -6,7 +7,12 @@ import { LoaderHelper } from '@/helpers/loader-helper'
 import buildAurora from './build-aurora.js'
 
 // Keep full-repository results separate from staged-file and ad hoc ESLint runs.
-const ESLINT_CACHE_PATH = 'node_modules/.cache/eslint/full'
+const { values } = parseArgs({ options: { scope: { type: 'string', default: 'all' } } })
+const SCOPES = ['all', 'core', 'desktop']
+const DESKTOP_GLOBS = ['apps/desktop/**/*.{ts,tsx,mjs,js}']
+const CORE_PROJECTS = ['tsconfig.json', 'apps/web/tsconfig.json', 'test/web-app/tsconfig.json', 'scripts/release/tsconfig.json']
+const DESKTOP_PROJECTS = ['apps/desktop/tsconfig.json']
+const ESLINT_CACHE_PATH = `node_modules/.cache/eslint/${values.scope}`
 
 const globs = [
   '.pnpmfile.mjs',
@@ -33,10 +39,17 @@ const globs = [
   LogHelper.info('Linting...')
 
   try {
+    if (!SCOPES.includes(values.scope)) {
+      throw new Error(`Unknown lint scope: ${values.scope}. Use ${SCOPES.join(', ')}.`)
+    }
+    const selectedGlobs = values.scope === 'desktop' ? DESKTOP_GLOBS
+      : values.scope === 'core' ? globs : [...globs, ...DESKTOP_GLOBS]
+    const projects = values.scope === 'desktop' ? DESKTOP_PROJECTS
+      : values.scope === 'core' ? CORE_PROJECTS : [...CORE_PROJECTS, ...DESKTOP_PROJECTS]
     await buildAurora({ quiet: true })
     // Reuse unchanged files while still checking every TypeScript project below.
     await execa('eslint', [
-      ...globs,
+      ...selectedGlobs,
       '--fix',
       '--cache',
       '--cache-strategy', 'content',
@@ -45,18 +58,11 @@ const globs = [
     ], {
       stdio: 'inherit'
     })
-    await execa('tsrs', ['--fast', '--noEmit', '-p', 'tsconfig.json'], {
-      stdio: 'inherit'
-    })
-    await execa('tsrs', ['--fast', '--noEmit', '-p', 'apps/web/tsconfig.json'], {
-      stdio: 'inherit'
-    })
-    await execa('tsrs', ['--fast', '--noEmit', '-p', 'test/web-app/tsconfig.json'], {
-      stdio: 'inherit'
-    })
-    await execa('tsrs', ['--fast', '--noEmit', '-p', 'scripts/release/tsconfig.json'], {
-      stdio: 'inherit'
-    })
+    for (const project of projects) {
+      await execa('tsrs', ['--fast', '--noEmit', '-p', project], {
+        stdio: 'inherit'
+      })
+    }
 
     LogHelper.success('Looks great')
     LoaderHelper.stop()
