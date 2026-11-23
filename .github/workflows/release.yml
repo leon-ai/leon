@@ -1,5 +1,4 @@
-# A version tag requests publication. Owners cannot discover the release until
-# source checks, a cold install, and the real Linux OTA/inference gate pass.
+# A version tag requests publication after the Core and Desktop checks pass.
 name: Release
 
 on:
@@ -40,6 +39,11 @@ jobs:
     with:
       platforms: '["ubuntu-24.04"]'
 
+  desktop-verification:
+    name: Desktop build and tests
+    needs: candidate
+    uses: ./.github/workflows/desktop-build.yml
+
   quick-evals:
     name: Quick Evals
     needs: candidate
@@ -58,7 +62,7 @@ jobs:
 
   publish:
     name: Publish verified release
-    needs: [verification, quick-evals, installation-and-ota]
+    needs: [verification, desktop-verification, quick-evals, installation-and-ota]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

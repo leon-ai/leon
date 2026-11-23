@@ -2,33 +2,14 @@ name: Desktop build and tests
 
 on:
   workflow_dispatch:
-  push:
-    branches: [master, develop]
-    paths: &desktop-paths
-      - '.github/workflows/desktop-build.yml'
-      - 'apps/desktop/**'
-      - 'apps/web/**'
-      - 'aurora/**'
-      - 'bridges/runtime/**'
-      - 'server/src/**'
-      - 'bin/**/versions.json'
-      - 'scripts/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.pnpmfile.mjs'
-      - '.nvmrc'
-      - 'tsconfig.json'
-      - 'eslint.config.mjs'
-  pull_request:
-    branches: [master, develop]
-    paths: *desktop-paths
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-build-${{ github.event.pull_request.number || github.ref }}
+  # A manual check of a tag must not cancel that tag's release verification.
+  group: desktop-build-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
