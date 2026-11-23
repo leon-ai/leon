@@ -39,6 +39,7 @@ export interface Gateway {
 
 const MAXIMUM_REQUEST_BYTES = 8 * 1_024 * 1_024
 const SESSION_COOKIE = 'leon-desktop-session'
+const FRONTEND_INDEX = 'index.html'
 const OWNER_TURN_PATH = /^\/api\/v1\/sessions\/[^/]+\/messages(?:\/[^/]+\/ui)?$/
 const CLIENT_OS_BY_PLATFORM: Readonly<Partial<Record<NodeJS.Platform, TurnClientOS>>> = {
   darwin: TurnClientOS.MacOS,
@@ -88,6 +89,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
   }
   const token = randomUUID()
   const files = createFileStore()
+  let documentFrontend: { root: string, phase: string | undefined } | undefined
 
   function cancellation(request: IncomingMessage, response: ServerResponse): { signal: AbortSignal, dispose: () => void } {
     const controller = new AbortController()
@@ -351,29 +353,44 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
       response.writeHead(404).end()
       return
     }
-    const frontendRoot = typeof frontend === 'function' ? path.resolve(await frontend()) : frontend
     const relative = decodeURIComponent(url.pathname.slice('/web-app/'.length))
-    let file = path.resolve(frontendRoot, relative || 'index.html')
+    const acceptsHTML = request.headers.accept?.includes('text/html')
+    const destination = request.headers['sec-fetch-dest']
+    const navigation = request.method === 'GET' && (
+      destination === 'document' ||
+      (destination === undefined && (!relative || relative === FRONTEND_INDEX || acceptsHTML))
+    )
+
+    // Keep serving the current page's assets until it navigates to the ready frontend.
+    const selected = !navigation && documentFrontend ? documentFrontend : {
+      phase: bootstrapPhase?.(),
+      root: typeof frontend === 'function' ? path.resolve(await frontend()) : frontend
+    }
+    const frontendRoot = selected.root
+    let file = path.resolve(frontendRoot, relative || FRONTEND_INDEX)
     if (!file.startsWith(`${frontendRoot}${path.sep}`)) {
       response.writeHead(403).end()
       return
     }
     let info = await stat(file).catch(() => null)
-    if (!info?.isFile() && request.headers.accept?.includes('text/html')) {
-      file = path.join(frontendRoot, 'index.html')
+    if (!info?.isFile() && acceptsHTML) {
+      file = path.join(frontendRoot, FRONTEND_INDEX)
       info = await stat(file)
     }
     if (!info?.isFile()) {
       response.writeHead(404).end()
       return
     }
-    if (path.basename(file) === 'index.html') {
+    if (path.basename(file) === FRONTEND_INDEX) {
       const nonce = randomUUID()
       const policy = CONTENT_SECURITY_POLICY.replace('script-src ', `script-src 'nonce-${nonce}' `)
       const html = (await readFile(file, 'utf8')).replaceAll('<script ', `<script nonce="${nonce}" `)
         .replace('<head>', '<head>' + (state?.bootstrap(nonce) ?? '<meta name="leon-desktop" content="true">') +
         (desktopUpdates ? `<meta name="${contract.updatesMetaName}" content="true">` : '') +
-        (bootstrapPhase ? `<meta name="${DESKTOP_BOOTSTRAP_META_NAME}" content="${bootstrapPhase() === 'complete' ? 'complete' : 'pending'}">` : ''))
+        (selected.phase !== undefined ? `<meta name="${DESKTOP_BOOTSTRAP_META_NAME}" content="${selected.phase === 'complete' ? 'complete' : 'pending'}">` : ''))
+      if (navigation && !response.destroyed) {
+        documentFrontend = selected
+      }
       response.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store',
         'content-security-policy': policy, 'x-content-type-options': 'nosniff',
         'referrer-policy': 'no-referrer' }).end(request.method === 'HEAD' ? undefined : html)
