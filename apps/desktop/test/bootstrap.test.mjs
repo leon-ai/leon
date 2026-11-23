@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import semver from 'semver'
+import { create } from 'tar'
 
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'leon-desktop-bootstrap-'))
 process.env.LEON_HOME = path.join(temporary, 'home')
@@ -13,11 +16,12 @@ process.env.LEON_PROFILE = 'desktop-test'
 await mkdir(process.env.LEON_HOME)
 const { createBootstrap, coreReady } = await import('../.generated/src/bootstrap.js')
 const { createProgressStore, SetupPhase } = await import('../.generated/src/progress.js')
-const { controlCore, createCoreService, serviceDefinition } = await import('../.generated/src/service.js')
+const { controlCore, createCoreService, serviceDefinition, stopCoreAndWait } = await import('../.generated/src/service.js')
 const { runCommand } = await import('../.generated/src/process.js')
-const { FileDownloader } = await import('../.generated/runtime/bootstrap-runtime.mjs')
+const { activateRuntime, currentRuntime, FileDownloader, getProfilePaths, runtimePlatform } = await import('../.generated/runtime/bootstrap-runtime.mjs')
 const { default: contract } = await import('../.generated/runtime/bootstrap-contract.mjs')
 const { DESKTOP_CORE_PROTOCOL_VERSION } = await import('../../../bridges/runtime/contracts/distribution.js')
+const { CORE_READY_EVENT } = await import('../../../bridges/runtime/contracts/update-status.js')
 const root = fileURLToPath(new URL('../', import.meta.url))
 after(async () => {
   await rm(temporary, { recursive: true, force: true })
@@ -42,6 +46,56 @@ async function httpServer(handler) {
     server.closeAllConnections()
     await new Promise((resolve) => server.close(resolve))
   } }
+}
+
+async function withManagedProfile(run) {
+  const home = process.env.LEON_HOME
+  const profile = process.env.LEON_PROFILE
+  const config = getProfilePaths().config
+  const previousCodebase = process.env.LEON_CODEBASE_PATH
+  const gate = await httpServer((_request, response) => response.end())
+  const port = Number(new URL(gate.origin).port)
+
+  await gate.close()
+  await mkdir(path.dirname(config), { recursive: true })
+  await writeFile(config, `server:\n  port: ${port}\n`)
+  delete process.env.LEON_CODEBASE_PATH
+
+  try {
+    await run({ home, profile, port, origin: gate.origin })
+  } finally {
+    const service = await readFile(path.join(home, 'desktop/service/core.json'), 'utf8').then(JSON.parse).catch(() => null)
+    if (service) {
+      await stopCoreAndWait(service)
+    }
+    await rm(path.join(home, 'desktop'), { recursive: true, force: true })
+    await rm(config, { force: true })
+    if (previousCodebase !== undefined) {
+      process.env.LEON_CODEBASE_PATH = previousCodebase
+    }
+  }
+}
+
+async function writeFiles(directory, files) {
+  for (const [name, content] of Object.entries(files)) {
+    const filename = path.join(directory, name)
+
+    await mkdir(path.dirname(filename), { recursive: true })
+    await writeFile(filename, content)
+  }
+}
+
+function coreEntry(port, version, start = '') {
+  return `import { createServer } from 'node:http'
+${start}
+createServer((_request, response) => response.end(JSON.stringify({ authenticated: false, profile_name: null,
+  version: ${JSON.stringify(version)}, desktop_protocol_version: ${DESKTOP_CORE_PROTOCOL_VERSION} }))).listen(${port}, '127.0.0.1', () => {
+  process.send?.({ kind: ${JSON.stringify(CORE_READY_EVENT)}, version: ${JSON.stringify(version)} })
+})\n`
+}
+
+async function coreVersion(origin) {
+  return fetch(new URL('/api/v1/profile-auth', origin)).then((response) => response.json()).then((value) => value.version).catch(() => null)
 }
 
 test('setup details stay bounded and redact inherited and profile secrets', async () => {
@@ -122,6 +176,134 @@ test('a responding incompatible Core is rejected rather than treated as an offli
   } finally {
     await server.close()
   }
+})
+
+test('startup reuses a supported running Core and restarts an incompatible managed checkout into its built Core', async () => {
+  await withManagedProfile(async ({ home, profile, port, origin }) => {
+    const codebase = path.join(temporary, 'rebuilt-checkout')
+    const older = `${semver.major(contract.minimumVersion)}.0.0-0`
+    const entry = path.join(codebase, 'server/dist/index.js')
+    await writeFiles(codebase, {
+      'package.json': JSON.stringify({ type: 'module', version: contract.sourceVersion }),
+      'server/dist/index.js': coreEntry(port, contract.minimumVersion),
+      'server/dist/pre-check.js': '',
+      'apps/web/dist/index.html': '',
+      'scripts/run-with-managed-node.js': 'await import(new URL(\'../\' + process.argv[2], import.meta.url))\n'
+    })
+    let service = await createCoreService({ home, codebase, node: process.execPath, profile })
+    await service.start()
+    await until(() => coreVersion(origin), 'supported Core readiness')
+    const running = await controlCore(service.configuration)
+    const compatible = await createBootstrap()
+    try {
+      await compatible.start()
+      assert.equal(compatible.store.state.phase, SetupPhase.Complete, compatible.store.state.error)
+      assert.equal(compatible.store.state.external, false)
+      assert.equal((await controlCore(service.configuration)).pid, running.pid)
+    } finally {
+      await compatible.close()
+    }
+
+    await stopCoreAndWait(service.configuration)
+    await writeFile(entry, coreEntry(port, older))
+    service = await createCoreService({ home, codebase, node: process.execPath, profile })
+    await service.start()
+    assert.equal(await until(() => coreVersion(origin), 'older Core readiness'), older)
+    const oldRunner = await controlCore(service.configuration)
+    await writeFile(entry, coreEntry(port, contract.sourceVersion))
+
+    const external = await createBootstrap({ origin })
+    try {
+      await external.start()
+      assert.equal(external.store.state.phase, SetupPhase.Failed)
+      assert.equal((await controlCore(service.configuration)).pid, oldRunner.pid)
+      assert.equal(await coreVersion(origin), older)
+    } finally {
+      await external.close()
+    }
+
+    const recovering = await createBootstrap()
+    try {
+      await recovering.start()
+      assert.equal(recovering.store.state.phase, SetupPhase.Complete, recovering.store.state.error)
+      assert.notEqual((await controlCore(service.configuration)).pid, oldRunner.pid)
+      assert.equal(await coreVersion(origin), contract.sourceVersion)
+    } finally {
+      await recovering.close()
+    }
+  })
+})
+
+test('a failed managed runtime upgrade restores the running previous Core and can be retried', async () => {
+  await withManagedProfile(async ({ home, profile, port, origin }) => {
+    const installation = path.join(home, 'runtimes/core')
+    const previous = `${semver.major(contract.minimumVersion)}.0.0-0`
+    const version = contract.sourceVersion
+    const platform = runtimePlatform()
+    const previousRoot = path.join(installation, 'versions', previous)
+    const payload = path.join(temporary, 'next-runtime')
+    const blocked = path.join(temporary, 'candidate-unavailable')
+    const runtimeLauncher = new URL('../../../scripts/run-runtime.js', import.meta.url).href
+    const node = process.platform === 'win32' ? 'runtime/node/node.exe' : 'runtime/node/bin/node'
+    const pnpm = process.platform === 'win32' ? 'runtime/pnpm/pnpm.exe' : 'runtime/pnpm/pnpm'
+    for (const [directory, release] of [[previousRoot, previous], [payload, version]]) {
+      const start = directory === payload
+        ? `import { existsSync } from 'node:fs'\nif (existsSync(${JSON.stringify(blocked)})) { process.exit(1) }`
+        : ''
+      await writeFiles(directory, {
+        'package.json': JSON.stringify({ type: 'module', version: release }),
+        'leon-runtime.json': JSON.stringify({ schemaVersion: 1, version: release, platform,
+          desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION, links: [] }),
+        'scripts/run-with-managed-node.js': `import { runRuntime } from ${JSON.stringify(runtimeLauncher)}\nawait runRuntime(process.env.LEON_RUNTIME_HOME)\n`,
+        'server/dist/index.js': coreEntry(port, release, start),
+        'server/dist/pre-check.js': '',
+        'server/dist/distribution-setup.js': '',
+        'apps/web/dist/index.html': '',
+        [pnpm]: ''
+      })
+      const binary = path.join(directory, node)
+      await mkdir(path.dirname(binary), { recursive: true })
+      await copyFile(process.execPath, binary)
+    }
+    await writeFile(blocked, '')
+    await activateRuntime(installation, previous)
+    const service = await createCoreService({ home, profile, runtimeHome: installation, codebase: previousRoot,
+      node: path.join(previousRoot, node), pnpm: path.join(previousRoot, pnpm) })
+    await service.start()
+    assert.equal(await until(() => coreVersion(origin), 'previous runtime readiness'), previous)
+
+    const name = `leon-core-${version}-${platform}.tar.gz`
+    const archive = path.join(temporary, name)
+    await create({ file: archive, cwd: payload, gzip: true, portable: true }, ['package.json', 'leon-runtime.json', 'scripts', 'server', 'apps', 'runtime'])
+    const bytes = await readFile(archive)
+    const servingDuringDownload = []
+    const assets = await httpServer(async (request, response) => {
+      servingDuringDownload.push(await coreVersion(origin))
+      response.writeHead(200, { 'content-length': bytes.length })
+      response.end(request.method === 'HEAD' ? undefined : bytes)
+    })
+    const asset = { name, version, platform, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'),
+      url: new URL(name, assets.origin).href }
+    const controller = await createBootstrap({ dependencies: { asset: async () => asset } })
+    try {
+      await controller.start()
+      assert.equal(controller.store.state.phase, SetupPhase.Failed)
+      assert.match(controller.store.state.error, /runtime did not finish startup/)
+      assert.equal((await currentRuntime(installation)).manifest.version, previous)
+      assert.equal(await until(() => coreVersion(origin), 'restored runtime readiness'), previous)
+      assert.ok(servingDuringDownload.length > 0)
+      assert.ok(servingDuringDownload.every((release) => release === previous))
+
+      await rm(blocked)
+      await controller.start()
+      assert.equal(controller.store.state.phase, SetupPhase.Complete, controller.store.state.error)
+      assert.equal((await currentRuntime(installation)).manifest.version, version)
+      assert.equal(await coreVersion(origin), version)
+    } finally {
+      await controller.close()
+      await assets.close()
+    }
+  })
 })
 
 test('a managed Core survives its desktop owner and is reused without a second process', async () => {

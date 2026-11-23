@@ -13,16 +13,29 @@ export interface PublishedRuntime {
 /**
  * Separates an occupied incompatible Core port from a server that is offline.
  */
-export class CoreCompatibilityError extends Error {}
+export class CoreCompatibilityError extends Error {
+  constructor(message: string, readonly coreVersion?: string) {
+    super(message)
+  }
+}
+
+/**
+ * Checks the supported release range and the protocol spoken by Core.
+ */
+export function supportsCore(value: { version?: unknown, desktop_protocol_version?: unknown }): boolean {
+  return typeof value.version === 'string' && Boolean(semver.valid(value.version)) &&
+    semver.satisfies(value.version, contract.coreVersionRange, { includePrerelease: true }) &&
+    value.desktop_protocol_version === DESKTOP_CORE_PROTOCOL_VERSION
+}
 
 /**
  * Rejects incompatible running servers before any profile content is requested.
  */
 export function assertCoreCompatibility(value: { version?: unknown, desktop_protocol_version?: unknown }): void {
-  if (typeof value.version !== 'string' || !semver.valid(value.version) ||
-    !semver.satisfies(value.version, contract.coreVersionRange, { includePrerelease: true }) ||
-    value.desktop_protocol_version !== DESKTOP_CORE_PROTOCOL_VERSION) {
-    throw new CoreCompatibilityError(`I need a compatible Leon Core (${contract.coreVersionRange}, desktop protocol ${DESKTOP_CORE_PROTOCOL_VERSION}). Update Core or use a matching desktop app.`)
+  if (!supportsCore(value)) {
+    const coreVersion = typeof value.version === 'string' ? semver.valid(value.version) ?? undefined : undefined
+
+    throw new CoreCompatibilityError(`I need a compatible Leon Core (${contract.coreVersionRange}, desktop protocol ${DESKTOP_CORE_PROTOCOL_VERSION}). Update Core or use a matching desktop app.`, coreVersion)
   }
 }
 

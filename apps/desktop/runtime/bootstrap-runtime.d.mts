@@ -10,6 +10,7 @@ export function getProfilePaths(): { config: string, dotEnv: string }
 export { JsonRedactionHelper } from '../../../server/src/helpers/json-redaction-helper'
 export { getUpdateStatePath } from '../../../scripts/update/paths.js'
 export { UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_JITTER_MS, UPDATE_STAGE_LABELS } from '../../../bridges/runtime/contracts/update-status.js'
+export { writeRuntimeJSON } from '../../../scripts/distribution/runtime.js'
 export { default as YAML } from 'yaml'
 export { default as dotenv } from 'dotenv'
 
@@ -35,6 +36,7 @@ export const RUNTIME_RELEASE_ASSET: string
 export function runtimePlatform(): string
 export const semver: {
   valid: (version: string) => string | null
+  gt: (version: string, other: string) => boolean
   satisfies: (version: string, range: string, options: { includePrerelease: boolean }) => boolean
   rcompare: (left: string, right: string) => number
 }

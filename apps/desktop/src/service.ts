@@ -8,7 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { runCommand } from './process.js'
-import type { ServiceConfiguration } from './types.js'
+import type { HostError, ServiceConfiguration } from './types.js'
 
 interface ServiceOptions {
   home: string
@@ -34,6 +34,8 @@ export interface CoreService {
 }
 
 const RESTART_DELAY_SECONDS = 10
+const STOP_TIMEOUT_MS = 30_000
+const STOP_POLL_INTERVAL_MS = 100
 const MAXIMUM_LOG_BYTES = 5 * 1_024 * 1_024
 const xml = (value: string | number): string => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll('\'', '&apos;')
 const unitValue = (value: string, expandVariables = false): string => '"' + String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('%', '%%').replaceAll('$', () => expandVariables ? '$$' : '$').replaceAll('\n', '\\n').replaceAll('\r', '\\r') + '"'
@@ -62,6 +64,32 @@ export function controlCore(configuration: ServiceConfiguration, action = 'statu
       }
     })
   })
+}
+
+/**
+ * Waits for the authenticated runner to release its process and socket before
+ * starting another instance under the same service configuration.
+ */
+export async function stopCoreAndWait(configuration: ServiceConfiguration): Promise<void> {
+  const runner = await controlCore(configuration, 'stop')
+  if (!runner) {
+    return
+  }
+
+  const deadline = Date.now() + STOP_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    try {
+      process.kill(runner.pid, 0)
+    } catch (error) {
+      if ((error as HostError).code === 'ESRCH') {
+        return
+      }
+      throw error
+    }
+    await delay(STOP_POLL_INTERVAL_MS)
+  }
+
+  throw new Error('My managed Core did not stop. Open Core logs, then retry.')
 }
 
 /**
