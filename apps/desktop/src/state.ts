@@ -4,10 +4,12 @@ import path from 'node:path'
 import type { Session, SafeStorage } from 'electron'
 
 import contract from '../runtime/desktop-contract.mjs'
+import { DEFAULT_WEB_THEME, WEB_THEMES, WebPreferenceKey, type WebColorScheme, type WebTheme } from '../../../bridges/runtime/contracts/desktop-client'
 
 const MAXIMUM_PREFERENCE_CHARACTERS = 16_384
 
 export interface DesktopState {
+  readonly colorScheme: WebColorScheme
   bootstrap: (nonce?: string) => string
   update: (values: Record<string, unknown>) => Promise<void>
   close: () => Promise<void>
@@ -28,12 +30,13 @@ async function atomicWrite(file: string, value: string | Buffer): Promise<void> 
  * Keeps preferences and encrypted authentication separate for each backend.
  * Diagnostic packages are ephemeral and never touch an owner's desktop state.
  */
-export async function createDesktopState({ directory, backend, session, safeStorage, ephemeral }: {
+export async function createDesktopState({ directory, backend, session, safeStorage, ephemeral, onColorSchemeChange }: {
   directory: string
   backend: URL
   session: Session
   safeStorage: SafeStorage | undefined
   ephemeral: boolean
+  onColorSchemeChange?: () => void
 }): Promise<DesktopState> {
   const identity = createHash('sha256').update(backend.origin).digest('hex')
   const root = path.join(directory, 'servers', identity)
@@ -42,6 +45,13 @@ export async function createDesktopState({ directory, backend, session, safeStor
   let preferences: Record<string, string> = {}
   let writes = Promise.resolve()
   let encryption: Promise<boolean> | undefined
+
+  function colorScheme(): WebColorScheme {
+    const value = preferences[WebPreferenceKey.Theme]
+
+    return value === 'system' || WEB_THEMES.includes(value as WebTheme)
+      ? value as WebColorScheme : DEFAULT_WEB_THEME
+  }
 
   async function canEncrypt(): Promise<boolean> {
     if (ephemeral || !safeStorage) {
@@ -114,6 +124,9 @@ export async function createDesktopState({ directory, backend, session, safeStor
   session.cookies.on('changed', changed)
 
   return {
+    get colorScheme(): WebColorScheme {
+      return colorScheme()
+    },
     bootstrap(nonce = ''): string {
       const values = JSON.stringify(preferences).replaceAll('<', '\\u003c')
       return `<meta name="leon-desktop" content="true"><script nonce="${nonce}">for(const [key,value] of Object.entries(${values})){localStorage.setItem(key,value)}</script>`
@@ -127,7 +140,13 @@ export async function createDesktopState({ directory, backend, session, safeStor
           throw Object.assign(new Error('Invalid preferences'), { status: 400 })
         }
       }
+      const previousScheme = colorScheme()
+
       preferences = { ...preferences, ...values as Record<string, string> }
+      if (colorScheme() !== previousScheme) {
+        // Notify after validation, without waiting for disk I/O to color controls.
+        onColorSchemeChange?.()
+      }
       if (!ephemeral) {
         const snapshot = JSON.stringify(preferences)
         writes = writes.catch(() => undefined).then(() => atomicWrite(preferencesFile, snapshot))

@@ -25,7 +25,8 @@ async function lifecycle() {
   const fixture = await createFixture()
   let app
   try {
-    app = await launchDiagnostic({ name: 'lifecycle-native', script: 'lifecycle.js', server: fixture.origin })
+    app = await launchDiagnostic({ name: 'lifecycle-native', script: 'lifecycle.js', server: fixture.origin,
+      configuration: { paint_when_hidden: true } })
     const result = await app.wait('complete')
     await app.waitForExit()
     console.log(`Desktop lifecycle: ${result.checks.length} window checks passed; explicit quit exits`)

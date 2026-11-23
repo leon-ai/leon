@@ -1,11 +1,12 @@
 import { flushSync } from 'react-dom'
 import { WebPreferenceKey, saveWebPreference } from '@/utils/web-preferences'
 import { ACCENT_COLORS, type AccentColor } from '../../../bridges/runtime/contracts/workspace'
+import { DEFAULT_WEB_THEME, WEB_THEMES, type WebColorScheme, type WebTheme } from '../../../bridges/runtime/contracts/desktop-client'
 
-const DEFAULT_THEME = 'dark'
+const DEFAULT_THEME = DEFAULT_WEB_THEME
 const DEFAULT_SIDEBAR_EXPANDED = true
 const DEFAULT_SOUNDS_ENABLED = true
-const THEMES = ['dark', 'light'] as const
+const THEMES = WEB_THEMES
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
 export const THEME_TRANSITION_ATTRIBUTE = 'data-theme-transition'
@@ -13,8 +14,8 @@ export const THEME_TRANSITION_ATTRIBUTE = 'data-theme-transition'
 export const THEME_CHANGE_EVENT = 'leon:web-app-theme-change'
 export const THEME_REQUEST_EVENT = 'leon:web-app-theme-request'
 
-export type Theme = (typeof THEMES)[number]
-export type ColorScheme = Theme | 'system'
+export type Theme = WebTheme
+export type ColorScheme = WebColorScheme
 
 type ThemePreparation = (theme: Theme) => Promise<(() => void) | void>
 

@@ -20,6 +20,8 @@ import { DESKTOP_BOOTSTRAP_META_NAME, DESKTOP_NOTIFICATION_EVENT, type DesktopTu
 
 applyStoredTheme()
 document.documentElement.dataset['accent'] = getStoredAccent()
+const desktop = document.querySelector('meta[name="leon-desktop"]') !== null
+document.documentElement.toggleAttribute('data-desktop', desktop)
 if (document.querySelector<HTMLMetaElement>(`meta[name="${DESKTOP_BOOTSTRAP_META_NAME}"]`)?.content !== 'pending') {
   initializeProfileAuthentication(queryClient)
 }
@@ -49,6 +51,7 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
+        {desktop && <div className="desktop-titlebar" aria-hidden="true" />}
         <DesktopCoreBoundary>
           <RequestErrorToasts />
           <SoundActivation />

@@ -22,6 +22,11 @@ export enum WebPreferenceKey {
   RecentModels = 'leon.web-app.recent-models'
 }
 
+export const WEB_THEMES = ['dark', 'light'] as const
+export const DEFAULT_WEB_THEME = 'dark'
+export type WebTheme = (typeof WEB_THEMES)[number]
+export type WebColorScheme = WebTheme | 'system'
+
 export interface DesktopFilesEvent {
   files: DesktopAttachmentFile[]
   issues?: string[]

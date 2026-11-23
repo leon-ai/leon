@@ -48,6 +48,41 @@ function encryption() {
   }
 }
 
+test('restores backend appearance before window creation and reports only effective preference changes', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'leon-desktop-theme-'))
+  const backend = new URL('http://localhost:5366')
+  const options = { directory, backend, session: cookieSession(), safeStorage: undefined, ephemeral: false }
+  let changes = 0
+  const state = await createDesktopState({ ...options, onColorSchemeChange: () => changes++ })
+
+  try {
+    assert.equal(state.colorScheme, 'dark')
+    await state.update({ 'leon.web-app.theme': 'light' })
+    assert.equal(state.colorScheme, 'light')
+    await state.update({ 'leon.web-app.theme': 'light', 'leon.web-app.sounds-enabled': 'false' })
+    assert.equal(changes, 1)
+    await assert.rejects(async () => state.update({ 'leon.web-app.theme': 'dark', secret: 'invalid' }))
+    assert.equal(state.colorScheme, 'light')
+    assert.equal(changes, 1)
+    await state.close()
+
+    const restored = await createDesktopState(options)
+    assert.equal(restored.colorScheme, 'light')
+    await restored.update({ 'leon.web-app.theme': 'system' })
+    assert.equal(restored.colorScheme, 'system')
+    await restored.update({ 'leon.web-app.theme': 'unsupported' })
+    assert.equal(restored.colorScheme, 'dark')
+    await restored.close()
+
+    const other = await createDesktopState({ ...options, backend: new URL('http://localhost:5367') })
+    assert.equal(other.colorScheme, 'dark')
+    await other.close()
+  } finally {
+    await state.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('restores encrypted desktop sessions and profile preferences, isolates backends and persists sign-out', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'leon-desktop-state-'))
   const backend = new URL('http://127.0.0.1:5366')

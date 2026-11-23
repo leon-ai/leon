@@ -1,7 +1,7 @@
 .app-layout
   --active-sidebar-width: var(--sidebar-width)
   --app-main-inline-padding: var(--space-xl)
-  min-height: 100vh
+  min-height: var(--app-viewport-height)
   background-color: var(--color-background)
   transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
@@ -14,8 +14,8 @@
     display: flex
     justify-content: center
     box-sizing: border-box
-    height: 100vh
-    min-height: 100vh
+    height: var(--app-viewport-height)
+    min-height: var(--app-viewport-height)
     margin-left: var(--active-sidebar-width)
     padding: 0 var(--app-main-inline-padding)
     overflow: auto

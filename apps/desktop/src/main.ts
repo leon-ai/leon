@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { bootstrapAPI } from './bootstrap-api.js'
 import { completionNotifications } from './notifications.js'
 import { requestBackend, readBackendJSON } from './backend.js'
-import { DESKTOP_NOTIFICATION_EVENT } from '../../../bridges/runtime/contracts/desktop-client'
+import { DEFAULT_WEB_THEME, DESKTOP_NOTIFICATION_EVENT, type WebTheme } from '../../../bridges/runtime/contracts/desktop-client'
 import { createDesktopUpdater, desktopUpdatesAPI } from './updates.js'
 import { createGateway } from './gateway.js'
 import { configureNavigation, configurePermissions } from './navigation.js'
@@ -34,6 +34,7 @@ const frontend = fileURLToPath(new URL('../web/', import.meta.url))
 const icons = fileURLToPath(new URL('../icons/', import.meta.url))
 // Match the shared themes while the renderer prepares its first painted frame.
 const WINDOW_BACKGROUNDS = { dark: '#000', light: '#FFF' }
+const TITLE_BAR_HEIGHT = 36
 // Display-name changes must not move existing sessions and preferences. Native
 // diagnostics also get an isolated Chromium cache, not just ephemeral app state.
 const dataDirectory = diagnostics ? mkdtempSync(path.join(app.getPath('temp'), 'leon-desktop-'))
@@ -128,7 +129,26 @@ app.on('will-quit', (event) => {
   }
 })
 
+function clientTheme(): WebTheme {
+  const scheme = state?.colorScheme ?? DEFAULT_WEB_THEME
+
+  return scheme === 'system' ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light') : scheme
+}
+
+function updateWindowAppearance(): void {
+  if (window && !window.isDestroyed()) {
+    const theme = clientTheme()
+
+    window.setBackgroundColor(WINDOW_BACKGROUNDS[theme])
+    if (process.platform !== 'darwin') {
+      window.setTitleBarOverlay({ color: WINDOW_BACKGROUNDS[theme],
+        symbolColor: WINDOW_BACKGROUNDS[theme === 'dark' ? 'light' : 'dark'] })
+    }
+  }
+}
+
 function createWindow(clientSession: Session): BrowserWindow {
+  const theme = clientTheme()
   const target = new BrowserWindow({
     title: manifest.productName,
     width: configuration.viewport?.width ?? 1_230,
@@ -140,7 +160,12 @@ function createWindow(clientSession: Session): BrowserWindow {
     focusable: !background,
     // A diagnostic paint control can exercise decoding without showing a window.
     paintWhenInitiallyHidden: !background || configuration.paint_when_hidden === true,
-    backgroundColor: WINDOW_BACKGROUNDS[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'],
+    backgroundColor: WINDOW_BACKGROUNDS[theme],
+    // Draw the exact shared palette beneath the OS-owned window controls.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { height: TITLE_BAR_HEIGHT, color: WINDOW_BACKGROUNDS[theme],
+      symbolColor: WINDOW_BACKGROUNDS[theme === 'dark' ? 'light' : 'dark'] },
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 11 } } : {}),
     ...(process.platform !== 'darwin' ? { icon: path.join(icons, 'light.png') } : {}),
     webPreferences: {
       session: clientSession,
@@ -214,7 +239,8 @@ async function showClient(server: string): Promise<void> {
   state = await createDesktopState({ directory: app.getPath('userData'),
     backend: new URL(server), session: backendSession,
     safeStorage: process.platform === 'darwin' && !manifest.release ? undefined : safeStorage,
-    ephemeral: diagnostics || process.env['LEON_DESKTOP_EPHEMERAL'] === '1' })
+    ephemeral: diagnostics || process.env['LEON_DESKTOP_EPHEMERAL'] === '1',
+    onColorSchemeChange: updateWindowAppearance })
   gateway = await createGateway({ frontend: bootstrapController ? async (): Promise<string> => await bootstrapController?.frontend() ?? frontend : frontend, backendSession, state,
     backendOrigin: server,
     ...(bootstrapController ? {
@@ -262,7 +288,7 @@ async function showClient(server: string): Promise<void> {
     }),
     desktopUpdates: desktopUpdatesAPI(desktopUpdater, async (): Promise<import('../../../bridges/runtime/contracts/updates').UpdateState | null> => await bootstrapController?.updateState() ?? null),
     reportPath: diagnostics ? process.env['LEON_DESKTOP_REPORT_PATH'] : undefined,
-    onDiagnosticWindow: diagnostics ? (action): { alive: boolean, visible: boolean, focused: boolean, platform: string } => {
+    onDiagnosticWindow: diagnostics ? (action): object => {
       if (action === 'close') {
         window?.close()
       } else if (action === 'activate') {
@@ -271,7 +297,9 @@ async function showClient(server: string): Promise<void> {
         setImmediate(() => app.quit())
       }
       const alive = Boolean(window && !window.isDestroyed())
-      return { alive, visible: alive && window!.isVisible(), focused: alive && window!.isFocused(), platform: process.platform }
+      return { alive, visible: alive && window!.isVisible(), focused: alive && window!.isFocused(), platform: process.platform,
+        background: alive ? window!.getBackgroundColor() : null,
+        systemDark: nativeTheme.shouldUseDarkColors }
     } : undefined,
     onDiagnosticPaste: diagnostics ? (): Promise<void> => pasteAttachments(window, gateway, { diagnostic: true,
       paths: configuration.clipboard_files ?? [] }) : undefined })
@@ -340,11 +368,8 @@ async function start(): Promise<void> {
       // Raster fallback builds lack the system's light/dark asset catalog.
       app.dock?.setIcon(path.join(icons, `${theme}.png`))
     }
-    for (const current of [window]) {
-      if (current && !current.isDestroyed()) {
-        current.setBackgroundColor(WINDOW_BACKGROUNDS[theme])
-      }
-    }
+    // Keep Dock appearance tied to macOS, independently of Leon's saved theme.
+    updateWindowAppearance()
   }
   updateAppearance()
   nativeTheme.on('updated', updateAppearance)

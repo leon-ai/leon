@@ -21,6 +21,8 @@ On macOS, the red cross hides the window and preserves its draft; the Dock resto
 
 UI preferences use the renderer's `localStorage`, backed by `servers/<server-hash>/preferences.json` under Electron's user-data directory (`~/Library/Application Support/Leon/` on macOS). Theme, accent, sidebar, sound and recent-model preferences are isolated per server; regular browsers keep their own copies. Core-owned settings remain in the profile. Credential persistence initializes OS encryption lazily through async APIs; local ad-hoc macOS builds keep authentication in memory while retaining preferences on disk.
 
+The draggable title bar follows Leon's saved Light/Dark/System preference and keeps native window controls. The macOS Dock icon follows the OS appearance independently.
+
 Desktop requires Core at or above its build version, below the next major, and with the same desktop protocol. Download selection skips unsupported platforms/protocols; incompatible running servers are rejected. Desktop-initiated updates validate compatibility before installation. Independently updating Core can require a newer Desktop. See [releases and OTA](RELEASING.md) and [download sources](DOWNLOADS.md).
 
 After normal repository setup, run `pnpm build:server`, `pnpm build:desktop`, then `pnpm start:desktop`. The repository launcher supplies its checkout through `LEON_CODEBASE_PATH`; `pnpm start:desktop --server http://127.0.0.1:5366` connects without managing that server. Desktop has its own workspace manifest and shares the root version/lockfile.

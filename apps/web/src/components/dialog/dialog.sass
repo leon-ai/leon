@@ -1,7 +1,7 @@
 .dialog-overlay
   --dialog-top-offset: min(112px, 12dvh)
   position: fixed
-  inset: 0
+  inset: var(--desktop-titlebar-height) 0 0
   z-index: 105
   display: flex
   align-items: center
@@ -41,7 +41,7 @@
   scrollbar-width: thin
   // Translate percentages follow this dialog's height. Keep the original top
   // offset until the available vertical space requires a higher position.
-  translate: 0 min(0px, calc(var(--dialog-top-offset) - (100dvh - 100%) / 2))
+  translate: 0 min(0px, calc(var(--dialog-top-offset) - (var(--app-viewport-height) - 100%) / 2))
   transition: opacity var(--transition-duration-main) var(--transition-timing-main)
 
 .dialog-open
