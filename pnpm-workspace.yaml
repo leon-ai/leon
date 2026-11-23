@@ -7,6 +7,18 @@ recursiveInstall: false
 
 dangerouslyAllowAllBuilds: true
 
+# Contributors use router API guidance and QMD search workflows.
+skills:
+  dirs:
+    - .agents/skills
+permissions:
+  '@tanstack/react-router':
+    skills:
+      - react-router
+  '@tobilu/qmd':
+    skills:
+      - qmd
+
 # Restore package sources instead of trusting machine-global cached build output.
 sideEffectsCache: false
 
