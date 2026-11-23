@@ -15,6 +15,7 @@ const SCOPES = [
   'voice',
   'controlled',
   'app/web',
+  'app/desktop',
   'scripts',
   'aurora',
   'messaging app',
