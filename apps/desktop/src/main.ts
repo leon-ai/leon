@@ -370,6 +370,9 @@ function installCoreMenu(): void {
 
 async function start(): Promise<void> {
   const updateAppearance = (): void => {
+    if (quitRequested || quitting) {
+      return
+    }
     const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
     if (process.platform === 'darwin' && !background && !manifest.nativeMacIcon) {
       // Raster fallback builds lack the system's light/dark asset catalog.

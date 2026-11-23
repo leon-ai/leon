@@ -138,7 +138,20 @@ try {
   const config = distributionConfig({ root: ROOT, staging, output,
     manifest: desktop, contract, diagnostics, release, channel })
   if (process.platform === 'darwin' && !nativeMacIcon) {
-    config.mac.icon = path.join(ROOT, 'packaging/icons/icon.icns')
+    let fallbackIcon = 'icon.icns'
+    try {
+      const appearance = execFileSync('/usr/bin/defaults', ['read', '-g', 'AppleInterfaceStyle'], {
+        encoding: 'utf8', timeout: 5_000, stdio: ['ignore', 'pipe', 'pipe']
+      }).trim()
+      if (appearance === 'Dark') {
+        fallbackIcon = 'dark.icns'
+      }
+    } catch {
+      // macOS omits AppleInterfaceStyle when the light appearance is selected.
+    }
+    // Dock restores the bundle icon on exit. Match the local Mac before signing,
+    // rather than modifying an installed bundle or relying on a runtime override.
+    config.mac.icon = path.join(ROOT, 'packaging/icons', fallbackIcon)
   }
   config.electronDist = path.join(electronDirectory, 'dist')
   await packageElectron({ projectDir: ROOT, config, publish: 'never' })

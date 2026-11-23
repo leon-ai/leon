@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -96,8 +96,8 @@ if (regionalMirror) {
   process.env.ELECTRON_BUILDER_BINARIES_MIRROR = mirror
 }
 try {
-  for (const format of ['icns', 'ico']) {
-    const convert = () => runIconsTool({ inputFile: fileURLToPath(new URL('light.png', OUTPUT)),
+  for (const [appearance, format] of [['dark', 'icns'], ['light', 'icns'], ['light', 'ico']]) {
+    const convert = () => runIconsTool({ inputFile: fileURLToPath(new URL(`${appearance}.png`, OUTPUT)),
       outputFormat: format, outDir: fileURLToPath(OUTPUT) })
     try {
       await convert()
@@ -108,6 +108,10 @@ try {
       // Keep the converter's embedded checksums and retry the original once.
       delete process.env.ELECTRON_BUILDER_BINARIES_MIRROR
       await convert()
+    }
+    if (appearance === 'dark') {
+      // Keep both fallback appearances; the packager selects one before signing.
+      await rename(new URL('icon.icns', OUTPUT), new URL('dark.icns', OUTPUT))
     }
   }
 } finally {
