@@ -54,7 +54,7 @@ export default class FileTool extends Tool {
   }
 
   /**
-   * Keep document caches and local OCR available for follow-up reads.
+   * Keep extracted documents available for follow-up reads.
    */
   public get runtimeLifetime(): ToolRuntimeLifetime {
     return this.documentReader ? ToolRuntimeLifetime.Persistent : ToolRuntimeLifetime.Idle

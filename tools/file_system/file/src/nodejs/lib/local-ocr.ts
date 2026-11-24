@@ -14,16 +14,18 @@ export interface OcrResult {
 const DIRECTORY = path.dirname(fileURLToPath(import.meta.url))
 const PYTHON = path.join(DIRECTORY, '..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')
 const TIMEOUT_MS = 120_000
+const IDLE_TIMEOUT_MS = 60_000
 const MAX_ERROR_CHARS = 4_096
 
 /**
- * Keep the tool-owned OCR model resident, without a separately managed service.
+ * Reuse the tool-owned OCR model during batches of recognition requests.
  */
 export class LocalOcr {
   private process: Subprocess<{ buffer: false }> | undefined
   private lines: Interface | undefined
   private stderr = ''
   private queue: Promise<unknown> = Promise.resolve()
+  private idleTimer?: ReturnType<typeof setTimeout>
   private disposed = false
 
   /**
@@ -35,11 +37,24 @@ export class LocalOcr {
    * Serialize requests so concurrent tool calls cannot mix OCR responses.
    */
   public recognize(image: Buffer): Promise<OcrResult> {
+    clearTimeout(this.idleTimer)
     const task = this.queue.then(async () => {
       if (this.disposed) throw new Error('Local OCR has been disposed.')
       return this.request(image)
     })
-    this.queue = task.catch(() => undefined)
+    const settled = task.catch(() => undefined)
+    this.queue = settled
+
+    void settled.then(() => {
+      if (this.queue === settled && this.process && !this.disposed) {
+        // Keep shutdown in the same queue so a new request waits for the old
+        // process to release its models and pipes before opening another one.
+        this.idleTimer = setTimeout(() => {
+          this.queue = this.stopWorker()
+        }, IDLE_TIMEOUT_MS).unref()
+      }
+    })
+
     return task
   }
 
@@ -48,7 +63,9 @@ export class LocalOcr {
    */
   public async dispose(): Promise<void> {
     this.disposed = true
+    clearTimeout(this.idleTimer)
     await this.stopWorker()
+    await this.queue
   }
 
   private async stopWorker(): Promise<void> {
@@ -66,6 +83,10 @@ export class LocalOcr {
     if (!this.process) {
       if (!this.resolveResources) throw new Error('OCR requires the file tool resource resolver.')
       const resourceRoots = await this.resolveResources()
+      if (this.disposed) {
+        throw new Error('Local OCR has been disposed.')
+      }
+
       this.stderr = ''
       this.process = execa(PYTHON, ['-u', path.join(DIRECTORY, 'ocr_worker.py'), ...resourceRoots], {
         buffer: false,
