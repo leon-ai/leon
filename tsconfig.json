@@ -24,6 +24,11 @@
     "declaration": true
   },
   "files": ["server/src/global.d.ts", "aurora/global.d.ts"],
-  "include": ["server/src/**/*", "scripts/setup/migrations/**/*.js"],
-  "exclude": ["node_modules", "server/dist", "bridges", "tcp_server"]
+  "include": [
+    "server/src/**/*",
+    "scripts/setup/migrations/**/*.js",
+    "bridges/nodejs/src/compiled-tool-runtime.ts",
+    "tools/search_web/crawlberg/src/nodejs/tool-worker-entry.ts"
+  ],
+  "exclude": ["node_modules", "server/dist", "tcp_server"]
 }

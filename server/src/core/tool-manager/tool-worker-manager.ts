@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import treeKill from 'tree-kill'
@@ -6,13 +7,18 @@ import { ToolTimeout } from '@@/bridges/runtime/nodejs/tool-timeout'
 
 import {
   CODEBASE_PATH,
+  COMPILED_NODEJS_TOOL_RUNTIME_PATH,
   NODE_RUNTIME_BIN_PATH,
   NODEJS_BRIDGE_ROOT_PATH,
   NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH
 } from '@/constants'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
+import {
+  COMPILED_TOOLS_PATH, NODEJS_TOOL_COMPILED_ENTRY, NODEJS_TOOL_SOURCE_ENTRY, resolveToolDirectory
+} from '@/leon-roots'
 import { ToolConcurrency } from '@/types'
 import {
   ToolRuntimeLifetime,
@@ -102,11 +108,13 @@ export class ToolWorkerManager {
   }
 
   private create(context: ToolExecutionContext, key: string): Worker {
-    // Load TypeScript in the worker itself. The CLI's intermediary process can
-    // exit before a large result finishes forwarding over its second IPC hop.
+    const compiled = this.hasCompiledTool(context)
+    // Source tools load through the same child process so even large IPC results
+    // reach the host before the worker shuts down.
+    const workerArgs = compiled ? [COMPILED_NODEJS_TOOL_RUNTIME_PATH]
+      : ['--import', TSX_LOADER_URL, NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH]
     const child = spawn(NODE_RUNTIME_BIN_PATH, [
-      '--import', TSX_LOADER_URL,
-      NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
+      ...workerArgs,
       '--runtime', 'tool',
       '--toolkit', context.toolkitId,
       '--tool', context.toolId
@@ -194,6 +202,21 @@ export class ToolWorkerManager {
     })
     this.workers.set(key, worker)
     return worker
+  }
+
+  private hasCompiledTool(context: ToolExecutionContext): boolean {
+    // Source Core should pick up local edits immediately. Profile-installed tools
+    // keep precedence over shipped JavaScript with the same toolkit and tool IDs.
+    if (!import.meta.url.endsWith('.js') || !existsSync(COMPILED_NODEJS_TOOL_RUNTIME_PATH)) {
+      return false
+    }
+
+    const { toolkitId, toolId, profileName } = context
+    const profileTool = resolveToolDirectory(getProfilePaths(profileName).tools, toolkitId, toolId)
+    const compiledTool = resolveToolDirectory(COMPILED_TOOLS_PATH, toolkitId, toolId)
+
+    return !existsSync(path.join(profileTool, NODEJS_TOOL_SOURCE_ENTRY)) &&
+      existsSync(path.join(compiledTool, NODEJS_TOOL_COMPILED_ENTRY))
   }
 
   private async dispatch(

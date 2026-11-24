@@ -8,7 +8,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { resolveToolDirectory } from '@/leon-roots'
+import {
+  COMPILED_TOOLS_PATH, NODEJS_TOOL_COMPILED_ENTRY, NODEJS_TOOL_SOURCE_ENTRY, resolveToolDirectory
+} from '@/leon-roots'
 
 import { ConnectionRequiredError } from '@sdk/base-tool'
 import type { ToolExecutionContext, ToolRuntimeResult } from '@sdk/tool-runtime-types'
@@ -68,12 +70,17 @@ const resolveToolModulePath = (
   toolkitId: string,
   toolId: string
 ): string | null => {
+  if (import.meta.url.endsWith('.js')) {
+    const directory = resolveToolDirectory(COMPILED_TOOLS_PATH, toolkitId, toolId)
+    const entry = path.join(directory, NODEJS_TOOL_COMPILED_ENTRY)
+
+    return fs.existsSync(entry) ? entry : null
+  }
+
   for (const toolsPath of [PROFILE_TOOLS_PATH, TOOLS_PATH]) {
     const toolModulePath = path.join(
       resolveToolDirectory(toolsPath, toolkitId, toolId),
-      'src',
-      'nodejs',
-      'index.ts'
+      NODEJS_TOOL_SOURCE_ENTRY
     )
     if (fs.existsSync(toolModulePath)) {
       return toolModulePath

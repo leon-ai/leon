@@ -380,6 +380,9 @@ export const NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH = path.join(
   NODEJS_BRIDGE_SRC_PATH,
   'tool-runtime.ts'
 )
+export const COMPILED_NODEJS_TOOL_RUNTIME_PATH = path.join(
+  CODEBASE_PATH, 'server', 'dist', 'bridges', 'nodejs', 'src', 'compiled-tool-runtime.js'
+)
 export const PYTHON_BRIDGE_SRC_PATH = path.join(PYTHON_BRIDGE_ROOT_PATH, 'src')
 export const PYTHON_TCP_SERVER_SRC_PATH = path.join(
   PYTHON_TCP_SERVER_ROOT_PATH,
