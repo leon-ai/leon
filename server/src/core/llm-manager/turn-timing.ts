@@ -456,6 +456,7 @@ export async function* readTurnHistory({ from, until, ...query }: {
   until?: number
   turnId?: string
   sessionId?: string
+  goal?: TurnPhase
   stage?: TurnStage
   taskId?: string
 }, profilePaths = getProfilePaths(), onUnreadableRecord?: () => void): AsyncGenerator<Record<string, unknown>> {

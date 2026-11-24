@@ -16,11 +16,14 @@ import { DateHelper } from '@/helpers/date-helper'
 import { FileHelper } from '@/helpers/file-helper'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { measurePulse, startPulseMeasurements, takePulseMeasurements } from './pulse-measurements'
+import { summarizeSessionActivity } from './session-activity'
 import {
-  DAILY_REPORT_PATH, getIanaTimeZone, getPublicModel, isPulseReport, isTelemetryEventReport, OTHER_MODEL, OTHER_PROVIDER,
+  DAILY_REPORT_PATH, getIanaTimeZone, getPublicModel, getSessionActivityId,
+  isPulseReport, isSessionActivityReport, isTelemetryEventReport, OTHER_MODEL, OTHER_PROVIDER,
   LATENCY_BUCKETS_MS, PRESENCE_INTERVAL_MS, PRESENCE_REPORT_PATH, TELEMETRY_DAY_MS, TELEMETRY_EVENT_PATH,
   TELEMETRY_MAX_MODEL_BUCKETS, TELEMETRY_MINUTE_MS, TELEMETRY_RETRY_DAYS, TELEMETRY_SCHEMA_VERSION,
-  PulseTimingMetric, type CapabilityUsage, type DailyReport, type FleetReport, type PresenceReport, type PulseReport, type TelemetryEventReport
+  PulseTimingMetric, type CapabilityUsage, type DailyReport, type FleetReport, type PresenceReport,
+  type PulseReport, type SessionActivityReport, type TelemetryEventReport
 } from './report-contract'
 
 const REPORT_ENDPOINT = new URL(DAILY_REPORT_PATH, TELEMETRY_COLLECTOR_ORIGIN).href
@@ -39,6 +42,7 @@ let presenceAbort: AbortController | undefined
 
 type Activity = ReturnType<typeof summarizeCompletedOwnerTurn>
 type ReportingInstallation = NonNullable<Awaited<ReturnType<typeof getReportingInstallation>>>
+type QueuedReport = TelemetryEventReport | PulseReport | SessionActivityReport
 
 interface PendingEvent {
   profile: string
@@ -49,8 +53,9 @@ interface PendingEvent {
   client?: TelemetryEventReport['client']
   skillEventId?: string
   pulse?: NonNullable<ReturnType<typeof takePulseMeasurements>>
+  sessionActivity?: true
   retryAt: number
-  event?: TelemetryEventReport | PulseReport
+  event?: QueuedReport
 }
 
 interface DeliveryState {
@@ -87,7 +92,7 @@ async function readDeliveryState(profile: string): Promise<DeliveryState | undef
 }
 
 async function sendReport(
-  endpoint: string, report: TelemetryEventReport | PresenceReport | PulseReport, signal: AbortSignal
+  endpoint: string, report: QueuedReport | PresenceReport, signal: AbortSignal
 ): Promise<boolean> {
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -320,9 +325,14 @@ async function prepareProfile(profile: string, at: number): Promise<DeliveryStat
   }
 }
 
+function getProfilePseudonym(state: DeliveryState, identity: ReportingInstallation): string {
+  return createHmac('sha256', identity.key).update('telemetry:profile:')
+    .update(identity.installation).update(state.seed).digest('hex')
+}
+
 function buildEvent(job: PendingEvent, state: DeliveryState, identity: ReportingInstallation): TelemetryEventReport | PulseReport {
   const { key, installation } = identity
-  const pseudonym = createHmac('sha256', key).update('telemetry:profile:').update(installation).update(state.seed).digest('hex')
+  const pseudonym = getProfilePseudonym(state, identity)
   if (job.pulse) {
     return { kind: 'pulse_metrics', at: job.at, installation, profile: pseudonym, version: PACKAGE.version,
       id: createHmac('sha256', key).update('telemetry:pulse:').update(pseudonym).update(randomUUID()).digest('hex'), ...job.pulse }
@@ -350,8 +360,7 @@ function buildEvent(job: PendingEvent, state: DeliveryState, identity: Reporting
 }
 
 /**
- * Reports finished owner turns and profile starts in the background. Only
- * recent installation presence needs a periodic signal from idle Core servers.
+ * Reports turn activity and periodic profile summaries in the background.
  */
 export function startProfileTelemetry(): (() => void) | undefined {
   // Disposable CI profiles must not contribute to installation or usage metrics.
@@ -362,6 +371,7 @@ export function startProfileTelemetry(): (() => void) | undefined {
   const startedAt = Date.now()
   const pending: PendingEvent[] = []
   const announced = new Set<string>()
+  const sessionActivityDays = new Map<string, number>()
   let inFlight = 0
   let closed = false
   let presenceTimer: NodeJS.Timeout | undefined
@@ -397,10 +407,21 @@ export function startProfileTelemetry(): (() => void) | undefined {
     if ((job.activity?.startedAt ?? job.at) < state.enabledAt) {
       return true
     }
-    if (job.event === undefined) {
+    if (!job.event && job.sessionActivity) {
+      const profile = getProfilePseudonym(state, installation)
+      const activity = await summarizeSessionActivity(job.profile, job.at, state.enabledAt, controller.signal)
+      job.event = {
+        kind: 'session_activity', id: getSessionActivityId(profile, job.at), at: job.at,
+        installation: installation.installation, profile, version: PACKAGE.version, activity
+      }
+    }
+    if (!job.event) {
       job.event = buildEvent(job, state, installation)
     }
-    if (job.event.kind === 'pulse_metrics' ? !isPulseReport(job.event) : !isTelemetryEventReport(job.event)) {
+
+    const valid = job.event.kind === 'session_activity' ? isSessionActivityReport(job.event) :
+      job.event.kind === 'pulse_metrics' ? isPulseReport(job.event) : isTelemetryEventReport(job.event)
+    if (!valid) {
       return true
     }
     controller.signal.throwIfAborted()
@@ -500,12 +521,18 @@ export function startProfileTelemetry(): (() => void) | undefined {
         try {
           if (getTelemetrySetting(profile.name).enabled) {
             sharing = true
-            announceProfile(profile.name, Date.now())
+            const at = Date.now()
+            announceProfile(profile.name, at)
             if (pending.length < MAXIMUM_PENDING_EVENTS) {
               const pulse = takePulseMeasurements(profile.name)
               if (pulse) {
-                enqueue({ profile: profile.name, at: Date.now(), pulse, retryAt: 0 })
+                enqueue({ profile: profile.name, at, pulse, retryAt: 0 })
               }
+            }
+            const day = Math.floor(at / TELEMETRY_DAY_MS)
+            if (sessionActivityDays.get(profile.name) !== day && pending.length < MAXIMUM_PENDING_EVENTS) {
+              sessionActivityDays.set(profile.name, day)
+              enqueue({ profile: profile.name, at, sessionActivity: true, retryAt: 0 })
             }
           } else {
             announced.delete(profile.name)

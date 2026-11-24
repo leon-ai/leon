@@ -166,6 +166,31 @@ export class ConversationRepository {
   private readonly db: Database
   public readonly workspaces: WorkspaceRepository
 
+  /**
+   * Reads saved session membership and creation times without opening a profile runtime or reading messages.
+   */
+  public static readInventory(sessionsPath: string): {
+    workspaceCount: number
+    sessions: { id: string, workspaceId: string | null, createdAt: number }[]
+  } {
+    const databasePath = path.join(sessionsPath, CONVERSATION_DATABASE_FILENAME)
+    if (!fs.existsSync(databasePath)) {
+      return { workspaceCount: 0, sessions: [] }
+    }
+
+    const db = new SQLite(databasePath, { readonly: true, fileMustExist: true, timeout: 0 })
+    try {
+      return db.transaction(() => ({
+        workspaceCount: Number(db.prepare('SELECT count(*) AS count FROM workspaces').get()?.['count']),
+        sessions: db.prepare(`SELECT s.id, w.id AS workspaceId, json_extract(s.payload, '$.createdAt') AS createdAt
+          FROM conversation_sessions s LEFT JOIN workspaces w ON w.id = json_extract(s.payload, '$.workspaceId')`)
+          .all() as { id: string, workspaceId: string | null, createdAt: number }[]
+      }))()
+    } finally {
+      db.close()
+    }
+  }
+
   public constructor(sessionsPath: string) {
     fs.mkdirSync(sessionsPath, { recursive: true })
     this.db = new SQLite(path.join(sessionsPath, CONVERSATION_DATABASE_FILENAME))

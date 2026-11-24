@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 
 import { Type, type Static } from '@sinclair/typebox'
@@ -20,6 +21,9 @@ export const TELEMETRY_FLEET_HEADER = 'x-leon-telemetry-fleet'
 export const TELEMETRY_ACTIVATION_HEADER = 'x-leon-telemetry-activation'
 export const TELEMETRY_SCHEMA_VERSION = 1
 export const TELEMETRY_DAY_MS = 86_400_000
+export const SESSION_ACTIVITY_DAYS = 28
+export const SESSION_CONTINUATION_DAYS = 7
+export const SESSION_TURN_BUCKETS = [1, 5, 10, 20] as const
 export const TELEMETRY_RETRY_DAYS = 7
 export const TELEMETRY_MINUTE_MS = 60_000
 export const TELEMETRY_MAX_MODEL_BUCKETS = 100
@@ -139,6 +143,52 @@ const telemetryEventSchema = Type.Object({
   report: dailyReportSchema
 }, { additionalProperties: false })
 export type TelemetryEventReport = Static<typeof telemetryEventSchema>
+
+const sessionActivitySchema = Type.Object({
+  kind: Type.Literal('session_activity'), id: identifier, installation: identifier, profile: identifier, version,
+  at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }),
+  activity: Type.Object({
+    savedWorkspaces: count, savedSessions: count, workspaceSessions: count,
+    activeWorkspaces: count, activeSessions: count, returningSessions: count,
+    turnsPerSession: Type.Array(count, {
+      minItems: SESSION_TURN_BUCKETS.length + 1, maxItems: SESSION_TURN_BUCKETS.length + 1
+    }),
+    continuation: Type.Optional(Type.Object({
+      eligibleSessions: count, continuedSessions: count
+    }, { additionalProperties: false }))
+  }, { additionalProperties: false })
+}, { additionalProperties: false })
+export type SessionActivityReport = Static<typeof sessionActivitySchema>
+
+/**
+ * Gives concurrent Core processes and retries the same snapshot identity for a profile and UTC day.
+ */
+export function getSessionActivityId(profile: string, at: number): string {
+  const day = Math.floor(at / TELEMETRY_DAY_MS)
+
+  return createHash('sha256').update(`telemetry:session-activity:${profile}:${day}`).digest('hex')
+}
+
+/**
+ * Accepts only inventory and usage counts that describe the same profile snapshot.
+ */
+export function isSessionActivityReport(value: unknown): value is SessionActivityReport {
+  if (!Value.Check(sessionActivitySchema, value)) {
+    return false
+  }
+
+  const { activity, id, profile, at } = value
+  const { continuation } = activity
+
+  return id === getSessionActivityId(profile, at) &&
+    activity.workspaceSessions <= activity.savedSessions &&
+    activity.activeWorkspaces <= Math.min(activity.savedWorkspaces, activity.activeSessions, activity.workspaceSessions) &&
+    activity.activeSessions <= activity.savedSessions &&
+    activity.returningSessions <= activity.activeSessions - activity.turnsPerSession[0]! &&
+    activity.turnsPerSession.reduce((sum, sessions) => sum + sessions, 0) === activity.activeSessions &&
+    (continuation === undefined || (continuation.continuedSessions <= continuation.eligibleSessions &&
+      continuation.eligibleSessions <= activity.activeSessions))
+}
 
 export const PULSE_COUNTERS = [
   'idle', 'active_conversation', 'cooldown', 'provider_unavailable', 'tick_failed',
