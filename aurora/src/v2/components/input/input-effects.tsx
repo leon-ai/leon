@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type RefObject } from 'react'
+import { memo, useLayoutEffect, useRef, type RefObject } from 'react'
 
 import {
   advanceCaretMotion,
@@ -28,6 +28,7 @@ export type TextField = HTMLInputElement | HTMLTextAreaElement
 
 interface InputEffectsProps {
   fieldRef: RefObject<TextField | null>
+  refreshRef: RefObject<(() => void) | null>
 }
 
 function measureCaret(
@@ -90,14 +91,13 @@ function measureCaret(
  * Adds a visual caret and fresh-character fade while native fields continue to
  * own editing, accessibility, selection, form submission and composition.
  */
-export function InputEffects({ fieldRef }: InputEffectsProps) {
+export const InputEffects = memo(function InputEffects({ fieldRef, refreshRef }: InputEffectsProps) {
   const viewportRef = useRef<HTMLSpanElement>(null)
   const mirrorRef = useRef<HTMLSpanElement>(null)
   const typingRef = useRef<HTMLSpanElement>(null)
   const caretRef = useRef<HTMLSpanElement>(null)
   const blockRef = useRef<HTMLSpanElement>(null)
   const caretInkRef = useRef<HTMLSpanElement>(null)
-  const refreshRef = useRef<(() => void) | null>(null)
 
   useLayoutEffect(() => {
     const field = fieldRef.current
@@ -495,12 +495,7 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
       document.fonts.removeEventListener('loadingdone', refreshLayout)
       motionPreference.removeEventListener('change', refreshLayout)
     }
-  }, [fieldRef])
-
-  useLayoutEffect(() => {
-    // Controlled values, resets and composer height changes settle after render.
-    refreshRef.current?.()
-  })
+  }, [fieldRef, refreshRef])
 
   return (
     <span ref={viewportRef} className="input-effects" aria-hidden="true" hidden>
@@ -515,4 +510,4 @@ export function InputEffects({ fieldRef }: InputEffectsProps) {
       </span>
     </span>
   )
-}
+})

@@ -4,7 +4,7 @@ import type {
   Ref,
   TextareaHTMLAttributes
 } from 'react'
-import { useCallback, useId, useRef } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef } from 'react'
 import { clsx } from 'clsx'
 
 import { InputEffects, type TextField } from './input-effects'
@@ -50,6 +50,7 @@ export function Input({
 }: InputProps) {
   const generatedId = useId()
   const nativeFieldRef = useRef<TextField | null>(null)
+  const refreshEffects = useRef<(() => void) | null>(null)
   const setFieldRef = useCallback((field: TextField | null) => {
     nativeFieldRef.current = field
 
@@ -83,6 +84,16 @@ export function Input({
     'input-with-icon': icon !== undefined
     }
   )
+  const wrap = 'wrap' in fieldProps ? fieldProps.wrap : undefined
+  const type = 'type' in fieldProps ? fieldProps.type : undefined
+
+  useLayoutEffect(() => {
+    // Browser events cover editing and resizing. React can also replace the
+    // field's value or presentation without emitting a native input event.
+    refreshEffects.current?.()
+  }, [multiline, inputId, inputClassName, wrap, type, fieldProps.value,
+    fieldProps.defaultValue, fieldProps.placeholder, fieldProps.style, fieldProps.dir,
+    fieldProps.lang, fieldProps.disabled, fieldProps.readOnly, fieldProps.hidden])
 
   return (
     <span className={inputClassName}>
@@ -108,7 +119,7 @@ export function Input({
           ref={setFieldRef}
         />
       )}
-      <InputEffects key={multiline ? 'textarea' : 'input'} fieldRef={nativeFieldRef} />
+      <InputEffects key={multiline ? 'textarea' : 'input'} fieldRef={nativeFieldRef} refreshRef={refreshEffects} />
     </span>
   )
 }
