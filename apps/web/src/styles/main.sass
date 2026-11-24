@@ -31,7 +31,10 @@ body
 // The native overlay owns its height, including platform scale and fullscreen.
 // Ordinary browser tabs retain their full viewport and have no draggable strip.
 html[data-desktop]
-  --desktop-titlebar-height: env(titlebar-area-height, 0px)
+  --desktop-native-titlebar-height: env(titlebar-area-height, 0px)
+  --desktop-titlebar-border-width: min(1px, var(--desktop-native-titlebar-height))
+  // Reserve the last row below the native overlay so the border spans the window.
+  --desktop-titlebar-height: calc(var(--desktop-native-titlebar-height) + var(--desktop-titlebar-border-width))
 
 .desktop-titlebar
   position: fixed
@@ -39,7 +42,7 @@ html[data-desktop]
   z-index: 106
   height: var(--desktop-titlebar-height)
   box-sizing: border-box
-  border-bottom: min(1px, var(--desktop-titlebar-height)) solid var(--color-border)
+  border-bottom: var(--desktop-titlebar-border-width) solid var(--color-border)
   background-color: var(--color-background)
   -webkit-app-region: drag
   user-select: none
