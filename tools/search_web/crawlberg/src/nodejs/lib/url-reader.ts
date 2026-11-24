@@ -1,3 +1,7 @@
+import { closeSync, mkdirSync, openSync } from 'node:fs'
+import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+
 import type { ScrapeResult, ThrownCrawlError } from '@xberg-io/crawlberg'
 import type { ExtractionResult } from '@xberg-io/xberg'
 
@@ -5,6 +9,8 @@ const MAX_TEXT_CHARS = 40_000
 const MAX_CACHE_CHARS = 2_000_000
 const MAX_CACHE_ENTRIES = 16
 const CACHE_LIFETIME_MS = 5 * 60_000
+const SNAPSHOT_DATABASE = 'snapshots.sqlite'
+const CACHE_WRITE_TIMEOUT_MS = 2_000
 const FETCH_TIMEOUT_MS = 45_000
 const MAX_BODY_BYTES = 50 * 1_024 * 1_024
 // Identify automated reads without owner identifiers or changes to source URLs.
@@ -23,9 +29,9 @@ export interface UrlReadOptions {
 interface SourceContent {
   text: string
   finalUrl: string
-  mimeType?: string
-  title?: string
-  jsRenderHint?: boolean
+  mimeType?: string | undefined
+  title?: string | undefined
+  jsRenderHint?: boolean | undefined
 }
 
 interface Page extends SourceContent {
@@ -51,12 +57,13 @@ export class UrlFetchError extends Error {
  * Retain snapshots locally so pagination never needs an LLM or repeated fetch.
  */
 export class UrlReader {
-  private readonly cache = new Map<string, Page>()
+  private cache?: DatabaseSync
 
   /**
    * Accept an extraction backend for focused lifecycle and pagination checks.
    */
   public constructor(
+    private readonly cacheDirectory: string,
     private readonly extractUrl?: (url: string) => Promise<ExtractionResult>
   ) {}
 
@@ -86,7 +93,9 @@ export class UrlReader {
       throw new Error('Refresh from offsetChars=0 to start a new snapshot.')
     }
 
-    let page = this.cache.get(cacheKey)
+    const cache = this.openCache()
+    const snapshot = cache.prepare('SELECT page FROM snapshots WHERE key = ?').get(cacheKey)
+    let page = snapshot ? JSON.parse(String(snapshot['page'])) as Page : undefined
     const cached = Boolean(page && !options.refresh && (
       offset > 0 || Date.now() - page.createdAt < CACHE_LIFETIME_MS
     ))
@@ -108,14 +117,7 @@ export class UrlReader {
         createdAt: Date.now()
       }
 
-      this.cache.delete(cacheKey)
-      this.cache.set(cacheKey, page)
-
-      while (this.cache.size > MAX_CACHE_ENTRIES || [...this.cache.values()].reduce(
-        (total, item) => total + item.text.length, 0
-      ) > MAX_CACHE_CHARS) {
-        this.cache.delete(this.cache.keys().next().value!)
-      }
+      this.saveSnapshot(cache, cacheKey, page)
     }
 
     if (offset > page!.text.length) {
@@ -150,10 +152,62 @@ export class UrlReader {
   }
 
   /**
-   * Clear source content when the retained profile worker shuts down.
+   * Release the database connection so the worker can retire between reads.
    */
   public dispose(): void {
-    this.cache.clear()
+    this.cache?.close()
+    delete this.cache
+  }
+
+  private openCache(): DatabaseSync {
+    if (this.cache) {
+      return this.cache
+    }
+
+    mkdirSync(this.cacheDirectory, { recursive: true, mode: 0o700 })
+    const filename = path.join(this.cacheDirectory, SNAPSHOT_DATABASE)
+
+    closeSync(openSync(filename, 'a', 0o600))
+    const cache = new DatabaseSync(filename, { timeout: CACHE_WRITE_TIMEOUT_MS })
+
+    try {
+      cache.exec(`
+        PRAGMA secure_delete = ON;
+        CREATE TABLE IF NOT EXISTS snapshots (
+          sequence INTEGER PRIMARY KEY, key TEXT NOT NULL UNIQUE,
+          chars INTEGER NOT NULL, page TEXT NOT NULL
+        ) STRICT;
+      `)
+    } catch (error) {
+      cache.close()
+      throw error
+    }
+
+    this.cache = cache
+
+    return cache
+  }
+
+  private saveSnapshot(cache: DatabaseSync, key: string, page: Page): void {
+    // Publish the snapshot and evict older entries together so independent workers
+    // sharing a profile see a complete cache within the same bounds.
+    cache.exec('BEGIN IMMEDIATE')
+    try {
+      cache.prepare('INSERT OR REPLACE INTO snapshots (key, chars, page) VALUES (?, ?, ?)')
+        .run(key, page.text.length, JSON.stringify(page))
+      cache.prepare(`
+        DELETE FROM snapshots WHERE sequence IN (
+          SELECT sequence FROM (
+            SELECT sequence, ROW_NUMBER() OVER newest AS position, SUM(chars) OVER newest AS total
+            FROM snapshots WINDOW newest AS (ORDER BY sequence DESC)
+          ) WHERE position > ? OR total > ?
+        )
+      `).run(MAX_CACHE_ENTRIES, MAX_CACHE_CHARS)
+      cache.exec('COMMIT')
+    } catch (error) {
+      cache.exec('ROLLBACK')
+      throw error
+    }
   }
 
   private async fetch(
@@ -207,8 +261,8 @@ export class UrlReader {
       const extracted = await extract({
         kind: ExtractInputKind.Bytes,
         bytes: Buffer.from(document.contentBase64, 'base64'),
-        mimeType: document.mimeType,
-        filename: document.filename
+        ...(document.mimeType === undefined ? {} : { mimeType: document.mimeType }),
+        ...(document.filename === undefined ? {} : { filename: document.filename })
       }, {
         useCache: false,
         disableOcr: true,

@@ -1,16 +1,22 @@
+import path from 'node:path'
+
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
 
 import { UrlFetchError, UrlReader, type UrlReadOptions } from './lib/url-reader'
 
+const SNAPSHOT_CACHE_DIRECTORY = 'url-cache'
+
 /**
  * Provider-independent URL extraction with locally cached source snapshots.
  */
 export default class CrawlbergTool extends Tool {
-  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   private readonly config = ToolkitConfig.load(this.toolkit, this.toolName)
-  private readonly reader = new UrlReader()
+  private readonly reader = new UrlReader(path.join(
+    path.dirname(this.getSettingsPath()), SNAPSHOT_CACHE_DIRECTORY
+  ))
 
   get toolName(): string {
     return 'crawlberg'
@@ -52,7 +58,7 @@ export default class CrawlbergTool extends Tool {
   }
 
   /**
-   * Release retained source text with the profile-owned worker.
+   * Close the profile snapshot store when the runtime retires this worker.
    */
   public async dispose(): Promise<void> {
     this.reader.dispose()

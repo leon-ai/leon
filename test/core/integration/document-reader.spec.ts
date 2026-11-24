@@ -181,37 +181,46 @@ it('reuses prepared document text, invalidates changed inputs and reports missin
 })
 
 it('paginates one URL snapshot, refreshes explicitly and rejects unsafe URL forms', async () => {
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-url-snapshots-'))
   const extract = vi.fn()
     .mockResolvedValueOnce({
       results: [{ content: 'First snapshot', mimeType: 'text/html' }],
       crawlFinalUrls: ['https://example.com/final']
     })
     .mockResolvedValueOnce({ results: [{ content: 'Changed snapshot' }] })
-  const urls = new UrlReader(extract)
+  const urls = new UrlReader(directory, extract)
+  const resumed = new UrlReader(directory, extract)
 
-  expect(await urls.read('https://example.com/page#section', { maxChars: 5 })).toMatchObject({
-    text: 'First',
-    nextOffsetChars: 5,
-    cached: false,
-    finalUrl: 'https://example.com/final',
-    content_kind: 'extracted_text'
-  })
-  expect(await urls.read('https://example.com/page', { offsetChars: 5 })).toMatchObject({
-    text: ' snapshot',
-    cached: true,
-    nextOffsetChars: null
-  })
-  expect(extract).toHaveBeenCalledTimes(1)
-  expect(await urls.read('https://example.com/page', { refresh: true })).toMatchObject({
-    text: 'Changed snapshot',
-    cached: false
-  })
+  try {
+    const first = await urls.read('https://example.com/page#section', { maxChars: 5 })
+    expect(first).toMatchObject({
+      text: 'First',
+      nextOffsetChars: 5,
+      cached: false,
+      finalUrl: 'https://example.com/final',
+      content_kind: 'extracted_text'
+    })
+    urls.dispose()
+    expect(await resumed.read('https://example.com/page', { offsetChars: 5 })).toMatchObject({
+      text: ' snapshot',
+      cached: true,
+      nextOffsetChars: null,
+      fetchedAt: first['fetchedAt']
+    })
+    expect(extract).toHaveBeenCalledTimes(1)
+    expect(await resumed.read('https://example.com/page', { refresh: true })).toMatchObject({
+      text: 'Changed snapshot',
+      cached: false
+    })
 
-  await expect(urls.read('file:///etc/passwd')).rejects.toThrow('HTTP(S)')
-  await expect(urls.read('https://user:password@example.com/')).rejects.toThrow('credentials')
-  await expect(urls.read('https://example.com/page', { offsetChars: 1, refresh: true })).rejects.toThrow('Refresh')
+    await expect(resumed.read('file:///etc/passwd')).rejects.toThrow('HTTP(S)')
+    await expect(resumed.read('https://user:password@example.com/')).rejects.toThrow('credentials')
+    await expect(resumed.read('https://example.com/page', { offsetChars: 1, refresh: true })).rejects.toThrow('Refresh')
 
-  urls.dispose()
-  await expect(urls.read('https://example.com/page', { offsetChars: 1 })).rejects.toThrow('no longer cached')
-  expect(extract).toHaveBeenCalledTimes(2)
+    await expect(resumed.read('https://example.com/missing', { offsetChars: 1 })).rejects.toThrow('no longer cached')
+    expect(extract).toHaveBeenCalledTimes(2)
+  } finally {
+    urls.dispose()
+    resumed.dispose()
+  }
 })
