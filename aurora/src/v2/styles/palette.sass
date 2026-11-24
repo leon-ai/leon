@@ -1,8 +1,22 @@
 // One palette supplies workspace identities and owner-selected application accents.
 // Light variants retain enough contrast for small icons on light surfaces.
-$palette: ('blue', #1C75DB, #1C75DB), ('pink', #ED297A, #C62067), ('green', #49B86B, #237A41), ('violet', #AB73FF, #7842BD), ('orange', #F19B50, #AD5815), ('rouge', #E56868, #B13245), ('yellow', #EACB64, #896915), ('teal', #52B8AA, #22786D), ('cyan', #65BBD3, #22758E), ('rose', #D98DA9, #9E4567), ('amber', #DFA55D, #93611E), ('lime', #A6BF65, #617C29)
+// Button edges match the default blue's contrast against the fill in each theme.
+$palette: (
+  ('blue', #1C75DB, #1C75DB, null, null),
+  ('pink', #ED297A, #C62067, #F199BE, #841C48),
+  ('green', #49B86B, #237A41, #377F4D, #1D5230),
+  ('violet', #AB73FF, #7842BD, #D7C0FA, #4C2E73),
+  ('orange', #F19B50, #AD5815, #A76E3C, #743F15),
+  ('rouge', #E56868, #B13245, #EFBCBD, #702631),
+  ('yellow', #EACB64, #896915, #A7924B, #5C4815),
+  ('teal', #52B8AA, #22786D, #3D8077, #1D514B),
+  ('cyan', #65BBD3, #22758E, #4A8393, #1D505F),
+  ('rose', #D98DA9, #9E4567, #956375, #643144),
+  ('amber', #DFA55D, #93611E, #9B7545, #61431A),
+  ('lime', #A6BF65, #617C29, #76874A, #455622)
+)
 
-@each $name, $dark, $light in $palette
+@each $name, $dark, $light, $dark-button-border, $light-button-border in $palette
   :root,
   [data-theme='dark']
     --color-palette-#{$name}: #{$dark}
@@ -20,6 +34,13 @@ $palette: ('blue', #1C75DB, #1C75DB), ('pink', #ED297A, #C62067), ('green', #49B
     --color-accent-muted: color-mix(in srgb, var(--color-accent) 30%, transparent)
     --color-primary-button-active: color-mix(in srgb, var(--color-accent) 85%, #000)
     --color-primary-button-disabled: color-mix(in srgb, var(--color-accent) 40%, transparent)
+
+    @if $dark-button-border
+      --gradient-primary-button-border: linear-gradient(to bottom, #{$dark-button-border}, transparent)
+
+  @if $light-button-border
+    :root[data-theme='light'][data-accent='#{$name}']
+      --gradient-primary-button-border: linear-gradient(to bottom, #{$light-button-border}, transparent)
 
 [data-workspace-color='default']
   --workspace-color: var(--color-text)
