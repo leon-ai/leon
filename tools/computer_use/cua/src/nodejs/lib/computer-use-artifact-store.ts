@@ -28,6 +28,16 @@ const VISUAL_STATE_ID_LENGTH = 16
 const READING_IMAGE_PIXEL_BUDGET = 1_600_000
 const READING_IMAGE_SCALE = 2
 const READING_CROP_MARGIN_RATIO = 0.1
+const COMPACT_PREVIEW_MIN_BYTES = 96 * 1_024
+const COMPACT_PREVIEW_JPEG_QUALITY = '3'
+const COMPACT_PREVIEW_MEDIA_TYPE = 'image/jpeg'
+
+interface ComputerUseModelImage {
+  dataBase64: string
+  mediaType: string
+  dimensions: ComputerUseImageDimensions
+  setOfMark: PersistedComputerUseImages['setOfMark']
+}
 
 /**
  * Persists complete evidence while returning only bounded model attachments.
@@ -187,7 +197,7 @@ export class ComputerUseArtifactStore {
             ? await this.createModelImage(
                 artifactPath,
                 extension,
-                content,
+                { content, mediaType: image.mimeType },
                 sourceDimensions,
                 action === 'get_window_state' ? structuredResult : null,
                 setOfMarkMode,
@@ -195,6 +205,7 @@ export class ComputerUseArtifactStore {
               )
             : {
                 dataBase64: image.dataBase64,
+                mediaType: image.mimeType,
                 dimensions: sourceDimensions,
                 setOfMark: []
               }
@@ -207,8 +218,9 @@ export class ComputerUseArtifactStore {
           },
           modelFile: {
             dataBase64: modelImage.dataBase64,
-            mediaType: image.mimeType,
-            filename: path.basename(artifactPath),
+            mediaType: modelImage.mediaType,
+            filename: path.basename(artifactPath, `.${extension}`) +
+              `.${IMAGE_EXTENSION_BY_MIME_TYPE[modelImage.mediaType] ?? extension}`,
             visualDetail: 'high' as const
           },
           modelDimensions: modelImage.dimensions,
@@ -273,16 +285,12 @@ export class ComputerUseArtifactStore {
   private async createModelImage(
     artifactPath: string,
     extension: string,
-    originalContent: Buffer,
+    original: { content: Buffer, mediaType: string },
     sourceDimensions: ComputerUseImageDimensions,
     structuredResult: Record<string, unknown> | null,
     setOfMarkMode: ComputerUseSetOfMarkMode,
     zoomed: boolean
-  ): Promise<{
-    dataBase64: string
-    dimensions: ComputerUseImageDimensions
-    setOfMark: PersistedComputerUseImages['setOfMark']
-  }> {
+  ): Promise<ComputerUseModelImage> {
     const modelDimensions = calculateComputerUseModelImageDimensions(
       sourceDimensions
     )
@@ -297,18 +305,24 @@ export class ComputerUseArtifactStore {
     const needsResize =
       modelDimensions.width !== sourceDimensions.width ||
       modelDimensions.height !== sourceDimensions.height
+    // Only model attachments use compact encoding. Original captures retain
+    // their pixels and format for owner evidence and precise reading crops.
+    const compress = !zoomed && original.mediaType === 'image/png' &&
+      original.content.byteLength >= COMPACT_PREVIEW_MIN_BYTES
+    const originalImage = (): ComputerUseModelImage => ({
+      dataBase64: original.content.toString('base64'),
+      mediaType: original.mediaType,
+      dimensions: sourceDimensions,
+      setOfMark: []
+    })
     if (
       extension === 'bin' ||
-      (!needsResize && !setOfMark.filter && !coordinateGuide)
+      (!needsResize && !setOfMark.filter && !coordinateGuide && !compress)
     ) {
-      return {
-        dataBase64: originalContent.toString('base64'),
-        dimensions: sourceDimensions,
-        setOfMark: []
-      }
+      return originalImage()
     }
 
-    const modelImagePath = `${artifactPath}.model.${extension}`
+    const modelImagePath = `${artifactPath}.model.${compress ? 'jpg' : extension}`
     try {
       const filters = [
         ...(needsResize
@@ -326,25 +340,26 @@ export class ComputerUseArtifactStore {
         'error',
         '-i',
         artifactPath,
-        '-vf',
-        filters,
+        ...(filters ? ['-vf', filters] : []),
+        ...(compress ? ['-q:v', COMPACT_PREVIEW_JPEG_QUALITY, '-pix_fmt', 'yuvj444p'] : []),
         '-frames:v',
         '1',
         '-y',
         modelImagePath
       ])
       const resizedContent = await fs.promises.readFile(modelImagePath)
+      if (compress && resizedContent.byteLength >= original.content.byteLength &&
+          !needsResize && !setOfMark.filter) {
+        return originalImage()
+      }
       return {
         dataBase64: resizedContent.toString('base64'),
+        mediaType: compress ? COMPACT_PREVIEW_MEDIA_TYPE : original.mediaType,
         dimensions: modelDimensions,
         setOfMark: setOfMark.annotations
       }
     } catch {
-      return {
-        dataBase64: originalContent.toString('base64'),
-        dimensions: sourceDimensions,
-        setOfMark: []
-      }
+      return originalImage()
     } finally {
       await fs.promises.rm(modelImagePath, { force: true })
     }
