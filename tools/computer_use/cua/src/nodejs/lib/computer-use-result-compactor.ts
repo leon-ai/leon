@@ -6,6 +6,7 @@ import type { CuaExecutionContext as ToolExecutionContext,
 
 import {
   COMPUTER_USE_APP_QUERY_PARAMETER,
+  COMPUTER_USE_APP_QUERIES_PARAMETER,
   COMPUTER_USE_APP_RESULT_LIMIT,
   COMPUTER_USE_APP_WINDOW_LIMIT,
   COMPUTER_USE_WINDOW_RESULT_LIMIT
@@ -289,14 +290,16 @@ export class ComputerUseResultCompactor {
     })
     const candidates = desktopApps.length > 0 ? desktopApps : allApps
     const query = input.parameters[COMPUTER_USE_APP_QUERY_PARAMETER]
-    const normalizedQuery =
-      typeof query === 'string' ? query.trim().toLocaleLowerCase() : ''
-    const matchingCandidates = normalizedQuery
+    const queryBatch = input.parameters[COMPUTER_USE_APP_QUERIES_PARAMETER]
+    const queries = [query, ...(Array.isArray(queryBatch) ? queryBatch : [])]
+      .filter(hasText)
+      .map((value) => value.trim().toLocaleLowerCase())
+    const matchingCandidates = queries.length > 0
       ? candidates.filter((app) =>
           [app['name'], app['bundle_id'], app['launch_path']].some(
             (value) =>
               hasText(value) &&
-              value.toLocaleLowerCase().includes(normalizedQuery)
+              queries.some((term) => value.toLocaleLowerCase().includes(term))
           )
         )
       : candidates

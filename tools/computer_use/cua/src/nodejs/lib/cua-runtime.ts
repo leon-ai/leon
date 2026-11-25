@@ -31,6 +31,7 @@ import {
   COMPUTER_USE_ACTION_SEQUENCE_NAME,
   COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT,
   COMPUTER_USE_APP_QUERY_PARAMETER,
+  COMPUTER_USE_APP_QUERIES_PARAMETER,
   COMPUTER_USE_CAPTURE_ACTIONS,
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
   COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
@@ -258,8 +259,9 @@ export class CuaRuntime {
         driverParameters['include_screenshot'] = true
       }
       if (action === 'list_apps') {
-        // Querying is a Leon-side compaction hint, not a Cua Driver parameter.
+        // Filters apply to one inventory result on Leon's side.
         delete driverParameters[COMPUTER_USE_APP_QUERY_PARAMETER]
+        delete driverParameters[COMPUTER_USE_APP_QUERIES_PARAMETER]
       }
       const coordinateSafeParameters = this.applyObservationDefaults(
         action,

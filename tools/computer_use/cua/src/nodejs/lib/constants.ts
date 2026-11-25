@@ -10,6 +10,7 @@ export const COMPUTER_USE_MODEL_IMAGE_PIXEL_BUDGET = 800_000
 export const COMPUTER_USE_APP_RESULT_LIMIT = 24
 export const COMPUTER_USE_APP_WINDOW_LIMIT = 3
 export const COMPUTER_USE_APP_QUERY_PARAMETER = 'query'
+export const COMPUTER_USE_APP_QUERIES_PARAMETER = 'queries'
 export const COMPUTER_USE_WINDOW_RESULT_LIMIT = 24
 export const COMPUTER_USE_VISUAL_STATE_LIMIT = 512
 // Layout containers can put useful GTK controls dozens of levels deep. Bound

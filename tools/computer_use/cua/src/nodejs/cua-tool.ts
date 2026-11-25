@@ -57,8 +57,8 @@ export default class CuaTool extends Tool {
   /**
    * Execute list apps through the retained Cua runtime.
    */
-  public async list_apps(query?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('list_apps', { query })
+  public async list_apps(query?: unknown, queries?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('list_apps', { query, queries })
   }
 
   /**
