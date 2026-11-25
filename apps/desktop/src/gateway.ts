@@ -131,7 +131,11 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
       headers['origin'] = backend.origin
     }
     const upload = request.method === 'POST' && url.pathname.endsWith('/attachments')
-    let body: Readable = request
+    const hasBody = Number(request.headers['content-length']) > 0 || request.headers['transfer-encoding'] !== undefined
+    // Chromium's chunked upload mode needs a body. Commands such as stopping
+    // a turn still need to reach Core when their POST has no payload.
+    let body: Readable | undefined = hasBody && request.method !== 'GET' && request.method !== 'HEAD'
+      ? request : undefined
     if (request.method === 'POST' && url.pathname === '/api/v1/updates/apply') {
       const bytes = await readBody(request, 4_096)
       const input = JSON.parse(bytes.toString())
@@ -154,7 +158,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
     const upstream = requestBackend({ session: backendSession!, url: target,
       method: request.method ?? 'GET', headers, maximumBytes, signal: active.signal,
       ...(publicCompletion ? { cookie: '' } : {}),
-      ...(!['GET', 'HEAD'].includes(request.method ?? 'GET') ? { body } : {}) })
+      ...(body ? { body } : {}) })
     try {
       const incoming = await upstream.response
       response.statusCode = incoming.statusCode
