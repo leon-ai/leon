@@ -12,9 +12,13 @@ function record(inputTokens: number, cachedInputTokens: number, stage = TurnStag
   }
 }
 
-function sample(inputTokens: number, cachedInputTokens: number): { evaluation: Evaluation } {
+function sample(
+  inputTokens: number,
+  cachedInputTokens: number,
+  ...additionalRequests: InferenceUsageRecord[]
+): { evaluation: Evaluation } {
   return { evaluation: {
-    metrics: summarizeQuickEvalUsage([record(inputTokens, cachedInputTokens)], 100),
+    metrics: summarizeQuickEvalUsage([record(inputTokens, cachedInputTokens), ...additionalRequests], 100),
     turns: [], diagnostics: { tools: [], calls: [], completionReviews: [] }
   } }
 }
@@ -75,25 +79,70 @@ describe('Quick Evals release budgets', () => {
     expect(result.samples.map(({ metrics }) => metrics.uncachedInputTokens)).toEqual(cachedTokens.map((cached) => 100 - cached))
   })
 
-  it('blocks on a repeated hard budget breach during uncached-input resampling', async () => {
-    const run = vi.fn().mockResolvedValueOnce(sample(100, 35)).mockResolvedValue(sample(120, 80))
-    const result = await evaluateQuickEvalCase(run, 15, 0, sample(100, 50).evaluation.metrics)
+  it('reports an isolated hard budget breach after two samples stay within budget', async () => {
+    const clean = sample(100, 50)
+    const run = vi.fn().mockResolvedValueOnce(sample(120, 80)).mockResolvedValue(clean)
+    const result = await evaluateQuickEvalCase(run, 15, 0, clean.evaluation.metrics)
 
     expect(run).toHaveBeenCalledTimes(3)
-    expect(result.failures).toEqual([
-      expect.stringContaining('inputTokens'), expect.stringContaining('peakInputTokens')
-    ])
+    expect(result).toMatchObject({
+      failures: [], warnings: ['Initial samples showed isolated budget breaches']
+    })
   })
 
-  it('retains the failing child’s reason and diagnostics without retrying a failed assertion', async () => {
-    const failedSample = {
-      reason: 'AssertionError: expected the verification line', exitCode: 1, timedOut: false,
-      diagnostics: { tools: ['operating_system_control.shell.executeCommand'], calls: [], completionReviews: [] }
-    }
-    const run = vi.fn().mockResolvedValue({ failedSample })
+  it('blocks when a budget breach found during uncached resampling repeats in the confirmation batch', async () => {
+    const run = vi.fn()
+      .mockResolvedValueOnce(sample(100, 35))
+      .mockResolvedValueOnce(sample(120, 80))
+      .mockResolvedValueOnce(sample(120, 80))
+      .mockResolvedValueOnce(sample(100, 50))
+      .mockResolvedValueOnce(sample(121, 80))
+      .mockResolvedValueOnce(sample(121, 80))
     const result = await evaluateQuickEvalCase(run, 15, 0, sample(100, 50).evaluation.metrics)
 
-    expect(run).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({ samples: [], failures: [failedSample.reason], warnings: [], failedSample })
+    expect(run).toHaveBeenCalledTimes(6)
+    expect(result.samples.map(({ metrics }) => metrics.inputTokens)).toEqual([100, 120, 120, 100, 121, 121])
+    expect(result.failures).toEqual([
+      'inputTokens grew from 100 to 121 (limit +15%)',
+      'peakInputTokens grew from 100 to 121 (limit +15%)'
+    ])
+    expect(result.notes).toContain('peakInputTokens exceeded its budget in 2/3 initial samples and 2/3 confirmation samples')
   })
+
+  it('reports an inconclusive breach when the confirmation batch exceeds a different budget', async () => {
+    const baseline = sample(100, 75, record(80, 55)).evaluation.metrics
+    const peakBreach = sample(120, 90, record(60, 40))
+    const inputBreach = sample(110, 85, record(110, 85))
+    const run = vi.fn()
+
+    for (const attempt of [peakBreach, peakBreach, inputBreach, inputBreach, peakBreach, inputBreach]) {
+      run.mockResolvedValueOnce(attempt)
+    }
+    const result = await evaluateQuickEvalCase(run, 15, 0, baseline)
+
+    expect(run).toHaveBeenCalledTimes(6)
+    expect(result).toMatchObject({
+      failures: [],
+      warnings: ['peakInputTokens budget breach was inconclusive'],
+      notes: ['peakInputTokens exceeded its budget in 2/3 initial samples and 1/3 confirmation samples']
+    })
+  })
+
+  it.each([0, 4])('stops at a failed assertion after %i successful samples and retains its diagnostics',
+    async (successfulSamples) => {
+      const failedSample = {
+        reason: 'AssertionError: expected the verification line', exitCode: 1, timedOut: false,
+        diagnostics: { tools: ['operating_system_control.shell.executeCommand'], calls: [], completionReviews: [] }
+      }
+      const run = vi.fn().mockResolvedValue({ failedSample })
+
+      for (let index = 0; index < successfulSamples; index += 1) {
+        run.mockResolvedValueOnce(sample(120, 80))
+      }
+      const result = await evaluateQuickEvalCase(run, 15, 0, sample(100, 50).evaluation.metrics)
+
+      expect(run).toHaveBeenCalledTimes(successfulSamples + 1)
+      expect(result.samples).toHaveLength(successfulSamples)
+      expect(result).toMatchObject({ failures: [failedSample.reason], warnings: [], failedSample })
+    })
 })

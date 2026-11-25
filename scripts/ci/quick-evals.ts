@@ -33,6 +33,8 @@ const DEFAULT_MAX_GROWTH = 15
 const CALIBRATION_SAMPLES = 3
 const MAX_BUDGET_SAMPLES = 3
 const BUDGET_VOTES_REQUIRED = 2
+const INPUT_BUDGET_METRICS = ['inputTokens', 'peakInputTokens'] as const
+const BUDGET_METRICS = [...INPUT_BUDGET_METRICS, 'modelCalls'] as const
 const CASE_TIMEOUT_MS = 90_000
 const RESULT_PREFIX = '__AGENT_RESULT__'
 const PROGRESS_PREFIX = '__AGENT_PROGRESS__'
@@ -93,6 +95,7 @@ interface Baseline {
 
 type QuickEvalCase = (typeof CASES)[number]
 type MaintainedTurn = Awaited<ReturnType<typeof runMaintainedTurn>>
+type BudgetMetric = (typeof BUDGET_METRICS)[number]
 type EvaluationSample = Evaluation & ReturnType<typeof compareQuickEval>
 type ScenarioSample = { evaluation: Evaluation } | { failedSample: FailedSample }
 
@@ -158,19 +161,25 @@ export function compareQuickEval(
   baseline: Metrics,
   maxGrowth: number,
   callAllowance: number
-): { failures: string[], warnings: string[], uncachedWarning?: string } {
-  const failures: string[] = []
+): {
+  failures: string[]
+  budgetFailures: Partial<Record<BudgetMetric, string>>
+  warnings: string[]
+  uncachedWarning?: string
+} {
+  const budgetFailures: Partial<Record<BudgetMetric, string>> = {}
   const warnings: string[] = []
-  for (const key of ['inputTokens', 'peakInputTokens', 'modelCalls', 'turnLatencyMs'] as const) {
+
+  for (const key of [...BUDGET_METRICS, 'turnLatencyMs'] as const) {
     assert(Number.isFinite(baseline[key]) && baseline[key] > 0, `Missing or invalid baseline ${key}`)
   }
-  for (const key of ['inputTokens', 'peakInputTokens'] as const) {
+  for (const key of INPUT_BUDGET_METRICS) {
     if (observed[key] * 100 > baseline[key] * (100 + maxGrowth)) {
-      failures.push(`${key} grew from ${baseline[key]} to ${observed[key]} (limit +${maxGrowth}%)`)
+      budgetFailures[key] = `${key} grew from ${baseline[key]} to ${observed[key]} (limit +${maxGrowth}%)`
     }
   }
   if (observed.modelCalls > baseline.modelCalls + callAllowance) {
-    failures.push(`modelCalls grew from ${baseline.modelCalls} to ${observed.modelCalls} (limit +${callAllowance})`)
+    budgetFailures.modelCalls = `modelCalls grew from ${baseline.modelCalls} to ${observed.modelCalls} (limit +${callAllowance})`
   }
   if (observed.failedCalls) {
     warnings.push(`${observed.failedCalls} provider call(s) did not complete`)
@@ -182,7 +191,10 @@ export function compareQuickEval(
     warnings.push(`turnLatencyMs grew from ${baseline.turnLatencyMs} to ${observed.turnLatencyMs}`)
   }
 
-  return { failures, warnings, ...(uncachedWarning ? { uncachedWarning } : {}) }
+  return {
+    failures: Object.values(budgetFailures), budgetFailures, warnings,
+    ...(uncachedWarning ? { uncachedWarning } : {})
+  }
 }
 
 function scenarioDiagnostics(lines: string[], rows: InferenceUsageRecord[]): ScenarioDiagnostics {
@@ -312,7 +324,8 @@ async function runCase(scenario: QuickEvalCase, jqPath: string): Promise<Scenari
 }
 
 /**
- * Repeats the affected scenario only when a hard budget or uncached input exceeds the threshold.
+ * Uses a fresh batch to confirm repeated usage breaches in the affected scenario.
+ * Scenario failures stop sampling immediately because every attempt must satisfy its assertions.
  */
 export async function evaluateQuickEvalCase(
   runSample: () => Promise<ScenarioSample>,
@@ -321,10 +334,11 @@ export async function evaluateQuickEvalCase(
   baseline?: Metrics
 ): Promise<EvaluationResult> {
   const samples: EvaluationSample[] = []
+
   try {
-    const sampleLimit = baseline ? MAX_BUDGET_SAMPLES : CALIBRATION_SAMPLES
-    let budgetBreaches = 0
-    let uncachedBreaches = 0
+    let sampleLimit = baseline ? 1 : CALIBRATION_SAMPLES
+    let budgetsToConfirm: BudgetMetric[] = []
+
     for (let index = 0; index < sampleLimit; index += 1) {
       const attempt = await runSample()
       if ('failedSample' in attempt) {
@@ -335,36 +349,57 @@ export async function evaluateQuickEvalCase(
       const sample = attempt.evaluation
       const comparison = baseline
         ? compareQuickEval(sample.metrics, baseline, maxGrowth, callAllowance)
-        : { failures: [], warnings: [] }
+        : { failures: [], budgetFailures: {}, warnings: [] }
       samples.push({ ...sample, ...comparison })
 
-      budgetBreaches += Number(comparison.failures.length > 0)
-      uncachedBreaches += Number(comparison.uncachedWarning !== undefined)
-      // An uncached spike needs three samples for a median and a range. Hard
-      // budget checks alone can finish as soon as two samples agree.
-      if (baseline && uncachedBreaches === 0 && (budgetBreaches === 0 || budgetBreaches >= BUDGET_VOTES_REQUIRED ||
-        samples.length - budgetBreaches >= BUDGET_VOTES_REQUIRED)) {
-        break
+      if (baseline && samples.length === 1 && (comparison.failures.length || comparison.uncachedWarning)) {
+        sampleLimit = MAX_BUDGET_SAMPLES
+      }
+      if (baseline && samples.length === MAX_BUDGET_SAMPLES) {
+        // Count each budget independently so unrelated spikes cannot confirm one another.
+        budgetsToConfirm = BUDGET_METRICS.filter((metric) =>
+          samples.filter(({ budgetFailures }) => budgetFailures[metric]).length >= BUDGET_VOTES_REQUIRED
+        )
+        if (budgetsToConfirm.length) {
+          sampleLimit += MAX_BUDGET_SAMPLES
+        }
       }
     }
 
-    let representative = samples.at(-1)!
+    // Keep the original batch as the summary measurement and retain both batches in the report.
+    const initialSamples = baseline ? samples.slice(0, MAX_BUDGET_SAMPLES) : samples
+    const confirmationSamples = samples.slice(initialSamples.length)
+    const uncachedBreaches = initialSamples.filter(({ uncachedWarning }) => uncachedWarning).length
     const notes: string[] = []
+    let representative = initialSamples.at(-1)!
+
     if (!baseline || uncachedBreaches) {
       const key = baseline ? 'uncachedInputTokens' : 'inputTokens'
-      const ranked = samples.toSorted((left, right) => left.metrics[key] - right.metrics[key])
+      const ranked = initialSamples.toSorted((left, right) => left.metrics[key] - right.metrics[key])
       representative = ranked[Math.floor(ranked.length / 2)]!
       if (uncachedBreaches) {
         const [first] = ranked
         const last = ranked.at(-1)!
-        notes.push(`Uncached input median ${representative.metrics[key]} tokens, range ${first!.metrics[key]}–${last.metrics[key]} (${uncachedBreaches}/${samples.length} above +${maxGrowth}%)`)
+        notes.push(`Uncached input median ${representative.metrics[key]} tokens, range ${first!.metrics[key]}–${last.metrics[key]} (${uncachedBreaches}/${initialSamples.length} above +${maxGrowth}%)`)
       }
     }
 
-    const failures = budgetBreaches >= BUDGET_VOTES_REQUIRED ? [...new Set(samples.flatMap((sample) => sample.failures))] : []
+    const failures: string[] = []
     const warnings = [...representative.warnings]
-    if (budgetBreaches === 1) {
-      warnings.push('One sample exceeded the budget before two samples passed')
+
+    for (const metric of budgetsToConfirm) {
+      const initialVotes = initialSamples.filter(({ budgetFailures }) => budgetFailures[metric]).length
+      const breaches = confirmationSamples.flatMap(({ budgetFailures }) => budgetFailures[metric] ?? [])
+
+      notes.push(`${metric} exceeded its budget in ${initialVotes}/${initialSamples.length} initial samples and ${breaches.length}/${confirmationSamples.length} confirmation samples`)
+      if (breaches.length >= BUDGET_VOTES_REQUIRED) {
+        failures.push(...new Set(breaches))
+      } else {
+        warnings.push(`${metric} budget breach was inconclusive`)
+      }
+    }
+    if (!budgetsToConfirm.length && initialSamples.some(({ failures }) => failures.length)) {
+      warnings.push('Initial samples showed isolated budget breaches')
     }
     if (uncachedBreaches >= BUDGET_VOTES_REQUIRED) {
       warnings.push('Uncached input growth persisted across samples')
