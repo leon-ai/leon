@@ -11,7 +11,7 @@ import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
 import { InferencePurpose } from '@/core/llm-manager/types'
 import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
-import { runOutsideTurnTiming, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
+import { getTurnTimings, runOutsideTurnTiming, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
@@ -42,6 +42,19 @@ type PulseMatterStatus =
 
 type PulseMatterSource = 'memory' | 'context' | 'self_model'
 type PulseOwnerFeedback = 'accept' | 'decline' | null
+type PulseTickReason = 'scheduled' | 'follow_up' | 'manual'
+
+enum PulseFailureReason {
+  Deadline = 'Research deadline reached',
+  Provider = 'Research model request failed',
+  NoAnswer = 'Research did not return a final answer',
+  Blocked = 'Research ended with a blocked response',
+  Research = 'Research could not finish',
+  ReviewUnavailable = 'Finding review could not finish',
+  ReviewInvalid = 'Finding review returned an invalid decision',
+  Storage = 'Could not save the result',
+  Delivery = 'Could not deliver the finding'
+}
 
 interface PulseMatter extends PulseMatterLead {
   id: string
@@ -124,6 +137,15 @@ interface PulseResolutionTurn {
 
 type ScheduledPulseCheck = Pick<PulseFollowUp, 'checkAt' | 'expiresAt'>
 
+interface PulseResearchResult {
+  decision: PulseDecision
+  findingKey: string | null
+  output: string | null
+  followUp: PulseFollowUp | null
+  answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace' | 'artifacts'>
+  failureReason?: PulseFailureReason
+}
+
 const PULSE_MARKDOWN_FILENAME = 'PULSE.md'
 const PULSE_STATE_FILENAME = '.leon-pulse-state.json'
 const MAX_PENDING_MATTERS = 6
@@ -133,6 +155,7 @@ const MAX_RECENT_TICKS = 12
 const MAX_CHANGED_CONTEXT_SIGNALS = 6
 const ACTIVE_CONVERSATION_GRACE_MS = 2 * 60 * 1_000
 const PULSE_INITIAL_DELAY_MS = 2 * 60 * 1_000
+const PULSE_FOLLOW_UP_RETRY_MS = 15_000
 const PULSE_SURFACED_RESPONSE_WINDOW_MS = 30 * 60 * 1_000
 const PULSE_COMPLETED_COOLDOWN_MS = 12 * 60 * 60 * 1_000
 const PULSE_FAILED_COOLDOWN_MS = 3 * 60 * 60 * 1_000
@@ -291,8 +314,9 @@ function defaultPulseState(isEnabled: boolean): PulseState {
 export default class PulseManager {
   private readonly results = new PulseResultRepository(this.getPrivateContextPath())
   private state: PulseState | null = null
-  private intervalId: NodeJS.Timeout | null = null
-  private initialTimerId: NodeJS.Timeout | null = null
+  private timerId: NodeJS.Timeout | null = null
+  private nextDiscoveryAt: number | null = null
+  private followUpRetryAt = 0
   private queue: Promise<void> = Promise.resolve()
   private isTickPending = false
 
@@ -318,33 +342,68 @@ export default class PulseManager {
     state.intervalMs = LEON_PULSE_INTERVAL_MS
     this.persist()
 
-    if (this.intervalId || this.initialTimerId) {
+    if (this.nextDiscoveryAt !== null) {
       return
     }
-    const initialDelayMs = Math.min(
-      LEON_PULSE_INTERVAL_MS,
-      PULSE_INITIAL_DELAY_MS
-    )
-
-    this.initialTimerId = setTimeout(() => {
-      this.initialTimerId = null
-      void this.tick('initial')
-    }, initialDelayMs)
-    if (typeof this.initialTimerId.unref === 'function') {
-      this.initialTimerId.unref()
-    }
-
-    this.intervalId = setInterval(() => {
-      void this.tick('scheduled')
-    }, LEON_PULSE_INTERVAL_MS)
-    if (typeof this.intervalId.unref === 'function') {
-      this.intervalId.unref()
-    }
+    this.nextDiscoveryAt = Date.now() + Math.min(LEON_PULSE_INTERVAL_MS, PULSE_INITIAL_DELAY_MS)
+    this.scheduleNextTick()
 
     LogHelper.title('Pulse Manager')
     LogHelper.info(
       `Pulse started with interval ${Math.round(LEON_PULSE_INTERVAL_MS / 60_000)} minute(s)`
     )
+  }
+
+  // Discovery has a minimum interval. Agenda checks wake independently at their due time.
+  private scheduleNextTick(): void {
+    if (this.nextDiscoveryAt === null || this.isTickPending) {
+      return
+    }
+
+    const now = Date.now()
+    const enabled = this.isEnabled()
+    const discoveryAt = enabled
+      ? Math.max(
+          this.nextDiscoveryAt,
+          now + this.getDiscoveryCooldownRemainingMs(this.ensureLoaded(), now)
+        )
+      : this.nextDiscoveryAt
+    let wakeAt = discoveryAt
+    if (enabled) {
+      try {
+        for (const { checkAt, expiresAt } of this.results.openMatters(now)) {
+          wakeAt = Math.min(wakeAt, Math.max(checkAt, this.followUpRetryAt), expiresAt)
+        }
+      } catch (error) {
+        // Keep the regular scan armed if the agenda cannot be read.
+        LogHelper.warning(`Failed to schedule Pulse follow-ups: ${String(error)}`)
+      }
+    }
+
+    // Profile timers can start during chat initialization. They must use the current
+    // conversation at wake-up instead of retaining the initializing turn's settings.
+    const delay = Math.max(0, Math.min(wakeAt - now, LEON_PULSE_INTERVAL_MS))
+    this.timerId = runOutsideTurnTiming(() => runWithConversationSession({ sessionId: '' }, () =>
+      setTimeout(() => {
+        this.timerId = null
+        const now = Date.now()
+        if (now < wakeAt) {
+          this.scheduleNextTick()
+          return
+        }
+
+        const isDiscoveryTick = now >= discoveryAt
+        if (isDiscoveryTick) {
+          this.nextDiscoveryAt = now + LEON_PULSE_INTERVAL_MS
+        }
+        if (this.isEnabled()) {
+          void this.tick(isDiscoveryTick ? 'scheduled' : 'follow_up')
+        } else {
+          this.scheduleNextTick()
+        }
+      }, delay)
+    ))
+    this.timerId.unref?.()
   }
 
   public async observeOwnerUtterance(utterance: string): Promise<void> {
@@ -484,27 +543,27 @@ export default class PulseManager {
     }
   }
 
-  public async tick(reason: 'initial' | 'scheduled' | 'manual'): Promise<void> {
-    if (!this.isEnabled()) {
+  public async tick(reason: PulseTickReason): Promise<void> {
+    if (!this.isEnabled() || this.isTickPending) {
       return
     }
 
-    if (this.isTickPending) {
-      return
-    }
-
+    clearTimeout(this.timerId ?? undefined)
+    this.timerId = null
     this.isTickPending = true
     this.queue = this.queue
       .then(async () => {
         await runOutsideTurnTiming(() => this.tickInternal(reason))
       })
       .catch((error: unknown) => {
+        this.followUpRetryAt = Date.now() + PULSE_FOLLOW_UP_RETRY_MS
         measurePulse({ counter: 'tick_failed', count: 1 })
         LogHelper.title('Pulse Manager')
         LogHelper.warning(`Pulse tick failed: ${String(error)}`)
       })
       .finally(() => {
         this.isTickPending = false
+        this.scheduleNextTick()
       })
 
     return this.queue
@@ -754,18 +813,16 @@ export default class PulseManager {
     ].slice(0, MAX_RECENT_TICKS)
   }
 
-  private getExecutionCooldownRemainingMs(state: PulseState): number {
+  private getDiscoveryCooldownRemainingMs(state: PulseState, now: number): number {
     const lastExecutionTs = parseIsoTimestamp(state.lastExecutionAt)
     if (lastExecutionTs === null) {
       return 0
     }
 
-    return Math.max(lastExecutionTs + state.intervalMs - Date.now(), 0)
+    return Math.max(lastExecutionTs + state.intervalMs - now, 0)
   }
 
-  private async tickInternal(
-    reason: 'initial' | 'scheduled' | 'manual'
-  ): Promise<void> {
+  private async tickInternal(reason: PulseTickReason): Promise<void> {
     const state = this.ensureLoaded()
     state.enabled = this.isEnabled()
     state.intervalMs = LEON_PULSE_INTERVAL_MS
@@ -780,14 +837,22 @@ export default class PulseManager {
     const now = Date.now()
     this.results.prune(now)
 
-    const executionCooldownRemainingMs = this.getExecutionCooldownRemainingMs(state)
-    if (executionCooldownRemainingMs > 0) {
+    // Due checks already have verified grounding and take priority over discovery.
+    const openMatters = this.results.openMatters(now)
+    const due = openMatters.find((matter) => matter.checkAt <= now)
+    if (!due && reason === 'follow_up') {
+      this.persist()
+      return
+    }
+
+    const cooldownRemainingMs = this.getDiscoveryCooldownRemainingMs(state, now)
+    if (!due && cooldownRemainingMs > 0) {
       measurePulse({ counter: 'cooldown', count: 1 })
-      const remainingMinutes = Math.ceil(executionCooldownRemainingMs / 60_000)
+      const remainingMinutes = Math.ceil(cooldownRemainingMs / 60_000)
       this.pushTickRecord(
         state,
         'skipped',
-        `Skipped pulse execution; ${remainingMinutes} minute(s) remain before the next allowed pulse`
+        `Skipped Pulse discovery; ${remainingMinutes} minute(s) remain before the next scan`
       )
       this.persist()
       return
@@ -795,19 +860,34 @@ export default class PulseManager {
 
     const core = await this.loadCoreNodes()
     if (!core.LLM_PROVIDER.isLLMProviderReady) {
+      if (due) {
+        this.followUpRetryAt = Date.now() + PULSE_FOLLOW_UP_RETRY_MS
+      }
       measurePulse({ counter: 'provider_unavailable', count: 1 })
       this.pushTickRecord(state, 'skipped', 'Skipped pulse until the model provider is ready')
       this.persist()
       return
     }
-    const recentConversation = await core.CONVERSATION_LOGGER.load({
-      nbOfLogsToLoad: 8
-    })
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    const recentConversation = await core.CONVERSATION_LOGGER.load({ sessionId, nbOfLogsToLoad: 8 })
+    const sourceSessionId = due?.lead.sessionId
 
     if (
-      WEB_SESSION_RUNTIME.isRunning(CONVERSATION_SESSION_MANAGER.getCurrentSessionId()) ||
-      this.hasRecentOwnerActivity(recentConversation)
+      WEB_SESSION_RUNTIME.isRunning(sessionId) ||
+      this.hasRecentOwnerActivity(recentConversation) ||
+      (
+        sourceSessionId && sourceSessionId !== sessionId &&
+        CONVERSATION_SESSION_MANAGER.getSession(sourceSessionId) && (
+          WEB_SESSION_RUNTIME.isRunning(sourceSessionId) ||
+          this.hasRecentOwnerActivity(await core.CONVERSATION_LOGGER.load({
+            sessionId: sourceSessionId, nbOfLogsToLoad: 8
+          }))
+        )
+      )
     ) {
+      if (due) {
+        this.followUpRetryAt = Date.now() + PULSE_FOLLOW_UP_RETRY_MS
+      }
       measurePulse({ counter: 'active_conversation', count: 1 })
       this.pushTickRecord(
         state,
@@ -818,11 +898,13 @@ export default class PulseManager {
       return
     }
 
-    this.pruneState(state)
+    if (due && due.expiresAt <= Date.now()) {
+      this.results.prune(Date.now())
+      this.persist()
+      return
+    }
 
-    // Due checks already have verified grounding and take priority over discovery.
-    const openMatters = this.results.openMatters(now)
-    const due = openMatters.find((matter) => matter.checkAt <= now)
+    this.pruneState(state)
     let nextMatter = due
       ? this.createMatter(due.lead, [], toIsoString(now))
       : this.selectNextMatter(state)
@@ -1108,13 +1190,26 @@ export default class PulseManager {
       maxTokens: PULSE_PLANNER_MAX_TOKENS,
       trackProviderErrors: false
     }))
-    const payload = this.parseJsonObject(result?.output) as PulsePlannerOutput | null
-    const lead = Array.isArray(payload?.items) ? payload.items[0] : undefined
-    if (!lead || typeof lead !== 'object') {
+    if (!result) {
+      throw new Error('Pulse planning inference did not complete.')
+    }
+    const payload = this.parseJsonObject(result.output) as PulsePlannerOutput | null
+    if (!Array.isArray(payload?.items)) {
+      throw new Error('Pulse planner returned an invalid decision.')
+    }
+    if (payload.items.length === 0) {
       return null
     }
 
-    return this.normalizePlannedMatter(lead, new Date().toISOString())
+    const [lead] = payload.items
+    const matter = lead && typeof lead === 'object'
+      ? this.normalizePlannedMatter(lead, new Date().toISOString())
+      : null
+    if (!matter) {
+      throw new Error('Pulse planner returned an incomplete lead.')
+    }
+
+    return matter
   }
 
   private normalizePlannedMatter(
@@ -1247,6 +1342,8 @@ export default class PulseManager {
       measurePulse({ metric: PulseTimingMetric.FollowUpLateness, ms, pulseActive: false })
     }
     let decision = PulseDecision.Failed
+    let failureReason: PulseFailureReason | undefined
+    let operation = PulseFailureReason.Research
     let suppressed = false
 
     try {
@@ -1258,6 +1355,7 @@ export default class PulseManager {
       )
       const { findingKey, output, answerMetadata, followUp } = research
       decision = research.decision
+      failureReason = research.failureReason
       if (decision === PulseDecision.Notify && !CONVERSATION_SESSION_MANAGER.getSession(sessionId)) {
         decision = PulseDecision.Save
       }
@@ -1273,6 +1371,7 @@ export default class PulseManager {
         output,
         checkedAt: new Date().toISOString()
       }
+      operation = PulseFailureReason.Storage
       if (!this.results.record(result, matter, followUp, scheduled?.checkAt)) {
         decision = PulseDecision.Silent
         suppressed = true
@@ -1281,6 +1380,7 @@ export default class PulseManager {
 
       // Only delivery joins the session queue. Research never owns the owner's turn.
       if (decision === PulseDecision.Notify && output) {
+        operation = PulseFailureReason.Delivery
         try {
           await CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, () =>
             this.surfacePulseMessage(state, matter, output, answerMetadata, true)
@@ -1293,6 +1393,11 @@ export default class PulseManager {
       }
     } catch (error: unknown) {
       decision = PulseDecision.Failed
+      failureReason = operation
+      if (scheduled) {
+        // A persistence failure can leave the check due even after research ends.
+        this.followUpRetryAt = Date.now() + PULSE_FOLLOW_UP_RETRY_MS
+      }
       LogHelper.title('Pulse Manager')
       LogHelper.warning(`Could not complete pulse matter: ${String(error)}`)
     } finally {
@@ -1304,6 +1409,9 @@ export default class PulseManager {
       matter.updatedAt = completedAt
       matter.completedAt = completedAt
       matter.status = decision === PulseDecision.Failed ? 'failed' : 'completed'
+      if (decision === PulseDecision.Failed) {
+        matter.outcome = failureReason ?? PulseFailureReason.Research
+      }
       this.upsertSuppressionPolicy(state, matter, matter.status, completedAt)
       state.lastExecutionAt = completedAt
       state.matters = state.matters.filter((entry) => entry.id !== matter.id)
@@ -1311,7 +1419,9 @@ export default class PulseManager {
       this.pushTickRecord(
         state,
         decision === PulseDecision.Failed ? 'failed' : 'executed',
-        `${decision}: ${matter.summary}`,
+        decision === PulseDecision.Failed
+          ? `${decision}: ${matter.outcome} (${matter.summary})`
+          : `${decision}: ${matter.summary}`,
         matter.id
       )
       this.persist()
@@ -1321,22 +1431,17 @@ export default class PulseManager {
   /**
    * Lets the agent gather evidence and do useful prep before deciding whether to interrupt.
    */
-  private async researchMatter(matter: PulseMatter, scheduled?: ScheduledPulseCheck): Promise<{
-    decision: PulseDecision
-    findingKey: string | null
-    output: string | null
-    followUp: PulseFollowUp | null
-    answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace' | 'artifacts'>
-  }> {
+  private async researchMatter(matter: PulseMatter, scheduled?: ScheduledPulseCheck): Promise<PulseResearchResult> {
     const recentFindings = this.results.recentFindings(matter.fingerprint).map((finding) => ({
       ...finding, output: clipText(finding.output || '', 480)
     }))
-    const failure = {
-      decision: PulseDecision.Failed, findingKey: null, output: null, followUp: null, answerMetadata: {}
-    }
     const silence = {
       decision: PulseDecision.Silent, findingKey: null, output: null, followUp: null, answerMetadata: {}
     }
+    const fail = (failureReason: PulseFailureReason): PulseResearchResult => ({
+      ...silence, decision: PulseDecision.Failed, failureReason
+    })
+    let operation = PulseFailureReason.Research
     const deadlineAt = Math.min(Date.now() + PULSE_RESEARCH_TIMEOUT_MS, scheduled?.expiresAt ?? Infinity)
     const input = [
       `${PULSE_REACT_SENTINEL} Investigate a lead on my own initiative.`,
@@ -1378,8 +1483,18 @@ export default class PulseManager {
       if (executions.length) {
         measurePulse({ counter: 'tool_calls', count: executions.length })
       }
+      const remainingMs = deadlineAt - Date.now()
+      if (remainingMs <= 0) {
+        return fail(PulseFailureReason.Deadline)
+      }
       if (data?.['finalIntent'] !== 'answer' || !output) {
-        return failure
+        const attempt = getTurnTimings().findLast((timing) =>
+          timing.kind === 'inference' && timing.purpose === InferencePurpose.Pulse && timing.outcome !== 'started'
+        )
+        if (attempt && attempt.outcome !== 'completed') {
+          return fail(PulseFailureReason.Provider)
+        }
+        return fail(data?.['finalIntent'] === 'blocked' ? PulseFailureReason.Blocked : PulseFailureReason.NoAnswer)
       }
       const evidence = executions
         .filter((record) => record.status === 'success' && PULSE_RESEARCH_TOOLS.has(record.function))
@@ -1389,11 +1504,11 @@ export default class PulseManager {
           input: clipText(record.requestedToolInput || '', 400),
           observation: clipText(record.observation, 2_400)
         }))
-      const remainingMs = deadlineAt - Date.now()
-      if (evidence.length === 0 || remainingMs <= 0) {
+      if (evidence.length === 0) {
         return silence
       }
 
+      operation = PulseFailureReason.ReviewUnavailable
       const review = await withPulseStage(PulseStage.Review, () => runInference({
         usagePurpose: InferencePurpose.PulsePlanning,
         prompt: JSON.stringify({
@@ -1416,14 +1531,22 @@ export default class PulseManager {
         maxRetries: 0,
         trackProviderErrors: false
       }))
-      const payload = this.parseJsonObject(review?.output)
+      if (Date.now() >= deadlineAt) {
+        return fail(PulseFailureReason.Deadline)
+      }
+      if (!review) {
+        return fail(PulseFailureReason.ReviewUnavailable)
+      }
+      const payload = this.parseJsonObject(review.output)
       const decision = payload?.['decision']
+      if (decision === PulseDecision.Silent) {
+        return silence
+      }
       const findingKey = typeof payload?.['finding_key'] === 'string'
         ? normalizeIntentToken(clipText(payload['finding_key'], 120), '')
         : ''
-      if (Date.now() >= deadlineAt ||
-        (decision !== PulseDecision.Save && decision !== PulseDecision.Notify) || !findingKey) {
-        return silence
+      if ((decision !== PulseDecision.Save && decision !== PulseDecision.Notify) || !findingKey) {
+        return fail(PulseFailureReason.ReviewInvalid)
       }
 
       return {
@@ -1443,7 +1566,7 @@ export default class PulseManager {
       LogHelper.title('Pulse Manager')
       LogHelper.warning(`Pulse research failed: ${String(error)}`)
 
-      return failure
+      return fail(Date.now() >= deadlineAt ? PulseFailureReason.Deadline : operation)
     }
   }
 
@@ -1707,7 +1830,7 @@ export default class PulseManager {
       getManifest(): string
     }
     CONVERSATION_LOGGER: {
-      load(params?: { nbOfLogsToLoad?: number }): Promise<MessageLog[]>
+      load(params?: { sessionId?: string, nbOfLogsToLoad?: number }): Promise<MessageLog[]>
     }
     MEMORY_MANAGER: {
       buildPlanningMemoryPack(query: string, tokenBudget?: number): Promise<string>

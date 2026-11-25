@@ -10,8 +10,10 @@ import Brain from '@/core/brain/brain'
 import PulseManager from '@/core/pulse-manager/pulse-manager'
 import { PulseDecision, PulseResultRepository } from '@/core/pulse-manager/pulse-result-repository'
 import { CONFIG_MANAGER } from '@/config'
+import { LEON_PULSE_INTERVAL_MS } from '@/constants'
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import * as turnTiming from '@/core/llm-manager/turn-timing'
 import type { LLMAnswerMetrics, MessageLog } from '@/types'
 import type { HTTPPluginAgentEvent } from '@/core/http-server/http-plugins/types'
 import {
@@ -193,6 +195,67 @@ describe('conversation trace persistence', () => {
       expect(matter.status).toBe('completed')
     }
   )
+
+  it('checks due Pulse follow-ups during discovery cooldown when the provider recovers', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(turnTiming, 'runWithTurnTiming').mockImplementation((_id, _session, execute) => execute())
+    const now = Date.parse('2028-01-15T08:00:00Z')
+    vi.setSystemTime(now)
+    const config = CONFIG_MANAGER.getConfig()
+    const getConfig = vi.spyOn(CONFIG_MANAGER, 'getConfig').mockReturnValue({
+      ...config,
+      runtime: { ...config.runtime, pulse_enabled: false }
+    })
+    const pulse = new PulseManager()
+    const results = new PulseResultRepository(sessions.root)
+    const provider = { isLLMProviderReady: false }
+    const lead = {
+      fingerprint: 'meeting-notes', intentKey: 'prepare', targetScope: 'meeting',
+      turnPrompt: 'Check the meeting agenda.', summary: 'Prepare meeting notes',
+      why: 'I can prepare notes when the agenda is published.', confidence: 0.9,
+      sessionId: 'pulse-session'
+    }
+    const checkAt = now + LEON_PULSE_INTERVAL_MS / 2
+    const expiresAt = now + 3 * LEON_PULSE_INTERVAL_MS / 4
+    results.record({
+      id: 'meeting-agenda-announcement', matterId: lead.fingerprint,
+      sessionId: lead.sessionId, summary: lead.summary, reason: lead.why, decision: PulseDecision.Save,
+      findingKey: 'agenda_announced', output: 'The agenda will be published before the meeting.',
+      checkedAt: new Date(checkAt - 2 * LEON_PULSE_INTERVAL_MS).toISOString()
+    }, lead, { question: lead.turnPrompt, checkAt, expiresAt })
+    Object.assign(pulse, {
+      results,
+      getPrivateContextPath: (): string => sessions.root,
+      loadCoreNodes: async () => ({
+        LLM_PROVIDER: provider,
+        CONVERSATION_LOGGER: { load: vi.fn().mockResolvedValue([]) }
+      }),
+      researchMatter: async () => ({
+        decision: PulseDecision.Save, findingKey: 'agenda_published',
+        output: 'The published agenda includes the budget review.',
+        followUp: null, answerMetadata: {}
+      })
+    })
+    pulse['ensureLoaded']().lastExecutionAt = new Date(now).toISOString()
+    getConfig.mockReturnValue({
+      ...config,
+      runtime: { ...config.runtime, pulse_enabled: true }
+    })
+
+    pulse.start()
+    await vi.advanceTimersByTimeAsync(checkAt - now)
+    expect(results.recentFindings(lead.fingerprint).map(({ findingKey }) => findingKey))
+      .toEqual(['agenda_announced'])
+    expect(results.openMatters(Date.now()).map(({ lead: matter }) => matter.fingerprint))
+      .toEqual([lead.fingerprint])
+
+    provider.isLLMProviderReady = true
+    await vi.advanceTimersByTimeAsync(expiresAt - checkAt - 1)
+
+    expect(results.recentFindings(lead.fingerprint).map(({ findingKey }) => findingKey))
+      .toEqual(['agenda_published', 'agenda_announced'])
+    expect(results.openMatters(Date.now())).toEqual([])
+  })
 
   it('persists distinct turn routes without credentials and keeps older attribution unknown', async () => {
     const logger = new ConversationLogger({
