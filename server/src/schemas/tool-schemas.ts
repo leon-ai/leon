@@ -2,6 +2,7 @@ import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
 import { ToolCompletionReview, ToolConcurrency } from '@/types'
 import { MAX_TOOL_TIMEOUT_MS } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import { ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
 import { catalogMetadataProperties } from './catalog-metadata-schemas'
 
 import {
@@ -60,6 +61,9 @@ const toolFunctionSchemaObject = Type.Strict(
             'Allow agent calls to yield a retained execution handle after a bounded wait. Execution keeps its original deadline and can be waited on, queried or canceled.'
         })
       ),
+      device_allowed: Type.Optional(Type.Boolean({
+        description: 'Set false to keep this function out of paired device execution.'
+      })),
       timeout: Type.Optional(
         Type.Object({
           idleMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_TIMEOUT_MS })),
@@ -222,6 +226,9 @@ const toolManifestObject = Type.Object(
       })
     ),
     ...catalogMetadataProperties,
+    execution_target: Type.Optional(Type.Enum(ToolExecutionTarget, {
+      description: 'Host required by the tool. Omit to use the profile’s existing routing.'
+    })),
     binaries: Type.Optional(
       Type.Record(
         Type.String({

@@ -1,4 +1,6 @@
 import type { OpenAITool } from '@/core/llm-manager/types'
+import { TOOLKIT_REGISTRY } from '@/core'
+import { ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
 import {
   normalizeSearchText, prepareSearchQuery, rankSearchFields, SearchRank
 } from '@/helpers/search-helper'
@@ -73,10 +75,20 @@ export async function searchAgentCatalog(input: Record<string, unknown>): Promis
   }
 
   return JSON.stringify({
-    tools: matches.map(({ tool }) => ({
-      id: tool.id, name: tool.name.slice(0, MAXIMUM_RESULT_NAME_LENGTH), description: tool.description,
-      kind: tool.kind, state: getCatalogToolState(tool), restricted: isCatalogToolRestricted(tool)
-    })),
+    tools: matches.map(({ tool }) => {
+      const state = getCatalogToolState(tool)
+      const [toolkitId, toolId] = tool.id.split('.')
+      const availability = state === CatalogToolState.Ready && toolkitId && toolId &&
+        TOOLKIT_REGISTRY.getToolExecutionTarget(toolkitId, toolId) === ToolExecutionTarget.Device
+        ? TOOLKIT_REGISTRY.getToolAvailability(toolkitId, toolId) : undefined
+
+      return {
+        id: tool.id, name: tool.name.slice(0, MAXIMUM_RESULT_NAME_LENGTH), description: tool.description,
+        kind: tool.kind, state: availability?.available === false ? 'unavailable' : state,
+        restricted: isCatalogToolRestricted(tool),
+        ...(availability?.reason ? { reason: availability.reason } : {})
+      }
+    }),
     has_more: ranked.length > matches.length,
     ...(setupShown ? {
       setup_card: selected!.id,

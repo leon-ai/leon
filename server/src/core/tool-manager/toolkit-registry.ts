@@ -24,6 +24,8 @@ import { isCatalogInstalled } from '@/core/catalog/activation'
 import { CatalogDistribution, CatalogMaintenance } from '@/schemas/catalog-metadata-schemas'
 import type { CapabilityUsage } from '@/core/telemetry/report-contract'
 import type { LogoMaskMode, MaskedPackageLogo } from '@@/aurora/src/contracts/package-logo'
+import { CORE_DEVICE_SELECTION, ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
+import { getConversationDevice, getSelectedDevice, isSatelliteWorker } from '@/core/satellite/device-context'
 
 const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
 const HOSTED_SEARCH_TOOL_ID = 'hosted'
@@ -47,6 +49,7 @@ interface ToolkitToolDefinition {
   name: string
   description: string
   concurrency?: ToolConcurrency
+  execution_target?: ToolExecutionTarget
   progressive_guidance?: string
   icon_name?: string
   binaries?: Record<string, ToolBinary>
@@ -64,6 +67,7 @@ interface ToolkitToolDefinition {
       deduplicate_calls?: boolean
       read_only?: boolean
       background?: boolean
+      device_allowed?: boolean
       timeout?: ToolTimeoutPolicy
       completion_review?: ToolCompletionReview
       hooks?: {
@@ -141,6 +145,7 @@ export default class ToolkitRegistry {
     SatelliteToolkitDefinition[]
   >()
   private readonly satelliteToolTargets = new Map<string, string>()
+  private readonly pairedDevices = new Set<string>()
   private readonly publicTelemetryTools = new WeakSet<ToolkitToolDefinition>()
   private _isLoaded = false
 
@@ -242,6 +247,15 @@ export default class ToolkitRegistry {
     toolkitId: string,
     toolId: string
   ): ToolAvailability {
+    if (this.getToolExecutionTarget(toolkitId, toolId) === ToolExecutionTarget.Device &&
+        !isSatelliteWorker() && !this.getToolDeviceSelection(toolkitId, toolId)) {
+      return {
+        available: false,
+        requiredSettings: [], missingSettings: [], settingsPath: null,
+        reason: 'Connect a device to use this tool.'
+      }
+    }
+
     const deviceId = this.getToolSatelliteDevice(toolkitId, toolId)
     if (deviceId && !this.satelliteToolkits.get(deviceId)?.some((toolkit) =>
       toolkit.id === toolkitId && Boolean(toolkit.tools[toolId]))) {
@@ -250,6 +264,9 @@ export default class ToolkitRegistry {
         requiredSettings: [], missingSettings: [], settingsPath: null,
         reason: `Satellite "${deviceId}" is offline or does not provide this tool.`
       }
+    }
+    if (deviceId && this.pairedDevices.has(deviceId)) {
+      return { available: true, requiredSettings: [], missingSettings: [], settingsPath: null }
     }
     const availability = this._toolAvailability.get(
       this.getQualifiedToolId(toolkitId, toolId)
@@ -390,6 +407,12 @@ export default class ToolkitRegistry {
     toolkitId: string,
     toolId: string
   ): ToolkitToolDefinition['functions'] | null {
+    const device = this.getToolSatelliteDevice(toolkitId, toolId)
+    if (device && this.pairedDevices.has(device)) {
+      return this.satelliteToolkits.get(device)?.find((item) =>
+        item.id === toolkitId)?.tools[toolId]?.functions ?? null
+    }
+
     const toolkit = this._toolkits.find((item) => item.id === toolkitId)
     const tool = toolkit?.tools?.[toolId]
     if (!tool) {
@@ -504,7 +527,8 @@ export default class ToolkitRegistry {
       ...(toolkit.contextFiles ? { context_files: [...toolkit.contextFiles] } : {}),
       tools: Object.fromEntries(
         Object.entries(toolkit.tools || {})
-          .filter(([toolId, tool]) => !tool.source && this.isToolAvailable(toolkit.id, toolId))
+          .filter(([toolId, tool]) => !tool.source && tool.execution_target !== ToolExecutionTarget.Core &&
+            this.isToolAvailable(toolkit.id, toolId))
           .map(([toolId, tool]) => [toolId, { ...tool }])
       )
     }))
@@ -515,8 +539,12 @@ export default class ToolkitRegistry {
    */
   public registerSatelliteTools(
     deviceId: string,
-    toolkits: SatelliteToolkitDefinition[]
+    toolkits: SatelliteToolkitDefinition[],
+    paired = false
   ): void {
+    if (paired) {
+      this.pairedDevices.add(deviceId)
+    }
     this.satelliteToolkits.set(deviceId, toolkits)
     this.refreshCombinedToolkits()
   }
@@ -526,19 +554,67 @@ export default class ToolkitRegistry {
     this.refreshCombinedToolkits()
   }
 
+  /**
+   * Resolves trusted manifest placement before any Satellite catalog overlay.
+   */
+  public getToolExecutionTarget(toolkitId: string, toolId: string): ToolExecutionTarget | undefined {
+    return this._localToolkits.find((item) => item.id === toolkitId)
+      ?.tools?.[toolId]?.execution_target
+  }
+
+  /**
+   * Advertises only declared device capabilities and functions granted to this helper.
+   */
+  public getPairedDeviceManifest(
+    allowed?: readonly string[],
+    advertised?: SatelliteToolkitDefinition[]
+  ): SatelliteToolkitDefinition[] {
+    return this._localToolkits.flatMap((toolkit) => {
+      const provided = advertised?.find((item) => item?.id === toolkit.id)?.tools
+      const tools = Object.fromEntries(Object.entries(toolkit.tools || {})
+        .filter(([id, tool]) => tool.execution_target === ToolExecutionTarget.Device && !tool.source &&
+          !ProfileHelper.isToolDisabled(id, toolkit.id) &&
+          (!advertised || Boolean(provided?.[id])) &&
+          (!allowed || allowed.includes(this.getQualifiedToolId(toolkit.id, id))))
+        .map(([id, tool]) => [id, {
+          ...tool,
+          functions: Object.fromEntries(Object.entries(tool.functions).filter(([, definition]) =>
+            definition.device_allowed !== false
+          ).filter(([name]) => !advertised || Boolean(provided?.[id]?.functions?.[name])))
+        }]))
+
+      return Object.keys(tools).length ? [{
+        id: toolkit.id, name: toolkit.name, description: toolkit.description,
+        icon_name: toolkit.iconName, tools
+      }] : []
+    })
+  }
+
+  /**
+   * Selects an explicit profile assignment or the authenticated conversation device.
+   */
+  public getToolDeviceSelection(toolkitId: string, toolId: string): string | undefined {
+    const qualifiedId = this.getQualifiedToolId(toolkitId, toolId)
+    const executionTarget = this.getToolExecutionTarget(toolkitId, toolId)
+    if (isSatelliteWorker() || executionTarget === ToolExecutionTarget.Core) {
+      return undefined
+    }
+
+    const configured = CONFIG_MANAGER.getConfig(this.profilePaths.name).satellite?.tools[qualifiedId]
+    if (executionTarget === ToolExecutionTarget.Device) {
+      return configured || getSelectedDevice() || getConversationDevice()
+    }
+
+    return configured || this.satelliteToolTargets.get(qualifiedId)
+  }
+
   public getToolSatelliteDevice(
     toolkitId: string,
     toolId: string
   ): string | null {
-    return (
-      CONFIG_MANAGER.getConfig(this.profilePaths.name).satellite?.tools[
-        this.getQualifiedToolId(toolkitId, toolId)
-      ] ||
-      this.satelliteToolTargets.get(
-        this.getQualifiedToolId(toolkitId, toolId)
-      ) ||
-      null
-    )
+    const device = this.getToolDeviceSelection(toolkitId, toolId)
+
+    return device && device !== CORE_DEVICE_SELECTION ? device : null
   }
 
   /**
@@ -710,6 +786,9 @@ export default class ToolkitRegistry {
     }
 
     for (const [deviceId, satelliteToolkits] of this.satelliteToolkits) {
+      if (this.pairedDevices.has(deviceId)) {
+        continue
+      }
       for (const satelliteToolkit of satelliteToolkits) {
         const toolkit = toolkitsById.get(satelliteToolkit.id) || {
           id: satelliteToolkit.id,
@@ -727,6 +806,9 @@ export default class ToolkitRegistry {
         }
 
         for (const [toolId, tool] of Object.entries(satelliteToolkit.tools)) {
+          if (this.getToolExecutionTarget(satelliteToolkit.id, toolId) === ToolExecutionTarget.Core) {
+            continue
+          }
           const boundDevice = this.getToolSatelliteDevice(satelliteToolkit.id, toolId)
           if (boundDevice && boundDevice !== deviceId) continue
           if (ProfileHelper.isToolDisabled(toolId, satelliteToolkit.id)) {

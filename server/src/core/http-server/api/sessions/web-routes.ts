@@ -20,6 +20,7 @@ import { resolveOwnerAttachments } from '@/core/owner-attachments/stored-owner-a
 import { OWNER_ATTACHMENT_MAX_COUNT } from '@/core/owner-attachments/owner-attachment-contract'
 import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER } from '@@/bridges/runtime/contracts/turn-client'
 import { runWithTurnClient } from '@/core/leon-interface/turn-client'
+import { readDeviceSelection, runWithSelectedDevice } from '@/core/satellite/device-context'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 const MAXIMUM_STREAM_BACKLOG_BYTES = 1_024 * 1_024
@@ -96,7 +97,9 @@ export const webSessionRoutes: FastifyPluginAsync<APIOptions> = async (fastify, 
         return reply.code(202).send(runWithTurnClient(
           request.headers[TURN_CLIENT_TYPE_HEADER],
           request.headers[TURN_CLIENT_OS_HEADER],
-          () => WEB_SESSION_RUNTIME.submitUI(request.params.session_id, request.params.message_id, request.body)
+          () => runWithSelectedDevice(readDeviceSelection(request.headers), () =>
+            WEB_SESSION_RUNTIME.submitUI(request.params.session_id, request.params.message_id, request.body)
+          )
         ))
       } catch (error) {
         return reply.code(409).send({ message: error instanceof Error ? error.message : 'I could not save this answer. Please try again.' })
@@ -179,7 +182,9 @@ export const webSessionRoutes: FastifyPluginAsync<APIOptions> = async (fastify, 
         const command = runWithTurnClient(
           request.headers[TURN_CLIENT_TYPE_HEADER],
           request.headers[TURN_CLIENT_OS_HEADER],
-          () => WEB_SESSION_RUNTIME.submit(sessionId, request.body.id, query, attachments)
+          () => runWithSelectedDevice(readDeviceSelection(request.headers), () =>
+            WEB_SESSION_RUNTIME.submit(sessionId, request.body.id, query, attachments)
+          )
         )
 
         return reply.code(202).send({ command })

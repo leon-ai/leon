@@ -54,6 +54,7 @@ import {
   type LeonClientInterfaceUtterancePayload
 } from '@/core/leon-interface/types'
 import { runWithTurnClient } from '@/core/leon-interface/turn-client'
+import { authenticateDevice, PAIRED_DEVICE_ID_PREFIX } from '@/core/satellite/device-pairing'
 import { TurnClientType, type TurnClientOS } from '@@/bridges/runtime/contracts/turn-client'
 import {
   authenticateProfileCredential,
@@ -1073,14 +1074,18 @@ export default class SocketServer {
         async (data: SatelliteInitPayload) => {
           // Advertising executable tools always requires a profile credential,
           // even when anonymous chat is enabled for the local web app.
-          const profileName = authenticateProfileCredential(
-            this.getSocketAuthToken(socket, data)
-          )?.profileName
+          const paired = authenticateDevice(data?.deviceCredential)
+          const profileName = data?.deviceCredential === undefined
+            ? authenticateProfileCredential(this.getSocketAuthToken(socket, data))?.profileName
+            : paired?.profile
 
           if (
             !profileName ||
+            this.satelliteClients.has(socket.id) ||
             data?.protocolVersion !== SATELLITE_PROTOCOL_VERSION ||
-            !data.device?.id?.trim() ||
+            typeof data.device?.id !== 'string' ||
+            !data.device.id.trim() ||
+            (!paired && data.device.id.startsWith(PAIRED_DEVICE_ID_PREFIX)) ||
             !Array.isArray(data.toolkits)
           ) {
             socket.emit(SATELLITE_EVENTS.error, {
@@ -1091,34 +1096,49 @@ export default class SocketServer {
             return
           }
 
-          await runWithProfileContext({ profileName }, async () => {
+          const device = paired ? { ...data.device, id: paired.id, name: paired.name } : data.device
+          const registered = await runWithProfileContext({ profileName }, async () => {
             await ensureActiveProfileRuntime()
             await TOOLKIT_REGISTRY.load()
+            if (!socket.connected || (paired && !authenticateDevice(data.deviceCredential))) {
+              return false
+            }
+            const toolkits = paired
+              ? TOOLKIT_REGISTRY.getPairedDeviceManifest(paired.tools, data.toolkits)
+              : data.toolkits
             TOOLKIT_REGISTRY.registerSatelliteTools(
-              data.device.id,
-              data.toolkits
+              device.id,
+              toolkits,
+              Boolean(paired)
             )
             SATELLITE_REGISTRY.register({
               profileName,
-              device: data.device,
-              toolkits: data.toolkits,
+              device,
+              toolkits,
               transport: socket
             })
+            return true
           })
+          if (!registered) {
+            socket.disconnect(true)
+            return
+          }
 
           this.satelliteClients.set(socket.id, {
             profileName,
-            deviceId: data.device.id
+            deviceId: device.id
           })
           socket.on(SATELLITE_EVENTS.context, (payload: unknown) => {
-            SATELLITE_REGISTRY.updateContext(profileName, data.device.id, payload, socket)
+            if (!paired) {
+              SATELLITE_REGISTRY.updateContext(profileName, device.id, payload, socket)
+            }
           })
           socket.on(
             SATELLITE_EVENTS.toolProgress,
             (payload: SatelliteToolProgressPayload) => {
               SATELLITE_REGISTRY.handleProgress(
                 profileName,
-                data.device.id,
+                device.id,
                 payload,
                 socket
               )
@@ -1129,7 +1149,7 @@ export default class SocketServer {
             (payload: SatelliteToolResultPayload) => {
               SATELLITE_REGISTRY.handleResult(
                 profileName,
-                data.device.id,
+                device.id,
                 payload,
                 socket
               )
@@ -1138,7 +1158,7 @@ export default class SocketServer {
           socket.emit(SATELLITE_EVENTS.ready, {
             protocolVersion: SATELLITE_PROTOCOL_VERSION,
             profileName,
-            deviceId: data.device.id
+            deviceId: device.id
           })
         }
       )

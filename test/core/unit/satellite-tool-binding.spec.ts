@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import ToolkitRegistry from '@/core/tool-manager/toolkit-registry'
 import type { SatelliteToolkitDefinition } from '@/core/satellite/types'
+import { runWithSelectedDevice } from '@/core/satellite/device-context'
+import { ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
 import { ToolConcurrency } from '@/types'
 
 vi.mock('@/constants', () => ({ TOOLS_PATH: '/unused' }))
@@ -10,7 +12,7 @@ vi.mock('@/config', () => ({ CONFIG_MANAGER: { getConfig: (): { satellite: { too
 }) } }))
 vi.mock('@/core/config-states/config-state', () => ({ CONFIG_STATE: {} }))
 vi.mock('@/helpers/log-helper', () => ({ LogHelper: { title: vi.fn(), success: vi.fn() } }))
-vi.mock('@/leon-roots', () => ({ resolveToolDirectory: vi.fn() }))
+vi.mock('@/leon-roots', () => ({ resolveToolDirectory: vi.fn(), LEON_PROFILE_NAME: 'owner' }))
 vi.mock('@/helpers/profile-helper', () => ({ ProfileHelper: { isToolDisabled: (): boolean => false } }))
 vi.mock('@/core/profile-runtime/profile-paths', () => ({ getProfilePaths: (): { name: string } => ({ name: 'owner' }) }))
 
@@ -22,6 +24,37 @@ const TOOLKIT: SatelliteToolkitDefinition = {
 }
 
 describe('Satellite tool ownership', () => {
+  it('keeps paired devices scoped to the selected command and reports an offline device', () => {
+    const registry = new ToolkitRegistry()
+    vi.spyOn(registry, 'getToolExecutionTarget').mockReturnValue(ToolExecutionTarget.Device)
+    const toolkit = { ...TOOLKIT, id: 'device_tools' }
+    registry.registerSatelliteTools('first-device', [toolkit], true)
+    registry.registerSatelliteTools('second-device', [toolkit], true)
+
+    expect(registry.getToolSatelliteDevice(toolkit.id, 'cua')).toBeNull()
+    expect(registry.isToolAvailable(toolkit.id, 'cua')).toBe(false)
+    runWithSelectedDevice('first-device', () => {
+      expect(registry.isToolAvailable(toolkit.id, 'cua')).toBe(true)
+      expect(Object.keys(registry.getToolFunctions(toolkit.id, 'cua')!)).toEqual(['click'])
+      registry.removeSatelliteTools('first-device')
+      expect(registry.getToolSatelliteDevice(toolkit.id, 'cua')).toBe('first-device')
+      expect(registry.isToolAvailable(toolkit.id, 'cua')).toBe(false)
+    })
+    runWithSelectedDevice('second-device', () => {
+      expect(registry.isToolAvailable(toolkit.id, 'cua')).toBe(true)
+    })
+  })
+
+  it('keeps a Core-only tool on the Core host even when a Satellite advertises it', () => {
+    const registry = new ToolkitRegistry()
+    vi.spyOn(registry, 'getToolExecutionTarget').mockReturnValue(ToolExecutionTarget.Core)
+    registry.registerSatelliteTools('owner-device', [TOOLKIT])
+
+    runWithSelectedDevice('owner-device', () => {
+      expect(registry.getToolSatelliteDevice('computer_use', 'cua')).toBeNull()
+    })
+  })
+
   it('preserves per-function concurrency overrides from a Satellite manifest', () => {
     const registry = new ToolkitRegistry()
     registry.registerSatelliteTools('owner-device', [{

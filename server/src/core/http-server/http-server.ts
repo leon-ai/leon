@@ -36,6 +36,7 @@ import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
 import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
 import { connectionsPlugin } from '@/core/http-server/api/connections'
 import { toolsPlugin } from '@/core/http-server/api/tools'
+import { devicesPlugin } from '@/core/http-server/api/devices'
 import { skillsPlugin } from '@/core/http-server/api/skills'
 import { ambientPlugin } from '@/core/http-server/api/ambient'
 import { faviconsPlugin } from '@/core/http-server/api/favicons'
@@ -216,7 +217,7 @@ export default class HTTPServer {
       const isConversationMetadata = requestPath === sessionsPath ||
         requestPath.startsWith(`${sessionsPath}/`) ||
         requestPath === `/api/${API_VERSION}/conversation-history`
-      const isToolManagement = ['tools', 'connections', 'skills', 'updates', 'insights'].some((resource) =>
+      const isToolManagement = ['tools', 'connections', 'skills', 'updates', 'insights', 'devices'].some((resource) =>
         requestPath === `/api/${API_VERSION}/${resource}` || requestPath.startsWith(`/api/${API_VERSION}/${resource}/`))
 
       // Session browsing must remain usable while a model is booting or offline.
@@ -245,6 +246,7 @@ export default class HTTPServer {
     this.fastify.register(extensionFilesPlugin, { apiVersion: API_VERSION })
     this.fastify.register(connectionsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(toolsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(devicesPlugin, { apiVersion: API_VERSION })
     this.fastify.register(skillsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(ambientPlugin, { apiVersion: API_VERSION })
     this.fastify.register(faviconsPlugin, { apiVersion: API_VERSION })
