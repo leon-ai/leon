@@ -175,6 +175,11 @@ import {
   estimateAgentInputTokens,
   resolveAgentMaxOutputTokens
 } from './react-llm-duty/agent-context-budget'
+import {
+  callWithDesktopFocus,
+  isDesktopAgentToolCall,
+  resolveDesktopFocusReasoningEffort
+} from './react-llm-duty/desktop-focus'
 import { AgentHistoryManager } from './react-llm-duty/agent-history-manager'
 
 const LOOKUP_SYSTEM_PROMPT = [
@@ -851,21 +856,23 @@ export class ReActLLMDuty extends LLMDuty {
               : null
           })
 
-          return this.callAgentModel(
+          const checkpoint = {
+            originalInput,
+            trackedSteps: state.trackedSteps,
+            executionHistory: state.executionHistory,
+            loadedToolkitIds: catalog.loadedToolkitIds,
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
+            activeSkillId: caller.agentSkillContext?.id ?? null
+          }
+
+          return callWithDesktopFocus(
             messages,
-            agentSystemPrompt,
-            tools,
             options,
-            {
-              originalInput,
-              trackedSteps: state.trackedSteps,
-              executionHistory: state.executionHistory,
-              loadedToolkitIds: catalog.loadedToolkitIds,
-              loadedToolNames: catalog.loadedToolNames,
-              loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
-              activeSkillId: caller.agentSkillContext?.id ?? null
-            },
-            catalog.functionsByToolName
+            (transcript, requestOptions) => this.callAgentModel(
+              transcript, agentSystemPrompt, tools, requestOptions, checkpoint, catalog.functionsByToolName
+            ),
+            (id, message) => this.closeStreamedToolCall(id, message)
           )
         },
         executeFunction: async (callable, toolInput, toolCallTitle, toolCallId) => {
@@ -1346,6 +1353,7 @@ export class ReActLLMDuty extends LLMDuty {
       isStallRecoveryAttempt?: boolean
       isImageInspection?: boolean
       hasPendingImages?: boolean
+      isDesktopDecision?: boolean
     },
     checkpointInput?: AgentContinuityCheckpointInput,
     functionsByToolName?: ReadonlyMap<string, AgentCallableFunction>
@@ -1581,11 +1589,14 @@ export class ReActLLMDuty extends LLMDuty {
     // Otherwise, retain its normal provider-compatible settings.
     const useInternalReasoning = isPrivateResponse &&
       modelCapabilities?.reasoning.includes(internalReasoningEffort)
+    const desktopReasoning = options.isDesktopDecision
+      ? resolveDesktopFocusReasoningEffort(modelCapabilities?.reasoning)
+      : undefined
     const configuredReasoning = useInternalReasoning
       ? internalReasoningEffort
-      : modelSettings.reasoning
+      : desktopReasoning ?? modelSettings.reasoning
     const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
-    const reasoningEffortBaseline = useInternalReasoning &&
+    const reasoningEffortBaseline = (useInternalReasoning || desktopReasoning !== undefined) &&
       modelCapabilities?.supportsPerMessageReasoning &&
       modelSettings.reasoning !== 'none'
       ? modelSettings.reasoning === 'auto'
@@ -1616,7 +1627,8 @@ export class ReActLLMDuty extends LLMDuty {
         : configuredReasoning === 'on' ? undefined : configuredReasoning
     let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = useInternalReasoning
       ? options.isImageInspection ? 'inspection' : 'review'
-      : configuredReasoning === 'auto' ? defaultReasoning.source : 'owner'
+      : desktopReasoning !== undefined ? 'desktop'
+        : configuredReasoning === 'auto' ? defaultReasoning.source : 'owner'
     // Auto may recover from reasoning-only exhaustion with less effort.
     // Never disable mandatory reasoning or override an explicit owner choice.
     if (options.isOutputRecoveryAttempt && configuredReasoning === 'auto' &&
@@ -2017,7 +2029,7 @@ export class ReActLLMDuty extends LLMDuty {
                 refreshWaitDiagnostics()
                 clearModelStatus()
                 const callable = functionsByToolName?.get(call.function.name)
-                if (!callable) {
+                if (!callable || (options.isDesktopDecision && !isDesktopAgentToolCall(call))) {
                   return
                 }
 

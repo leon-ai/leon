@@ -12,6 +12,7 @@ import {
   retainRecentToolImages,
   reuseToolContext
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
+import { projectDesktopAgentContext } from '@/core/llm-manager/llm-duties/react-llm-duty/desktop-focus'
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
 import type {
   AgentToolTranscriptMessage,
@@ -69,6 +70,27 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('ends desktop focus when the owner changes the task between tool calls', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Keep the document open.' }
+    ]
+    appendToolExchange(transcript, 'older', 'Prior command transcript')
+    transcript.push(
+      { role: 'assistant', content: 'The document is open.' },
+      { role: 'user', content: 'Check the document layout.' },
+      { role: 'assistant', content: '', toolCalls: [createComputerUseToolCall('layout')] },
+      { role: 'tool', toolCallId: 'layout', toolName: 'computer_use__cua__get_window_state',
+        content: '{"status":"success"}', files: [{ dataBase64: 'ZnJhbWU=', mediaType: 'image/png' }] }
+    )
+    const focused = projectDesktopAgentContext(transcript)
+    expect(focused).toEqual([transcript[0], ...transcript.slice(3)])
+    expect(transcript.some((message) => message.content === 'Prior command transcript')).toBe(true)
+
+    transcript.push({ role: 'user', content: 'Actually, read the project instructions first.' })
+
+    expect(projectDesktopAgentContext(transcript)).toBeNull()
+  })
+
   it('keeps the exit status and diagnostic tail of a noisy command with its original result available', () => {
     const stdout = `${'Progress update\n'.repeat(2_500)}Last check: 37 assets\n`
     const stderr = 'Permission denied for snapshot.json'

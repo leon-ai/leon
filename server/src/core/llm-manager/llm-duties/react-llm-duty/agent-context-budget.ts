@@ -19,6 +19,7 @@ import {
   AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
   AGENT_RECENT_TOOL_IMAGE_LIMIT,
+  AGENT_TOOLKIT_LOADER_NAME,
   AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   CHARS_PER_TOKEN
@@ -26,7 +27,6 @@ import {
 
 const TOOL_NAME_SEPARATOR = '__'
 const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
-const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 const RETAINED_RESULT_PREVIEW_MAX_CHARS = 4_096
@@ -501,7 +501,10 @@ export function buildBoundedToolObservation(
   return JSON.stringify(compacted)
 }
 
-function findCompletedToolExchanges(
+/**
+ * Finds whole tool exchanges that can be retained or projected together.
+ */
+export function findCompletedToolExchanges(
   transcript: AgentToolTranscriptMessage[]
 ): CompletedToolExchange[] {
   const exchanges: CompletedToolExchange[] = []
@@ -692,7 +695,7 @@ function findRecentToolkitIds(
       const toolCall = message.toolCalls[callIndex]!
       const toolkitId =
         getToolkitIdFromFunctionName(toolCall.function.name) ||
-        (toolCall.function.name === TOOLKIT_LOADER_NAME
+        (toolCall.function.name === AGENT_TOOLKIT_LOADER_NAME
           ? getLoadedToolkitId(toolCall.function.arguments)
           : null)
 
@@ -794,7 +797,7 @@ function pruneInactiveToolkitSchemas(
   tools: OpenAITool[]
 ): OpenAITool[] {
   const hasToolkitLoader = tools.some(
-    (tool) => tool.function.name === TOOLKIT_LOADER_NAME
+    (tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME
   )
   if (!hasToolkitLoader) {
     // Forced-tool runs cannot reload a schema, so they must retain it.

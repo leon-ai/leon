@@ -63,6 +63,7 @@ import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_MAX_ITERATIONS,
   AGENT_COMPLETION_REVIEW_TIMEOUT_MS,
+  AGENT_TOOLKIT_LOADER_NAME,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './agent-constants'
@@ -89,7 +90,7 @@ import { describeProviderConnectionFailure } from '@/core/llm-manager/llm-provid
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
 export const AGENT_CANCELLATION_TOOL_NAME = 'cancel_task'
 export const AGENT_SKILL_TOOL_NAME = 'load_agent_skill'
-export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
+export { AGENT_TOOLKIT_LOADER_NAME } from './agent-constants'
 
 const AGENT_TOOL_NAME_SEPARATOR = '__'
 const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
