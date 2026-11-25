@@ -5,6 +5,7 @@ import type { Session, SafeStorage } from 'electron'
 
 import contract from '../runtime/desktop-contract.mjs'
 import { DEFAULT_WEB_THEME, WEB_THEMES, WebPreferenceKey, type WebColorScheme, type WebTheme } from '../../../bridges/runtime/contracts/desktop-client'
+import type { DeviceGrant } from '../../../bridges/runtime/contracts/device-execution'
 
 const MAXIMUM_PREFERENCE_CHARACTERS = 16_384
 
@@ -12,6 +13,10 @@ export interface DesktopState {
   readonly colorScheme: WebColorScheme
   bootstrap: (nonce?: string) => string
   update: (values: Record<string, unknown>) => Promise<void>
+  loadDeviceGrant: (profile: string) => Promise<DeviceGrant | undefined>
+  saveDeviceGrant: (profile: string, grant?: DeviceGrant) => Promise<void>
+  readDevicePermission: (profile: string) => Promise<boolean | undefined>
+  saveDevicePermission: (profile: string, allowed: boolean) => Promise<void>
   close: () => Promise<void>
 }
 
@@ -42,6 +47,9 @@ export async function createDesktopState({ directory, backend, session, safeStor
   const root = path.join(directory, 'servers', identity)
   const preferencesFile = path.join(root, 'preferences.json')
   const cookiesFile = path.join(root, 'cookies.enc')
+  const deviceFile = (profile: string, extension = '.enc'): string => path.join(root,
+    'device-' + createHash('sha256').update(profile).digest('hex') + extension)
+  const devicePermissions = new Map<string, boolean>()
   let preferences: Record<string, string> = {}
   let writes = Promise.resolve()
   let encryption: Promise<boolean> | undefined
@@ -152,6 +160,42 @@ export async function createDesktopState({ directory, backend, session, safeStor
         writes = writes.catch(() => undefined).then(() => atomicWrite(preferencesFile, snapshot))
       }
       return writes
+    },
+    async loadDeviceGrant(profile): Promise<DeviceGrant | undefined> {
+      try {
+        const saved = await readFile(deviceFile(profile))
+        if (safeStorage && await canEncrypt()) {
+          const decoded = await safeStorage.decryptStringAsync(saved)
+          const grant = JSON.parse(decoded.result) as DeviceGrant
+          if (grant.profile === profile && typeof grant.credential === 'string' && Array.isArray(grant.tools)) {
+            return grant
+          }
+        }
+      } catch {
+        // An unavailable key or stale file requires explicit enrollment.
+      }
+      return undefined
+    },
+    async saveDeviceGrant(profile, grant): Promise<void> {
+      if (!grant && !ephemeral) {
+        await rm(deviceFile(profile), { force: true })
+      } else if (grant && safeStorage && await canEncrypt()) {
+        await atomicWrite(deviceFile(profile), await safeStorage.encryptStringAsync(JSON.stringify(grant)))
+      }
+    },
+    async readDevicePermission(profile): Promise<boolean | undefined> {
+      if (ephemeral || devicePermissions.has(profile)) {
+        return devicePermissions.get(profile)
+      }
+      const decision = await readFile(deviceFile(profile, '.permission'), 'utf8').catch(() => '')
+
+      return decision === 'allow' ? true : decision === 'deny' ? false : undefined
+    },
+    async saveDevicePermission(profile, allowed): Promise<void> {
+      devicePermissions.set(profile, allowed)
+      if (!ephemeral) {
+        await atomicWrite(deviceFile(profile, '.permission'), allowed ? 'allow' : 'deny')
+      }
     },
     async close(): Promise<void> {
       session.cookies.off('changed', changed)

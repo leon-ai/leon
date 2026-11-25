@@ -11,6 +11,7 @@ import {
   type ExperienceLoadResult
 } from '@/core/experience-manager/experience-manager'
 import { CATALOG_SEARCH_TOOL_NAME, createCatalogSearchTool } from '@/core/tool-manager/catalog/agent-catalog'
+import { COMPUTER_USE_TOOLKIT_ID } from '@@/bridges/runtime/contracts/device-execution'
 import {
   CONNECTION_SETUP_TOOL_NAME,
   setupConnection,
@@ -2671,6 +2672,12 @@ async function executeAgentToolCall(
 
     const toolkit = params.catalog.availableToolkitsById.get(toolkitId)
     if (!toolkit) {
+      if (toolkitId === COMPUTER_USE_TOOLKIT_ID) {
+        const { showComputerUsePermission, COMPUTER_USE_PERMISSION_REQUIRED } = await import('@/core/satellite/computer-use-permission')
+        if (showComputerUsePermission()) {
+          return { content: COMPUTER_USE_PERMISSION_REQUIRED, rejected: true, trackedSteps }
+        }
+      }
       return {
         content: `Toolkit load rejected: "${toolkitId}" is not available.`,
         rejected: true,

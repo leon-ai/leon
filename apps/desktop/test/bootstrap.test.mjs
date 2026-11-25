@@ -200,6 +200,15 @@ test('startup reuses a supported running Core and restarts an incompatible manag
       assert.equal(compatible.store.state.phase, SetupPhase.Complete, compatible.store.state.error)
       assert.equal(compatible.store.state.external, false)
       assert.equal((await controlCore(service.configuration)).pid, running.pid)
+      assert.equal(await compatible.deviceOwnerCredential(origin), undefined)
+      const credentialFile = getProfilePaths(profile).dotEnv
+      await writeFile(credentialFile, 'LEON_PROFILE_TOKEN=device-pairing-fixture\n')
+      try {
+        assert.equal(await compatible.deviceOwnerCredential(origin), profile + ':device-pairing-fixture')
+        assert.equal(await compatible.deviceOwnerCredential('https://another-core.example'), undefined)
+      } finally {
+        await rm(credentialFile)
+      }
     } finally {
       await compatible.close()
     }

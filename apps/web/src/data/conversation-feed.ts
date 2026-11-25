@@ -8,6 +8,7 @@ import { getActivityLabel, getProcessingLabel } from './activity-labels'
 import { getConnectionSetupDescriptor } from './connection-setup-contract'
 import { readMaskedPackageLogo } from '../../../../aurora/src/contracts/package-logo'
 import { PreparationStatus } from '../../../../aurora/src/v2/contracts/preparation'
+import { COMPUTER_USE_PERMISSION_WIDGET } from '../../../../bridges/runtime/contracts/desktop-client'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
@@ -499,9 +500,10 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
     return cached.entry
   }
   const connection = getConnectionSetupDescriptor(record.widget)
-  if (connection) {
+  const computerUsePermission = record.widget?.widget === COMPUTER_USE_PERMISSION_WIDGET
+  if (connection || computerUsePermission) {
     const entry: LeonFeedEntry = {
-      id: record.messageId, role: 'leon', connection, isMaintenance: true,
+      id: record.messageId, role: 'leon', ...(connection ? { connection } : { computerUsePermission: true }), isMaintenance: true,
       status: FeedTurnStatus.Completed, durationMs: 0, activities: [], finalAnswer: ''
     }
     entryCache.set(record, { active, entry })

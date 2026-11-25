@@ -28,7 +28,8 @@ export function useAuroraSubmission(
 
       return requestAPI<{ answerParts: AnswerPart[] }>(
         `sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/ui`,
-        { method: 'POST', headers: turnClientHeaders(), body: JSON.stringify({ id: commandId.current, surfaceId, nodeId, revision, values }) }
+        { method: 'POST', headers: turnClientHeaders(),
+          body: JSON.stringify({ id: commandId.current, surfaceId, nodeId, revision, values }) }
       )
     },
     onSuccess: ({ answerParts }) => {

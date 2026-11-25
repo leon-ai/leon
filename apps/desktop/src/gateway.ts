@@ -11,8 +11,9 @@ import { requestBackend, readBackendJSON } from './backend.js'
 import { createFileStore } from './files.js'
 import { assertCoreUpdateCompatibility } from './compatibility.js'
 import contract from '../runtime/desktop-contract.mjs'
-import { DESKTOP_BOOTSTRAP_META_NAME, DESKTOP_BOOTSTRAP_PATH, DESKTOP_NOTIFICATION_PATH } from '../../../bridges/runtime/contracts/desktop-client'
+import { DESKTOP_BOOTSTRAP_META_NAME, DESKTOP_BOOTSTRAP_PATH, DESKTOP_COMPUTER_USE_PATH, DESKTOP_NOTIFICATION_PATH, DesktopComputerUseApproval, type DesktopComputerUseSetup } from '../../../bridges/runtime/contracts/desktop-client'
 import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER, TurnClientOS, TurnClientType } from '../../../bridges/runtime/contracts/turn-client'
+import { DEVICE_CREDENTIAL_HEADER } from '../../../bridges/runtime/contracts/device-execution'
 import { DESKTOP_LOOPBACK_HOST, DESKTOP_OAUTH_META_NAME, DESKTOP_OAUTH_PATH, isDesktopOAuthReturn } from '../../../bridges/runtime/contracts/oauth-popup'
 import { createDesktopOAuth } from './oauth.js'
 import type { Session } from 'electron'
@@ -32,6 +33,8 @@ interface GatewayOptions {
   bootstrapPhase?: () => string
   notifications?: HostAPI
   openOAuthURL?: (url: string) => Promise<void>
+  deviceCredential?: () => Promise<string | undefined>
+  computerUse?: { setup: () => DesktopComputerUseSetup | null, enable: (confirm: boolean) => Promise<boolean> }
 }
 export interface Gateway {
   origin: string
@@ -80,7 +83,7 @@ async function readBody(request: IncomingMessage, maximumBytes = MAXIMUM_REQUEST
  * Owns one loopback origin, private backend cookies and streamed API responses.
  */
 export async function createGateway({ frontend, backendOrigin, backendSession, reportPath, onDiagnosticPaste, onDiagnosticWindow, state, bootstrap, desktopUpdates,
-  bootstrapPhase, notifications, openOAuthURL }: GatewayOptions): Promise<Gateway> {
+  bootstrapPhase, notifications, openOAuthURL, deviceCredential, computerUse }: GatewayOptions): Promise<Gateway> {
   if (typeof frontend !== 'function') {
     frontend = path.resolve(frontend)
   }
@@ -126,6 +129,10 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
       // Core may be remote, so label the turn using the native client's platform.
       headers[TURN_CLIENT_TYPE_HEADER] = TurnClientType.Desktop
       headers[TURN_CLIENT_OS_HEADER] = CLIENT_OS_BY_PLATFORM[process.platform] ?? TurnClientOS.Other
+      const credential = await deviceCredential?.()
+      if (credential) {
+        headers[DEVICE_CREDENTIAL_HEADER] = credential
+      }
     }
     if (request.headers.origin) {
       headers['origin'] = backend.origin
@@ -347,6 +354,27 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
     }
     if (bootstrap && url.pathname.startsWith(DESKTOP_BOOTSTRAP_PATH)) {
       await bootstrap(request, response, url, readBody)
+      return
+    }
+    if (computerUse && url.pathname === DESKTOP_COMPUTER_USE_PATH) {
+      if (request.method === 'GET') {
+        response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+          .end(JSON.stringify(computerUse.setup()))
+        return
+      }
+      if (request.method !== 'POST' || request.headers.origin !== origin) {
+        response.writeHead(403).end()
+        return
+      }
+      const { approval } = JSON.parse((await readBody(request, 256)).toString())
+      if (approval !== DesktopComputerUseApproval.Confirm &&
+        (approval !== DesktopComputerUseApproval.Setup || !computerUse.setup())) {
+        response.writeHead(400).end()
+        return
+      }
+      const enabled = await computerUse.enable(approval === DesktopComputerUseApproval.Confirm)
+      response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+        .end(JSON.stringify({ enabled }))
       return
     }
     if (desktopUpdates && url.pathname.startsWith(contract.updatesPath)) {

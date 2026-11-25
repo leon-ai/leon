@@ -28,9 +28,15 @@ function platformOS(client: Navigator): TurnClientOS {
 /**
  * Labels an owner command at its origin, using the desktop host marker and an OS family.
  */
-export function turnClientHeaders(): Record<string, string> {
-  const desktop = Boolean(document.querySelector(`meta[name="${DESKTOP_META_NAME}"]`))
+export function isDesktopClient(): boolean {
+  return Boolean(document.querySelector(`meta[name="${DESKTOP_META_NAME}"]`))
+}
 
+/**
+ * Attaches the selected device only to the owner command it belongs to.
+ */
+export function turnClientHeaders(): Record<string, string> {
+  const desktop = isDesktopClient()
   return {
     [TURN_CLIENT_TYPE_HEADER]: desktop ? TurnClientType.Desktop : TurnClientType.Web,
     [TURN_CLIENT_OS_HEADER]: platformOS(navigator)

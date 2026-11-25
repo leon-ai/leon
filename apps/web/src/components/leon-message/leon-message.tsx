@@ -25,6 +25,8 @@ import { ToolCallList } from '@/components/tool-call-list'
 import { ToolPreparation } from '@/components/tool-call/tool-preparation'
 import { WorkingMessage } from '@/components/working-message'
 import { ActivityTimestamp } from '@/components/activity-timestamp'
+import { isDesktopClient } from '@/data/turn-client'
+import { ComputerUsePermission } from '@/components/desktop-setup/computer-use-permission'
 
 import './leon-message.sass'
 
@@ -316,6 +318,9 @@ function renderActivity(activity: LeonFeedActivity) {
 }
 
 export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps) {
+  if (entry.computerUsePermission) {
+    return isDesktopClient() ? <ComputerUsePermission /> : <p>Open Leon Desktop to enable computer use.</p>
+  }
   if (entry.connection) {
     return <Suspense fallback={<Loader size="sm" label="Getting connection setup ready…" />}>
       <ConnectionSetupCard connection={entry.connection} />

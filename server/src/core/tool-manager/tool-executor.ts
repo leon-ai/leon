@@ -29,7 +29,7 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import { bindConversationDevice, isSatelliteWorker } from '@/core/satellite/device-context'
-import { ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
+import { COMPUTER_USE_TOOL_ID, COMPUTER_USE_TOOLKIT_ID, ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
 import { TOOL_EXECUTION_MANAGER } from './tool-execution-manager'
 import type { LongLanguageCode, ToolExecutionOrigin } from '@/types'
 import type {
@@ -537,6 +537,11 @@ export default class ToolExecutor {
       resolvedTool.toolId
     )
     if (!availability.available) {
+      if (resolvedTool.toolkitId === COMPUTER_USE_TOOLKIT_ID && resolvedTool.toolId === COMPUTER_USE_TOOL_ID) {
+        const { showComputerUsePermission } = await import('@/core/satellite/computer-use-permission')
+        showComputerUsePermission()
+      }
+
       const missingSettings = availability.missingSettings
       const reason =
         availability.reason ||

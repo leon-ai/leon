@@ -4,6 +4,11 @@ import type { DesktopAttachmentFile } from '../../../bridges/runtime/contracts/d
 export type HostError = Error & { code?: string, status?: number }
 export type ReadBody = (request: IncomingMessage, maximumBytes?: number) => Promise<Buffer>
 export type HostAPI = (request: IncomingMessage, response: ServerResponse, url: URL, readBody: ReadBody) => Promise<void>
+export interface DesktopDeviceRuntime {
+  node: string
+  root: string
+  environment: NodeJS.ProcessEnv
+}
 export interface FileGrants {
   files: DesktopAttachmentFile[]
   issues: string[]
@@ -32,4 +37,5 @@ export interface DiagnosticConfiguration {
   paint_when_hidden?: boolean
   clipboard_files?: string[]
   bootstrap?: { asset: import('../runtime/bootstrap-runtime.mjs').RuntimeAsset }
+  deviceRuntime?: { root: string, node: string, managed: boolean }
 }

@@ -205,6 +205,7 @@ export interface LeonFeedEntry {
   pulseReason?: string
   connections?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor[]
   connection?: import('../../../../aurora/src/contracts/connection-setup').ConnectionSetupDescriptor
+  computerUsePermission?: boolean
   answerParts?: import('../../../../aurora/src/v2/contracts/answer').AnswerPart[]
   sentAt?: number | undefined
   metrics?: ConversationMetrics | undefined

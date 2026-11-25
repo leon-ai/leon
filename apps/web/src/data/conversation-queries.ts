@@ -231,6 +231,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
     gcTime: 0,
     mutationFn: async (input: SendMessageInput) => {
       assertSendMessageActive(profile, input.signal)
+      const headers = turnClientHeaders()
       const attachments = await uploadOwnerAttachments(profile, sessionId, input.attachments ?? [], input.onUploadProgress, input.signal)
       assertSendMessageActive(profile, input.signal)
       if (attachments.length) {
@@ -244,7 +245,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
 
       return requestAPI<{ command: ConversationCommand }>(`sessions/${encodeURIComponent(sessionId)}/messages`, {
         ...(input.signal ? { signal: input.signal } : {}),
-        method: 'POST', headers: turnClientHeaders(), body: JSON.stringify({ id: input.id, query: input.query,
+        method: 'POST', headers, body: JSON.stringify({ id: input.id, query: input.query,
           ...(attachments.length ? { attachments: attachments.map((file) => file.id) } : {}) })
       })
     },

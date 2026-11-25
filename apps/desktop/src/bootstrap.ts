@@ -13,7 +13,7 @@ import { controlCore, createCoreService, stopCoreAndWait, type CoreService } fro
 import { assertCoreCompatibility, CoreCompatibilityError, findCoreAsset, supportsCore, type PublishedRuntime } from './compatibility.js'
 import { DESKTOP_CORE_PROTOCOL_VERSION } from '../../../bridges/runtime/contracts/desktop-client'
 import type { CoreRuntime, RuntimeAsset } from '../runtime/bootstrap-runtime.mjs'
-import type { HostError, ServiceConfiguration } from './types.js'
+import type { DesktopDeviceRuntime, HostError, ServiceConfiguration } from './types.js'
 import { UpdatePhase, type RuntimeUpdateJob, type UpdateState, type UpdateJob } from '../../../bridges/runtime/contracts/updates'
 
 interface BootstrapDependencies {
@@ -35,6 +35,8 @@ export interface BootstrapController {
   stop: () => Promise<void>
   updateState: () => Promise<UpdateState | null>
   frontend: () => Promise<string | undefined>
+  deviceRuntime: (signal: AbortSignal) => Promise<DesktopDeviceRuntime>
+  deviceOwnerCredential: (backend: string) => Promise<string | undefined>
   readonly log: string | undefined
   close: () => Promise<void>
 }
@@ -121,6 +123,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
   const directory = path.join(home, 'desktop')
   const installation = path.join(home, 'runtimes', 'core')
   const settingsPath = path.join(directory, 'installation.json')
+  const lockPath = path.join(directory, 'install.lock')
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const saved: InstallationSettings = await readFile(settingsPath, 'utf8').then(JSON.parse).catch((error) => {
     if ((error as HostError).code === 'ENOENT') {
@@ -223,7 +226,6 @@ export async function createBootstrap({ dependencies = {}, origin }: {
     let started = false
     let stopped: ServiceConfiguration | undefined
     let recovery: { statePath: string, job: RuntimeUpdateJob } | undefined
-    const lockPath = path.join(directory, 'install.lock')
     const stopManaged = async (config: ServiceConfiguration): Promise<void> => {
       await step('restart', 'Restarting my Core', async () => {
         await stopCoreAndWait(config)
@@ -250,7 +252,8 @@ export async function createBootstrap({ dependencies = {}, origin }: {
       })
       const running = await runningConfiguration()
       const runningHome = running?.environment?.['LEON_HOME']
-      const managed = running?.environment?.['LEON_PROFILE'] === LEON_PROFILE_NAME && runningHome &&
+      const managed = (!origin || new URL(origin).origin === new URL(await profileOrigin()).origin) &&
+        running?.environment?.['LEON_PROFILE'] === LEON_PROFILE_NAME && runningHome &&
         await realpath(runningHome).catch(() => null) === await realpath(home) ? running : undefined
       if (ready) {
         service = managed ? await createService({ ...managed, home, profile: LEON_PROFILE_NAME }) : undefined
@@ -486,6 +489,67 @@ export async function createBootstrap({ dependencies = {}, origin }: {
         return activeRuntime!.frontend
       }
       return service ? path.join(service.configuration.codebase, 'apps/web/dist') : undefined
+    },
+    async deviceRuntime(signal): Promise<DesktopDeviceRuntime> {
+      const config = service?.configuration
+      const checkout = process.env['LEON_CODEBASE_PATH'] || (config && !config.runtimeHome ? config.codebase : undefined)
+      const environment = { LEON_HOME: home, LEON_PROFILE: LEON_PROFILE_NAME }
+      if (checkout) {
+        const root = await realpath(checkout)
+        const node = config?.node ?? path.join(home, 'bin/node', process.platform === 'win32' ? 'node.exe' : 'bin/node')
+
+        await stat(path.join(root, 'server/dist/satellite.js'))
+        return { node, root, environment: { ...environment, LEON_CODEBASE_PATH: root } }
+      }
+
+      const runtimeHome = config?.runtimeHome ?? installation
+      const unlock = await acquireRuntimeLock(lockPath)
+      try {
+        let runtime = await currentRuntime(runtimeHome).catch((error: HostError) => {
+          if (error.code !== 'ENOENT') {
+            throw error
+          }
+          return null
+        })
+        if (!runtime) {
+          const asset = await (dependencies.asset ?? releaseAsset)(signal)
+          runtime = await installRuntimeArchive({
+            installation: runtimeHome, asset, signal, download: FileDownloader.downloadFile.bind(FileDownloader)
+          })
+          const prepared = { ...runtimeEnvironment(runtime, runtimeHome), ...environment }
+          await command(runtime.node, [runtime.setup], { cwd: runtime.root, env: prepared, signal })
+          await activateRuntime(runtimeHome, runtime.manifest.version)
+        }
+
+        assertCoreCompatibility({ version: runtime.manifest.version,
+          desktop_protocol_version: runtime.manifest.desktopProtocolVersion })
+        return { node: runtime.node, root: runtime.root,
+          environment: { ...runtimeEnvironment(runtime, runtimeHome), ...environment } }
+      } finally {
+        unlock()
+      }
+    },
+    async deviceOwnerCredential(backend): Promise<string | undefined> {
+      // A locally managed Core may allow anonymous chat. Pairing still proves
+      // ownership using the credential from this launcher's own local profile.
+      if (!service || store.state.external || !server ||
+          new URL(server).origin !== new URL(backend).origin) {
+        return undefined
+      }
+      const profile = service.configuration.environment['LEON_PROFILE']
+      if (!profile) {
+        return undefined
+      }
+      const token = await readFile(getProfilePaths(profile).dotEnv, 'utf8')
+        .then((content) => dotenv.parse(content)['LEON_PROFILE_TOKEN'])
+        .catch((error: HostError) => {
+          if (error.code !== 'ENOENT') {
+            throw error
+          }
+          return undefined
+        })
+
+      return token ? profile + ':' + token : undefined
     },
     get log(): string | undefined {
       return service?.log

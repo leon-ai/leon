@@ -6,7 +6,7 @@ export { LEON_HOME_PATH, LEON_PROFILE_NAME, isValidProfileName } from '../../../
 /**
  * Resolves the current profile without importing profile services into the host.
  */
-export function getProfilePaths(): { config: string, dotEnv: string }
+export function getProfilePaths(profileName?: string): { config: string, dotEnv: string }
 export { JsonRedactionHelper } from '../../../server/src/helpers/json-redaction-helper'
 export { getUpdateStatePath } from '../../../scripts/update/paths.js'
 export { UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_JITTER_MS, UPDATE_STAGE_LABELS } from '../../../bridges/runtime/contracts/update-status.js'
@@ -72,6 +72,6 @@ export function installRuntimeArchive(options: {
   asset: RuntimeAsset
   signal?: AbortSignal
   download: typeof FileDownloader.downloadFile
-  onStage: (stage: 'downloading' | 'verifying' | 'extracting') => void
-  onProgress: (progress: { downloadedBytes: number, totalBytes: number | null }) => void
+  onStage?: (stage: 'downloading' | 'verifying' | 'extracting') => void
+  onProgress?: (progress: { downloadedBytes: number, totalBytes: number | null }) => void
 }): Promise<CoreRuntime>

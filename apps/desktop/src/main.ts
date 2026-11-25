@@ -8,16 +8,19 @@ import { bootstrapAPI } from './bootstrap-api.js'
 import { completionNotifications } from './notifications.js'
 import { requestBackend, readBackendJSON } from './backend.js'
 import { DEFAULT_WEB_THEME, DESKTOP_NOTIFICATION_EVENT, type WebTheme } from '../../../bridges/runtime/contracts/desktop-client'
+import { COMPUTER_USE_DEVICE_TOOL } from '../../../bridges/runtime/contracts/device-execution'
 import { createDesktopUpdater, desktopUpdatesAPI } from './updates.js'
 import { createGateway } from './gateway.js'
 import { configureNavigation, configurePermissions } from './navigation.js'
 import { createDesktopState } from './state.js'
 import { loadClientURL } from './startup.js'
 import { HIDE_WINDOW_MENU_ID, installPasteMenu, pasteAttachments } from './paste.js'
+import { BROWSER_USE_DEVICE_TOOL, createDesktopDevice } from './device.js'
+import { SetupPhase } from './progress.js'
 import type { Session } from 'electron'
 import type { Gateway } from './gateway.js'
 import type { DesktopUpdater } from './updates.js'
-import type { DiagnosticConfiguration } from './types.js'
+import type { DesktopDeviceRuntime, DiagnosticConfiguration } from './types.js'
 
 type BootstrapController = Awaited<ReturnType<typeof import('./bootstrap.js').createBootstrap>>
 type DesktopState = Awaited<ReturnType<typeof createDesktopState>>
@@ -45,6 +48,7 @@ app.setPath('userData', dataDirectory)
 let gateway: Gateway | undefined
 let window: BrowserWindow | undefined
 let state: DesktopState | undefined
+let device: ReturnType<typeof createDesktopDevice> | undefined
 let quitting = false
 let quitRequested = false
 let bootstrapController: BootstrapController | undefined
@@ -120,7 +124,7 @@ app.on('will-quit', (event) => {
       notification.close()
     }
     notifications.clear()
-    void Promise.all([state?.close(), bootstrapController?.close()]).finally(() => {
+    void Promise.all([device?.close(), state?.close(), bootstrapController?.close()]).finally(() => {
       gateway?.close()
       // Electron resets its quit guard after this callback returns. Resuming
       // inside a resolved promise can otherwise leave a windowless app alive.
@@ -236,6 +240,7 @@ async function showClient(server: string): Promise<void> {
     restoreWindow()
     return
   }
+  await device?.close()
   await state?.close()
   gateway?.close()
   const clientSession = session.fromPartition('leon-client')
@@ -245,9 +250,38 @@ async function showClient(server: string): Promise<void> {
     safeStorage: process.platform === 'darwin' && !manifest.release ? undefined : safeStorage,
     ephemeral: diagnostics || process.env['LEON_DESKTOP_EPHEMERAL'] === '1',
     onColorSchemeChange: updateWindowAppearance })
+  const testRuntime = diagnostics ? configuration.deviceRuntime : undefined
+  if (bootstrapController && (!diagnostics || testRuntime)) {
+    const owner = bootstrapController
+    device = createDesktopDevice({
+      backend: server, session: backendSession, state,
+      runtime: testRuntime ? async (): Promise<DesktopDeviceRuntime> => ({
+        node: testRuntime.node, root: testRuntime.root, environment: {}
+      }) : owner.deviceRuntime,
+      ownerCredential: owner.deviceOwnerCredential,
+      managed: () => testRuntime?.managed ?? owner.store.state.external === false,
+      authorize: async () => {
+        if (!window || window.isDestroyed()) {
+          throw new Error('The desktop window is no longer available.')
+        }
+        const result = await dialog.showMessageBox(window, {
+          type: 'question',
+          message: 'Use this computer with my Core?',
+          detail: `My Core at ${new URL(server).origin} can request desktop observations and input while Leon Desktop is open.`,
+          buttons: ['Allow computer use', 'Not now'],
+          defaultId: 1,
+          cancelId: 1
+        })
+
+        return result.response === 0
+      }
+    })
+  }
   gateway = await createGateway({ frontend: bootstrapController ? async (): Promise<string> => await bootstrapController?.frontend() ?? frontend : frontend, backendSession, state,
     backendOrigin: server,
     openOAuthURL: (url) => shell.openExternal(url),
+    deviceCredential: async () => device?.credential(),
+    ...(device ? { computerUse: device } : {}),
     ...(bootstrapController ? {
       bootstrap: bootstrapAPI(bootstrapController, { openLogs: async (file) => {
         if (file) {
@@ -316,6 +350,21 @@ async function showClient(server: string): Promise<void> {
     onDiagnosticPaste: diagnostics ? (): Promise<void> => pasteAttachments(window, gateway, { diagnostic: true,
       paths: configuration.clipboard_files ?? [] }) : undefined })
   window = createWindow(clientSession)
+  if (device && bootstrapController) {
+    const localDevice = device
+    const { store } = bootstrapController
+    let coreReady = false
+    const refresh = (): void => {
+      const ready = store.state.phase === SetupPhase.Complete
+      if (ready && !coreReady) {
+        void localDevice.connect().catch(console.error)
+      }
+      coreReady = ready
+    }
+    store.events.on('change', refresh)
+    window.once('closed', () => store.events.off('change', refresh))
+    refresh()
+  }
   installPasteMenu(window, (): Promise<void> => pasteAttachments(window, gateway))
   configureNavigation(window, { origin: gateway.origin, clientSession, background })
   configurePermissions(clientSession, window, gateway.origin)
@@ -359,6 +408,28 @@ function installCoreMenu(): void {
     submenu.append(item)
   }
   menu.append(new MenuItem({ label: 'Core', submenu }))
+  if (device && window) {
+    const paired = device
+    const ownerWindow = window
+    const devices = new Menu()
+    devices.append(new MenuItem({ label: 'Use this computer…', click: (): void => run(async () => {
+      const result = await dialog.showMessageBox(ownerWindow, {
+        type: 'question',
+        message: 'Let me use this computer?',
+        detail: 'Core can request desktop observations and input on this computer. The device worker runs while Leon Desktop is open.',
+        buttons: ['Enable', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        checkboxLabel: 'Also allow access to my configured browser'
+      })
+      if (result.response === 0) {
+        await paired.connect(result.checkboxChecked
+          ? [COMPUTER_USE_DEVICE_TOOL, BROWSER_USE_DEVICE_TOOL] : [COMPUTER_USE_DEVICE_TOOL])
+      }
+    }) }))
+    devices.append(new MenuItem({ label: 'Revoke this computer', click: (): void => run(() => paired.disable()) }))
+    menu.append(new MenuItem({ label: 'Devices', submenu: devices }))
+  }
   const update = (): void => {
     const data = bootstrapController!.store.state
     const managed = data.phase === 'complete' && !data.external
@@ -404,7 +475,7 @@ async function start(): Promise<void> {
       if (bootstrapController?.store.state.phase === 'running') {
         throw new Error('Let me finish Core setup before restarting the desktop app.')
       }
-      await Promise.all([state?.close(), bootstrapController?.close()])
+      await Promise.all([device?.close(), state?.close(), bootstrapController?.close()])
       quitting = true
       desktopUpdater.close()
       gateway?.close()

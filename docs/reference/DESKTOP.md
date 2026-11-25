@@ -29,6 +29,14 @@ Account sign-in opens in the system browser. The provider returns to Core, and D
 
 Desktop requires a Core release in its supported range with the same desktop protocol. The minimum Core release advances when Desktop needs a newer Core capability. Download selection skips unsupported platforms and protocols. When a local managed Core is incompatible, Desktop restarts it into a compatible built checkout or prepares a verified prebuilt release and restores the previous runtime if startup fails. Explicit server connections are managed by the server operator. Desktop-initiated updates validate compatibility before installation. See [releases and OTA](RELEASING.md) and [download sources](DOWNLOADS.md).
 
+## Device tools
+
+Device tools default to the computer running Leon Desktop. Desktop starts its local Satellite automatically for the Core it manages. For an external Core, **Allow computer use on this computer** appears below the Core address at sign-in. Owners who skip it can choose **Enable computer use** in chat when a task needs it, then confirm in the native dialog. Desktop remembers access for that Core and profile. **Devices → Use this computer** can adjust the grant, including optional access to the configured signed-in browser. **Revoke this computer** disconnects the device and disables automatic enrollment. If Desktop quits or the selected device goes offline, active tool work is canceled. Start a new conversation to direct device actions to a different computer.
+
+Set `execution_target` in a tool manifest to `device` or `core` when placement is required. Omitted placement uses existing profile routing. A profile can assign individual device-bound tools through `satellite.tools`. The reserved value `$core` explicitly selects Core's own host, for example for a browser with an owner-configured Core CDP endpoint.
+
+On macOS, grant Accessibility and Screen Recording to the responsible Leon process. On Windows, keep the device in the signed-in interactive desktop. On GNOME Wayland, Cua uses the WinRects helper for window discovery and capture. Fresh installs require a helper that lists the running Shell version. The bundled helper currently lists GNOME Shell 45–49.
+
 After normal repository setup, run `pnpm build:server`, `pnpm build:desktop`, then `pnpm start:desktop`. The repository launcher supplies its checkout through `LEON_CODEBASE_PATH`; `pnpm start:desktop --server http://127.0.0.1:5366` connects without managing that server. Desktop has its own workspace manifest and shares the root version/lockfile.
 
 On Linux, if AppArmor prevents Electron from initializing its sandbox, run `pnpm start:desktop` from an interactive terminal. The launcher offers to install an AppArmor profile with `sudo` and retries as your regular user. The profile applies to the built executable's exact path and continues to work across rebuilds in the same checkout.
