@@ -206,14 +206,27 @@ export class CuaRuntime {
     const startedAt = performance.now()
     const timings: Record<string, number> = {}
     try {
+      const captureOption = parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
+      const activatesWindow = action === 'bring_to_front'
+      const hasExactWindow = activatesWindow &&
+        Number.isSafeInteger(parameters['pid']) && Number(parameters['pid']) > 0 &&
+        Number.isSafeInteger(parameters['window_id']) && Number(parameters['window_id']) > 0
+      // Explicit activation already changes focus. Capture the exact window
+      // while it is available, unless the caller only needs to raise it.
+      const captureActivatedWindow = activatesWindow && (captureOption ?? hasExactWindow) === true
+      if (captureActivatedWindow && !hasExactWindow) {
+        return this.failure('Focusing and capturing requires the exact observed pid and window_id. No input was sent.')
+      }
+
       const runtime = await this.runtimeManager.get(input)
       timings['runtime'] = Math.round(performance.now() - startedAt)
       const recording = runtime.recordingSessionId !== undefined &&
         runtime.recordingSessionId === input.conversationSessionId
-      const captureAfter =
-        (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? true) === true &&
-        COMPUTER_USE_CAPTURE_ACTIONS.has(action) &&
-        runtime.driver.supportsPostActionCapture !== false
+      const captureAfter = runtime.driver.supportsPostActionCapture !== false && (
+        captureActivatedWindow ||
+        (captureOption ?? true) === true &&
+        COMPUTER_USE_CAPTURE_ACTIONS.has(action)
+      )
       const driverParameters = { ...parameters }
       const zoomPurpose = action === 'zoom' ? parameters['purpose'] ?? ComputerUseZoomPurpose.Act : null
       const desktopZoom = action === 'zoom' && parameters['scope'] === 'desktop'
@@ -340,9 +353,11 @@ export class CuaRuntime {
         const target = asRecord(actionParameters['target']) ?? actionParameters
         if (Number.isInteger(target['pid']) && Number.isInteger(target['window_id'])) {
           // Foreground input normally restores the previous app, dismissing
-          // context menus before capture. Keep this multi-step UI in front.
+          // context menus before capture. Keep the target in front and
+          // capture after opening the menu.
           const activation = await this.executeAction(input, 'bring_to_front', {
-            pid: target['pid'], window_id: target['window_id']
+            pid: target['pid'], window_id: target['window_id'],
+            [COMPUTER_USE_CAPTURE_AFTER_PARAMETER]: false
           })
           if (!activation.success) return activation
         }
@@ -444,9 +459,12 @@ export class CuaRuntime {
             COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
             error instanceof Error ? error.message : String(error)
           ))
-      let capturedState = captureAfter || recoverObservation ? await capture(captureParameters) : null
+      let capturedState = (captureAfter && !(captureActivatedWindow && actionFailed)) || recoverObservation
+        ? await capture(captureParameters)
+        : null
       const capturedWindowId = captureParameters['window_id'] ?? asRecord(captureParameters['target'])?.['window_id']
-      if (capturedState?.result['success'] === false && typeof capturedWindowId === 'number' && action !== 'invoke_menu') {
+      if (capturedState?.result['success'] === false && typeof capturedWindowId === 'number' &&
+        action !== 'invoke_menu' && !captureActivatedWindow) {
         // Saving or closing a dialog can remove the source window. Return its
         // destination in the same call instead of encouraging a repeated click.
         const desktopState = await capture({ scope: 'desktop', session: actionParameters['session'] })
@@ -663,7 +681,7 @@ export class CuaRuntime {
       return 'The compositor cannot establish this window\'s pixel geometry. Do not repeat the same window capture or use its reported bounds for clicks. If foreground interaction is permitted, capture get_desktop_state and use its capture_target and attached-image coordinates; semantic window tokens remain a separate option.'
     }
     if (failureCode === CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE) {
-      return 'The target is covered. Inspect covering_windows or a fresh desktop screenshot first: a task-related dialog may own focus in another process. Complete that dialog using its own window target or fresh desktop pixels before returning to the parent. For an unrelated covering window, use bring_to_front if foreground interaction is permitted. Otherwise use semantic observation without a screenshot. Never address the parent using the covering window\'s pixels.'
+      return 'Inspect covering_windows. If Leon or another clearly unrelated window is covering the target and foreground interaction is permitted, use bring_to_front with the exact target pid and window_id. Use its returned frame directly. A task dialog may instead need its own window target or fresh desktop pixels. If foreground input is unavailable, use semantic observation without a screenshot.'
     }
     if (failureCode === COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE) {
       return 'Post-action capture failed. Input may already have landed; obtain a valid observation and verify the intended effect before retrying.'
@@ -1786,6 +1804,11 @@ export class CuaRuntime {
           ? { screenshot_error: structuredResult['screenshot_error'] }
           : structuredResult || {})
     }
+    if (action === 'bring_to_front' &&
+      (structuredResult?.['pid'] !== pid || structuredResult?.['window_id'] !== windowId)) {
+      return this.failedCapture(input, captureParameters, COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
+        'The capture did not identify the activated window. Observe the intended window before using its pixels.')
+    }
     // A closed dialog can return stale AX elements with a successful envelope.
     // Post-action evidence always needs a fresh frame; use the same recovery
     // path as an explicit capture failure instead of reusing those elements.
@@ -1833,6 +1856,8 @@ export class CuaRuntime {
       // Label the new coordinate space so it cannot be used as window pixels.
       observation['capture_target'] = { kind: 'desktop' }
       observation['hint'] = 'Use target={kind:"desktop",display_id:"primary"} for these image pixels, not window coordinates. For a small menu row, use zoom(scope="desktop",purpose="act") first, then click its centre with copy_text if copying. A highlighted row alone does not prove execution.'
+    } else if (action === 'bring_to_front') {
+      observation['capture_target'] = { kind: 'window', pid, window_id: windowId }
     }
     // Post-action captures are tutorial evidence too; bind annotation geometry
     // to their own screenshot rather than the pre-action snapshot.

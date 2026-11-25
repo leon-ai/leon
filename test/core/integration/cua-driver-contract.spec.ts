@@ -28,6 +28,7 @@ it('keeps native Cua action arguments compatible with the installed driver', asy
       launch_app: process.platform === 'darwin' ? ['launch_path'] : [],
       get_window_state: ['settle_ms'],
       get_desktop_state: ['settle_ms'],
+      bring_to_front: ['capture_after'],
       zoom: ['purpose', 'scope'],
       move_cursor: ['capture_after', 'settle_ms'],
       click: ['capture_after', 'settle_ms', ...(process.platform === 'linux' ? ['action'] : [])],

@@ -34,7 +34,7 @@
   "functions": {
     "observe": {
       "description": "Inspect the current frontmost normal window: fresh accessibility tree and image, without switching apps. Use for work in the already-open foreground window.",
-      "progressive_guidance": "Check app/title and copy capture_target into target on every input step. Use query for missing controls. For another window or unavailable stacking order, use list_windows and get_window_state. No implicit current-window target.",
+      "progressive_guidance": "Check app/title and copy capture_target into target on every input step. Use query for missing controls. If Leon is known to cover the intended window and foreground interaction is permitted, go directly to bring_to_front with the target pid and window_id to activate and capture it. Use list_windows when the target or stacking order is unknown. No implicit current-window target.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -184,7 +184,7 @@
     },
     "get_window_state": {
       "description": "Inspect one native window and return its interface tree plus a screenshot. Use this for visible appearance, colors, or controls after list_windows.",
-      "progressive_guidance": "Read AX text before Copy or OCR. Semantic click needs its listed action (default press); focus other text fields using image pixels or keyboard. Retry an outer-frame-only tree at most once for a missing control. Reuse post-action state. Observe changed or loading destinations (settle_ms), including new windows/dialogs, before continuing.",
+      "progressive_guidance": "Read AX text before Copy or OCR. Semantic click needs its listed action (default press); focus other text fields using image pixels or keyboard. Retry an outer-frame-only tree at most once for a missing control. Use the post-action frame directly when it shows the intended effect. For a known covered target, use bring_to_front with its pid and window_id when foreground interaction is allowed. Observe changed or loading destinations (settle_ms), including new windows/dialogs, before continuing.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -732,17 +732,21 @@
       }
     },
     "bring_to_front": {
-      "description": "Bring a known window forward when persistent visibility or desktop interaction is needed.",
-      "progressive_guidance": "Use only for persistent visibility or an exposed desktop target. Ordinary foreground input already activates its target and normally restores prior focus; foreground right-clicks keep the target in front so the menu remains available.",
+      "description": "Bring a window forward and return its fresh screenshot and accessibility state in the same call when both pid and window_id are supplied.",
+      "progressive_guidance": "Use only when foreground interaction is permitted and persistent visibility is needed. For a covered target, including desktop follow-ups and canvas drags, supply both observed IDs and use the returned frame for the next action. Ordinary foreground input already activates its target and normally restores prior focus; foreground right-clicks keep the target in front so the menu remains available.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
+          "capture_after": {
+            "description": "Defaults to true with exact pid and window_id. Set false to activate without a screenshot. A pid-only call activates without a screenshot.",
+            "type": "boolean"
+          },
           "pid": {
             "type": "integer"
           },
           "window_id": {
-            "description": "X11 window id (xid) to activate. If omitted, the first window of `pid` is used.",
+            "description": "Exact native window ID from a recent observation. Omit for application-only activation.",
             "type": "integer"
           }
         },

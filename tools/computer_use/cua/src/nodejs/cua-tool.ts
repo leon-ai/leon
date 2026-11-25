@@ -154,8 +154,8 @@ export default class CuaTool extends Tool {
   /**
    * Execute bring to front through the retained Cua runtime.
    */
-  public async bring_to_front(pid?: unknown, window_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('bring_to_front', { pid, window_id })
+  public async bring_to_front(pid?: unknown, window_id?: unknown, capture_after?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('bring_to_front', { pid, window_id, capture_after })
   }
 
   /**
