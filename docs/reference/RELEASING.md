@@ -8,7 +8,7 @@ Preview installs receive eligible prereleases and stable releases; stable instal
 2. Run `pnpm release`. It checks published releases/remote tags, creates missing release-note scaffolding or updates a stale metadata version, then stops for review when needed. It never bumps `package.json` or commits.
 3. Commit and push the reviewed version, notes and code. Run `pnpm release` again from the clean, pushed branch to create/push the immutable tag and trigger CI. `pnpm release --dry-run` checks without writes. Optional `GH_TOKEN`/`GITHUB_TOKEN` authenticates discovery; no maintainer token ships to owners.
 
-Set `desktop.minimumCoreVersion` in `release.json` to the oldest server version supported by Desktop in the release's major version. The Desktop build embeds this value for startup and update checks. Carry it forward across releases and raise it when Desktop requires a newer server capability.
+Set `desktop.minimumServerVersion` in `release.json` to the oldest server version supported by Desktop in the release's major version. The Desktop build embeds this value for startup and update checks. Carry it forward across releases and raise it when Desktop requires a newer server capability.
 
 [Release CI](../../.github/workflows/release.yml) gates publication on build/lint/tests, Desktop builds, cold installs, [Quick Evals](../../.github/workflows/quick-evals.yml), and source/archive OTA checks with profile preservation, restart and live inference. Server archives and Desktop builds require native verification for `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`. Windows ARM64 remains unverified; macOS Intel is excluded. Without a predecessor, gates record a bootstrap baseline, not a proven public upgrade.
 

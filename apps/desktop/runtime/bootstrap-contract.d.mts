@@ -1,11 +1,11 @@
 /**
- * Public bootstrap defaults derived from the root product manifest and Core.
+ * Desktop bootstrap defaults derived from the product manifest and server configuration.
  */
 export interface BootstrapContract {
   repository: string
   defaultPort: number
   minimumVersion: string
-  coreVersionRange: string
+  serverVersionRange: string
   sourceVersion: string
   channel: 'preview' | 'stable'
   author: { name: string, email: string }

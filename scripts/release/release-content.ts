@@ -18,7 +18,7 @@ const semver = createRequire(import.meta.url)('semver') as {
 const MAXIMUM_CONTENT_BYTES = 100_000
 export const RELEASE_SOURCE_NAME = 'release.json'
 const versionString = Type.String({ minLength: 1, maxLength: 128 })
-const desktopSchema = Type.Object({ minimumCoreVersion: versionString }, { additionalProperties: false })
+const desktopSchema = Type.Object({ minimumServerVersion: versionString }, { additionalProperties: false })
 const markdown = Type.String({ minLength: 1, maxLength: 8_000 })
 const changes = Object.fromEntries(UPDATE_CHANGELOG_SECTIONS.map(({ id }) => [id,
   Type.Array(markdown, { maxItems: 100 })])) as Record<ReleaseChangeScope, TArray<TString>>
@@ -53,15 +53,15 @@ export function isPreviewVersion(version: string): boolean {
  * Validates Desktop compatibility independently of release-note readiness so
  * the packaged host can use the same floor during development and distribution.
  */
-export function getMinimumCoreVersion(desktop: unknown, version: string): string {
-  assert(Value.Check(desktopSchema, desktop), 'release.json must specify desktop.minimumCoreVersion')
-  const { minimumCoreVersion } = desktop
+export function getMinimumServerVersion(desktop: unknown, version: string): string {
+  assert(Value.Check(desktopSchema, desktop), 'release.json must specify desktop.minimumServerVersion')
+  const { minimumServerVersion } = desktop
 
-  assert(semver.valid(minimumCoreVersion) === minimumCoreVersion &&
-    semver.major(minimumCoreVersion) === semver.major(version) && !semver.gt(minimumCoreVersion, version),
-  'desktop.minimumCoreVersion must be a canonical SemVer in the release major, at or below the release version')
+  assert(semver.valid(minimumServerVersion) === minimumServerVersion &&
+    semver.major(minimumServerVersion) === semver.major(version) && !semver.gt(minimumServerVersion, version),
+  'desktop.minimumServerVersion must be a canonical SemVer in the release major, at or below the release version')
 
-  return minimumCoreVersion
+  return minimumServerVersion
 }
 
 /**
@@ -73,7 +73,7 @@ export function validateReleaseContent(value: unknown, version: string, tag: str
   assert.equal(tag, `v${version}`, 'The release tag must match package.json')
   assert(Value.Check(releaseSchema, value), 'release.json does not match the release content schema')
   assert.equal(value.version, version, 'Release content must match package.json')
-  getMinimumCoreVersion(value.desktop, version)
+  getMinimumServerVersion(value.desktop, version)
   assert(value.title.trim() && value.summary.trim(), 'Release title and summary must not be blank')
   assert(Buffer.byteLength(JSON.stringify(value)) <= MAXIMUM_CONTENT_BYTES, 'Release content is too large')
 

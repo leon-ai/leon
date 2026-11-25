@@ -24,7 +24,7 @@ export class CoreCompatibilityError extends Error {
  */
 export function supportsCore(value: { version?: unknown, desktop_protocol_version?: unknown }): boolean {
   return typeof value.version === 'string' && Boolean(semver.valid(value.version)) &&
-    semver.satisfies(value.version, contract.coreVersionRange, { includePrerelease: true }) &&
+    semver.satisfies(value.version, contract.serverVersionRange, { includePrerelease: true }) &&
     value.desktop_protocol_version === DESKTOP_CORE_PROTOCOL_VERSION
 }
 
@@ -35,7 +35,7 @@ export function assertCoreCompatibility(value: { version?: unknown, desktop_prot
   if (!supportsCore(value)) {
     const coreVersion = typeof value.version === 'string' ? semver.valid(value.version) ?? undefined : undefined
 
-    throw new CoreCompatibilityError(`I need a compatible Leon server (${contract.coreVersionRange}, desktop protocol ${DESKTOP_CORE_PROTOCOL_VERSION}). Update the server or use a matching desktop app.`, coreVersion)
+    throw new CoreCompatibilityError(`I need a compatible Leon server (${contract.serverVersionRange}, desktop protocol ${DESKTOP_CORE_PROTOCOL_VERSION}). Update the server or use a matching desktop app.`, coreVersion)
   }
 }
 
@@ -61,7 +61,7 @@ export async function findCoreAsset(releases: PublishedRuntime[], readManifest: 
   platform = runtimePlatform()): Promise<RuntimeAsset> {
   const candidates = releases.filter((item) => !item.draft && semver.valid(item.tag_name) &&
     (contract.channel === 'preview' || !item.prerelease && !item.tag_name.includes('-')) &&
-    semver.satisfies(item.tag_name, contract.coreVersionRange, { includePrerelease: true }) &&
+    semver.satisfies(item.tag_name, contract.serverVersionRange, { includePrerelease: true }) &&
     item.assets?.some((asset) => asset.name === RUNTIME_RELEASE_ASSET))
     .sort((a, b) => semver.rcompare(a.tag_name, b.tag_name))
 

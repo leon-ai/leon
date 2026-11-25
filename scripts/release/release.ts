@@ -98,7 +98,7 @@ export async function release({ root = process.cwd(), dryRun = false } = {}): Pr
       return
     }
     content = content ? { ...content, version } : {
-      schemaVersion: 1, version, desktop: { minimumCoreVersion: version },
+      schemaVersion: 1, version, desktop: { minimumServerVersion: version },
       title: `Leon ${version}`, summary: '', highlights: [],
       changes: { new: [], improvements: [], fixes: [], removed: [] }
     }

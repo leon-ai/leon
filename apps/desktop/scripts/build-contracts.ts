@@ -7,7 +7,7 @@ import ts from 'typescript'
 import { PROFILE_AUTH_COOKIE_NAME } from '../../../server/src/core/http-server/profile-auth-contract'
 import type { DesktopContract } from '../runtime/desktop-contract.mjs'
 import type { BootstrapContract } from '../runtime/bootstrap-contract.mjs'
-import { getMinimumCoreVersion, RELEASE_SOURCE_NAME } from '../../../scripts/release/release-content'
+import { getMinimumServerVersion, RELEASE_SOURCE_NAME } from '../../../scripts/release/release-content'
 
 import {
   OWNER_ATTACHMENT_MAX_COUNT, OWNER_ATTACHMENT_MAX_FILE_BYTES,
@@ -23,7 +23,7 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const semver = createRequire(import.meta.url)('semver')
 const manifest = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'))
 const release = JSON.parse(await readFile(path.join(ROOT, RELEASE_SOURCE_NAME), 'utf8')) as { desktop?: unknown } | null
-const minimumCoreVersion = getMinimumCoreVersion(release?.desktop, manifest.version)
+const minimumServerVersion = getMinimumServerVersion(release?.desktop, manifest.version)
 const repository = new URL(manifest.repository.url.replace('git+', ''))
 if (repository.pathname.endsWith('.git')) {
   repository.pathname = repository.pathname.slice(0, -4)
@@ -70,8 +70,8 @@ await writeFile(path.join(OUTPUT, 'bootstrap-contract.mjs'), 'export default ' +
   repository: repository.href,
   author: manifest.author,
   defaultPort: defaultPort!,
-  minimumVersion: minimumCoreVersion,
-  coreVersionRange: `>=${minimumCoreVersion} <${semver.major(minimumCoreVersion) + 1}.0.0-0`,
+  minimumVersion: minimumServerVersion,
+  serverVersionRange: `>=${minimumServerVersion} <${semver.major(minimumServerVersion) + 1}.0.0-0`,
   sourceVersion: manifest.version,
   channel: manifest.version.includes('-') ? 'preview' : 'stable'
 } satisfies BootstrapContract, null, 2) + '\n')

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": "2.0.0-alpha.0.26",
   "desktop": {
-    "minimumCoreVersion": "2.0.0-alpha.0.17"
+    "minimumServerVersion": "2.0.0-alpha.0.17"
   },
   "title": "A new era begins",
   "summary": "A new web app, shared context for related conversations, and server updates you can review and install when you choose.",

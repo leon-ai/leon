@@ -20,7 +20,7 @@ let apiStatus: number
 const git = async (...args: string[]): Promise<string> =>
   (await execute('git', args, { cwd: root })).stdout.trim()
 const content = {
-  schemaVersion: 1, version: VERSION, desktop: { minimumCoreVersion: PREVIOUS_VERSION },
+  schemaVersion: 1, version: VERSION, desktop: { minimumServerVersion: PREVIOUS_VERSION },
   title: 'A quieter update', summary: 'Keep my profiles and projects close.',
   highlights: [], changes: { new: [], improvements: ['Preserve owner data.'], fixes: [], removed: [] }
 }
@@ -74,7 +74,7 @@ const commitContent = async (): Promise<void> => {
 it.skipIf(process.platform === 'win32')('prepares reviewable content before tagging only a clean, pushed release commit', async () => {
   await release({ root })
   expect(JSON.parse(await fs.readFile(path.join(root, 'release.json'), 'utf8'))).toMatchObject({
-    version: VERSION, desktop: { minimumCoreVersion: VERSION }, summary: ''
+    version: VERSION, desktop: { minimumServerVersion: VERSION }, summary: ''
   })
   expect(await git('ls-remote', '--tags', 'origin')).toBe('')
   await commitContent()
@@ -92,7 +92,7 @@ it.skipIf(process.platform === 'win32')('carries Desktop compatibility forward w
   await release({ root })
 
   expect(JSON.parse(await fs.readFile(filename, 'utf8'))).toMatchObject({
-    version: VERSION, desktop: { minimumCoreVersion: PREVIOUS_VERSION }
+    version: VERSION, desktop: { minimumServerVersion: PREVIOUS_VERSION }
   })
   expect(await git('ls-remote', '--tags', 'origin')).toBe('')
 })
