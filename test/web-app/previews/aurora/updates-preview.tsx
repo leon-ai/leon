@@ -44,7 +44,7 @@ export default function UpdatesPreview() {
     error: desktopPhase === 'failed' ? 'I could not verify my desktop update. Check again to retry.' : null, reason: supported ? null : 'Automatic desktop updates are unavailable for this installation.' }
   const setup: SetupState = { phase: setupPhase, external, service: false, logAvailable: true,
     error: setupPhase === SetupPhase.Failed ? 'I could not finish setup. My completed downloads and profiles are preserved.' : null,
-    steps: [{ id: 'download', label: 'Downloading my Core', phase: setupPhase === SetupPhase.Running ? SetupPhase.Running : setupPhase,
+    steps: [{ id: 'download', label: 'Downloading my server', phase: setupPhase === SetupPhase.Running ? SetupPhase.Running : setupPhase,
       value: 64 * 1_024 ** 2, total: 128 * 1_024 ** 2, details: ['My platform archive is selected.', 'My download can resume after an interruption.'] }] }
 
   return <div className="demo-stack">
@@ -53,14 +53,14 @@ export default function UpdatesPreview() {
       setOpen(false)
       setView(event.target.value)
     }}>
-      <option value="core">Browser update</option><option value="desktop">Desktop update</option><option value="setup">Core setup</option><option value="startup">Desktop startup</option>
+      <option value="core">Browser update</option><option value="desktop">Desktop update</option><option value="setup">Server setup</option><option value="startup">Desktop startup</option>
     </select></label>
     <p>{view === 'core' ? 'Update Leon from a browser.' : view === 'desktop'
       ? 'One update action prepares the available server and app updates.'
       : view === 'startup' ? 'The first startup view, with no artificial delay.'
-      : 'First-time Core installation and background startup.'}</p>
+      : 'First-time server installation and background startup.'}</p>
     {(view === 'core' || view === 'desktop' && includeCore) && <div className="demo-controls">
-      <label>Core update state <select aria-label="Core update state" value={stage} onChange={(event) => setStage(event.target.value)}>
+      <label>Server update state <select aria-label="Server update state" value={stage} onChange={(event) => setStage(event.target.value)}>
         {['available', ...STAGES, 'reconnecting', 'completed', 'failed'].map((value) => <option key={value}>{value}</option>)}
       </select></label>
       <label><input type="checkbox" checked={details} onChange={(event) => setDetails(event.target.checked)} />Include step details</label>
@@ -86,19 +86,19 @@ export default function UpdatesPreview() {
           setDesktopPhase(desktopPhase === 'ready' ? 'installing' : 'downloading')
         }
       }}>
-      {(view === 'core' || includeCore) && running && <label className="update-preview-control">Preview controls <select aria-label="Core update state" value={stage} onChange={(event) => setStage(event.target.value)}>
+      {(view === 'core' || includeCore) && running && <label className="update-preview-control">Preview controls <select aria-label="Server update state" value={stage} onChange={(event) => setStage(event.target.value)}>
         {['available', ...STAGES, 'reconnecting', 'completed', 'failed'].map((value) => <option key={value}>{value}</option>)}
       </select></label>}
     </UpdateDialog>}
     {view === 'setup' && <>
-    <h2>Core setup</h2>
+    <h2>Server setup</h2>
     <label>Setup state <select aria-label="Setup state" value={setupPhase} onChange={(event) => setSetupPhase(event.target.value as SetupPhase)}>
       {Object.values(SetupPhase).map((value) => <option key={value}>{value}</option>)}
     </select></label>
     <label><input type="checkbox" checked={external} onChange={(event) => {
       setExternal(event.target.checked)
       setSetupPhase(SetupPhase.Complete)
-    }} />Connect to an already running Core</label>
+    }} />Connect to an already running server</label>
     <DesktopSetupView data={setup} pending={false} onStart={() => setSetupPhase(SetupPhase.Running)}
       onCancel={() => setSetupPhase(SetupPhase.Cancelled)} onLogs={noop} />
     </>}

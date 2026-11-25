@@ -1,4 +1,4 @@
-// Share matching with Core without importing its runtime services.
+// Share matching with the server without importing its runtime services.
 export {
   createSearchIndex,
   getSearchSegments,

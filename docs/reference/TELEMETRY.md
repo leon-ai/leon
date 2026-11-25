@@ -20,5 +20,5 @@ Leon generates anonymous installation and profile codes locally so we can count 
 | Context usage | How much of the context window Leon used. |
 | Context reduction | Counts of local prompt reductions and estimates of tokens freed. |
 | Pulse | Counts, timing, and model usage for proactive checks. |
-| Build and reliability | Leon version, public build commit when available, Core server operating system and CPU architecture, and broad failure categories. |
+| Build and reliability | Leon version, public build commit when available, server operating system and CPU architecture, and broad failure categories. |
 | Timezone | The timezone used by Leon or its server, such as `Europe/Paris`. |

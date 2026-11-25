@@ -9,7 +9,7 @@ const MAXIMUM_PENDING_ATTEMPTS = 16
 
 /**
  * Relays a browser return to the waiting Desktop request across browser profiles.
- * Only Core's authenticated connection status can confirm a successful sign-in.
+ * Only the server's authenticated connection status can confirm a successful sign-in.
  */
 export function createDesktopOAuth(openExternal: (url: string) => Promise<void>): {
   authorize: HostAPI

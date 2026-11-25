@@ -10,7 +10,7 @@ export const COMPUTER_USE_PERMISSION_REQUIRED = 'The owner can click Enable comp
 
 /**
  * Offers the local permission action when the Desktop turn has no device.
- * Displaying the action grants no access or control to Core.
+ * Displaying the action grants no access or control to the server.
  */
 export function showComputerUsePermission(): boolean {
   const responseId = getActiveConversationResponseId()

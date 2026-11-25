@@ -1,7 +1,7 @@
 import type { HardwareInspectionSnapshot } from './system-helper'
 
 /**
- * Read a small hardware snapshot without retaining native GPU state in Core.
+ * Read a small hardware snapshot without retaining native GPU state in the server.
  */
 async function inspectHardware(): Promise<HardwareInspectionSnapshot> {
   const { getLlama, LlamaLogLevel } = await import('node-llama-cpp')

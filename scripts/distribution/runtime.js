@@ -26,11 +26,11 @@ export function validateRuntimeVersion(version) {
 }
 
 /**
- * Provides one platform key for packaging, first install and Core OTA.
+ * Provides one platform key for packaging, first install and server updates.
  */
 export function runtimePlatform(platform = process.platform, architecture = process.arch) {
   assert(['darwin', 'win32', 'linux'].includes(platform) && ['arm64', 'x64'].includes(architecture),
-    'I do not have a Core runtime for this platform.')
+    'I do not have a server runtime for this platform.')
   return `${platform}-${architecture}`
 }
 
@@ -87,7 +87,7 @@ export function selectRuntimeAsset(manifest, version, platform = runtimePlatform
   assert(manifest?.schemaVersion === RUNTIME_SCHEMA_VERSION && manifest.version === version &&
     Array.isArray(manifest.assets), 'Runtime metadata does not match this release.')
   const matches = manifest.assets.filter((asset) => asset.platform === platform)
-  assert(matches.length === 1, 'I do not have exactly one Core archive for this platform.')
+  assert(matches.length === 1, 'I do not have exactly one server archive for this platform.')
   const asset = matches[0]
   const expected = `leon-core-${version}-${platform}.tar.gz`
   assert(asset.name === expected && typeof asset.sha256 === 'string' && asset.sha256.length === 64 &&
@@ -112,7 +112,7 @@ export async function readInstalledRuntime(root, expected = {}) {
   const packageJSON = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'))
   assert(packageJSON.version === manifest.version, 'The runtime code and manifest versions disagree.')
   for (const file of [paths.node, paths.pnpm, paths.setup, paths.entry, path.join(paths.frontend, 'index.html')]) {
-    assert((await fs.stat(file)).isFile(), 'The Core runtime is incomplete.')
+    assert((await fs.stat(file)).isFile(), 'The server runtime is incomplete.')
   }
   return { ...paths, manifest }
 }

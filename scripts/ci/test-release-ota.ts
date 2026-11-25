@@ -179,7 +179,7 @@ export async function verifyReleaseOTA(): Promise<void> {
             return
           }
         } catch (error) {
-          // Core's expected restart outage is temporary; an explicit failed
+          // The server's expected restart outage is temporary; an explicit failed
           // receipt is authoritative and must never be hidden by reconnects.
           if (error instanceof Error && error.name === 'OTAInstallationError') {
             throw error
@@ -215,7 +215,7 @@ export async function verifyReleaseOTA(): Promise<void> {
     const sessions = await request<{ sessions: { id: string }[] }>('sessions')
     assert(sessions.sessions.some((session) => session.id === sessionId), 'The existing session must survive the update')
     const boots = fs.readFileSync(bootsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as { pid: number, version: string })
-    assert.equal(boots.length, 2, 'OTA must restart Core exactly once')
+    assert.equal(boots.length, 2, 'OTA must restart the server exactly once')
     assert.notEqual(boots[0]!.pid, boots[1]!.pid)
     assert.deepEqual(boots.map((boot) => boot.version), [installedVersion, version])
     const challenge = randomUUID()

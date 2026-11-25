@@ -201,7 +201,7 @@ describe('profile provider requests', () => {
     }
   })
 
-  it('reads hosted URLs through Core with the bound account and preserves native evidence', async () => {
+  it('reads hosted URLs through the server with the bound account and preserves native evidence', async () => {
     const url = 'https://example.com/weather'
     const output = [
       { type: 'web_search_call', status: 'completed', action: { type: 'open_page', url } },

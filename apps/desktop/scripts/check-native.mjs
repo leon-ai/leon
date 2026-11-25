@@ -74,15 +74,15 @@ async function transport() {
     const result = await app.wait()
     const bytes = (await stat(file)).size
     assert(fixture.uploads.some((upload) => upload.complete && upload.bytes === bytes && upload.digest === expected),
-      'Native file bytes must arrive unchanged at Core')
+      'Native file bytes must arrive unchanged at the server')
     assert(fixture.uploads.some((upload) => !upload.complete && upload.bytes < bytes),
       'Cancelling a native upload must stop delivery')
     const clientOS = { darwin: 'macos', linux: 'linux', win32: 'windows' }[process.platform] ?? 'other'
     assert.deepEqual(fixture.ownerCommands, [
       { kind: 'message', clientType: 'desktop', clientOS },
       { kind: 'ui', clientType: 'desktop', clientOS }
-    ], 'Messages and interactive replies must carry the native client type and OS to Core')
-    result.checks.push('Native client type and OS reach Core for both owner turn routes')
+    ], 'Messages and interactive replies must carry the native client type and OS to the server')
+    result.checks.push('Native client type and OS reach the server for both owner turn routes')
     await writeFile(app.report, JSON.stringify({ ...result, transport: { native_bytes: bytes, sha256_verified: true } }, null, 2) + '\n')
     console.log(`Desktop transport: ${result.checks.length} checks passed; ${bytes} native bytes verified`)
   } finally {
@@ -169,8 +169,8 @@ http.createServer((request,response)=>{
     await app.close()
     app = undefined
     assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/profile-auth`)).status, 200,
-      'Managed Core must survive closing the desktop')
-    console.log(`Desktop bootstrap: ${result.checks.length} checks passed; managed Core survives app exit`)
+      'Managed server must survive closing the desktop')
+    console.log(`Desktop bootstrap: ${result.checks.length} checks passed; managed server survives app exit`)
   } finally {
     await app?.close()
     const configuration = await readFile(path.join(home, 'desktop/service/core.json'), 'utf8').then(JSON.parse).catch(() => null)

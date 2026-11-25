@@ -49,7 +49,7 @@ jobs:
           xcrun actool --version
           echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
 
-      # The host uses bundled Core leaves, not Core setup or Python tooling.
+      # The host uses bundled server leaves, not server setup or Python tooling.
       - name: Install build dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Install desktop dependencies

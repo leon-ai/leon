@@ -12,7 +12,7 @@ const READY_TIMEOUT_MS = 120_000
 const STOP_TIMEOUT_MS = 10_000
 
 /**
- * Supervises prebuilt Core versions outside their lifetime. A failed candidate
+ * Supervises prebuilt server versions outside their lifetime. A failed candidate
  * restores code selection without undoing profile migrations or owner data.
  */
 export async function runRuntime(installation, { signal } = {}) {

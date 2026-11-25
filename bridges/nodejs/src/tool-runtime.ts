@@ -1,6 +1,6 @@
 /**
  * Tool runtime for executing Node.js tools.
- * This runtime exists only for Node.js because the core server is built on Node.js
+ * This runtime exists only for Node.js because the Leon server is built on Node.js
  * and the ReAct loop only needs a single bridge for now.
  */
 

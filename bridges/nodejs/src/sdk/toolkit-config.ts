@@ -114,7 +114,7 @@ export class ToolkitConfig {
   }
 
   /**
-   * Resolve SDK settings from explicit host paths without loading Core services.
+   * Resolve SDK settings from explicit host paths without loading server services.
    */
   private static getSettingsPaths(
     toolkitName: string,

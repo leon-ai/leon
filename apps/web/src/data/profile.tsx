@@ -103,7 +103,7 @@ function ProfileSignIn() {
       {setup.data && <>
         <p>{setup.data.server}</p>
         <Selection multiple label="Allow computer use on this computer" checked={allowComputerUse}
-          description="This Core can view my screen and send mouse and keyboard input while Leon Desktop is open."
+          description="This server can view my screen and send mouse and keyboard input while Leon Desktop is open."
           onChange={(event) => setAllowComputerUse(event.target.checked)} disabled={login.isPending} />
       </>}
       <Input

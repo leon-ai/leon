@@ -4,6 +4,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 ## Leon server and tooling
 
+- Use **Leon server** on first mention and **server** thereafter for the backend, its process and its lifecycle. Name specific listeners precisely, such as the **HTTP server**, **Socket.IO server** or **Python TCP server**. Refer to internal code by its subsystem or path, such as `server/src/core/`. Use literal names for commands, paths and artifacts, including `pnpm build:server`, `server/dist` and `leon-core-*`.
 - Use the root `scripts/` directory for build, setup, maintenance and release tooling. Keep server services and lifecycle code under `server/src/`.
 - Keep dependencies pointing from tooling to runtime. When both need the same logic, tooling should import a narrow runtime module. Put server behavior in a server-owned module and shared host capabilities in a dependency-free leaf under `bridges/runtime/`.
 
@@ -48,7 +49,7 @@ These are community expectations for agents, not license conditions. The unchang
 - Add tests only for distinct observable contracts and real coverage gaps, expressed in names, fixtures and assertions without change history or incidental versions. Cover broad behavior/invariants for the failure class, not incident-specific reproductions, copied configuration assertions, private-wiring checks or mock passthrough smoke tests. Trivial changes need no new tests.
 - Never add test files/cases for SDKs, tools or skills without explicit owner request, wherever they would live. Run affected existing tests and adjust compatibility as needed.
 - Review affected tests and fixtures. Keep cleanup tied to the approved change and preserve distinct contracts that still apply.
-- New Core concepts/mechanisms require real, behavior-named scenarios with isolated fixtures under `test/agent/scenarios/<suite>-scenarios/<mechanism>-scenarios/`, separate from the provider matrix.
+- New server runtime concepts and mechanisms require real, behavior-named scenarios with isolated fixtures under `test/agent/scenarios/<suite>-scenarios/<mechanism>-scenarios/`, separate from the provider matrix.
 - Run `pnpm lint`, fix all warnings/errors, and run relevant checks.
 - Include validation in the implementation plan: identify affected behavior and the smallest checks that cover it. Inspect package scripts and runner argument handling before selecting files or cases; confirm the selection does not unintentionally include a whole suite.
 - Use focused checks for feedback while implementing. Complete coherent edits and review before final validation; run independent checks together only when they do not share mutable fixtures, servers or output directories. For purely visual changes, use lint and a targeted visual check when useful; broader functional suites need a concrete affected contract.
@@ -57,7 +58,7 @@ These are community expectations for agents, not license conditions. The unchang
 - Use `pnpm test:unit` for fast feedback and `pnpm test:integration` for real worker, download, capture and rendering changes; `pnpm test` includes both.
 - Run all real scenarios with `pnpm test:agent:scenario`; select categories/mechanisms/cases with `pnpm test:agent:scenario -- <selection>` or list with `--list`. Short mechanism names must be unambiguous. Scenarios use the latest-used profile's active model; override the profile with `LEON_PROFILE`.
 - Use `pnpm test:agent:e2e -- -t openai` unless the owner explicitly requests other providers.
-- For bridge boundary changes, verify built import graphs and isolated Core startup without bridge-only dependencies; source tests are insufficient.
+- For bridge boundary changes, verify built import graphs and isolated server startup without bridge-only dependencies. Source tests are insufficient.
 
 ## Setup migrations
 
@@ -69,7 +70,7 @@ These are community expectations for agents, not license conditions. The unchang
 ## Tools
 
 - Declare semver `version` in `tool.json`, starting at `1.0.0`; advance when the tool changes, following the repository-wide versioning rule. Bundled tools ship with Leon; when release notes are explicitly requested, they belong in root `CHANGELOG.md`. MCP versions identify Leon's integration definition, not the remote service.
-- Keep application/device behavior in tools, orchestration in skills, generic execution/transport in Core. Inspect `tools/video_streaming/ffmpeg/` and parent SDK classes before implementing tools.
+- Keep application/device behavior in tools, orchestration in skills and generic execution/transport in the server. Inspect `tools/video_streaming/ffmpeg/` and parent SDK classes before implementing tools.
 - Keep tools self-contained, allowing small application-specific helper duplication; no toolkit-level source folders. Preserve existing layouts: Node.js implementations in `src/nodejs/` extend SDK `Tool` and export through `index.ts`; Python implementations in `src/python/` extend SDK `BaseTool` and follow package exports. Supporting scripts belong in the implementation's `lib/`, not another language folder implying an SDK implementation.
 - Use `ToolkitConfig` and inherited settings, validation, reporting, command and binary facilities. Keep connection checks tool-specific; no parallel settings loader or installer.
 - Assess incremental output when changing tools. Use SDK command streaming, `emitOutput`/`emit_output` for text and `emitProgress`/`emit_progress` only for advancing work. Separate final results, bound chunks and attach retained output to its original call. Declare function `timeout.idleMs` and optional `totalMs` as needed; activity renews only idle time. Respect cancellation/task deadlines through host policy, not parallel timers or simulated output.
@@ -77,17 +78,17 @@ These are community expectations for agents, not license conditions. The unchang
 - No nested `pnpm-workspace.yaml` in tools, skills, bridges or generated tool projects. Root build policy is carried into independent installs by the shared installer. Keep application-specific compatibility rules in source-local `.pnpmfile.mjs`; include it in generated projects/source exports that need it.
 - Before adding dependencies, inspect existing packages/SDK helpers; prefer compatible existing pinned versions. Keep application engines/assets tool-local; consider bridge-owned packages behind generic SDK helpers for reusable infrastructure. Assess dependencies individually; do not move application behavior into SDKs merely to reduce manifests.
 - `tool.json` owns function schemas, descriptions, progressive guidance and binary/resource declarations; no separate instruction-fetching functions or duplicated guidance.
-- Derive catalogs from canonical `tools/<toolkit>/<tool>/tool.json`, never duplicate registries/runtime constants. Native tools retain implementations. MCP definitions contain only shared metadata, an HTTP server source and empty functions; discover bounded remote schemas after explicit profile installation. Core owns transport, encrypted authorization and cancellation. Catalog visibility never enables execution, installs dependencies, authorizes accounts or replays remote writes.
+- Derive catalogs from canonical `tools/<toolkit>/<tool>/tool.json`, never duplicate registries/runtime constants. Native tools retain implementations. MCP definitions contain only shared metadata, an HTTP server source and empty functions. Discover bounded remote schemas after explicit profile installation. The Leon server owns transport, encrypted authorization and cancellation. Catalog visibility never enables execution, installs dependencies, authorizes accounts or replays remote writes.
 - Keep `distribution` (`built-in`/`extension`), profile installation/availability and `maintenance` (`official`/`community`) independent. Preserve author attribution; `author`/`maintainers` share optional GitHub username, Discord ID/username, email and website contact fields. Only curated source may claim official maintenance; distinguish integration maintainers from remote operators.
 - Declared `logo` means local `logo.svg`, rendered as an isolated catalog/connection-card image, never injected SVG. Optional `logo_mask` (`alpha`/`inverse-luminance`) enables monochrome activities using that asset; otherwise retain `icon_name`. Keep rendering policy in metadata, not brand-specific code.
-- Expose ordinary SDK tool methods, not Core providers or `execution` overrides. Propose missing shared runtime contracts first.
+- Expose ordinary SDK tool methods. Server providers and `execution` overrides stay private. Propose missing shared runtime contracts first.
 
 ## Bridge SDKs
 
-- No Core imports of SDK/tool runtime implementations or SDK imports of Core services/helpers; type-only imports and explicit dependency-free host contracts are allowed.
-- Shared contracts belong in `bridges/runtime/contracts/`, Node.js capabilities in `bridges/runtime/nodejs/`: small standard-library leaves without Core/SDK/toolkit imports. Reuse persistence/transport through thin adapters; paths/context, logging and authentication remain host-owned.
+- Keep server runtime code independent of SDK and tool implementations. Keep SDKs independent of server services and helpers. Type-only imports and explicit dependency-free host contracts are allowed.
+- Put shared contracts in `bridges/runtime/contracts/` and Node.js capabilities in `bridges/runtime/nodejs/`. These small standard-library leaves keep server, SDK and toolkit dependencies out of shared code. Reuse persistence and transport through thin adapters. The host owns paths, context, logging and authentication.
 - Keep helpers in `sdk/utils/`, preserving public imports and equivalent, idiomatic Node.js/Python behavior. Add only shared infrastructure avoiding repeated dependencies or meaningful duplication; keep application behavior in tools and host transport outside the public SDK.
-- Declare SDK dependencies in bridge manifests, never Core's `node_modules`. Prefer standard-library equivalents; compatible versions may share pnpm's store, not runtime ownership.
+- Declare SDK dependencies in bridge manifests and keep them separate from the server's `node_modules`. Prefer standard-library equivalents. Compatible versions may share pnpm's store while each runtime owns its dependencies.
 - Use narrow imports: platform/path/settings must not load archives/downloaders/integrations. Lazy loading only defers optional work.
 
 ## Skills

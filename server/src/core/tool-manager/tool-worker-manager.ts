@@ -205,7 +205,7 @@ export class ToolWorkerManager {
   }
 
   private hasCompiledTool(context: ToolExecutionContext): boolean {
-    // Source Core should pick up local edits immediately. Profile-installed tools
+    // A server running from source should pick up local edits immediately. Profile-installed tools
     // keep precedence over shipped JavaScript with the same toolkit and tool IDs.
     if (!import.meta.url.endsWith('.js') || !existsSync(COMPILED_NODEJS_TOOL_RUNTIME_PATH)) {
       return false

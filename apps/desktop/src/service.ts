@@ -90,7 +90,7 @@ export async function stopCoreAndWait(configuration: ServiceConfiguration): Prom
     await delay(STOP_POLL_INTERVAL_MS)
   }
 
-  throw new Error('My managed Core did not stop. Open Core logs, then retry.')
+  throw new Error('My managed server did not stop. Open server logs, then retry.')
 }
 
 /**
@@ -124,7 +124,7 @@ export function serviceDefinition({ platform, id, node, runner, configurationPat
   }
   if (platform === 'linux') {
     const file = path.join(home, '.config/systemd/user', `${id}.service`)
-    return { file, content: `[Unit]\nDescription=Leon Core\nStartLimitIntervalSec=60\nStartLimitBurst=3\n\n[Service]\nType=simple\nExecStart=${[unitValue(node), ...args.slice(1).map((arg) => unitValue(arg, true))].join(' ')}\nWorkingDirectory=${unitValue(directory)}\nRestart=on-failure\nRestartSec=${RESTART_DELAY_SECONDS}\nTimeoutStopSec=90\n\n[Install]\nWantedBy=default.target\n`,
+    return { file, content: `[Unit]\nDescription=Leon server\nStartLimitIntervalSec=60\nStartLimitBurst=3\n\n[Service]\nType=simple\nExecStart=${[unitValue(node), ...args.slice(1).map((arg) => unitValue(arg, true))].join(' ')}\nWorkingDirectory=${unitValue(directory)}\nRestart=on-failure\nRestartSec=${RESTART_DELAY_SECONDS}\nTimeoutStopSec=90\n\n[Install]\nWantedBy=default.target\n`,
       enable: ['systemctl', ['--user', 'enable', '--now', `${id}.service`]],
       disable: ['systemctl', ['--user', 'disable', '--now', `${id}.service`]] }
   }

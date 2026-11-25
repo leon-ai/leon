@@ -45,7 +45,7 @@ describe('Satellite tool ownership', () => {
     })
   })
 
-  it('keeps a Core-only tool on the Core host even when a Satellite advertises it', () => {
+  it('keeps a server-only tool on the server host even when a Satellite advertises it', () => {
     const registry = new ToolkitRegistry()
     vi.spyOn(registry, 'getToolExecutionTarget').mockReturnValue(ToolExecutionTarget.Core)
     registry.registerSatelliteTools('owner-device', [TOOLKIT])

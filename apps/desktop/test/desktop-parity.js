@@ -76,7 +76,7 @@ void (async () => {
       body: JSON.stringify({ id: crypto.randomUUID(), surfaceId: 'fixture', nodeId: 'choice', revision: 1, values: true })
     })
     if (interactive.status !== 202) {
-      throw new Error('Desktop could not send an interactive reply to Core')
+      throw new Error('Desktop could not send an interactive reply to the server')
     }
     await waitFor(async () => (await fetch('/__desktop/notifications').then((response) => response.json())).length === 1,
       'live native completion notification')
@@ -85,9 +85,9 @@ void (async () => {
     const incompatible = await fetch('/api/v1/updates/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tag: `v${Number(auth.version.split('.')[0]) + 1}.0.0` }) })
     if (incompatible.status !== 409) {
-      throw new Error('Desktop must reject a breaking Core update before forwarding installation')
+      throw new Error('Desktop must reject a breaking server update before forwarding installation')
     }
-    checks.push('Breaking Core updates are rejected before installation')
+    checks.push('Breaking server updates are rejected before installation')
     // Exercise the real Aurora bootstrap under the inherited desktop policy;
     // its opaque frame can interact without gaining access to Node or the host.
     const frame = await waitFor(() => document.querySelector('iframe[title="Desktop sandbox check"]'), 'sandbox frame')
@@ -139,17 +139,17 @@ void (async () => {
     if (!ordinary.ok || receipt.attachment?.size_bytes !== browserBytes.length) {
       throw new Error('An ordinary attachment is still capped at 8 MB')
     }
-    checks.push('Ordinary browser-file uploads above 8 MB reach Core')
+    checks.push('Ordinary browser-file uploads above 8 MB reach the server')
     const artifact = await fetch(`/api/v1/artifacts/${created.session.id}/fixture-note`)
     if (artifact.headers.get('Content-Security-Policy') !== 'sandbox; default-src \'none\'') {
-      throw new Error('The desktop host dropped Core’s artifact sandbox policy')
+      throw new Error('The desktop host dropped the server’s artifact sandbox policy')
     }
     const artifactWindow = window.open(`/api/v1/artifacts/${created.session.id}/fixture-note?inline=1`, '_blank')
     if (!artifactWindow) {
       throw new Error('The authenticated artifact could not open in a desktop window')
     }
     artifactWindow.close()
-    checks.push('Authenticated artifact windows preserve Core’s sandbox policy')
+    checks.push('Authenticated artifact windows preserve the server’s sandbox policy')
     const settings = await fetch('/web-app/settings/general', { headers: { Accept: 'text/html' } })
     if (!settings.ok || !(await settings.text()).includes('name="leon-desktop"')) {
       throw new Error('A refreshed settings route did not restore the shared application')

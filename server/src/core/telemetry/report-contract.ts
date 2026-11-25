@@ -161,7 +161,7 @@ const sessionActivitySchema = Type.Object({
 export type SessionActivityReport = Static<typeof sessionActivitySchema>
 
 /**
- * Gives concurrent Core processes and retries the same snapshot identity for a profile and UTC day.
+ * Gives concurrent server processes and retries the same snapshot identity for a profile and UTC day.
  */
 export function getSessionActivityId(profile: string, at: number): string {
   const day = Math.floor(at / TELEMETRY_DAY_MS)
@@ -246,7 +246,7 @@ export function getIanaTimeZone(value: string): string | undefined {
 }
 
 /**
- * Checks the shape and timezone of an event sent by Core.
+ * Checks the shape and timezone of an event sent by the server.
  */
 export function isTelemetryEventReport(value: unknown): value is TelemetryEventReport {
   return Value.Check(telemetryEventSchema, value) &&
@@ -287,7 +287,7 @@ const localGGUFLabels = new Map<string, Pick<PublicModelLabel, 'model' | 'quanti
 const MANAGED_GGUF_CHECKSUM = /-[a-f0-9]{64}(?=\.gguf$)/i
 
 /**
- * Only canonical catalog names leave Core. Private model aliases share one bucket.
+ * Only canonical catalog names leave the server. Private model aliases share one bucket.
  */
 export function getPublicModel(provider: string, model: string): PublicModelLabel {
   if (provider === LLMProviders.LlamaCPP || provider === LLMProviders.SGLang) {

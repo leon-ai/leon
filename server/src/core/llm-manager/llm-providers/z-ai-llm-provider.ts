@@ -131,7 +131,7 @@ export default class ZAILLMProvider extends AISDKRemoteLLMProvider {
       throw new Error('Z.ai tool-action requests require an available matching tool.')
     }
 
-    // Keep the cached system prefix and reasoning history intact. Core still
+    // Keep the cached system prefix and reasoning history intact. The server still
     // reviews completion; automatic selection cannot guarantee a tool call.
     options.toolChoice = { type: 'auto' }
     options.prompt.push({

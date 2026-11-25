@@ -3,7 +3,7 @@ import logo from '../../../public/img/logo-color.svg'
 import './desktop-startup.sass'
 
 /**
- * Gives native startup a first painted view without delaying Core readiness.
+ * Gives native startup a first painted view without delaying server readiness.
  * Measurable installation work uses the detailed progress view on the same root.
  */
 export function DesktopStartupView() {

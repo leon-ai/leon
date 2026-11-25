@@ -1,4 +1,4 @@
-// This entry stays plain Node so Core can run without an Electron process.
+// This entry stays plain Node so the server can run without an Electron process.
 import { readFile, mkdir, open, rm, stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:net'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -41,7 +41,7 @@ async function acquireLock(): Promise<void> {
       await rm(lock, { recursive: true, force: true })
     }
   }
-  throw new Error('Could not acquire the Core service lock')
+  throw new Error('Could not acquire the server service lock')
 }
 
 async function stop(): Promise<void> {
@@ -94,7 +94,7 @@ async function launch(script: string): Promise<void> {
       if (stopping || code === 0) {
         resolve()
       } else {
-        reject(new Error(`Core exited with ${signal ?? code}`))
+        reject(new Error(`The server exited with ${signal ?? code}`))
       }
     })
   })

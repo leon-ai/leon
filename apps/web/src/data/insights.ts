@@ -77,7 +77,7 @@ export function useInsightsEvaluations(filters: EvaluationQuery): UseQueryResult
 }
 
 /**
- * Applies only consent changes acknowledged by Core for the current profile.
+ * Applies only consent changes acknowledged by the server for the current profile.
  */
 export function useTelemetrySetting(): {
   setting: UseQueryResult<TelemetrySetting>

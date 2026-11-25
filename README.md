@@ -167,7 +167,7 @@ And if you would like to take part in building Leon, fill out the **[Leon AI con
 
 You can help with code, testing, documentation, design, translation, videos, or welcoming others. You don't need to be a developer to have something valuable to bring.
 
-For now, the core and interface are still moving quite a bit. I'm organizing contributions with that in mind, so we can give people a useful place to start and respect the time they offer.
+For now, the server and interface are still moving quite a bit. I'm organizing contributions with that in mind, so we can give people a useful place to start and respect the time they offer.
 
 Really looking forward to seeing what we make together.
 

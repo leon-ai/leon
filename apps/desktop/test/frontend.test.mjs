@@ -39,7 +39,7 @@ test('a startup page retains its assets until navigation opens the ready fronten
     async frontend() {
       const root = phase === 'complete' ? managed : bundled
 
-      // Core may become ready while the bundled document is being prepared.
+      // The server may become ready while the bundled document is being prepared.
       phase = 'complete'
       return root
     },

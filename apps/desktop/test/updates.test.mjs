@@ -21,7 +21,7 @@ class Engine extends EventEmitter {
   }
 }
 
-test('pins a verified desktop download until an explicit matching restart, independently of Core', async () => {
+test('pins a verified desktop download until an explicit matching restart, independently of the server', async () => {
   const engine = new Engine()
   const stoppedCore = false
   const updater = createDesktopUpdater({ engine, currentVersion: '0.1.0', beforeInstall: () => {

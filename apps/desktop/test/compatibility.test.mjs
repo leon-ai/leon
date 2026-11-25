@@ -18,7 +18,7 @@ const manifest = (version, protocol = DESKTOP_CORE_PROTOCOL_VERSION) => ({
   assets: [{ name: `leon-core-${version}-${platform}.tar.gz`, platform, bytes: 1_024, sha256: 'ab'.repeat(32) }]
 })
 
-test('accepts supported Core versions and rejects unknown protocols, older code and breaking releases', () => {
+test('accepts supported server versions and rejects unknown protocols, older code and breaking releases', () => {
   assertCoreCompatibility({ version: contract.sourceVersion, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
   assertCoreCompatibility({ version: contract.minimumVersion, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
   assertCoreCompatibility({ version: compatible, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
@@ -26,7 +26,7 @@ test('accepts supported Core versions and rejects unknown protocols, older code 
     { version: compatible, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION + 1 },
     { version: `${major - 1}.0.0`, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION },
     { version: `${major + 1}.0.0-alpha.1`, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION }]) {
-    assert.throws(() => assertCoreCompatibility(value), /compatible Leon Core/)
+    assert.throws(() => assertCoreCompatibility(value), /compatible Leon server/)
   }
 })
 
@@ -48,7 +48,7 @@ test('selects the newest eligible platform archive while skipping drafts, missin
 })
 
 test('fails clearly without a compatible release and refuses malformed archive integrity metadata', async () => {
-  await assert.rejects(findCoreAsset([], async () => {}, platform), /No compatible prebuilt Core/)
+  await assert.rejects(findCoreAsset([], async () => {}, platform), /No compatible prebuilt server/)
   await assert.rejects(findCoreAsset([release(compatible)], async () => {
     const value = manifest(compatible)
     value.assets[0].sha256 = 'invalid'

@@ -5,7 +5,7 @@ import {
 } from '../../../../bridges/runtime/contracts/desktop-client'
 
 /**
- * Reads the remote Core address from the local Desktop host before sign-in.
+ * Reads the remote server address from the local Desktop host before sign-in.
  */
 export async function getDesktopComputerUseSetup(signal: AbortSignal): Promise<DesktopComputerUseSetup | null> {
   const response = await fetch(DESKTOP_COMPUTER_USE_PATH, { signal })

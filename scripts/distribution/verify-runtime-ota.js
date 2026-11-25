@@ -23,7 +23,7 @@ const BOOTSTRAP_VERSION = '0.0.0-runtime.0'
 const TIMEOUT_MS = 180_000
 
 /**
- * Runs the actual Core HTTP apply flow against built releases. The first archive
+ * Runs the actual server HTTP apply flow against built releases. The first archive
  * release records a synthetic older baseline; published predecessors are reused.
  */
 export async function verifyRuntimeOTA(directory) {
@@ -123,7 +123,7 @@ export async function verifyRuntimeOTA(directory) {
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
     const baseURL = `http://127.0.0.1:${server.address().port}/`
     await writeRuntimeJSON(fixturePath, { manifest: metadata, baseURL, releases: [{ tag_name: `v${metadata.version}`,
-      name: 'Verified Core release', published_at: new Date().toISOString(), body: 'A built Core release.',
+      name: 'Verified server release', published_at: new Date().toISOString(), body: 'A built server release.',
       html_url: `${baseURL}release`, draft: false, prerelease: Boolean(semver.prerelease(metadata.version)) }] })
     child = spawn(initial.node, [path.join(initial.root, 'scripts/run-runtime.js')], { cwd: initial.root,
       windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...env,
@@ -141,7 +141,7 @@ export async function verifyRuntimeOTA(directory) {
           'x-leon-profile-token': `${identity.profile}:${identity.token}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: AbortSignal.timeout(TIMEOUT_MS)
       })
-      assert(response.ok, `Packaged Core returned ${response.status} for ${resource}: ${output}`)
+      assert(response.ok, `Packaged server returned ${response.status} for ${resource}: ${output}`)
       return response.json()
     }
     const until = async (probe) => {
@@ -188,27 +188,27 @@ export async function verifyRuntimeOTA(directory) {
         return snapshot.state?.id === accepted.state.id && snapshot.state?.phase === 'completed'
       })
       assert.equal(JSON.parse(await fs.readFile(path.join(installation, 'active.json'), 'utf8')).version, metadata.version)
-      assert((await fs.readFile(path.join(profileRoot, '.env'), 'utf8')).includes(token), 'Profile credentials must survive Core replacement')
-      assert((await fs.readFile(path.join(otherRoot, '.env'), 'utf8')).includes(other.token), 'Other profile credentials must survive Core replacement')
+      assert((await fs.readFile(path.join(profileRoot, '.env'), 'utf8')).includes(token), 'Profile credentials must survive server replacement')
+      assert((await fs.readFile(path.join(otherRoot, '.env'), 'utf8')).includes(other.token), 'Other profile credentials must survive server replacement')
       for (const item of preserved) {
         const environment = parseEnvironment(await fs.readFile(path.join(home, 'profiles', item.identity.profile, '.env'), 'utf8'))
         for (const [key, value] of Object.entries(item.environment)) {
-          assert.equal(environment[key], value, 'Profile secrets must survive Core replacement')
+          assert.equal(environment[key], value, 'Profile secrets must survive server replacement')
         }
         const { workspaces } = await request('workspaces', undefined, item.identity)
         const workspace = workspaces.find((value) => value.id === item.workspace.id)
-        assert(workspace, 'The existing workspace must survive Core replacement')
+        assert(workspace, 'The existing workspace must survive server replacement')
         for (const field of ['name', 'brief', 'resources']) {
           assert.deepEqual(workspace[field], item.workspace[field])
         }
         const { sessions } = await request(`sessions?workspace_id=${item.workspace.id}`, undefined, item.identity)
         const session = sessions.find((value) => value.id === item.session.id)
-        assert(session, 'The existing conversation must survive Core replacement')
+        assert(session, 'The existing conversation must survive server replacement')
         for (const [key, value] of Object.entries(item.session)) {
           assert.deepEqual(session[key], value)
         }
         const otherWorkspace = preserved.find((value) => value !== item).workspace.id
-        assert(!workspaces.some((value) => value.id === otherWorkspace), 'Profiles must remain isolated after Core replacement')
+        assert(!workspaces.some((value) => value.id === otherWorkspace), 'Profiles must remain isolated after server replacement')
       }
       if (process.env.LEON_FRESH_INSTALL_API_KEY) {
         const challenge = randomUUID()

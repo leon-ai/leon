@@ -121,7 +121,7 @@ test('cancelling setup terminates an owned command and releases output pipes', a
   await assert.rejects(running, /cancelled-by-owner/)
 })
 
-test('readiness accepts Core authentication without hardware or session requests', async () => {
+test('readiness accepts server authentication without hardware or session requests', async () => {
   const requests = []
   const server = await httpServer((request, response) => {
     requests.push(request.url)
@@ -136,11 +136,12 @@ test('readiness accepts Core authentication without hardware or session requests
   }
 })
 
-test('a compatible running external Core is connected without executing setup', async () => {
+test('a compatible running external server is connected without executing setup', async () => {
   const controller = await createBootstrap({ dependencies: {
-    probe: async () => true, command: async () => {
- throw new Error('Existing Core must not run setup') 
-}
+    probe: async () => true,
+    command: async () => {
+      throw new Error('An existing server must not run setup')
+    }
   } })
   try {
     await controller.start()
@@ -148,19 +149,19 @@ test('a compatible running external Core is connected without executing setup', 
     assert.equal(controller.store.state.external, true)
     assert.match(controller.store.state.server, /^http:\/\/127.0.0.1:/)
     await assert.rejects(controller.setStartup(true), /managed local instance/)
-    await assert.rejects(controller.stop(), /only the Core/)
+    await assert.rejects(controller.stop(), /only the server/)
   } finally {
     await controller.close()
   }
 })
 
-test('a responding incompatible Core is rejected rather than treated as an offline server', async () => {
+test('a responding incompatible server is rejected rather than treated as an offline server', async () => {
   const server = await httpServer((_request, response) => {
     response.end(JSON.stringify({ authenticated: false, profile_name: null,
       version: contract.sourceVersion, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION + 1 }))
   })
   try {
-    await assert.rejects(coreReady(server.origin), /compatible Leon Core/)
+    await assert.rejects(coreReady(server.origin), /compatible Leon server/)
     const controller = await createBootstrap({ origin: server.origin, dependencies: {
       command: async () => {
         throw new Error('An incompatible server must never start setup')
@@ -169,7 +170,7 @@ test('a responding incompatible Core is rejected rather than treated as an offli
     try {
       await controller.start()
       assert.equal(controller.store.state.phase, SetupPhase.Failed)
-      assert.match(controller.store.state.error, /compatible Leon Core/)
+      assert.match(controller.store.state.error, /compatible Leon server/)
     } finally {
       await controller.close()
     }
@@ -178,7 +179,7 @@ test('a responding incompatible Core is rejected rather than treated as an offli
   }
 })
 
-test('startup reuses a supported running Core and restarts an incompatible managed checkout into its built Core', async () => {
+test('startup reuses a supported running server and restarts an incompatible managed checkout into its built server', async () => {
   await withManagedProfile(async ({ home, profile, port, origin }) => {
     const codebase = path.join(temporary, 'rebuilt-checkout')
     const older = `${semver.major(contract.minimumVersion)}.0.0-0`
@@ -192,7 +193,7 @@ test('startup reuses a supported running Core and restarts an incompatible manag
     })
     let service = await createCoreService({ home, codebase, node: process.execPath, profile })
     await service.start()
-    await until(() => coreVersion(origin), 'supported Core readiness')
+    await until(() => coreVersion(origin), 'supported server readiness')
     const running = await controlCore(service.configuration)
     const compatible = await createBootstrap()
     try {
@@ -217,7 +218,7 @@ test('startup reuses a supported running Core and restarts an incompatible manag
     await writeFile(entry, coreEntry(port, older))
     service = await createCoreService({ home, codebase, node: process.execPath, profile })
     await service.start()
-    assert.equal(await until(() => coreVersion(origin), 'older Core readiness'), older)
+    assert.equal(await until(() => coreVersion(origin), 'older server readiness'), older)
     const oldRunner = await controlCore(service.configuration)
     await writeFile(entry, coreEntry(port, contract.sourceVersion))
 
@@ -243,7 +244,7 @@ test('startup reuses a supported running Core and restarts an incompatible manag
   })
 })
 
-test('a failed managed runtime upgrade restores the running previous Core and can be retried', async () => {
+test('a failed managed runtime upgrade restores the previous running server and can be retried', async () => {
   await withManagedProfile(async ({ home, profile, port, origin }) => {
     const installation = path.join(home, 'runtimes/core')
     const previous = `${semver.major(contract.minimumVersion)}.0.0-0`
@@ -315,7 +316,7 @@ test('a failed managed runtime upgrade restores the running previous Core and ca
   })
 })
 
-test('a managed Core survives its desktop owner and is reused without a second process', async () => {
+test('a managed server survives its desktop owner and is reused without a second process', async () => {
   const home = path.join(temporary, 'service-home')
   const codebase = path.join(temporary, 'fixture-checkout')
   const marker = path.join(temporary, 'server-starts')
@@ -354,7 +355,7 @@ createServer((_request, response) => response.end(JSON.stringify({ authenticated
       });
       await service.start();
     `])
-    assert.ok(await until(() => coreReady(`http://127.0.0.1:${port}`), 'detached Core readiness'))
+    assert.ok(await until(() => coreReady(`http://127.0.0.1:${port}`), 'detached server readiness'))
     const first = await controlCore(service.configuration)
     assert.ok(first?.pid)
     const reopened = await createCoreService({ home, codebase: codebase + path.sep + 'server' + path.sep + '..', node: process.execPath,
@@ -373,8 +374,8 @@ createServer((_request, response) => response.end(JSON.stringify({ authenticated
     assert.equal(await coreReady(`http://127.0.0.1:${port}`), true)
   } finally {
     await controlCore(service.configuration, 'stop')
-    await until(async () => !await controlCore(service.configuration), 'Core stop')
-    await until(async () => !await coreReady(`http://127.0.0.1:${port}`), 'Core child stop')
+    await until(async () => !await controlCore(service.configuration), 'server shutdown')
+    await until(async () => !await coreReady(`http://127.0.0.1:${port}`), 'server process exit')
   }
 })
 
@@ -398,7 +399,7 @@ test('startup definitions preserve paths with spaces and platform-specific escap
   }
 })
 
-// The copied downloader must remain usable without Core/SDK/bridge packages.
+// The copied downloader must remain usable without server, SDK or bridge packages.
 test('bootstrap runtime imports only Node built-ins after bundling', async () => {
   const destination = path.join(temporary, 'isolated-runtime.mjs')
   await writeFile(destination, await readFile(path.join(root, '.generated/runtime/bootstrap-runtime.mjs')))

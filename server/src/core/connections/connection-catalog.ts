@@ -134,7 +134,7 @@ export function getConnectionCallbackURL(
 }
 
 /**
- * Exposes tool-owned setup metadata; configured client secrets never leave Core.
+ * Exposes tool-owned setup metadata; configured client secrets never leave the server.
  */
 async function getConnectionSetup(
   provider: string,

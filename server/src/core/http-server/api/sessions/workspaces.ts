@@ -58,7 +58,7 @@ async function normalizeInput(input: WorkspaceInput): Promise<WorkspaceInput> {
           throw new Error('Use an absolute folder path or your home shortcut.')
         }
         // Missing or disconnected resources can recover without being reattached.
-        // Filesystem probes stay asynchronous so slow volumes cannot block Core.
+        // Filesystem probes stay asynchronous so slow volumes cannot block the server.
         try {
           if (!(await fs.stat(location)).isDirectory()) {
             throw new Error('A folder resource must point to a directory.')

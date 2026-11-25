@@ -6,7 +6,7 @@ const MAXIMUM_CONTEXT_LENGTH = 256
 const MAXIMUM_CONTROL_BYTES = 4_096
 
 /**
- * Authenticates each completion against Core and bounds replay receipts. Native
+ * Authenticates each completion against the server and bounds replay receipts. Native
  * diagnostics record dispatch without displaying banners or requesting focus.
  */
 export function completionNotifications({ profile, show, diagnostic = false }: {

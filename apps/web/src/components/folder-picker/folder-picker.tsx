@@ -40,10 +40,10 @@ export function FolderPicker({ onAttach, disabled = false, initialPath, label = 
       const result = await requestAPI<FolderListing>('file-system/list', {
         method: 'POST', body: JSON.stringify({ value, folders_only: true }), signal
       })
-      // Older Core processes return entries without the navigation metadata.
+      // Older server processes return entries without the navigation metadata.
       // Report that mismatch rather than treating two missing paths as the root.
       if (result.success && (!result.directory || !result.parent)) {
-        throw new Error('I need Core to be rebuilt and restarted before I can browse folders.')
+        throw new Error('I need the server to be rebuilt and restarted before I can browse folders.')
       }
 
       return result

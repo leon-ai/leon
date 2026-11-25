@@ -65,7 +65,7 @@ export async function buildRuntime({ source = process.cwd(), output, home = proc
       await fs.copyFile(path.join(source, 'scripts', file), path.join(payload, 'scripts', file))
     }
     await fs.cp(path.join(source, 'bridges/runtime/contracts'), path.join(payload, 'bridges/runtime/contracts'), { recursive: true })
-    // Source workers keep their bridge-owned dependencies, apart from Core's.
+    // Source workers keep their bridge-owned dependencies, apart from the server's.
     await copyRuntimeDependencies(path.join(source, 'bridges/nodejs'), path.join(payload, 'bridges/nodejs/node_modules'))
     for (const name of ['node', 'pnpm', 'python', 'uv', 'jq']) {
       await fs.cp(path.join(home, 'bin', name), path.join(payload, 'runtime', name), { recursive: true, verbatimSymlinks: true })

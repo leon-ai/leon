@@ -318,7 +318,7 @@ export const MCP_MANAGER = createProfileServiceProxy('MCP_MANAGER', () => new MC
 
 /**
  * Starts discovery and sign-in from an explicit client action. The provider
- * returns to Core before Core signals completion to the originating client.
+ * returns to the server before the server signals completion to the originating client.
  */
 export async function startMCPOAuth(manifest: MCPManifest, origin: string, returnURL: string, apiVersion: string): Promise<{ authorization_url?: string }> {
   const target = new URL(returnURL)

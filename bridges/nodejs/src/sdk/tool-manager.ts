@@ -91,7 +91,7 @@ export default class ToolManager {
   }
 
   /**
-   * Ask Leon Core to run a profile tool, including Satellite-hosted tools.
+   * Ask the Leon server to run a profile tool, including Satellite-hosted tools.
    */
   static async executeTool<
     TOutput extends Record<string, unknown> = Record<string, unknown>
@@ -106,7 +106,7 @@ export default class ToolManager {
       const timeout = setTimeout(() => {
         this.pendingToolRequests.delete(requestId)
         this.stopToolResultListenerIfIdle()
-        reject(new Error('Leon Core tool execution timed out.'))
+        reject(new Error('Leon server tool execution timed out.'))
       }, SKILL_TOOL_REQUEST_TIMEOUT_MS)
 
       timeout.unref?.()

@@ -488,7 +488,7 @@ export default class ToolExecutor {
       return this.buildResult({
         origin: input.origin,
         status: 'not_available',
-        message: 'This tool must run on the Core host.',
+        message: 'This tool must run on the Leon server.',
         resolvedTool,
         functionName: functionName ?? null,
         input: input.toolInput ?? null,

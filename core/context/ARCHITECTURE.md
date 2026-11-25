@@ -1,15 +1,15 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-11-23T06:03:17+08:00
+- Generated at: 2026-11-26T11:58:36+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
-- Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
-## Core Principles
+- Server runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
+## Runtime Principles
 - Explicit tools over implicit behavior: Leon calls declared tools/functions instead of free-form shell logic whenever possible.
 - Progressive grounding: Leon prefers context and memory tools first, then shell only when no dedicated tool can satisfy the request.
 - Auditable steps: Leon keeps plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
-- Tools own dependencies, settings, connections and device behavior. Core/bridge hosts own execution, transport and authentication. `bridges/runtime/` holds dependency-free shared contracts/Node.js capabilities; Core and SDK implementations stay independent with equivalent Node.js/Python SDK behavior.
-- Native tools keep their SDK workers. Owner-installed HTTP MCP servers have profile-local tool manifests and bounded discovered schemas; Core owns their lazy transports, encrypted OAuth and cancellation, routing results through the ordinary execution/logging lifecycle. Bundled MCP catalog entries alone are not installed or callable, and remote writes are never automatically replayed.
+- Tools own dependencies, settings, connections and device behavior. The server and bridge hosts own execution, transport and authentication. `bridges/runtime/` holds dependency-free shared contracts/Node.js capabilities; the server and SDK implementations stay independent with equivalent Node.js/Python SDK behavior.
+- Native tools keep their SDK workers. Owner-installed HTTP MCP servers have profile-local tool manifests and bounded discovered schemas; the server owns their lazy transports, encrypted OAuth and cancellation, routing results through the ordinary execution/logging lifecycle. Bundled MCP catalog entries alone are not installed or callable, and remote writes are never automatically replayed.
 - Tool catalogs derive from canonical tools/<toolkit>/<tool>/tool.json definitions for native and MCP sources. Native skills use skill.json; Agent Skills retain SKILL.md discovery with optional format-specific skill.json package metadata. Built-in distribution, optional extension installation, profile availability and maintenance provenance are independent; owner-facing documentation and local assets load only on demand and never enter model prompts. Previous tool IDs retain installed identity and authorization without rewriting history.
 - The agent searches bounded local catalog metadata on demand before declaring a service unavailable. Catalog discovery is read-only; trusted setup cards require explicit owner actions to add, enable and authorize tools while respecting profile policy.
 - Workspaces are profile-owned briefs, colors and resource references stored beside conversation metadata. Session membership is optional. The active brief and references refresh as agent grounding each turn; histories remain separate, and deleting a workspace detaches its sessions without deleting resources. Local folder retrieval owns persistent incremental indexes in its tool.
@@ -17,7 +17,7 @@
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
 - Browser conversations use profile-scoped HTTP commands and durable SSE replay; Socket.IO remains available for other clients. Browser and legacy owner-agent entry points share turn orchestration.
 - Aurora visual answers combine bounded native widgets and versioned generated HTML/CSS/JavaScript surfaces in durable answer parts. Generated code runs only in opaque-origin browser frames with restricted resources and an ancestor navigation policy; locally bundled Aurora/chart runtimes load on demand. Only declared values confirmed outside the frame can become profile/session-bound owner commands. Receipts commit atomically, replay never submits actions, and required questions reuse the clarification lifecycle.
-- External HTTP plugins can extend Leon's HTTP contract without patching the core API for each integration.
+- External HTTP plugins can extend Leon's HTTP contract without patching the server API for each integration.
 - Custom clients can read profile-owned extension JSON files through a generic redacted HTTP endpoint, covering skill memory, skill settings, and tool settings without exposing secrets.
 - The LLM layer supports media understanding and generation; generated files are conversation artifacts with authenticated downloads and inline media playback.
 - Setup discovers known AI fellows and can reuse their API keys or bind with some AI provider accounts. AI and tool connections share profile encryption with separate stores and setup handlers; /connection lists both, and /connection ai manages AI connections.
@@ -28,7 +28,7 @@
 ## Leon Satellite
 - Leon Satellite is an optional process on a user device that connects its enabled and available profile tools to a remote Leon server.
 - Eligible tool calls are routed through Satellite and executed on that device; those tools become unavailable when Satellite disconnects.
-- Satellite provides generic transport only. Device-, application-, and company-specific behavior stays in tools and skills instead of Leon Core.
+- Satellite provides generic transport. Tools and skills own device-, application- and company-specific behavior. The server owns shared orchestration.
 ## Browser & Computer Use
 - The browser_use toolkit uses Browser Use CLI for direct browser inspection and actions in the configured browser session. Cua handles graphical application control locally or through Leon Satellite, retaining its session and cleaning up native resources through the worker host.
 - Computer use respects owner app preferences and permissions, adapts to platform capabilities, and uses observed results to verify actions and recover from ineffective attempts.
@@ -46,7 +46,7 @@
 - Deterministic runtime guards validate and repair arguments, block duplicate calls, execute tools, and return every success or failure as a structured observation to the same loop.
 - The model batches independent calls within or across planned work. Tools run concurrently in isolated workers by default; tool-level serial declarations preserve shared sessions and instance state, and function-level overrides allow both in one tool. Bookkeeping stays ordered, and results retain their emitted transcript order.
 - Coding runs directly in the existing agent loop, guided by an Agent Skill and repository instructions. The file tool supports targeted patches; the shell tool supports finite commands and retained conversation-owned command sessions. External coding agents are optional owner-selected delegates.
-- Core retains opted-in background and oversized synchronous agent results per profile/conversation, with handles, cancellation, progress, bounded waits and structured queries without reexecution.
+- The server retains opted-in background and oversized synchronous agent results per profile/conversation, with handles, cancellation, progress, bounded waits and structured queries without reexecution.
 - SDK binary/resource preparation is retained independently of tool background settings. Follow-up messages leave downloads running but require reassessment before the dependent action; explicit cancellation and deadlines still stop preparation. Worker and Satellite boundaries preserve this separation.
 - Workers load assets from the codebase and resolve relative task files in the caller's workspace; Satellite uses its device's workspace.
 - Plans track scope, collection coverage and verified outcomes; their worklists persist through checkpointing and continuation.
@@ -88,8 +88,8 @@
 - A small shortlist matches the current task; full procedures load on demand. Retrieval uses local matching, without QMD or an extra LLM call.
 - The limit is 196 experiences. Retention uses last use, or creation time when unused, and protects active procedures. Loading and use have separate counters.
 ## Reliability
-- Published GitHub releases drive host-wide updates through the authenticated Core API. Clean Git-clone installations started with the managed launcher can fast-forward to a reviewed release; dependency installation and setup run after Core stops, with rollback on setup failure and a browser reconnect after restart.
-- Prebuilt Core installations stage checksum-verified archives, prepare profiles through the same ordered setup as source installations, then select immutable runtime versions. Failed candidate startup restores previous code without undoing profile migrations. Core and desktop share product versions and release notes; one client action coordinates their platform-specific update transports, with native replacement following successful server preparation.
+- Published GitHub releases drive host-wide updates through the authenticated server API. Clean Git-clone installations started with the managed launcher can fast-forward to a reviewed release; dependency installation and setup run after the server stops, with rollback on setup failure and a browser reconnect after restart.
+- Prebuilt server installations stage checksum-verified archives, prepare profiles through the same ordered setup as source installations, then select immutable runtime versions. Failed candidate startup restores previous code without undoing profile migrations. The server and Desktop share product versions and release notes; one client action coordinates their platform-specific update transports, with native replacement following successful server preparation.
 - Schema-guided tool calls and argument repair reduce malformed executions.
 - Duplicate-input guards and observation-driven recovery reduce repeated bad calls while preserving successful progress.
 - Leon prefers dedicated tools over shell commands to keep behavior stable and auditable.

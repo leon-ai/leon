@@ -12,7 +12,7 @@ Automatic detection uses a bounded, cached request to `https://ipapi.co/country/
 | Managed uv's Python dependencies | Tsinghua PyPI, then original PyPI when eligible mirror artifacts or upload timestamps are unavailable. |
 | Playwright browsers and its FFmpeg, Electron, Node.js/headers | npmmirror binaries through each installer's native configuration. |
 | Standalone Python | npmmirror's exact upstream release asset, verified against upstream SHA-256. |
-| pnpm, uv, jq, CMake, Ninja, llama.cpp, llmfit, Leon binaries/Core archives | GH-Proxy for allowlisted repositories with trusted release checksums. |
+| pnpm, uv, jq, CMake, Ninja, llama.cpp, llmfit, Leon binaries and server archives | GH-Proxy for allowlisted repositories with trusted release checksums. |
 | Public Hugging Face weights | `hf-mirror.com`, verified against original LFS SHA-256 metadata; authenticated/custom endpoints stay unchanged. |
 | Desktop icon converter | Verified npmmirror artifact, preserving the converter's pinned integrity checks. |
 

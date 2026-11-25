@@ -17,15 +17,15 @@ interface DesktopSetupViewProps {
 }
 
 /**
- * Shows automatic Core preparation and recovery, shared with Aurora previews.
- * Advanced lifecycle controls live in the native Core menu rather than onboarding.
+ * Shows automatic server preparation and recovery, shared with Aurora previews.
+ * Advanced lifecycle controls live in the native Server menu rather than onboarding.
  */
 export function DesktopSetupView({ data, pending, error, onStart, onCancel, onLogs }: DesktopSetupViewProps) {
   const running = data.phase === SetupPhase.Running
   const ready = data.phase === SetupPhase.Complete
   return <main className="setup">
     <header><h1>{ready ? 'I’m ready' : 'I’m getting ready'}</h1>
-      <p>I’ll open your session as soon as my Core is ready.</p></header>
+      <p>I’ll open your session as soon as my server is ready.</p></header>
     <section aria-label="Installation">
       <div className="setup-actions">
         {!running && !ready && <>
@@ -49,6 +49,6 @@ export function DesktopSetupView({ data, pending, error, onStart, onCancel, onLo
         </li>)}
       </ol>
     </section>
-    {data.phase === SetupPhase.Failed && data.logAvailable && <Button variant="secondary" onClick={onLogs}>Open Core logs</Button>}
+    {data.phase === SetupPhase.Failed && data.logAvailable && <Button variant="secondary" onClick={onLogs}>Open server logs</Button>}
   </main>
 }

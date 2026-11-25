@@ -83,7 +83,7 @@ test('blocks modified installers and missing platforms before making publication
 })
 
 for (const mismatch of ['version', 'commit']) {
-  test(`refuses installer publication when the Core release ${mismatch} differs`, { skip: process.platform === 'win32' }, async () => {
+  test(`refuses installer publication when the server release ${mismatch} differs`, { skip: process.platform === 'win32' }, async () => {
     const f = await fixture()
     try {
       if (mismatch === 'version') {
@@ -92,7 +92,7 @@ for (const mismatch of ['version', 'commit']) {
         f.env.FIXTURE_RELEASE_COMMIT = 'another-commit'
       }
       await assert.rejects(execute(process.execPath, [publisher, f.artifacts], { cwd: f.root, env: f.env }),
-        /matching verified Core release|exact Core release commit/)
+        /matching verified server release|exact server release commit/)
       const calls = (await readFile(f.log, 'utf8')).trim().split('\n').map(JSON.parse)
       assert(calls.every(({ args }) => args[0] === 'api'))
     } finally {

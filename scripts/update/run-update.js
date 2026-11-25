@@ -66,7 +66,7 @@ async function install(job) {
 }
 
 /**
- * Applies only the reviewed fast-forward revision while Core is stopped. A
+ * Applies only the reviewed fast-forward revision while the server is stopped. A
  * failed setup restores the previous revision and rebuilds it before restart.
  */
 export async function runUpdate(statePath, installer = install) {
@@ -79,7 +79,7 @@ export async function runUpdate(statePath, installer = install) {
   const temporaryPath = `${statePath}.tmp`
   let lock
 
-  // Publish whole receipts so an interrupted write cannot block Core's next boot.
+  // Publish whole receipts so an interrupted write cannot block the server's next boot.
   const save = async () => {
     await fs.writeFile(temporaryPath, JSON.stringify(job), { mode: 0o600 })
     await fs.rename(temporaryPath, statePath)

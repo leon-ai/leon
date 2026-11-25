@@ -397,7 +397,7 @@ export interface CompletionParams {
   responseTransport?: 'http'
   /**
    * Optional provider hint to disable thinking/reasoning for a request.
-   * The core may also enable this proactively for compatibility when
+   * The server may also enable this proactively for compatibility when
    * tool_choice is forced.
    */
   disableThinking?: boolean

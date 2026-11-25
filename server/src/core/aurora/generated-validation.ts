@@ -10,7 +10,7 @@ const MAXIMUM_MARKUP_NODES = 2_048
 const MAXIMUM_MARKUP_DEPTH = 48
 
 /**
- * Checks bounded source without executing model code in Core. Browser layout and
+ * Checks bounded source without executing model code in the server. Browser layout and
  * runtime behavior are separate checks; syntax validation is not a security sandbox.
  */
 export function validateGeneratedSurfaces(spec: AuroraSpec): string[] {

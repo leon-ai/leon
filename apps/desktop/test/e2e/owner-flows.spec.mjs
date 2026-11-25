@@ -21,7 +21,7 @@ process.on('disconnect', () => process.exit(0))
 `
 
 /**
- * Drives the packaged app with an isolated profile and a fixture at Core's API.
+ * Drives the packaged app with an isolated profile and a fixture at the server's API.
  */
 async function withDesktop(info, options, run) {
   const backend = await createFixture({ requireLogin: true, ...options.fixture })
@@ -146,7 +146,7 @@ test('sends and stops a turn with an attachment and reopens the conversation', a
 })
 
 for (const managed of [true, false]) {
-  test(`selects the local device automatically after ${managed ? 'managed' : 'remote'} Core setup`, async () => {
+  test(`selects the local device automatically after ${managed ? 'managed' : 'remote'} server setup`, async () => {
     await withDesktop(test.info(), { managed, fixture: { devices: true } }, async ({ application, page, backend }) => {
       await application.evaluate(({ dialog }) => {
         globalThis.devicePrompts = []

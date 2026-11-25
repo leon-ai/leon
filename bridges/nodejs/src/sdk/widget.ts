@@ -67,7 +67,7 @@ export abstract class Widget<T = unknown> {
   public abstract render(): WidgetComponent<unknown>
 
   /**
-   * Indicate the core to send a given utterance
+   * Ask the server to send a given utterance
    * @param key The key of the content
    * @param options The options of the utterance
    * @example content('provider_selected', { data: { provider: 'Spotify' } }) // 'I chose the Spotify provider'
@@ -89,7 +89,7 @@ export abstract class Widget<T = unknown> {
   }
 
   /**
-   * Indicate the core to run a given skill action
+   * Ask the server to run a given skill action
    * @param actionName The name of the action
    * @param params The parameters of the action
    * @example runSkillAction('music_player_skill:next', { provider: 'Spotify' })

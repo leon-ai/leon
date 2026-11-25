@@ -151,7 +151,7 @@ it('keeps browser completion signals content-free and inert outside their intend
   expect(completion.html).not.toContain('access_token')
 })
 
-it('keeps the provider callback on Core and returns a failed sign-in to its Desktop attempt', async () => {
+it('keeps the provider callback on the server and returns a failed sign-in to its Desktop attempt', async () => {
   const desktopReturn = new URL('http://127.0.0.1:54321/api/v1/connections/complete?popup_id=1fe063e6-76be-4fe3-9c09-5ce1bd930ca5')
   const input = {
     provider: 'example.account',

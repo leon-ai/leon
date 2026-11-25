@@ -19,10 +19,10 @@ void (async () => {
       await waitFor(() => button('Retry setup'), 'cancelled setup')
       sessionStorage.setItem(marker, 'retrying')
       button('Retry setup').click()
-      // Core readiness automatically reloads the root with its matching assets.
+      // Server readiness automatically reloads the root with its matching assets.
       return
     }
-    await waitFor(() => document.querySelector('textarea[aria-label="Message Leon"]'), 'new session after automatic Core connection', 90_000)
+    await waitFor(() => document.querySelector('textarea[aria-label="Message Leon"]'), 'new session after automatic server connection', 90_000)
     const state = await fetch('/__desktop/bootstrap/state').then((response) => response.json())
     if (state.phase !== 'complete' || state.service || state.steps.some((step) => step.phase !== 'complete' || !step.details.length)) {
       throw new Error('Preparation must finish with details and keep sign-in startup opt-in')
@@ -32,7 +32,7 @@ void (async () => {
     }
     await report({ passed: true, phase: 'complete', checks: ['Root opens without installation choices', 'Automatic measured download',
       'Cancellation and retry', 'Per-step details', 'No settled startup loaders', 'Startup opt-in', 'Gateway session isolation',
-      'Managed Core connected to shared frontend'] })
+      'Managed server connected to shared frontend'] })
   } catch (error) {
     await report({ passed: false, phase: 'complete', error: String(error), text: document.body.innerText,
       state: await fetch('/__desktop/bootstrap/state').then((response) => response.json()).catch(() => null) })

@@ -46,7 +46,7 @@ const READY_INTERVAL_MS = 500
 const MAXIMUM_READINESS_BYTES = 16_384
 
 /**
- * Reads the shared receipt used by the detached Core supervisor.
+ * Reads the shared receipt used by the detached server supervisor.
  */
 async function readUpdateJob(statePath: string): Promise<UpdateJob | null> {
   return readFile(statePath, 'utf8').then(JSON.parse).catch((error) => {
@@ -95,7 +95,7 @@ export async function coreReady(origin: string | undefined, signal?: AbortSignal
 }
 
 /**
- * Resolves the same profile port for the gateway and its managed Core process.
+ * Resolves the same profile port for the gateway and its managed server process.
  */
 export async function profileOrigin(): Promise<string> {
   const config = await readFile(getProfilePaths().config, 'utf8').then(YAML.parse).catch((error) => {
@@ -112,7 +112,7 @@ export async function profileOrigin(): Promise<string> {
 }
 
 /**
- * Installs built Core releases into a shared version store, independent of the
+ * Installs built server releases into a shared version store, independent of the
  * desktop bundle and owner profiles. Host-only adapters support local fixtures.
  */
 export async function createBootstrap({ dependencies = {}, origin }: {
@@ -181,23 +181,23 @@ export async function createBootstrap({ dependencies = {}, origin }: {
 
   async function downloadRuntime(asset: RuntimeAsset, signal: AbortSignal): Promise<CoreRuntime> {
     let installationStage: 'download' | 'verifying' | 'extracting' = 'download'
-    const runtime = await step('download', 'Downloading and verifying my Core', () => installRuntimeArchive({
+    const runtime = await step('download', 'Downloading and verifying my server', () => installRuntimeArchive({
       installation, asset, signal, download: FileDownloader.downloadFile.bind(FileDownloader),
       onStage: (stage) => {
         if (stage !== 'downloading') {
-          store.step(installationStage, installationStage === 'download' ? 'Downloading my Core' : UPDATE_STAGE_LABELS[installationStage], { phase: SetupPhase.Complete })
+          store.step(installationStage, installationStage === 'download' ? 'Downloading my server' : UPDATE_STAGE_LABELS[installationStage], { phase: SetupPhase.Complete })
           installationStage = stage
           store.step(stage, UPDATE_STAGE_LABELS[stage], { phase: SetupPhase.Running, value: null, total: null })
         }
       },
-      onProgress: (value) => store.step('download', 'Downloading my Core', {
+      onProgress: (value) => store.step('download', 'Downloading my server', {
         value: value.downloadedBytes, total: value.totalBytes, sublabel: asset.name })
     }))
 
     // Verify the extracted release before changing any profile or active runtime.
     assertCoreCompatibility({ version: runtime.manifest.version,
       desktop_protocol_version: runtime.manifest.desktopProtocolVersion })
-    store.step(installationStage, installationStage === 'download' ? 'Downloading my Core' : UPDATE_STAGE_LABELS[installationStage], { phase: SetupPhase.Complete })
+    store.step(installationStage, installationStage === 'download' ? 'Downloading my server' : UPDATE_STAGE_LABELS[installationStage], { phase: SetupPhase.Complete })
     return runtime
   }
 
@@ -227,7 +227,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
     let stopped: ServiceConfiguration | undefined
     let recovery: { statePath: string, job: RuntimeUpdateJob } | undefined
     const stopManaged = async (config: ServiceConfiguration): Promise<void> => {
-      await step('restart', 'Restarting my Core', async () => {
+      await step('restart', 'Restarting my server', async () => {
         await stopCoreAndWait(config)
         stopped = config
       })
@@ -264,10 +264,10 @@ export async function createBootstrap({ dependencies = {}, origin }: {
         throw mismatch
       }
       if (running && !managed) {
-        throw new Error('Another managed Core is using this Leon home.')
+        throw new Error('Another managed server is using this Leon home.')
       }
       if (origin) {
-        throw new Error('I could not reach the selected Core. Start it, then retry connecting.')
+        throw new Error('I could not reach the selected server. Start it, then retry connecting.')
       }
       let codebase: string
       let node: string
@@ -296,7 +296,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
           }
           const files = await Promise.all(required.map((file) => stat(file)))
           if (files.some((file) => !file.isFile())) {
-            throw new Error('I need a complete Core build before I can start this checkout.')
+            throw new Error('I need a complete server build before I can start this checkout.')
           }
         })
         if (mismatch && managed) {
@@ -315,9 +315,9 @@ export async function createBootstrap({ dependencies = {}, origin }: {
         const previous = selected
         if (!selected || !supportsCore({ version: selected.manifest.version,
           desktop_protocol_version: selected.manifest.desktopProtocolVersion })) {
-          const asset = await step('release', 'Finding my Core release', () => (dependencies.asset ?? releaseAsset)(signal))
+          const asset = await step('release', 'Finding my server release', () => (dependencies.asset ?? releaseAsset)(signal))
           if (previous && !semver.gt(asset.version, previous.manifest.version)) {
-            throw mismatch ?? new Error('I need a Desktop version that supports my installed Core.')
+            throw mismatch ?? new Error('I need a Desktop version that supports my installed server.')
           }
           if (mismatch?.coreVersion && semver.gt(mismatch.coreVersion, asset.version)) {
             throw mismatch
@@ -332,11 +332,11 @@ export async function createBootstrap({ dependencies = {}, origin }: {
               // A stopped supervisor cannot still be applying an update under
               // this lock. Its previous selection can be reused for this attempt.
               if (managed || !('kind' in existing) || existing.expectedVersion !== previous.manifest.version) {
-                throw new Error('My Core installation is already changing. Retry when it finishes.')
+                throw new Error('My server installation is already changing. Retry when it finishes.')
               }
             }
             if ((await currentRuntime(installation)).manifest.version !== previous.manifest.version) {
-              throw new Error('My Core installation is already changing. Retry when it finishes.')
+              throw new Error('My server installation is already changing. Retry when it finishes.')
             }
             if (managed) {
               await stopManaged(managed)
@@ -369,7 +369,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
       }
       service = await createService({ home, codebase, node, pnpm, runtimeHome, profile: LEON_PROFILE_NAME })
       started = !await controlCore(service.configuration)
-      await step('start', 'Starting my Core', () => service!.start())
+      await step('start', 'Starting my server', () => service!.start())
       store.update({ logAvailable: true })
       server = await profileOrigin()
       await step('ready', 'Waiting for my server', async () => {
@@ -377,14 +377,14 @@ export async function createBootstrap({ dependencies = {}, origin }: {
         while (true) {
           const update = recovery && await readUpdateJob(recovery.statePath)
           if (update?.id === recovery?.job.id && update?.phase === UpdatePhase.Failed) {
-            throw new Error(update.error ?? 'My new Core could not start.')
+            throw new Error(update.error ?? 'My new server could not start.')
           }
           if (await probe(server, signal) &&
             (!recovery || update?.id === recovery.job.id && update.phase === UpdatePhase.Completed)) {
             return
           }
           if (Date.now() > deadline) {
-            throw new Error('My server did not become ready. Open Core logs, then retry.')
+            throw new Error('My server did not become ready. Open server logs, then retry.')
           }
           await delay(READY_INTERVAL_MS, undefined, { signal })
         }
@@ -413,7 +413,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
           await service.start()
         }
       } catch (restoreError) {
-        message = `I could not restore my previous Core. ${store.redact(restoreError)} (${message})`
+        message = `I could not restore my previous server. ${store.redact(restoreError)} (${message})`
       }
       for (const item of store.state.steps) {
         if (item.phase === SetupPhase.Running) {
@@ -453,7 +453,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
     },
     async stop(): Promise<void> {
       if (!service || store.state.external) {
-        throw new Error('I can stop only the Core started by this desktop installation')
+        throw new Error('I can stop only the server started by this desktop installation')
       }
       if (saved.startAtLogin) {
         await service.setStartup(false, { keepRunning: false })
@@ -480,7 +480,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
       if (runtimeHome) {
         const selection = JSON.parse(await readFile(path.join(runtimeHome, 'active.json'), 'utf8'))
         // Static requests need only the tiny selection pointer. Revalidate the
-        // full dependency manifest once when Core activates another version.
+        // full dependency manifest once when the server activates another version.
         if (activeRuntime?.manifest.version !== selection.version) {
           activeRuntime = await currentRuntime(runtimeHome)
           assertCoreCompatibility({ version: activeRuntime.manifest.version,
@@ -530,7 +530,7 @@ export async function createBootstrap({ dependencies = {}, origin }: {
       }
     },
     async deviceOwnerCredential(backend): Promise<string | undefined> {
-      // A locally managed Core may allow anonymous chat. Pairing still proves
+      // A locally managed server may allow anonymous chat. Pairing still proves
       // ownership using the credential from this launcher's own local profile.
       if (!service || store.state.external || !server ||
           new URL(server).origin !== new URL(backend).origin) {

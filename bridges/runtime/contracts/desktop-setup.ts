@@ -1,5 +1,5 @@
 /**
- * Shared lifecycle states for managed Core setup and its native client view.
+ * Shared lifecycle states for managed server setup and its native client view.
  */
 export enum SetupPhase {
   Idle = 'idle', Running = 'running', Complete = 'complete', Failed = 'failed', Cancelled = 'cancelled'

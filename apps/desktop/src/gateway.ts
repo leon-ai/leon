@@ -126,7 +126,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
       }
     }
     if (request.method === 'POST' && OWNER_TURN_PATH.test(url.pathname)) {
-      // Core may be remote, so label the turn using the native client's platform.
+      // The server may be remote, so label the turn using the native client's platform.
       headers[TURN_CLIENT_TYPE_HEADER] = TurnClientType.Desktop
       headers[TURN_CLIENT_OS_HEADER] = CLIENT_OS_BY_PLATFORM[process.platform] ?? TurnClientOS.Other
       const credential = await deviceCredential?.()
@@ -140,19 +140,19 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
     const upload = request.method === 'POST' && url.pathname.endsWith('/attachments')
     const hasBody = Number(request.headers['content-length']) > 0 || request.headers['transfer-encoding'] !== undefined
     // Chromium's chunked upload mode needs a body. Commands such as stopping
-    // a turn still need to reach Core when their POST has no payload.
+    // a turn still need to reach the server when their POST has no payload.
     let body: Readable | undefined = hasBody && request.method !== 'GET' && request.method !== 'HEAD'
       ? request : undefined
     if (request.method === 'POST' && url.pathname === '/api/v1/updates/apply') {
       const bytes = await readBody(request, 4_096)
       const input = JSON.parse(bytes.toString())
       if (typeof input.tag !== 'string') {
-        throw Object.assign(new Error('Invalid Core update release'), { status: 400 })
+        throw Object.assign(new Error('Invalid server update release'), { status: 400 })
       }
       try {
         await assertCoreUpdateCompatibility(input.tag)
       } catch (error) {
-        throw Object.assign(new Error(error instanceof Error ? error.message : 'I could not verify Core compatibility.'), { status: 409 })
+        throw Object.assign(new Error(error instanceof Error ? error.message : 'I could not verify that the server is compatible.'), { status: 409 })
       }
       body = Readable.from([bytes])
     }
@@ -392,7 +392,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
     if (url.pathname.startsWith('/api/')) {
       if (!backendOrigin || bootstrapPhase && bootstrapPhase() !== 'complete') {
         response.writeHead(503, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-        response.end(JSON.stringify({ message: 'I’m preparing my Core. Please wait for it to be ready.' }))
+        response.end(JSON.stringify({ message: 'I’m preparing my server. Please wait for it to be ready.' }))
         return
       }
       await proxy(request, response, url, publicCompletion)

@@ -10,7 +10,7 @@ const cli = vi.hoisted(() => vi.fn())
 vi.mock('execa', () => ({ execa: cli }))
 
 describe('Anthropic Claude Code adapter', () => {
-  it('returns tool decisions for Core and disables executable CLI tools', async () => {
+  it('returns tool decisions for the server and disables executable CLI tools', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'other-account-key')
     vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'other-account-token')
     let temporaryDirectory = ''

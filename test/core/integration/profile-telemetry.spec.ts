@@ -23,7 +23,7 @@ it.each([
     await fs.writeFile(path.join(profile, 'config.yml'), `telemetry_enabled: ${enabled}\n`)
     await fs.writeFile(path.join(home, 'leon.json'), JSON.stringify({ instanceID: 'fixture-installation' }))
 
-    // Each child sets its environment before Core loads. Intercept outbound
+    // Each child sets its environment before the server loads. Intercept outbound
     // requests to exercise the reporter without writing to the fleet.
     await execute(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', `
       import assert from 'node:assert/strict'

@@ -3,7 +3,7 @@
   "tool_id": "document",
   "toolkit_id": "document",
   "name": "document",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Create editable Word documents locally or document artifacts through configured generation providers.",
   "icon_name": "file-text-line",
   "distribution": "built-in",
@@ -40,7 +40,7 @@
     },
     "generate": {
       "description": "Generate document using the profile defaults and attach the result. No model selection is needed.",
-      "progressive_guidance": "Use this operation for hosted generation requests. For local PDF use typst.compile; for local DOCX use create. Core resolves the configured provider/model. Check capabilities to inspect resolved defaults or diagnose missing setup. Do not switch models after an error unless the owner requests it. Do not claim completion without returned artifacts. Defaults live in this tool’s settings. provider=inherit follows the active conversation provider, model=auto uses its recommendation. If status is selection_required, explain the limitation and ask the owner to choose among choices; do not call another provider automatically. After they choose, use generateWithModel. Use configure only if they want the choice remembered.",
+      "progressive_guidance": "Use this operation for hosted generation requests. For local PDF use typst.compile; for local DOCX use create. The server resolves the configured provider/model. Check capabilities to inspect resolved defaults or diagnose missing setup. Do not switch models after an error unless the owner requests it. Do not claim completion without returned artifacts. Defaults live in this tool’s settings. provider=inherit follows the active conversation provider, model=auto uses its recommendation. If status is selection_required, explain the limitation and ask the owner to choose among choices; do not call another provider automatically. After they choose, use generateWithModel. Use configure only if they want the choice remembered.",
       "parameters": {
         "type": "object",
         "properties": {

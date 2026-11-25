@@ -108,7 +108,7 @@ type ResolvedDownloadFileOptions = Omit<
 }
 
 /**
- * Download files with resumable transport independent of Core and tool runtimes.
+ * Download files with resumable transport independent of the server and tool runtimes.
  */
 export class FileDownloader {
   /**

@@ -8,7 +8,7 @@ import { writeBundleNotices } from './bundle-notices.mjs'
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const OUTPUT = fileURLToPath(new URL('../.generated/runtime/', import.meta.url))
 
-// Bundle canonical leaves directly; Core services and bridge SDKs stay outside
+// Bundle canonical leaves directly; server services and bridge SDKs stay outside
 // the desktop host, including when no repository dependencies are installed.
 const result = await build({
   absWorkingDir: ROOT,

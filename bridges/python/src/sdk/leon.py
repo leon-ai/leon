@@ -95,7 +95,7 @@ class Leon:
 
     def answer(self, answer_input: AnswerInput) -> Optional[str]:
         """
-        Send an answer to the core
+        Send an answer to the server
         :param answer_input: The answer input
         :return: Message ID for potential future replacement
         """
@@ -140,7 +140,7 @@ class Leon:
                 **output
             }
 
-            # "Temporize" for the data buffer output on the core
+            # "Temporize" for the data buffer output on the server
             sleep(0.1)
 
             # Write the answer object to stdout as a JSON string with a newline for brain chunk-by-chunk parsing

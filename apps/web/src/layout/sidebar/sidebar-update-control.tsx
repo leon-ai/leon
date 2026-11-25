@@ -33,7 +33,7 @@ export function SidebarUpdateControl() {
     }
     const beforeUnload = (event: BeforeUnloadEvent): void => {
       event.preventDefault()
-      // Browsers own the confirmation copy. The accepted job continues in Core
+      // Browsers own the confirmation copy. The accepted job continues in the server
       // after a tab closes; this handler never cancels or repeats installation.
       event.returnValue = true
     }
@@ -110,7 +110,7 @@ export function SidebarUpdateControl() {
       }
     } catch {
       // Shared mutation handling reports the error once. A server update that
-      // was already accepted remains owned by Core, independent of this view.
+      // was already accepted remains owned by the server, independent of this view.
       setNativeVersion(null)
     } finally {
       setStarting(false)
@@ -118,8 +118,8 @@ export function SidebarUpdateControl() {
   }
 
   function checkForUpdates(): void {
-    // The installed Core snapshot is sufficient to open native update controls
-    // even when GitHub discovery for Core is offline or rate limited.
+    // The installed server snapshot is sufficient to open native update controls
+    // even when GitHub discovery for the server is offline or rate limited.
     if (desktop.query.data) {
       setReleaseCheck(query.data?.check ?? null)
       setMounted(true)

@@ -114,7 +114,7 @@ app.on('window-all-closed', () => {
   }
 })
 // Tear down transports only after every window has accepted closing. An owner
-// who cancels beforeunload must keep a working connection to the updating Core.
+// who cancels beforeunload must keep a working connection to the server during its update.
 app.on('will-quit', (event) => {
   if (!quitting) {
     event.preventDefault()
@@ -207,7 +207,7 @@ function createWindow(clientSession: Session): BrowserWindow {
     const choice = dialog.showMessageBoxSync(target, {
       type: 'question', buttons: ['Keep open', 'Close window'], defaultId: 0, cancelId: 0,
       message: 'Close this window while I’m updating?',
-      detail: 'I’ll keep updating my Core in the background. You can reopen this window to check progress.'
+      detail: 'I’ll keep updating my server in the background. You can reopen this window to check progress.'
     })
     if (choice === 1) {
       // Electron uses preventDefault here to allow the renderer's blocked unload.
@@ -267,8 +267,8 @@ async function showClient(server: string): Promise<void> {
         }
         const result = await dialog.showMessageBox(window, {
           type: 'question',
-          message: 'Use this computer with my Core?',
-          detail: `My Core at ${new URL(server).origin} can request desktop observations and input while Leon Desktop is open.`,
+          message: 'Use this computer with my server?',
+          detail: `My server at ${new URL(server).origin} can request desktop observations and input while Leon Desktop is open.`,
           buttons: ['Allow computer use', 'Not now'],
           defaultId: 1,
           cancelId: 1
@@ -393,22 +393,22 @@ function installCoreMenu(): void {
       }
     })
   }
-  const start = new MenuItem({ label: 'Start Core',
+  const start = new MenuItem({ label: 'Start the server',
     click: (): void => run(() => bootstrapController!.start()) })
-  const startup = new MenuItem({ label: 'Start Core when I sign in', type: 'checkbox',
+  const startup = new MenuItem({ label: 'Start the server when I sign in', type: 'checkbox',
     click: (item): void => run(() => bootstrapController!.setStartup(item.checked)) })
-  const logs = new MenuItem({ label: 'Open Core logs', click: (): void => run(async () => {
+  const logs = new MenuItem({ label: 'Open server logs', click: (): void => run(async () => {
     const error = await shell.openPath(bootstrapController!.log!)
     if (error) {
       throw new Error(error)
     }
   }) })
-  const stop = new MenuItem({ label: 'Stop Core', click: (): void => run(() => bootstrapController!.stop()) })
+  const stop = new MenuItem({ label: 'Stop the server', click: (): void => run(() => bootstrapController!.stop()) })
   const submenu = new Menu()
   for (const item of [start, startup, logs, stop]) {
     submenu.append(item)
   }
-  menu.append(new MenuItem({ label: 'Core', submenu }))
+  menu.append(new MenuItem({ label: 'Server', submenu }))
   if (device && window) {
     const paired = device
     const ownerWindow = window
@@ -417,7 +417,7 @@ function installCoreMenu(): void {
       const result = await dialog.showMessageBox(ownerWindow, {
         type: 'question',
         message: 'Let me use this computer?',
-        detail: 'Core can request desktop observations and input on this computer. The device worker runs while Leon Desktop is open.',
+        detail: 'The server can request desktop observations and input on this computer. The device worker runs while Leon Desktop is open.',
         buttons: ['Enable', 'Cancel'],
         defaultId: 1,
         cancelId: 1,
@@ -474,7 +474,7 @@ async function start(): Promise<void> {
     reason: engine ? null : 'Automatic desktop updates are unavailable for this installation.',
     beforeInstall: async () => {
       if (bootstrapController?.store.state.phase === 'running') {
-        throw new Error('Let me finish Core setup before restarting the desktop app.')
+        throw new Error('Let me finish server setup before restarting the desktop app.')
       }
       await Promise.all([device?.close(), state?.close(), bootstrapController?.close()])
       quitting = true
@@ -488,7 +488,7 @@ async function start(): Promise<void> {
   const origin = diagnostics && configuration.bootstrap ? undefined : process.env['LEON_DESKTOP_SERVER']
   bootstrapController = await createBootstrap({ dependencies, origin })
   // The shared root opens while preparation advances; it never asks owners to
-  // choose an installation. Authentication starts only after Core is ready.
+  // choose an installation. Authentication starts only after the server is ready.
   void bootstrapController.start()
   await showClient(origin ?? await profileOrigin())
   installCoreMenu()

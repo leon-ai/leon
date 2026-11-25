@@ -124,7 +124,7 @@ export function createDesktopDevice({ backend, session, state, runtime, ownerCre
       }
     })
     if (await handshake !== DESKTOP_SATELLITE_READY || worker !== child) {
-      throw new Error('I could not connect this computer. Check that Core supports device pairing.')
+      throw new Error('I could not connect this computer. Check that the server supports device pairing.')
     }
 
     ready = true
@@ -138,7 +138,7 @@ export function createDesktopDevice({ backend, session, state, runtime, ownerCre
     const result = await response
     result.resume()
     if (result.statusCode !== 204) {
-      throw new Error('I could not revoke this computer. Sign in to its Core profile and retry.')
+      throw new Error('I could not revoke this computer. Sign in to your profile on that server and retry.')
     }
   }
 

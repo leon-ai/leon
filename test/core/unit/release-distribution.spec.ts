@@ -42,7 +42,7 @@ describe('release distribution content', () => {
     expect(() => validateReleaseContent(content, `${VERSION}+dev`, `v${VERSION}+dev`)).toThrow('without build metadata')
   })
 
-  it('requires a Core compatibility floor covered by the Desktop release', () => {
+  it('requires a server compatibility floor covered by the Desktop release', () => {
     for (const desktop of [undefined, {}, { minimumCoreVersion: '1.9.0' },
       { minimumCoreVersion: '2.0.0-alpha.0.3' }, { minimumCoreVersion: `${VERSION}+dev` }]) {
       expect(() => validateReleaseContent({ ...content, desktop }, VERSION, `v${VERSION}`)).toThrow()
@@ -65,7 +65,7 @@ describe('release distribution content', () => {
 })
 
 
-describe('verified Core runtime publication', () => {
+describe('verified server runtime publication', () => {
   let directory: string
   const verified = { version: VERSION, commit: 'candidate-commit', runId: 'release-run' }
   const prepare = async (): Promise<void> => {

@@ -11,7 +11,7 @@ export interface PublishedRuntime {
 }
 
 /**
- * Separates an occupied incompatible Core port from a server that is offline.
+ * Separates an occupied incompatible server port from a server that is offline.
  */
 export class CoreCompatibilityError extends Error {
   constructor(message: string, readonly coreVersion?: string) {
@@ -20,7 +20,7 @@ export class CoreCompatibilityError extends Error {
 }
 
 /**
- * Checks the supported release range and the protocol spoken by Core.
+ * Checks the supported release range and the protocol spoken by the server.
  */
 export function supportsCore(value: { version?: unknown, desktop_protocol_version?: unknown }): boolean {
   return typeof value.version === 'string' && Boolean(semver.valid(value.version)) &&
@@ -35,13 +35,13 @@ export function assertCoreCompatibility(value: { version?: unknown, desktop_prot
   if (!supportsCore(value)) {
     const coreVersion = typeof value.version === 'string' ? semver.valid(value.version) ?? undefined : undefined
 
-    throw new CoreCompatibilityError(`I need a compatible Leon Core (${contract.coreVersionRange}, desktop protocol ${DESKTOP_CORE_PROTOCOL_VERSION}). Update Core or use a matching desktop app.`, coreVersion)
+    throw new CoreCompatibilityError(`I need a compatible Leon server (${contract.coreVersionRange}, desktop protocol ${DESKTOP_CORE_PROTOCOL_VERSION}). Update the server or use a matching desktop app.`, coreVersion)
   }
 }
 
 /**
- * Prevents a desktop-initiated Core update from installing an incompatible host.
- * Core still owns release pinning, integrity checks, setup and restart.
+ * Prevents a desktop-initiated server update from installing an incompatible host.
+ * The server still owns release pinning, integrity checks, setup and restart.
  */
 export async function assertCoreUpdateCompatibility(tag: string): Promise<void> {
   assertCoreCompatibility({ version: tag, desktop_protocol_version: DESKTOP_CORE_PROTOCOL_VERSION })
@@ -82,5 +82,5 @@ export async function findCoreAsset(releases: PublishedRuntime[], readManifest: 
     }
     return selectRuntimeAsset(metadata, version, platform, baseURL)
   }
-  throw new Error('No compatible prebuilt Core release is published for this platform yet. I can retry after a release is published, or connect to a compatible running Core.')
+  throw new Error('No compatible prebuilt server release is published for this platform yet. I can retry after a release is published, or connect to a compatible running server.')
 }

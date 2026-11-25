@@ -749,7 +749,7 @@ test('explains a folder API mismatch and keeps attachment unavailable without di
   const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
   await editor.getByRole('textbox', { name: 'Folder', exact: true }).click()
   const browser = page.getByRole('dialog', { name: 'Folder', exact: true })
-  await expect(browser.getByRole('alert')).toHaveText('I need Core to be rebuilt and restarted before I can browse folders.')
+  await expect(browser.getByRole('alert')).toHaveText('I need the server to be rebuilt and restarted before I can browse folders.')
   await expect(browser.getByRole('button', { name: 'Attach this folder', exact: true })).toBeDisabled()
   await expect(browser.getByRole('button', { name: '..', exact: true })).toHaveCount(0)
 })

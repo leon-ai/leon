@@ -1005,7 +1005,7 @@ export default class NLU {
    *
    * 1. Handle explicit jump to another action.
    * This allows a skill to override any loop or workflow logic.
-   * E.g., a "replay" action telling the core to jump back to the "set_up" action.
+   * E.g., a "replay" action telling the server to jump back to the "set_up" action.
    *
    * 2. Handle action loop logic.
    * An action with "is_loop" will repeat by default.

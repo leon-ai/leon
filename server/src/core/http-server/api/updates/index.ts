@@ -28,7 +28,7 @@ export const updatesPlugin: FastifyPluginAsync<APIOptions & { service?: UpdateSe
         reply.raw.once('close', resolve)
       })
       void delivered.then(() => service.waitUntilPrepared()).then(() => requestShutdown(LEON_UPDATE_EXIT_CODE)).catch(() => {
-        // Staging failures stay visible in the update receipt; keep Core alive
+        // Staging failures stay visible in the update receipt; keep the server alive
         // so the owner can inspect the error and retry.
       })
 

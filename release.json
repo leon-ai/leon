@@ -5,7 +5,7 @@
     "minimumCoreVersion": "2.0.0-alpha.0.17"
   },
   "title": "A new era begins",
-  "summary": "A new web app, shared context for related conversations, and Core updates you can review and install when you choose.",
+  "summary": "A new web app, shared context for related conversations, and server updates you can review and install when you choose.",
   "highlights": [
     {
       "title": "A workspace for each project",
@@ -13,19 +13,19 @@
     },
     {
       "title": "Updates on your terms",
-      "body": "Read release notes before updating my Core, follow installation progress, and keep your profiles separate from application code."
+      "body": "Read release notes before updating my server, follow installation progress, and keep your profiles separate from application code."
     }
   ],
   "changes": {
     "new": [
       "Browse conversations and project workspaces in the new web app.",
-      "Review and install published Core releases from the update dialog.",
+      "Review and install published server releases from the update dialog.",
       "Explore activity and usage in your profile."
     ],
     "improvements": [
-      "Stage verified Core archives before restarting the server.",
+      "Stage verified server archives before restarting the server.",
       "Show measured download progress and profile preparation details during updates.",
-      "Keep accepted Core updates running when the browser page closes."
+      "Keep accepted server updates running when the browser page closes."
     ],
     "fixes": [
       "Preserve the working runtime when a replacement download or extraction fails."

@@ -1,4 +1,4 @@
-# A version tag requests publication after the Core and Desktop checks pass.
+# A version tag requests publication after the server and Desktop checks pass.
 name: Release
 
 on:

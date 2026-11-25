@@ -34,7 +34,7 @@ export function releaseDesktopAttachment(file: DesktopAttachmentFile): void {
 }
 
 /**
- * The native host streams the selected file directly to Core. Only bounded
+ * The native host streams the selected file directly to the server. Only bounded
  * progress records and the final artifact receipt pass through the renderer.
  */
 export async function uploadDesktopAttachment(

@@ -120,7 +120,7 @@ const catalog: ModelCatalog = {
 
 /**
  * Exercises the production UI with per-context HTTP data, without paid models
- * or owner profiles. Core's real persistence/runtime integration is tested separately.
+ * or owner profiles. The server's real persistence/runtime integration is tested separately.
  */
 export const test = base.extend<{ ui: UIFixture }>({
   ui: async ({ page }, use): Promise<void> => {

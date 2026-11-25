@@ -20,7 +20,7 @@ const PUBLISH_INTERVAL_MS = 200
 const MAXIMUM_RELEASE_NOTES = 100_000
 
 /**
- * Owns native update state independently of Core, exposing only bounded metadata.
+ * Owns native update state independently of the server, exposing only bounded metadata.
  * The packaged updater verifies checksums/signatures and installs its own files.
  */
 export function createDesktopUpdater({ engine, currentVersion, beforeInstall, reason }: {

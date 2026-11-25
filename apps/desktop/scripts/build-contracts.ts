@@ -29,7 +29,7 @@ if (repository.pathname.endsWith('.git')) {
   repository.pathname = repository.pathname.slice(0, -4)
 }
 
-// Read the canonical default without evaluating profile configuration or Core.
+// Read the canonical default without loading profile configuration or the server runtime.
 const config = ts.createSourceFile('config.ts',
   await readFile(path.join(ROOT, 'server/src/config.ts'), 'utf8'), ts.ScriptTarget.Latest)
 let defaultPort: number | undefined
@@ -48,7 +48,7 @@ function visit(node: ts.Node): void {
 }
 visit(config)
 if (!Number.isInteger(defaultPort)) {
-  throw new Error('Core default server port is unavailable')
+  throw new Error('The default server port is unavailable')
 }
 
 await mkdir(OUTPUT, { recursive: true })

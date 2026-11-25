@@ -67,19 +67,19 @@ try {
     }
   }
   assert(PLATFORMS.every((platform) => seen.has(platform)), 'All desktop platform checks are required')
-  // Core owns product release notes and the immutable version tag. Native
+  // The server owns product release notes and the immutable version tag. Native
   // artifacts join that exact release before its app-update pointer advances.
   const existing = await run('api', `repos/${repository}/releases?per_page=100`)
   const releases = JSON.parse(existing)
   const release = releases.find((item) => item.tag_name === tag && !item.draft &&
     item.assets?.some((asset) => asset.name === RUNTIME_RELEASE_ASSET))
-  assert(release, 'Publish the matching verified Core release before attaching desktop installers')
+  assert(release, 'Publish the matching verified server release before attaching desktop installers')
   let reference = JSON.parse(await run('api', `repos/${repository}/git/ref/tags/${tag}`)).object
   while (reference.type === 'tag') {
     reference = JSON.parse(await run('api', `repos/${repository}/git/tags/${reference.sha}`)).object
   }
   assert(reference.type === 'commit' && reference.sha === process.env.GITHUB_SHA,
-    'Desktop installers must come from the exact Core release commit')
+    'Desktop installers must come from the exact server release commit')
   const prior = releases.find((release) => release.tag_name === feedTag)
   if (prior?.body) {
     const publishedVersion = prior.body.trim()

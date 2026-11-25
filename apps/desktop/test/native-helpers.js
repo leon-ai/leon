@@ -58,7 +58,7 @@ window.leonDiagnostics = (() => {
   }
 
   /**
-   * Publishes diagnostics through the local host without contacting Leon Core.
+   * Publishes diagnostics through the local host without contacting the Leon server.
    */
   async function report(value) {
     const response = await fetch('/__desktop/report', {
