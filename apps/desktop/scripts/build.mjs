@@ -104,7 +104,7 @@ await rm(staging, { recursive: true, force: true })
 await mkdir(path.join(staging, 'runtime'), { recursive: true })
 try {
   await mkdir(path.join(staging, 'src'))
-  for (const filename of ['main.js', 'core-runner.js']) {
+  for (const filename of ['main.js', 'server-runner.js']) {
     await cp(path.join(ROOT, '.generated/src', filename), path.join(staging, 'src', filename))
   }
   if (diagnostics) {

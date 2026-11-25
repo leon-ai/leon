@@ -6,7 +6,7 @@ import YAML from 'yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ajv } from '@/ajv'
-import { configSchemaObject } from '@/schemas/core-schemas'
+import { configSchemaObject } from '@/schemas/config-schema'
 
 const syncedEnvKeys = [
   'LEON_LANG',

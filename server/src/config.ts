@@ -14,7 +14,7 @@ import type {
   LLMProviderConfigSchema,
   LeonConfigSchema,
   SecretReferenceSchema
-} from '@/schemas/core-schemas'
+} from '@/schemas/config-schema'
 
 export type LeonConfig = LeonConfigSchema
 export type SecretReference = SecretReferenceSchema

@@ -11,7 +11,7 @@ const bootstrap = document.querySelector<HTMLMetaElement>(`meta[name="${DESKTOP_
  * Keeps profile requests behind real server readiness, on the shared root URL.
  * One reload switches the bootstrap document to the selected server's web assets.
  */
-export function DesktopCoreBoundary({ children }: { children: ReactNode }) {
+export function DesktopServerBoundary({ children }: { children: ReactNode }) {
   if (!bootstrap) {
     return children
   }

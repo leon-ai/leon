@@ -15,7 +15,7 @@ import { applyStoredTheme, getStoredAccent } from './theme'
 import { RequestErrorToasts } from './data/request-error-toasts'
 import { initializeProfileAuthentication, PROFILE_AUTH_QUERY_KEY  } from './data/profile-query'
 import { SoundActivation } from './components/sound-activation/sound-activation'
-import { DesktopCoreBoundary } from './components/desktop-setup/desktop-core-boundary'
+import { DesktopServerBoundary } from './components/desktop-setup/desktop-server-boundary'
 import { DESKTOP_BOOTSTRAP_META_NAME, DESKTOP_NOTIFICATION_EVENT, type DesktopTurnNotification } from '../../../bridges/runtime/contracts/desktop-client'
 
 applyStoredTheme()
@@ -52,12 +52,12 @@ createRoot(rootElement).render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         {desktop && <div className="desktop-titlebar" aria-hidden="true" />}
-        <DesktopCoreBoundary>
+        <DesktopServerBoundary>
           <RequestErrorToasts />
           <SoundActivation />
           <DesktopNotificationNavigation />
           <RouterProvider router={router} />
-        </DesktopCoreBoundary>
+        </DesktopServerBoundary>
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>

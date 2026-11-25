@@ -152,6 +152,7 @@ export async function createCoreService({ home, codebase, node, pnpm, runtimeHom
   const id = `ai.getleon.core.${identity}`
   const directory = path.join(home, 'desktop', 'service')
   const configurationPath = path.join(directory, 'core.json')
+  // Startup registrations reference this installed runner path.
   const runner = path.join(directory, 'core-runner.mjs')
   const log = path.join(directory, 'core.log')
   await mkdir(directory, { recursive: true, mode: 0o700 })
@@ -174,7 +175,7 @@ export async function createCoreService({ home, codebase, node, pnpm, runtimeHom
       throw new Error('Another managed checkout is already running in this Leon home')
     }
   } else {
-    await cp(fileURLToPath(new URL('./core-runner.js', import.meta.url)), runner)
+    await cp(fileURLToPath(new URL('./server-runner.js', import.meta.url)), runner)
     await writeFile(`${configurationPath}.pending`, JSON.stringify(configuration), { mode: 0o600 })
     await rename(`${configurationPath}.pending`, configurationPath)
   }

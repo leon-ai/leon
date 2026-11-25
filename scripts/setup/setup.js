@@ -14,7 +14,7 @@ import generateJSONSchemas from '../generate/generate-json-schemas'
 
 import { updateDotEnvVariable } from './setup-dotenv'
 import { CONFIG_MANAGER } from '@/config'
-import setupServerConfig from './setup-core'
+import setupServerConfig from './setup-server-config'
 import { setupProfile } from './setup-profile'
 import { shouldUseCIRuntimes } from './setup-ci.js'
 import setupNode from './setup-node'
