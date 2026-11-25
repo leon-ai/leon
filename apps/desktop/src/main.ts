@@ -221,8 +221,9 @@ function createWindow(clientSession: Session): BrowserWindow {
 }
 
 async function installDiagnosticScript(target: BrowserWindow): Promise<void> {
-  if (diagnostics) {
-    const script = await readFile(process.env['LEON_DESKTOP_SMOKE_SCRIPT']!, 'utf8')
+  const filename = process.env['LEON_DESKTOP_SMOKE_SCRIPT']
+  if (diagnostics && filename) {
+    const script = await readFile(filename, 'utf8')
     target.webContents.on('did-finish-load', () => {
       void target.webContents.executeJavaScript(
         `window.leonDiagnosticConfig = ${JSON.stringify(configuration)};\n${script}`
