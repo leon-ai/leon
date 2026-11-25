@@ -61,3 +61,34 @@ jobs:
         run: pnpm run test:desktop
       - name: Build desktop application
         run: pnpm run build:desktop
+      - name: Build packaged desktop for automation
+        run: pnpm --filter leon-desktop build:diagnostics
+      - name: Install test browser
+        if: runner.os != 'Linux'
+        run: node apps/desktop/scripts/install-test-browser.mjs
+      - name: Run desktop owner flows
+        if: runner.os != 'Linux'
+        run: pnpm run test:desktop:e2e
+      - name: Run Linux owner flows
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          pnpm exec playwright install-deps chromium
+          node apps/desktop/scripts/install-test-browser.mjs
+          if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]] &&
+             [[ $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns) == 1 ]]; then
+            binary=$(node -p 'const b = require("./apps/desktop/.artifacts/diagnostics-build.json"); require("node:path").join(b.output, b.executableName)')
+            policy="$RUNNER_TEMP/leon-desktop-e2e.apparmor"
+            printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile leon-desktop-e2e "%s" flags=(unconfined) {\n  userns,\n}\n' "$binary" > "$policy"
+            sudo apparmor_parser --replace "$policy"
+          fi
+          xvfb-run -a pnpm run test:desktop:e2e
+          pnpm run test:web-app:e2e e2e/connections.spec.ts e2e/attachments.spec.ts -g 'returns from|selects multiple files'
+      - name: Retain owner-flow diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: desktop-owner-flows-${{ matrix.platform }}
+          path: |
+            apps/desktop/.artifacts/e2e
+            test/web-app/results
