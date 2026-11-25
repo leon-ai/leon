@@ -38,6 +38,7 @@ import {
   COMPUTER_USE_COORDINATE_FIELDS,
   COMPUTER_USE_COPY_ACTIONS,
   COMPUTER_USE_COPY_SETTLE_MS,
+  COMPUTER_USE_DIALOG_POLL_INTERVAL_MS,
   COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
   COMPUTER_USE_SELECT_ALL_KEYS,
@@ -63,6 +64,20 @@ import {
 import { createCuaDriverAdapter } from './cua/cua-driver-adapter'
 import { CuaDesktopSetupPendingError, CuaDesktopSetupState } from './cua/cua-desktop-setup'
 import { asRecord, hasText, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
+
+type SequenceStep = Record<string, unknown> & {
+  action: string
+  parameters: Record<string, unknown>
+}
+
+const DIALOG_OPENING_ACTIONS = new Set(['click', 'hotkey', 'press_key'])
+const DIALOG_FIELD_PARAMETERS = new Set(['target', 'name', 'role', 'value'])
+const ACT_FOCUS_PARAMETERS = new Set(['x', 'y', 'expect', 'settle_ms'])
+
+function isVisibleWindow(window: Record<string, unknown>): boolean {
+  return window['is_on_screen'] === true && window['minimized'] !== true &&
+    window['on_current_space'] !== false && (window['layer'] === undefined || window['layer'] === 0)
+}
 
 export { COMPUTER_USE_ACTION_NAMES } from './constants'
 export {
@@ -164,7 +179,8 @@ export class CuaRuntime {
       const steps = parameters['steps'] ?? []
       if (!target || !Array.isArray(steps) || (parameters['focus'] != null &&
           (!focus || !Number.isFinite(focus['x']) || !Number.isFinite(focus['y']) ||
-            Object.keys(focus).some((key) => key !== 'x' && key !== 'y')))) {
+            Object.keys(focus).some((key) => !ACT_FOCUS_PARAMETERS.has(key)) ||
+            (focus['expect'] !== undefined && !hasText(focus['expect']))))) {
         return this.failure('act requires an exact shared target and at most one focus={x,y}. No input was sent.')
       }
       for (const value of steps) {
@@ -177,7 +193,7 @@ export class CuaRuntime {
 
       return this.executeActionSequence(input, {
         ...parameters,
-        steps: expandComputerUseSequenceSteps(steps, parameters['focus'])
+        steps: expandComputerUseSequenceSteps(steps, focus)
       })
     }
     if (action === 'copy_text') return this.copyText(input, parameters)
@@ -584,9 +600,7 @@ export class CuaRuntime {
     }
 
     const windows = inventory['windows'].map(asRecord).filter((window) =>
-      window && window['is_on_screen'] === true && window['minimized'] !== true &&
-      window['on_current_space'] !== false &&
-      (window['layer'] === undefined || window['layer'] === 0) &&
+      window && isVisibleWindow(window) &&
       Number.isSafeInteger(window['pid']) && Number(window['pid']) > 0 &&
       Number.isSafeInteger(window['window_id']) && Number(window['window_id']) > 0
     ) as Record<string, unknown>[]
@@ -836,7 +850,7 @@ export class CuaRuntime {
     // Reuse one established field through select-all and typing. Repeated
     // coordinates for that same field must not click again and clear selection.
     let focusedField: Record<string, unknown> | undefined
-    const normalizedSteps = steps.map((value) => {
+    const normalizedSteps: SequenceStep[] = steps.map((value) => {
       const step = asRecord(value)!
       const action = step['action'] as string
       const parameters = { ...resolveComputerUseSequenceParameters(
@@ -874,6 +888,9 @@ export class CuaRuntime {
     }
 
     const captureAfter = (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? true) === true
+    if (normalizedSteps.some((step) => step['wait_for_window'] !== undefined)) {
+      return this.executeDialogContinuation(input, batchTarget, normalizedSteps, captureAfter)
+    }
     const stepResults: Array<Record<string, unknown>> = []
     const artifacts: Array<Record<string, unknown>> = []
     let modelFiles: ToolRuntimeResult['modelFiles'] = []
@@ -888,6 +905,8 @@ export class CuaRuntime {
       let stepParameters = asRecord(step['parameters'])!
       const named = hasText(stepParameters['name'])
       const settleMs = this.resolveSettleMs(stepParameters['settle_ms'])
+      const expected = step['expect']
+      const isLastStep = index === steps.length - 1
 
       try {
         if (hasText(step['wait_for'])) {
@@ -917,17 +936,16 @@ export class CuaRuntime {
       delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
       // A capture mints new element handles. Preserve the already-grounded
       // handles of a mechanical sequence until its final action.
-      if (index < steps.length - 1) {
+      if (!isLastStep) {
         boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = false
-        // Inside a batch, settle before the next input without minting handles.
-        delete boundedParameters['settle_ms']
+      } else if (COMPUTER_USE_CAPTURE_ACTIONS.has(stepAction)) {
+        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = captureAfter && !hasText(expected)
       }
-      if (
-        index === steps.length - 1 &&
-        COMPUTER_USE_CAPTURE_ACTIONS.has(stepAction)
-      ) {
-        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = captureAfter &&
-          !hasText(step['expect'])
+      // When the sequence owns verification or another input follows, wait
+      // here so the native action does not capture an intermediate frame.
+      const settleInSequence = !isLastStep || hasText(expected)
+      if (settleInSequence) {
+        delete boundedParameters['settle_ms']
       }
 
       input.onProgress?.({
@@ -976,7 +994,10 @@ export class CuaRuntime {
         break
       }
 
-      const expected = step['expect']
+      if (settleInSequence && settleMs > 0) {
+        await delay(settleMs)
+      }
+
       if (hasText(expected)) {
         try {
           const verification = await this.checkSequenceText(input, stepParameters, expected)
@@ -987,7 +1008,7 @@ export class CuaRuntime {
           stepResults.at(-1)!['error_code'] = 'sequence_postcondition_failed'
           stepResults.at(-1)!['verification'] = failure.output
         }
-        if ((index === steps.length - 1 && captureAfter) || failure) {
+        if ((isLastStep && captureAfter) || failure) {
           const target = asRecord(stepParameters['target'])
           const observed = await this.executeAction(input, 'get_window_state', {
             pid: target?.['pid'] ?? stepParameters['pid'],
@@ -1002,10 +1023,6 @@ export class CuaRuntime {
         if (failure) {
           break
         }
-      }
-
-      if (index < steps.length - 1 && settleMs > 0) {
-        await delay(settleMs)
       }
     }
 
@@ -1029,12 +1046,196 @@ export class CuaRuntime {
   }
 
   /**
+   * Opens one expected dialog and edits its exact live field. The new window
+   * must belong to the original process and remain frontmost through dispatch.
+   */
+  private async executeDialogContinuation(
+    input: ToolExecutionContext,
+    parent: Record<string, unknown> | null,
+    steps: SequenceStep[],
+    captureAfter: boolean
+  ): Promise<ToolRuntimeResult> {
+    const [open, edit] = steps
+    const title = edit?.['wait_for_window']
+    const field = edit?.parameters
+    const opener = open?.parameters
+    const singleSemanticClick = opener &&
+      (hasText(opener['name']) || hasText(opener['element_token'])) &&
+      (opener['count'] ?? 1) === 1 && (opener['button'] ?? 'left') === 'left'
+    if (steps.length !== 2 || !open || !edit || !parent || parent['kind'] !== 'window' ||
+      !hasText(title) || !DIALOG_OPENING_ACTIONS.has(open.action) || edit.action !== 'set_value' ||
+      !field || !hasText(field['role']) || !hasText(field['name']) || typeof field['value'] !== 'string' ||
+      Object.keys(field).some((key) => !DIALOG_FIELD_PARAMETERS.has(key)) ||
+      !opener || opener['target'] !== parent || field['target'] !== parent ||
+      opener['x'] != null || opener['y'] != null || (open.action === 'click' && !singleSemanticClick) ||
+      steps.some((step) => ['wait_for', 'expect'].some((key) => step[key] !== undefined)) ||
+      open['wait_for_window'] !== undefined) {
+      return this.failure('A dialog continuation requires two steps on one observed window: a single semantic left-click or key action, then set_value with the exact new window title, field name and role. No input was sent.')
+    }
+
+    const list = async (): Promise<Record<string, unknown>[]> => {
+      const { driver } = await this.runtimeManager.get(input)
+      const result = await this.callAction(driver, input, 'list_windows', { on_screen_only: false })
+      const state = parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+      if (hasCuaError(result) || result.degraded || !Array.isArray(state?.['windows'])) {
+        throw new Error('Window identity could not be established.')
+      }
+
+      return state['windows'].map(asRecord).filter((window): window is Record<string, unknown> => window !== null)
+    }
+    const front = (windows: Record<string, unknown>[]): Record<string, unknown> | undefined => {
+      const visible = windows.filter(isVisibleWindow)
+      if (visible.some((window) => !Number.isSafeInteger(window['z_index']))) {
+        return undefined
+      }
+      visible.sort((left, right) => Number(right['z_index']) - Number(left['z_index']))
+      const top = visible[0]
+      const focused = visible.filter((window) => window['focused'] === true)
+      if (focused.length && (focused.length !== 1 || focused[0] !== top)) {
+        return undefined
+      }
+
+      return top?.['z_index'] !== visible[1]?.['z_index'] ? top : undefined
+    }
+    const same = (window: Record<string, unknown> | undefined, target: Record<string, unknown>): boolean =>
+      window?.['pid'] === target['pid'] && window?.['window_id'] === target['window_id']
+    const matchesDialog = (window: Record<string, unknown>): boolean =>
+      window['pid'] === parent['pid'] && window['title'] === title
+    const baseline = await list()
+    if (!same(front(baseline), parent) || baseline.some(matchesDialog)) {
+      return this.failure('The parent is not uniquely frontmost or the expected dialog already exists. No input was sent.')
+    }
+
+    const openParams = hasText(opener['name'])
+      ? await this.resolveSequenceTarget(input, open.action, opener)
+      : opener
+    if (openParams !== opener) {
+      const current = await list()
+      if (!same(front(current), parent) || current.some(matchesDialog)) {
+        return this.failure('The parent lost foreground or the dialog already exists. No input was sent.')
+      }
+    }
+    const opened = await this.executeAction(input, open.action, {
+      ...openParams,
+      capture_after: false,
+      settle_ms: 0
+    })
+    const results: Array<Record<string, unknown>> = [
+      { action: open.action, success: opened.success, result: opened.output['result'] }
+    ]
+    if (!opened.success) {
+      return {
+        ...opened,
+        output: {
+          ...opened.output,
+          completed_action_count: 0,
+          steps: results,
+          recovery: 'The opening action may have landed. Inspect the interface before repeating it.'
+        }
+      }
+    }
+
+    let target: Record<string, unknown> | undefined
+    let edited = false
+    try {
+      const deadline = performance.now() + COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS
+      do {
+        const windows = await list()
+        const foreground = front(windows)
+        const candidates = windows.filter(matchesDialog)
+        if (candidates.length > 1 || !foreground ||
+          (!same(foreground, parent) && (candidates.length !== 1 || foreground !== candidates[0]))) {
+          throw new Error('The foreground changed to an unexpected or ambiguous window.')
+        }
+        if (foreground === candidates[0] && Number.isSafeInteger(foreground['window_id']) && Number(foreground['window_id']) > 0 &&
+          !baseline.some((window) => same(window, foreground))) {
+          target = { kind: 'window', pid: foreground['pid'], window_id: foreground['window_id'] }
+          break
+        }
+        await delay(COMPUTER_USE_DIALOG_POLL_INTERVAL_MS, undefined, { signal: input.signal })
+      } while (performance.now() < deadline)
+      if (!target) {
+        throw new Error('The expected new dialog did not become ready.')
+      }
+
+      const selector = { ...field, target }
+      const element = await this.readSequenceElement(input, edit.action, selector, true)
+      const latest = await list()
+      const matches = latest.filter(matchesDialog)
+      if (!same(front(latest), target) || matches.length !== 1 || !same(matches[0], target)) {
+        throw new Error('The dialog lost foreground or became ambiguous before input.')
+      }
+      if (element['value'] !== field['value']) {
+        const delivery = await this.executeAction(input, edit.action, {
+          target,
+          element_token: element['element_token'],
+          value: field['value'],
+          capture_after: false
+        })
+        edited = true
+        const receipt = { action: edit.action, success: false, resolved_target: target, result: delivery.output['result'] }
+        results.push(receipt)
+        if (!delivery.success) {
+          throw new Error(delivery.message)
+        }
+        const verified = await this.readSequenceElement(input, edit.action, selector, true)
+        if (verified['value'] !== field['value']) {
+          throw new Error('The dialog field value was not verified.')
+        }
+        receipt.success = true
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Dialog continuation stopped. ${this.executionFailure(error).message}`,
+        output: this.boundWindowObservation({
+          success: false, completed_action_count: 1, steps: results,
+          recovery: edited
+            ? 'The edit may have landed. Inspect the dialog before retrying. Do not repeat the opening action.'
+            : 'The opening action was sent once. Inspect the interface before continuing. Do not repeat it automatically.',
+          ...(target ? { resolved_target: target } : {})
+        })
+      }
+    }
+
+    const observation = captureAfter ? await this.executeAction(input, 'get_window_state', {
+      pid: target['pid'], window_id: target['window_id']
+    }) : undefined
+
+    return {
+      success: true,
+      message: 'Opened the expected dialog and verified the field value.',
+      output: this.boundWindowObservation({
+        completed_action_count: results.length, steps: results, verified: true, capture_target: target,
+        ...(observation ? { post_action_state: observation.output['result'], artifacts: observation.output['artifacts'] } : {})
+      }),
+      ...(observation?.modelFiles ? { modelFiles: observation.modelFiles } : {})
+    }
+  }
+
+  /**
    * Resolves one exact semantic target without reusing a previous snapshot token.
    */
   private async resolveSequenceTarget(
     input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const element = await this.readSequenceElement(input, action, parameters)
+    const resolved: Record<string, unknown> = { ...parameters, element_token: element['element_token'] }
+    delete resolved['name']
+    delete resolved['role']
+    return resolved
+  }
+
+  /**
+   * Reads an exact control from the current native window snapshot.
+   */
+  private async readSequenceElement(
+    input: ToolExecutionContext,
+    action: string,
+    parameters: Record<string, unknown>,
+    matchLabelOnly = false
   ): Promise<Record<string, unknown>> {
     const target = asRecord(parameters['target'])
     const pid = target?.['pid'] ?? parameters['pid']
@@ -1049,11 +1250,12 @@ export class CuaRuntime {
     this.forgetVisualState(input, parameters)
     const state = parseJsonRecord(observed.structuredJson) || parseJsonRecord(observed.rawJson)
     if (hasCuaError(observed) || !Array.isArray(state?.['elements']) || state['truncated'] === true ||
+        (matchLabelOnly && (observed.degraded || state['elements_complete'] === false)) ||
         state['pid'] !== pid || state['window_id'] !== windowId) {
       throw new Error('Fresh named-target observation failed or was incomplete. Observe the exact window before continuing.')
     }
     const namedMatches = state['elements'].map(asRecord).filter((element) => element &&
-      (element['label'] === parameters['name'] || element['value'] === parameters['name']) &&
+      (element['label'] === parameters['name'] || !matchLabelOnly && element['value'] === parameters['name']) &&
       (!hasText(parameters['role']) || element['role'] === parameters['role']))
     // Structured AX names use AXPress/AXShowMenu; Markdown uses press/show_menu.
     const requestedAction = String(parameters['action'] ?? 'press').split('_').join('').toLowerCase()
@@ -1074,10 +1276,7 @@ export class CuaRuntime {
     if (action === 'click' && !supportsAction(element)) {
       throw new Error('The named element does not advertise the requested click action. Observe and use a grounded alternative.')
     }
-    const resolved: Record<string, unknown> = { ...parameters, element_token: element['element_token'] }
-    delete resolved['name']
-    delete resolved['role']
-    return resolved
+    return element
   }
 
   /**
@@ -1102,7 +1301,7 @@ export class CuaRuntime {
       const observed = await this.callAction(runtime.driver, input, 'get_window_state', observationArgs)
       this.forgetVisualState(input, parameters)
       const state = parseJsonRecord(observed.structuredJson) || parseJsonRecord(observed.rawJson)
-      if (hasCuaError(observed) || state?.['pid'] !== pid || state['window_id'] !== windowId ||
+      if (hasCuaError(observed) || !state || state['pid'] !== pid || state['window_id'] !== windowId ||
           !Array.isArray(state['elements'])) {
         return null
       }
