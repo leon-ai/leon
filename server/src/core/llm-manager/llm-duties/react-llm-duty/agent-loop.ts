@@ -21,6 +21,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
+import { waitForRetry } from '@/core/llm-manager/llm-provider/llm-provider-errors'
 import {
   CompletionFailureKind,
   ProviderRetryReason,
@@ -100,6 +101,7 @@ const AGENT_REVIEW_REFERENCE_BUDGET = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 
 const AGENT_REVIEW_OBSERVATION_MAX_CHARS = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS / 4)
 const AGENT_PLAN_REMINDER_INTERVAL = 4
 const AGENT_REPEATED_REJECTION_LIMIT = 3
+const AGENT_STALL_RETRY_DELAY_MS = 5_000
 const AGENT_DIRECT_TOOL_LOAD_MAX_CHARS = 8_000
 const AGENT_FUNCTION_INDEX_MAX_CHARS = 8_000
 const AGENT_RESUMABLE_STEP_LIMIT = 8
@@ -1041,6 +1043,7 @@ export async function runAgentLoop(
   let hasUsedOutputRecovery = false
   let hasUsedContextRecovery = false
   let hasUsedStallRecovery = false
+  let retryStalledRequest = false
   let hasOwnerUpdates = false
   const lastQueuedSource = transcript.findLastIndex((message) =>
     message.role !== 'assistant' && message.files?.some((file) => file.inspectionPending)
@@ -1085,6 +1088,7 @@ export async function runAgentLoop(
     if (await appendPendingOwnerMessages(params, transcript)) {
       hasOwnerUpdates = true
       pendingOwnerReassessment = true
+      retryStalledRequest = false
     }
     if (pendingOwnerReassessment) {
       rejectedCalls.clear()
@@ -1118,12 +1122,12 @@ export async function runAgentLoop(
     let modelResult: AgentModelResult | null
     let imageBatch: AgentImageBatch | null = null
     let isImageInspection = false
-    let isRecoveryAttempt = false
     let isOutputRecoveryAttempt = false
-    let isStallRecoveryAttempt = false
-    // Keep the smaller target after a context rejection. A stream stall only
-    // needs the smaller request for the recovery attempt.
-    let isContextRecoveryAttempt = hasUsedContextRecovery
+    let isStallRecoveryAttempt = retryStalledRequest && !params.runBudget?.isFinishing
+    let isRecoveryAttempt = isStallRecoveryAttempt
+    let isContextRecoveryAttempt = hasUsedContextRecovery || isStallRecoveryAttempt
+    retryStalledRequest = false
+
     const remainingIterations = iterationLimit - iteration
     // A stale plan is a cue to reconcile evidence, never proof that work finished.
     // Keep the reminder transient so long runs do not accumulate bookkeeping text.
@@ -1183,23 +1187,35 @@ export async function runAgentLoop(
         }
 
         if (error instanceof AgentModelResponseTimeoutError) {
-          if (!hasUsedStallRecovery && !params.runBudget?.isFinishing &&
+          if (!params.runBudget?.isFinishing &&
             error.diagnostics?.replaySafe === true &&
             !error.diagnostics.providerCompleted &&
             (error.diagnostics.retryReason === ProviderRetryReason.Output ||
               (error.diagnostics.reasoningOnly === true &&
                 (error.diagnostics.retryReason === ProviderRetryReason.ReasoningTimeout ||
                   error.diagnostics.retryReason === ProviderRetryReason.Exhausted)))) {
-            // Interrupted drafts and unexecuted tool arguments are provisional.
-            // Rebuild once from retained evidence without replaying completed actions.
-            hasUsedStallRecovery = true
-            isRecoveryAttempt = true
-            isStallRecoveryAttempt = true
-            isContextRecoveryAttempt = true
-            await params.onProgressMessage?.(
-              'I am recovering from the model stall using compacted evidence and a fresh request.'
-            )
-            continue
+            if (!isStallRecoveryAttempt) {
+              // Rebuild from retained evidence so completed actions stay settled.
+              hasUsedStallRecovery = true
+              isRecoveryAttempt = true
+              isStallRecoveryAttempt = true
+              isContextRecoveryAttempt = true
+              await params.onProgressMessage?.(
+                'I am recovering from the model stall using compacted evidence and a fresh request.'
+              )
+              continue
+            }
+
+            if (remainingIterations > 1) {
+              // Consecutive stalls spend iterations and leave the finishing reserve available.
+              const workingTimeMs = (params.runBudget?.remainingMs ?? Infinity) -
+                (params.runBudget?.finishingReserveMs ?? 0)
+              const delayMs = Math.min(AGENT_STALL_RETRY_DELAY_MS, Math.max(0, workingTimeMs))
+
+              await waitForRetry(delayMs, params.signal)
+              retryStalledRequest = true
+              continue agentIterations
+            }
           }
 
           // An operational stall may consume the work budget. Use the existing

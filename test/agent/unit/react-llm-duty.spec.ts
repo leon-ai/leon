@@ -1127,7 +1127,7 @@ describe('continuous agent loop', () => {
     { recovers: false, retryReason: ProviderRetryReason.Exhausted, reasoningOnly: true },
     { recovers: true, retryReason: ProviderRetryReason.Output, reasoningOnly: false },
     { recovers: false, retryReason: ProviderRetryReason.Output, reasoningOnly: false }
-  ])('bounds $retryReason recovery while preserving completed actions (recovers: $recovers)', async ({ recovers, retryReason, reasoningOnly }) => {
+  ])('bounds $retryReason recovery at the iteration limit while preserving completed actions (recovers: $recovers)', async ({ recovers, retryReason, reasoningOnly }) => {
     const timeout = new AgentModelResponseTimeoutError({
       providerEventCount: 3, providerCompleted: false, elapsedMs: 90_000,
       reasoningOnly, replaySafe: true, retryReason
@@ -1156,7 +1156,8 @@ describe('continuous agent loop', () => {
 
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Save the release receipt.' }], catalog: createCatalog(),
-      callModel, executeFunction, onCheckpoint, loadAgentSkill: async () => null
+      callModel, executeFunction, onCheckpoint, loadAgentSkill: async () => null,
+      maxIterations: recovers ? 3 : 2
     })
 
     expect(result.intent).toBe(recovers ? 'answer' : 'error')
@@ -1167,6 +1168,63 @@ describe('continuous agent loop', () => {
     expect(checkpoints[0]).toMatchObject({
       transcript: expect.arrayContaining([expect.objectContaining({ role: 'tool', content: 'Receipt saved: release-42.' })])
     })
+  })
+
+  it('recovers from later and consecutive stalls while retaining completed actions', async () => {
+    vi.useFakeTimers()
+
+    const timeout = new AgentModelResponseTimeoutError({
+      providerEventCount: 3, providerCompleted: false, elapsedMs: 30_000,
+      reasoningOnly: true, replaySafe: true, retryReason: ProviderRetryReason.ReasoningTimeout
+    })
+    const firstReceipt = 'Release receipt saved.'
+    const secondReceipt = 'Delivery receipt saved.'
+    const executeFunction = vi.fn()
+      .mockResolvedValueOnce({
+        execution: { function: callable.qualifiedName, status: 'success', observation: firstReceipt }
+      })
+      .mockResolvedValueOnce({
+        execution: { function: callable.qualifiedName, status: 'success', observation: secondReceipt }
+      })
+    const onProgressMessage = vi.fn()
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({
+        toolCalls: [toolCall('release', CALLABLE_TOOL_NAME, { query: 'release' })]
+      })
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce({
+        toolCalls: [toolCall('delivery', CALLABLE_TOOL_NAME, { query: 'delivery' })]
+      })
+      .mockRejectedValueOnce(timeout)
+      .mockRejectedValueOnce(timeout)
+      .mockImplementationOnce(async (messages: AgentToolTranscriptMessage[]) => {
+        expect(messages.filter((message) => message.role === 'tool').map((message) => message.content))
+          .toEqual(expect.arrayContaining([firstReceipt, secondReceipt]))
+
+        return { textContent: 'Both receipts are saved.' }
+      })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Both receipts are verified.' }) })
+
+    try {
+      const pending = runAgentLoopWithCompletionReview({
+        transcript: [{ role: 'user', content: 'Save both receipts.' }],
+        catalog: createCatalog(), callModel, executeFunction, onProgressMessage,
+        loadAgentSkill: async () => null, maxIterations: 5
+      })
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(callModel).toHaveBeenCalledTimes(5)
+      expect(onProgressMessage).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersToNextTimerAsync()
+
+      const result = await pending
+      expect(result.intent).toBe('answer')
+      expect(result.answer).toBe('Both receipts are saved.')
+      expect(executeFunction).toHaveBeenCalledTimes(2)
+      expect(result.executionHistory.map((execution) => execution.observation)).toEqual([firstReceipt, secondReceipt])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([
