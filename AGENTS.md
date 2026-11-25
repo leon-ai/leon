@@ -2,6 +2,11 @@
 
 Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and [LEON.md](core/context/LEON.md) for intended behavior. These are generated summaries; verify relevant source before changing a subsystem.
 
+## Leon server and tooling
+
+- Use the root `scripts/` directory for build, setup, maintenance and release tooling. Keep server services and lifecycle code under `server/src/`.
+- Keep dependencies pointing from tooling to runtime. When both need the same logic, tooling should import a narrow runtime module. Put server behavior in a server-owned module and shared host capabilities in a dependency-free leaf under `bridges/runtime/`.
+
 ## Open-source values and agent-assisted reuse
 
 Leon is a long-term project built with passion, care and a belief in sharing useful software. Welcome curiosity, good intentions and thoughtful learning, contributions or independent work; good faith matters more than experience.

@@ -6,6 +6,7 @@ import psList from 'ps-list'
 import kill from 'tree-kill'
 
 import {
+  CODEBASE_PATH,
   IS_DEVELOPMENT_ENV,
   IS_PRODUCTION_ENV,
   LEON_PROFILE_NAME,
@@ -43,6 +44,7 @@ import {
 } from '@/core'
 import { shouldIgnoreTCPServerError } from '@/utilities'
 import { Updater } from '@/updater'
+import { registerServerShutdownControl } from '@/core/server-shutdown-control'
 import { startProfileTelemetry } from '@/core/telemetry/profile-telemetry'
 import { setShutdownHandler } from '@/core/server-lifecycle'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -286,6 +288,14 @@ async function bootstrap(): Promise<void> {
       })
     }
   )
+
+  if (IS_PRODUCTION_ENV) {
+    try {
+      await registerServerShutdownControl(CODEBASE_PATH, shutdown)
+    } catch (error) {
+      LogHelper.warning(`Could not register the server shutdown endpoint: ${String(error)}`)
+    }
+  }
 
   process.on('uncaughtException', (error) => {
     LogHelper.title('Server')
