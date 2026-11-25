@@ -16,6 +16,8 @@ import { ComputerUseArtifactStore } from './computer-use-artifact-store'
 import { COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_FOREGROUND_DELIVERY_MODE } from './constants'
 import { asRecord, hasCuaError, hasText } from './utils'
 
+const CUA_EXECUTABLE_TOKEN_PATTERN = /^[^"\s]+$/u
+
 /**
  * Owns persistent driver instances and host-managed runtime parameters.
  */
@@ -139,6 +141,17 @@ export class ComputerUseRuntimeManager {
       // macOS accepts observed .app paths through name, not launch_path.
       managedParameters['name'] = managedParameters['launch_path']
       delete managedParameters['launch_path']
+    }
+    const launchPath = managedParameters['launch_path']
+    if (action === 'launch_app' && process.platform === 'linux' &&
+        typeof launchPath === 'string' && launchPath.startsWith('"') && launchPath.endsWith('"')) {
+      const executable = launchPath.slice(1, -1)
+      // The Linux driver splits Exec text on whitespace. Round-trip a
+      // standalone quoted path when the executable fits in one token.
+      if (path.isAbsolute(executable) && CUA_EXECUTABLE_TOKEN_PATTERN.test(executable) &&
+          (await fs.promises.stat(executable).catch(() => null))?.isFile()) {
+        managedParameters['launch_path'] = executable
+      }
     }
     if (action === 'verify_state' && Array.isArray(managedParameters['expect'])) {
       // Preserve the predicate's meaning when the model flattens its selector.
