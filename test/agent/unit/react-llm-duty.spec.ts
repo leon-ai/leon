@@ -2542,6 +2542,45 @@ describe('continuous agent loop', () => {
     expect(executeFunction).toHaveBeenCalledOnce()
   })
 
+  it('reviews the latest desktop frame from the current owner turn', async () => {
+    const frame = { dataBase64: 'Z2l2ZW4=', mediaType: 'image/png' }
+    const olderFrame = { dataBase64: 'b2xk', mediaType: 'image/png' }
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Inspect the previous window.' },
+      { role: 'tool', toolName: 'computer_use__cua__observe', toolCallId: 'previous-window',
+        content: '{"status":"success"}', files: [olderFrame] },
+      { role: 'user', content: 'Read the version from the About window.' },
+      { role: 'tool', toolName: 'computer_use__cua__observe', toolCallId: 'settings-window',
+        content: '{"status":"success"}', files: [olderFrame] },
+      { role: 'tool', toolName: 'computer_use__cua__act', toolCallId: 'about-window',
+        content: '{"status":"success"}', files: [frame] }
+    ]
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: 'The About window shows version 2.3.' })
+      .mockImplementationOnce(async (messages) => {
+        const review = messages.at(-1)
+        expect(messages.flatMap((message: AgentToolTranscriptMessage) =>
+          message.role === 'assistant' ? [] : message.files ?? []
+        )).toEqual([frame])
+        expect(JSON.parse(review.content).screenshot_evidence.tool_call_id).toBe('about-window')
+        return { textContent: JSON.stringify({ status: 'complete', reason: 'The frame shows version 2.3.' }) }
+      })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript,
+      catalog: createCatalog(),
+      initialExecutionHistory: [{
+        function: 'computer_use.cua.act', toolCallId: 'about-window',
+        status: 'success', observation: '{"status":"success"}'
+      }],
+      callModel,
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.answer).toBe('The About window shows version 2.3.')
+    expect(callModel).toHaveBeenCalledTimes(2)
+  })
+
   it.each([
     {
       status: 'revise',

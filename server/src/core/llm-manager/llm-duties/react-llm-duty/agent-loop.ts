@@ -1862,6 +1862,25 @@ async function reviewAgentCompletion(
 ): Promise<AgentCompletionReview | null> {
   const source = restoreCompactionSources(transcript)
   const { entries, omittedCount } = buildCompletionReviewEvidence(source, state.executionHistory)
+  const lastOwnerMessage = source.findLastIndex((message) =>
+    message.role === 'user' && !message.runtimeContext
+  )
+  // A later desktop action can invalidate the previous frame. Review only the
+  // latest desktop result in this turn, and tie the image to its text evidence.
+  const desktopResult = intent === 'answer' && lastOwnerMessage >= 0
+    ? source.slice(lastOwnerMessage + 1).findLast((message) =>
+        message.role === 'tool' && message.toolName.startsWith('computer_use__cua__')
+      )
+    : undefined
+  const desktopEvidence = desktopResult?.role === 'tool'
+    ? retainRecentToolImages([desktopResult])[0]
+    : undefined
+  const desktopImage = desktopEvidence?.role === 'tool' &&
+    entries.some((entry) => entry['id'] === desktopEvidence.toolCallId)
+    ? desktopEvidence.files?.findLast((file) =>
+        file.mediaType.startsWith('image/') && !file.inspectionPending
+      )
+    : undefined
   const messages: AgentToolTranscriptMessage[] = [
     ...source.flatMap((message): AgentToolTranscriptMessage[] => {
       if (message.role === 'user' && !message.runtimeContext) {
@@ -1886,8 +1905,13 @@ async function reviewAgentCompletion(
         available_toolkits: [...params.catalog.availableToolkitsById.keys()],
         loaded_functions: [...params.catalog.functionsByToolName.values()].map((tool) => tool.qualifiedName),
         tool_evidence: entries,
+        ...(desktopImage && desktopEvidence?.role === 'tool'
+          ? { screenshot_evidence: { tool_call_id: desktopEvidence.toolCallId,
+              instruction: 'Inspect the attached screenshot as evidence from this tool result.' } }
+          : {}),
         ...(omittedCount > 0 ? { omitted_tool_evidence_count: omittedCount } : {})
-      })
+      }),
+      ...(desktopImage ? { files: [desktopImage] } : {})
     }
   ]
 
