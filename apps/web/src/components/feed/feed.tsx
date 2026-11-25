@@ -109,10 +109,6 @@ const FeedEntryContent = memo(function FeedEntryContent({ entry, sessionId, late
   )
 })
 
-function supportsScrollEnd(element: HTMLElement): boolean {
-  return 'onscrollend' in element
-}
-
 export function Feed({
   entries,
   onScrollToBottomVisibilityChange,
@@ -383,7 +379,6 @@ export function Feed({
 
     const observedLatestTurnElement = latestTurnElement
     const observedScrollElement = scrollElement
-    const hasScrollEndSupport = supportsScrollEnd(observedScrollElement)
 
     // The former latest turn just lost its viewport minimum. Refresh that
     // measurement before deriving the new turn's final scroll destination.
@@ -404,8 +399,8 @@ export function Feed({
     observedLatestTurnElement.classList.add('feed-turn-awaiting-owner')
 
     let ownerMessageRevealed = false
-    let scrollStartOffset = observedScrollElement.scrollTop
-    let scrollTargetOffset = scrollStartOffset
+    let scrollStartOffset: number
+    let scrollTargetOffset: number
     let scrollSettleTimeout: number | undefined
 
     function revealOwnerMessage(): void {
@@ -417,10 +412,12 @@ export function Feed({
       observedLatestTurnElement.classList.remove('feed-turn-awaiting-owner')
       observedScrollElement.removeEventListener('scroll', handleScroll)
       observedScrollElement.removeEventListener('scrollend', revealOwnerMessage)
+      window.clearTimeout(scrollSettleTimeout)
+    }
 
-      if (scrollSettleTimeout !== undefined) {
-        window.clearTimeout(scrollSettleTimeout)
-      }
+    function scheduleOwnerReveal(): void {
+      window.clearTimeout(scrollSettleTimeout)
+      scrollSettleTimeout = window.setTimeout(revealOwnerMessage, SCROLL_SETTLE_DELAY_MS)
     }
 
     function handleScroll(): void {
@@ -438,32 +435,32 @@ export function Feed({
         return
       }
 
-      if (!hasScrollEndSupport) {
-        if (scrollSettleTimeout !== undefined) {
-          window.clearTimeout(scrollSettleTimeout)
-        }
-
-        scrollSettleTimeout = window.setTimeout(
-          revealOwnerMessage,
-          SCROLL_SETTLE_DELAY_MS
-        )
-      }
+      scheduleOwnerReveal()
     }
 
     const animationFrame = window.requestAnimationFrame(() => {
       const feedTopClearance = Number.parseFloat(
         window.getComputedStyle(feedElement).paddingTop
       )
-      const targetOffset = scrollElement.scrollTop +
+      const currentOffset = scrollElement.scrollTop
+      // Measure inside the scroll viewport so window chrome and scroll limits
+      // are accounted for when deciding whether the turn needs to move.
+      const desiredOffset = currentOffset +
         observedLatestTurnElement.getBoundingClientRect().top -
+        scrollElement.getBoundingClientRect().top -
+        scrollElement.clientTop -
         feedTopClearance
+      const targetOffset = Math.max(0, Math.min(
+        desiredOffset,
+        scrollElement.scrollHeight - scrollElement.clientHeight
+      ))
       const shouldReduceMotion = window.matchMedia(
         REDUCED_MOTION_MEDIA_QUERY
       ).matches
 
       if (
         shouldReduceMotion ||
-        Math.abs(targetOffset - scrollElement.scrollTop) <=
+        Math.abs(targetOffset - currentOffset) <=
           SCROLL_POSITION_TOLERANCE_PX
       ) {
         scrollElement.scrollTo({ top: targetOffset, behavior: 'auto' })
@@ -471,20 +468,17 @@ export function Feed({
         return
       }
 
-      scrollStartOffset = observedScrollElement.scrollTop
+      scrollStartOffset = currentOffset
       scrollTargetOffset = targetOffset
       observedScrollElement.addEventListener('scroll', handleScroll, {
         passive: true
       })
+      observedScrollElement.addEventListener('scrollend', revealOwnerMessage, {
+        once: true
+      })
 
-      if (hasScrollEndSupport) {
-        observedScrollElement.addEventListener('scrollend', revealOwnerMessage, {
-          once: true
-        })
-      }
-
-      // Reveal the owner message at its position inside the turn instead of
-      // aligning the virtualized turn's outer bounds.
+      // A scroll interrupted before its first movement can emit no events.
+      scheduleOwnerReveal()
       scrollElement.scrollTo({
         top: targetOffset,
         behavior: 'smooth'
@@ -493,13 +487,7 @@ export function Feed({
 
     return () => {
       window.cancelAnimationFrame(animationFrame)
-      observedScrollElement.removeEventListener('scrollend', revealOwnerMessage)
-      observedScrollElement.removeEventListener('scroll', handleScroll)
       revealOwnerMessage()
-
-      if (scrollSettleTimeout !== undefined) {
-        window.clearTimeout(scrollSettleTimeout)
-      }
     }
   }, [turnCount, fastScroll, virtualizer, resumeFollowing])
 
