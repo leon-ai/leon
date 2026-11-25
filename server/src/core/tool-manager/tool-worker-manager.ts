@@ -45,6 +45,7 @@ interface Worker {
   lifetime?: ToolRuntimeLifetime
   idleTimer?: NodeJS.Timeout
   idleRetirement?: Promise<void>
+  retainedResources: Set<string>
   progress: Map<string, {
     receive: (progress: ToolRuntimeProgress) => void
     streams: Set<string>
@@ -137,6 +138,7 @@ export class ToolWorkerManager {
       process: child,
       diagnostics: '',
       progress: new Map(),
+      retainedResources: new Set(),
       closed: new Promise((resolve) => child.once('close', () => resolve()))
     }
     let pendingLine = ''
@@ -157,6 +159,14 @@ export class ToolWorkerManager {
         worker.result?.(message)
       } else if (message.type === 'prepared') {
         worker.approvePreparation?.(message)
+      } else if (message.type === 'retention') {
+        if (message.retained) {
+          worker.retainedResources.add(message.id)
+          clearTimeout(worker.idleTimer)
+          delete worker.idleTimer
+        } else if (worker.retainedResources.delete(message.id)) {
+          this.scheduleIdleRetirement(worker)
+        }
       } else if (message.type === 'progress') {
         const subscription = worker.progress.get(message.requestId)
         if (!subscription) {
@@ -245,6 +255,7 @@ export class ToolWorkerManager {
     const timeout = context.timeout ? new ToolTimeout(context.timeout) : undefined
     const worker = current ?? this.create(context, key)
     clearTimeout(worker.idleTimer)
+    delete worker.idleTimer
     const requestId = randomUUID()
     let preparing = false
     let forceStopTimer: NodeJS.Timeout | undefined
@@ -350,6 +361,7 @@ export class ToolWorkerManager {
       delete callContext.signal
       delete callContext.preparationSignal
       delete callContext.onPreparationComplete
+      delete callContext.retainWorker
       worker.process.send({ type: 'execute', requestId, context: callContext, args }, (error) => {
         if (error) {
           worker.fail?.(error.message)
@@ -387,8 +399,11 @@ export class ToolWorkerManager {
   }
 
   private scheduleIdleRetirement(worker: Worker): void {
-    // An active call or retained output keeps its progress subscription until it finishes.
-    if (this.closing || worker.lifetime !== ToolRuntimeLifetime.Idle || worker.progress.size > 0) {
+    // Progress subscriptions cover active calls and ongoing output. Silent live
+    // resources hold the worker independently until their owners release them.
+    if (this.closing || !worker.lifetime || worker.lifetime === ToolRuntimeLifetime.Call ||
+        worker.progress.size > 0 || worker.retainedResources.size > 0 ||
+        worker.idleTimer || worker.idleRetirement) {
       return
     }
 

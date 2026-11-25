@@ -77,6 +77,7 @@ export interface ManagedComputerUseRuntime {
    * Only the conversation that started recording receives automatic evidence captures.
    */
   recordingSessionId?: string | null
+  releaseRecordingWorker?: () => void
 }
 
 export interface ComputerUseImageDimensions {

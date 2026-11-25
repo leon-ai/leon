@@ -44,6 +44,7 @@ interface AppendOptions {
 }
 
 export default class FileTool extends Tool {
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   private static readonly TOOLKIT = 'file_system'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
   private documentReader?: DocumentReader
@@ -51,13 +52,6 @@ export default class FileTool extends Tool {
   constructor() {
     super()
     this.config = ToolkitConfig.load(FileTool.TOOLKIT, this.toolName)
-  }
-
-  /**
-   * Keep extracted documents available for follow-up reads.
-   */
-  public get runtimeLifetime(): ToolRuntimeLifetime {
-    return this.documentReader ? ToolRuntimeLifetime.Persistent : ToolRuntimeLifetime.Idle
   }
 
   get toolName(): string {

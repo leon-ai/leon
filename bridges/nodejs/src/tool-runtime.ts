@@ -217,6 +217,23 @@ const run = async (): Promise<void> => {
               if (process.connected) {
                 process.send?.({ type: 'progress', requestId: request.requestId, progress }, () => {})
               }
+            },
+            retainWorker: (): (() => void) => {
+              const id = randomUUID()
+              let held = true
+              const update = (retained: boolean): void => {
+                if (process.connected) {
+                  process.send?.({ type: 'retention', id, retained }, () => {})
+                }
+              }
+
+              update(true)
+              return () => {
+                if (held) {
+                  held = false
+                  update(false)
+                }
+              }
             }
           }, request.args)
         )

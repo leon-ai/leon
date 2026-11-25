@@ -79,9 +79,9 @@ export interface PresentOptions {
  * Authors and verifies animated presentations with tool-owned local dependencies.
  */
 export default class SlidevTool extends Tool {
-  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   private readonly config = ToolkitConfig.load('document', 'slidev')
-  private readonly presentations = new PresentationSessions()
+  private readonly presentations = new PresentationSessions(() => this.retainWorker())
 
   constructor() {
     super()

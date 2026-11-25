@@ -76,6 +76,11 @@ export interface ToolExecutionContext {
    * Rechecks host instructions before a prepared tool can perform its action.
    */
   onPreparationComplete?: () => Promise<void>
+  /**
+   * Holds the worker while a live resource needs follow-up calls or its own cleanup.
+   * Release it when the resource closes, even if it outlives the current call.
+   */
+  retainWorker?: () => () => void
 }
 
 export interface ToolRuntimeResult {
@@ -86,16 +91,17 @@ export interface ToolRuntimeResult {
 }
 
 /**
- * Internal worker retention policy; ordinary SDK tools run once by default.
+ * Internal worker reuse policy; ordinary SDK tools run once by default.
  */
 export enum ToolRuntimeLifetime {
   Call = 'call',
   Idle = 'idle',
+  // Existing tools using this value share the idle policy for reusable workers.
   Persistent = 'persistent'
 }
 
 export type ToolWorkerRequest =
-  | { type: 'execute', requestId: string, context: Omit<ToolExecutionContext, 'onProgress' | 'onPreparationComplete' | 'signal' | 'preparationSignal'>, args: unknown[] }
+  | { type: 'execute', requestId: string, context: Omit<ToolExecutionContext, 'onProgress' | 'onPreparationComplete' | 'retainWorker' | 'signal' | 'preparationSignal'>, args: unknown[] }
   | { type: 'shutdown' }
   | { type: 'cancel', requestId: string, reason: string, name?: string }
   | { type: 'preparation-result', requestId: string, preparationId: string, error?: string }
@@ -106,3 +112,4 @@ export type ToolWorkerResponse = {
   result: ToolRuntimeResult
 } | { type: 'progress', requestId: string, progress: ToolRuntimeProgress }
   | { type: 'prepared', requestId: string, preparationId: string }
+  | { type: 'retention', id: string, retained: boolean }

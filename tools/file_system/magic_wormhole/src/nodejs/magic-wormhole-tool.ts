@@ -45,7 +45,7 @@ interface Transfer {
  * Own one-recipient, encrypted internet transfers with finite process lifetimes.
  */
 export default class MagicWormholeTool extends Tool {
-  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   private readonly config = ToolkitConfig.load(this.toolkit, this.toolName)
   private readonly transfers = new Map<string, Transfer>()
 
@@ -119,9 +119,14 @@ export default class MagicWormholeTool extends Tool {
       const child = fork(SUPERVISOR, [], {
         execArgv: [], stdio: ['ignore', 'ignore', 'ignore', 'ipc']
       })
+      const releaseWorker = this.retainWorker()
       const closed = new Promise<void>((resolve) => {
-        child.once('exit', resolve)
-        child.once('error', resolve)
+        const finish = (): void => {
+          releaseWorker()
+          resolve()
+        }
+        child.once('exit', finish)
+        child.once('error', finish)
       })
       transfer = {
         child, closed, sessionId, filename, sizeBytes: stat.size, expiresAt,

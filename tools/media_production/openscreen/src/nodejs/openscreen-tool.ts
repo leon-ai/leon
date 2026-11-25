@@ -42,6 +42,7 @@ interface Recording {
   systemPicker: boolean
   hasCamera: boolean
   state: RecordingState
+  releaseWorker: () => void
   context?: ToolExecutionContext
   timer?: NodeJS.Timeout
   finishing?: Promise<void>
@@ -93,7 +94,7 @@ export interface ExportOptions {
  * Owns managed OpenScreen sessions while upstream validates edits and plans zooms.
  */
 export default class OpenScreenTool extends Tool {
-  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   private readonly config = ToolkitConfig.load(this.toolkit, this.toolName)
   private readonly sessions = new Map<string, OpenScreenSession>()
   private readonly recordings = new Map<string, Recording>()
@@ -193,12 +194,14 @@ export default class OpenScreenTool extends Tool {
         break
       }
       if (item.state !== RecordingState.Recording && item.state !== RecordingState.Stopping) {
+        item.releaseWorker()
         this.recordings.delete(id)
       }
     }
     const recording: Recording = {
       id: randomUUID(), owner, session, startedAt: started['startedAt'],
       state: RecordingState.Recording,
+      releaseWorker: this.retainWorker(),
       systemPicker: options.systemPicker === true,
       hasCamera: options.camera === true,
       ...(options.title ? { title: options.title } : {}),
@@ -245,6 +248,7 @@ export default class OpenScreenTool extends Tool {
         await this.applyBrowserEvidence(recording, context)
         await this.reportZooms(recording, context)
         delete recording.result['browserWindowVerificationRequired']
+        recording.releaseWorker()
       }
     }
     await this.finish(recording, context)
@@ -438,6 +442,11 @@ export default class OpenScreenTool extends Tool {
       recording.error = String(error)
       this.recordingOutput(recording, `${recording.error}\n`, 'failed')
       throw error
+    } finally {
+      // Wayland review still needs the recording handle to confirm the source.
+      if (recording.state !== RecordingState.Completed || !recording.result?.['browserWindowVerificationRequired']) {
+        recording.releaseWorker()
+      }
     }
   }
 

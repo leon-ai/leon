@@ -529,8 +529,11 @@ export class CuaRuntime {
       }
       if (succeeded && action === 'start_recording') {
         runtime.recordingSessionId = input.conversationSessionId
+        runtime.releaseRecordingWorker ??= input.retainWorker?.()
       } else if (succeeded && action === 'stop_recording') {
         delete runtime.recordingSessionId
+        runtime.releaseRecordingWorker?.()
+        delete runtime.releaseRecordingWorker
       }
       const successMessage = visualStateUnchanged
         ? 'Computer input was delivered, but the captured interface did not change. Treat the intended effect as unverified.'

@@ -90,6 +90,14 @@ export abstract class Tool {
     this.downloadTracker = undefined
   }
 
+  /**
+   * Keep a reusable worker available until this resource closes. Acquire the
+   * hold during the owning call and invoke the returned release on cleanup.
+   */
+  protected retainWorker(): () => void {
+    return this.executionContext?.retainWorker?.() ?? ((): void => {})
+  }
+
   private get downloads(): DownloadTracker {
     // Native skill stdout carries protocol messages; keep CLI progress in SDK logs.
     this.downloadTracker ??= new DownloadTracker(

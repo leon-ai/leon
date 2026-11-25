@@ -831,7 +831,8 @@ async function fixture(lifetime = ToolRuntimeLifetime.Call): Promise<void> {
     await fs.writeFile(path.join(directory, 'src', 'nodejs', 'index.ts'), `
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
 import { Tool } from '@sdk/base-tool'
 export default class Fixture extends Tool {
@@ -865,6 +866,24 @@ export default class Fixture extends Tool {
       this.emitOutput('finished', { id, state: 'completed' }, context)
     })()
   }
+  async startChildAndFail() {
+    this.child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    await once(this.child, 'spawn')
+    await fs.writeFile(path.join(process.env.LEON_HOME, 'child-pids'),
+      JSON.stringify({ worker: process.pid, child: this.child.pid }))
+    throw new Error('The operation failed after starting a child.')
+  }
+  startResource(name) {
+    const release = this.retainWorker()
+    const marker = path.join(process.env.LEON_HOME, name)
+    void (async () => {
+      while (!await fs.stat(marker).then(() => true, () => false)) {
+        await delay(10)
+      }
+      release()
+      await fs.writeFile(marker + '-released', '')
+    })()
+  }
   async readInput() {
     const command = [
       "process.stdin.on('end', () => {",
@@ -881,6 +900,11 @@ export default class Fixture extends Tool {
     })
   }
   async dispose() {
+    if (this.child) {
+      const closed = once(this.child, 'close')
+      this.child.kill()
+      await closed
+    }
     await fs.appendFile(path.join(process.env.LEON_HOME, 'disposed'), process.env.LEON_PROFILE + '\\n')
   }
 }
@@ -939,6 +963,61 @@ it('reuses an idle worker while it has retained output and starts fresh after ex
     await vi.advanceTimersByTimeAsync(60_000)
     expect((await next('a', 'five')).output['result']).toMatchObject({ count: 1 })
     expect(await fs.readFile(path.join(home, 'disposed'), 'utf8')).toBe('a\n')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('retires a reusable worker and its managed child after a failed call', async () => {
+  await fixture(ToolRuntimeLifetime.Persistent)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const result = await manager.execute({
+      toolkitId: 'fixture', toolId: 'state', functionName: 'startChildAndFail',
+      profileName: 'a', conversationSessionId: 'one', parameters: {}
+    }, [], () => {}, { concurrency: ToolConcurrency.Serial })
+    expect(result.success).toBe(false)
+
+    const { worker, child } = JSON.parse(await fs.readFile(path.join(home, 'child-pids'), 'utf8'))
+    expect(process.kill(worker, 0)).toBe(true)
+    expect(process.kill(child, 0)).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.waitFor(() => {
+      expect(() => process.kill(worker, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      expect(() => process.kill(child, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('retires a worker after its last quiet resource closes between calls', async () => {
+  await fixture(ToolRuntimeLifetime.Idle)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const first = await next('a', 'one')
+    const { pid } = first.output['result'] as { pid: number }
+    for (const name of ['first', 'second']) {
+      const result = await manager.execute({
+        toolkitId: 'fixture', toolId: 'state', functionName: 'startResource',
+        profileName: 'a', conversationSessionId: name, parameters: {}
+      }, [name], () => {}, { concurrency: ToolConcurrency.Serial })
+      expect(result.success).toBe(true)
+    }
+
+    await fs.writeFile(path.join(home, 'first'), '')
+    await vi.waitFor(() => fs.access(path.join(home, 'first-released')))
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(process.kill(pid, 0)).toBe(true)
+    expect((await next('a', 'one')).output['result']).toMatchObject({ pid, count: 2 })
+
+    await fs.writeFile(path.join(home, 'second'), '')
+    await vi.waitFor(() => fs.access(path.join(home, 'second-released')))
+    await vi.advanceTimersByTimeAsync(61_000)
+    await vi.waitFor(() => {
+      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+    })
   } finally {
     vi.useRealTimers()
   }
