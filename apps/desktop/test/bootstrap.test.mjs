@@ -326,13 +326,23 @@ child.on('exit', (code) => process.exit(code ?? 0))\n`)
   await writeFile(path.join(codebase, 'server/dist/index.js'), `import { createServer } from 'node:http'
 import { appendFileSync } from 'node:fs'
 appendFileSync(${JSON.stringify(marker)}, 'started\\n')
+if (process.platform === 'linux') {
+  appendFileSync(${JSON.stringify(marker)}, JSON.stringify({
+    display: process.env.WAYLAND_DISPLAY, desktop: process.env.XDG_CURRENT_DESKTOP,
+    unrelated: process.env.LEON_FIXTURE_PRIVATE_VALUE ?? null
+  }) + '\\n')
+}
 createServer((_request, response) => response.end(JSON.stringify({ authenticated: false, profile_name: null, version: '${contract.sourceVersion}', desktop_protocol_version: ${DESKTOP_CORE_PROTOCOL_VERSION} }))).listen(${port}, '127.0.0.1')\n`)
   const service = await createCoreService({ home, codebase, node: process.execPath, pnpm: process.execPath,
     profile: 'fixture' })
   try {
     await runCommand(process.execPath, ['--input-type=module', '-e', `
       const { createCoreService } = await import(${JSON.stringify(new URL('../.generated/src/service.js', import.meta.url).href)});
-      const service = await createCoreService(${JSON.stringify({ home, codebase, node: process.execPath, pnpm: process.execPath, profile: 'fixture' })});
+      const service = await createCoreService({
+        ...${JSON.stringify({ home, codebase, node: process.execPath, pnpm: process.execPath, profile: 'fixture' })},
+        environment: { ...process.env, WAYLAND_DISPLAY: 'wayland-fixture',
+          XDG_CURRENT_DESKTOP: 'GNOME', LEON_FIXTURE_PRIVATE_VALUE: 'excluded' }
+      });
       await service.start();
     `])
     assert.ok(await until(() => coreReady(`http://127.0.0.1:${port}`), 'detached Core readiness'))
@@ -342,7 +352,13 @@ createServer((_request, response) => response.end(JSON.stringify({ authenticated
       pnpm: process.execPath, profile: 'fixture' })
     await reopened.start()
     assert.equal((await controlCore(reopened.configuration)).pid, first.pid)
-    assert.equal(await readFile(marker, 'utf8'), 'started\n')
+    const output = (await readFile(marker, 'utf8')).trimEnd().split('\n')
+    assert.equal(output[0], 'started')
+    if (process.platform === 'linux') {
+      assert.deepEqual(JSON.parse(output[1]), {
+        display: 'wayland-fixture', desktop: 'GNOME', unrelated: null
+      })
+    }
     // Authenticating a control connection must not grant another local client access.
     assert.equal(await controlCore({ ...service.configuration, controlToken: 'wrong-token' }, 'stop'), null)
     assert.equal(await coreReady(`http://127.0.0.1:${port}`), true)

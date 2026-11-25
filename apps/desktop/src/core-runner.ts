@@ -4,6 +4,7 @@ import { createServer, type Server } from 'node:net'
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import type { ServiceConfiguration, HostError } from './types.js'
+import { desktopSessionEnvironment } from './desktop-session.js'
 
 const configuration = JSON.parse(await readFile(process.argv[2]!, 'utf8')) as ServiceConfiguration
 const { node, codebase, environment, controlPath, controlToken, directory } = configuration
@@ -82,7 +83,10 @@ async function launch(script: string): Promise<void> {
   }
   return new Promise<void>((resolve, reject) => {
     child = spawn(selectedNode, [path.join(selectedCodebase, 'scripts/run-with-managed-node.js'), script], {
-      cwd: selectedCodebase, env: { ...environment, LEON_NODE_ENV: 'production' }, stdio: 'inherit', windowsHide: true
+      cwd: selectedCodebase,
+      env: { ...environment, ...desktopSessionEnvironment(), LEON_NODE_ENV: 'production' },
+      stdio: 'inherit',
+      windowsHide: true
     })
     child.once('error', reject)
     child.once('exit', (code, signal) => {

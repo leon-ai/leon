@@ -8,6 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { runCommand } from './process.js'
+import { desktopSessionEnvironment } from './desktop-session.js'
 import type { HostError, ServiceConfiguration } from './types.js'
 
 interface ServiceOptions {
@@ -193,7 +194,8 @@ export async function createCoreService({ home, codebase, node, pnpm, runtimeHom
       const output = openSync(log, 'a', 0o600)
       try {
         const child = spawn(node, [runner, configurationPath], { cwd: directory,
-          env: configuration.environment, detached: true, windowsHide: true, stdio: ['ignore', output, output] })
+          env: { ...configuration.environment, ...desktopSessionEnvironment(environment) },
+          detached: true, windowsHide: true, stdio: ['ignore', output, output] })
         await new Promise<void>((resolve, reject) => {
           child.once('spawn', resolve)
           child.once('error', reject)
