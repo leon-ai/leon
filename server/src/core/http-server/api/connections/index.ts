@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import { getOAuthCompletionPath } from '@@/bridges/runtime/contracts/oauth-popup'
 
 import type { APIOptions } from '@/core/http-server/http-server'
 import { CONNECTION_STORE } from '@/core/connections/connection-store'
@@ -42,7 +43,7 @@ export const connectionsPlugin: FastifyPluginAsync<APIOptions> = async (
 
   // Desktop hosts have no browser session to redirect into after OAuth.
   // This public landing page exposes no account state or credentials.
-  fastify.get<{ Querystring: { popup_id?: string, provider?: string, connection_result?: string } }>(`${route}/complete`, async (request, reply) => {
+  fastify.get<{ Querystring: { popup_id?: string, provider?: string, connection_result?: string } }>(getOAuthCompletionPath(options.apiVersion), async (request, reply) => {
     reply.header('Cache-Control', 'no-store')
     reply.header('Referrer-Policy', 'no-referrer')
     const completion = renderOAuthCompletion(request.query)

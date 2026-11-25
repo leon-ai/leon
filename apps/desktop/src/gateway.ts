@@ -13,6 +13,8 @@ import { assertCoreUpdateCompatibility } from './compatibility.js'
 import contract from '../runtime/desktop-contract.mjs'
 import { DESKTOP_BOOTSTRAP_META_NAME, DESKTOP_BOOTSTRAP_PATH, DESKTOP_NOTIFICATION_PATH } from '../../../bridges/runtime/contracts/desktop-client'
 import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER, TurnClientOS, TurnClientType } from '../../../bridges/runtime/contracts/turn-client'
+import { DESKTOP_LOOPBACK_HOST, DESKTOP_OAUTH_META_NAME, DESKTOP_OAUTH_PATH, isDesktopOAuthReturn } from '../../../bridges/runtime/contracts/oauth-popup'
+import { createDesktopOAuth } from './oauth.js'
 import type { Session } from 'electron'
 import type { HostAPI, HostError, FileGrants } from './types.js'
 import type { createDesktopState } from './state.js'
@@ -29,6 +31,7 @@ interface GatewayOptions {
   desktopUpdates?: HostAPI
   bootstrapPhase?: () => string
   notifications?: HostAPI
+  openOAuthURL?: (url: string) => Promise<void>
 }
 export interface Gateway {
   origin: string
@@ -77,7 +80,7 @@ async function readBody(request: IncomingMessage, maximumBytes = MAXIMUM_REQUEST
  * Owns one loopback origin, private backend cookies and streamed API responses.
  */
 export async function createGateway({ frontend, backendOrigin, backendSession, reportPath, onDiagnosticPaste, onDiagnosticWindow, state, bootstrap, desktopUpdates,
-  bootstrapPhase, notifications }: GatewayOptions): Promise<Gateway> {
+  bootstrapPhase, notifications, openOAuthURL }: GatewayOptions): Promise<Gateway> {
   if (typeof frontend !== 'function') {
     frontend = path.resolve(frontend)
   }
@@ -89,6 +92,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
   }
   const token = randomUUID()
   const files = createFileStore()
+  const oauth = openOAuthURL ? createDesktopOAuth(openOAuthURL) : undefined
   let documentFrontend: { root: string, phase: string | undefined } | undefined
 
   function cancellation(request: IncomingMessage, response: ServerResponse): { signal: AbortSignal, dispose: () => void } {
@@ -103,7 +107,12 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
     } }
   }
 
-  async function proxy(request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> {
+  async function proxy(
+    request: IncomingMessage,
+    response: ServerResponse,
+    url: URL,
+    publicCompletion: boolean
+  ): Promise<void> {
     const target = new URL(backend)
     target.pathname = url.pathname
     target.search = url.search
@@ -144,6 +153,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
     const active = cancellation(request, response)
     const upstream = requestBackend({ session: backendSession!, url: target,
       method: request.method ?? 'GET', headers, maximumBytes, signal: active.signal,
+      ...(publicCompletion ? { cookie: '' } : {}),
       ...(!['GET', 'HEAD'].includes(request.method ?? 'GET') ? { body } : {}) })
     try {
       const incoming = await upstream.response
@@ -288,7 +298,14 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
         'cache-control': 'no-store', 'referrer-policy': 'no-referrer' }).end()
       return
     }
-    if (!request.headers.cookie?.split(';').some((value) => value.trim() === `${SESSION_COOKIE}=${token}`)) {
+    // A provider redirect may arrive without the Strict session cookie. The
+    // completion page only sends a refresh signal and needs no backend session.
+    const publicCompletion = request.method === 'GET' && url.origin === origin &&
+      isDesktopOAuthReturn(url, 'v1', true)
+    if (publicCompletion && oauth?.complete(url, response)) {
+      return
+    }
+    if (!publicCompletion && !request.headers.cookie?.split(';').some((value) => value.trim() === `${SESSION_COOKIE}=${token}`)) {
       response.writeHead(401).end()
       return
     }
@@ -336,13 +353,17 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
       await notifications(request, response, url, readBody)
       return
     }
+    if (oauth && url.pathname === DESKTOP_OAUTH_PATH) {
+      await oauth.authorize(request, response, url, readBody)
+      return
+    }
     if (url.pathname.startsWith('/api/')) {
       if (!backendOrigin || bootstrapPhase && bootstrapPhase() !== 'complete') {
         response.writeHead(503, { 'content-type': 'application/json', 'cache-control': 'no-store' })
         response.end(JSON.stringify({ message: 'I’m preparing my Core. Please wait for it to be ready.' }))
         return
       }
-      await proxy(request, response, url)
+      await proxy(request, response, url, publicCompletion)
       return
     }
     if (!['GET', 'HEAD'].includes(request.method ?? 'GET')) {
@@ -386,6 +407,7 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
       const policy = CONTENT_SECURITY_POLICY.replace('script-src ', `script-src 'nonce-${nonce}' `)
       const html = (await readFile(file, 'utf8')).replaceAll('<script ', `<script nonce="${nonce}" `)
         .replace('<head>', '<head>' + (state?.bootstrap(nonce) ?? '<meta name="leon-desktop" content="true">') +
+        (oauth ? `<meta name="${DESKTOP_OAUTH_META_NAME}" content="true">` : '') +
         (desktopUpdates ? `<meta name="${contract.updatesMetaName}" content="true">` : '') +
         (selected.phase !== undefined ? `<meta name="${DESKTOP_BOOTSTRAP_META_NAME}" content="${selected.phase === 'complete' ? 'complete' : 'pending'}">` : ''))
       if (navigation && !response.destroyed) {
@@ -419,9 +441,9 @@ export async function createGateway({ frontend, backendOrigin, backendSession, r
   })
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
-    server.listen(0, '127.0.0.1', resolve)
+    server.listen(0, DESKTOP_LOOPBACK_HOST, resolve)
   })
-  const origin = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`
+  const origin = `http://${DESKTOP_LOOPBACK_HOST}:${(server.address() as import('node:net').AddressInfo).port}`
   return { origin, grantFiles: (paths) => files.grant(paths), entry: `${origin}/__desktop/${token}`, close(): void {
     server.closeAllConnections()
     server.close()

@@ -163,25 +163,14 @@ void (async () => {
       throw new Error('Desktop preferences did not preserve their allowlist and profile scope')
     }
     checks.push('Settings-route refresh and allowlisted profile-scoped preferences')
-    const popup = window.open('about:blank', '_blank', 'popup,width=560,height=720')
-    if (!popup) {
-      throw new Error('The authorization popup was blocked')
+    const returnURL = new URL('/api/v1/connections/complete', location.origin)
+    const noSession = { credentials: 'omit' }
+    const malformedReturn = await fetch(returnURL, noSession)
+    const privateRoute = await fetch('/api/v1/profile-auth', noSession)
+    if (malformedReturn.status !== 401 || privateRoute.status !== 401) {
+      throw new Error('Requests without a desktop session reached private routes')
     }
-    const channelName = 'desktop-parity-' + crypto.randomUUID()
-    const channel = new BroadcastChannel(channelName)
-    let popupReply
-    channel.onmessage = (event) => {
- popupReply = event.data 
-}
-    const nonce = document.querySelector('script[nonce]').nonce
-    popup.document.write('<script nonce="' + nonce + '">new BroadcastChannel(' + JSON.stringify(channelName) + ').postMessage({node:typeof require,origin:location.origin})</script>')
-    await waitFor(() => popupReply, 'authorization callback channel')
-    popup.close()
-    channel.close()
-    if (popupReply.node !== 'undefined') {
-      throw new Error('A provider popup received Node privileges')
-    }
-    checks.push('Authorization popup shares the callback channel without Node access')
+    checks.push('Requests without the desktop session cannot access private routes')
     if (errors.length) {
       throw new Error(errors.join('; '))
     }

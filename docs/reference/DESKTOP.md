@@ -23,7 +23,9 @@ UI preferences use the renderer's `localStorage`, backed by `servers/<server-has
 
 Electron retains the main window's size, position and display state across launches. The draggable title bar follows Leon's saved Light/Dark/System preference, keeps native window controls and shares the sidebar border color. The macOS Dock icon follows the OS appearance independently.
 
-Desktop uses Cmd/Ctrl+O for a new session (Shift+O remains an alias), Cmd/Ctrl+K for search and Cmd/Ctrl+, for settings. Cmd/Ctrl+W hides the main window on macOS or minimizes it on Windows/Linux; account and artifact popups close normally. Native menus retain editing, zoom and full-screen controls. Browser new-session shortcuts keep Shift to leave Open to the browser.
+Desktop uses Cmd/Ctrl+O for a new session (Shift+O remains an alias), Cmd/Ctrl+K for search and Cmd/Ctrl+, for settings. Cmd/Ctrl+W hides the main window on macOS or minimizes it on Windows/Linux. Native menus retain editing, zoom and full-screen controls. Browser new-session shortcuts keep Shift to leave Open to the browser.
+
+Account sign-in opens in the system browser. The provider returns to Core, and Desktop rechecks connection status in the conversation that began sign-in. The owner can cancel the wait in Desktop.
 
 Desktop requires a Core release in its supported range with the same desktop protocol. The minimum Core release advances when Desktop needs a newer Core capability. Download selection skips unsupported platforms and protocols. When a local managed Core is incompatible, Desktop restarts it into a compatible built checkout or prepares a verified prebuilt release and restores the previous runtime if startup fails. Explicit server connections are managed by the server operator. Desktop-initiated updates validate compatibility before installation. See [releases and OTA](RELEASING.md) and [download sources](DOWNLOADS.md).
 

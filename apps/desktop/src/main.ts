@@ -247,6 +247,7 @@ async function showClient(server: string): Promise<void> {
     onColorSchemeChange: updateWindowAppearance })
   gateway = await createGateway({ frontend: bootstrapController ? async (): Promise<string> => await bootstrapController?.frontend() ?? frontend : frontend, backendSession, state,
     backendOrigin: server,
+    openOAuthURL: (url) => shell.openExternal(url),
     ...(bootstrapController ? {
       bootstrap: bootstrapAPI(bootstrapController, { openLogs: async (file) => {
         if (file) {

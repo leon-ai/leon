@@ -27,6 +27,7 @@ export interface ConnectionSetupWidgetProps {
   busy: boolean
   loading: boolean
   error?: string | undefined
+  cancelAuthorization?: (() => void) | undefined
   icon?: ReactNode
   onRefresh: () => void
   onAction: (action: ConnectionSetupAction, state: ConnectionSetupView['state'], credentials: Record<string, string>) => Promise<void>
@@ -39,7 +40,7 @@ export interface ConnectionSetupWidgetProps {
  * Credentials live only in native fields and the active request, not drafts or
  * React state; every attempt clears the fields, including transport failures.
  */
-export function ConnectionSetupWidget({ title, description, view, busy, loading, error, icon,
+export function ConnectionSetupWidget({ title, description, view, busy, loading, error, cancelAuthorization, icon,
   onRefresh, onAction, renderCopyButton, renderLink }: ConnectionSetupWidgetProps) {
   const formId = useId()
   const formRef = useRef<HTMLFormElement>(null)
@@ -61,8 +62,8 @@ export function ConnectionSetupWidget({ title, description, view, busy, loading,
   const expanded = Boolean(view && (view.fields.length ||
     [Step.Application, Step.Credentials, Step.Assisted].includes(view.state.step as Step)))
   const notice = view?.notice && (view.state.step !== Step.Installation || !primary) ? view.notice : undefined
-  const hasBody = expanded || view?.details || links.length > 0 || error || notice
-  const hasFooter = primary || footerActions.length > 0 || !view
+  const hasBody = expanded || view?.details || links.length > 0 || error || notice || cancelAuthorization
+  const hasFooter = primary || footerActions.length > 0 || !view || cancelAuthorization
   const statusProps: StatusProps | undefined = connected ? { label: 'Connected', variant: 'success' }
     : error ? { label: 'Request failed', variant: 'error' }
       : view?.state.step === Step.Disabled ? { label: 'Disabled', variant: 'secondary' }
@@ -155,6 +156,7 @@ export function ConnectionSetupWidget({ title, description, view, busy, loading,
         {connected && view?.status && view.status !== 'Connected' && <p className="aurora-feedback">{view.status}</p>}
       </div>}
     </header>} footer={hasFooter && <>
+      {cancelAuthorization && <Button variant="secondary" onClick={cancelAuthorization}>Cancel sign-in</Button>}
       {footerActions.map((action) => actionButton(action, true))}
       {primary && actionButton(primary)}
       {!view && (error ? <Button variant="primary" loading={loading} onClick={onRefresh}>{loading ? 'Loading…' : messages.retry}</Button>
@@ -163,6 +165,7 @@ export function ConnectionSetupWidget({ title, description, view, busy, loading,
       <Collapse isOpen={Boolean(hasBody)} className="aurora-connection-collapse">
         <div className="aurora-connection-body">
           {error && <p className="aurora-feedback" role="alert">{error}</p>}
+          {cancelAuthorization && <p className="aurora-feedback" role="status">Finish signing in in your browser.</p>}
           {view && <>
             {notice && <p className="aurora-feedback" role="status">{notice}</p>}
             {expanded && <div className="aurora-connection-form">

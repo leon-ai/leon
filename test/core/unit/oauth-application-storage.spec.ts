@@ -16,7 +16,8 @@ const fixture = vi.hoisted(() => ({
         oauth: {
           settings: { client_id: null, client_secret: null },
           supports_refresh: true, token_auth: 'basic', token_format: 'json',
-          scopes: [], token_url: 'https://example.com/token'
+          scopes: [], token_url: 'https://example.com/token',
+          authorization_url: 'https://example.com/authorize'
         }
       }
     }
@@ -24,7 +25,13 @@ const fixture = vi.hoisted(() => ({
 }))
 
 vi.mock('@/config', () => ({
-  CONFIG_MANAGER: { resolveSecretReference: (): string => fixture.key }
+  CONFIG_MANAGER: {
+    resolveSecretReference: (): string => fixture.key,
+    getConfig: (): { server: { public_url: string }, client_interface: { allowed_origins: string[] } } => ({
+      server: { public_url: '' },
+      client_interface: { allowed_origins: [] }
+    })
+  }
 }))
 vi.mock('@/constants', () => ({
   HOST: 'http://localhost', IS_PRODUCTION_ENV: false, WEB_APP_DEV_SERVER_PORT: 3_000
@@ -65,7 +72,7 @@ vi.mock('@/core/profile-runtime/initialize-profile-runtime', () => ({
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { CONNECTION_STORE, OAUTH_APPLICATION_STORE, ensureConnectionEncryptionKey } from '@/core/connections/connection-store'
 import { getConnectionCatalog, getOAuthClientSettings } from '@/core/connections/connection-catalog'
-import { saveConnection } from '@/core/connections/connection-service'
+import { saveConnection, startConnectionOAuth } from '@/core/connections/connection-service'
 import { setupConnection } from '@/core/connections/connection-tool'
 import { OAUTH_MANAGER } from '@/core/connections/oauth-manager'
 import { renderOAuthCompletion } from '@/core/connections/oauth-completion'
@@ -142,4 +149,29 @@ it('keeps browser completion signals content-free and inert outside their intend
   expect(completion.html).toContain('\\u003c/script>')
   expect(completion.contentSecurityPolicy).toContain('default-src \'none\'')
   expect(completion.html).not.toContain('access_token')
+})
+
+it('keeps the provider callback on Core and returns a failed sign-in to its Desktop attempt', async () => {
+  const desktopReturn = new URL('http://127.0.0.1:54321/api/v1/connections/complete?popup_id=1fe063e6-76be-4fe3-9c09-5ce1bd930ca5')
+  const input = {
+    provider: 'example.account',
+    profileName: 'test',
+    callbackOrigin: 'https://core.example',
+    apiVersion: 'v1'
+  }
+  await expect(startConnectionOAuth({
+    ...input,
+    returnURL: new URL('/web-app/', desktopReturn).href
+  })).rejects.toThrow('allowed Leon client origin')
+  await expect(startConnectionOAuth({
+    ...input,
+    returnURL: desktopReturn.href.replace('127.0.0.1', 'example.test')
+  })).rejects.toThrow('allowed Leon client origin')
+  const authorization = await startConnectionOAuth({ ...input, returnURL: desktopReturn.href })
+  const parameters = new URL(authorization.authorization_url).searchParams
+  expect(parameters.get('redirect_uri')).toBe('https://core.example/api/v1/connections/oauth/callback')
+  const completion = OAUTH_MANAGER.cancelAuthorization(parameters.get('state')!)
+  desktopReturn.searchParams.set('connection_result', 'failed')
+  desktopReturn.searchParams.set('provider', input.provider)
+  expect(completion).toBe(desktopReturn.href)
 })

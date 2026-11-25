@@ -8,6 +8,8 @@ import { spawn } from 'node:child_process'
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
 
+import { getOAuthCompletionPath } from '@@/bridges/runtime/contracts/oauth-popup'
+
 import {
   CODEBASE_PATH,
   API_VERSION,
@@ -198,7 +200,7 @@ export default class HTTPServer {
       const requestPath = request.url.split('?')[0] || ''
       const authPath = `/api/${API_VERSION}/profile-auth`
       const connectionOAuthCallbackPath = `/api/${API_VERSION}/connections/oauth/callback`
-      const connectionCompletePath = `/api/${API_VERSION}/connections/complete`
+      const connectionCompletePath = getOAuthCompletionPath(API_VERSION)
 
       if (
         !requestPath.startsWith(`/api/${API_VERSION}/`) ||

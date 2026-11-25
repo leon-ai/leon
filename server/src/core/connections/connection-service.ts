@@ -1,4 +1,5 @@
 import { HOST, IS_PRODUCTION_ENV, WEB_APP_DEV_SERVER_PORT } from '@/constants'
+import { isDesktopOAuthReturn } from '@@/bridges/runtime/contracts/oauth-popup'
 import { CONFIG_MANAGER } from '@/config'
 import { TOOLKIT_REGISTRY, TOOL_WORKER_MANAGER } from '@/core'
 import {
@@ -184,7 +185,7 @@ export async function startConnectionOAuth(
       !['http:', 'https:'].includes(returnURL.protocol) ||
       returnURL.username ||
       returnURL.password ||
-      !allowedOrigins.has(returnURL.origin)
+      (!allowedOrigins.has(returnURL.origin) && !isDesktopOAuthReturn(returnURL, input.apiVersion))
     ) {
       throw new Error(
         'The OAuth return URL must belong to an allowed Leon client origin.'

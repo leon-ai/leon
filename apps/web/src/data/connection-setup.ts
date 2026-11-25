@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ConnectionSetupActionId,
@@ -22,6 +22,7 @@ interface ConnectionSetupController {
   loading: boolean
   busy: boolean
   error: string | undefined
+  cancelAuthorization: (() => void) | undefined
   refresh: () => void
   act: (action: ConnectionSetupAction, state: ConnectionSetupView['state'], values: Record<string, string>) => Promise<void>
 }
@@ -47,6 +48,7 @@ export function useConnectionSetup(sessionId: string, provider: string, initialA
   const popup = useRef<ConnectionAuthorizationPopup | undefined>(undefined)
   const popupError = useRef<unknown>(undefined)
   const startedAuthorization = useRef(false)
+  const [waitingInBrowser, setWaitingInBrowser] = useState(false)
   const scope = `${profile}:${sessionId}:${provider}`
   const authorization = useRef({ scope, failed: false })
   const currentScope = useRef(scope)
@@ -198,7 +200,11 @@ export function useConnectionSetup(sessionId: string, provider: string, initialA
           if (!authorizationPopup) {
             throw new Error(CONNECTION_SETUP_MESSAGES.actionError)
           }
+          if (authorizationPopup.external) {
+            setWaitingInBrowser(true)
+          }
           const outcome = await authorizationPopup.authorize(result.authorization_url, abort.signal)
+            .finally(() => setWaitingInBrowser(false))
           if (!isCurrent()) {
             throw new DOMException('Connection setup is no longer active.', 'AbortError')
           }
@@ -292,6 +298,7 @@ export function useConnectionSetup(sessionId: string, provider: string, initialA
     view: query.data?.view,
     loading: query.isFetching,
     busy: mutation.isPending,
+    cancelAuthorization: waitingInBrowser ? (): void => popup.current?.dispose() : undefined,
     error: mutation.isError ? mutation.error instanceof ConnectionAuthorizationError
       ? mutation.error.message : CONNECTION_SETUP_MESSAGES.actionError : query.isError ? CONNECTION_SETUP_MESSAGES.loadError : undefined,
     refresh: (): void => {
