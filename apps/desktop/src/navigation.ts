@@ -1,5 +1,11 @@
 import { dialog, shell, type BrowserWindow, type Session } from 'electron'
 
+const MAIN_FRAME_PERMISSIONS = new Set([
+  'clipboard-sanitized-write',
+  'clipboard-write',
+  'fullscreen'
+])
+
 /**
  * Opens explicit ordinary links in the system browser, keeping executable and
  * filesystem URL schemes outside the desktop navigation surface.
@@ -86,9 +92,9 @@ export function configureNavigation(window: BrowserWindow, { origin, clientSessi
 }
 
 /**
- * Grants clipboard writes only to the active main document. Media permissions
- * require an explicit owner decision; opaque Aurora frames and providers cannot
- * inherit a native permission grant from the main interface.
+ * Lets the active main document write to the clipboard and enter fullscreen
+ * after user interaction. Camera and microphone access require owner consent.
+ * Opaque Aurora frames and provider windows cannot inherit these grants.
  */
 export function configurePermissions(clientSession: Session, window: BrowserWindow, origin: string): void {
   const media = new Set<string>()
@@ -104,7 +110,7 @@ export function configurePermissions(clientSession: Session, window: BrowserWind
     if (!trusted(contents, requesting) || details.isMainFrame === false) {
       return false
     }
-    return ['clipboard-sanitized-write', 'clipboard-write'].includes(permission) ||
+    return MAIN_FRAME_PERMISSIONS.has(permission) ||
       permission === 'media' && media.has(details.mediaType ?? '')
   })
   clientSession.setPermissionRequestHandler((contents, permission, callback, details) => {
@@ -112,7 +118,7 @@ export function configurePermissions(clientSession: Session, window: BrowserWind
       callback(false)
       return
     }
-    if (['clipboard-sanitized-write', 'clipboard-write'].includes(permission)) {
+    if (MAIN_FRAME_PERMISSIONS.has(permission)) {
       callback(true)
       return
     }
