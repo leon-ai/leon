@@ -4,7 +4,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 
-import { RUNTIME_RELEASE_ASSET, RUNTIME_SCHEMA_VERSION, REQUIRED_RUNTIME_PLATFORMS } from '../../bridges/runtime/contracts/distribution.js'
+import { RUNTIME_RELEASE_ASSET, RUNTIME_SCHEMA_VERSION, REQUIRED_RUNTIME_PLATFORMS, DESKTOP_CORE_PROTOCOL_VERSION } from '../../bridges/runtime/contracts/distribution.js'
 
 /**
  * Publishes a complete platform manifest only after every archive has passed
@@ -23,6 +23,7 @@ export async function collectRuntimeAssets(directory, verified, output) {
     const ota = JSON.parse(await fs.readFile(path.join(folder, 'runtime-ota-verification.json'), 'utf8'))
     assert.equal(metadata.schemaVersion, RUNTIME_SCHEMA_VERSION)
     assert.equal(metadata.version, verified.version)
+    assert.equal(metadata.desktopProtocolVersion, DESKTOP_CORE_PROTOCOL_VERSION)
     assert.equal(metadata.assets.length, 1)
     const asset = metadata.assets[0]
     assert(!assets.some((candidate) => candidate.platform === asset.platform), 'Duplicate runtime platform')
@@ -56,6 +57,6 @@ export async function collectRuntimeAssets(directory, verified, output) {
     'Every supported release platform must have a verified runtime archive')
   const manifest = path.join(output, RUNTIME_RELEASE_ASSET)
   await fs.writeFile(manifest, JSON.stringify({ schemaVersion: RUNTIME_SCHEMA_VERSION,
-    version: verified.version, assets }, null, 2) + '\n')
+    version: verified.version, desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION, assets }, null, 2) + '\n')
   return [...files, manifest]
 }

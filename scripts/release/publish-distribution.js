@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { collectRuntimeAssets } from '../distribution/collect-assets.js'
 import { RELEASE_ASSET_NAME } from '../../bridges/runtime/contracts/update-status.js'
+import { publicQuickEvalReport, QUICK_EVAL_ASSET } from '../../server/src/core/insights/evaluation-report.js'
 
 const execute = promisify(execFile)
 const COMMAND_TIMEOUT_MS = 60_000
@@ -24,6 +25,7 @@ export async function publishDistribution() {
   const read = async (filename) => JSON.parse(await fs.readFile(path.join(directory, filename), 'utf8'))
   const verified = await read('verification.json')
   const content = await read(RELEASE_ASSET_NAME)
+  const evaluation = await read(QUICK_EVAL_ASSET)
   const manifest = JSON.parse(await fs.readFile('package.json', 'utf8'))
   assert.equal(verified.runId, process.env.GITHUB_RUN_ID, 'The receipt must belong to this workflow run')
   assert.equal(verified.commit, process.env.GITHUB_SHA, 'The verified commit must match the release event')
@@ -32,6 +34,14 @@ export async function publishDistribution() {
   assert.equal(verified.tag, `v${manifest.version}`)
   assert.equal(verified.version, manifest.version)
   assert.equal(content.version, verified.version)
+  assert.equal(evaluation.sha, verified.commit, 'The evaluation must match the release commit')
+  assert.equal(evaluation.version, verified.version, 'The evaluation must match the release version')
+  assert.equal(evaluation.runId, verified.runId, 'The evaluation must belong to this workflow run')
+  assert.equal(evaluation.source, 'release', 'Expected a release evaluation')
+  const report = publicQuickEvalReport(evaluation, evaluation)
+  assert(report.results.every(({ status }) => status !== 'Failed'), 'Quick Evals must pass before publication')
+  const evaluationFile = path.join(directory, QUICK_EVAL_ASSET)
+  await fs.writeFile(evaluationFile, `${JSON.stringify(report)}\n`)
   assert(['upgrade', 'bootstrap'].includes(verified.mode), 'Missing successful OTA verification')
   const refs = (await run('git', ['ls-remote', 'origin', `refs/tags/${verified.tag}`, `refs/tags/${verified.tag}^{}`]))
     .split('\n').map((line) => line.split('\t'))
@@ -54,7 +64,10 @@ export async function publishDistribution() {
     }
     await run('gh', args)
   }
-  await run('gh', ['release', 'upload', verified.tag, path.join(directory, RELEASE_ASSET_NAME), ...runtimeFiles, '--repo', repository, '--clobber'], 15 * 60_000)
+  await run('gh', [
+    'release', 'upload', verified.tag, path.join(directory, RELEASE_ASSET_NAME), evaluationFile, ...runtimeFiles,
+    '--repo', repository, '--clobber'
+  ], 15 * 60_000)
   await run('gh', ['release', 'edit', verified.tag, '--repo', repository, '--title', content.title,
     '--notes-file', path.join(directory, 'release-notes.md'), '--draft=false',
     `--prerelease=${verified.version.includes('-')}`, `--latest=${!verified.version.includes('-')}`])

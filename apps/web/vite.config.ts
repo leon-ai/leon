@@ -70,7 +70,7 @@ interface ModelCatalogModule {
 }
 
 async function readModelProviders(): Promise<ModelProvider[]> {
-  // Resolve Core's aliases only in the build process, not through the web app's
+  // Resolve the server's aliases only in the build process, not through the web app's
   // identically named alias. Serialize just the public selector metadata.
   const options = {
     parentURL: import.meta.url,

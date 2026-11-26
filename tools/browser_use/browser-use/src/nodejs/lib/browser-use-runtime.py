@@ -599,7 +599,12 @@ def leon_download(target, expected_text=None, timeout=_LEON_DOWNLOAD_SECONDS):
 
 
 def _leon_execute(code):
-    """Keep errors structured and flush the journal after normal or canceled scripts."""
+    """Verify the browser connection before running and journaling task code."""
+    # The daemon can outlive remote debugging access. Recheck it using only a
+    # read before creating the journal that marks entry to the task.
+    list_tabs()
+    _leon_save_actions()
+
     try:
         exec(compile(code, '<browser-script>', 'exec'), globals())
     except BaseException as error:

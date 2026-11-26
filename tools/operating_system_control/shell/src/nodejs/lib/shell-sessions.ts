@@ -145,16 +145,18 @@ export class ShellSessions {
       if (session.status === SessionStatus.Running) {
         session.status = SessionStatus.Exited
       }
-      flushOutput()
       const succeeded = session.exitCode === 0 && session.status === SessionStatus.Exited
       // A failed spawn closes before the session is registered or exposed.
       if (this.sessions.has(session.id)) {
+        flushOutput()
         onProgress?.({
           source: 'log',
           message: succeeded ? 'The command completed.' : `The command ended with status ${session.status} and exit code ${code}.`,
           data: { result: { success: true, data: this.read(owner, session.id) } },
           stream: { id: session.id, state: succeeded ? 'completed' : 'failed' }
         })
+      } else {
+        clearTimeout(progressTimer)
       }
       finish()
     }
@@ -206,11 +208,13 @@ export class ShellSessions {
     }
 
     this.sessions.set(session.id, session)
-    onProgress?.({
-      source: 'log',
-      message: 'The command is running. Output will appear as it arrives.',
-      stream
-    })
+    if (session.alive) {
+      onProgress?.({
+        source: 'log',
+        message: 'The command is running. Output will appear as it arrives.',
+        stream
+      })
+    }
     if (signal?.aborted) {
       await this.terminate(session, SessionStatus.Stopped)
       throw new Error('Session launch canceled.')

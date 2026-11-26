@@ -9,7 +9,7 @@ from bridges.python.src.sdk.network import Network, NetworkError
 
 from .dns_message import create_dns_query, read_dns_addresses
 
-REQUEST_TIMEOUT_MS = 4_000
+REQUEST_TIMEOUT_MS = 8_000
 DNS_TIMEOUT_MS = 1_500
 MAX_FALLBACK_ATTEMPTS = 2
 RETRYABLE_STATUSES = {0, 500, 502, 503, 504}

@@ -1,4 +1,39 @@
-import { test, expect, SESSION_URL } from './fixtures'
+import { test, expect, LATEST_ANSWER, SESSION_ID, SESSION_URL } from './fixtures'
+
+test('reveals the owner message when the new turn’s smooth scroll is interrupted', async ({ page, ui }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  ui.history.set(SESSION_ID, ui.history.get(SESSION_ID)!.slice(-2))
+  await page.route(`**/api/v1/sessions/${SESSION_ID}/messages`, (route) => {
+    const input = route.request().postDataJSON() as { id: string }
+
+    return route.fulfill({ json: { command: { id: input.id, status: 'accepted' } } })
+  })
+  await page.goto(SESSION_URL)
+  await expect(page.getByText(LATEST_ANSWER, { exact: true })).toBeInViewport()
+
+  const feedViewport = page.locator('.app-main')
+  await feedViewport.evaluate((element) => {
+    // Cancel the smooth scroll before it can move or emit scroll events.
+    element.scrollTo = new Proxy(element.scrollTo, {
+      apply(scrollTo, target, args): void {
+        Reflect.apply(scrollTo, target, args)
+        if (args[0]?.behavior === 'smooth') {
+          Reflect.apply(scrollTo, target, [{ top: element.scrollTop, behavior: 'instant' }])
+        }
+      }
+    })
+  })
+
+  const text = 'Keep the next question in view.'
+  const composer = page.getByRole('textbox', { name: 'Message Leon' })
+  await composer.fill(text)
+  await composer.press('Enter')
+  await expect(page.getByRole('button', { name: 'Stop this turn' })).toBeVisible()
+
+  const owner = page.getByText(text, { exact: true })
+  await expect(owner).toBeInViewport()
+  await expect(owner).toHaveCSS('opacity', '1')
+})
 
 test('keeps session title motion idle during scrolling and resumes on pointer intent', async ({ page, ui }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })

@@ -46,7 +46,7 @@ export async function isDownloadMirrorAvailable(url) {
 }
 
 /**
- * Share bootstrap decisions across pnpm, setup workers and Core without loading
+ * Share bootstrap decisions across pnpm, setup workers and the server without loading
  * dependencies or storing the owner's IP address or profile location.
  */
 export function getDownloadCachePath(environment = process.env) {

@@ -20,7 +20,7 @@ import {
   googleCloudVoiceConfiguration,
   watsonVoiceConfiguration
 } from '@/schemas/voice-config-schemas'
-import { configSchemaObject } from '@/schemas/core-schemas'
+import { configSchemaObject } from '@/schemas/config-schema'
 
 import { createSetupStatus } from '../setup/setup-status'
 

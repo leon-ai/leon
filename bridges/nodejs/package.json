@@ -1,6 +1,6 @@
 {
   "name": "leon-nodejs-bridge",
-  "description": "Leon's Node.js bridge to communicate between the core and skills made with JavaScript",
+  "description": "Leon's Node.js bridge connects the server to JavaScript skills",
   "main": "dist/bin/leon-nodejs-bridge.js",
   "type": "module",
   "author": {

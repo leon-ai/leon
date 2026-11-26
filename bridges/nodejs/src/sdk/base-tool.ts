@@ -90,6 +90,14 @@ export abstract class Tool {
     this.downloadTracker = undefined
   }
 
+  /**
+   * Keep a reusable worker available until this resource closes. Acquire the
+   * hold during the owning call and invoke the returned release on cleanup.
+   */
+  protected retainWorker(): () => void {
+    return this.executionContext?.retainWorker?.() ?? ((): void => {})
+  }
+
   private get downloads(): DownloadTracker {
     // Native skill stdout carries protocol messages; keep CLI progress in SDK logs.
     this.downloadTracker ??= new DownloadTracker(
@@ -275,7 +283,7 @@ export abstract class Tool {
   }
 
   /**
-   * Checks account access before Core persists credentials supplied during onboarding.
+   * Checks account access before the server persists credentials supplied during onboarding.
    */
   public async validateConnection(): Promise<{ account_label?: string }> {
     throw new Error('This tool does not implement connection validation.')
@@ -350,7 +358,7 @@ export abstract class Tool {
   }
 
   /**
-   * Calls the authenticated Core service with host-supplied profile credentials.
+   * Calls the authenticated server service with host-supplied profile credentials.
    */
   protected async requestLeon<T>(endpoint: string, body?: unknown): Promise<T> {
     const service = this.executionContext?.leonService
@@ -1534,7 +1542,7 @@ export abstract class Tool {
   }
 
   /**
-   * Download binary from URL using the core download helper.
+   * Download binary from URL using the shared download helper.
    * If the downloaded file is an archive, it will be extracted automatically
    */
   private async downloadBinary(

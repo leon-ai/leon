@@ -3,7 +3,7 @@ import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedPlanStep, LeonFeedActivity } from '@/data/feed'
-import { isToolCallVisible } from '@/data/feed'
+import { hasActiveStepPreparation, isToolCallVisible } from '@/data/feed'
 import { Collapse } from '@/components/collapse'
 import { Loader } from '@/components/loader'
 import { useProcessGroupNestedDisclosureDefault } from '@/components/process-group'
@@ -19,27 +19,33 @@ interface TaskListItemProps {
 export function TaskListItem({ step, renderActivity }: TaskListItemProps) {
   const hasToolCalls = step.toolCalls.some(isToolCallVisible) || Boolean(step.activities?.length)
   const expandByDefault = useProcessGroupNestedDisclosureDefault()
-  const previousStatusRef = useRef(step.status)
+  const preparationActive = hasActiveStepPreparation(step)
+  const previousState = useRef({ status: step.status, preparationActive })
   const toolCallsId = useId()
   const [isExpanded, setIsExpanded] = useState(
-    step.status === 'in_progress' && expandByDefault
+    preparationActive || step.status === 'in_progress' && expandByDefault
   )
 
   useLayoutEffect(() => {
-    if (previousStatusRef.current === step.status) {
+    const previous = previousState.current
+    if (previous.status === step.status && previous.preparationActive === preparationActive) {
       return
     }
 
-    previousStatusRef.current = step.status
+    previousState.current = { status: step.status, preparationActive }
 
-    // Move the disclosure with execution progress without overriding manual
-    // toggles while a step remains in the same state.
-    if (step.status === 'completed') {
-      setIsExpanded(false)
+    // A step can finish before its retained preparation. Keep the same
+    // disclosure state until that work settles or the owner toggles it.
+    if (preparationActive) {
+      if (!previous.preparationActive) {
+        setIsExpanded(true)
+      }
     } else if (step.status === 'in_progress') {
       setIsExpanded(true)
+    } else if (step.status === 'completed' || previous.preparationActive) {
+      setIsExpanded(false)
     }
-  }, [step.status])
+  }, [preparationActive, step.status])
 
   const marker = step.status === 'completed'
     ? <Icon name="check-line" className="task-list-item-marker-icon" />

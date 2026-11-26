@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import treeKill from 'tree-kill'
@@ -6,13 +7,18 @@ import { ToolTimeout } from '@@/bridges/runtime/nodejs/tool-timeout'
 
 import {
   CODEBASE_PATH,
+  COMPILED_NODEJS_TOOL_RUNTIME_PATH,
   NODE_RUNTIME_BIN_PATH,
   NODEJS_BRIDGE_ROOT_PATH,
   NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH
 } from '@/constants'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
+import {
+  COMPILED_TOOLS_PATH, NODEJS_TOOL_COMPILED_ENTRY, NODEJS_TOOL_SOURCE_ENTRY, resolveToolDirectory
+} from '@/leon-roots'
 import { ToolConcurrency } from '@/types'
 import {
   ToolRuntimeLifetime,
@@ -24,6 +30,7 @@ import {
 } from '@@/bridges/runtime/contracts/tool-runtime-types'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
+const WORKER_IDLE_TIMEOUT_MS = 60_000
 const DIAGNOSTIC_LIMIT = 16_000
 const TSX_LOADER_URL = import.meta.resolve('tsx')
 
@@ -35,6 +42,10 @@ interface Worker {
   log?: (line: string) => void
   diagnostics: string
   approvePreparation?: (request: Extract<ToolWorkerResponse, { type: 'prepared' }>) => void
+  lifetime?: ToolRuntimeLifetime
+  idleTimer?: NodeJS.Timeout
+  idleRetirement?: Promise<void>
+  retainedResources: Set<string>
   progress: Map<string, {
     receive: (progress: ToolRuntimeProgress) => void
     streams: Set<string>
@@ -92,17 +103,19 @@ export class ToolWorkerManager {
    */
   public async dispose(): Promise<void> {
     this.closing = true
-    await Promise.all([...this.workers.values()].map((worker) => this.stop(worker)))
+    await Promise.all([...this.workers.values()].map((worker) => worker.idleRetirement ?? this.stop(worker)))
     await Promise.all(this.tails.values())
     this.workers.clear()
   }
 
   private create(context: ToolExecutionContext, key: string): Worker {
-    // Load TypeScript in the worker itself. The CLI's intermediary process can
-    // exit before a large result finishes forwarding over its second IPC hop.
+    const compiled = this.hasCompiledTool(context)
+    // Source tools load through the same child process so even large IPC results
+    // reach the host before the worker shuts down.
+    const workerArgs = compiled ? [COMPILED_NODEJS_TOOL_RUNTIME_PATH]
+      : ['--import', TSX_LOADER_URL, NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH]
     const child = spawn(NODE_RUNTIME_BIN_PATH, [
-      '--import', TSX_LOADER_URL,
-      NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
+      ...workerArgs,
       '--runtime', 'tool',
       '--toolkit', context.toolkitId,
       '--tool', context.toolId
@@ -125,6 +138,7 @@ export class ToolWorkerManager {
       process: child,
       diagnostics: '',
       progress: new Map(),
+      retainedResources: new Set(),
       closed: new Promise((resolve) => child.once('close', () => resolve()))
     }
     let pendingLine = ''
@@ -145,6 +159,14 @@ export class ToolWorkerManager {
         worker.result?.(message)
       } else if (message.type === 'prepared') {
         worker.approvePreparation?.(message)
+      } else if (message.type === 'retention') {
+        if (message.retained) {
+          worker.retainedResources.add(message.id)
+          clearTimeout(worker.idleTimer)
+          delete worker.idleTimer
+        } else if (worker.retainedResources.delete(message.id)) {
+          this.scheduleIdleRetirement(worker)
+        }
       } else if (message.type === 'progress') {
         const subscription = worker.progress.get(message.requestId)
         if (!subscription) {
@@ -163,11 +185,13 @@ export class ToolWorkerManager {
         subscription.receive(message.progress)
         if (subscription.returned && subscription.streams.size === 0) {
           worker.progress.delete(message.requestId)
+          this.scheduleIdleRetirement(worker)
         }
       }
     })
     child.on('error', (error) => worker.fail?.(error.message))
     child.on('close', () => {
+      clearTimeout(worker.idleTimer)
       for (const subscription of worker.progress.values()) {
         for (const id of subscription.streams) {
           subscription.receive({
@@ -190,6 +214,21 @@ export class ToolWorkerManager {
     return worker
   }
 
+  private hasCompiledTool(context: ToolExecutionContext): boolean {
+    // A server running from source should pick up local edits immediately. Profile-installed tools
+    // keep precedence over shipped JavaScript with the same toolkit and tool IDs.
+    if (!import.meta.url.endsWith('.js') || !existsSync(COMPILED_NODEJS_TOOL_RUNTIME_PATH)) {
+      return false
+    }
+
+    const { toolkitId, toolId, profileName } = context
+    const profileTool = resolveToolDirectory(getProfilePaths(profileName).tools, toolkitId, toolId)
+    const compiledTool = resolveToolDirectory(COMPILED_TOOLS_PATH, toolkitId, toolId)
+
+    return !existsSync(path.join(profileTool, NODEJS_TOOL_SOURCE_ENTRY)) &&
+      existsSync(path.join(compiledTool, NODEJS_TOOL_COMPILED_ENTRY))
+  }
+
   private async dispatch(
     context: ToolExecutionContext,
     args: unknown[],
@@ -203,8 +242,20 @@ export class ToolWorkerManager {
       process.cwd(),
       ...(isolated ? [randomUUID()] : [])
     ])
+    let current = this.workers.get(key)
+    if (current?.idleRetirement) {
+      await current.idleRetirement
+      if (this.closing || context.signal?.aborted) {
+        return this.failure('Tool execution canceled before dispatch.')
+      }
+
+      current = undefined
+    }
+
     const timeout = context.timeout ? new ToolTimeout(context.timeout) : undefined
-    const worker = this.workers.get(key) ?? this.create(context, key)
+    const worker = current ?? this.create(context, key)
+    clearTimeout(worker.idleTimer)
+    delete worker.idleTimer
     const requestId = randomUUID()
     let preparing = false
     let forceStopTimer: NodeJS.Timeout | undefined
@@ -284,7 +335,11 @@ export class ToolWorkerManager {
         finish(this.failure(message, worker.diagnostics))
       }
       worker.result = (message): void => {
-        retire = isolated || message.lifetime !== ToolRuntimeLifetime.Persistent
+        worker.lifetime = message.lifetime
+        retire = isolated || (
+          message.lifetime !== ToolRuntimeLifetime.Persistent &&
+          message.lifetime !== ToolRuntimeLifetime.Idle
+        )
         finish(message.result)
       }
       worker.approvePreparation = (request): void => {
@@ -306,6 +361,7 @@ export class ToolWorkerManager {
       delete callContext.signal
       delete callContext.preparationSignal
       delete callContext.onPreparationComplete
+      delete callContext.retainWorker
       worker.process.send({ type: 'execute', requestId, context: callContext, args }, (error) => {
         if (error) {
           worker.fail?.(error.message)
@@ -324,6 +380,8 @@ export class ToolWorkerManager {
     if (retire || context.signal?.aborted) {
       this.workers.delete(key)
       await this.stop(worker)
+    } else {
+      this.scheduleIdleRetirement(worker)
     }
     delete worker.log
     if (context.signal?.aborted) {
@@ -340,7 +398,22 @@ export class ToolWorkerManager {
     return result
   }
 
+  private scheduleIdleRetirement(worker: Worker): void {
+    // Progress subscriptions cover active calls and ongoing output. Silent live
+    // resources hold the worker independently until their owners release them.
+    if (this.closing || !worker.lifetime || worker.lifetime === ToolRuntimeLifetime.Call ||
+        worker.progress.size > 0 || worker.retainedResources.size > 0 ||
+        worker.idleTimer || worker.idleRetirement) {
+      return
+    }
+
+    worker.idleTimer = setTimeout(() => {
+      worker.idleRetirement = this.stop(worker)
+    }, WORKER_IDLE_TIMEOUT_MS).unref()
+  }
+
   private async stop(worker: Worker, graceMs = SHUTDOWN_TIMEOUT_MS): Promise<void> {
+    clearTimeout(worker.idleTimer)
     const timer = setTimeout(() => {
       // A non-cooperative call can retain command children. Killing only the
       // worker would orphan them and leave their output pipes open.

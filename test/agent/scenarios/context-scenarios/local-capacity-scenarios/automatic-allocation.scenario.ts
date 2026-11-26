@@ -36,7 +36,7 @@ const scenario: RealAgentScenario = {
     document.deleteIn(['llm', 'providers', 'llamacpp', 'context_size'])
     document.setIn(['llm', 'providers', 'llamacpp', 'base_url'], endpoint)
     await fs.writeFile(configPath, String(document))
-    // Core paths cache configuration before fixture preparation runs.
+    // Server paths cache configuration before fixture preparation runs.
     const { CONFIG_MANAGER } = await import('@/config')
     CONFIG_MANAGER.reload()
   },

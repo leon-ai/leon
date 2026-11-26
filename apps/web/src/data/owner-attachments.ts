@@ -1,6 +1,7 @@
 import type { Artifact } from '../../../../server/src/core/artifacts/artifact-types'
 import { requestAPI } from './api'
 import { queryClient } from '@/query-client'
+import { createUUID } from '@/utils/create-uuid'
 import { PROFILE_AUTH_QUERY_KEY } from './profile-query'
 import type { DesktopAttachmentFile } from '../../../../bridges/runtime/contracts/desktop-client'
 import { isDesktopAttachmentFile, uploadDesktopAttachment } from './desktop-attachments'
@@ -70,7 +71,7 @@ export function createSendMessageInput(query: string, attachments: OwnerAttachme
   const sameDraft = previous?.query === query &&
     JSON.stringify(previous.attachments?.map((file) => file.id) ?? []) === JSON.stringify(attachments.map((file) => file.id))
   const input: SendMessageInput = {
-    id: sameDraft ? previous!.id : crypto.randomUUID(), query, attachments,
+    id: sameDraft ? previous!.id : createUUID(), query, attachments,
     ...(onUploadProgress ? { onUploadProgress } : {}), ...(signal ? { signal } : {})
   }
   if (previous) {

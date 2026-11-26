@@ -10,8 +10,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import MemoryManager from '@/core/memory-manager/memory-manager'
 import MemoryRepository from '@/core/memory-manager/memory-repository'
-import SelfModelManager from '@/core/self-model-manager'
-import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
+import SelfModelManager from '@/core/self-model-manager/self-model-manager'
+import PostTurnMaintenanceQueue from '@/core/turn-lifecycle/post-turn-maintenance-queue'
 import { ConversationLogger } from '@/conversation-logger'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
@@ -99,6 +99,7 @@ vi.mock('@/core/tool-manager/tool-settings', () => ({
 }))
 vi.mock('@/core', () => ({
   EXPERIENCE_MANAGER: { observeTurn: vi.fn(async () => undefined) },
+  PULSE_MANAGER: { prepareChatResolution: (): null => null },
   MEMORY_MANAGER: new Proxy({}, { get: (_target, key): unknown => {
     const service = fixture.services.get(getActiveProfileName())!.memory
     const value = Reflect.get(service, key)

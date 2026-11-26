@@ -204,6 +204,7 @@ export class ConversationSessionManager {
     pending: PendingAgentMessage[]
     controller: AbortController
     executionController: AbortController
+    visible: boolean
   }>()
 
   /**
@@ -211,7 +212,7 @@ export class ConversationSessionManager {
    * Explicit cancellation also ends retained executions from the same turn.
    * Unconsumed messages return to ordinary session processing when the run ends.
    */
-  public openAgentTurn(sessionId: string): {
+  public openAgentTurn(sessionId: string, visible = true): {
     signal: AbortSignal
     drainOwnerMessages: () => Promise<AgentToolTranscriptMessage[]>
     getOwnerMessageSignal: () => AbortSignal
@@ -224,7 +225,7 @@ export class ConversationSessionManager {
 
     const pending: PendingAgentMessage[] = []
     const executionController = new AbortController()
-    const turn = { pending, controller: new AbortController(), executionController }
+    const turn = { pending, controller: new AbortController(), executionController, visible }
     this.agentMessageQueues.set(sessionId, turn)
 
     return {
@@ -295,6 +296,13 @@ export class ConversationSessionManager {
    */
   public isAgentTurnActive(sessionId: string): boolean {
     return this.agentMessageQueues.has(sessionId)
+  }
+
+  /**
+   * A quiet turn still accepts owner input without appearing as live chat work.
+   */
+  public isVisibleAgentTurnActive(sessionId: string): boolean {
+    return this.agentMessageQueues.get(sessionId)?.visible === true
   }
 
   /**

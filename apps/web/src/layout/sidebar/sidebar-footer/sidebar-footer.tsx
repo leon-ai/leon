@@ -1,10 +1,11 @@
 import { Icon } from '@/components/icon'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MouseEvent  } from 'react'
+import { Link } from '@tanstack/react-router'
 
 import { Tooltip } from '@/components/tooltip'
 import { getPublicAssetPath, LEON_VERSION } from '@/config'
 import { useAmbientConditions } from '@/data/ambient-conditions'
-import { Link } from '@tanstack/react-router'
+import { AppShortcutKey, getAppShortcutAria } from '@/utils/keyboard-shortcuts'
 
 import './sidebar-footer.sass'
 
@@ -26,10 +27,19 @@ type MoodIconStyle = CSSProperties & {
 
 interface SidebarFooterProps {
   mood?: Mood
+  onInsights: () => void
+  onSettings: () => void
+}
+
+function openDialog(event: MouseEvent<HTMLAnchorElement>, open: () => void): void {
+  if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    event.preventDefault()
+    open()
+  }
 }
 
 export function SidebarFooter({
-  mood: previewMood
+  mood: previewMood, onInsights, onSettings
 }: SidebarFooterProps) {
   const ambient = useAmbientConditions()
   const currentMood = ambient.data?.mood
@@ -55,8 +65,15 @@ export function SidebarFooter({
       </a>
       <div className="sidebar-footer-status">
         <Tooltip message="Settings" position="right">
-          <Link to="/settings" className="sidebar-footer-settings" aria-label="Settings">
+          <Link to="/settings" className="sidebar-footer-settings" aria-label="Settings" aria-keyshortcuts={getAppShortcutAria(AppShortcutKey.Settings)}
+            onClick={(event) => openDialog(event, onSettings)}>
             <Icon name="settings-line" />
+          </Link>
+        </Tooltip>
+        <Tooltip message="Insights" position="right">
+          <Link to="/insights" className="sidebar-footer-settings" aria-label="Insights"
+            onClick={(event) => openDialog(event, onInsights)}>
+            <Icon name="trend-chart-line" />
           </Link>
         </Tooltip>
         <span className="sidebar-footer-status-label">

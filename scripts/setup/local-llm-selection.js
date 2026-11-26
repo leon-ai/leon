@@ -22,7 +22,7 @@ import {
   LlamaCPPCapacityError
 } from '@/core/llm-manager/llm-providers/llamacpp-context'
 
-import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from './local-llm-catalog'
+import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '@/core/llm-manager/local-model-catalog'
 
 const MIB_PER_GIB = 1_024
 const BYTES_PER_MIB = 1_024 * 1_024

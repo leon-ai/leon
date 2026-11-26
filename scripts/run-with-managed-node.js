@@ -94,7 +94,7 @@ function startManagedProcess(afterUpdate = false) {
 }
 
 /**
- * Keeps dependency replacement outside Core's lifetime, then restores service
+ * Keeps dependency replacement outside the server's lifetime, then restores service
  * after either a completed installation or a reported installation failure.
  */
 function runPendingUpdate(codebase) {

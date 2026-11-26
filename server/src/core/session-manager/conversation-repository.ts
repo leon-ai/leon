@@ -166,6 +166,31 @@ export class ConversationRepository {
   private readonly db: Database
   public readonly workspaces: WorkspaceRepository
 
+  /**
+   * Reads saved session membership and creation times without opening a profile runtime or reading messages.
+   */
+  public static readInventory(sessionsPath: string): {
+    workspaceCount: number
+    sessions: { id: string, workspaceId: string | null, createdAt: number }[]
+  } {
+    const databasePath = path.join(sessionsPath, CONVERSATION_DATABASE_FILENAME)
+    if (!fs.existsSync(databasePath)) {
+      return { workspaceCount: 0, sessions: [] }
+    }
+
+    const db = new SQLite(databasePath, { readonly: true, fileMustExist: true, timeout: 0 })
+    try {
+      return db.transaction(() => ({
+        workspaceCount: Number(db.prepare('SELECT count(*) AS count FROM workspaces').get()?.['count']),
+        sessions: db.prepare(`SELECT s.id, w.id AS workspaceId, json_extract(s.payload, '$.createdAt') AS createdAt
+          FROM conversation_sessions s LEFT JOIN workspaces w ON w.id = json_extract(s.payload, '$.workspaceId')`)
+          .all() as { id: string, workspaceId: string | null, createdAt: number }[]
+      }))()
+    } finally {
+      db.close()
+    }
+  }
+
   public constructor(sessionsPath: string) {
     fs.mkdirSync(sessionsPath, { recursive: true })
     this.db = new SQLite(path.join(sessionsPath, CONVERSATION_DATABASE_FILENAME))
@@ -697,14 +722,31 @@ export class ConversationRepository {
   }
 
   /**
-   * Reads one disclosure body without loading the rest of the conversation.
+   * Reads one message, with options for a summary or a first-owner-message match.
    */
-  public readMessage(sessionId: string, messageId: string): MessageLog | null {
-    const row = this.db.prepare(`SELECT payload FROM conversation_messages
-      WHERE session_id = ? AND (id = ? OR trace_id = ?) LIMIT 1`)
-      .get(sessionId, messageId, messageId)
+  public readMessage(
+    sessionId: string, messageId: string, options: { summary?: boolean, firstOwnerOnly?: boolean } = {}
+  ): MessageLog | null {
+    const row = this.db.prepare(`SELECT ${options.summary ? 'summary' : 'payload'} AS value FROM conversation_messages
+      WHERE session_id = @sessionId AND (id = @messageId OR trace_id = @messageId)
+      ${options.firstOwnerOnly ? `AND sequence = (
+        SELECT sequence FROM conversation_messages
+        WHERE session_id = @sessionId AND role = 'owner' ORDER BY sequence LIMIT 1
+      )` : ''} LIMIT 1`)
+      .get({ sessionId, messageId })
 
-    return row ? JSON.parse(String(row['payload'])) as MessageLog : null
+    return row ? JSON.parse(String(row['value'])) as MessageLog : null
+  }
+
+  /**
+   * Reads saved answer measurements for activity without loading message or trace content.
+   */
+  public readAnswerMetrics(sessionId: string, turnId: string): unknown {
+    const row = this.db.prepare(`SELECT json_extract(summary, '$.agentResponseTrace.metrics') AS metrics
+      FROM conversation_messages WHERE session_id = ? AND id = ? AND role = 'leon'`)
+      .get(sessionId, `${turnId}:leon`)
+
+    return typeof row?.['metrics'] === 'string' ? JSON.parse(row['metrics']) : undefined
   }
 
   /**
@@ -1086,6 +1128,16 @@ export class ConversationRepository {
           ? path.extname(String(row['source_path'])).slice(1).toLocaleLowerCase() || 'text' : 'markdown')
       })
     }
+  }
+
+  /**
+   * Returns the earliest owner interaction still retained by this profile.
+   */
+  public readFirstOwnerMessageAt(): number | null {
+    const row = this.db.prepare(`
+      SELECT min(sent_at) AS sent_at FROM conversation_messages WHERE role = 'owner' AND visible = 1
+    `).get()
+    return typeof row?.['sent_at'] === 'number' ? row['sent_at'] : null
   }
 
   /**

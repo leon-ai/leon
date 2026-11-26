@@ -19,7 +19,7 @@ const scenario: RealAgentScenario = {
     }
   },
   async run({ profilePath, runTurn }) {
-    // Core imports must follow the runner's temporary-home initialization.
+    // Server imports must follow the runner's temporary-home initialization.
     const { ConversationRepository } = await import('@/core/session-manager/conversation-repository')
     const [first, second] = await Promise.all([
       runTurn(`For this conversation the label is ${FIRST_LABEL}. Reply with this label only; do not use tools.`),

@@ -20,7 +20,9 @@ const scenario: RealAgentScenario = {
       assert.equal(first.finalIntent, 'answer', first.output)
 
       const { ReActLLMDuty } = await import('@/core/llm-manager/llm-duties/react-llm-duty')
-      const { AgentModelResponseTimeoutError } = await import('@/core/llm-manager/llm-duties/react-llm-duty/agent-loop')
+      const {
+        AgentCompletionStatus, AgentModelResponseTimeoutError
+      } = await import('@/core/llm-manager/llm-duties/react-llm-duty/agent-loop')
       const prototype = ReActLLMDuty.prototype as unknown as { callAgentModel: ModelCall }
       const original = prototype.callAgentModel
       let stalled = false
@@ -48,7 +50,9 @@ const scenario: RealAgentScenario = {
         const result = await original.apply(this, args)
         if (options.isCompletionReview) {
           if (result?.textContent) {
-            rejected ||= JSON.parse(result.textContent).status === 'continue'
+            const { status } = JSON.parse(result.textContent)
+
+            rejected ||= status === AgentCompletionStatus.Continue || status === AgentCompletionStatus.Revise
           }
         } else if (stalled && !draftInjected && result?.textContent && !result.toolCalls?.length) {
           draftInjected = true

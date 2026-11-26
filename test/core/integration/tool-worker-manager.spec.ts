@@ -7,7 +7,7 @@ import { createRequire } from 'node:module'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
-import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
+import { ToolRuntimeLifetime, type ToolRuntimeResult } from '@@/bridges/runtime/contracts/tool-runtime-types'
 import { extractArchive } from '@sdk/utils'
 import { runRipgrep } from '@@/tools/file_system/ripgrep/src/nodejs/lib/run-ripgrep'
 import { DocumentReader } from '@@/tools/file_system/file/src/nodejs/lib/document-reader'
@@ -48,7 +48,7 @@ let home = ''
 let manager: ToolWorkerManager
 
 it('keeps scaffold content visible without click steps and respects reduced motion', async () => {
-  await fixture(false)
+  await fixture()
 
   const project = path.join(home, 'presentation')
   const context = {
@@ -119,7 +119,7 @@ it('keeps scaffold content visible without click steps and respects reduced moti
 }, 60_000)
 
 it('delivers animated browser presentations, static exports and editable sources through profile workers', async () => {
-  await fixture(false)
+  await fixture()
 
   const project = path.join(home, 'presentation')
   const context = {
@@ -362,7 +362,7 @@ require('node:fs').appendFileSync(require('node:path').join(process.env.LEON_HOM
 }, 300_000)
 
 it('renders seekable HTML motion into durable profile artifacts and returns actionable validation findings', async () => {
-  await fixture(false)
+  await fixture()
 
   const project = path.join(home, 'motion-project')
   const source = path.join(project, 'index.html')
@@ -511,7 +511,7 @@ window.__timelines.motion = timeline;
 })
 
 it('compiles local documents and page images into durable conversation artifacts', async () => {
-  await fixture(false)
+  await fixture()
 
   const project = path.join(home, 'project')
   const source = path.join(project, 'report.typ')
@@ -681,7 +681,7 @@ it('compiles local documents and page images into durable conversation artifacts
 })
 
 it('isolates concurrent calls even when a tool normally retains instance state', async () => {
-  await fixture(true)
+  await fixture(ToolRuntimeLifetime.Persistent)
   const run = (session: string): Promise<ToolRuntimeResult> => manager.execute({
     toolkitId: 'fixture', toolId: 'state', functionName: 'next',
     profileName: 'a', conversationSessionId: session, parameters: {}
@@ -697,7 +697,7 @@ it('isolates concurrent calls even when a tool normally retains instance state',
 })
 
 it('delivers a large result before retiring a one-shot worker', async () => {
-  await fixture(false)
+  await fixture()
 
   const result = await manager.execute({
     toolkitId: 'fixture',
@@ -714,7 +714,7 @@ it('delivers a large result before retiring a one-shot worker', async () => {
 })
 
 it('preserves vector sources, publishes complete output batches and cleans workspaces after failures', async () => {
-  await fixture(false)
+  await fixture()
   const source = path.join(home, 'source.vectorcraft')
   const toolDirectory = path.join(home, 'profiles', 'a', 'tools', 'fixture', 'vector')
 
@@ -781,7 +781,7 @@ export default class Fixture extends VectorCraftTool {
 })
 
 it('runs two workers at once and cancellation affects only the selected call', async () => {
-  await fixture(true)
+  await fixture(ToolRuntimeLifetime.Persistent)
   const firstController = new AbortController()
   const secondController = new AbortController()
   let started = 0
@@ -820,7 +820,7 @@ afterEach(async () => {
 /**
  * Exercise real bridge processes with a harmless profile tool, never the owner's desktop.
  */
-async function fixture(persistent: boolean): Promise<void> {
+async function fixture(lifetime = ToolRuntimeLifetime.Call): Promise<void> {
   home = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-worker-'))
   vi.stubEnv('LEON_HOME', home)
   manager = new ToolWorkerManager()
@@ -831,12 +831,13 @@ async function fixture(persistent: boolean): Promise<void> {
     await fs.writeFile(path.join(directory, 'src', 'nodejs', 'index.ts'), `
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { once } from 'node:events'
+import { setTimeout as delay } from 'node:timers/promises'
 import { Tool } from '@sdk/base-tool'
-import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
 export default class Fixture extends Tool {
   toolName = 'state'; toolkit = 'fixture'; description = 'Worker fixture'
-  runtimeLifetime = ToolRuntimeLifetime.${persistent ? 'Persistent' : 'Call'}
+  runtimeLifetime = ${JSON.stringify(lifetime)}
   count = 0
   async next(attach, crash = false) {
     if (crash) process.exit(7)
@@ -852,6 +853,36 @@ export default class Fixture extends Tool {
   }
   largeResult(bytes) {
     return { payload: 'x'.repeat(bytes) }
+  }
+  startOutput() {
+    const context = this.executionContext
+    const id = 'retained'
+    const release = path.join(process.env.LEON_HOME, 'release')
+    this.emitOutput('started', { id, state: 'running' }, context)
+    void (async () => {
+      while (!await fs.stat(release).then(() => true, () => false)) {
+        await delay(10)
+      }
+      this.emitOutput('finished', { id, state: 'completed' }, context)
+    })()
+  }
+  async startChildAndFail() {
+    this.child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    await once(this.child, 'spawn')
+    await fs.writeFile(path.join(process.env.LEON_HOME, 'child-pids'),
+      JSON.stringify({ worker: process.pid, child: this.child.pid }))
+    throw new Error('The operation failed after starting a child.')
+  }
+  startResource(name) {
+    const release = this.retainWorker()
+    const marker = path.join(process.env.LEON_HOME, name)
+    void (async () => {
+      while (!await fs.stat(marker).then(() => true, () => false)) {
+        await delay(10)
+      }
+      release()
+      await fs.writeFile(marker + '-released', '')
+    })()
   }
   async readInput() {
     const command = [
@@ -869,6 +900,11 @@ export default class Fixture extends Tool {
     })
   }
   async dispose() {
+    if (this.child) {
+      const closed = once(this.child, 'close')
+      this.child.kill()
+      await closed
+    }
     await fs.appendFile(path.join(process.env.LEON_HOME, 'disposed'), process.env.LEON_PROFILE + '\\n')
   }
 }
@@ -882,7 +918,7 @@ async function next(profile: string, session: string, attach = false, crash = fa
 }
 
 it('retains per-profile state, refreshes session context, clears attachments and disposes workers', async () => {
-  await fixture(true)
+  await fixture(ToolRuntimeLifetime.Persistent)
   const workspace = path.join(await fs.realpath(home), 'workspace')
   await fs.mkdir(workspace)
   vi.spyOn(process, 'cwd').mockReturnValue(workspace)
@@ -898,13 +934,102 @@ it('retains per-profile state, refreshes session context, clears attachments and
   expect((await fs.readFile(path.join(home, 'disposed'), 'utf8')).trim().split('\n').sort()).toEqual(['a', 'b'])
 })
 
+it('reuses an idle worker while it has retained output and starts fresh after expiry', async () => {
+  await fixture(ToolRuntimeLifetime.Idle)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const first = await next('a', 'one')
+    expect(first.output['result']).toMatchObject({ count: 1 })
+    await vi.advanceTimersByTimeAsync(30_000)
+    const warm = await next('a', 'two')
+    expect(warm.output['result']).toMatchObject({ count: 2 })
+
+    const completed = Promise.withResolvers<void>()
+    const result = await manager.execute({
+      toolkitId: 'fixture', toolId: 'state', functionName: 'startOutput',
+      profileName: 'a', conversationSessionId: 'three', parameters: {},
+      onProgress: (progress) => {
+        if (progress.stream?.state === 'completed') {
+          completed.resolve()
+        }
+      }
+    }, [], () => {}, { concurrency: ToolConcurrency.Serial })
+    expect(result.success).toBe(true)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect((await next('a', 'four')).output['result']).toMatchObject({ count: 3 })
+
+    await fs.writeFile(path.join(home, 'release'), '')
+    await completed.promise
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect((await next('a', 'five')).output['result']).toMatchObject({ count: 1 })
+    expect(await fs.readFile(path.join(home, 'disposed'), 'utf8')).toBe('a\n')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('retires a reusable worker and its managed child after a failed call', async () => {
+  await fixture(ToolRuntimeLifetime.Persistent)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const result = await manager.execute({
+      toolkitId: 'fixture', toolId: 'state', functionName: 'startChildAndFail',
+      profileName: 'a', conversationSessionId: 'one', parameters: {}
+    }, [], () => {}, { concurrency: ToolConcurrency.Serial })
+    expect(result.success).toBe(false)
+
+    const { worker, child } = JSON.parse(await fs.readFile(path.join(home, 'child-pids'), 'utf8'))
+    expect(process.kill(worker, 0)).toBe(true)
+    expect(process.kill(child, 0)).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.waitFor(() => {
+      expect(() => process.kill(worker, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      expect(() => process.kill(child, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('retires a worker after its last quiet resource closes between calls', async () => {
+  await fixture(ToolRuntimeLifetime.Idle)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const first = await next('a', 'one')
+    const { pid } = first.output['result'] as { pid: number }
+    for (const name of ['first', 'second']) {
+      const result = await manager.execute({
+        toolkitId: 'fixture', toolId: 'state', functionName: 'startResource',
+        profileName: 'a', conversationSessionId: name, parameters: {}
+      }, [name], () => {}, { concurrency: ToolConcurrency.Serial })
+      expect(result.success).toBe(true)
+    }
+
+    await fs.writeFile(path.join(home, 'first'), '')
+    await vi.waitFor(() => fs.access(path.join(home, 'first-released')))
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(process.kill(pid, 0)).toBe(true)
+    expect((await next('a', 'one')).output['result']).toMatchObject({ pid, count: 2 })
+
+    await fs.writeFile(path.join(home, 'second'), '')
+    await vi.waitFor(() => fs.access(path.join(home, 'second-released')))
+    await vi.advanceTimersByTimeAsync(61_000)
+    await vi.waitFor(() => {
+      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 it('keeps ordinary calls isolated and does not replay a crashed persistent call', async () => {
-  await fixture(false)
+  await fixture()
   expect((await next('a', 'one')).output['result']).toMatchObject({ count: 1 })
   expect((await next('a', 'one')).output['result']).toMatchObject({ count: 1 })
   await manager.dispose()
   await fs.rm(home, { recursive: true, force: true })
-  await fixture(true)
+  await fixture(ToolRuntimeLifetime.Persistent)
   expect((await next('a', 'one')).success).toBe(true)
   const crashed = await next('a', 'one', false, true)
   expect(crashed.success).toBe(false)
@@ -913,7 +1038,7 @@ it('keeps ordinary calls isolated and does not replay a crashed persistent call'
 })
 
 it('closes unused stdin so non-interactive commands can finish', async () => {
-  await fixture(false)
+  await fixture()
 
   const result = await manager.execute({
     toolkitId: 'fixture',
@@ -929,7 +1054,7 @@ it('closes unused stdin so non-interactive commands can finish', async () => {
 })
 
 it('cancels an active call cooperatively and releases its worker before another call', async () => {
-  await fixture(true)
+  await fixture(ToolRuntimeLifetime.Persistent)
   const controller = new AbortController()
   const result = await manager.execute({ toolkitId: 'fixture', toolId: 'state', functionName: 'hold',
     profileName: 'a', conversationSessionId: 'one', parameters: {}, signal: controller.signal }, [],
@@ -942,7 +1067,7 @@ it('cancels an active call cooperatively and releases its worker before another 
 
 
 it.skipIf(spawnSync('rg', ['--version']).status !== 0)('executes built-in ripgrep functions through real profile workers', async () => {
-  await fixture(false)
+  await fixture()
   const { default: ToolkitRegistry } = await import('@/core/tool-manager/toolkit-registry')
   const registry = new ToolkitRegistry()
   await registry.load()

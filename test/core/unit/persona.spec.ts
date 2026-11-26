@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Persona from '@/core/llm-manager/persona'
-import AmbientConditionsManager from '@/core/ambient-conditions-manager'
+import AmbientConditionsManager from '@/core/ambient/ambient-conditions-manager'
 import { ToolExecutionOrigin } from '@/types'
 import Fastify from 'fastify'
 import { getAmbientConditions } from '@/core/http-server/api/ambient/get'

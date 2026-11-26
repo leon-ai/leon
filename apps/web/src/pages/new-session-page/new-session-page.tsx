@@ -13,6 +13,7 @@ import { conversationQueryOptions, useSendMessage } from '@/data/conversation-qu
 import type { ConversationSession } from '@/data/sessions'
 import { queryClient } from '@/query-client'
 import { prefetchModule } from '@/utils/prefetch'
+import { createUUID } from '@/utils/create-uuid'
 import type { SendMessageInput } from '@/data/owner-attachments'
 import { assertSendMessageActive, createSendMessageInput } from '@/data/owner-attachments'
 
@@ -23,10 +24,10 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 export function NewSessionPage() {
   const navigate = useNavigate()
   const profile = useProfile()
-  const { workspace } = useSearch({ from: '/' })
+  const { workspace } = useSearch({ strict: false })
   const workspaceId = workspace ?? null
   const model = useComposerModel()
-  const [intent, setIntent] = useState(() => ({ sessionId: crypto.randomUUID(), workspaceId }))
+  const [intent, setIntent] = useState(() => ({ sessionId: createUUID(), workspaceId }))
   const { sessionId } = intent
   const send = useSendMessage(sessionId)
   const create = useMutation({
@@ -65,7 +66,7 @@ export function NewSessionPage() {
     if (intent.workspaceId !== workspaceId && !create.isPending) {
       // A submitted ID stays bound to its original context, including retries
       // after uncertain delivery. Choosing another workspace starts a new intent.
-      setIntent({ sessionId: crypto.randomUUID(), workspaceId })
+      setIntent({ sessionId: createUUID(), workspaceId })
       create.reset()
       send.reset()
     }

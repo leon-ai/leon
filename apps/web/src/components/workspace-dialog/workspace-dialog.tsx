@@ -7,6 +7,7 @@ import { Callout } from '@/components/callout/callout'
 import { FolderPicker } from '@/components/folder-picker/folder-picker'
 import { useProfile } from '@/data/profile'
 import { useWorkspaceMutation, type Workspace } from '@/data/workspaces'
+import { createUUID } from '@/utils/create-uuid'
 import { WORKSPACE_COLORS, WORKSPACE_LIMITS, WorkspaceResourceKind,
   type WorkspaceColor, type WorkspaceResource } from '../../../../../bridges/runtime/contracts/workspace'
 
@@ -38,8 +39,8 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
   const [folders, setFolders] = useState<FolderRow[]>(() => {
     const attached = workspace?.resources.filter((resource) => resource.kind === WorkspaceResourceKind.Folder) ?? []
 
-    return attached.length > 0 ? attached.map((resource) => ({ id: crypto.randomUUID(), resource }))
-      : [{ id: crypto.randomUUID() }]
+    return attached.length > 0 ? attached.map((resource) => ({ id: createUUID(), resource }))
+      : [{ id: createUUID() }]
   })
   const [confirmRemove, setConfirmRemove] = useState(false)
   const formId = useId()
@@ -100,11 +101,11 @@ export function WorkspaceDialog({ workspace, onClose, onCreated }: WorkspaceDial
               }} />
             {(folders.length > 1 || folder.resource) && <Button iconName="close" ariaLabel={`Remove folder ${index + 1}`}
               onClick={() => setFolders((previous) => previous.length === 1
-                ? [{ id: crypto.randomUUID() }] : previous.filter((row) => row.id !== folder.id))} />}
+                ? [{ id: createUUID() }] : previous.filter((row) => row.id !== folder.id))} />}
           </div>)}
           {folders.length < WORKSPACE_LIMITS.folders && <Button className="workspace-add-folder" iconName="add-large"
             onClick={() => setFolders((previous) => previous.length < WORKSPACE_LIMITS.folders
-              ? [...previous, { id: crypto.randomUUID() }] : previous)}>Add folder</Button>}
+              ? [...previous, { id: createUUID() }] : previous)}>Add folder</Button>}
         </div>
       </fieldset>
       {mutation.isError && <p role="alert">{mutation.error.message}</p>}

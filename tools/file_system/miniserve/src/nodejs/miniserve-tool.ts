@@ -31,7 +31,7 @@ interface Share {
  * Own finite-lived, read-only LAN servers within the profile's tool worker.
  */
 export default class MiniserveTool extends Tool {
-  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   private readonly config = ToolkitConfig.load(this.toolkit, this.toolName)
   private readonly shares = new Map<string, Share>()
 
@@ -95,10 +95,12 @@ export default class MiniserveTool extends Tool {
         execArgv: [], stdio: ['ignore', 'ignore', 'pipe', 'ipc']
       })
       const server = child
+      const releaseWorker = this.retainWorker()
       server.stderr?.resume()
       closed = new Promise<void>((resolve) => {
         const finish = (): void => {
           this.shares.delete(id)
+          releaseWorker()
           resolve()
         }
         server.once('exit', finish)

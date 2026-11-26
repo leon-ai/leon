@@ -1,18 +1,21 @@
 import { flushSync } from 'react-dom'
 import { WebPreferenceKey, saveWebPreference } from '@/utils/web-preferences'
 import { ACCENT_COLORS, type AccentColor } from '../../../bridges/runtime/contracts/workspace'
+import { DEFAULT_WEB_THEME, WEB_THEMES, type WebColorScheme, type WebTheme } from '../../../bridges/runtime/contracts/desktop-client'
 
-const DEFAULT_THEME = 'dark'
+const DEFAULT_THEME = DEFAULT_WEB_THEME
 const DEFAULT_SIDEBAR_EXPANDED = true
 const DEFAULT_SOUNDS_ENABLED = true
-const THEMES = ['dark', 'light'] as const
+const THEMES = WEB_THEMES
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
+const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
 export const THEME_TRANSITION_ATTRIBUTE = 'data-theme-transition'
 
 export const THEME_CHANGE_EVENT = 'leon:web-app-theme-change'
 export const THEME_REQUEST_EVENT = 'leon:web-app-theme-request'
 
-export type Theme = (typeof THEMES)[number]
+export type Theme = WebTheme
+export type ColorScheme = WebColorScheme
 
 type ThemePreparation = (theme: Theme) => Promise<(() => void) | void>
 
@@ -164,10 +167,18 @@ export async function applyTheme(theme: Theme): Promise<boolean> {
   }
 }
 
-export function getStoredTheme(): Theme {
+export function getStoredColorScheme(): ColorScheme {
   const storedTheme = window.localStorage.getItem(WebPreferenceKey.Theme)
 
-  return isTheme(storedTheme) ? storedTheme : DEFAULT_THEME
+  return storedTheme === 'system' || isTheme(storedTheme) ? storedTheme : DEFAULT_THEME
+}
+
+function resolveColorScheme(scheme: ColorScheme): Theme {
+  return scheme === 'system' ? window.matchMedia(SYSTEM_DARK_MEDIA_QUERY).matches ? 'dark' : 'light' : scheme
+}
+
+export function getStoredTheme(): Theme {
+  return resolveColorScheme(getStoredColorScheme())
 }
 
 /**
@@ -191,17 +202,34 @@ export function getRequestedTheme(): Theme {
  */
 export function applyStoredTheme(): void {
   commitTheme(getStoredTheme())
+  window.matchMedia(SYSTEM_DARK_MEDIA_QUERY).addEventListener('change', () => {
+    if (getStoredColorScheme() === 'system') {
+      void applyTheme(getStoredTheme())
+    }
+  })
 }
 
 /**
  * Persists a selected theme once its visual update has been applied.
  */
 export function saveTheme(theme: Theme): void {
-  void applyTheme(theme).then((applied) => {
-    if (applied) {
-      saveWebPreference(WebPreferenceKey.Theme, theme)
+  void saveColorScheme(theme)
+}
+
+/**
+ * Stores the preference independently of the palette selected by the system.
+ */
+export async function saveColorScheme(scheme: ColorScheme): Promise<boolean> {
+  const applied = await applyTheme(resolveColorScheme(scheme))
+  if (applied) {
+    saveWebPreference(WebPreferenceKey.Theme, scheme)
+    // The operating system may have changed while the palette was preparing.
+    const current = resolveColorScheme(scheme)
+    if (current !== getCurrentTheme()) {
+      void applyTheme(current)
     }
-  })
+  }
+  return applied
 }
 
 /**

@@ -11,6 +11,8 @@ import { prefetchModule } from '@/utils/prefetch'
 import { useToast } from '@/components/toast'
 import { useTheme } from '@/hooks/use-theme'
 import { loadImage } from '@/utils/load-image'
+import { restoreOverlayFocus } from '@/utils/overlay-focus'
+import { AppShortcutKey, hasAppModifier, NEW_SESSION_REQUIRES_SHIFT } from '@/utils/keyboard-shortcuts'
 import {
   getStoredSidebarExpanded,
   saveSidebarExpanded,
@@ -86,7 +88,11 @@ function shouldReduceMotion(): boolean {
   return window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
 }
 
-export function Sidebar() {
+export function Sidebar({ inert, onInsights, onSettings }: {
+  inert?: boolean
+  onInsights: () => void
+  onSettings: () => void
+}) {
   const navigate = useNavigate()
   const sidebarScrollAreaRef = useRef<HTMLDivElement>(null)
   const searchReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -170,18 +176,18 @@ export function Sidebar() {
 
   function closeSearchSessionsDialog(): void {
     setSearchSessionsDialogOpen(false)
-    if (searchReturnFocusRef.current?.isConnected) {
-      searchReturnFocusRef.current.focus({ preventScroll: true })
-    }
+    restoreOverlayFocus(searchReturnFocusRef.current)
     searchReturnFocusRef.current = null
   }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
-      const modifierKeyPressed = event.ctrlKey || event.metaKey
+      const modifierKeyPressed = hasAppModifier(event)
       const key = event.key.toLowerCase()
 
       if (
+        event.defaultPrevented ||
+        event.isComposing ||
         event.repeat ||
         event.altKey ||
         !modifierKeyPressed
@@ -189,7 +195,17 @@ export function Sidebar() {
         return
       }
 
-      if (event.shiftKey && key === 'o') {
+      if (!event.shiftKey && key === AppShortcutKey.Settings) {
+        event.preventDefault()
+        onSettings()
+        return
+      }
+
+      if (inert) {
+        return
+      }
+
+      if (key === AppShortcutKey.NewSession && (event.shiftKey || !NEW_SESSION_REQUIRES_SHIFT)) {
         event.preventDefault()
         searchReturnFocusRef.current = null
         setSearchSessionsDialogOpen(false)
@@ -199,7 +215,7 @@ export function Sidebar() {
 
       if (
         event.shiftKey ||
-        key !== 'k'
+        key !== AppShortcutKey.SearchSessions
       ) {
         return
       }
@@ -213,12 +229,12 @@ export function Sidebar() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [navigate])
+  }, [inert, navigate, onSettings])
 
   const logoSrc = theme === 'dark' ? DARK_THEME_LOGO_SRC : LIGHT_THEME_LOGO_SRC
 
   return (
-    <aside className={clsx(
+    <aside inert={inert} className={clsx(
       'sidebar',
       sidebarExpanded ? 'sidebar-expanded' : 'sidebar-collapsed',
       {
@@ -278,7 +294,7 @@ export function Sidebar() {
         aria-label="Open sidebar"
         onClick={() => updateSidebarExpanded(true)}
       />
-      <SidebarFooter />
+      <SidebarFooter onInsights={onInsights} onSettings={onSettings} />
       <Dialog
         hideHeader
         open={searchSessionsDialogOpen}

@@ -5,7 +5,7 @@ import { AggregateAjvError } from '@segment/ajv-human-errors'
 
 import { ajv } from '@/ajv'
 import { PROFILE_CONFIG_PATH } from '@/leon-roots'
-import { configSchemaObject } from '@/schemas/core-schemas'
+import { configSchemaObject } from '@/schemas/config-schema'
 import { SystemHelper } from '@/helpers/system-helper'
 
 interface ObjectUnknown {

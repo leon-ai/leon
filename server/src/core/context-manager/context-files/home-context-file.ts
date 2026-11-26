@@ -60,7 +60,7 @@ export class HomeContextFile extends ContextFile {
       `- Built-in tool manifests: ${toolManifestPath}`,
       `- Global data path: ${GLOBAL_DATA_PATH}`,
       `- Server source path: ${serverSourcePath}`,
-      `- Server core runtime path: ${SERVER_CORE_PATH}`
+      `- Server internals path: ${SERVER_CORE_PATH}`
     ].join('\n')
   }
 }

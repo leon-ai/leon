@@ -3,6 +3,7 @@ import { TOOL_CONTENT_PREVIEW_CHARACTERS } from '../../../../server/src/core/ses
 import type { JsonValue } from '@/data/feed'
 
 const MAXIMUM_FORMATTED_INPUT_CHARACTERS = 65_536
+const MARKDOWN_FORMAT_HINT = JSON.stringify({ format: 'markdown' }, null, 2)
 
 /**
  * Reads the native tool runtime's result/data envelope without discarding the
@@ -48,6 +49,18 @@ export function toToolDisplayContent(value: unknown, complete = false): ToolCont
   const text = typeof result['content'] === 'string' ? result['content'] : result['text']
 
   return typeof text === 'string' && text.trim() ? toToolContent(text, complete, false, 'markdown') : undefined
+}
+
+/**
+ * Shows the running status until readable output arrives. A format-only report
+ * describes the upcoming text and is serialized as JSON by both output paths.
+ */
+export function getToolOutputProgress(output: ToolContentPart | undefined, message?: string): string | undefined {
+  if (output?.language === 'json' && output.text === MARKDOWN_FORMAT_HINT) {
+    return message || 'Waiting for tool output…'
+  }
+
+  return message && !output?.text.trim() ? message : undefined
 }
 
 /**

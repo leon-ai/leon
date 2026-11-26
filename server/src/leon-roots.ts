@@ -56,6 +56,9 @@ export const LEON_PROFILE_PATH = path.join(
 )
 export const PROFILE_DOT_ENV_PATH = path.join(LEON_PROFILE_PATH, '.env')
 export const PROFILE_CONFIG_PATH = path.join(LEON_PROFILE_PATH, 'config.yml')
+export const COMPILED_TOOLS_PATH = path.join(CODEBASE_PATH, 'server', 'dist', 'tools')
+export const NODEJS_TOOL_SOURCE_ENTRY = path.join('src', 'nodejs', 'index.ts')
+export const NODEJS_TOOL_COMPILED_ENTRY = path.join('src', 'nodejs', 'tool-worker-entry.js')
 
 /**
  * Resolve a tool within its owning toolkit directory.

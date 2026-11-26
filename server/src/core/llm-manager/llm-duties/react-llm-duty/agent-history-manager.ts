@@ -9,7 +9,7 @@ import {
   type LLMProviders,
   type AgentToolTranscriptMessage
 } from '@/core/llm-manager/types'
-import type { PostTurnMaintenanceTask } from '@/core/post-turn-maintenance-queue'
+import type { PostTurnMaintenanceTask } from '@/core/turn-lifecycle/post-turn-maintenance-queue'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import type { MessageLog } from '@/types'
@@ -519,7 +519,7 @@ export class AgentHistoryManager {
    * Prepares eligible background maintenance with its own replayable activity,
    * without modifying the completed answer or its execution plan.
    */
-  public async prepareHistoryCompactionAfterAnswer(): Promise<PostTurnMaintenanceTask | null> {
+  public async prepareHistoryCompactionAfterAnswer(announce = true): Promise<PostTurnMaintenanceTask | null> {
     const historyConfig = this.getHistoryCompactionConfig()
     const historyScope = this.getHistoryCompactionScope()
     const conversationLogs = this.getHistoryEligibleConversationLogs(
@@ -555,6 +555,9 @@ export class AgentHistoryManager {
       const id = widgetId('compaction')
       const startedAt = Date.now()
       const emit = (outcome: InferenceActivity['outcome']): void => {
+        if (!announce) {
+          return
+        }
         const active = outcome === 'started'
         const completed = outcome === 'completed'
         emitPlanWidget([{

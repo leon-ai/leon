@@ -30,7 +30,7 @@ export function useUpdates(profile: string): {
         if (!document.querySelector(`meta[name="${DESKTOP_UPDATES_META_NAME}"]`) || signal.aborted) {
           throw error
         }
-        // The native host can read the public receipt while Core is stopped.
+        // The native host can read the public receipt while the server is stopped.
         // Browser clients keep the last state and show a reconnect loader.
         const response = await fetch(`${DESKTOP_UPDATES_PATH}core`, { signal })
         if (!response.ok) {

@@ -66,7 +66,8 @@ export async function appendInferenceUsage(
  */
 export async function* readInferenceUsage(
   query: InferenceUsageQuery,
-  profilePaths = getProfilePaths()
+  profilePaths = getProfilePaths(),
+  onUnreadableRecord?: () => void
 ): AsyncGenerator<InferenceUsageRecord> {
   const directory = path.join(profilePaths.logs, USAGE_DIRECTORY)
   let files: string[]
@@ -106,8 +107,19 @@ export async function* readInferenceUsage(
           continue
         }
 
-        // A damaged record must remain visible as a reporting failure, not lost usage.
-        const record = JSON.parse(line) as InferenceUsageRecord
+        let record: InferenceUsageRecord
+        try {
+          record = JSON.parse(line) as InferenceUsageRecord
+          if (!record?.usage || typeof record.usage !== 'object') {
+            throw new SyntaxError('The usage record is missing its accounting data.')
+          }
+        } catch (error) {
+          if (!onUnreadableRecord || !(error instanceof SyntaxError)) {
+            throw error
+          }
+          onUnreadableRecord()
+          continue
+        }
 
         if (
           (query.from !== undefined && record.startedAt < query.from) ||

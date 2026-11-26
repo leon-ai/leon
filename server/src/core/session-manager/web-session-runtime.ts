@@ -7,7 +7,8 @@ import { LogHelper } from '@/helpers/log-helper'
 import { finishAuroraAnswer, publishAnswerParts } from '@/core/aurora/answer-presentation'
 import type { AnswerPart } from '@@/aurora/src/v2/contracts/answer'
 import type { Artifact } from '@/core/artifacts/artifact-types'
-import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
+import { prepareStoredOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
+import { getSelectedDevice } from '@/core/satellite/device-context'
 
 import { CONVERSATION_SESSION_MANAGER } from './index'
 import { CONVERSATION_REPOSITORY } from './conversation-repository'
@@ -16,6 +17,7 @@ import type { ConversationCommandStatus, ConversationCommand } from './conversat
 interface ActiveWebTurn {
   controller: AbortController
   completion: Promise<void>
+  device: string | undefined
 }
 
 /**
@@ -26,13 +28,14 @@ export class WebSessionRuntime {
   private readonly active = new Map<string, Set<ActiveWebTurn>>()
 
   public isRunning(sessionId: string): boolean {
-    return this.active.has(sessionId) || CONVERSATION_SESSION_MANAGER.isAgentTurnActive(sessionId)
+    return this.active.has(sessionId) || CONVERSATION_SESSION_MANAGER.isVisibleAgentTurnActive(sessionId)
   }
 
   /**
    * Acknowledges durable input once; retries with the same ID never repeat work.
    */
   public submit(sessionId: string, id: string, query: string, attachments: Artifact[] = []): ConversationCommand {
+    this.assertDeviceForQueuedTurn(sessionId)
     const accepted = CONVERSATION_REPOSITORY.acceptCommand(sessionId, id, query, attachments)
     this.dispatchAccepted(accepted)
 
@@ -47,6 +50,7 @@ export class WebSessionRuntime {
     messageId: string,
     input: { id: string, surfaceId: string, nodeId: string, revision: number, values: unknown }
   ): { command: ConversationCommand, answerParts: AnswerPart[] } {
+    this.assertDeviceForQueuedTurn(sessionId)
     const accepted = CONVERSATION_REPOSITORY.acceptAuroraSubmission(sessionId, messageId, input, !this.isRunning(sessionId))
     publishAnswerParts(sessionId, messageId, accepted.answerParts)
     this.dispatchAccepted(accepted)
@@ -70,7 +74,7 @@ export class WebSessionRuntime {
     })
     const controller = new AbortController()
     const completion = this.execute(sessionId, id, query, controller)
-    const turn = { controller, completion }
+    const turn = { controller, completion, device: getSelectedDevice() }
     const turns = this.active.get(sessionId) ?? new Set<ActiveWebTurn>()
     turns.add(turn)
     this.active.set(sessionId, turns)
@@ -87,6 +91,15 @@ export class WebSessionRuntime {
       LogHelper.error(`Could not finalize browser turn: ${error}`)
     })
 
+  }
+
+  private assertDeviceForQueuedTurn(sessionId: string): void {
+    const device = getSelectedDevice()
+    for (const turn of this.active.get(sessionId) ?? []) {
+      if (device !== turn.device) {
+        throw new Error('This conversation is running on another device. Wait for the turn to finish or start a new conversation.')
+      }
+    }
   }
 
   private async execute(sessionId: string, id: string, query: string, controller: AbortController): Promise<void> {

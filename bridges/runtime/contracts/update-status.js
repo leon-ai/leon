@@ -1,4 +1,4 @@
-// Plain Node.js and browser/Core callers share these states before any build runs.
+// Node.js tooling, the browser and the Leon server share these states before any build runs.
 export const UpdatePhase = /**
  * @type {const}
  */ ({
@@ -32,6 +32,6 @@ export const UPDATE_STAGE_LABELS = Object.freeze({
   verifying: 'Verifying my update',
   extracting: 'Unpacking my update',
   preparing: 'Preparing my profiles',
-  restarting: 'Restarting my Core',
-  starting: 'Waiting for my Core'
+  restarting: 'Restarting my server',
+  starting: 'Waiting for my server'
 })

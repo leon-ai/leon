@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { selectLocalLLM, rankLocalLLMPlans } from '@@/scripts/setup/local-llm-selection'
-import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '@@/scripts/setup/local-llm-catalog'
+import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '@/core/llm-manager/local-model-catalog'
 import { LlamaCPPBackendError, LlamaCPPCapacityError, LlamaCPPExecutionMode } from '@/core/llm-manager/llm-providers/llamacpp-context'
 
 const fixture = await vi.hoisted(async () => {

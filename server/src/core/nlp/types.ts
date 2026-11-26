@@ -104,6 +104,8 @@ export interface NLUProcessResult {
     bridge: SkillSchema['bridge']
     version: SkillSchema['version']
     workflow: SkillSchema['workflow']
+    distribution?: NonNullable<SkillSchema['distribution']>
+    maintenance?: NonNullable<SkillSchema['maintenance']>
   }
   localeSkillConfig: {
     variables: SkillLocaleConfigSchema['variables']

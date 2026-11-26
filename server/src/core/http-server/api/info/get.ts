@@ -5,6 +5,7 @@ import {
   LEON_VERSION,
   SHOULD_START_PYTHON_TCP_SERVER
 } from '@/constants'
+import { getTelemetrySetting } from '@/core/telemetry/profile-telemetry'
 import { CONFIG_MANAGER } from '@/config'
 import { PERSONA } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
@@ -64,7 +65,7 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
         code: 'info_pulled',
         message,
         after_speech: profileConfig.after_speech_enabled,
-        telemetry: profileConfig.telemetry_enabled,
+        telemetry: getTelemetrySetting().enabled,
         timeZone: DateHelper.getTimeZone(),
         gpu: gpuDeviceNames[0],
         graphicsComputeAPI,

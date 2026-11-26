@@ -14,7 +14,7 @@ import type {
   LLMProviderConfigSchema,
   LeonConfigSchema,
   SecretReferenceSchema
-} from '@/schemas/core-schemas'
+} from '@/schemas/config-schema'
 
 export type LeonConfig = LeonConfigSchema
 export type SecretReference = SecretReferenceSchema
@@ -372,6 +372,9 @@ class ConfigManager {
 
   private load(profileName: string): LeonConfig {
     const parsedConfig = this.readRawConfig(profileName)
+    // Profiles cannot redirect usage reports to a different collector.
+    delete parsedConfig['telemetry_endpoint']
+    delete parsedConfig['telemetry_share_timezone']
     const mergedConfig = mergeDefaults(
       cloneConfig(DEFAULT_CONFIG),
       parsedConfig
@@ -487,9 +490,6 @@ class ConfigManager {
     process.env['LEON_TTS_PROVIDER'] = config.voice.tts.provider
     process.env['LEON_TIME_ZONE'] = toEnvString(config.time_zone)
     process.env['LEON_AFTER_SPEECH'] = config.after_speech_enabled
-      ? 'true'
-      : 'false'
-    process.env['LEON_TELEMETRY'] = config.telemetry_enabled
       ? 'true'
       : 'false'
     process.env['LEON_PY_TCP_SERVER_HOST'] = config.python_tcp_server.host

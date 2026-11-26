@@ -5,14 +5,44 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
 
+import PACKAGE from '@@/package.json' with { type: 'json' }
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LogHelper } from '@/helpers/log-helper'
 import type { CompletionAttemptTiming } from './types'
-import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type TurnTimingContext, type InferenceActivity } from './turn-timing-contract'
+import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type TurnTimingContext, type InferenceActivity, OwnerTurnFailureCode  } from './turn-timing-contract'
+import { readContextUsage, type ContextUsageMetrics } from './llm-usage/context-usage'
 import type { InferenceUsage } from './llm-usage/usage-context'
+import type { InferenceUsageRecord } from './llm-usage/usage-ledger'
+import { TELEMETRY_MAX_CAPABILITY_BUCKETS, type CapabilityUsage } from '@/core/telemetry/report-contract'
+import { getTurnClient } from '@/core/leon-interface/turn-client'
+import type { TurnClient } from '@@/bridges/runtime/contracts/turn-client'
 
 export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
+
+interface OwnerTurnMeasurement {
+  version: string
+  client: TurnClient
+  outcome: 'answered' | 'clarification' | 'failed' | 'canceled'
+  context?: ContextUsageMetrics
+  failure?: OwnerTurnFailureCode
+}
+
+export interface CompletedOwnerTurn {
+  id: string
+  profile: string
+  startedAt: number
+  durationMs: number
+  measurement: OwnerTurnMeasurement
+  timings: readonly TurnTiming[]
+  inferenceUsage: readonly ForegroundInferenceUsage[]
+  capabilities: readonly CapabilityUsage[]
+  contextReduction: { count: number, estimatedTokensReclaimed: number }
+  pulseQueue?: PulseQueueSample
+}
+
+interface PulseQueueSample { model: string, waitMs: number, pulseActive: boolean }
+type ForegroundInferenceUsage = Pick<InferenceUsageRecord, 'provider' | 'model' | 'outcome' | 'usage'>
 
 const MAXIMUM_TURN_TIMINGS = 10_000
 
@@ -27,11 +57,99 @@ interface TurnTimingScope extends TurnTimingContext {
   profile: string
   parentId?: string
   onActivity?: (activity: InferenceActivity) => void
-  state: { sessionId: string | null, timings: Map<string, TurnTiming>, closed: boolean, omitted: number }
+  state: {
+    sessionId: string | null
+    timings: Map<string, TurnTiming>
+    closed: boolean
+    omitted: number
+    ownerTurn?: OwnerTurnMeasurement
+    inferenceUsage?: ForegroundInferenceUsage[]
+    capabilities?: Map<string, CapabilityUsage>
+    contextReduction?: CompletedOwnerTurn['contextReduction']
+    pulseQueue?: PulseQueueSample
+  }
 }
 
 const storage = new AsyncLocalStorage<TurnTimingScope | undefined>()
 const pendingWrites = new Map<string, Promise<void>>()
+const ownerTurnListeners = new Set<(turn: CompletedOwnerTurn) => void>()
+const standaloneSkillListeners = new Set<(profile: string, entry: CapabilityUsage) => void>()
+
+/**
+ * Observes completed foreground owner turns without awaiting subscriber work.
+ */
+export function onCompletedOwnerTurn(listener: (turn: CompletedOwnerTurn) => void): () => void {
+  ownerTurnListeners.add(listener)
+  return () => {
+    ownerTurnListeners.delete(listener)
+  }
+}
+
+/**
+ * Observes controlled skill actions that run outside the agent loop.
+ */
+export function onStandaloneSkill(listener: (profile: string, entry: CapabilityUsage) => void): () => void {
+  standaloneSkillListeners.add(listener)
+  return () => {
+    standaloneSkillListeners.delete(listener)
+  }
+}
+
+/**
+ * Measures the first local admission within a foreground turn.
+ */
+export function recordPulseQueueSample(sample: PulseQueueSample): void {
+  const scope = storage.getStore()
+  if (ownerTurnListeners.size && scope?.stage === TurnStage.AgentLoop && !scope.taskId && !scope.state.closed) {
+    scope.state.pulseQueue ??= sample
+  }
+}
+
+/**
+ * Counts only capability labels already classified against the public catalog.
+ */
+export function recordCapabilityUsage(entry: CapabilityUsage): void {
+  const scope = storage.getStore()
+  if (!scope && entry.kind === 'native_skill') {
+    const profile = getActiveProfileName()
+    for (const listener of standaloneSkillListeners) {
+      queueMicrotask(() => listener(profile, entry))
+    }
+    return
+  }
+  if (!scope || scope.state.closed || scope.taskId || scope.stage === TurnStage.PostTurn || !ownerTurnListeners.size) {
+    return
+  }
+
+  scope.state.capabilities ??= new Map()
+  const { calls, failed, durationMs, ...label } = entry
+  const key = JSON.stringify(label)
+  const previous = scope.state.capabilities.get(key)
+  if (previous) {
+    previous.calls += calls
+    previous.failed += failed
+    if (durationMs !== undefined) {
+      previous.durationMs = (previous.durationMs ?? 0) + durationMs
+    }
+  } else if (scope.state.capabilities.size < TELEMETRY_MAX_CAPABILITY_BUCKETS) {
+    scope.state.capabilities.set(key, { ...entry })
+  }
+}
+
+/**
+ * Measures local prompt reduction using the same estimate before and after preparation.
+ */
+export function recordForegroundContextReduction(tokensReclaimed: number): void {
+  const scope = storage.getStore()
+  if (!ownerTurnListeners.size || !scope || scope.state.closed || scope.stage !== TurnStage.AgentLoop ||
+    !Number.isSafeInteger(tokensReclaimed) || tokensReclaimed <= 0) {
+    return
+  }
+
+  const reduction = scope.state.contextReduction ??= { count: 0, estimatedTokensReclaimed: 0 }
+  reduction.count++
+  reduction.estimatedTokensReclaimed += tokensReclaimed
+}
 
 /**
  * Observes only this foreground execution. Fresh background timing scopes do not
@@ -109,6 +227,22 @@ export function setTurnTimingSession(sessionId: string): void {
   const scope = storage.getStore()
   if (scope) {
     scope.state.sessionId = sessionId
+  }
+}
+
+/**
+ * Distinguishes accepted owner answers from background work and failed dispatches.
+ */
+export function recordOwnerTurn(
+  outcome: OwnerTurnMeasurement['outcome'],
+  metrics?: unknown,
+  failure?: OwnerTurnFailureCode
+): void {
+  const scope = storage.getStore()
+  if (scope && !scope.state.closed) {
+    const context = readContextUsage(metrics)
+    scope.state.ownerTurn = { version: PACKAGE.version, client: getTurnClient(), outcome, ...(context ? { context } : {}),
+      ...(failure && outcome === 'failed' ? { failure } : {}) }
   }
 }
 
@@ -277,6 +411,20 @@ export function recordTurnInferenceUsage(attemptId: string, usageId: string, usa
 }
 
 /**
+ * Counts foreground inference attempts even when no matching timing interval was emitted.
+ */
+export function recordForegroundInferenceUsage(entry: ForegroundInferenceUsage): void {
+  const scope = storage.getStore()
+  if (!ownerTurnListeners.size || !scope || scope.state.closed || scope.stage !== TurnStage.AgentLoop) {
+    return
+  }
+  scope.state.inferenceUsage ??= []
+  if (scope.state.inferenceUsage.length < MAXIMUM_TURN_TIMINGS) {
+    scope.state.inferenceUsage.push(entry)
+  }
+}
+
+/**
  * Records maintenance transitions for audit replay, never automatic re-execution.
  */
 export async function recordMaintenanceEvent(
@@ -303,13 +451,16 @@ export async function recordMaintenanceEvent(
  * Streams a profile's recorded lifecycle without rerunning model calls or mutations.
  * Old records without stage/task metadata remain readable by their turn identity.
  */
-export async function* readTurnHistory(query: {
+export async function* readTurnHistory({ from, until, ...query }: {
+  from?: number
+  until?: number
   turnId?: string
   sessionId?: string
+  goal?: TurnPhase
   stage?: TurnStage
   taskId?: string
-}): AsyncGenerator<Record<string, unknown>> {
-  const directory = path.join(getProfilePaths().logs, 'turns')
+}, profilePaths = getProfilePaths(), onUnreadableRecord?: () => void): AsyncGenerator<Record<string, unknown>> {
+  const directory = path.join(profilePaths.logs, 'turns')
   let filenames: string[]
   try {
     filenames = await fs.readdir(directory)
@@ -320,8 +471,11 @@ export async function* readTurnHistory(query: {
     throw error
   }
 
+  const firstDay = from === undefined ? '' : new Date(from).toISOString().slice(0, 10)
+  const lastDay = until === undefined ? '' : new Date(until - 1).toISOString().slice(0, 10)
   for (const filename of filenames.sort()) {
-    if (!filename.endsWith('.jsonl')) {
+    const day = filename.slice(0, 10)
+    if (!filename.endsWith('.jsonl') || (firstDay && day < firstDay) || (lastDay && day > lastDay)) {
       continue
     }
     const stream = createReadStream(path.join(directory, filename), { encoding: 'utf8' })
@@ -331,7 +485,25 @@ export async function* readTurnHistory(query: {
         if (!line.trim()) {
           continue
         }
-        const record = JSON.parse(line) as Record<string, unknown>
+        let record: Record<string, unknown>
+        try {
+          record = JSON.parse(line) as Record<string, unknown>
+          if (!record || typeof record !== 'object' || Array.isArray(record)) {
+            throw new SyntaxError('The timing record is missing its event data.')
+          }
+        } catch (error) {
+          if (!onUnreadableRecord || !(error instanceof SyntaxError)) {
+            throw error
+          }
+          onUnreadableRecord()
+          continue
+        }
+
+        const timestamp = Number(record['startedAt'])
+        if ((from !== undefined && !(timestamp >= from)) ||
+          (until !== undefined && !(timestamp < until))) {
+          continue
+        }
         if (Object.entries(query).every(([key, value]) => value === undefined || record[key] === value)) {
           yield record
         }
@@ -377,9 +549,28 @@ export async function runWithTurnTiming<T>(
           timing.outcome = 'detached'
         }
       }
+      const timings = getTurnTimings()
+      const owner = scope.state.ownerTurn
+      const root = owner && !scope.taskId && timings.find((timing) =>
+        timing.goal === TurnPhase.Turn && !timing.parentId)
+      if (owner && root && ownerTurnListeners.size) {
+        const turn = {
+          id: turnId, profile: scope.profile, startedAt: root.startedAt,
+          durationMs: root.durationMs, measurement: owner, timings,
+          inferenceUsage: scope.state.inferenceUsage ?? [],
+          capabilities: [...(scope.state.capabilities?.values() ?? [])],
+          contextReduction: scope.state.contextReduction ?? { count: 0, estimatedTokensReclaimed: 0 },
+          ...(scope.state.pulseQueue ? { pulseQueue: scope.state.pulseQueue } : {})
+        }
+        // Reporting can use finalized counters as soon as the turn closes.
+        runOutsideTurnTiming(() => {
+          for (const listener of ownerTurnListeners) {
+            queueMicrotask(() => listener(turn))
+          }
+        })
+      }
       try {
         const directory = path.join(getProfilePaths(scope.profile).logs, 'turns')
-        const timings = getTurnTimings()
         const records = new Map<string, string[]>()
         for (const timing of timings) {
           const date = new Date(timing.startedAt).toISOString().slice(0, 10)
@@ -387,6 +578,8 @@ export async function runWithTurnTiming<T>(
           entries.push(JSON.stringify({
             profile: scope.profile, sessionId: scope.state.sessionId,
             ...getTurnTimingContext(), ...timing,
+            ...(timing.goal === TurnPhase.Turn && !timing.parentId && scope.state.ownerTurn
+              ? { ownerTurn: scope.state.ownerTurn } : {}),
             endedAt: timing.startedAt + timing.durationMs
           }))
           records.set(date, entries)

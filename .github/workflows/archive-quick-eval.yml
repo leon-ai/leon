@@ -1,0 +1,28 @@
+name: Archive Quick Evals
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Archive the evaluated commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name leon-quick-evals --dir "$RUNNER_TEMP/quick-evals"
+          gh auth setup-git
+          node scripts/ci/archive-quick-eval.js "$RUNNER_TEMP/quick-evals/leon-quick-evals.json" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"

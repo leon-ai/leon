@@ -5,7 +5,7 @@ import { DateHelper } from '@/helpers/date-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
 import { ContextProbeHelper } from '@/core/context-manager/context-probe-helper'
-import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import { ContextStateStore, normalizeSampleTime } from '@/core/context-manager/context-state-store'
 
 interface DiscoveredNeighbor {
   ip: string
@@ -33,8 +33,8 @@ interface LocalEcosystemState {
 }
 
 const FALLBACK_STATE: LocalEcosystemState = {
-  trackingStartedAt: new Date(0).toISOString(),
-  lastSampleAt: new Date(0).toISOString(),
+  trackingStartedAt: '',
+  lastSampleAt: '',
   devices: {}
 }
 
@@ -409,10 +409,8 @@ export class NetworkEcosystemContextFile extends ContextFile {
     nowIso: string
   ): LocalEcosystemState {
     return {
-      trackingStartedAt: this.isValidDate(state.trackingStartedAt)
-        ? state.trackingStartedAt
-        : nowIso,
-      lastSampleAt: this.isValidDate(state.lastSampleAt) ? state.lastSampleAt : nowIso,
+      trackingStartedAt: normalizeSampleTime(state.trackingStartedAt, nowIso),
+      lastSampleAt: normalizeSampleTime(state.lastSampleAt, nowIso),
       devices:
         state.devices && typeof state.devices === 'object'
           ? this.normalizeDeviceStateEntries(state.devices)
@@ -702,9 +700,5 @@ export class NetworkEcosystemContextFile extends ContextFile {
     addWhenSeen('docker', 'Container runtime (docker) detected')
 
     return [...signals].sort((valueA, valueB) => valueA.localeCompare(valueB))
-  }
-
-  private isValidDate(value: string): boolean {
-    return Number.isFinite(Date.parse(value || ''))
   }
 }

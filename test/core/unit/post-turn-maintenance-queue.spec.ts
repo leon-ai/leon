@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
+import PostTurnMaintenanceQueue from '@/core/turn-lifecycle/post-turn-maintenance-queue'
 import { LogHelper } from '@/helpers/log-helper'
 import { TurnStage } from '@/core/llm-manager/turn-timing'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'

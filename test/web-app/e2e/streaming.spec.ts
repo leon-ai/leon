@@ -8,6 +8,84 @@ import { setFixtureTheme, test, expect, SESSION_ID, SESSION_URL, toolContentsFix
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
+import { DESKTOP_META_NAME } from '../../../bridges/runtime/contracts/desktop-client'
+import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER } from '../../../bridges/runtime/contracts/turn-client'
+
+for (const { desktop, platform, type, os } of [
+  { desktop: false, platform: 'Android', type: 'web', os: 'android' },
+  { desktop: true, platform: 'macOS', type: 'desktop', os: 'macos' }
+]) {
+  test(`sends the ${type} client and ${os} OS family with an owner message`, async ({ page, ui }) => {
+    await page.addInitScript((platform) => {
+      Object.defineProperty(navigator, 'userAgentData', { get: () => ({ platform }) })
+      Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 })
+    }, platform)
+    await page.goto(SESSION_URL)
+    if (desktop) {
+      await page.evaluate((name) => {
+        const marker = document.createElement('meta')
+        marker.name = name
+        document.head.append(marker)
+      }, DESKTOP_META_NAME)
+    }
+
+    const messages = `/api/v1/sessions/${ui.sessions[0]!.id}/messages`
+    const request = page.waitForRequest((request) =>
+      request.method() === 'POST' && new URL(request.url()).pathname === messages)
+    const composer = page.getByRole('textbox', { name: 'Message Leon' })
+    await composer.fill('Hello Leon')
+    await composer.press('Enter')
+    const headers = (await request).headers()
+    expect(headers[TURN_CLIENT_TYPE_HEADER]).toBe(type)
+    expect(headers[TURN_CLIENT_OS_HEADER]).toBe(os)
+  })
+}
+
+test('shows the Pulse reason before work begins and keeps it with the saved reply', async ({ page, ui }) => {
+  await page.goto(SESSION_URL)
+  const answers = page.getByRole('region', { name: 'Leon’s final answer', exact: true })
+  await expect(answers.last()).toBeVisible()
+  const sentAt = Date.now()
+  const messageId = 'pulse-reading-list'
+  const reason = 'I’m checking for new articles to add to your reading list.'
+  const step = { id: 'sources', label: 'Check for new reading material', status: 'in_progress' as const }
+  const event = (type: string, sequence: number, data: Record<string, unknown>): ConversationEvent => ({
+    type, sequence, session_id: SESSION_ID, turn_id: messageId, response_id: messageId,
+    created_at: sentAt + sequence, data: { ...data, origin: 'pulse' }
+  })
+  await ui.emit([event('turn_status', 1, { status: 'accepted', pulse_reason: reason })])
+  const label = page.getByText('Pulse', { exact: true })
+  await expect(label).toBeVisible()
+  await expect(label.locator('[data-icon="heart-pulse"][data-icon-variant="line"]:not([data-icon-fallback])')).toBeVisible()
+  const turn = page.locator('.leon-message').filter({ has: label })
+  const explanation = turn.getByText(reason, { exact: true })
+  const plan = turn.getByRole('region', { name: 'Leon’s execution plan' })
+  await expect(explanation).toBeVisible()
+  await expect(plan).toHaveCount(0)
+
+  await ui.emit([event('plan_step', 2, { step })])
+  await expect(plan).toBeVisible()
+  const intro = await explanation.elementHandle()
+  expect(await plan.evaluate((activity, intro) =>
+    activity.getBoundingClientRect().top >= intro.getBoundingClientRect().bottom, intro)).toBe(true)
+  const saved: ConversationRecord = {
+    origin: 'pulse', pulseReason: reason,
+    who: 'leon', messageId, message: 'I found two new articles for your reading list.',
+    sentAt: sentAt + 3, isAddedToHistory: true, llmMetrics: { durationMs: 2_000 },
+    agentResponseTrace: { id: messageId, planSteps: [{ ...step, status: 'completed' }], toolCalls: [] }
+  }
+  ui.history.get(SESSION_ID)!.push(saved)
+  await ui.emit([
+    event('session_changed', 3, { is_running: false }),
+    event('final_answer', 4, { message: saved })
+  ])
+  await expect(turn.getByText(saved.message)).toBeVisible()
+  await expect(explanation).toBeVisible()
+  await page.reload()
+  await expect(turn.getByText(saved.message)).toBeVisible()
+  await expect(explanation).toBeVisible()
+  await expect(label).toHaveCount(1)
+})
 
 test('explains completed empty tool output in both the preview and inspector', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
@@ -140,7 +218,7 @@ for (const legacy of [false, true]) {
     const tool = { id: 'rich-search', name: 'search_web.hosted.searchWeb', toolCallTitle: 'Read useful guidance',
       toolkitName: 'Search & Web', toolName: 'hosted', toolLogo: logo,
       status: 'running' as const, input: { query: 'Useful guidance' },
-      output: { output: text, format: 'markdown' }, commandOutput: text }
+      progressMessage: 'Searching the web...', output: { format: 'markdown' } }
     const saved: ConversationRecord = {
       who: 'leon', messageId: responseId, message: '', sentAt: Date.now(), isAddedToHistory: false,
       agentResponseTrace: { id: responseId, planSteps: [], toolCalls: [tool], metrics: { durationMs: 1_000 } }
@@ -153,10 +231,10 @@ for (const legacy of [false, true]) {
       turn_id: 'rich-search-turn', response_id: responseId, created_at: Date.now()
     }])
     await emit('turn_status', { status: 'accepted' })
-    const toolMetadata = { toolkit_name: tool.toolkitName, tool_name: tool.toolName,
+    const toolMetadata = { id: tool.id, name: tool.name, toolkit_name: tool.toolkitName, tool_name: tool.toolName,
       tool_logo: logo, tool_call_title: tool.toolCallTitle }
     const toolPath = 'search_web > hosted > searchWeb()'
-    await emit('tool_call', { tool_call: { ...tool, ...toolMetadata, command_output: text } })
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: tool.status, progress_message: tool.progressMessage } })
     const call = page.locator('.tool-call').filter({ hasText: 'Read useful guidance' })
     const revealTool = async (): Promise<void> => {
       const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true }).last()
@@ -171,7 +249,31 @@ for (const legacy of [false, true]) {
       await expect(call.locator('.activity-details-title')).toHaveText(toolPath)
       await expect(call.locator('.activity-wave-content .package-icon-mask')).toHaveAttribute('data-logo-mask', LogoMaskMode.Alpha)
     }
+    const previewResponse = page.waitForResponse(`**/tools/${tool.id}?complete=false`)
     await revealTool()
+    expect((await previewResponse).ok()).toBe(true)
+    await expect(call.getByRole('status')).toHaveText(tool.progressMessage)
+    await expect(call.locator('.code-view')).toHaveCount(0)
+
+    const detailsResponse = page.waitForResponse(`**/tools/${tool.id}?complete=true`)
+    await call.getByRole('button', { name: 'View details', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: tool.toolCallTitle, exact: true })
+    expect((await detailsResponse).ok()).toBe(true)
+    await expect(dialog.getByRole('status')).toHaveText(tool.progressMessage)
+    await expect(dialog.getByRole('button', { name: 'Copy output', exact: true })).toBeDisabled()
+
+    const preparing = { ...tool, progressMessage: 'Preparing search results...' }
+    saved.agentResponseTrace!.toolCalls = [preparing]
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: tool.status, progress_message: preparing.progressMessage } })
+    await expect(dialog.getByRole('status')).toHaveText(preparing.progressMessage)
+
+    const streaming = { ...tool, progressMessage: 'Receiving tool output...', output: { output: text, format: 'markdown' }, commandOutput: text }
+    saved.agentResponseTrace!.toolCalls = [streaming]
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: tool.status, progress_message: streaming.progressMessage } })
+    await expect(dialog.getByRole('region', { name: 'Output', exact: true }).getByRole('table')).toContainText('Take your time')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+
     const preview = call.getByRole('region', { name: 'Tool output', exact: true })
     await expect(preview.getByRole('heading', { name: 'A useful guide' })).toBeVisible()
     await expect(preview.getByRole('table')).toContainText('Take your time')
@@ -180,13 +282,12 @@ for (const legacy of [false, true]) {
       result: { content: text, sources, ...(legacy ? {} : { format: 'markdown' }) }
     }, commandOutput: `Searching the web...\nSource: https://example.com/guide\n${text}` }
     saved.agentResponseTrace!.toolCalls = [finished]
-    await emit('tool_call', { tool_call: { ...finished, ...toolMetadata, command_output: finished.commandOutput } })
+    await emit('tool_call', { tool_call: { ...toolMetadata, status: finished.status } })
     await revealTool()
     await expect(preview.getByRole('heading')).toHaveText('A useful guide')
     await expect(preview).not.toContainText('Source:')
     await expect(preview).not.toContainText('Searching the web...')
     await call.getByRole('button', { name: 'View details', exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: tool.toolCallTitle, exact: true })
     await expect(dialog.locator('.activity-details-path')).toHaveText(toolPath)
     await expect(dialog.getByRole('region', { name: 'Output', exact: true }).getByRole('table')).toContainText('Take your time')
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
@@ -435,6 +536,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       '> [!CAUTION]\n> This action cannot be undone.',
       '<details>\n<summary>A little more</summary>\n\nA **warm** detail.\n\n</details>',
       '| Craft | Pace |\n| --- | --- |\n| Wood | Gentle |',
+      '**The price fell to $208.65** before [the update](https://example.com/update), with a forecast of **$8.0–$8.2 billion**.',
+      'At $5 each, the total is $n \\times 5$.',
+      'The term $2 x$ already includes the coefficient.',
       'A right triangle: $a^2 + b^2 = c^2$.',
       '$$\nE = mc^2\n$$',
       '```typescript\nconst craft: string = "care";\n```',
@@ -450,8 +554,11 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     ui.history.get(SESSION_ID)!.at(-3)!.message = 'Another quiet note[^craft].\n\n[^craft]: A separate footnote.'
     await page.goto(SESSION_URL)
     const answer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
-    await expect(answer.locator('.katex')).toHaveCount(2)
-    await expect(answer.locator('math')).toHaveCount(2)
+    await expect(answer.locator('.katex')).toHaveCount(4)
+    await expect(answer.locator('math')).toHaveCount(4)
+    await expect(answer.getByText('The price fell to $208.65', { exact: true })).toBeVisible()
+    await expect(answer.getByText('$8.0–$8.2 billion', { exact: true })).toBeVisible()
+    await expect(answer.getByRole('link', { name: 'the update' })).toHaveAttribute('href', 'https://example.com/update')
     await expect(answer.locator('.markdown-task-item')).toHaveCount(2)
     await expect(answer.getByRole('checkbox').first()).toBeChecked()
     await expect(answer.getByRole('checkbox').first()).toBeDisabled()
@@ -2024,7 +2131,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   })
 }
 
-test('settles hidden and reduced-motion arrivals while preserving selected text', async ({ page, ui }) => {
+test('reveals visible arrivals without focus and settles hidden or reduced-motion text', async ({ page, ui }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto(SESSION_URL)
   await expect(page.getByRole('textbox', { name: 'Message Leon' })).toBeFocused()
@@ -2075,6 +2182,10 @@ test('settles hidden and reduced-motion arrivals while preserving selected text'
   await expect(characters).toHaveCount(0)
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await expect(characters).toHaveCount(0)
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => false })
+    window.dispatchEvent(new Event('blur'))
+  })
   // Browser media-query change events settle at the next rendering opportunity.
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
   const visibleToken = ' New visible text.'

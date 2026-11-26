@@ -7,6 +7,8 @@ import { getProcessingCategory } from './processing-categories'
 import { getActivityLabel, getProcessingLabel } from './activity-labels'
 import { getConnectionSetupDescriptor } from './connection-setup-contract'
 import { readMaskedPackageLogo } from '../../../../aurora/src/contracts/package-logo'
+import { PreparationStatus } from '../../../../aurora/src/v2/contracts/preparation'
+import { COMPUTER_USE_PERMISSION_WIDGET } from '../../../../bridges/runtime/contracts/desktop-client'
 
 const entryCache = new WeakMap<ConversationRecord, { active: boolean, entry: FeedEntry }>()
 const MINIMUM_PROCESSING_DURATION_MS = 1_000
@@ -160,10 +162,10 @@ export function toFeedTool(call: ConversationTool, active = true): FeedToolCall 
     status: !active && !call.preparation?.executionId && (call.status === 'running' || call.status === 'preparing') ? 'error' : call.status,
     startedAt: call.startedAt,
     preparationStartedAt: call.preparationStartedAt,
-    ...(call.preparation ? { preparation: call.preparation } : {}),
     ...(call.durationMs === undefined ? {} : { durationMs: call.durationMs }),
     input: call.input ?? null,
     ...(call.commandOutput === undefined ? {} : { commandOutput: call.commandOutput }),
+    ...(call.progressMessage === undefined ? {} : { progressMessage: call.progressMessage }),
     ...(call.output === undefined && call.commandOutput === undefined && call.errorMessage === undefined
       ? {} : { output: call.output ?? call.commandOutput ?? call.errorMessage ?? null })
   }
@@ -220,10 +222,24 @@ function toActivities(
     } })
   }
   for (const call of trace.toolCalls) {
-    items.push({ timestamp: call.preparationStartedAt ?? call.startedAt ?? sentAt, activity: {
-      id: call.id, type: 'tools', toolCalls: [toFeedTool(call, active)],
-      startedAt: call.preparationStartedAt ?? call.startedAt
+    const tool = toFeedTool(call, active)
+    const startedAt = tool.preparationStartedAt ?? tool.startedAt
+    const timestamp = startedAt ?? sentAt
+    const preparation = call.preparation
+
+    items.push({ timestamp, activity: {
+      id: call.id, type: 'tools', toolCalls: [tool], startedAt
     } })
+    if (preparation) {
+      // The snapshot updates in place under the tool's original start time,
+      // including retained work that outlives the call or the answer.
+      const isActive = (preparation.status === PreparationStatus.Preparing || preparation.status === PreparationStatus.Downloading) &&
+        (Boolean(preparation.executionId) || tool.status === 'preparing' || tool.status === 'running')
+
+      items.push({ timestamp, activity: {
+        id: `${call.id}:preparation`, type: 'preparation', toolCallId: call.id, startedAt, preparation, isActive
+      } })
+    }
   }
   items.sort((left, right) => left.timestamp - right.timestamp)
   const activities: LeonFeedActivity[] = []
@@ -381,7 +397,8 @@ function attachPlanActivities(
       summaries.push(activity)
       continue
     }
-    const tool = activity.type === 'tools' ? tools.get(activity.toolCalls[0]!.id) : undefined
+    const tool = activity.type === 'tools' ? tools.get(activity.toolCalls[0]!.id)
+      : activity.type === 'preparation' ? tools.get(activity.toolCallId) : undefined
     const explicitStep = tool?.stepLabel
       ? trace.planSteps.find((step) => step.label === tool.stepLabel)?.id : undefined
     timeline.push({ activity, timestamp: activity.startedAt ?? sentAt,
@@ -483,9 +500,10 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
     return cached.entry
   }
   const connection = getConnectionSetupDescriptor(record.widget)
-  if (connection) {
+  const computerUsePermission = record.widget?.widget === COMPUTER_USE_PERMISSION_WIDGET
+  if (connection || computerUsePermission) {
     const entry: LeonFeedEntry = {
-      id: record.messageId, role: 'leon', connection, isMaintenance: true,
+      id: record.messageId, role: 'leon', ...(connection ? { connection } : { computerUsePermission: true }), isMaintenance: true,
       status: FeedTurnStatus.Completed, durationMs: 0, activities: [], finalAnswer: ''
     }
     entryCache.set(record, { active, entry })
@@ -510,6 +528,8 @@ export function toFeedEntry(record: ConversationRecord, running: boolean): FeedE
   } : {
     id: record.messageId,
     role: 'leon',
+    ...(record.origin ? { origin: record.origin } : {}),
+    ...(record.pulseReason ? { pulseReason: record.pulseReason } : {}),
     sentAt: record.sentAt,
     metrics,
     status: active ? FeedTurnStatus.InProgress : FeedTurnStatus.Completed,
@@ -646,7 +666,7 @@ export function toFeedEntries(records: readonly ConversationRecord[], running: b
   for (const record of records) {
     if (record.who === 'owner') {
       turnId = record.messageId
-    } else {
+    } else if (record.origin !== 'pulse') {
       if (record.agentResponseTrace?.planSteps.length) {
         structuredPlanTurns.add(turnId)
       }

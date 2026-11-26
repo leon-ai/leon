@@ -4,6 +4,16 @@ import path from 'node:path'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { FileHelper } from '@/helpers/file-helper'
 
+/**
+ * Context sampling starts with the first known sample. An epoch placeholder
+ * gives no evidence of an earlier observation or elapsed sample time.
+ */
+export function normalizeSampleTime(value: string, fallback: string): string {
+  const timestamp = Date.parse(value)
+
+  return Number.isFinite(timestamp) && timestamp > 0 ? value : fallback
+}
+
 export class ContextStateStore<T> {
   private readonly stateFilePath: string
 

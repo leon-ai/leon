@@ -15,6 +15,10 @@ on:
     secrets:
       LEON_DEEPSEEK_API_KEY:
         required: true
+    outputs:
+      report:
+        description: Artifact ID for the metrics-only report
+        value: ${{ jobs.quick-evals.outputs.report }}
 
 permissions:
   contents: read
@@ -23,6 +27,8 @@ jobs:
   quick-evals:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    outputs:
+      report: ${{ steps.metrics.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -42,10 +48,24 @@ jobs:
           LEON_EVAL_MAX_GROWTH_PERCENT: ${{ inputs.max-input-growth }}
           LEON_EVAL_REPORT: ${{ runner.temp }}/quick-evals.json
         run: pnpm exec tsx scripts/ci/quick-evals.ts
-      - name: Retain metrics
+      - name: Retain detailed measurements and diagnostics
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
           name: quick-evals
           path: ${{ runner.temp }}/quick-evals.json
           if-no-files-found: ignore
+          overwrite: true
+      - name: Prepare the metrics-only report
+        id: prepare
+        if: ${{ !cancelled() }}
+        run: node scripts/ci/prepare-quick-eval-report.js "$RUNNER_TEMP/quick-evals.json"
+      - name: Retain the metrics-only report
+        id: metrics
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: leon-quick-evals
+          path: ${{ runner.temp }}/leon-quick-evals.json
+          if-no-files-found: error
+          overwrite: true

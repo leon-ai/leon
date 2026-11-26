@@ -12,6 +12,38 @@ const CONNECTIONS = [...fs.globSync('tools/*/*/tool.json')].flatMap((file) => {
 })
 
 for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preference']] as const) {
+  test(`matches primary button and owner message borders when the accent changes (${theme})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/aurora.html')
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    const primary = page.getByRole('region', { name: 'Buttons', exact: true })
+      .getByRole('button', { name: 'Continue', exact: true })
+    const feed = page.getByRole('region', { name: 'Feed preview', exact: true })
+    const ownerMessage = feed.locator('.owner-message')
+    let blueBorder = ''
+
+    for (const accent of ['blue', 'pink']) {
+      await page.locator('html').evaluate((root, value) => root.setAttribute('data-accent', value), accent)
+      const border = await primary.evaluate((button) => getComputedStyle(button, '::before').backgroundImage)
+      expect(border).toContain('linear-gradient')
+      if (accent === 'blue') {
+        blueBorder = border
+      } else {
+        expect(border).not.toBe(blueBorder)
+      }
+
+      await page.getByRole('button', { name: 'Feed', exact: true }).click()
+      await feed.getByRole('combobox', { name: 'Feed example', exact: true }).selectOption('completed-no-plan')
+      await expect(ownerMessage).toBeVisible()
+      await expect.poll(() => ownerMessage.evaluate((message) => getComputedStyle(message).backgroundImage))
+        .toContain(border)
+      await page.getByRole('button', { name: 'Components', exact: true }).click()
+    }
+  })
+
   test(`explores real feed activity states and complete turns without API requests (${theme}, ${reducedMotion})`, async ({ page }, testInfo) => {
     const unexpectedRequests: string[] = []
     const errors: string[] = []
@@ -1043,7 +1075,7 @@ for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preferen
 }
 
 for (const theme of ['light', 'dark'] as const) {
-  test(`previews Core stages, desktop restart and setup states with production views (${theme})`, async ({ page }, testInfo) => {
+  test(`previews server update stages, desktop restart and setup states with production views (${theme})`, async ({ page }, testInfo) => {
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -1052,24 +1084,24 @@ for (const theme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
     }
     await page.getByRole('button', { name: 'Updates', exact: true }).click()
-    await page.getByLabel('Core update state', { exact: true }).selectOption('preparing')
+    await page.getByLabel('Server update state', { exact: true }).selectOption('preparing')
     await page.getByRole('button', { name: 'Preview Leon update', exact: true }).click()
     const dialog = page.getByRole('dialog')
-    await expect(dialog.getByRole('list', { name: 'Core update progress' })).toBeVisible()
+    await expect(dialog.getByRole('list', { name: 'Server update progress' })).toBeVisible()
     await dialog.getByText('Details', { exact: true }).click()
     await expect(dialog.getByText('Applying pending profile migrations.', { exact: true })).toBeVisible()
     await dialog.getByText('Release notes', { exact: true }).click()
     await expect(dialog.getByText('Full changelog', { exact: true })).toBeVisible()
     await expect(dialog).toHaveCSS('opacity', '1')
     await dialog.screenshot({ path: testInfo.outputPath(`core-update-${theme}.png`) })
-    await dialog.getByLabel('Core update state', { exact: true }).selectOption('completed')
+    await dialog.getByLabel('Server update state', { exact: true }).selectOption('completed')
     await expect(dialog.getByRole('progressbar')).toHaveCount(0)
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
     await page.getByLabel('Update preview', { exact: true }).selectOption('desktop')
     await page.getByLabel('Desktop update state', { exact: true }).selectOption('ready')
     await page.getByRole('button', { name: 'Preview Leon update', exact: true }).click()
     await expect(dialog.getByRole('tab')).toHaveCount(0)
-    await expect(dialog.getByRole('list', { name: 'Core update progress' })).toHaveCount(0)
+    await expect(dialog.getByRole('list', { name: 'Server update progress' })).toHaveCount(0)
     await expect(dialog).toHaveCSS('opacity', '1')
     await dialog.screenshot({ path: testInfo.outputPath(`desktop-update-${theme}.png`) })
     await page.getByRole('button', { name: 'Update Leon', exact: true }).click()

@@ -9,11 +9,12 @@ import { RELEASE_ASSET_NAME, formatReleaseNotes, selectPreviousDistribution,
 import { parseReleaseNotes } from '@/core/ota/release-notes'
 
 import { collectRuntimeAssets } from '../../../scripts/distribution/collect-assets.js'
-import { REQUIRED_RUNTIME_PLATFORMS, RUNTIME_RELEASE_ASSET } from '../../../bridges/runtime/contracts/distribution.js'
+import { REQUIRED_RUNTIME_PLATFORMS, RUNTIME_RELEASE_ASSET, DESKTOP_CORE_PROTOCOL_VERSION } from '../../../bridges/runtime/contracts/distribution.js'
 
 const VERSION = '2.0.0-alpha.0.2'
 const content: ReleaseContent = {
-  schemaVersion: 1, version: VERSION, title: 'A place for each project', summary: 'Keep **shared context** close.',
+  schemaVersion: 1, version: VERSION, desktop: { minimumServerVersion: '2.0.0-alpha.0.1' },
+  title: 'A place for each project', summary: 'Keep **shared context** close.',
   highlights: [{ title: 'Workspaces', body: 'Group related conversations and folders.' }],
   changes: { new: ['Create workspaces.'], improvements: ['Find folders faster.'], fixes: ['Keep dialogs scrollable.'], removed: [] }
 }
@@ -41,6 +42,13 @@ describe('release distribution content', () => {
     expect(() => validateReleaseContent(content, `${VERSION}+dev`, `v${VERSION}+dev`)).toThrow('without build metadata')
   })
 
+  it('requires a server compatibility floor covered by the Desktop release', () => {
+    for (const desktop of [undefined, {}, { minimumServerVersion: '1.9.0' },
+      { minimumServerVersion: '2.0.0-alpha.0.3' }, { minimumServerVersion: `${VERSION}+dev` }]) {
+      expect(() => validateReleaseContent({ ...content, desktop }, VERSION, `v${VERSION}`)).toThrow()
+    }
+  })
+
   it('selects the newest published OTA-capable baseline in the requested channel', () => {
     const releases = [published('2.0.0-alpha.0.1'), published('2.0.0-alpha.0'),
       published('2.0.0-alpha.0.9', { draft: true }), published('1.0.0', { prerelease: false }),
@@ -57,7 +65,7 @@ describe('release distribution content', () => {
 })
 
 
-describe('verified Core runtime publication', () => {
+describe('verified server runtime publication', () => {
   let directory: string
   const verified = { version: VERSION, commit: 'candidate-commit', runId: 'release-run' }
   const prepare = async (): Promise<void> => {
@@ -71,7 +79,7 @@ describe('verified Core runtime publication', () => {
       const asset = { name, platform, sha256, bytes: content.length }
       const receipt = { ...verified, platform, sha256 }
       await fs.writeFile(path.join(folder, name), content)
-      await fs.writeFile(path.join(folder, RUNTIME_RELEASE_ASSET), JSON.stringify({ schemaVersion: 1, version: VERSION, assets: [asset] }))
+      await fs.writeFile(path.join(folder, RUNTIME_RELEASE_ASSET), JSON.stringify({ schemaVersion: 1, version: VERSION, desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION, assets: [asset] }))
       await fs.writeFile(path.join(folder, 'runtime-verification.json'), JSON.stringify({ ...receipt, isolatedStartup: true }))
       await fs.writeFile(path.join(folder, 'runtime-ota-verification.json'), JSON.stringify({ ...receipt,
         artifactOTA: true, profilePreserved: true, profilesVerified: 2, sessionsVerified: 2,

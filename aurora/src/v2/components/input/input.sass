@@ -6,7 +6,7 @@
 .input-icon
   position: absolute
   top: 50%
-  left: var(--space-lg)
+  inset-inline-start: var(--space-lg)
   z-index: 1
   color: var(--color-text-secondary)
   font-size: var(--font-size-lg)
@@ -24,7 +24,7 @@
   border: 1px solid var(--color-input-border)
   border-radius: var(--border-radius-md)
   outline: 0
-  background-color: var(--color-background)
+  background-color: var(--color-surface-elevated)
   color: var(--input-native-text-color, var(--color-text))
   caret-color: var(--color-accent)
   font-family: var(--font-family)
@@ -58,17 +58,19 @@
     min-height: 56px
 
 .input-with-icon
-  &.input-medium .input-field
-    // 16px left; 16px right; + icon font-size
-    padding-left: calc((var(--space-lg) * 2) + var(--font-size-lg))
-
+  &.input-medium .input-field,
   &.input-large .input-field
-    // 16px left; 16px right; + icon font-size
-    padding-left: calc((var(--space-lg) * 2) + var(--font-size-lg))
+    padding-inline-start: calc((var(--space-lg) * 2) + var(--font-size-lg))
 
   &:focus-within
     .input-icon
       color: var(--color-accent)
+
+.input-header
+  .input-field
+    padding-inline: var(--space-sm)
+    border-width: 0 0 1px
+    border-radius: 0
 
 .input-embedded
   .input-field

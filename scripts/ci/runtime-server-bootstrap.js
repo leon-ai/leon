@@ -6,7 +6,7 @@ import { ensureModuleMocks } from './module-mocks.js'
 
 const root = process.env.LEON_CODEBASE_PATH
 const fixturePath = process.env.LEON_RUNTIME_FIXTURE
-// Only release discovery is substituted. Core, HTTP authorization, staging,
+// Only release discovery is substituted. The server, HTTP authorization, staging,
 // migrations, executable selection and process restart retain their real paths.
 if (root && fixturePath && process.argv[1] &&
   fs.realpathSync(process.argv[1]) === path.join(fs.realpathSync(root), 'server/dist/index.js')) {

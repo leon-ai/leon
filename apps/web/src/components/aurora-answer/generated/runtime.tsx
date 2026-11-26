@@ -331,6 +331,9 @@ function initialize(event: MessageEvent): void {
     measure()
   }, { once: true })
   const script = document.createElement('script')
+  // Source is executable only in this opaque sandbox. It needs the same nonce
+  // as its trusted bootstrap when an ancestor enforces a strict script policy.
+  script.nonce = document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce ?? ''
   script.textContent = `(async () => {\n${initial.source.javascript ?? ''}\n})().then(() => window.dispatchEvent(new Event('${SOURCE_FINISHED_EVENT}'))).catch(error => window.dispatchEvent(new ErrorEvent('error', { message: String(error) })))`
   document.body.append(script)
   measure()

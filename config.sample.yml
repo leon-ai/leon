@@ -159,6 +159,8 @@ voice:
 
 time_zone: null
 after_speech_enabled: false
+# Share metrics to improve Leon. Reports use pseudonyms and contain no identifying personal details or sensitive information.
+# See https://github.com/leon-ai/leon/blob/develop/docs/reference/TELEMETRY.md for the data collected.
 telemetry_enabled: true
 
 client_interface:

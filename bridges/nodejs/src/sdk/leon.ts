@@ -130,7 +130,7 @@ class Leon {
   }
 
   /**
-   * Send an answer to the core
+   * Send an answer to the server
    * @param answerInput The answer input
    * @example answer({ key: 'greet' }) // 'Hello world'
    * @example answer({ key: 'welcome', data: { name: 'Louis' } }) // 'Welcome Louis'
@@ -182,7 +182,7 @@ class Leon {
         }
       }
 
-      // "Temporize" for the data buffer output on the core
+      // "Temporize" for the data buffer output on the server
       await new Promise((r) => setTimeout(r, 100))
 
       // Write the answer object to stdout as a JSON string with a newline for brain chunk-by-chunk parsing

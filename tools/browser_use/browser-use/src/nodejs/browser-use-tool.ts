@@ -32,6 +32,7 @@ const SCREENSHOT_MAX_DIMENSION = 1_800
 const CLI_ENVIRONMENT = {
   BU_NAME: BROWSER_USE_DAEMON_NAME, BU_BROWSER_ID: '', BU_AUTOSPAWN: '',
   BH_RECORD: '0', BH_TAB_MARKER: '0', BH_DOMAIN_SKILLS: '0',
+  BROWSER_USE_NO_UPDATE_CHECK: '1',
   ANONYMIZED_TELEMETRY: 'false', PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1'
 }
 
@@ -52,6 +53,11 @@ type BrowserCommandOptions = Pick<Options, 'input' | 'cwd' | 'timeout' | 'maxBuf
   env: NodeJS.ProcessEnv
   reject: false
 }
+
+/**
+ * Identifies a browser connection failure before any task input ran.
+ */
+class BrowserReadinessError extends Error {}
 
 /**
  * Setup facts are returned to the agent so it can explain the next step naturally.
@@ -171,6 +177,29 @@ export class BrowserUseTool extends Tool {
   }
 
   /**
+   * Preserve the distinction between owner browser access and a local CLI failure.
+   */
+  private assertBrowserReady(
+    result: Awaited<Subprocess<BrowserCommandOptions>>,
+    env: NodeJS.ProcessEnv
+  ): void {
+    if (result.exitCode === 0 && !result.timedOut) {
+      return
+    }
+
+    const failure = describeBrowserUseReadinessFailure(
+      result,
+      path.join(env['BH_TMP_DIR']!, `${BROWSER_USE_DAEMON_FILE_STEM}.log`)
+    )
+
+    if (failure.requiresOwnerAction) {
+      throw this.createBrowserConnectionError(failure.message)
+    }
+
+    throw new BrowserReadinessError(failure.message)
+  }
+
+  /**
    * Resolve only the configured browser; never launch or copy an owner's profile.
    */
   private async resolveBrowserEndpoint(): Promise<string> {
@@ -239,37 +268,14 @@ export class BrowserUseTool extends Tool {
     if (previousEndpoint !== endpoint) {
       // The CLI daemon retains its original environment across worker processes.
       // Reconnect when the owner changes browsers, before sending any task input.
-      const stopped = await this.command(['--reload'], {
+      const reload = await this.command(['--reload'], {
         env: environment, timeout: COMMAND_TIMEOUT_MS, reject: false
       })
-      if (stopped.exitCode !== 0 || stopped.timedOut) {
-        // Reload also connects to the browser. Preserve its permission failure
-        // so the existing owner-action handoff pauses instead of retrying tools.
-        const failure = describeBrowserUseReadinessFailure(
-          stopped,
-          path.join(environment['BH_TMP_DIR']!, `${BROWSER_USE_DAEMON_FILE_STEM}.log`)
-        )
-        if (failure.requiresOwnerAction) {
-          throw this.createBrowserConnectionError(failure.message)
-        }
-        throw new Error(failure.message)
-      }
+      this.assertBrowserReady(reload, environment)
       await fs.mkdir(path.dirname(endpointPath), { recursive: true })
       await fs.writeFile(endpointPath, endpoint)
     }
-    // Recheck even cached connections: disabling debugging can leave both the
-    // endpoint file and our environment cache intact. This read never replays task input.
-    const readiness = await this.command([], {
-      input: 'list_tabs()', env: environment, timeout: COMMAND_TIMEOUT_MS, reject: false
-    })
-    if (readiness.exitCode !== 0 || readiness.timedOut) {
-      const failure = describeBrowserUseReadinessFailure(
-        readiness,
-        path.join(environment['BH_TMP_DIR']!, `${BROWSER_USE_DAEMON_FILE_STEM}.log`)
-      )
-      if (failure.requiresOwnerAction) throw this.createBrowserConnectionError(failure.message)
-      throw new Error(failure.message)
-    }
+
     return environment
   }
 
@@ -280,6 +286,7 @@ export class BrowserUseTool extends Tool {
       (typeof parameters['code'] !== 'string' || !parameters['code'].trim())) {
       throw new Error('code must contain a Python script.')
     }
+    const startedAt = performance.now()
     const env = await this.environment()
     const directory = path.join(PROFILE_SESSIONS_PATH,
       encodeURIComponent(process.env['LEON_SESSION_ID'] || 'unscoped'), 'artifacts', 'browser_use')
@@ -311,7 +318,6 @@ export class BrowserUseTool extends Tool {
       const args = [parameters['tab_id'], code, videoPath].map((value) => JSON.stringify(value))
       code = `_leon_record_tab(${args.join(', ')})`
     }
-    const startedAt = performance.now()
     const execution = this.command([], {
       input: `${workflow}\n_leon_execute(${JSON.stringify(code)})`, cwd: directory,
       env: {
@@ -332,6 +338,12 @@ export class BrowserUseTool extends Tool {
     })
 
     const result = await execution
+    // The runtime creates the action journal after its read-only probe and
+    // before dispatching task code, including scripts that do not log actions.
+    if ((result.exitCode !== 0 || result.timedOut) && !existsSync(actionsPath)) {
+      this.assertBrowserReady(result, env)
+    }
+
     let actions: Array<Record<string, unknown>> = []
     let pointerEvents: Array<Record<string, unknown>> = []
     try {
@@ -414,7 +426,7 @@ export class BrowserUseTool extends Tool {
           error.setupState !== BrowserSetupState.ConfigurationRequired
         return {
           success: false, error: error.message, status: 'owner_action_required',
-          error_code: 'browser_use_setup_pending', setup_state: error.setupState,
+          error_code: 'browser_use_setup_pending', setup_state: error.setupState, effect: 'not_sent',
           setup: {
             component: 'Chromium remote debugging',
             purpose: 'browser use in the owner’s existing signed-in browser',
@@ -434,8 +446,12 @@ export class BrowserUseTool extends Tool {
             : 'Explain why browser access is needed and the reported owner steps in a friendly message in your own words. Include the exact settings_url, the checkbox label, and the later Allow approval step; do not assume the owner already knows how to enable remote debugging. A discovered endpoint does not prove the checkbox is still enabled. Pause browser use until the owner completes the steps; do not repeat setup while waiting. Preserve the current browser session. Recheck readiness when the owner retries.'
         }
       }
-      return { success: false, error: error instanceof Error ? error.message : String(error),
-        code: 'browser_operation_failed', effect: 'unverifiable' }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        code: 'browser_operation_failed',
+        effect: error instanceof BrowserReadinessError ? 'not_sent' : 'unverifiable'
+      }
     } finally {
       process.off('SIGTERM', cancel)
       process.off('SIGINT', cancel)

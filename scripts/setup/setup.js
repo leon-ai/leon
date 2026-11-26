@@ -14,7 +14,7 @@ import generateJSONSchemas from '../generate/generate-json-schemas'
 
 import { updateDotEnvVariable } from './setup-dotenv'
 import { CONFIG_MANAGER } from '@/config'
-import setupCore from './setup-core'
+import setupServerConfig from './setup-server-config'
 import { setupProfile } from './setup-profile'
 import { shouldUseCIRuntimes } from './setup-ci.js'
 import setupNode from './setup-node'
@@ -253,8 +253,8 @@ async function syncLLMSetupChoice(preferences) {
       async prepareRuntime() {
         currentStep = 'syncLLMSetupChoice'
         await syncLLMSetupChoice(preferences)
-        currentStep = 'setupCore'
-        await setupCore()
+        currentStep = 'setupServerConfig'
+        await setupServerConfig()
         if (!USE_CI_RUNTIMES) {
           currentStep = 'setupNode'
           await setupNode()
@@ -270,7 +270,7 @@ async function syncLLMSetupChoice(preferences) {
           )
         }
 
-        // Core queries retained results even in CI, where portable runtimes are skipped.
+        // The server queries retained results even in CI, where portable runtimes are skipped.
         currentStep = 'setupJQ'
         await setupJQ()
         currentStep = 'setupNodejsBridgeEnv'
@@ -358,13 +358,13 @@ async function syncLLMSetupChoice(preferences) {
     }
     currentStep = 'buildServer'
     {
-      const status = createSetupStatus('Building server...').start()
+      const status = createSetupStatus('Building the server...').start()
 
       try {
         await buildServer({ quiet: true })
         status.succeed('Server: ready')
       } catch (error) {
-        status.fail('Failed to build server')
+        status.fail('Failed to build the server')
         throw error
       }
     }

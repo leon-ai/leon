@@ -22,7 +22,7 @@
 .feed-scrim
   // A fixed decoration cannot widen the feed's scrollable content on small screens.
   position: fixed
-  top: 0
+  top: var(--desktop-titlebar-height)
   bottom: 0
   left: 0
   z-index: -1
@@ -64,7 +64,7 @@
   padding-bottom: calc(var(--feed-entry-gap) + var(--space-xl))
 
 .feed-turn-latest
-  min-height: calc(100vh - var(--feed-top-clearance) - var(--feed-bottom-clearance) - var(--feed-history-clearance))
+  min-height: calc(var(--app-viewport-height) - var(--feed-top-clearance) - var(--feed-bottom-clearance) - var(--feed-history-clearance))
 
 .feed-turn-awaiting-owner .owner-message-animate
   animation-play-state: paused
@@ -95,7 +95,7 @@
 
 .feed-mask-top
   --feed-mask-gradient: linear-gradient(to bottom, #000, transparent)
-  top: 0
+  top: var(--desktop-titlebar-height)
   height: var(--feed-top-clearance)
 
 .feed-mask-bottom

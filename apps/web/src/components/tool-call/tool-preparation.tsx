@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useMutationState } from '@tanstack/react-query'
 import { PreparationWidget } from '../../../../../aurora/src/v2/widgets/preparation'
 import type { ToolPreparationSnapshot } from '../../../../../aurora/src/v2/contracts/preparation'
 import { ConversationDetailsContext } from '@/data/conversation-details'
@@ -17,7 +17,12 @@ export function ToolPreparation({ preparation }: { preparation: ToolPreparationS
   const profile = useProfile()
   const subject = preparation.purpose === 'download' ? 'download' : 'preparation'
   const { showToast } = useToast()
+  const mutationKey = ['tool-executions/cancel', profile, owner?.sessionId, preparation.executionId]
+
+  // Disclosures can unmount the card while the cancellation request is in flight.
+  const cancellations = useMutationState({ filters: { mutationKey, exact: true }, select: (mutation) => mutation.state.status })
   const request = useMutation({
+    mutationKey,
     meta: { errorTitle: `I could not cancel the ${subject}`, profile },
     retry: false,
     mutationFn: () => requestAPI<{ execution: { state: string } }>('tool-executions/cancel', {
@@ -33,6 +38,6 @@ export function ToolPreparation({ preparation }: { preparation: ToolPreparationS
   })
 
   return <PreparationWidget title={preparation.purpose === 'download' ? 'Downloads' : 'Getting files ready'} {...preparation}
-    cancelling={request.isPending || request.isSuccess}
+    cancelling={cancellations.some((status) => status === 'pending' || status === 'success')}
     {...(owner && preparation.executionId ? { onCancel: () => request.mutate() } : {})} />
 }

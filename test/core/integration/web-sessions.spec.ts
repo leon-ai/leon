@@ -32,10 +32,12 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import { artifactsPlugin } from '@/core/http-server/api/artifacts'
 import type { Artifact } from '@/core/artifacts/artifact-types'
 import { readArtifact } from '@/core/artifacts/artifact-store'
-import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachment-contract'
-import { prepareStoredOwnerAttachments } from '@/core/stored-owner-attachments'
-import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTES, OWNER_ATTACHMENT_MAX_FILE_BYTES } from '@/core/owner-attachments/owner-attachment-contract'
+import { prepareStoredOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
+import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 import { presentAurora } from '@/core/aurora/answer-presentation'
+import { onCompletedOwnerTurn, type CompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
+import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER } from '../../../bridges/runtime/contracts/turn-client'
 
 interface FixtureAnswer {
   output: string
@@ -49,12 +51,17 @@ const fixture = vi.hoisted(() => ({
 }))
 
 vi.mock('@/core', () => ({
-  TOOLKIT_REGISTRY: { getToolIconLogo: (): undefined => undefined },
+  TOOLKIT_REGISTRY: {
+    getToolIconLogo: (): undefined => undefined,
+    resolveToolById: (): null => null
+  },
   LLM_PROVIDER: { runForegroundTurn: <T>(execute: () => Promise<T>): Promise<T> => execute() },
   CONVERSATION_LOGGER: {
     upsert: (...args: Parameters<ConversationLogger['upsert']>): Promise<void> => fixture.logger!.upsert(...args)
   },
-  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn(), enqueueBatch: vi.fn(), startConcurrent: vi.fn() }
+  POST_TURN_MAINTENANCE_QUEUE: {
+    enqueue: vi.fn(), enqueueBatch: vi.fn(), enqueueIfNeeded: vi.fn(), startConcurrent: vi.fn()
+  }
 }))
 vi.mock('@/core/fyi', () => ({
   generateFyi: vi.fn(async () => ({ kind: FyiKind.Fact, text: 'FYI, a related fact can add a little context.' }))
@@ -734,6 +741,43 @@ describe('web conversation runtime', () => {
     }
     expect((await request('GET', '/api/v1/sessions/missing/queries')).statusCode).toBe(404)
     expect(fixture.executions).toHaveLength(0)
+  })
+
+  it('keeps client labels with the originating turn across concurrent sessions in one profile', async () => {
+    const sessions = [await create(), await create(), await create()]
+    const sources = [
+      { type: 'web', os: 'android' },
+      { type: 'desktop', os: 'macos' },
+      { type: 'custom device name', os: 'macOS 26.0' }
+    ]
+    const completed: CompletedOwnerTurn[] = []
+    const stop = onCompletedOwnerTurn((turn) => {
+      completed.push(turn)
+    })
+
+    try {
+      const ids = sessions.map(() => randomUUID())
+      const responses = await Promise.all(sessions.map((session, index) => app.inject({
+        method: 'POST', url: `/api/v1/sessions/${session}/messages`,
+        headers: {
+          'x-test-profile': profile,
+          [TURN_CLIENT_TYPE_HEADER]: sources[index]!.type,
+          [TURN_CLIENT_OS_HEADER]: sources[index]!.os
+        },
+        payload: { id: ids[index], query: `Message from client ${index}` }
+      })))
+      expect(responses.map(({ statusCode }) => statusCode)).toEqual([202, 202, 202])
+      await vi.waitFor(() => expect(fixture.executions).toHaveLength(3))
+      for (const execution of fixture.executions) {
+        execution.release()
+      }
+      await vi.waitFor(() => expect(completed).toHaveLength(3))
+      expect(ids.map((id) => completed.find((turn) => turn.id === id)?.measurement.client)).toEqual([
+        sources[0], sources[1], { type: 'unknown', os: 'unknown' }
+      ])
+    } finally {
+      stop()
+    }
   })
 
   it('runs different sessions concurrently, deduplicates delivery, and stops only the addressed session', async () => {

@@ -9,6 +9,25 @@
   font-size: var(--font-size-lg)
   line-height: var(--line-height-lg)
 
+.leon-message-origin
+  display: flex
+  align-items: baseline
+  gap: var(--space-sm)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+
+  > .app-icon
+    // Use the label's cap height to align the visible heart outline.
+    position: relative
+    top: calc(.475em - .5cap)
+
+.leon-message-pulse-reason
+  margin: var(--space-xs) 0 0
+  font-size: var(--font-size-lg)
+  line-height: var(--line-height-lg)
+  overflow-wrap: anywhere
+
 .leon-message-summary
   margin: 0
   color: var(--color-text)

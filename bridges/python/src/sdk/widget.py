@@ -67,7 +67,7 @@ class Widget(ABC, Generic[T]):
 
     def send_utterance(self, key: str, options: Optional[Dict[str, Any]] = None) -> WidgetEventMethod:
         """
-        Indicate the core to send a given utterance
+        Ask the server to send a given utterance
         :param key: The key of the content
         :param options: The options of the utterance
         """
@@ -84,7 +84,7 @@ class Widget(ABC, Generic[T]):
 
     def run_skill_action(self, action_name: str, params: Dict[str, Any]) -> WidgetEventMethod:
         """
-        Indicate the core to run a given skill action
+        Ask the server to run a given skill action
         :param action_name: The name of the action
         :param params: The parameters of the action
         """

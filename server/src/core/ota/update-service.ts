@@ -206,7 +206,7 @@ export class UpdateService {
   }
 
   /**
-   * Waits for staging before the host stops Core. Git jobs need no preparation
+   * Waits for staging before the host stops the server. Git jobs need no preparation
    * while running because their installer is owned by the managed launcher.
    */
   public async waitUntilPrepared(): Promise<void> {
@@ -215,7 +215,7 @@ export class UpdateService {
 
   /**
    * Pins an owner-reviewed release and acknowledges its host-owned job. Prebuilt
-   * payloads stage asynchronously while the current Core keeps serving clients.
+   * payloads stage asynchronously while the current server keeps serving clients.
    */
   public async prepare(tag: string): Promise<UpdateSnapshot> {
     if (this.applying) {
@@ -250,7 +250,7 @@ export class UpdateService {
         }
         recordUpdateProgress(job, 'downloading')
         await FileHelper.writeAtomicJSON(this.statePath, job)
-        // Acknowledgement is independent of download duration. Core stays
+        // Acknowledgement is independent of download duration. The server stays
         // available until the accepted job finishes staging and clients can
         // observe failures through the ordinary status endpoint.
         const accepted = await this.snapshot()

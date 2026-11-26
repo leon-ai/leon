@@ -10,7 +10,7 @@ import { Collapse } from '@/components/collapse'
 import { useToolCallContents } from '@/data/conversation-details'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
 import { ActivityDetails } from '@/components/activity-details/activity-details'
-import { getToolOutputFormat, toToolContent, toToolDisplayContent, toToolInput } from '@/utils/tool-content'
+import { getToolOutputFormat, getToolOutputProgress, toToolContent, toToolDisplayContent, toToolInput } from '@/utils/tool-content'
 import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
 import { prefetchToolDiff, ToolChanges, ToolOutput } from './tool-output'
 import { useOpenToolDetails } from '@/components/activity-details/activity-details-provider'
@@ -71,6 +71,7 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
   const changes = useMemo(() => getToolChanges(input, changesAvailable), [input, changesAvailable])
   const detailsId = useId()
   const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
+  const outputProgress = isActive ? getToolOutputProgress(output, toolCall.progressMessage) : undefined
   const duration = isActive
     ? ''
     : formatToolDuration(toolCall.durationMs)
@@ -138,7 +139,7 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
             <ToolChanges changes={changes} truncated={disclosure.data?.diffTruncated ?? false} preview
               fallback={<ToolOutput content={output} label="Tool output" preview />} />
           ) : (
-            <ToolOutput content={output} label="Tool output" active={isActive}
+            <ToolOutput content={output} label="Tool output" active={isActive} progressMessage={outputProgress}
               {...(disclosure.isError || disclosure.fetchStatus === 'paused' ? { emptyMessage: null } : {})}
               animationId={`${toolCall.id}:output`}
               loading={disclosure.isFetching} preview

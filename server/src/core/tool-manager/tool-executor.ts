@@ -1,6 +1,6 @@
 import { readArtifact, registerArtifact } from '@/core/artifacts/artifact-store'
 import { recordArtifacts } from '@/core/artifacts/artifact-context'
-import { readStoredProfileToken } from '@/core/profile-auth'
+import { readStoredProfileToken } from '@/core/profile-runtime/profile-auth'
 import { attachArtifacts } from '@/core/artifacts/artifact-service'
 import type { ArtifactFile } from '@/core/artifacts/artifact-types'
 import fs from 'node:fs'
@@ -28,6 +28,8 @@ import { CONNECTION_STORE } from '@/core/connections/connection-store'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
+import { bindConversationDevice, isSatelliteWorker } from '@/core/satellite/device-context'
+import { COMPUTER_USE_TOOL_ID, COMPUTER_USE_TOOLKIT_ID, ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
 import { TOOL_EXECUTION_MANAGER } from './tool-execution-manager'
 import type { LongLanguageCode, ToolExecutionOrigin } from '@/types'
 import type {
@@ -481,6 +483,19 @@ export default class ToolExecutor {
       })
     }
 
+    const executionTarget = TOOLKIT_REGISTRY.getToolExecutionTarget(resolvedTool.toolkitId, resolvedTool.toolId)
+    if (executionTarget === ToolExecutionTarget.Core && isSatelliteWorker()) {
+      return this.buildResult({
+        origin: input.origin,
+        status: 'not_available',
+        message: 'This tool must run on the Leon server.',
+        resolvedTool,
+        functionName: functionName ?? null,
+        input: input.toolInput ?? null,
+        output: {}
+      })
+    }
+
     const requiredConnections = TOOLKIT_REGISTRY.getToolConnectionProviders(
       resolvedTool.toolkitId,
       resolvedTool.toolId
@@ -522,6 +537,11 @@ export default class ToolExecutor {
       resolvedTool.toolId
     )
     if (!availability.available) {
+      if (resolvedTool.toolkitId === COMPUTER_USE_TOOLKIT_ID && resolvedTool.toolId === COMPUTER_USE_TOOL_ID) {
+        const { showComputerUsePermission } = await import('@/core/satellite/computer-use-permission')
+        showComputerUsePermission()
+      }
+
       const missingSettings = availability.missingSettings
       const reason =
         availability.reason ||
@@ -565,6 +585,21 @@ export default class ToolExecutor {
       resolvedTool.toolId
     )
     const declaredConnections = requiredConnections
+    const deviceSelection = executionTarget === ToolExecutionTarget.Device
+      ? TOOLKIT_REGISTRY.getToolDeviceSelection(resolvedTool.toolkitId, resolvedTool.toolId)
+      : undefined
+
+    if (deviceSelection && !bindConversationDevice(deviceSelection)) {
+      return this.buildResult({
+        origin: input.origin,
+        status: 'not_available',
+        message: 'This conversation already used a different device. Start a new conversation to change devices.',
+        resolvedTool,
+        functionName,
+        input: input.toolInput ?? null,
+        output: {}
+      })
+    }
 
     if (satelliteDeviceId && declaredConnections.length > 0) {
       return this.buildResult({
@@ -599,6 +634,17 @@ export default class ToolExecutor {
     }
 
     if (satelliteDeviceId) {
+      if (!TOOLKIT_REGISTRY.getToolFunctions(resolvedTool.toolkitId, resolvedTool.toolId)?.[functionName]) {
+        return this.buildResult({
+          origin: input.origin,
+          status: 'not_available',
+          message: 'This function is unavailable on the selected device.',
+          resolvedTool,
+          functionName,
+          input: input.toolInput ?? null,
+          output: {}
+        })
+      }
       try {
         const { onProgress, signal, retainedSignal, ...serializableInput } = input
 

@@ -19,6 +19,7 @@ export default function ConnectionSetupCard({ connection, initialAuthorization }
   return <ConnectionSetupWidget title={connection.name ?? 'Connection setup'}
     {...(connection.description ? { description: connection.description } : {})}
     view={setup.view} loading={setup.loading} busy={setup.busy} error={setup.error}
+    cancelAuthorization={setup.cancelAuthorization}
     icon={<PackageIcon logoUrl={connection.logoUrl} iconName={connection.iconName ?? 'plug-line'} />}
     onRefresh={setup.refresh} onAction={setup.act}
     renderCopyButton={(item) => <CopyButton text={item.value} label={item.copyLabel} size="sm" />}

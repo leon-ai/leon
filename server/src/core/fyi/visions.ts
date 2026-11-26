@@ -4,6 +4,7 @@
 export const FYI_VISIONS = [
   { id: 'human-craft', text: 'Humans at the center. Not AI, not FOMO, just humans and our craft.' },
   { id: 'creativity', text: 'Things take time, so let your creativity speak. F*** daily metrics.' },
+  { id: 'abundance', text: 'We live in a world where we’ve stopped taking time to appreciate things. Everything is so abundant that we question our own creativity, and that’s not how I want you to feel when you’re here.' },
   { id: 'owner-control', text: 'Whatever my mood today, you are my owner and in control. You always will be.' },
   { id: 'creator-family', text: 'After his son was born, my creator realized how important it is to stay connected to our craft. That sparked my 2.0.' },
   { id: 'creator-passion', text: 'My creator is obsessed with me.' },

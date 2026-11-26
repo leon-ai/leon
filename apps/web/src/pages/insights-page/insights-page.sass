@@ -1,0 +1,130 @@
+.insights-usage
+  display: grid
+  gap: var(--space-lg)
+  min-width: 0
+  container-type: inline-size
+
+  .insights-filters, .insights-values
+    display: grid
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr))
+    gap: var(--space-sm)
+    margin: 0
+
+  .insights-values
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr))
+
+  label
+    display: grid
+    gap: var(--space-xs)
+    min-width: 0
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+  select
+    min-width: 0
+    width: 100%
+    min-height: 44px
+    padding: var(--space-sm)
+    color: var(--color-text)
+    background: var(--color-surface-hover)
+    border: 1px solid var(--color-border-secondary)
+    border-radius: var(--border-radius-md)
+
+  .insights-value, .insights-trend
+    margin: 0
+    padding: var(--space-md)
+    border: 1px solid var(--color-border-secondary)
+    border-radius: var(--border-radius-md)
+
+  .insights-value
+    display: grid
+    align-content: start
+    gap: var(--space-xs)
+
+    dt, .insights-previous
+      color: var(--color-text-secondary)
+      font-size: var(--font-size-sm)
+
+    dd
+      margin: 0
+      font-size: var(--font-size-xl)
+      font-weight: var(--font-weight-semibold)
+      font-variant-numeric: tabular-nums
+
+    .insights-previous
+      font-weight: var(--font-weight-regular)
+
+  .insights-note, figcaption p, small, .insights-empty
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+  .insights-panel, .insights-chart-grid
+    display: grid
+    gap: var(--space-md)
+    min-width: 0
+
+  .insights-panel
+    padding-top: var(--space-md)
+
+  .insights-chart-grid
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+
+    @container (max-width: 560px)
+      grid-template-columns: minmax(0, 1fr)
+
+  .insights-trend
+    background: var(--color-surface-elevated)
+
+  .aurora-tab-list
+    flex-wrap: wrap
+
+  .insights-chart-canvas
+    height: 205px
+    min-width: 0
+    margin-top: var(--space-sm)
+
+  .insights-empty
+    padding: var(--space-md) 0
+
+  figcaption
+    display: grid
+    gap: var(--space-xs)
+
+    border-radius: var(--border-radius-md)
+
+  .insights-actions
+    display: flex
+    flex-wrap: wrap
+    gap: var(--space-sm)
+    align-items: center
+
+  .insights-table-scroll
+    overflow-x: auto
+
+  table
+    width: 100%
+    border-collapse: collapse
+    text-align: left
+    font-variant-numeric: tabular-nums
+
+  th, td
+    padding: var(--space-sm)
+    border-bottom: 1px solid var(--color-border-secondary)
+    vertical-align: top
+    overflow-wrap: anywhere
+
+  td small
+    display: block
+
+  summary
+    display: list-item
+    align-content: center
+    min-height: 44px
+    cursor: pointer
+
+  .insights-repeat
+    margin-top: var(--space-sm)
+    overflow-wrap: anywhere
+
+  h3
+    margin: 0

@@ -167,7 +167,7 @@ Et si vous avez envie de participer à la construction de Leon, remplissez le **
 
 Vous pouvez aider avec le code, les tests, la documentation, le design, la traduction, des vidéos ou l’accueil des nouveaux. Pas besoin d’être développeur pour apporter quelque chose de précieux.
 
-Pour l’instant, le cœur et l’interface bougent encore pas mal. J’organise les contributions en gardant cela en tête, pour donner à chacun un point de départ utile et respecter le temps qu’il nous offre.
+Pour l’instant, le serveur et l’interface bougent encore pas mal. J’organise les contributions en gardant cela en tête, pour donner à chacun un point de départ utile et respecter le temps qu’il nous offre.
 
 J’ai vraiment hâte de voir ce qu’on va créer ensemble.
 

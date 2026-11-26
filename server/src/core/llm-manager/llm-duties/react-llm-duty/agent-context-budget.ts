@@ -4,6 +4,7 @@ import type {
   OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
+import type { ContextTokenBreakdown } from '../../llm-usage/context-usage'
 import { runTurnPhase, TurnPhase } from '../../turn-timing'
 import { AGENT_IMAGE_BATCH_MAX_BYTES, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
@@ -18,6 +19,7 @@ import {
   AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
   AGENT_RECENT_TOOL_IMAGE_LIMIT,
+  AGENT_TOOLKIT_LOADER_NAME,
   AGENT_TOOL_IMAGE_REMOVAL_BATCH_SIZE,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   CHARS_PER_TOKEN
@@ -25,7 +27,6 @@ import {
 
 const TOOL_NAME_SEPARATOR = '__'
 const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
-const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 const RETAINED_RESULT_PREVIEW_MAX_CHARS = 4_096
@@ -47,6 +48,7 @@ export interface PreparedAgentModelContext {
   tools: OpenAITool[]
   estimatedInputTokensBeforePreparation: number
   estimatedInputTokens: number
+  contextTokenBreakdown: ContextTokenBreakdown
   wasCompacted: boolean
 }
 
@@ -136,6 +138,18 @@ export function estimateAgentInputTokens(
   systemPrompt: string,
   tools: OpenAITool[]
 ): number {
+  return sumContextTokens(estimateContextTokens(transcript, systemPrompt, tools))
+}
+
+function sumContextTokens(breakdown: ContextTokenBreakdown): number {
+  return breakdown.transcript + breakdown.system + breakdown.tools + breakdown.images + breakdown.compaction
+}
+
+function estimateContextTokens(
+  transcript: AgentToolTranscriptMessage[],
+  systemPrompt: string,
+  tools: OpenAITool[]
+): ContextTokenBreakdown {
   let imageCount = 0
   let compactionTokens = 0
   const serializedTranscript = JSON.stringify(transcript, (key, value) => {
@@ -154,13 +168,13 @@ export function estimateAgentInputTokens(
     return value
   })
 
-  return (
-    estimateTokens(serializedTranscript) +
-    compactionTokens +
-    imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS +
-    estimateTokens(systemPrompt) +
-    estimateTokens(JSON.stringify(tools))
-  )
+  return {
+    transcript: estimateTokens(serializedTranscript),
+    compaction: compactionTokens,
+    images: imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
+    system: estimateTokens(systemPrompt),
+    tools: estimateTokens(JSON.stringify(tools))
+  }
 }
 
 /**
@@ -487,7 +501,10 @@ export function buildBoundedToolObservation(
   return JSON.stringify(compacted)
 }
 
-function findCompletedToolExchanges(
+/**
+ * Finds whole tool exchanges that can be retained or projected together.
+ */
+export function findCompletedToolExchanges(
   transcript: AgentToolTranscriptMessage[]
 ): CompletedToolExchange[] {
   const exchanges: CompletedToolExchange[] = []
@@ -678,7 +695,7 @@ function findRecentToolkitIds(
       const toolCall = message.toolCalls[callIndex]!
       const toolkitId =
         getToolkitIdFromFunctionName(toolCall.function.name) ||
-        (toolCall.function.name === TOOLKIT_LOADER_NAME
+        (toolCall.function.name === AGENT_TOOLKIT_LOADER_NAME
           ? getLoadedToolkitId(toolCall.function.arguments)
           : null)
 
@@ -780,7 +797,7 @@ function pruneInactiveToolkitSchemas(
   tools: OpenAITool[]
 ): OpenAITool[] {
   const hasToolkitLoader = tools.some(
-    (tool) => tool.function.name === TOOLKIT_LOADER_NAME
+    (tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME
   )
   if (!hasToolkitLoader) {
     // Forced-tool runs cannot reload a schema, so they must retain it.
@@ -833,13 +850,13 @@ function prepareModelContext(
   const tools = !params.preserveToolSchemas && shouldReduceContext
     ? pruneInactiveToolkitSchemas(imageBoundedTranscript, params.tools)
     : params.tools
+  const contextTokenBreakdown = estimateContextTokens(boundedTranscript, params.systemPrompt, tools)
   return {
     transcript: boundedTranscript,
     tools,
     estimatedInputTokensBeforePreparation,
-    estimatedInputTokens: estimateAgentInputTokens(
-      boundedTranscript, params.systemPrompt, tools
-    ),
+    estimatedInputTokens: sumContextTokens(contextTokenBreakdown),
+    contextTokenBreakdown,
     wasCompacted: tools.length < params.tools.length || reducedTranscript.some(
       (message, index) => message !== imageBoundedTranscript[index]
     )

@@ -10,10 +10,10 @@ import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ArtifactConflictError, registerArtifact } from '@/core/artifacts/artifact-store'
 import type { Artifact } from '@/core/artifacts/artifact-types'
-import { validateOwnerAttachmentContent } from '@/core/owner-attachment-validation'
+import { validateOwnerAttachmentContent } from '@/core/owner-attachments/owner-attachment-validation'
 import {
   OWNER_ATTACHMENT_SOURCE, OWNER_ATTACHMENT_MAX_FILE_BYTES, getOwnerAttachmentFormat, getOwnerAttachmentSizeLimit
-} from '@/core/owner-attachment-contract'
+} from '@/core/owner-attachments/owner-attachment-contract'
 
 /**
  * Stores validated owner uploads through the immutable, profile-scoped artifact

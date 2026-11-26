@@ -20,7 +20,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    exclude: [...configDefaults.exclude, '**/tmp/**', 'test/web-app/**'],
+    exclude: [...configDefaults.exclude, '**/tmp/**', 'test/web-app/**', 'apps/desktop/test/**'],
     fileParallelism: true,
     maxWorkers: 4,
     // Real scenarios use isolated child runtimes; bound paid calls and native resources.

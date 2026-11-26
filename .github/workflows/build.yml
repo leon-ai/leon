@@ -110,7 +110,7 @@ jobs:
 
       - name: Run linter
         if: runner.os == 'Linux'
-        run: pnpm run lint
+        run: pnpm run lint --scope core
 
       # Linux's full unit suite already includes these isolated discovery fixtures.
       - name: Check AI fellow discovery

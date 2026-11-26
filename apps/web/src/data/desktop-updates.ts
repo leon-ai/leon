@@ -19,7 +19,7 @@ async function request(action: string, version?: string): Promise<DesktopUpdateS
 
 /**
  * Subscribes once to the local host with no idle polling or GitHub requests.
- * Native updates are app-wide; Core's existing query remains profile-scoped.
+ * Native updates are app-wide; the server's existing query remains profile-scoped.
  */
 export function useDesktopUpdates(): {
   query: UseQueryResult<DesktopUpdateSnapshot, Error>

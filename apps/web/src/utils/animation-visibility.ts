@@ -5,10 +5,10 @@ let preference: MediaQueryList | undefined
 let observer: IntersectionObserver | undefined
 
 /**
- * Decorative work belongs to a visible, focused document with motion enabled.
+ * Visible windows can show motion while another window has focus.
  */
 export function getAnimationVisibility(): boolean {
-  return !document.hidden && document.hasFocus() &&
+  return !document.hidden &&
     !(preference ?? window.matchMedia(REDUCED_MOTION_QUERY)).matches
 }
 
@@ -26,8 +26,6 @@ export function subscribeAnimationVisibility(subscriber: () => void): () => void
     preference = window.matchMedia(REDUCED_MOTION_QUERY)
     preference.addEventListener('change', update)
     document.addEventListener('visibilitychange', update)
-    window.addEventListener('focus', update)
-    window.addEventListener('blur', update)
   }
 
   subscribers.add(subscriber)
@@ -37,8 +35,6 @@ export function subscribeAnimationVisibility(subscriber: () => void): () => void
     if (subscribers.size === 0) {
       preference?.removeEventListener('change', update)
       document.removeEventListener('visibilitychange', update)
-      window.removeEventListener('focus', update)
-      window.removeEventListener('blur', update)
       preference = undefined
     }
   }

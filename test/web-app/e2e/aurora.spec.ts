@@ -748,11 +748,11 @@ for (const form of [false, true]) {
   })
 }
 
-test('keeps a measured file list in the answer and cancels only after server acknowledgement', async ({ page, ui }) => {
+test('shows download progress outside tool details and preserves cancellation after the answer', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.message = ''
   answer.isAddedToHistory = false
-  const preparation = { status: PreparationStatus.Downloading, detail: 'Downloading the speech model',
+  const preparation = { purpose: 'download' as const, status: PreparationStatus.Downloading, detail: 'Downloading the speech model',
     executionId: 'speech-preparation', downloads: [
       { id: 'config', fileName: 'config.json', status: 'complete' as const,
         downloadedBytes: 1_024, totalBytes: 1_024, etaMs: null },
@@ -774,8 +774,12 @@ test('keeps a measured file list in the answer and cancels only after server ack
     pending.resolve(route)
   })
   await page.goto(SESSION_URL)
-  const widget = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
-    .getByRole('region', { name: 'Getting files ready', exact: true })
+  const tools = page.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+  const widget = page.getByRole('region', { name: 'Downloads', exact: true })
+  const finalAnswer = page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()
+  const call = tools.getByRole('button', { name: 'Transcribe the recording', exact: true })
+  await expect(call).toHaveAttribute('aria-expanded', 'false')
+  await expect(tools.getByRole('region', { name: 'Downloads', exact: true })).toHaveCount(0)
   await expect(widget.getByRole('listitem')).toHaveCount(3)
   await expect(widget.getByText('40%', { exact: true })).toHaveCount(1)
   await expect(widget).toContainText('40 B / 100 B · ETA 10s')
@@ -787,42 +791,76 @@ test('keeps a measured file list in the answer and cancels only after server ack
       file.id === 'model' ? { ...file, downloadedBytes: 65 } : file) }
   } } }])
   await expect(widget.getByRole('progressbar')).toHaveAttribute('value', '65')
+  await tools.getByRole('button', { name: 'Using tools...', exact: true }).click()
+  await expect(call).toHaveCount(0)
+  await expect(widget.getByRole('progressbar')).toHaveAttribute('value', '65')
+
   await widget.getByRole('button', { name: 'Cancel', exact: true }).click()
   const route = await pending.promise
   await expect(widget.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled()
-  await expect(widget.getByRole('progressbar')).toBeVisible()
+
+  const content = 'The model download is still running.'
+  const metrics = { durationMs: 6_000 }
+  await ui.emit([{ ...event, sequence: 2, type: 'final_answer', data: { content, response_trace: { metrics } } }])
+  const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).filter({
+    has: page.getByRole('button', { name: 'Worked for 6s', exact: true })
+  })
+  const workTrigger = work.getByRole('button', { name: 'Worked for 6s', exact: true })
+  const retainedWidget = work.getByRole('region', { name: 'Downloads', exact: true })
+  await expect(finalAnswer).toContainText(content)
+  await expect(finalAnswer.getByRole('region', { name: 'Downloads', exact: true })).toHaveCount(0)
+  await expect(retainedWidget.getByRole('progressbar')).toHaveAttribute('value', '65')
+  await expect(retainedWidget.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled()
+
   await route.fulfill({ json: { execution: { state: 'canceled' } } })
-  await expect(page.getByText('I cancelled the preparation', { exact: true })).toBeVisible()
+  await expect(page.getByText('I cancelled the download', { exact: true })).toBeVisible()
   const cancelled = { ...preparation, status: PreparationStatus.Cancelled, detail: 'The preparation was cancelled.',
     downloads: preparation.downloads.map((file) => file.status === 'complete' ? file
       : { ...file, status: 'cancelled' as const, etaMs: null }) }
-  await ui.emit([{ ...event, sequence: 2, type: 'tool_call', data: { tool_call: { ...tool, status: 'error', preparation: cancelled } } }])
-  await expect(widget.getByText('Cancelled', { exact: true })).toHaveCount(2)
-  await expect(widget.getByRole('progressbar')).toHaveCount(0)
+  await ui.emit([{ ...event, sequence: 3, type: 'tool_call', data: { background: true,
+    tool_call: { ...tool, status: 'error', preparation: cancelled } } }])
+  await expect(workTrigger).toHaveAttribute('aria-expanded', 'false')
+  await workTrigger.click()
+  await expect(retainedWidget.getByText('Cancelled', { exact: true })).toHaveCount(2)
+  await expect(retainedWidget.getByRole('progressbar')).toHaveCount(0)
   expect(cancellations).toBe(1)
+  answer.message = content
+  answer.isAddedToHistory = true
+  answer.agentResponseTrace!.metrics = metrics
   answer.agentResponseTrace!.toolCalls[0]!.preparation = cancelled
   answer.agentResponseTrace!.toolCalls[0]!.status = 'error'
   await page.reload()
-  await expect(widget.getByRole('listitem')).toHaveCount(3)
-  await expect(widget.getByText('Cancelled', { exact: true })).toHaveCount(2)
+  await workTrigger.click()
+  await expect(retainedWidget.getByRole('listitem')).toHaveCount(3)
+  await expect(retainedWidget.getByText('Cancelled', { exact: true })).toHaveCount(2)
 })
 
-test('keeps retained preparation updates separate from accepted answer text and turn timing', async ({ page, ui }) => {
+test('keeps retained preparation visible in its plan after the answer and collapses settled work', async ({ page, ui }) => {
   const answer = ui.history.get(SESSION_ID)!.at(-1)!
   answer.message = 'The model is downloading. We can keep talking while it finishes.'
   const preparation = { status: PreparationStatus.Downloading, detail: 'Downloading the speech model',
     executionId: 'retained-preparation', completed: 25, total: 100 }
-  answer.agentResponseTrace = { id: answer.messageId, planSteps: [], toolCalls: [{
-    id: 'retained-call', name: 'speech.asr.transcribe', status: 'running', startedAt: Date.now(),
-    toolCallTitle: 'Prepare the speech model', preparation
-  }], metrics: { durationMs: 7_000 } }
+  const step = { id: 'prepare-model', label: 'Set up speech recognition', status: 'completed' as const }
+  const tool = {
+    id: 'retained-call', name: 'speech.asr.transcribe', status: 'success' as const, startedAt: Date.now(),
+    toolCallTitle: 'Prepare the speech model', planStepId: step.id, preparation
+  }
+  answer.agentResponseTrace = { id: answer.messageId, planSteps: [step], toolCalls: [tool], metrics: { durationMs: 7_000 } }
   await page.goto(SESSION_URL)
-  const widget = page.getByRole('region', { name: 'Getting files ready', exact: true })
+  const work = page.getByRole('region', { name: 'Leon’s completed work', exact: true }).filter({
+    has: page.getByRole('button', { name: 'Worked for 7s', exact: true })
+  })
+  const plan = work.getByRole('region', { name: 'Leon’s execution plan', exact: true })
+  const widget = plan.getByRole('region', { name: 'Getting files ready', exact: true })
+  const toolGroup = plan.getByRole('button', { name: /^Used 1 tool/ })
+  const workTrigger = work.getByRole('button', { name: 'Worked for 7s', exact: true })
+  const event = { type: 'tool_call', session_id: SESSION_ID, turn_id: null, response_id: answer.messageId, created_at: Date.now() }
   await expect(widget.getByRole('progressbar')).toHaveAttribute('value', '25')
-  await ui.emit([{ type: 'tool_call', sequence: 1, session_id: SESSION_ID, turn_id: null,
-    response_id: answer.messageId, created_at: Date.now(), data: { tool_call: {
-      id: 'retained-call', name: 'speech.asr.transcribe', status: 'running', preparation: { ...preparation, completed: 75 }
-    } } }])
+  await expect(workTrigger).toHaveAttribute('aria-expanded', 'true')
+  await expect(toolGroup).toHaveAttribute('aria-expanded', 'false')
+  await ui.emit([{ ...event, sequence: 1, data: { background: true, tool_call: {
+    id: tool.id, name: tool.name, status: tool.status, preparation: { ...preparation, completed: 75 }
+  } } }])
   await expect(widget.getByRole('progressbar')).toHaveAttribute('value', '75')
   await expect(page.getByRole('button', { name: 'Worked for 7s', exact: true })).toBeVisible()
   await expect(page.getByText(answer.message, { exact: true })).toBeVisible()
@@ -831,4 +869,16 @@ test('keeps retained preparation updates separate from accepted answer text and 
       id: 'other-call', name: 'speech.asr.transcribe', status: 'running', preparation
     } } }])
   await expect(page.getByRole('button', { name: 'Worked for', exact: false })).toHaveCount(1)
+  await ui.emit([{ ...event, sequence: 3, data: { background: true, tool_call: {
+    id: tool.id, name: tool.name, status: tool.status,
+    preparation: { ...preparation, status: PreparationStatus.Ready, detail: 'The model is ready.' }
+  } } }])
+  await expect(workTrigger).toHaveAttribute('aria-expanded', 'false')
+  await expect(widget).toHaveCount(0)
+  await workTrigger.click()
+  await plan.getByRole('button', { name: 'Completed plan', exact: true }).click()
+  await plan.getByRole('button', { name: step.label, exact: true }).click()
+  await expect(toolGroup).toHaveAttribute('aria-expanded', 'false')
+  await expect(widget).toContainText('The model is ready.')
+  await expect(page.getByRole('region', { name: 'Leon’s final answer', exact: true }).last()).toContainText(answer.message)
 })

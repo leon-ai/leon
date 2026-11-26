@@ -53,6 +53,7 @@ interface AgentProgressEvent {
     | 'bootstrap'
     | 'turn_start'
     | 'tool_call'
+    | 'completion_review'
     | 'turn_result'
     | 'scenario_complete'
     | 'cleanup'
@@ -390,7 +391,7 @@ async function main(): Promise<void> {
     isRealScenario
   )
 
-  // Scenario imports may resolve environment-derived Core paths. Load them only
+  // Scenario imports may resolve environment-derived server paths. Load them only
   // after the disposable profile is configured, never in the owner environment.
   if (realScenarioPath) {
     realScenario = (await import(realScenarioPath)).default as RealAgentScenario
@@ -419,10 +420,10 @@ async function main(): Promise<void> {
     TMP_PATH
   } = await import('../../../server/src/constants')
 
-  // Refuse fixture writes if any earlier dependency loaded owner-owned Core roots.
+  // Refuse fixture writes if any earlier dependency loaded server paths from the owner profile.
   if (path.resolve(LEON_HOME_PATH) !== path.resolve(testHomePath) ||
       path.resolve(LEON_PROFILE_PATH) !== path.resolve(testProfilePath)) {
-    throw new Error('Core was loaded before the isolated scenario profile was configured.')
+    throw new Error('The server was loaded before the isolated scenario profile was configured.')
   }
 
   // Retained-output queries need the managed binary in the isolated home too.
@@ -651,6 +652,15 @@ async function main(): Promise<void> {
             const duty = new ReActLLMDuty({
               input: ownerInput,
               ...options,
+              onCompletionReview: (review): void => {
+                printProgress({
+                  provider,
+                  stage: 'completion_review',
+                  turn: currentTurn,
+                  message: scenario.id,
+                  data: { review }
+                })
+              },
               onProgressEvent: (event): void => {
                 if (event.type === 'progress_message') {
                   progressMessages.push(structuredClone(event.message))
@@ -804,7 +814,7 @@ async function main(): Promise<void> {
 void main()
   .then(() => {
     /**
-     * Core singletons keep background handles open, so exit explicitly once the
+     * Server singletons keep background handles open, so exit explicitly once the
      * structured result has been printed and cleanup has finished.
      */
     process.exit(0)

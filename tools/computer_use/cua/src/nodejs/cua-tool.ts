@@ -13,7 +13,7 @@ const GNOME_RESOURCE = 'gnome_wayland_v12'
  * Owns desktop setup, native sessions and Cua actions inside the standard tool runtime.
  */
 export default class CuaTool extends Tool {
-  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   public get toolName(): string { return 'cua' }
   public get toolkit(): string { return 'computer_use' }
   public get description(): string { return 'Observe and operate graphical desktop applications with Cua.' }
@@ -38,6 +38,7 @@ export default class CuaTool extends Tool {
       profileName: context?.profileName ?? LEON_PROFILE_NAME,
       conversationSessionId: context?.conversationSessionId ?? process.env['LEON_SESSION_ID'] ?? null,
       ...(context?.signal ? { signal: context.signal } : {}),
+      retainWorker: () => this.retainWorker(),
       getSettings: () => {
         this.settings = ToolkitConfig.loadToolSettings(this.toolkit, this.toolName, {}, true)
         return this.settings
@@ -57,8 +58,8 @@ export default class CuaTool extends Tool {
   /**
    * Execute list apps through the retained Cua runtime.
    */
-  public async list_apps(query?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('list_apps', { query })
+  public async list_apps(query?: unknown, queries?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('list_apps', { query, queries })
   }
 
   /**
@@ -154,8 +155,8 @@ export default class CuaTool extends Tool {
   /**
    * Execute bring to front through the retained Cua runtime.
    */
-  public async bring_to_front(pid?: unknown, window_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('bring_to_front', { pid, window_id })
+  public async bring_to_front(pid?: unknown, window_id?: unknown, capture_after?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('bring_to_front', { pid, window_id, capture_after })
   }
 
   /**

@@ -182,7 +182,7 @@ for (const { theme, motion, width } of [
     await expect(save).toBeDisabled()
     await editor.getByRole('textbox', { name: 'Workspace name' }).fill('Leon')
     await editor.getByRole('textbox', { name: 'Workspace brief' }).fill('I am building my open-source AI assistant.')
-    const pink = editor.getByRole('button', { name: 'Leon pink', exact: true })
+    const pink = editor.getByRole('button', { name: 'Leonie pink', exact: true })
     await pink.click()
     if (motion === 'no-preference') {
       const ring = await pink.evaluate((element) => {
@@ -264,8 +264,8 @@ for (const { theme, motion, width } of [
     await expect(sidebar.locator(`a[data-session-id="${created.id}"]`)).toBeVisible()
     expect(ui.sessions.find((session) => session.id === created.id)).not.toHaveProperty('workspaceId')
     await sidebar.getByRole('link', { name: 'Settings', exact: true }).click()
-    await page.getByRole('link', { name: 'Appearance', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Mute sounds', exact: true })).toBeVisible()
+    await page.getByRole('link', { name: 'Appearance', exact: true }).click()
     await page.getByRole('button', { name: 'Violet', exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('data-accent', 'violet')
   })
@@ -350,14 +350,18 @@ test('plays only live turn completion and keeps routine actions, replay and mute
     created_at: 1, data: { status: 'completed' } }
   await ui.emit([completed])
   await expect.poll(count).toBe(1)
-  await ui.emit([completed])
-  await expect.poll(count).toBe(1)
+  const pulse = {
+    ...completed, sequence: 11, turn_id: 'reading-list', response_id: 'reading-list',
+    data: { ...completed.data, origin: 'pulse' }
+  }
+  await ui.emit([completed, pulse])
+  await expect.poll(count).toBe(2)
+  await ui.emit([pulse])
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
-  await page.getByRole('link', { name: 'Appearance', exact: true }).click()
   await page.getByRole('button', { name: 'Mute sounds', exact: true }).click()
-  await ui.emit([{ ...completed, sequence: 11 }])
+  await ui.emit([{ ...pulse, sequence: 12 }])
   await expect(page.getByRole('button', { name: 'Unmute sounds', exact: true })).toBeVisible()
-  expect(await count()).toBe(1)
+  expect(await count()).toBe(2)
 })
 
 test('matches workspace row geometry and keeps collapsed unread results', async ({ page, ui }) => {
@@ -745,7 +749,7 @@ test('explains a folder API mismatch and keeps attachment unavailable without di
   const editor = page.getByRole('dialog', { name: 'New workspace', exact: true })
   await editor.getByRole('textbox', { name: 'Folder', exact: true }).click()
   const browser = page.getByRole('dialog', { name: 'Folder', exact: true })
-  await expect(browser.getByRole('alert')).toHaveText('I need Core to be rebuilt and restarted before I can browse folders.')
+  await expect(browser.getByRole('alert')).toHaveText('I need the server to be rebuilt and restarted before I can browse folders.')
   await expect(browser.getByRole('button', { name: 'Attach this folder', exact: true })).toBeDisabled()
   await expect(browser.getByRole('button', { name: '..', exact: true })).toHaveCount(0)
 })

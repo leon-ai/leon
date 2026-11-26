@@ -49,11 +49,17 @@ export function resolveComputerUseSequenceParameters(
  */
 export function expandComputerUseSequenceSteps(
   steps: unknown,
-  focus?: unknown
+  focus?: Record<string, unknown> | null
 ): unknown[] | null {
   if (!Array.isArray(steps)) {
     return null
   }
 
-  return focus == null ? steps : [{ action: 'click', parameters: focus }, ...steps]
+  if (!focus) {
+    return steps
+  }
+
+  const { expect, ...parameters } = focus
+
+  return [{ action: 'click', parameters, expect }, ...steps]
 }

@@ -6,6 +6,7 @@ import { CuaDesktopSetup, CuaDesktopSetupPendingError, CuaDesktopSetupState, isC
 import { CuaWaylandCaptureAdapter } from './cua-wayland-capture'
 
 import {
+  CUA_DISABLE_A11Y_ADVERTISE_ENV,
   CUA_TELEMETRY_ENABLED_ENV,
   CUA_X11_UINPUT_SAFETY_ENV,
   CUA_WINDOW_CHANGE_TIMEOUT_ENV,
@@ -27,6 +28,10 @@ export async function createCuaDriverAdapter(
     throw new CuaDesktopSetupPendingError()
   }
   process.env[CUA_TELEMETRY_ENABLED_ENV] ??= 'false'
+  if (process.platform === 'linux') {
+    // Keep the owner's accessibility settings intact when Cua starts observing.
+    process.env[CUA_DISABLE_A11Y_ADVERTISE_ENV] = '1'
+  }
   // This trusted host bound applies to direct SDK runtimes too. Preserve an
   // operator override; tool-call arguments cannot shorten focus protection.
   process.env[CUA_WINDOW_CHANGE_TIMEOUT_ENV] ??=

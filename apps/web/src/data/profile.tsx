@@ -1,12 +1,17 @@
 import { createContext, Fragment, useContext, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { Selection } from '../../../../aurora/src/v2/components/selection'
+import { DesktopComputerUseApproval } from '../../../../bridges/runtime/contracts/desktop-client'
 
 import { Button } from '@/components/button'
 import { Input } from '@/components/input'
 import { RequestFeedback } from '@/components/request-feedback/request-feedback'
 import { queryClient } from '@/query-client'
+import { useToast } from '@/components/toast'
 
 import { requestAPI } from './api'
+import { enableDesktopComputerUse, getDesktopComputerUseSetup } from './desktop-computer-use'
+import { isDesktopClient } from './turn-client'
 import type { ProfileAuthentication } from '../../../../server/src/core/http-server/profile-auth-contract'
 import { PROFILE_AUTH_QUERY_KEY, profileAuthQueryOptions } from './profile-query'
 
@@ -62,12 +67,26 @@ export function ProfileAccessGate({ children }: { children: ReactNode }) {
 }
 
 function ProfileSignIn() {
+  const { showToast } = useToast()
   const [token, setToken] = useState('')
+  const [allowComputerUse, setAllowComputerUse] = useState(false)
+  const setup = useQuery({ queryKey: ['desktop-computer-use-setup'],
+    queryFn: ({ signal }) => getDesktopComputerUseSetup(signal), enabled: isDesktopClient(),
+    retry: false, staleTime: Infinity, meta: { errorToast: false } })
   const login = useMutation({
     meta: { errorTitle: 'Could not sign in' },
-    mutationFn: () => requestAPI<ProfileAuthentication>('profile-auth', {
-      method: 'POST', body: JSON.stringify({ token })
-    }),
+    mutationFn: async () => {
+      const result = await requestAPI<ProfileAuthentication>('profile-auth', {
+        method: 'POST', body: JSON.stringify({ token })
+      })
+      if (result.authenticated && setup.data && allowComputerUse) {
+        await enableDesktopComputerUse(DesktopComputerUseApproval.Setup).catch((error: Error) => {
+          showToast({ type: 'error', title: 'Could not enable computer use', description: error.message })
+        })
+      }
+
+      return result
+    },
     onSuccess: (result) => {
       queryClient.removeQueries({ predicate: (query): boolean => query.queryKey[0] !== PROFILE_AUTH_QUERY_KEY[0] })
       queryClient.setQueryData(PROFILE_AUTH_QUERY_KEY, result)
@@ -81,6 +100,12 @@ function ProfileSignIn() {
       login.mutate()
     }}>
       <h1>Connect to your Leon profile</h1>
+      {setup.data && <>
+        <p>{setup.data.server}</p>
+        <Selection multiple label="Allow computer use on this computer" checked={allowComputerUse}
+          description="This server can view my screen and send mouse and keyboard input while Leon Desktop is open."
+          onChange={(event) => setAllowComputerUse(event.target.checked)} disabled={login.isPending} />
+      </>}
       <Input
         ariaLabel="Profile token"
         placeholder="Profile token"

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import type { RealAgentScenario, RealScenarioTurn } from '../e2e/run-agent-provider-scenario'
 import type { ToolExecutionInput, ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
-import type { AmbientWeatherSnapshot } from '@/core/ambient-conditions-manager'
+import type { AmbientWeatherSnapshot } from '@/core/ambient/ambient-conditions-manager'
 
 const AMBIENT_WEATHER_WAIT_MS = 5_000
 const AMBIENT_WEATHER_POLL_INTERVAL_MS = 50

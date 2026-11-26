@@ -22,6 +22,11 @@ export enum WebPreferenceKey {
   RecentModels = 'leon.web-app.recent-models'
 }
 
+export const WEB_THEMES = ['dark', 'light'] as const
+export const DEFAULT_WEB_THEME = 'dark'
+export type WebTheme = (typeof WEB_THEMES)[number]
+export type WebColorScheme = WebTheme | 'system'
+
 export interface DesktopFilesEvent {
   files: DesktopAttachmentFile[]
   issues?: string[]
@@ -29,4 +34,32 @@ export interface DesktopFilesEvent {
 
 export const DESKTOP_UPDATES_PATH = '/__desktop/updates/'
 
+export const DESKTOP_META_NAME = 'leon-desktop'
 export const DESKTOP_UPDATES_META_NAME = 'leon-desktop-updates'
+
+export { DESKTOP_CORE_PROTOCOL_VERSION } from './distribution.js'
+export const DESKTOP_BOOTSTRAP_META_NAME = 'leon-desktop-bootstrap'
+export const DESKTOP_BOOTSTRAP_PATH = '/__desktop/bootstrap/'
+export const DESKTOP_COMPUTER_USE_PATH = '/__desktop/computer-use'
+export const COMPUTER_USE_PERMISSION_WIDGET = 'ComputerUsePermission'
+
+export interface DesktopComputerUseSetup {
+  server: string
+}
+
+export enum DesktopComputerUseApproval {
+  Setup = 'setup',
+  Confirm = 'confirm'
+}
+
+export const DESKTOP_NOTIFICATION_PATH = '/__desktop/notifications'
+export const DESKTOP_NOTIFICATION_EVENT = 'leon:desktop-notification'
+
+/**
+ * Native notifications identify a completed turn without exposing its content.
+ */
+export interface DesktopTurnNotification {
+  profile: string
+  sessionId: string
+  sequence: number
+}

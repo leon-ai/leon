@@ -3,7 +3,7 @@
   "tool_id": "openscreen",
   "toolkit_id": "media_production",
   "name": "OpenScreen",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Record a selected desktop display or window, retain editable cursor data and export polished MP4/GIF recordings with automatic focus zoom.",
   "icon_name": "record-circle-line",
   "distribution": "built-in",

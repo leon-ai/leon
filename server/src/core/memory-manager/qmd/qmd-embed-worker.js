@@ -77,6 +77,7 @@ await writeDiagnostics({
 })
 
 const payload = JSON.parse(await fs.readFile(payloadPath, 'utf8'))
+const signal = AbortSignal.timeout(payload.maxDurationMs)
 
 await writeDiagnostics({
   status: 'running',
@@ -93,7 +94,7 @@ try {
     stage: 'embed'
   })
 
-  const result = await store.embed(payload.options || {})
+  const result = await store.embed({ force: payload.force, signal })
 
   await fs.writeFile(outputPath, JSON.stringify({ result }), 'utf8')
   await writeDiagnostics({

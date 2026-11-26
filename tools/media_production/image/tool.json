@@ -3,7 +3,7 @@
   "tool_id": "image",
   "toolkit_id": "media_production",
   "name": "image",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Create downloadable image artifacts through configured generation providers.",
   "icon_name": "image-line",
   "distribution": "built-in",
@@ -40,7 +40,7 @@
     },
     "generate": {
       "description": "Generate image using the profile defaults and attach the result. No model selection is needed.",
-      "progressive_guidance": "Use this operation for ordinary requests. Core resolves the configured provider/model. Check capabilities to inspect resolved defaults or diagnose missing setup. Do not switch models after an error unless the owner requests it. For edits, pass reference_artifact_ids from this session. Do not claim completion without returned artifacts. Defaults live in this tool’s settings. provider=inherit follows the active conversation provider, model=auto uses its recommendation. If status is selection_required, explain the limitation and ask the owner to choose among choices; do not call another provider automatically. After they choose, use generateWithModel. Use configure only if they want the choice remembered.",
+      "progressive_guidance": "Use this operation for ordinary requests. The server resolves the configured provider/model. Check capabilities to inspect resolved defaults or diagnose missing setup. Do not switch models after an error unless the owner requests it. For edits, pass reference_artifact_ids from this session. Do not claim completion without returned artifacts. Defaults live in this tool’s settings. provider=inherit follows the active conversation provider, model=auto uses its recommendation. If status is selection_required, explain the limitation and ask the owner to choose among choices; do not call another provider automatically. After they choose, use generateWithModel. Use configure only if they want the choice remembered.",
       "parameters": {
         "type": "object",
         "properties": {

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useToast } from '@/components/toast'
+import { createUUID } from '@/utils/create-uuid'
 import { AttachmentUploadState, type AttachmentUploadListener, type AttachmentUploadProgress, type OwnerAttachmentDraft } from '@/data/owner-attachments'
 import {
   OWNER_ATTACHMENT_MAX_COUNT, getOwnerAttachmentFormat, getOwnerAttachmentSizeLimit
-} from '../../../../../server/src/core/owner-attachment-contract'
+} from '../../../../../server/src/core/owner-attachments/owner-attachment-contract'
 import { AttachmentDropZone, AttachmentDropPhase } from './attachment-drop-zone'
 import { DESKTOP_FILES_EVENT, type DesktopAttachmentFile, type DesktopFilesEvent } from '../../../../../bridges/runtime/contracts/desktop-client'
 import { isDesktopAttachmentFile, releaseDesktopAttachment } from '@/data/desktop-attachments'
@@ -100,7 +101,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       // Browser MIME detection can be missing or use aliases. Give local media
       // previews the same canonical type that the upload validator will inspect.
       const url = native ? file.url : URL.createObjectURL(file.slice(0, file.size, format.mediaType))
-      next.push({ id: crypto.randomUUID(), file, filename: file.name, mediaType: format.mediaType, url })
+      next.push({ id: createUUID(), file, filename: file.name, mediaType: format.mediaType, url })
     }
     if (next.length !== previousCount) {
       itemsRef.current = next
@@ -120,7 +121,8 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
     // The composer's lifetime scopes these handlers to session/new-session
     // pages. File paste works with focus anywhere on that page; text stays native.
     const paste = (event: ClipboardEvent): void => {
-      if (!document.hidden && !event.defaultPrevented && event.clipboardData?.files.length) {
+      if (!document.hidden && !event.defaultPrevented && event.clipboardData?.files.length &&
+        !container.current?.closest('[inert]')) {
         event.preventDefault()
         add(event.clipboardData.files)
       }
@@ -132,7 +134,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       }
       const files = detail.files.filter(isDesktopAttachmentFile)
       const issues = new Set(detail.issues ?? [])
-      if (document.hidden) {
+      if (document.hidden || container.current?.closest('[inert]')) {
         files.forEach(releaseDesktopAttachment)
         return
       }
@@ -152,7 +154,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       document.removeEventListener('paste', paste)
       window.removeEventListener(DESKTOP_FILES_EVENT, nativePaste)
     }
-  }, [add, disabled, reportIssues])
+  }, [add, container, disabled, reportIssues])
 
   useEffect(() => {
     const target = container.current?.closest<HTMLElement>('.app-main')
@@ -173,7 +175,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
         ? current : AttachmentDropPhase.Idle)
     }
     const enter = (event: DragEvent): void => {
-      if (isFileDrag(event)) {
+      if (isFileDrag(event) && !container.current?.closest('[inert]')) {
         event.preventDefault()
         depth += 1
         feedbackVersion += 1
@@ -181,7 +183,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       }
     }
     const over = (event: DragEvent): void => {
-      if (isFileDrag(event)) {
+      if (isFileDrag(event) && !container.current?.closest('[inert]')) {
         event.preventDefault()
         event.dataTransfer!.dropEffect = 'copy'
       }
@@ -195,7 +197,7 @@ export function useComposerAttachments(container: RefObject<HTMLDivElement | nul
       }
     }
     const drop = (event: DragEvent): void => {
-      if (isFileDrag(event)) {
+      if (isFileDrag(event) && !container.current?.closest('[inert]')) {
         event.preventDefault()
         depth = 0
         const version = ++feedbackVersion

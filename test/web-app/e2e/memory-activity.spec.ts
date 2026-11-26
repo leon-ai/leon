@@ -230,7 +230,7 @@ test('settles clipboard feedback once and ignores dismissed copy operations', as
   await expect(dialog.getByRole('button', { name: 'Copied', exact: true })).toHaveCount(0)
 })
 
-// Automatic context loading is Core work; an additional lookup is an ordinary tool.
+// The server loads context automatically; an additional lookup is an ordinary tool.
 for (const durationMs of [0, 0.125]) {
   test(`separates automatic temporary context from a requested memory tool lookup (${durationMs}ms)`, async ({ page, ui }) => {
     const startedAt = Date.now() - 2_000

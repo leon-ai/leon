@@ -64,7 +64,7 @@ jobs:
           UV_CACHE_DIR: ${{ runner.temp }}/leon-fresh-uv-cache
         run: node scripts/ci/test-fresh-install.js
 
-      - name: Package and verify prebuilt Core
+      - name: Package and verify prebuilt server
         if: inputs.verify-ota
         env:
           LEON_HOME: ${{ runner.temp }}/leon-fresh-install
@@ -75,7 +75,7 @@ jobs:
           node scripts/distribution/verify-runtime.js "${{ runner.temp }}/leon-runtime"
           node scripts/distribution/verify-runtime-ota.js "${{ runner.temp }}/leon-runtime"
 
-      - name: Retain verified Core archive
+      - name: Retain verified server archive
         if: inputs.verify-ota
         uses: actions/upload-artifact@v7.0.2
         with:
@@ -184,7 +184,7 @@ jobs:
           LEON_FRESH_INSTALL_LOG_PATH: ${{ runner.temp }}/leon-fresh-inferences.log
         run: node scripts/ci/test-fresh-install.js --verify
 
-      - name: Package and verify prebuilt Core
+      - name: Package and verify prebuilt server
         if: inputs.verify-ota
         env:
           LEON_HOME: ${{ runner.temp }}/leon-fresh-install
@@ -195,7 +195,7 @@ jobs:
           node scripts/distribution/verify-runtime.js "${{ runner.temp }}/leon-runtime"
           node scripts/distribution/verify-runtime-ota.js "${{ runner.temp }}/leon-runtime"
 
-      - name: Retain verified Core archive
+      - name: Retain verified server archive
         if: inputs.verify-ota
         uses: actions/upload-artifact@v7.0.2
         with:

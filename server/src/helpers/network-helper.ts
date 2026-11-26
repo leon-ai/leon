@@ -57,7 +57,7 @@ export class NetworkHelper {
   }
 
   /**
-   * Downloads through the shared runtime implementation with Core-owned logging.
+   * Downloads through the shared runtime implementation with server-owned logging.
    * Cancellation also covers requests waiting for that implementation to load.
    */
   public static async downloadFile(fileURL: string, destinationPath: string, options?: DownloadFileOptions): Promise<void> {

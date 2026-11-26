@@ -58,7 +58,7 @@ export function getTemporaryContextSize(entries: readonly unknown[]): number {
 }
 
 /**
- * Resolve the same profile-owned memory settings in Core and tool workers.
+ * Resolve the same profile-owned memory settings in the server and tool workers.
  */
 export function resolveTemporaryMemoryPolicy(settings: Record<string, unknown>): TemporaryMemoryPolicy {
   const policy = { ...DEFAULT_TEMPORARY_MEMORY_POLICY }

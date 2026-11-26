@@ -1,15 +1,14 @@
 import { CORE_READY_EVENT } from '@@/bridges/runtime/contracts/update-status.js'
 import { spawn } from 'node:child_process'
-import fs from 'node:fs'
 import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
 
 import psList from 'ps-list'
 import kill from 'tree-kill'
 
 import {
+  CODEBASE_PATH,
   IS_DEVELOPMENT_ENV,
   IS_PRODUCTION_ENV,
-  IS_TELEMETRY_ENABLED,
   LEON_PROFILE_NAME,
   LANG as LEON_LANG,
   NVIDIA_CUBLAS_PATH,
@@ -45,7 +44,8 @@ import {
 } from '@/core'
 import { shouldIgnoreTCPServerError } from '@/utilities'
 import { Updater } from '@/updater'
-import { Telemetry } from '@/telemetry'
+import { registerServerShutdownControl } from '@/core/server-shutdown-control'
+import { startProfileTelemetry } from '@/core/telemetry/profile-telemetry'
 import { setShutdownHandler } from '@/core/server-lifecycle'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -243,25 +243,7 @@ async function bootstrap(): Promise<void> {
     Updater.start()
   }
 
-  // Telemetry events
-  if (IS_TELEMETRY_ENABLED) {
-    Telemetry.start()
-
-    // Watch for errors in the error log file and report them to the telemetry service
-    fs.watchFile(LogHelper.ERRORS_FILE_PATH, async () => {
-      const logErrors = await LogHelper.parseErrorLogs()
-      const lastError = logErrors[logErrors.length - 1] || ''
-
-      Telemetry.error(lastError)
-    })
-
-    setInterval(
-      () => {
-        Telemetry.heartbeat()
-      },
-      1_000 * 3_600 * 6
-    )
-  }
+  const stopTelemetry = startProfileTelemetry()
   let isShuttingDown = false
   const shutdown = (exitCode = 0): void => {
     if (isShuttingDown) {
@@ -269,15 +251,12 @@ async function bootstrap(): Promise<void> {
     }
 
     isShuttingDown = true
+    stopTelemetry?.()
     LLM_PROVIDER.dispose()
     PROVIDER_REQUESTS.close()
 
     if (global.pythonTCPServerProcess?.pid) {
       kill(global.pythonTCPServerProcess.pid as number)
-    }
-
-    if (IS_TELEMETRY_ENABLED) {
-      Telemetry.stop()
     }
 
     const forceExitTimeout = setTimeout(() => {
@@ -309,6 +288,14 @@ async function bootstrap(): Promise<void> {
       })
     }
   )
+
+  if (IS_PRODUCTION_ENV) {
+    try {
+      await registerServerShutdownControl(CODEBASE_PATH, shutdown)
+    } catch (error) {
+      LogHelper.warning(`Could not register the server shutdown endpoint: ${String(error)}`)
+    }
+  }
 
   process.on('uncaughtException', (error) => {
     LogHelper.title('Server')

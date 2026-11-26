@@ -8,6 +8,7 @@ import ts from 'typescript'
 import { LogHelper } from '@/helpers/log-helper'
 
 import buildAurora from './build-aurora'
+import { stopCheckoutServer } from './stop-checkout-server.js'
 import train from './train/train'
 
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
@@ -163,14 +164,14 @@ async function runBuildStep(stepName, step, quiet) {
 }
 
 /**
- * Build the production server output and copy runtime assets that TypeScript
- * does not emit by itself.
+ * Build the Leon server and include its runtime assets in the distribution.
  */
 export default async function buildServer(options = {}) {
   const { quiet = false } = options
 
+  await runBuildStep('Stopping the server for this checkout...', () => stopCheckoutServer(process.cwd()), quiet)
   await runBuildStep(
-    'Deleting server dist...',
+    'Deleting server/dist...',
     () =>
       fs.promises.rm(SERVER_DIST_PATH, {
         recursive: true,
@@ -201,7 +202,7 @@ export default async function buildServer(options = {}) {
     () => execa('resolve-tspaths', [], { stdio: quiet ? 'pipe' : 'inherit' }),
     quiet
   )
-  await runBuildStep('Reshaping server dist...', () => reshapeServerDist(), quiet)
+  await runBuildStep('Reshaping server/dist...', () => reshapeServerDist(), quiet)
   await runBuildStep('Copying runtime assets...', () => copyRuntimeAssets(), quiet)
 }
 
@@ -214,7 +215,7 @@ if (isMainModule) {
     try {
       await buildServer()
     } catch (e) {
-      LogHelper.error(`Failed to build server: ${e}`)
+      LogHelper.error(`Failed to build the server: ${e}`)
       process.exit(1)
     }
   })()

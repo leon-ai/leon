@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 const MODULE_MOCKS_FLAG = '--experimental-test-module-mocks'
 
 /**
- * Node disallows this test-only flag in NODE_OPTIONS. Re-exec only the Core
+ * Node disallows this test-only flag in NODE_OPTIONS. Re-exec only the server
  * fixture process, forwarding IPC readiness and its actual lifecycle exit code.
  */
 export async function ensureModuleMocks() {

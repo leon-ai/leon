@@ -17,6 +17,7 @@ import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { getSatelliteArtifactRoot, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
 import { parseSatelliteContext, SATELLITE_CONTEXT_MAX_AGE_MS, type SatelliteContextSnapshot } from '@/core/satellite/satellite-context'
+import { LogHelper } from '@/helpers/log-helper'
 
 const SATELLITE_TOOL_IDLE_TIMEOUT_MS = 15 * 60 * 1_000
 
@@ -45,6 +46,7 @@ interface PendingInvocation {
   receivingResult?: boolean
   returned?: boolean
   streams: Set<string>
+  dispatchedAt: number
 }
 
 class SatelliteRegistry {
@@ -161,6 +163,7 @@ class SatelliteRegistry {
         resolve,
         reject,
         streams: new Set(),
+        dispatchedAt: performance.now(),
         ...(input.onProgress ? { onProgress: input.onProgress } : {}),
         timeout,
         transport: connection.transport,
@@ -242,6 +245,7 @@ class SatelliteRegistry {
     }
 
     pending.receivingResult = true
+    const arrivedAt = performance.now()
     const receive = async (): Promise<ToolExecutionResult> => {
       if (!payload.artifacts) return payload.result
       if (!pending.conversationSessionId) throw new Error('Satellite artifacts require a conversation session.')
@@ -258,6 +262,15 @@ class SatelliteRegistry {
       pending.returned = true
       if (pending.streams.size === 0) {
         this.pendingInvocations.delete(payload.invocationId)
+      }
+      if (Number.isFinite(payload.timing?.executionMs) && Number.isFinite(payload.timing?.artifactPreparationMs)) {
+        const { executionMs, artifactPreparationMs } = payload.timing!
+        LogHelper.debug('Satellite tool timings (ms): ' + JSON.stringify({
+          execution: Math.round(executionMs),
+          artifactPreparation: Math.round(artifactPreparationMs),
+          transport: Math.round(Math.max(0, arrivedAt - pending.dispatchedAt - executionMs - artifactPreparationMs)),
+          artifactReceive: Math.round(performance.now() - arrivedAt)
+        }))
       }
       pending.resolve(result)
     }).catch((error: unknown) => {

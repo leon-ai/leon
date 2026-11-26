@@ -77,7 +77,7 @@ export async function verifyRuntime(directory) {
         }
         await delay(100)
       }
-      assert(ready, `Packaged Core could not start: ${diagnostics}`)
+      assert(ready, `Packaged server could not start: ${diagnostics}`)
       let installedBytes = 0
       let allocatedBytes = 0
       const measure = async (directory) => {

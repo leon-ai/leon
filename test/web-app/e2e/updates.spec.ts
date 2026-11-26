@@ -125,7 +125,7 @@ test('keeps release notes readable when installation is unavailable and reports 
   await expect(dialog.getByRole('button', { name: 'Update Leon', exact: true })).toBeEnabled()
 })
 
-test('updates the desktop independently when Core is already current', async ({ page, ui }) => {
+test('updates the desktop independently when the server is already current', async ({ page, ui }) => {
   ui.updates.check!.release = null
   await page.route('**/web-app/', async (route) => {
     const response = await route.fetch()
@@ -151,7 +151,7 @@ test('updates the desktop independently when Core is already current', async ({ 
   expect(ui.requests.filter((request) => request.pathname.endsWith('/updates/apply'))).toHaveLength(0)
 })
 
-test('keeps a ready desktop update accessible when Core discovery fails', async ({ page }) => {
+test('keeps a ready desktop update accessible when server update discovery fails', async ({ page }) => {
   await page.route('**/web-app/', async (route) => {
     const response = await route.fetch()
     await route.fulfill({ response, body: (await response.text()).replace('<head>', '<head><meta name="leon-desktop-updates" content="true">') })
@@ -167,7 +167,7 @@ test('keeps a ready desktop update accessible when Core discovery fails', async 
   await expect(page.getByText('I couldn’t check for updates', { exact: true })).toBeVisible()
   const dialog = page.getByRole('dialog', { name: 'Update Leon', exact: true })
   await expect(dialog.getByRole('button', { name: 'Update Leon', exact: true })).toBeEnabled()
-  await expect(dialog.getByRole('list', { name: 'Core update progress' })).toHaveCount(0)
+  await expect(dialog.getByRole('list', { name: 'Server update progress' })).toHaveCount(0)
 })
 
 for (const outcome of ['completed', 'failed'] as const) {
@@ -217,7 +217,7 @@ for (const outcome of ['completed', 'failed'] as const) {
   })
 }
 
-test('confirms leaving during Core installation without cancelling or repeating the accepted update', async ({ page, ui }) => {
+test('confirms leaving during server installation without cancelling or repeating the accepted update', async ({ page, ui }) => {
   let applications = 0
   await page.route('**/api/v1/updates/apply', async (route) => {
     applications++

@@ -108,7 +108,7 @@ const TERMINAL_AUTH_WRAPPERS = new Set<string>([
 ])
 
 export default class ShellTool extends Tool {
-  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Idle
   private static readonly TOOLKIT = 'operating_system_control'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
   private readonly sessions = new ShellSessions()

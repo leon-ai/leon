@@ -6,6 +6,8 @@
 @use '_includes/inline-link'
 
 html
+  --desktop-titlebar-height: 0px
+  --app-viewport-height: calc(100vh - var(--desktop-titlebar-height))
   min-width: 320px
   min-height: 100%
   background-color: var(--color-background)
@@ -16,13 +18,34 @@ html
   -moz-osx-font-smoothing: grayscale
   -webkit-text-size-adjust: 100%
 
-body,
-#root
-  min-height: 100vh
-
 body
+  min-height: 100vh
+  box-sizing: border-box
+  padding-top: var(--desktop-titlebar-height)
   background-color: var(--color-background)
   overflow: hidden
+
+#root
+  min-height: var(--app-viewport-height)
+
+// The native overlay owns its height, including platform scale and fullscreen.
+// Ordinary browser tabs retain their full viewport and have no draggable strip.
+html[data-desktop]
+  --desktop-native-titlebar-height: env(titlebar-area-height, 0px)
+  --desktop-titlebar-border-width: min(1px, var(--desktop-native-titlebar-height))
+  // Reserve the last row below the native overlay so the border spans the window.
+  --desktop-titlebar-height: calc(var(--desktop-native-titlebar-height) + var(--desktop-titlebar-border-width))
+
+.desktop-titlebar
+  position: fixed
+  inset: 0 0 auto
+  z-index: 106
+  height: var(--desktop-titlebar-height)
+  box-sizing: border-box
+  border-bottom: var(--desktop-titlebar-border-width) solid var(--color-border)
+  background-color: var(--color-background)
+  -webkit-app-region: drag
+  user-select: none
 
 ::selection
   background-color: var(--color-accent-soft)

@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef } from 'react'
 import { infiniteQueryOptions, useInfiniteQuery, useMutation, type InfiniteData,
   type UseInfiniteQueryOptions, type UseInfiniteQueryResult, type UseMutationResult } from '@tanstack/react-query'
 
+import { notifyDesktopTurnCompleted } from './desktop-notifications'
 import { queryClient } from '@/query-client'
 import { useToast } from '@/components/toast'
 import { canPrefetch, prefetchModule } from '@/utils/prefetch'
+import { createUUID } from '@/utils/create-uuid'
 import { requestAPI } from './api'
 import type { ConversationCommand, ConversationNotification, ConversationPage, ConversationRecord } from './conversation'
 import { applyConversationEvent, mergeAnswerParts } from './conversation-events'
 import { toFeedEntries } from './conversation-feed'
+import { turnClientHeaders } from './turn-client'
 import { PROFILE_AUTH_QUERY_KEY, useProfile } from './profile'
 import { ConnectionError, requestErrors } from './request-errors'
 import { sessionsQueryKey, SESSION_PAGE_SIZE, SessionStatus, type SessionsPage } from './sessions'
@@ -53,7 +56,7 @@ async function fetchConversationPage(profile: string, sessionId: string, cursor:
   const liveRecords = new Map(cached?.pages.flatMap((item) => item.messages.filter((record) => !record.historical).map((record) => [record.messageId, record] as const)))
 
   return {
-    ...page, snapshotVersion: crypto.randomUUID(), appliedCursor: page.event_cursor,
+    ...page, snapshotVersion: createUUID(), appliedCursor: page.event_cursor,
     messages: page.messages.map((record) => {
       const live = liveRecords.get(record.messageId)
       return { ...record, historical: record.isAddedToHistory && !live,
@@ -228,6 +231,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
     gcTime: 0,
     mutationFn: async (input: SendMessageInput) => {
       assertSendMessageActive(profile, input.signal)
+      const headers = turnClientHeaders()
       const attachments = await uploadOwnerAttachments(profile, sessionId, input.attachments ?? [], input.onUploadProgress, input.signal)
       assertSendMessageActive(profile, input.signal)
       if (attachments.length) {
@@ -241,7 +245,7 @@ export function useSendMessage(sessionId: string): UseMutationResult<{ command: 
 
       return requestAPI<{ command: ConversationCommand }>(`sessions/${encodeURIComponent(sessionId)}/messages`, {
         ...(input.signal ? { signal: input.signal } : {}),
-        method: 'POST', body: JSON.stringify({ id: input.id, query: input.query,
+        method: 'POST', headers, body: JSON.stringify({ id: input.id, query: input.query,
           ...(attachments.length ? { attachments: attachments.map((file) => file.id) } : {}) })
       })
     },
@@ -365,6 +369,9 @@ export function useConversationEvents(sessionId: string | undefined, snapshot: C
       if (event.sequence > (snapshot?.event_cursor ?? sidebarCursor ?? 0) && event.type === 'turn_status'
         && event.data['status'] === 'completed' && event.data['consumed'] !== true) {
         playTurnCompletionSound(profile, event.sequence)
+        if (event.session_id) {
+          notifyDesktopTurnCompleted({ profile, sessionId: event.session_id, sequence: event.sequence })
+        }
       }
       if (event.type === 'owner_message' || event.type === 'error' && event.data['code'] === 'replay_snapshot_required') {
         void queryClient.invalidateQueries({ queryKey: queryHistoryKey(profile, event.session_id || sessionId || ''), exact: true })

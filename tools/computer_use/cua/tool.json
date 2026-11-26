@@ -3,7 +3,8 @@
   "tool_id": "cua",
   "toolkit_id": "computer_use",
   "name": "Cua Driver",
-  "version": "1.0.2",
+  "version": "1.1.1",
+  "execution_target": "device",
   "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
   "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens. Application menu-bar entries may appear in a window tree but are outside that window; use invoke_menu with an exact observed menu path rather than clicking their window tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse act for predictable inputs on one observed target and verify its final state. Put the only pixel click in focus; steps use semantic controls or keys. Every input shares the explicit target: kind=window with pid/window_id or kind=desktop with display_id. A new pixel target needs a new call grounded in the returned observation.",
   "icon_name": "cursor-line",
@@ -33,7 +34,7 @@
   "functions": {
     "observe": {
       "description": "Inspect the current frontmost normal window: fresh accessibility tree and image, without switching apps. Use for work in the already-open foreground window.",
-      "progressive_guidance": "Check app/title and copy capture_target into target on every input step. Use query for missing controls. For another window or unavailable stacking order, use list_windows and get_window_state. No implicit current-window target.",
+      "progressive_guidance": "Check app/title and copy capture_target into target on every input step. Use query for missing controls. If Leon is known to cover the intended window and foreground interaction is permitted, go directly to bring_to_front with the target pid and window_id to activate and capture it. Use list_windows when the target or stacking order is unknown. No implicit current-window target.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -52,8 +53,8 @@
       }
     },
     "list_apps": {
-      "description": "List installed desktop applications and configured preferred_apps. Use it to choose a launch target when the owner did not name one.",
-      "progressive_guidance": "preferred_apps includes saved choices even when query filters the app list. found_in_desktop_inventory=false means no desktop entry matched, not that the app is absent: for a terminal-hosted app, consult ACTIVITY.md process ancestry and inspect the host's correct idle session. The terminal is its host, not a replacement for the selected app. Running time is not proof of preference. Remote context must describe the target device, not the server. Save a new preference only with owner confirmation.",
+      "description": "List installed desktop applications and configured preferred_apps. Find a named app or select from installed candidates in one inventory read.",
+      "progressive_guidance": "Combine plausible names into a single queries array and check the installed matches before choosing a fallback. preferred_apps includes saved choices even when query filters the app list. found_in_desktop_inventory=false means no desktop entry matched, not that the app is absent: for a terminal-hosted app, consult ACTIVITY.md process ancestry and inspect the host's correct idle session. The terminal is its host, not a replacement for the selected app. Running time is not proof of preference. Remote context must describe the target device, not the server. Save a new preference only with owner confirmation.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -62,6 +63,16 @@
             "description": "Optional case-insensitive app name, bundle ID, or launch-path substring.",
             "minLength": 1,
             "type": "string"
+          },
+          "queries": {
+            "description": "Check several alternative app names, bundle IDs, or launch-path substrings in one inventory read.",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 12,
+            "type": "array"
           }
         },
         "type": "object"
@@ -173,7 +184,7 @@
     },
     "get_window_state": {
       "description": "Inspect one native window and return its interface tree plus a screenshot. Use this for visible appearance, colors, or controls after list_windows.",
-      "progressive_guidance": "Read AX text before Copy or OCR. Semantic click needs its listed action (default press); focus other text fields using image pixels or keyboard. Retry an outer-frame-only tree at most once for a missing control. Reuse post-action state. Observe changed or loading destinations (settle_ms), including new windows/dialogs, before continuing.",
+      "progressive_guidance": "Read AX text before Copy or OCR. Semantic click needs its listed action (default press); focus other text fields using image pixels or keyboard. Retry an outer-frame-only tree at most once for a missing control. Use the post-action frame directly when it shows the intended effect. For a known covered target, use bring_to_front with its pid and window_id when foreground interaction is allowed. Observe changed or loading destinations (settle_ms), including new windows/dialogs, before continuing.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -721,17 +732,21 @@
       }
     },
     "bring_to_front": {
-      "description": "Bring a known window forward when persistent visibility or desktop interaction is needed.",
-      "progressive_guidance": "Use only for persistent visibility or an exposed desktop target. Ordinary foreground input already activates its target and normally restores prior focus; foreground right-clicks keep the target in front so the menu remains available.",
+      "description": "Bring a window forward and return its fresh screenshot and accessibility state in the same call when both pid and window_id are supplied.",
+      "progressive_guidance": "Use only when foreground interaction is permitted and persistent visibility is needed. For a covered target, including desktop follow-ups and canvas drags, supply both observed IDs and use the returned frame for the next action. Ordinary foreground input already activates its target and normally restores prior focus; foreground right-clicks keep the target in front so the menu remains available.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
+          "capture_after": {
+            "description": "Defaults to true with exact pid and window_id. Set false to activate without a screenshot. A pid-only call activates without a screenshot.",
+            "type": "boolean"
+          },
           "pid": {
             "type": "integer"
           },
           "window_id": {
-            "description": "X11 window id (xid) to activate. If omitted, the first window of `pid` is used.",
+            "description": "Exact native window ID from a recent observation. Omit for application-only activation.",
             "type": "integer"
           }
         },
@@ -2382,7 +2397,7 @@
     },
     "perform_actions": {
       "description": "One to eight inputs, one final observation. At most ONE x/y step, including type_text. Includes set_value for dropdowns; click/type/key inputs are already included.",
-      "progressive_guidance": "Batch predictable inputs, ending at the next decision or review. Use current tokens for observed controls; exact name plus optional native role resolves later controls from fresh state. Missing/ambiguous names stop. Prefer set_value for dropdowns, type_text for free text. Set target once for the batch; overrides need a complete target. After a named lookup/check use names or focused keys, never old tokens/pixels. At most ONE x/y step; additional clicks need tokens or exact names. Click needs the listed action (default press). wait_for/expect check literal text. Inspect final state and uncertain delivery before retrying.",
+      "progressive_guidance": "Batch predictable inputs, ending at the next decision or review. Use current tokens for observed controls; exact name plus optional native role resolves later controls from fresh state. Missing/ambiguous names stop. Prefer set_value for dropdowns, type_text for free text. Set target once for the batch; overrides need a complete target. After a named lookup/check use names or focused keys, never old tokens/pixels. At most ONE x/y step; additional clicks need tokens or exact names. Click needs the listed action (default press). wait_for/expect check literal text. Inspect final state and uncertain delivery before retrying. To continue across a known same-process dialog, use exactly two steps on the parent: one semantic left-click or key action, then set_value with wait_for_window (exact new dialog title), exact field name/role and desired value. The dialog must become uniquely frontmost. The tool verifies the field and stops there.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2581,6 +2596,12 @@
                     }
                   }
                 },
+                "wait_for_window": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Exact title of a newly opened dialog in the same process. Use only on the final set_value step of a two-step sequence, with exact field name and role. No existing dialog, pixels, or target override."
+                },
                 "wait_for": {
                   "type": "string",
                   "minLength": 1,
@@ -2636,7 +2657,7 @@
     },
     "act": {
       "description": "One exact target, optional single pixel focus, then semantic/keyboard steps; one final observation. Use for both single inputs and predictable batches.",
-      "progressive_guidance": "Put pixel coordinates only in focus={x,y}; steps use the shared target with keys, text, current element_token or exact name. Batch predictable inputs, stopping for decisions/review. Select dropdowns with set_value and the full exact value; single-letter type-ahead can choose another option. Use type_text for free text. Exact names resolve fresh state and stop if missing/ambiguous; after a name/check use names or focused keys, never old tokens. Click requires its listed action (default press); otherwise focus fields with pixels or attach their token to keyboard input. wait_for/expect check literal text. Inspect final state and uncertain delivery before retrying.",
+      "progressive_guidance": "Put pixels only in focus. Batch predictable inputs, stopping for decisions/review. When a click starts a known loading transition, use expect for known accessibility text or settle_ms for the first visual capture after a short wait. Put the check or wait on the input that starts the transition. Reuse the returned frame; observe again if still loading and never repeat input just to verify. Steps use the shared target with keys, text, current element_token or exact name. Select dropdowns with set_value and the full exact value; single-letter type-ahead can choose another option. Use type_text for free text. Exact names resolve fresh state and stop if missing/ambiguous; after a name/check use names or focused keys, never old tokens. Click requires its listed action (default press); otherwise focus fields with pixels or attach their token to keyboard input. wait_for/expect check literal text. To continue across a known same-process dialog, use exactly two steps on the parent: one semantic left-click or key action, then set_value with wait_for_window (exact new dialog title), exact field name/role and desired value. The dialog must become uniquely frontmost. The tool verifies the field and stops there.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2789,6 +2810,12 @@
                     }
                   }
                 },
+                "wait_for_window": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Exact title of a newly opened dialog in the same process. Use only on the final set_value step of a two-step sequence, with exact field name and role. No existing dialog, pixels, or target override."
+                },
                 "wait_for": {
                   "type": "string",
                   "minLength": 1,
@@ -2833,13 +2860,24 @@
           },
           "focus": {
             "type": "object",
-            "description": "Optional single left click to establish focus, using pixels from the latest matching screenshot. Omit for semantic/keyboard input. Requires both x and y.",
+            "description": "Optional single left click at x/y from the latest matching screenshot. Use alone for a pixel click or before a mechanical sequence. Omit for semantic/keyboard input.",
             "properties": {
               "x": {
                 "type": "number"
               },
               "y": {
                 "type": "number"
+              },
+              "expect": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Known literal accessibility text expected in this exact window after the click. A bounded check stops remaining steps if unmet, returning current evidence without clicking again."
+              },
+              "settle_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2000,
+                "description": "Short wait after this click before checking expect, capturing, or continuing. Use for a known visual transition when accessibility text is unavailable. Omit for immediate actions."
               }
             },
             "additionalProperties": false

@@ -123,7 +123,7 @@ test('keeps visible working sessions animated across reading pauses and navigati
   await expect.poll(() => canvasPaints(other.locator('canvas'))).toBeGreaterThan(reducedPaints)
 })
 
-test('budgets weather frames and suspends decoration outside the viewport or foreground', async ({ page, ui }) => {
+test('keeps visible weather and composer decoration moving when the window loses focus', async ({ page, ui }) => {
   ui.ambient.weather = {
     condition: 'rain', description: 'Rain', temperatureC: 12, feelsLikeC: 10,
     weatherCode: 63, location: 'Test location', observationTime: '2026-11-15T12:00', fetchedAt: Date.now()
@@ -139,14 +139,29 @@ test('budgets weather frames and suspends decoration outside the viewport or for
   expect(drawn).toBeGreaterThan(2)
   expect(drawn).toBeLessThanOrEqual(17)
 
+  const composer = page.locator('.query-input-container')
+  await page.getByRole('textbox', { name: 'Message Leon' }).fill('A visible draft')
+  await expect(composer).toHaveClass(/query-input-active/)
+  await expect(composer.locator('.input-effects-caret')).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => false })
+    window.dispatchEvent(new Event('blur'))
+  })
+  await expect(composer).toHaveClass(/query-input-visible/)
+  await expect(composer).toHaveClass(/query-input-active/)
+  await expect(composer.locator('.input-effects-caret')).toBeHidden()
+  const blurred = await paints()
+
+  await expect.poll(paints).toBeGreaterThan(blurred)
+
   // Playwright emulates focused, visible pages; deliver the lifecycle contract
   // explicitly here. Headed resource samples disable that override for backgrounding.
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true })
     document.dispatchEvent(new Event('visibilitychange'))
   })
-  await expect(page.locator('.query-input-container')).not.toHaveClass(/query-input-active/)
-  await expect(page.locator('.query-input-container')).not.toHaveClass(/query-input-visible/)
+  await expect(composer).not.toHaveClass(/query-input-active/)
+  await expect(composer).not.toHaveClass(/query-input-visible/)
   const hidden = await paints()
   await page.waitForTimeout(300)
   expect(await paints()).toBe(hidden)
@@ -155,6 +170,10 @@ test('budgets weather frames and suspends decoration outside the viewport or for
     document.dispatchEvent(new Event('visibilitychange'))
   })
   await expect.poll(paints).toBeGreaterThan(hidden)
+  await page.evaluate(() => {
+    Reflect.deleteProperty(document, 'hasFocus')
+    window.dispatchEvent(new Event('focus'))
+  })
 
   const weather = page.locator('.weather-layer')
   await weather.evaluate((element) => { element.style.transform = 'translateX(-200vw)' })
@@ -170,7 +189,7 @@ test('budgets weather frames and suspends decoration outside the viewport or for
   await page.getByRole('textbox', { name: 'Message Leon' }).fill('Motion preference respected')
   await page.waitForTimeout(300)
   expect(await paints()).toBe(reduced)
-  await expect(page.locator('.query-input-container')).not.toHaveClass(/query-input-active/)
+  await expect(composer).not.toHaveClass(/query-input-active/)
 })
 
 

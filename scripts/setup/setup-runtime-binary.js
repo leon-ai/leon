@@ -68,7 +68,7 @@ export async function setupRuntimeBinary({
   try {
     await fs.promises.mkdir(path.dirname(basePath), { recursive: true })
     // Keep downloads and extraction beside the live runtime. A failed download
-    // must leave the executable available to both Core and its recovery worker.
+    // must leave the executable available to both the server and its recovery worker.
     staging = await fs.promises.mkdtemp(path.join(path.dirname(basePath), `.${path.basename(basePath)}-`))
     const candidate = path.join(staging, 'candidate')
     const backup = path.join(staging, 'previous')

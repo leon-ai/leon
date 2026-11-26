@@ -82,7 +82,7 @@ export default class AnthropicClaudeCodeAdapter {
   }
 
   /**
-   * Request only a response or tool decisions, then let Core execute those decisions.
+   * Request only a response or tool decisions, then let the server execute those decisions.
    */
   public async runChatCompletion(
     prompt: PromptOrChatHistory,
@@ -162,7 +162,7 @@ export default class AnthropicClaudeCodeAdapter {
     try {
       params.signal?.throwIfAborted()
       // Keep full tool schemas in a file; Windows limits command-line length.
-      // Core validates returned arguments against these schemas before execution.
+      // The server validates returned arguments against these schemas before execution.
       const systemPromptFile = path.join(directory, 'system-prompt.txt')
       await fs.writeFile(systemPromptFile, [
         params.systemPrompt,
@@ -270,7 +270,7 @@ export default class AnthropicClaudeCodeAdapter {
           if (value && typeof value === 'object' && 'tool_calls' in value) {
             const partialCalls = value['tool_calls']
             if (Array.isArray(partialCalls)) {
-              // SDK partial JSON parsing is for display only. Core receives the
+              // SDK partial JSON parsing is for display only. The server receives the
               // validated final decisions, using these same IDs for activity cards.
               for (const [index, call] of partialCalls.entries()) {
                 if (!call || typeof call !== 'object' || typeof call.name !== 'string') {
@@ -299,7 +299,7 @@ export default class AnthropicClaudeCodeAdapter {
         throw new Error('I could not use your Claude subscription. Check claude auth status or reconnect with /connection ai connect anthropic.')
       }
       // Streaming schema mode is not supported by the CLI. Validate the final
-      // JSON before Core receives any tool decisions; partial values are display-only.
+      // JSON before the server receives any tool decisions; partial values are display-only.
       const output = streamText
         ? JSON.parse(completed.result || streamedJSON) as Record<string, unknown>
         : completed.structured_output

@@ -4,6 +4,7 @@ import type { Client, StreamableHTTPClientTransport, Tool } from '@modelcontextp
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
 import { MAX_TOOL_TIMEOUT_MS, type ToolRuntimeProgress, type ToolRuntimeResult, type ToolTimeoutPolicy } from '@@/bridges/runtime/contracts/tool-runtime-types'
+import { getOAuthCompletionPath, isDesktopOAuthReturn } from '@@/bridges/runtime/contracts/oauth-popup'
 import { ToolTimeout } from '@@/bridges/runtime/nodejs/tool-timeout'
 import type { MCPFunction, MCPManifest } from '../tool-source'
 import { createMCPAuth, MCPAuthenticationRequired, MCP_CONNECTIONS, type MCPAuth } from './auth'
@@ -316,12 +317,14 @@ export class MCPManager {
 export const MCP_MANAGER = createProfileServiceProxy('MCP_MANAGER', () => new MCPManager())
 
 /**
- * Starts discovery/sign-in only from an explicit browser action, with a callback
- * and popup return URL constrained to the authenticated origin.
+ * Starts discovery and sign-in from an explicit client action. The provider
+ * returns to the server before the server signals completion to the originating client.
  */
 export async function startMCPOAuth(manifest: MCPManifest, origin: string, returnURL: string, apiVersion: string): Promise<{ authorization_url?: string }> {
   const target = new URL(returnURL)
-  if (target.origin !== origin || target.pathname !== `/api/${apiVersion}/connections/complete`) {
+  const coreReturn = target.origin === origin && target.pathname === getOAuthCompletionPath(apiVersion)
+
+  if (!coreReturn && !isDesktopOAuthReturn(target, apiVersion)) {
     throw new Error('Return to this Leon window to connect the account.')
   }
   for (const [state, pending] of authorizations) {

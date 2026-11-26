@@ -1,6 +1,7 @@
 export const CHARS_PER_TOKEN = 4
 export const DUTY_NAME = 'Agent LLM Duty'
 export const AGENT_PROMPT_CACHE_KEY = 'leon-ai-assistant'
+export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
 
 export const AGENT_HISTORY_COMPACTION_SYSTEM_PROMPT = `You rewrite a bounded rolling summary for older agent conversation turns.
 

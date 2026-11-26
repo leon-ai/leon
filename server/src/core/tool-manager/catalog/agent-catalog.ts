@@ -1,4 +1,6 @@
 import type { OpenAITool } from '@/core/llm-manager/types'
+import { TOOLKIT_REGISTRY } from '@/core'
+import { COMPUTER_USE_DEVICE_TOOL, ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
 import {
   normalizeSearchText, prepareSearchQuery, rankSearchFields, SearchRank
 } from '@/helpers/search-helper'
@@ -66,18 +68,36 @@ export async function searchAgentCatalog(input: Record<string, unknown>): Promis
   const selected = first && (ranked.length === 1 || first.rank === SearchRank.Exact && ranked[1]?.rank !== SearchRank.Exact)
     ? first.tool : undefined
   let setupShown = false
+  let deviceSetupInstruction: string | undefined
   if (selected && getCatalogToolState(selected) !== CatalogToolState.Ready && !isCatalogToolRestricted(selected)) {
     const { emitConnectionWidget } = await import('@/core/connections/connection-widget')
     emitConnectionWidget(selected.id, selected)
     setupShown = true
+  } else if (selected?.id === COMPUTER_USE_DEVICE_TOOL && !isCatalogToolRestricted(selected)) {
+    const { showComputerUsePermission, COMPUTER_USE_PERMISSION_REQUIRED } = await import('@/core/satellite/computer-use-permission')
+    if (showComputerUsePermission()) {
+      deviceSetupInstruction = COMPUTER_USE_PERMISSION_REQUIRED
+    }
   }
 
   return JSON.stringify({
-    tools: matches.map(({ tool }) => ({
-      id: tool.id, name: tool.name.slice(0, MAXIMUM_RESULT_NAME_LENGTH), description: tool.description,
-      kind: tool.kind, state: getCatalogToolState(tool), restricted: isCatalogToolRestricted(tool)
-    })),
+    tools: matches.map(({ tool }) => {
+      const state = getCatalogToolState(tool)
+      const [toolkitId, toolId] = tool.id.split('.')
+      const availability = state === CatalogToolState.Ready && toolkitId && toolId &&
+        TOOLKIT_REGISTRY.getToolExecutionTarget(toolkitId, toolId) === ToolExecutionTarget.Device
+        ? TOOLKIT_REGISTRY.getToolAvailability(toolkitId, toolId) : undefined
+
+      return {
+        id: tool.id, name: tool.name.slice(0, MAXIMUM_RESULT_NAME_LENGTH), description: tool.description,
+        kind: tool.kind, state: availability?.available === false ? 'unavailable' : state,
+        restricted: isCatalogToolRestricted(tool),
+        ...(availability?.reason ? { reason: tool.id === COMPUTER_USE_DEVICE_TOOL && deviceSetupInstruction
+          ? deviceSetupInstruction : availability.reason } : {})
+      }
+    }),
     has_more: ranked.length > matches.length,
+    ...(deviceSetupInstruction ? { next_step: deviceSetupInstruction } : {}),
     ...(setupShown ? {
       setup_card: selected!.id,
       next_step: 'The owner can use the card to add, enable or connect this tool. Do not claim account access or install it yourself.'

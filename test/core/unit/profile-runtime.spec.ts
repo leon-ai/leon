@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { parseProfileCredential } from '@/core/profile-auth'
+import { parseProfileCredential } from '@/core/profile-runtime/profile-auth'
 import {
   getActiveProfileName,
   runWithProfileContext

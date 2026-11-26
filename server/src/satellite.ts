@@ -1,6 +1,7 @@
 import { API_VERSION } from '@/constants'
 import { uploadSatelliteDeliverables } from '@/core/satellite/satellite-deliverables'
 import os from 'node:os'
+import { once } from 'node:events'
 
 import { io } from 'socket.io-client'
 
@@ -23,7 +24,7 @@ import {
 import {
   parseProfileCredential,
   readStoredProfileToken
-} from '@/core/profile-auth'
+} from '@/core/profile-runtime/profile-auth'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
@@ -32,6 +33,13 @@ import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import { buildSatelliteProcessTitle } from '@/core/satellite/satellite-process-title'
 import { collectSatelliteArtifacts, getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
 import { SATELLITE_CONTEXT_REFRESH_MS } from '@/core/satellite/satellite-context'
+import { runOnSatellite } from '@/core/satellite/device-context'
+import {
+  DESKTOP_SATELLITE_ENV,
+  DESKTOP_SATELLITE_READY,
+  DESKTOP_SATELLITE_REJECTED,
+  type DeviceGrant
+} from '@@/bridges/runtime/contracts/device-execution'
 
 const REMOTE_URL_ARGUMENT = '--url'
 const PROFILE_TOKEN_ARGUMENT = '--token'
@@ -84,8 +92,10 @@ async function startSatellite(): Promise<void> {
   const remoteURL =
     getArgumentValue(REMOTE_URL_ARGUMENT) ||
     String(process.env['LEON_SATELLITE_REMOTE_URL'] || '').trim()
-  const credentialValue = getProfileCredential()
-  const credential = parseProfileCredential(credentialValue)
+  const grant = process.env[DESKTOP_SATELLITE_ENV] === '1' && process.send
+    ? (await once(process, 'message'))[0] as DeviceGrant : undefined
+  const deviceCredential = grant?.credential
+  const credential = parseProfileCredential(deviceCredential || getProfileCredential())
 
   if (!remoteURL) {
     throw new Error(
@@ -98,38 +108,40 @@ async function startSatellite(): Promise<void> {
     )
   }
 
-  const deviceId =
+  const deviceId = grant?.id ||
     getArgumentValue(DEVICE_ID_ARGUMENT) ||
     String(process.env['LEON_SATELLITE_DEVICE_ID'] || '').trim() ||
     os.hostname()
 
-  process.title = buildSatelliteProcessTitle(
-    credential.profileName,
-    deviceId
-  )
+  // A remote profile name never selects another profile on the local computer.
+  const localProfile = grant ? LEON_PROFILE_NAME : credential.profileName
+  process.title = buildSatelliteProcessTitle(localProfile, deviceId)
 
   await runWithProfileContext(
-    { profileName: credential.profileName },
+    { profileName: localProfile },
     async () => {
       await TOOLKIT_REGISTRY.load()
     }
   )
 
+  const manifest = runWithProfileContext({ profileName: localProfile }, () =>
+    runOnSatellite(() => deviceCredential
+      ? TOOLKIT_REGISTRY.getPairedDeviceManifest(grant?.tools)
+      : TOOLKIT_REGISTRY.getSatelliteManifest())
+  )
   const socket = io(remoteURL, {
-    auth: {
-      token: credential.value
-    },
+    auth: deviceCredential ? {} : { token: credential.value },
     reconnection: true
   })
 
   let refreshingContext = false
   const publishContext = async (): Promise<void> => {
-    if (!socket.connected || refreshingContext) return
+    if (deviceCredential || !socket.connected || refreshingContext) return
     refreshingContext = true
     const connectionId = socket.id
     try {
       await runWithProfileContext({ profileName: credential.profileName }, async () => {
-        const filenames = TOOLKIT_REGISTRY.getSatelliteManifest()
+        const filenames = runOnSatellite(() => TOOLKIT_REGISTRY.getSatelliteManifest())
           .flatMap((toolkit) => toolkit.context_files || [])
         const snapshot = await CONTEXT_MANAGER.getDeviceDiscoverySnapshot(filenames)
         if (socket.connected && socket.id === connectionId) socket.emit(SATELLITE_EVENTS.context, snapshot)
@@ -157,23 +169,26 @@ async function startSatellite(): Promise<void> {
 
   socket.on('connect', () => {
     void runWithProfileContext(
-      { profileName: credential.profileName },
+      { profileName: localProfile },
       async () => {
         socket.emit(SATELLITE_EVENTS.init, {
           protocolVersion: SATELLITE_PROTOCOL_VERSION,
-          token: credential.value,
+          ...(deviceCredential ? { deviceCredential } : { token: credential.value }),
           device: {
             id: deviceId,
             name: DEFAULT_SATELLITE_NAME,
             platform: process.platform
           },
-          toolkits: TOOLKIT_REGISTRY.getSatelliteManifest()
+          toolkits: deviceCredential ? manifest : runOnSatellite(() => TOOLKIT_REGISTRY.getSatelliteManifest())
         })
       }
     )
   })
 
   socket.on(SATELLITE_EVENTS.ready, () => {
+    if (grant && process.connected) {
+      process.send?.(DESKTOP_SATELLITE_READY)
+    }
     void publishContext()
     LogHelper.title('Satellite')
     LogHelper.success(
@@ -191,19 +206,29 @@ async function startSatellite(): Promise<void> {
       activePreparations.set(invocation.invocationId, preparationController)
       let result: ToolExecutionResult
       let artifacts: SatelliteArtifactBundle | undefined
+      let timing: SatelliteToolResultPayload['timing']
+      const startedAt = performance.now()
 
       try {
+        if (deviceCredential && !manifest.some((toolkit) =>
+          toolkit.id === invocation.input.toolkitId &&
+          Boolean(invocation.input.functionName && Object.hasOwn(
+            toolkit.tools[invocation.input.toolId]?.functions ?? {}, invocation.input.functionName
+          ))
+        )) {
+          throw new Error('This tool function is outside the device grant.')
+        }
         result = await runWithProfileContext(
-          { profileName: credential.profileName },
+          { profileName: localProfile },
           async () => {
             const execute = (): Promise<ToolExecutionResult> =>
-              TOOL_EXECUTOR.executeTool({
+              runOnSatellite(() => TOOL_EXECUTOR.executeTool({
                 ...invocation.input,
                 deferArtifactDelivery: true,
-                leonService: {
+                ...(!deviceCredential ? { leonService: {
                   baseURL: `${remoteURL.replace(/\/$/, '')}/api/${API_VERSION}`,
                   token: credential.value
-                },
+                } } : {}),
                 signal: controller.signal,
                 retainedSignal: preparationController.signal,
                 onProgress: (progress) => {
@@ -213,7 +238,7 @@ async function startSatellite(): Promise<void> {
                     progress
                   })
                 }
-              })
+              }))
 
             return invocation.conversationSessionId
               ? runWithConversationSession(
@@ -223,24 +248,25 @@ async function startSatellite(): Promise<void> {
               : execute()
           }
         )
+        const executedAt = performance.now()
         if (invocation.conversationSessionId && !controller.signal.aborted) {
-          result = await uploadSatelliteDeliverables({
-            result,
-            root: getSatelliteArtifactRoot(
-              credential.profileName,
-              invocation.conversationSessionId
-            ),
-            sessionId: invocation.conversationSessionId,
-            remoteURL,
-            token: credential.value,
-            signal: controller.signal
-          })
+          if (!deviceCredential) {
+            result = await uploadSatelliteDeliverables({
+              result,
+              root: getSatelliteArtifactRoot(credential.profileName, invocation.conversationSessionId),
+              sessionId: invocation.conversationSessionId,
+              remoteURL,
+              token: credential.value,
+              signal: controller.signal
+            })
+          }
           artifacts = await collectSatelliteArtifacts(
-            getSatelliteArtifactRoot(credential.profileName, invocation.conversationSessionId), result
+            getSatelliteArtifactRoot(localProfile, invocation.conversationSessionId), result
           ).catch((error: unknown) => {
             throw new Error(`Satellite artifact transfer failed; the action may have executed, do not replay it blindly: ${String(error)}`)
           })
         }
+        timing = { executionMs: executedAt - startedAt, artifactPreparationMs: performance.now() - executedAt }
       } catch (error) {
         result = buildSatelliteToolError(invocation, error)
       } finally {
@@ -251,6 +277,7 @@ async function startSatellite(): Promise<void> {
       const payload: SatelliteToolResultPayload = {
         invocationId: invocation.invocationId,
         result,
+        ...(timing ? { timing } : {}),
         ...(artifacts ? { artifacts } : {})
       }
 
@@ -268,6 +295,10 @@ async function startSatellite(): Promise<void> {
   )
 
   socket.on(SATELLITE_EVENTS.error, (error: SatelliteErrorPayload) => {
+    if (grant && process.connected) {
+      process.send?.(DESKTOP_SATELLITE_REJECTED)
+      socket.disconnect()
+    }
     LogHelper.title('Satellite')
     LogHelper.error(error.message)
   })
@@ -295,6 +326,9 @@ const shutDown = async (): Promise<void> => {
 
 process.once('SIGINT', () => void shutDown())
 process.once('SIGTERM', () => void shutDown())
+if (process.env[DESKTOP_SATELLITE_ENV] === '1') {
+  process.once('disconnect', () => void shutDown())
+}
 
 void startSatellite().catch((error: unknown) => {
   LogHelper.title('Satellite')

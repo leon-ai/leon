@@ -4,8 +4,9 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import SelfModelManager from '@/core/self-model-manager'
+import SelfModelManager from '@/core/self-model-manager/self-model-manager'
 import { buildOwnerDocument, normalizeOwnerProfile, getOwnerContextPath } from '@/core/context-manager/owner-profile'
+import { LogHelper } from '@/helpers/log-helper'
 
 const fixture = vi.hoisted(() => ({ root: '', infer: vi.fn() }))
 vi.mock('@/core/llm-manager/inference', () => ({ runInference: fixture.infer }))
@@ -114,4 +115,32 @@ it.each([
   const restarted = new SelfModelManager()
   expect(restarted.getSnapshot()).toContain('Verify sources.')
   expect(restarted.getSnapshot()).toContain('Examples are useful.')
+})
+
+it('reports provider cutoff and applies complete reflection updates', async () => {
+  const manager = new SelfModelManager()
+  fixture.infer.mockResolvedValueOnce({
+    output: '{"working_theories":["The owner prefers',
+    finishReason: 'length',
+    usedOutputTokens: 700
+  })
+
+  await manager.observeTurn(OBSERVATION)
+
+  expect(manager.getSnapshot()).not.toContain('The owner prefers')
+  expect(LogHelper.debug).toHaveBeenCalledWith(expect.stringContaining(
+    'rejected invalid output | finishReason=length | outputTokens=700'
+  ))
+
+  fixture.infer.mockResolvedValueOnce({
+    output: { working_theories: ['The owner prefers worked examples.'] },
+    finishReason: 'stop',
+    usedOutputTokens: 730
+  })
+  await manager.observeTurn({ ...OBSERVATION, assistantMessage: 'I will include worked examples.' })
+
+  expect(new SelfModelManager().getSnapshot()).toContain('The owner prefers worked examples.')
+  expect(LogHelper.debug).toHaveBeenCalledWith(expect.stringContaining(
+    'accepted | finishReason=stop | outputTokens=730'
+  ))
 })

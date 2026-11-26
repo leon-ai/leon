@@ -1,3 +1,11 @@
+export interface ContextTokenBreakdown {
+  transcript: number
+  system: number
+  tools: number
+  images: number
+  compaction: number
+}
+
 /**
  * Prompt occupancy for one model request, independent of cumulative turn usage.
  * Missing capacity means the endpoint's context limit is unknown.
@@ -7,6 +15,8 @@ export interface ContextUsageMetrics {
   contextWindowTokens?: number
   contextUsagePercent?: number
   contextUsageEstimated: boolean
+  contextTokenBreakdown?: ContextTokenBreakdown
+  contextTarget?: { provider: string, model: string }
 }
 
 function isTokenCount(value: unknown): value is number {
@@ -21,6 +31,8 @@ export function captureContextUsage(params: {
   usedInputTokens?: number | undefined
   estimatedInputTokens: number
   contextWindowTokens?: number | undefined
+  contextTokenBreakdown?: ContextTokenBreakdown | undefined
+  contextTarget?: ContextUsageMetrics['contextTarget']
 }): ContextUsageMetrics {
   const contextUsageEstimated = !isTokenCount(params.usedInputTokens)
   const contextUsedTokens = contextUsageEstimated
@@ -31,6 +43,8 @@ export function captureContextUsage(params: {
   return {
     contextUsedTokens,
     contextUsageEstimated,
+    ...(params.contextTarget ? { contextTarget: params.contextTarget } : {}),
+    ...(params.contextTokenBreakdown ? { contextTokenBreakdown: params.contextTokenBreakdown } : {}),
     ...(isTokenCount(contextWindowTokens) && contextWindowTokens > 0
       ? {
           contextWindowTokens,
@@ -60,7 +74,21 @@ export function readContextUsage(value: unknown): ContextUsageMetrics | undefine
     return undefined
   }
 
+  const target = record['contextTarget'] as Partial<NonNullable<ContextUsageMetrics['contextTarget']>> | undefined
+  const contextTarget = typeof target?.provider === 'string' && typeof target.model === 'string'
+    ? { provider: target.provider, model: target.model } : undefined
+  const breakdown = record['contextTokenBreakdown'] as Partial<ContextTokenBreakdown> | undefined
+  const contextTokenBreakdown = breakdown &&
+    isTokenCount(breakdown.transcript) && isTokenCount(breakdown.system) &&
+    isTokenCount(breakdown.tools) && isTokenCount(breakdown.images) && isTokenCount(breakdown.compaction)
+    ? {
+        transcript: breakdown.transcript, system: breakdown.system,
+        tools: breakdown.tools, images: breakdown.images, compaction: breakdown.compaction
+      } : undefined
+
   return captureContextUsage({
+    contextTarget,
+    contextTokenBreakdown,
     usedInputTokens: record['contextUsageEstimated']
       ? undefined
       : record['contextUsedTokens'],

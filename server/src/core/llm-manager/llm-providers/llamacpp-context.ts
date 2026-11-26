@@ -10,7 +10,7 @@ import {
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CPUArchitectures } from '@/types'
-import type { LeonConfigSchema } from '@/schemas/core-schemas'
+import type { LeonConfigSchema } from '@/schemas/config-schema'
 
 /**
  * Owner-selected precision shared by KV memory estimates and inference.

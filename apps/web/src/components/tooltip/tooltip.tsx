@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { clsx } from 'clsx'
 import { useExitCleanup } from '@/hooks/use-exit-cleanup'
+import { isRestoringOverlayFocus } from '@/utils/overlay-focus'
 
 import './tooltip.sass'
 
@@ -69,6 +70,7 @@ export function Tooltip({
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties>()
   const triggerRef = useRef<HTMLSpanElement>(null)
   const hoveredRef = useRef(false)
+  const waitForMouseMoveRef = useRef(false)
   const contentRef = useRef<HTMLSpanElement>(null)
   const [content, setContent] = useState<{ message: string, hint: ReactNode }>({ message: '', hint: null })
   useExitCleanup(contentRef, rendered && !open, () => setRendered(false))
@@ -94,8 +96,14 @@ export function Tooltip({
     setOpen(false)
   }
 
+  function openHoveredTooltip(): void {
+    hoveredRef.current = true
+    openTooltip()
+  }
+
   function closeTooltipAndBlurTrigger(): void {
     if (closeOnClick) {
+      waitForMouseMoveRef.current = true
       closeTooltip()
     }
 
@@ -161,14 +169,29 @@ export function Tooltip({
         ref={triggerRef}
         className={clsx('tooltip', className)}
         onMouseEnter={() => {
-          hoveredRef.current = true
-          openTooltip()
+          if (!waitForMouseMoveRef.current) {
+            openHoveredTooltip()
+          }
+        }}
+        onMouseMove={() => {
+          // Closing an overlay can uncover the trigger under a stationary mouse.
+          if (waitForMouseMoveRef.current && !hoveredRef.current) {
+            waitForMouseMoveRef.current = false
+            openHoveredTooltip()
+          }
         }}
         onMouseLeave={() => {
           hoveredRef.current = false
           closeInactiveTooltip()
         }}
-        onFocus={openTooltip}
+        onFocus={(event) => {
+          if (isRestoringOverlayFocus(event.target)) {
+            waitForMouseMoveRef.current = true
+            return
+          }
+
+          openTooltip()
+        }}
         onBlur={closeInactiveTooltip}
         onClick={closeTooltipAndBlurTrigger}
       >

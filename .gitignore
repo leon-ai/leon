@@ -29,6 +29,18 @@ debug.log
 # Keep ignoring a repo-root .env on the safe side.
 .env
 /.eslintcache
+apps/desktop/.generated/
+apps/desktop/.artifacts/
+# Desktop signing material belongs in local files or CI secrets, never Git.
+apps/desktop/**/.env.*
+apps/desktop/**/*.p12
+apps/desktop/**/*.pfx
+apps/desktop/**/*.p8
+apps/desktop/**/*.key
+apps/desktop/**/*.pem
+apps/desktop/**/*.cer
+apps/desktop/**/*.mobileprovision
+!apps/desktop/**/.env.example
 .last-native-node-modules-rebuild
 bridges/nodejs/.last-nodejs-bridge-deps-sync
 bridges/python/src/.last-python-bridge-deps-sync

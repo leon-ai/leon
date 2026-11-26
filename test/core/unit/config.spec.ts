@@ -6,7 +6,7 @@ import YAML from 'yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ajv } from '@/ajv'
-import { configSchemaObject } from '@/schemas/core-schemas'
+import { configSchemaObject } from '@/schemas/config-schema'
 
 const syncedEnvKeys = [
   'LEON_LANG',
@@ -25,6 +25,7 @@ const syncedEnvKeys = [
   'LEON_TIME_ZONE',
   'LEON_AFTER_SPEECH',
   'LEON_TELEMETRY',
+  'LEON_TELEMETRY_ENDPOINT',
   'LEON_PY_TCP_SERVER_HOST',
   'LEON_PY_TCP_SERVER_PORT',
   'LEON_LLAMACPP_BASE_URL',
@@ -93,6 +94,21 @@ describe('ConfigManager', () => {
 
     fs.writeFileSync(profilePaths.configPath, fs.readFileSync('config.sample.yml', 'utf8'))
     expect(validate(manager.reload()), JSON.stringify(validate.errors)).toBe(true)
+  })
+
+  it('enables usage sharing by default and reads the sharing preference from YAML', async () => {
+    process.env['LEON_TELEMETRY'] = 'false'
+    process.env['LEON_TELEMETRY_ENDPOINT'] = 'https://legacy.example'
+
+    const manager = await loadConfigManager()
+    expect(manager.getConfig().telemetry_enabled).toBe(true)
+
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+      telemetry_enabled: false, telemetry_share_timezone: true, telemetry_endpoint: 'https://collector.example'
+    }))
+    expect(manager.reload().telemetry_enabled).toBe(false)
+    expect(manager.getConfig()).not.toHaveProperty('telemetry_share_timezone')
+    expect(manager.getConfig()).not.toHaveProperty('telemetry_endpoint')
   })
 
   it('removes optional entries without replacing unrelated configuration', async () => {

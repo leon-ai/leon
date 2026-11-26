@@ -2,7 +2,9 @@ import { useMutation, type UseMutationResult } from '@tanstack/react-query'
 import { useRef } from 'react'
 import type { AnswerPart, AuroraValues } from '../../../../aurora/src/v2/contracts/answer'
 import { queryClient } from '@/query-client'
+import { createUUID } from '@/utils/create-uuid'
 import { requestAPI } from './api'
+import { turnClientHeaders } from './turn-client'
 import { useProfile, PROFILE_AUTH_QUERY_KEY } from './profile'
 import { conversationQueryOptions, type CachedConversation } from './conversation-queries'
 import { queryHistoryKey } from './query-history'
@@ -22,11 +24,12 @@ export function useAuroraSubmission(
     meta: { errorTitle: 'I could not save your answer', profile },
     retry: false,
     mutationFn: (values: AuroraValues) => {
-      commandId.current ??= crypto.randomUUID()
+      commandId.current ??= createUUID()
 
       return requestAPI<{ answerParts: AnswerPart[] }>(
         `sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/ui`,
-        { method: 'POST', body: JSON.stringify({ id: commandId.current, surfaceId, nodeId, revision, values }) }
+        { method: 'POST', headers: turnClientHeaders(),
+          body: JSON.stringify({ id: commandId.current, surfaceId, nodeId, revision, values }) }
       )
     },
     onSuccess: ({ answerParts }) => {

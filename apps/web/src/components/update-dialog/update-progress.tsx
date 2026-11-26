@@ -16,13 +16,13 @@ export function UpdateProgress({ state }: { state: UpdateState }) {
     downloadedBytes: state.progress.downloadedBytes, totalBytes: state.progress.totalBytes
   }] : []
 
-  return <ol className="update-steps" aria-label="Core update progress">
+  return <ol className="update-steps" aria-label="Server update progress">
     {steps.map((step, index) => <li key={step.id} data-status={step.status}>
       <div className="update-step-heading"><span className="update-step-marker" aria-hidden="true">{step.status === 'completed' ? '✓' : index + 1}</span>
-        <strong>{STAGE_LABELS[step.id] ?? 'Updating my Core'}</strong>
+        <strong>{STAGE_LABELS[step.id] ?? 'Updating my server'}</strong>
         <span>{step.status === 'completed' ? 'Complete' : step.status === 'failed' ? 'Failed' : 'In progress'}</span></div>
       <div className="update-step-content">
-      {step.status === 'running' && <Progress label={STAGE_LABELS[step.id] ?? 'Updating my Core'} showLabel={false}
+      {step.status === 'running' && <Progress label={STAGE_LABELS[step.id] ?? 'Updating my server'} showLabel={false}
         {...(step.downloadedBytes !== null && step.totalBytes !== null && step.totalBytes > 0
           ? { value: step.downloadedBytes, max: step.totalBytes } : {})} />}
       {step.downloadedBytes !== null && step.totalBytes !== null && <p>{formatBytes(step.downloadedBytes)} / {formatBytes(step.totalBytes)}</p>}

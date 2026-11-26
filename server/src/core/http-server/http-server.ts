@@ -8,12 +8,13 @@ import { spawn } from 'node:child_process'
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
 
+import { getOAuthCompletionPath } from '@@/bridges/runtime/contracts/oauth-popup'
+
 import {
   CODEBASE_PATH,
   API_VERSION,
   LEON_VERSION,
   LEON_NODE_ENV,
-  IS_TELEMETRY_ENABLED,
   OWNER_ATTACHMENT_BODY_LIMIT,
   TMP_PATH
 } from '@/constants'
@@ -21,6 +22,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { corsMidd } from '@/core/http-server/plugins/cors'
 import { otherMidd } from '@/core/http-server/plugins/other'
+import { insightsPlugin } from '@/core/http-server/api/insights'
 import { infoPlugin } from '@/core/http-server/api/info'
 import { inferencePlugin } from '@/core/http-server/api/inference'
 import { runActionPlugin } from '@/core/http-server/api/run-action'
@@ -34,6 +36,7 @@ import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
 import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
 import { connectionsPlugin } from '@/core/http-server/api/connections'
 import { toolsPlugin } from '@/core/http-server/api/tools'
+import { devicesPlugin } from '@/core/http-server/api/devices'
 import { skillsPlugin } from '@/core/http-server/api/skills'
 import { ambientPlugin } from '@/core/http-server/api/ambient'
 import { faviconsPlugin } from '@/core/http-server/api/favicons'
@@ -168,9 +171,6 @@ export default class HTTPServer {
     )
     LogHelper.info(`Total VRAM: ${await SystemHelper.getTotalVRAM()} GB`)
 
-    const isTelemetryEnabled = IS_TELEMETRY_ENABLED ? 'enabled' : 'disabled'
-    LogHelper.info(`Telemetry: ${isTelemetryEnabled}`)
-
     await this.bootstrap()
   }
 
@@ -201,7 +201,7 @@ export default class HTTPServer {
       const requestPath = request.url.split('?')[0] || ''
       const authPath = `/api/${API_VERSION}/profile-auth`
       const connectionOAuthCallbackPath = `/api/${API_VERSION}/connections/oauth/callback`
-      const connectionCompletePath = `/api/${API_VERSION}/connections/complete`
+      const connectionCompletePath = getOAuthCompletionPath(API_VERSION)
 
       if (
         !requestPath.startsWith(`/api/${API_VERSION}/`) ||
@@ -217,7 +217,7 @@ export default class HTTPServer {
       const isConversationMetadata = requestPath === sessionsPath ||
         requestPath.startsWith(`${sessionsPath}/`) ||
         requestPath === `/api/${API_VERSION}/conversation-history`
-      const isToolManagement = ['tools', 'connections', 'skills', 'updates'].some((resource) =>
+      const isToolManagement = ['tools', 'connections', 'skills', 'updates', 'insights', 'devices'].some((resource) =>
         requestPath === `/api/${API_VERSION}/${resource}` || requestPath.startsWith(`/api/${API_VERSION}/${resource}/`))
 
       // Session browsing must remain usable while a model is booting or offline.
@@ -234,6 +234,7 @@ export default class HTTPServer {
     })
     this.fastify.register(systemWidgetsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(sessionsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(insightsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(infoPlugin, { apiVersion: API_VERSION })
     this.fastify.register(commandPlugin, { apiVersion: API_VERSION })
     this.fastify.register(mediaGenerationPlugin, { apiVersion: API_VERSION })
@@ -245,6 +246,7 @@ export default class HTTPServer {
     this.fastify.register(extensionFilesPlugin, { apiVersion: API_VERSION })
     this.fastify.register(connectionsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(toolsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(devicesPlugin, { apiVersion: API_VERSION })
     this.fastify.register(skillsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(ambientPlugin, { apiVersion: API_VERSION })
     this.fastify.register(faviconsPlugin, { apiVersion: API_VERSION })

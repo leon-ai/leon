@@ -1,4 +1,4 @@
-import { getAmbientClock } from '../../../../../server/src/core/ambient-clock'
+import { getAmbientClock } from '../../../../../server/src/core/ambient/ambient-clock'
 
 import {
   DEFAULT_VIBE_LANDSCAPE,

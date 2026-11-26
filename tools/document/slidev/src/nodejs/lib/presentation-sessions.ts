@@ -35,6 +35,8 @@ interface Presentation {
 export class PresentationSessions {
   private readonly sessions = new Map<string, Presentation>()
 
+  public constructor(private readonly retainWorker: () => () => void) {}
+
   /**
    * Reuse the owner's live deck or start a server and verify its native routes.
    */
@@ -125,6 +127,7 @@ export class PresentationSessions {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
+    const releaseWorker = this.retainWorker()
     const session: Presentation = {
       id: randomUUID(),
       owner,
@@ -133,8 +136,12 @@ export class PresentationSessions {
       // IPC is disconnected before exit, so await the process rather than the
       // stdio close event, which is not guaranteed after an IPC disconnect.
       closed: new Promise((resolve) => {
-        child.once('exit', () => resolve())
-        child.once('error', () => resolve())
+        const finish = (): void => {
+          releaseWorker()
+          resolve()
+        }
+        child.once('exit', finish)
+        child.once('error', finish)
       }),
       urls: { audienceUrl: '', presenterUrl: '' }
     }

@@ -1,6 +1,6 @@
 {
   "name": "leon",
-  "version": "2.0.0-alpha.0.5",
+  "version": "2.0.0-alpha.0.28",
   "description": "Server, skills and web app of the Leon personal assistant",
   "author": {
     "name": "Louis Grenard",
@@ -28,7 +28,7 @@
     },
     "packageManager": {
       "name": "pnpm",
-      "version": "12.18.0",
+      "version": "12.23.0",
       "onFail": "ignore"
     }
   },
@@ -76,7 +76,13 @@
     "train": "tsx scripts/train/run-train.js",
     "release": "tsx scripts/release/release.ts",
     "check": "tsx scripts/check.js",
-    "kill": "tsx scripts/kill.js"
+    "kill": "tsx scripts/kill.js",
+    "build:desktop": "pnpm --filter leon-desktop install --frozen-lockfile --ignore-scripts && pnpm --filter leon-desktop build",
+    "start:desktop": "node apps/desktop/scripts/start.mjs",
+    "test:desktop": "pnpm --filter leon-desktop test",
+    "test:desktop:e2e": "playwright test --config apps/desktop/test/playwright.config.mjs",
+    "check:desktop": "node apps/desktop/scripts/check-native.mjs",
+    "bench:desktop": "node apps/desktop/scripts/check-performance.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",
@@ -109,7 +115,7 @@
     "@tanstack/react-query": "5.106.0",
     "@tanstack/react-router": "1.170.46",
     "@tanstack/react-virtual": "3.14.26",
-    "@tobilu/qmd": "2.8.3",
+    "@tobilu/qmd": "2.9.0",
     "ai": "7.0.170",
     "ajv": "8.18.0",
     "ajv-formats": "2.1.1",

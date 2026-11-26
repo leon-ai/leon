@@ -6,7 +6,7 @@ import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 
 /**
- * Core settings access supplies profile paths without importing a tool SDK.
+ * Server settings access supplies profile paths without importing a tool SDK.
  */
 export class ToolSettings {
   /**

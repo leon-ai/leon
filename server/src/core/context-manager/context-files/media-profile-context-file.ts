@@ -4,31 +4,30 @@ import path from 'node:path'
 import { DateHelper } from '@/helpers/date-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
 import { ContextProbeHelper } from '@/core/context-manager/context-probe-helper'
-import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import { ContextStateStore, normalizeSampleTime } from '@/core/context-manager/context-state-store'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 interface MediaProfileState {
   trackingStartedAt: string
   lastSampleAt: string
   seenEntries: Record<string, string>
-  domains: Record<string, number>
+  hostnames: Record<string, number>
 }
 
 interface BrowserHistoryRecord {
   timestamp: string
-  domain: string
-  title: string
+  hostname: string
 }
 
 const FALLBACK_STATE: MediaProfileState = {
-  trackingStartedAt: new Date(0).toISOString(),
-  lastSampleAt: new Date(0).toISOString(),
+  trackingStartedAt: '',
+  lastSampleAt: '',
   seenEntries: {},
-  domains: {}
+  hostnames: {}
 }
 
 const MAX_DOMAINS = 24
-const MAX_SEEN_ENTRIES = 4000
+const MAX_SEEN_ENTRIES = 4_000
 
 export class MediaProfileContextFile extends ContextFile {
   public readonly filename = 'MEDIA_PROFILE.md'
@@ -62,7 +61,7 @@ export class MediaProfileContextFile extends ContextFile {
     const updatedState = this.updateState(state, browserRecords, nowIso)
     this.stateStore.save(updatedState)
 
-    const topDomains = this.rankCounts(updatedState.domains).slice(0, MAX_DOMAINS)
+    const topDomains = this.rankCounts(updatedState.hostnames).slice(0, MAX_DOMAINS)
     const mediaSignals = this.buildMediaSignals(runningApps, topDomains.map((entry) => entry.key))
 
     const summary =
@@ -88,7 +87,7 @@ export class MediaProfileContextFile extends ContextFile {
       `- Generated at: ${DateHelper.getDateTime()}`,
       `- Tracking started at: ${DateHelper.getDateTime(updatedState.trackingStartedAt)}`,
       `- Browser records parsed this run: ${browserRecords.length}`,
-      `- Domain signals stored: ${Object.keys(updatedState.domains).length}`,
+      `- Domain signals stored: ${Object.keys(updatedState.hostnames).length}`,
       '## Top Media Domains',
       ...domainLines,
       '## App and Platform Signals',
@@ -111,17 +110,17 @@ export class MediaProfileContextFile extends ContextFile {
         }
 
         const matched = line.match(
-          /^-\s+\d+\.\s+([^|]+)\|\s+([^|]+)(?:\s+\|\s+title:\s*(.+))?$/i
+          /^-\s+\d+\.\s+([^|]+)\|\s+(\S+)(?:\s+\|\s+title:.*)?$/i
         )
         if (!matched) {
           continue
         }
 
-        records.push({
-          timestamp: matched[1]?.trim() || '',
-          domain: (matched[2] || '').trim().toLowerCase(),
-          title: (matched[3] || '').trim()
-        })
+        const timestamp = matched[1]?.trim()
+        const hostname = URL.parse(matched[2] || '')?.hostname
+        if (timestamp && hostname) {
+          records.push({ timestamp, hostname })
+        }
       }
 
       return records
@@ -131,19 +130,20 @@ export class MediaProfileContextFile extends ContextFile {
   }
 
   private normalizeState(state: MediaProfileState, nowIso: string): MediaProfileState {
-    const trackingStartedAt = Number.isFinite(Date.parse(state.trackingStartedAt || ''))
-      ? state.trackingStartedAt
-      : nowIso
-    const lastSampleAt = Number.isFinite(Date.parse(state.lastSampleAt || ''))
-      ? state.lastSampleAt
-      : nowIso
+    const trackingStartedAt = normalizeSampleTime(state.trackingStartedAt, nowIso)
+
+    // Rebuild URL-keyed state from browser history so neither the old counts nor
+    // the old visit identifiers can retain full URLs or page titles.
+    if (!state.hostnames || typeof state.hostnames !== 'object') {
+      return { ...FALLBACK_STATE, trackingStartedAt }
+    }
 
     return {
       trackingStartedAt,
-      lastSampleAt,
+      lastSampleAt: normalizeSampleTime(state.lastSampleAt, nowIso),
       seenEntries:
         state.seenEntries && typeof state.seenEntries === 'object' ? state.seenEntries : {},
-      domains: state.domains && typeof state.domains === 'object' ? state.domains : {}
+      hostnames: state.hostnames
     }
   }
 
@@ -153,20 +153,22 @@ export class MediaProfileContextFile extends ContextFile {
     nowIso: string
   ): MediaProfileState {
     const seenEntries = { ...state.seenEntries }
-    const domains = { ...state.domains }
+    const hostnames = new Map(Object.entries(state.hostnames))
+    const visitsByTimeAndHost = new Map<string, number>()
 
     for (const record of records) {
-      if (!record.domain) {
-        continue
-      }
-
-      const uniqueId = `${record.timestamp}|${record.domain}|${record.title}`
+      // A timestamp can represent several visits to the same host. An ordinal
+      // distinguishes them without keeping addresses or page titles.
+      const visit = `${record.timestamp}|${record.hostname}`
+      const occurrence = (visitsByTimeAndHost.get(visit) ?? 0) + 1
+      visitsByTimeAndHost.set(visit, occurrence)
+      const uniqueId = `${visit}|${occurrence}`
       if (seenEntries[uniqueId]) {
         continue
       }
 
       seenEntries[uniqueId] = nowIso
-      domains[record.domain] = (domains[record.domain] || 0) + 1
+      hostnames.set(record.hostname, (hostnames.get(record.hostname) ?? 0) + 1)
     }
 
     const compactedSeenEntries = Object.entries(seenEntries)
@@ -181,7 +183,7 @@ export class MediaProfileContextFile extends ContextFile {
       trackingStartedAt: state.trackingStartedAt,
       lastSampleAt: nowIso,
       seenEntries: compactedSeen,
-      domains
+      hostnames: Object.fromEntries(hostnames)
     }
   }
 

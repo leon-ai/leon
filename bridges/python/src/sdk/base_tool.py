@@ -256,7 +256,7 @@ class BaseTool(ABC):
         }
 
     def request_leon(self, endpoint: str, body: Any = None) -> Any:
-        """Call Core with host-supplied profile credentials, never model arguments."""
+        """Call the server with host-supplied profile credentials, never model arguments."""
         service = (
             self.execution_context.leon_service if self.execution_context else None
         )
@@ -308,7 +308,7 @@ class BaseTool(ABC):
         return credentials
 
     async def validate_connection(self) -> dict[str, str]:
-        """Check account access before Core persists onboarding credentials."""
+        """Check account access before the server persists onboarding credentials."""
         raise NotImplementedError("This tool does not implement connection validation.")
 
     def _attach_model_files(self, files: list[ToolModelFile]) -> None:

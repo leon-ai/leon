@@ -34,7 +34,7 @@ import {
   TOOL_CALL_LOGGER
 } from '@/core'
 import { scheduleHistoryCompaction } from '@/core/turn-lifecycle/post-turn'
-import { createExperienceSearchTool, EXPERIENCE_PREFIX } from '@/core/experience-manager'
+import { createExperienceSearchTool, EXPERIENCE_PREFIX } from '@/core/experience-manager/experience-manager'
 import {
   LLMDuties,
   LLMProviders,
@@ -142,7 +142,11 @@ import {
 import type { AgentCallableFunction, AgentLoopResult } from './react-llm-duty/agent-loop'
 import { appendAgentRuntimeContext, buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
-import { runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings } from '../turn-timing'
+import {
+  runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings,
+  recordCapabilityUsage, recordForegroundContextReduction
+} from '../turn-timing'
+import { getActiveInferencePurpose } from '../llm-usage/usage-context'
 import { isToolPreparationPhase } from '../turn-timing-contract'
 import { CATALOG_SEARCH_TOOL_NAME } from '@/core/tool-manager/catalog/agent-catalog'
 import { AURORA_LOADER_NAME, AURORA_PREVIEW_NAME, AURORA_PRESENT_NAME } from '@/core/aurora/agent-ui-contract'
@@ -171,6 +175,11 @@ import {
   estimateAgentInputTokens,
   resolveAgentMaxOutputTokens
 } from './react-llm-duty/agent-context-budget'
+import {
+  callWithDesktopFocus,
+  isDesktopAgentToolCall,
+  resolveDesktopFocusReasoningEffort
+} from './react-llm-duty/desktop-focus'
 import { AgentHistoryManager } from './react-llm-duty/agent-history-manager'
 
 const LOOKUP_SYSTEM_PROMPT = [
@@ -239,6 +248,7 @@ export class ReActLLMDuty extends LLMDuty {
   private completionCount = 0
   private continuationSummaryFailed = false
   private automaticCompactionFailed = false
+  private useOpenAIHttpForTurn = false
   private lastDispatchedInputTokens: number | undefined
   private rejectedContextBudgetTokens: number | undefined
   private totalInputTokens = 0
@@ -291,6 +301,7 @@ export class ReActLLMDuty extends LLMDuty {
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
+  private readonly backgroundTools: ReactLLMDutyParams['backgroundTools']
   private readonly signal: AbortSignal | undefined
   private readonly deadlineAt: number | undefined
   private runBudget: AgentRunBudget | undefined
@@ -299,7 +310,9 @@ export class ReActLLMDuty extends LLMDuty {
   private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
+  private readonly onCompletionReview: ReactLLMDutyParams['onCompletionReview']
   private readonly responseId: string | undefined
+  private readonly pulseReason: string | undefined
   private readonly onTextStream: ReactLLMDutyParams['onTextStream']
 
   constructor(params: ReactLLMDutyParams) {
@@ -320,8 +333,11 @@ export class ReActLLMDuty extends LLMDuty {
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
     this.additionalInstructions = params.additionalInstructions?.trim() || ''
+    this.backgroundTools = params.backgroundTools
     this.onProgressEvent = params.onProgressEvent
+    this.onCompletionReview = params.onCompletionReview
     this.responseId = params.responseId
+    this.pulseReason = params.pulseReason
     this.onTextStream = params.onTextStream
     this.systemPrompt = this.appendAdditionalInstructions(
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
@@ -376,6 +392,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.completionCount = 0
     this.continuationSummaryFailed = false
     this.automaticCompactionFailed = false
+    this.useOpenAIHttpForTurn = false
     this.lastDispatchedInputTokens = undefined
     this.rejectedContextBudgetTokens = undefined
     this.totalInputTokens = 0
@@ -403,32 +420,45 @@ export class ReActLLMDuty extends LLMDuty {
     // Capture the session and profile-bound writer before any deferred saves.
     const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
     const upsert = CONVERSATION_LOGGER.upsert
-    this.persistResponseTrace = (): Promise<void> => upsert({
-      who: 'leon',
-      message: '',
-      messageId: traceId,
-      isAddedToHistory: false,
-      agentResponseTrace: this.responseTraceCollector.snapshot({})
-    }, { sessionId, activity: true })
-    this.reportProgressEvent({
-      type: 'reasoning_summary',
-      summary: 'Working'
-    })
-
+    const isPulse = getActiveInferencePurpose() === InferencePurpose.Pulse
+    const isVisible = !isPulse || Boolean(this.onProgressEvent)
+    if (isVisible) {
+      this.persistResponseTrace = (): Promise<void> => upsert({
+        who: 'leon',
+        message: '',
+        messageId: traceId,
+        isAddedToHistory: false,
+        ...(isPulse ? { origin: 'pulse' as const } : {}),
+        ...(this.pulseReason ? { pulseReason: this.pulseReason } : {}),
+        agentResponseTrace: this.responseTraceCollector.snapshot({})
+      }, { sessionId, activity: true })
+    }
     // Background duties without a bound conversation must not consume messages
     // addressed to the profile's currently selected chat session.
     const activeSessionId = getActiveConversationSessionId()
-    const agentTurn = activeSessionId
-      ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId)
+    const agentTurn = activeSessionId && !this.backgroundTools
+      ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId, isVisible)
       : null
     this.getOwnerMessageSignal = agentTurn?.getOwnerMessageSignal
     this.agentTurnSignal = agentTurn?.signal
 
     try {
+      if (isPulse && this.persistResponseTrace) {
+        await this.persistResponseTrace()
+      }
+      this.reportProgressEvent({
+        type: 'reasoning_summary',
+        summary: 'Working'
+      })
+
       const ownerInput = this.getInputAsText(this.input)
-      const { messageLogs: history, conversationState } =
-        await runTurnPhase(TurnPhase.History, () => ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput))
-      const continuation = this.loadValidAgentLoopContinuation()
+      // Background research grounds itself through tools and never owns the chat checkpoint.
+      const { messageLogs: history, conversationState } = this.backgroundTools
+        ? { messageLogs: [], conversationState: null }
+        : await runTurnPhase(TurnPhase.History, () =>
+          ReActLLMDuty.historyManager.loadPreparedHistory(ownerInput)
+        )
+      const continuation = this.backgroundTools ? null : this.loadValidAgentLoopContinuation()
       const loadedState = continuation ?? conversationState
       const originalInput = continuation?.originalInput || ownerInput
       const planWidgetIdValue =
@@ -443,7 +473,7 @@ export class ReActLLMDuty extends LLMDuty {
         const skill = continuation.activeSkillId.startsWith(EXPERIENCE_PREFIX)
           ? EXPERIENCE_MANAGER.load(continuation.activeSkillId, this.experienceTaskId)
           : await SkillDomainHelper.getAgentSkillExecutionContext(continuation.activeSkillId)
-        if (!skill) {
+        if (!skill || typeof skill === 'string') {
           throw new Error('The active Agent Skill is no longer available.')
         }
         caller.setAgentSkillContext(skill)
@@ -456,7 +486,7 @@ export class ReActLLMDuty extends LLMDuty {
       if (Array.isArray(restoredExperiences)) {
         for (const entry of restoredExperiences) {
           const context = EXPERIENCE_MANAGER.load(String(entry.id), this.experienceTaskId)
-          if (context) {
+          if (context && typeof context !== 'string') {
             this.activeExperiences.set(context.id, context)
             await this.emitSkillActivity(context, SkillActivityStatus.Loaded)
           }
@@ -480,9 +510,11 @@ export class ReActLLMDuty extends LLMDuty {
         }))
 
         const dutyResult = this.makeDutyResult(answer, routineLookup)
-        scheduleHistoryCompaction(
-          () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer()
-        )
+        if (!this.backgroundTools) {
+          scheduleHistoryCompaction(
+            () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(!isPulse)
+          )
+        }
 
         return dutyResult
       }
@@ -490,6 +522,7 @@ export class ReActLLMDuty extends LLMDuty {
       const progressiveToolkitLoading =
         CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
       const matchedSelection =
+        !this.backgroundTools &&
         !continuation &&
         !conversationState &&
         !this.activeForcedToolName &&
@@ -509,7 +542,8 @@ export class ReActLLMDuty extends LLMDuty {
               planTracking: loadedState.planTracking ?? false,
               ...(loadedState.auroraMode ? { auroraMode: loadedState.auroraMode } : {})
             }
-          : undefined
+          : undefined,
+        this.backgroundTools
       ))
 
       let preloadedToolkitContext = ''
@@ -665,6 +699,10 @@ export class ReActLLMDuty extends LLMDuty {
         state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>,
         reason: string
       ): void => {
+        if (this.backgroundTools) {
+          return
+        }
+
         this.saveAgentLoopContinuation(createAgentLoopContinuationState({
           originalInput,
           clarificationQuestion: reason,
@@ -681,11 +719,11 @@ export class ReActLLMDuty extends LLMDuty {
       }
 
       const result = await runAgentLoop({
-        onPresentUI: async (spec, purpose, surfaceId) => {
+        onPresentUI: isVisible ? async (spec, purpose, surfaceId): Promise<string> => {
           const surface = await presentAurora(sessionId, traceId, spec, purpose, surfaceId)
           hasAurora = true
           return surface.id
-        },
+        } : undefined,
         ...(agentTurn ? {
           drainOwnerMessages: agentTurn.drainOwnerMessages,
           getOwnerMessageSignal: agentTurn.getOwnerMessageSignal
@@ -696,6 +734,7 @@ export class ReActLLMDuty extends LLMDuty {
           this.closeStreamedToolCalls()
         },
         ...(this.signal ? { signal: this.signal } : {}),
+        ...(this.onCompletionReview ? { onCompletionReview: this.onCompletionReview } : {}),
         runBudget: this.runBudget,
         transcript,
         catalog,
@@ -817,21 +856,23 @@ export class ReActLLMDuty extends LLMDuty {
               : null
           })
 
-          return this.callAgentModel(
+          const checkpoint = {
+            originalInput,
+            trackedSteps: state.trackedSteps,
+            executionHistory: state.executionHistory,
+            loadedToolkitIds: catalog.loadedToolkitIds,
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
+            activeSkillId: caller.agentSkillContext?.id ?? null
+          }
+
+          return callWithDesktopFocus(
             messages,
-            agentSystemPrompt,
-            tools,
             options,
-            {
-              originalInput,
-              trackedSteps: state.trackedSteps,
-              executionHistory: state.executionHistory,
-              loadedToolkitIds: catalog.loadedToolkitIds,
-              loadedToolNames: catalog.loadedToolNames,
-              loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
-              activeSkillId: caller.agentSkillContext?.id ?? null
-            },
-            catalog.functionsByToolName
+            (transcript, requestOptions) => this.callAgentModel(
+              transcript, agentSystemPrompt, tools, requestOptions, checkpoint, catalog.functionsByToolName
+            ),
+            (id, message) => this.closeStreamedToolCall(id, message)
           )
         },
         executeFunction: async (callable, toolInput, toolCallTitle, toolCallId) => {
@@ -952,7 +993,7 @@ export class ReActLLMDuty extends LLMDuty {
 
       if (result.intent !== 'answer' && result.intent !== 'cancelled') {
         saveCheckpoint({ transcript: result.transcript, trackedSteps, executionHistory }, result.answer)
-      } else {
+      } else if (!this.backgroundTools) {
         await ReActLLMDuty.historyManager.saveConversationState(
           {
             transcript: retainRecentToolImages(result.transcript),
@@ -975,7 +1016,7 @@ export class ReActLLMDuty extends LLMDuty {
     } catch (error) {
       this.answerStream.discard()
       this.responseTraceCollector.interrupt()
-      if (this.signal?.aborted || agentTurn?.signal.aborted) {
+      if (!this.backgroundTools && (this.signal?.aborted || agentTurn?.signal.aborted)) {
         ReActLLMDuty.sessionState.getContinuationStore().save(null)
       }
       this.signal?.throwIfAborted()
@@ -1252,6 +1293,9 @@ export class ReActLLMDuty extends LLMDuty {
           timeout: this.runBudget?.capTimeout(AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS) ?? AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
           maxRetries: 0,
           remoteProviderErrorRetries: 0,
+          ...(this.useOpenAIHttpForTurn && getLLMProviderName() === LLMProviders.OpenAI
+            ? { responseTransport: 'http' as const }
+            : {}),
           shouldStream: false,
           disableThinking: true,
           trackProviderErrors: false,
@@ -1309,6 +1353,7 @@ export class ReActLLMDuty extends LLMDuty {
       isStallRecoveryAttempt?: boolean
       isImageInspection?: boolean
       hasPendingImages?: boolean
+      isDesktopDecision?: boolean
     },
     checkpointInput?: AgentContinuityCheckpointInput,
     functionsByToolName?: ReadonlyMap<string, AgentCallableFunction>
@@ -1375,6 +1420,8 @@ export class ReActLLMDuty extends LLMDuty {
     ].join('\n\n')
     const providerName = getLLMProviderName()
     const agentTarget = CONFIG_STATE.getModelState().getAgentTarget()
+    const useOpenAIHttp = providerName === LLMProviders.OpenAI &&
+      (options.isStallRecoveryAttempt || this.useOpenAIHttpForTurn)
     if (!options.isCompletionReview && providerName === LLMProviders.OpenAI &&
       (options.isContextRecoveryAttempt || options.isStallRecoveryAttempt)) {
       this.automaticCompactionFailed = true
@@ -1441,6 +1488,7 @@ export class ReActLLMDuty extends LLMDuty {
         ? false
         : options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
+    const estimatedTokensBeforeReduction = preparedContext.estimatedInputTokensBeforePreparation
     let hasAttemptedSummary = false
     // Rejected requests need a fresh reduction even if estimates look small.
     // Later productive calls retain their evidence until pressure grows again.
@@ -1501,6 +1549,7 @@ export class ReActLLMDuty extends LLMDuty {
     // serialized request fits, including output space and template overhead.
     // A stream stall supplies no size rejection. A bounded retry can still
     // proceed when required evidence is larger than the reduction target.
+    recordForegroundContextReduction(estimatedTokensBeforeReduction - preparedContext.estimatedInputTokens)
     const admissionLimitTokens = stallRecoveryAdmissionTokens ?? contextCompactionTriggerTokens
     if (
       !providerManagesContext &&
@@ -1540,11 +1589,14 @@ export class ReActLLMDuty extends LLMDuty {
     // Otherwise, retain its normal provider-compatible settings.
     const useInternalReasoning = isPrivateResponse &&
       modelCapabilities?.reasoning.includes(internalReasoningEffort)
+    const desktopReasoning = options.isDesktopDecision
+      ? resolveDesktopFocusReasoningEffort(modelCapabilities?.reasoning)
+      : undefined
     const configuredReasoning = useInternalReasoning
       ? internalReasoningEffort
-      : modelSettings.reasoning
+      : desktopReasoning ?? modelSettings.reasoning
     const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
-    const reasoningEffortBaseline = useInternalReasoning &&
+    const reasoningEffortBaseline = (useInternalReasoning || desktopReasoning !== undefined) &&
       modelCapabilities?.supportsPerMessageReasoning &&
       modelSettings.reasoning !== 'none'
       ? modelSettings.reasoning === 'auto'
@@ -1575,7 +1627,8 @@ export class ReActLLMDuty extends LLMDuty {
         : configuredReasoning === 'on' ? undefined : configuredReasoning
     let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = useInternalReasoning
       ? options.isImageInspection ? 'inspection' : 'review'
-      : configuredReasoning === 'auto' ? defaultReasoning.source : 'owner'
+      : desktopReasoning !== undefined ? 'desktop'
+        : configuredReasoning === 'auto' ? defaultReasoning.source : 'owner'
     // Auto may recover from reasoning-only exhaustion with less effort.
     // Never disable mandatory reasoning or override an explicit owner choice.
     if (options.isOutputRecoveryAttempt && configuredReasoning === 'auto' &&
@@ -1643,8 +1696,11 @@ export class ReActLLMDuty extends LLMDuty {
     const modelResponseStartedAt = Date.now()
     const modelResponseMaximumDeadlineAt = modelResponseStartedAt +
       (this.runBudget?.capTimeout(AGENT_MODEL_RESPONSE_MAX_DURATION_MS) ?? AGENT_MODEL_RESPONSE_MAX_DURATION_MS)
+    const contextTarget = agentTarget.model ? { provider: providerName, model: agentTarget.model } : undefined
     const contextUsage = captureContextUsage({
+      contextTarget,
       estimatedInputTokens: preparedContext.estimatedInputTokens,
+      contextTokenBreakdown: preparedContext.contextTokenBreakdown,
       contextWindowTokens
     })
     if (!options.isCompletionReview) {
@@ -1821,9 +1877,7 @@ export class ReActLLMDuty extends LLMDuty {
             : Math.min(timeoutMs, Math.max(0, remaining - (this.runBudget?.finishingReserveMs ?? 0)))
         },
         ...(isFinishingCall ? { remoteProviderErrorRetries: 0, connectionErrorRetries: 0 } : {}),
-        ...(options.isStallRecoveryAttempt && providerName === LLMProviders.OpenAI
-          ? { responseTransport: 'http' as const }
-          : {}),
+        ...(useOpenAIHttp ? { responseTransport: 'http' as const } : {}),
         // This loop executes local tools only after the whole response succeeds.
         retryInterruptedResponse: true,
         recoverReasoningStallWithContext: !isPrivateResponse && !options.isFinalizationAttempt,
@@ -1975,7 +2029,7 @@ export class ReActLLMDuty extends LLMDuty {
                 refreshWaitDiagnostics()
                 clearModelStatus()
                 const callable = functionsByToolName?.get(call.function.name)
-                if (!callable) {
+                if (!callable || (options.isDesktopDecision && !isDesktopAgentToolCall(call))) {
                   return
                 }
 
@@ -2037,10 +2091,12 @@ export class ReActLLMDuty extends LLMDuty {
       }))
       if (completionResult) {
         const observedContextUsage = captureContextUsage({
+          contextTarget,
           // Agent prompts include system instructions. A zero count from an
           // adapter means usage is unavailable, rather than an empty prompt.
           usedInputTokens: completionResult.usedInputTokens || undefined,
           estimatedInputTokens: preparedContext.estimatedInputTokens,
+          contextTokenBreakdown: preparedContext.contextTokenBreakdown,
           contextWindowTokens
         })
         if (!options.isCompletionReview) {
@@ -2101,6 +2157,10 @@ export class ReActLLMDuty extends LLMDuty {
       // Productive recovery makes the model available for later compaction.
       // A subsequent failed summary still suppresses repeated auxiliary calls.
       this.continuationSummaryFailed = false
+      if (useOpenAIHttp) {
+        // Reuse the working transport while this turn still has work to finish.
+        this.useOpenAIHttpForTurn = true
+      }
     }
 
     const completionEndedAt = Date.now()
@@ -2526,6 +2586,11 @@ export class ReActLLMDuty extends LLMDuty {
     const createdAt = previous?.createdAt ?? Date.now()
     this.skillActivities.set(skill.id, { createdAt, status })
     const isExperience = skill.id.startsWith(EXPERIENCE_PREFIX)
+    if (!previous && !isExperience) {
+      recordCapabilityUsage(skill.publicTelemetryId
+        ? { kind: 'agent_skill', source: 'built_in', skill: skill.publicTelemetryId, calls: 1, failed: 0 }
+        : { kind: 'agent_skill', source: 'extension', calls: 1, failed: 0 })
+    }
     const label = isExperience ? 'experience' : 'skill'
     const prefix = isExperience ? 'experience-activity' : 'agent-skill-activity'
 

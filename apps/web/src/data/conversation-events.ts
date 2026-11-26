@@ -60,6 +60,7 @@ export function readEventTool(value: Record<string, unknown>): ConversationTool 
     ...(value['input'] === undefined ? {} : { input: value['input'] as NonNullable<ConversationTool['input']> }),
     ...(value['output'] === undefined ? {} : { output: value['output'] as NonNullable<ConversationTool['output']> }),
     ...(value['command_output'] === undefined ? {} : { commandOutput: String(value['command_output']) }),
+    ...(typeof value['progress_message'] === 'string' ? { progressMessage: value['progress_message'] } : {}),
     ...(value['error_message'] ? { errorMessage: String(value['error_message']) } : {})
   }
 }
@@ -87,7 +88,9 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
       ? { ...candidate, sentAt: message.sentAt + 1 } : candidate)
   }
   const id = event.response_id
-  if (!id || event.type === 'session_changed' || event.type === 'turn_status') {
+  const isPulseStart = event.type === 'turn_status' &&
+    event.data['origin'] === 'pulse' && event.data['status'] === 'accepted'
+  if (!id || event.type === 'session_changed' || (event.type === 'turn_status' && !isPulseStart)) {
     return messages
   }
   const index = messages.findIndex((record) => record.messageId === id)
@@ -160,7 +163,11 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   record.agentResponseTrace = trace
   const data = event.data
 
-  if (event.type === 'inference_activity') {
+  if (isPulseStart) {
+    if (typeof data['pulse_reason'] === 'string') {
+      record.pulseReason = data['pulse_reason']
+    }
+  } else if (event.type === 'inference_activity') {
     const activity = data['activity'] as InferenceActivity
     const timing = { ...activity, kind: activity.kind ?? 'inference' as const }
     const found = trace.timings?.some((item) => item.id === timing.id)
@@ -239,6 +246,10 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
   } else if (event.type === 'metrics') {
     trace.metrics = data['metrics'] as NonNullable<ConversationTrace['metrics']>
   } else if (event.type === 'final_answer') {
+    const saved = data['message'] as ConversationRecord | undefined
+    if (saved?.origin === 'pulse' && saved.messageId === id && saved.isAddedToHistory) {
+      return index < 0 ? [...messages, saved] : messages.map((item, position) => position === index ? saved : item)
+    }
     // Completed traces include provider attempts that are not streamed as
     // separate events. Use them immediately instead of waiting for navigation.
     const completedTrace = data['response_trace'] as Pick<ConversationTrace, 'inferences' | 'metrics' | 'timings' | 'answerStartedAt'> | undefined
@@ -270,6 +281,10 @@ export function applyConversationEvent(messages: ConversationRecord[], event: Co
     }
   } else {
     return messages
+  }
+
+  if (data['origin'] === 'pulse') {
+    record.origin = 'pulse'
   }
 
   return index < 0 ? [...messages, record] : messages.map((message, position) => position === index ? record : message)

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { runTurnPhase, TurnPhase } from '../../turn-timing'
+import { recordCapabilityUsage, runTurnPhase, TurnPhase } from '../../turn-timing'
 
 import {
   SOCKET_SERVER,
@@ -700,6 +700,9 @@ export async function runToolExecution(
   } catch (error) {
     didFinishToolCall = true
     const durationMs = Math.max(0, performance.now() - executionStartedAt)
+    recordCapabilityUsage(TOOLKIT_REGISTRY.getToolTelemetryLabel(toolkitId, toolId, functionName, {
+      calls: 1, failed: Number(!(retainedSignal ?? signal)?.aborted), durationMs: Math.round(durationMs)
+    }))
     const reason = error instanceof Error ? error.message : String(error)
     finishPreparation(false, reason, (retainedSignal ?? signal)?.aborted)
     const message = lastPreparationProgress
@@ -806,6 +809,11 @@ export async function runToolExecution(
   const displayedStatus = isStreamRunning
     ? 'running'
     : progressStream?.state === 'failed' ? 'error' : effectiveStatus
+  recordCapabilityUsage(TOOLKIT_REGISTRY.getToolTelemetryLabel(toolkitId, toolId, functionName, {
+    calls: 1,
+    failed: Number(displayedStatus !== 'success' && displayedStatus !== 'running'),
+    ...(!isStreamRunning ? { durationMs: Math.round(durationMs) } : {})
+  }))
   const displayedMessage = isStreamRunning
     ? lastPreparationProgress?.message || 'The tool is running. Progress will appear as it arrives.'
     : completedStreamProgress?.message || effectiveMessage

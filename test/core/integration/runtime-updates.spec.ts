@@ -85,7 +85,7 @@ it('uses the same update API to pin and stage a prebuilt release without Git or 
   const initial = await install()
   await activateRuntime(installation, versions[0])
   archive = await createRuntimeArchive(home, versions[1])
-  const release = { tag_name: `v${versions[1]}`, name: 'A new Core', published_at: new Date().toISOString(),
+  const release = { tag_name: `v${versions[1]}`, name: 'A new server', published_at: new Date().toISOString(),
     body: 'Ready to use.', html_url: `${origin}/release`, draft: false, prerelease: true }
   const service = new UpdateService({ root: initial.root, home, runtimeHome: installation, managed: true,
     releases: async (): Promise<typeof release[]> => [release], runtimeAssets: async (): Promise<{ baseURL: string, manifest: unknown }> => ({ baseURL: `${origin}/`,

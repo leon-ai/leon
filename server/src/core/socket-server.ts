@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import axios from 'axios'
-import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 
 import {
   LANG,
@@ -30,8 +30,8 @@ import {
 import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
-import { Telemetry } from '@/telemetry'
-import { LLMProviders } from '@/core/llm-manager/types'
+import { InferencePurpose, LLMProviders } from '@/core/llm-manager/types'
+import { getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { RoutingMode, type ConversationWidgetData } from '@/types'
@@ -53,11 +53,14 @@ import {
   type LeonClientInterfaceTypingPayload,
   type LeonClientInterfaceUtterancePayload
 } from '@/core/leon-interface/types'
+import { runWithTurnClient } from '@/core/leon-interface/turn-client'
+import { authenticateDevice, PAIRED_DEVICE_ID_PREFIX } from '@/core/satellite/device-pairing'
+import { TurnClientType, type TurnClientOS } from '@@/bridges/runtime/contracts/turn-client'
 import {
   authenticateProfileCredential,
   readProfileCredentialFromHeaders,
   readStoredProfileToken
-} from '@/core/profile-auth'
+} from '@/core/profile-runtime/profile-auth'
 import {
   getActiveProfileName,
   runWithProfileContext
@@ -129,12 +132,20 @@ interface ConnectedChatClient {
   id: string
   client: string
   clientType: string
+  clientOS?: TurnClientOS
   capabilities: LeonClientCapabilities
   protocol: LeonClientInterfaceProtocol
   profileName: string
   sessionId: string
   socket: Socket
 }
+
+const SOCKET_CLIENT_TYPES = new Map<string, TurnClientType>([
+  ['web_app', TurnClientType.Web],
+  ['desktop_app', TurnClientType.Desktop],
+  ['mobile_app', TurnClientType.Mobile],
+  [LEON_CLIENT_INTERFACE_DEFAULT_CLIENT_TYPE, TurnClientType.Other]
+])
 
 export default class SocketServer {
   private static instance: SocketServer
@@ -247,6 +258,7 @@ export default class SocketServer {
       id: client.id,
       client: client.name || client.id,
       clientType: client.type,
+      ...(typeof initData.client !== 'string' && initData.client.os ? { clientOS: initData.client.os } : {}),
       capabilities: {
         ...DEFAULT_CLIENT_CAPABILITIES,
         ...(initData.capabilities || {})
@@ -477,6 +489,10 @@ export default class SocketServer {
     payload?: unknown,
     options?: { sessionId?: string | null }
   ): void {
+    if (getActiveInferencePurpose() === InferencePurpose.Pulse) {
+      return
+    }
+
     if (eventName === 'fyi' && options?.sessionId && payload && typeof payload === 'object') {
       const footer = payload as { messageId: string, fyi: import('@/core/fyi/fyi-contract').Fyi }
       publishAgentEvent(getActiveProfileName(), {
@@ -600,6 +616,12 @@ export default class SocketServer {
     answerData: unknown,
     options?: { sessionId?: string | null }
   ): void {
+    // Pulse owns delivery for its response. Legacy activity has no response ID
+    // and cannot honour the run's visibility or be settled with its final answer.
+    if (getActiveInferencePurpose() === InferencePurpose.Pulse) {
+      return
+    }
+
     const sessionId =
       options?.sessionId || CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
     const answerDataRecord =
@@ -893,7 +915,8 @@ export default class SocketServer {
 
           BRAIN.isMuted = false
           const prepared = await prepareOwnerAttachments(utterance, utteranceData.attachments, sessionId)
-          const processedData = await NLU.process(prepared.query, {
+          const clientType = chatClient?.clientType ?? TurnClientType.Unknown
+          await runWithTurnClient(SOCKET_CLIENT_TYPES.get(clientType) ?? clientType, chatClient?.clientOS, () => NLU.process(prepared.query, {
             ownerMessageId,
             files: prepared.files,
             hasAttachments: Boolean(utteranceData.attachments?.length),
@@ -915,11 +938,7 @@ export default class SocketServer {
                     utteranceData.commandContext.forcedToolName
                 }
               : {})
-          })
-
-          if (processedData) {
-            void Telemetry.utterance(processedData)
-          }
+          }))
 
           LogHelper.title('Execution Time')
           LogHelper.timeEnd('Utterance processed in')
@@ -1055,14 +1074,18 @@ export default class SocketServer {
         async (data: SatelliteInitPayload) => {
           // Advertising executable tools always requires a profile credential,
           // even when anonymous chat is enabled for the local web app.
-          const profileName = authenticateProfileCredential(
-            this.getSocketAuthToken(socket, data)
-          )?.profileName
+          const paired = authenticateDevice(data?.deviceCredential)
+          const profileName = data?.deviceCredential === undefined
+            ? authenticateProfileCredential(this.getSocketAuthToken(socket, data))?.profileName
+            : paired?.profile
 
           if (
             !profileName ||
+            this.satelliteClients.has(socket.id) ||
             data?.protocolVersion !== SATELLITE_PROTOCOL_VERSION ||
-            !data.device?.id?.trim() ||
+            typeof data.device?.id !== 'string' ||
+            !data.device.id.trim() ||
+            (!paired && data.device.id.startsWith(PAIRED_DEVICE_ID_PREFIX)) ||
             !Array.isArray(data.toolkits)
           ) {
             socket.emit(SATELLITE_EVENTS.error, {
@@ -1073,34 +1096,49 @@ export default class SocketServer {
             return
           }
 
-          await runWithProfileContext({ profileName }, async () => {
+          const device = paired ? { ...data.device, id: paired.id, name: paired.name } : data.device
+          const registered = await runWithProfileContext({ profileName }, async () => {
             await ensureActiveProfileRuntime()
             await TOOLKIT_REGISTRY.load()
+            if (!socket.connected || (paired && !authenticateDevice(data.deviceCredential))) {
+              return false
+            }
+            const toolkits = paired
+              ? TOOLKIT_REGISTRY.getPairedDeviceManifest(paired.tools, data.toolkits)
+              : data.toolkits
             TOOLKIT_REGISTRY.registerSatelliteTools(
-              data.device.id,
-              data.toolkits
+              device.id,
+              toolkits,
+              Boolean(paired)
             )
             SATELLITE_REGISTRY.register({
               profileName,
-              device: data.device,
-              toolkits: data.toolkits,
+              device,
+              toolkits,
               transport: socket
             })
+            return true
           })
+          if (!registered) {
+            socket.disconnect(true)
+            return
+          }
 
           this.satelliteClients.set(socket.id, {
             profileName,
-            deviceId: data.device.id
+            deviceId: device.id
           })
           socket.on(SATELLITE_EVENTS.context, (payload: unknown) => {
-            SATELLITE_REGISTRY.updateContext(profileName, data.device.id, payload, socket)
+            if (!paired) {
+              SATELLITE_REGISTRY.updateContext(profileName, device.id, payload, socket)
+            }
           })
           socket.on(
             SATELLITE_EVENTS.toolProgress,
             (payload: SatelliteToolProgressPayload) => {
               SATELLITE_REGISTRY.handleProgress(
                 profileName,
-                data.device.id,
+                device.id,
                 payload,
                 socket
               )
@@ -1111,7 +1149,7 @@ export default class SocketServer {
             (payload: SatelliteToolResultPayload) => {
               SATELLITE_REGISTRY.handleResult(
                 profileName,
-                data.device.id,
+                device.id,
                 payload,
                 socket
               )
@@ -1120,7 +1158,7 @@ export default class SocketServer {
           socket.emit(SATELLITE_EVENTS.ready, {
             protocolVersion: SATELLITE_PROTOCOL_VERSION,
             profileName,
-            deviceId: data.device.id
+            deviceId: device.id
           })
         }
       )

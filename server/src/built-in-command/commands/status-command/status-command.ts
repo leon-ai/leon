@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { getTelemetrySetting } from '@/core/telemetry/profile-telemetry'
 import { execFileSync } from 'node:child_process'
 
 import {
@@ -8,7 +9,6 @@ import {
   HAS_ASR,
   HAS_TTS,
   INSTANCE_ID,
-  IS_TELEMETRY_ENABLED,
   LEON_HOME_PATH,
   LEON_FILE_PATH,
   LEON_VERSION,
@@ -191,7 +191,7 @@ export class StatusCommand extends BuiltInCommand {
       },
       {
         label: 'Telemetry',
-        value: formatBooleanStatus(IS_TELEMETRY_ENABLED)
+        value: formatBooleanStatus(getTelemetrySetting().enabled)
       },
       {
         label: 'Time zone',

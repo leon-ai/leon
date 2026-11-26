@@ -1,4 +1,5 @@
 import type { ToolConcurrency } from '@/types'
+import type { ToolExecutionTarget } from '@@/bridges/runtime/contracts/device-execution'
 import type {
   ToolExecutionInput,
   ToolExecutionResult,
@@ -26,6 +27,7 @@ export interface SatelliteToolDefinition {
   name: string
   description: string
   concurrency?: ToolConcurrency
+  execution_target?: ToolExecutionTarget
   progressive_guidance?: string
   icon_name?: string
   execution?: {
@@ -42,6 +44,7 @@ export interface SatelliteToolDefinition {
       deduplicate_calls?: boolean
       read_only?: boolean
       background?: boolean
+      device_allowed?: boolean
     }
   >
 }
@@ -66,6 +69,7 @@ export interface SatelliteDescriptor {
 export interface SatelliteInitPayload {
   protocolVersion: number
   token?: string
+  deviceCredential?: string
   device: SatelliteDescriptor
   toolkits: SatelliteToolkitDefinition[]
 }
@@ -90,6 +94,7 @@ export interface SatelliteToolResultPayload {
   invocationId: string
   result: ToolExecutionResult
   artifacts?: SatelliteArtifactBundle
+  timing?: { executionMs: number, artifactPreparationMs: number }
 }
 
 export interface SatelliteArtifactBundle {

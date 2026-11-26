@@ -4,7 +4,7 @@ Thank you for wanting to help with Leon ❤️
 
 There are people behind this project, and I want contributing to feel welcoming. You can bring code, ideas, feedback, design, documentation, or simply help someone get started. You don't need to know the whole project to have something useful to share.
 
-We are preparing the first 2.0 alpha and its desktop application. The core and interface are still changing, and the public documentation mostly describes the previous version. Broader community onboarding will follow the alpha, but you can already [join Discord](https://discord.gg/MNQqqKg) and fill out the [Leon AI contributor interest form](https://forms.gle/6PCG2D5rYo1q8tKMA).
+We are preparing the first 2.0 alpha and its desktop application. The server and interface are still changing, and the public documentation mostly describes the previous version. Broader community onboarding will follow the alpha, but you can already [join Discord](https://discord.gg/MNQqqKg) and fill out the [Leon AI contributor interest form](https://forms.gle/6PCG2D5rYo1q8tKMA).
 
 You can report bugs and suggest ideas directly through [GitHub issues](https://github.com/leon-ai/leon/issues). The interest form helps me organize contributors and find useful starting points.
 
@@ -23,7 +23,7 @@ AI and coding agents are welcome. Take the time to understand their output, revi
 
 | Area | Starting point |
 | --- | --- |
-| Core, agent loop, context, and memory | [`server/src/`](../server/src/) |
+| The server, agent loop, context, and memory | [`server/src/`](../server/src/) |
 | New web app | [`apps/web/`](../apps/web/) and its [contributor instructions](../apps/web/AGENTS.md) |
 | Aurora components and visual answers | [`aurora/`](../aurora/) and the local previews below |
 | Tools and integrations | [`tools/`](../tools/) |
@@ -32,7 +32,7 @@ AI and coding agents are welcome. Take the time to understand their output, revi
 | Testing and reproducible bug reports | [`test/`](../test/) and [GitHub issues](https://github.com/leon-ai/leon/issues) |
 | Documentation, translation, design, and showcases | Bring an idea to Discord or an issue so we can find the right place for it |
 
-Read the relevant source and look for existing helpers, components, and utilities before adding new ones. Tools own application-specific behavior, skills guide workflows, and Core owns generic execution and orchestration.
+Read the relevant source and look for existing helpers, components, and utilities before adding new ones. Tools own application-specific behavior, skills guide workflows, and the server owns generic execution and orchestration.
 
 The [repository instructions](../AGENTS.md) cover architecture, style, dependencies, and testing in more detail. The generated [Leon overview](../core/context/LEON.md) and [architecture overview](../core/context/ARCHITECTURE.md) can help you find your way around; check the source for the details.
 
@@ -101,7 +101,7 @@ The rules live in [`eslint.config.mjs`](../eslint.config.mjs). Run the existing 
 
 | Change | Check |
 | --- | --- |
-| Core behavior and fast feedback | `pnpm test:unit` |
+| Server behavior and fast feedback | `pnpm test:unit` |
 | Real workers, downloads, capture, and rendering | `pnpm test:integration` |
 | Web app behavior | `pnpm test:web-app:e2e` |
 | Aurora components and rendering | `pnpm test:aurora:e2e` |
@@ -112,8 +112,8 @@ The rules live in [`eslint.config.mjs`](../eslint.config.mjs). Run the existing 
 - Use `pnpm test:agent:scenario -- --list` to find scenario selections. Scenarios use the latest-used profile's active model; `LEON_PROFILE` selects a specific profile.
 - Agent provider e2e checks must use `pnpm test:agent:e2e -- -t openai` unless other providers have been explicitly agreed with the maintainer.
 - Real agent scenarios and provider e2e checks can make model calls. Use a dedicated profile and understand its configured provider before running them.
-- Add meaningful coverage for observable behavior where there is a real gap. New Core mechanisms need real scenarios. Coordinate with the maintainer before adding tests for SDKs, tools, or skills, and run their affected existing tests.
-- For bridge boundary changes, also verify the built import graph and isolated Core startup without bridge-only dependencies. Follow the [repository instructions](../AGENTS.md) for these checks.
+- Add meaningful coverage for observable behavior where there is a real gap. New server mechanisms need real scenarios. Coordinate with the maintainer before adding tests for SDKs, tools, or skills, and run their affected existing tests.
+- For bridge boundary changes, also verify the built import graph and isolated server startup without bridge-only dependencies. Follow the [repository instructions](../AGENTS.md) for these checks.
 
 ## Send your pull request
 

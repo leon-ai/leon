@@ -40,14 +40,14 @@ export async function prepareRuntime(runtime, installation, environment = proces
       if (code === 0) {
         resolve()
       } else {
-        reject(new Error('I could not prepare the new runtime. Open my Core logs for details.'))
+        reject(new Error('I could not prepare the new runtime. Open my server logs for details.'))
       }
     })
   })
 }
 
 /**
- * Applies an exact reviewed asset while Core is stopped. A failed extraction or
+ * Applies an exact reviewed asset while the server is stopped. A failed extraction or
  * migration never selects the candidate; executable files stay version-local.
  */
 export async function runRuntimeUpdate(statePath) {

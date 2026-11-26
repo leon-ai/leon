@@ -45,6 +45,7 @@ interface MenuItemBaseProps {
   label: string
   status?: ComponentType
   shortcutKeys?: MenuItemShortcutKey[]
+  ariaKeyShortcuts?: string
   collapsed?: boolean
   disabled?: boolean
   onClick?: () => void
@@ -73,6 +74,7 @@ export function MenuItem({
   href,
   status: Status,
   shortcutKeys,
+  ariaKeyShortcuts,
   collapsed = false,
   disabled = false,
   onClick,
@@ -122,6 +124,7 @@ export function MenuItem({
           className={className}
           activeProps={{ className: 'menu-item-active' }}
           aria-disabled={disabled}
+          aria-keyshortcuts={ariaKeyShortcuts}
           onMouseEnter={disabled ? undefined : onIntent}
           onFocus={disabled ? undefined : onIntent}
           onClick={(event: MouseEvent<HTMLAnchorElement>) => {
@@ -144,6 +147,7 @@ export function MenuItem({
           href={href}
           className={className}
           aria-disabled={disabled}
+          aria-keyshortcuts={ariaKeyShortcuts}
           onMouseEnter={disabled ? undefined : onIntent}
           onFocus={disabled ? undefined : onIntent}
           onClick={(event: MouseEvent<HTMLAnchorElement>) => {
@@ -165,6 +169,7 @@ export function MenuItem({
         type="button"
         className={className}
         disabled={disabled}
+        aria-keyshortcuts={ariaKeyShortcuts}
         onClick={onClick}
         onMouseEnter={onIntent}
         onFocus={onIntent}

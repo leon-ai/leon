@@ -30,6 +30,8 @@ export function Button({
   const iconContent: ReactNode = icon !== undefined ? icon : (iconName ? (
     <Icon name={iconType === null ? iconName : `${iconName}-${iconType}`} selected={props.ariaPressed} morph />
   ) : undefined)
+  const { ariaExpanded, ariaHasPopup } = props
+  const popupOpen = ariaExpanded === true && Boolean(ariaHasPopup) && ariaHasPopup !== 'false'
   const button = <AuroraButton
     {...props}
     icon={iconContent}
@@ -39,6 +41,6 @@ export function Button({
   />
 
   return tooltipMessage === undefined ? button : (
-    <Tooltip message={tooltipMessage} position={tooltipPosition}>{button}</Tooltip>
+    <Tooltip message={tooltipMessage} position={tooltipPosition} disabled={popupOpen}>{button}</Tooltip>
   )
 }

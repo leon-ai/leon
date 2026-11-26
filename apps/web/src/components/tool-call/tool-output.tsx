@@ -64,6 +64,7 @@ interface ToolOutputProps {
   content: ToolContentPart | undefined
   label: string
   active?: boolean
+  progressMessage?: string | undefined
   loading?: boolean
   preview?: boolean
   previewTail?: boolean
@@ -74,12 +75,16 @@ interface ToolOutputProps {
 /**
  * Keeps prose readable and bounded while terminal/code results remain literal.
  */
-export function ToolOutput({ content, label, active = false, loading = false, preview = false, previewTail = false, animationId,
+export function ToolOutput({ content, label, active = false, progressMessage, loading = false, preview = false, previewTail = false, animationId,
   emptyMessage = 'This tool function does not return output.' }: ToolOutputProps) {
   const localId = useId()
   const markdown = content?.language === 'markdown'
   const rich = markdown && content.text.length <= MAXIMUM_RENDERED_MARKDOWN_CHARACTERS
   const empty = !content?.text.trim()
+
+  if (progressMessage) {
+    return <p className="tool-diff-notice" role="status">{progressMessage}</p>
+  }
 
   if (empty && !active && !loading) {
     return emptyMessage ? <p className="tool-diff-notice">{emptyMessage}</p> : null

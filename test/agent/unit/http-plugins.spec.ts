@@ -12,7 +12,7 @@ import type {
   HTTPPluginRequest
 } from '@/core/http-server/http-plugins/types'
 
-vi.mock('@/core/profile-auth', () => ({
+vi.mock('@/core/profile-runtime/profile-auth', () => ({
   authenticateProfileCredential: (
     value: string
   ): { profileName: string, secret: string } | null =>

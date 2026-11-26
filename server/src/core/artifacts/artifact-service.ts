@@ -4,6 +4,8 @@ import { CONVERSATION_LOGGER, SOCKET_SERVER } from '@/core'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
+import { getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
+import { InferencePurpose } from '@/core/llm-manager/types'
 import { readArtifact } from './artifact-store'
 import type { Artifact } from './artifact-types'
 
@@ -29,6 +31,11 @@ export async function attachArtifacts(
   }
 
   recordArtifacts(artifacts)
+  // Proactive attachments follow the response's visibility and final delivery.
+  if (getActiveInferencePurpose() === InferencePurpose.Pulse) {
+    return artifacts
+  }
+
   const messageId = `artifacts:${artifacts.map((artifact) => artifact.id).join(':')}`
   const message = artifacts.map((artifact) => artifact.filename).join(', ')
 

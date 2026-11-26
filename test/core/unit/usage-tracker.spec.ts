@@ -110,6 +110,123 @@ describe('inference usage', () => {
     vi.useRealTimers()
   })
 
+  it('measures all foreground turn outcomes separately from answered turns', async () => {
+    const profileName = 'insights-owner'
+    const from = Date.now() - 2_000
+    const { readUsageTurns, summarizeCompletedOwnerTurn, summarizeUsage } = await import('@/core/insights/usage')
+    const { onCompletedOwnerTurn, recordOwnerTurn } = await import('@/core/llm-manager/turn-timing')
+    const liveTurns: ReturnType<typeof summarizeCompletedOwnerTurn>[] = []
+    const unsubscribe = onCompletedOwnerTurn((turn) => {
+      liveTurns.push(summarizeCompletedOwnerTurn(turn))
+    })
+
+    try {
+      await runWithProfileContext({ profileName }, async () => {
+        for (const [index, outcome] of (['answered', 'answered', 'clarification', 'failed'] as const).entries()) {
+          await runWithTurnTiming(`owner-turn-${index}`, 'local-session', async () => {
+            await runTurnPhase(TurnPhase.Execution, () => trackInferenceUsage(TARGET, async () => {
+              recordInferenceUsage(index === 1
+                ? { input_tokens: 200 }
+                : { input_tokens: 100 * (index + 1), output_tokens: 20 })
+              recordInferenceUsageOutcome(outcome === 'failed' ? 'failed' : 'completed')
+            }))
+            recordOwnerTurn(outcome)
+          })
+        }
+
+        const activity = await readUsageTurns(from, Date.now() + 1, { explicitOwnerOnly: true })
+        expect(summarizeUsage(activity)).toMatchObject({
+          turns: 4, finishedTurns: 2, modelCalls: 4, meteredCalls: 3, failedModelCalls: 1,
+          inputTokens: 1_000, outputTokens: 60, tokenMeasuredTurns: 1, measuredTurnTokens: 120,
+          fullyMeasuredTurns: 3, fullyMeasuredTokens: 860, medianTurnTokens: 320, p95TurnTokens: 420
+        })
+        expect(summarizeUsage(activity.filter(({ outcome }) => outcome !== 'failed')).medianTurnTokens).toBe(220)
+        expect(summarizeUsage(liveTurns)).toEqual(summarizeUsage(activity))
+      })
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('keeps capability and context reduction counts on the originating owner turn', async () => {
+    const {
+      onCompletedOwnerTurn, recordCapabilityUsage, recordForegroundContextReduction, recordOwnerTurn
+    } = await import('@/core/llm-manager/turn-timing')
+    const observed = vi.fn()
+    const unsubscribe = onCompletedOwnerTurn(observed)
+
+    try {
+      await runWithProfileContext({ profileName: 'activity-owner' }, async () => {
+        await runWithTurnTiming('owner-turn', null, async () => {
+          await runTurnPhase(TurnPhase.Execution, async () => {
+            const entry = { kind: 'tool', source: 'mcp', calls: 1, failed: 0, durationMs: 10 } as const
+            recordCapabilityUsage(entry)
+            recordCapabilityUsage({ ...entry, failed: 1, durationMs: 5 })
+            recordForegroundContextReduction(300)
+            recordForegroundContextReduction(0)
+
+            await runWithTurnTiming('background-turn', null, async () => {
+              recordCapabilityUsage({ kind: 'agent_skill', source: 'extension', calls: 1, failed: 0 })
+            }, { stage: TurnStage.PostTurn, taskId: 'background' })
+          })
+          recordOwnerTurn('answered')
+        })
+      })
+
+      expect(observed).toHaveBeenCalledTimes(1)
+      expect(observed).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'owner-turn',
+        profile: 'activity-owner',
+        capabilities: [{ kind: 'tool', source: 'mcp', calls: 2, failed: 1, durationMs: 15 }],
+        contextReduction: { count: 1, estimatedTokensReclaimed: 300 }
+      }))
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('keeps readable activity when a journal entry is damaged', async () => {
+    const profileName = 'activity-history-owner'
+    const { readUsageTurns, summarizeUsage } = await import('@/core/insights/usage')
+    const { recordOwnerTurn } = await import('@/core/llm-manager/turn-timing')
+
+    await runWithProfileContext({ profileName }, async () => {
+      const from = Date.now() - 1_000
+      const recordTurn = async (id: string): Promise<void> => {
+        await runWithTurnTiming(id, 'local-session', async () => {
+          await runTurnPhase(TurnPhase.Execution, () => trackInferenceUsage(TARGET, async () => {
+            recordInferenceUsage({ input_tokens: 100, output_tokens: 20 })
+            recordInferenceUsageOutcome('completed')
+          }))
+          recordOwnerTurn('answered')
+        })
+      }
+      await recordTurn('first-turn')
+
+      const logs = path.join(runtime.directory, profileName, 'logs')
+      for (const journal of ['usage', 'turns']) {
+        const directory = path.join(logs, journal)
+        const [filename] = await fs.readdir(directory)
+        await fs.appendFile(path.join(directory, filename!), Buffer.from([0, 0, 10]))
+      }
+
+      await recordTurn('second-turn')
+      const until = Date.now() + 1
+      let unreadableRecords = 0
+      const activity = await readUsageTurns(from, until, {
+        onUnreadableRecord: () => {
+          unreadableRecords++
+        }
+      })
+
+      expect(unreadableRecords).toBe(2)
+      expect(summarizeUsage(activity)).toMatchObject({
+        turns: 2, modelCalls: 2, tokenMeasuredTurns: 2, measuredTurnTokens: 240
+      })
+      await expect(readUsageTurns(from, until, { explicitOwnerOnly: true })).rejects.toThrow(SyntaxError)
+    })
+  })
+
   it('persists concurrent profile and session attribution without credential contents', async () => {
     await Promise.all(['owner-a', 'owner-b'].map((profileName) =>
       runWithProfileContext({ profileName }, () => runWithConversationSession(
@@ -233,7 +350,8 @@ describe('inference usage', () => {
     expect(today).toContain('3 requests')
     expect(today).toContain('Input: 110 (2/3 requests reported)')
     expect(today).toContain('Total tokens: 135 (2/3 requests reported)')
-    expect(today).toContain('Reported cost: $0.25 (1/3 requests reported)')
+    const cost = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(0.25)
+    expect(today).toContain(`Reported cost: ${cost} (1/3 requests reported)`)
     expect(today).toContain('openrouter / kimi / API key / connection')
     expect(today).toContain('openrouter / xiaomi')
     expect(today).toContain('memory')

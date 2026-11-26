@@ -37,7 +37,7 @@ export interface ModelSettings {
   speed: ModelSpeed
 }
 
-// Vite projects the curated catalog at build time; no Core runtime or profile
+// Vite projects the curated catalog at build time; no server runtime or profile
 // credentials are loaded by the browser.
 declare const LEON_MODEL_PROVIDERS: readonly ModelProvider[]
 

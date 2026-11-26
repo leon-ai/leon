@@ -1,8 +1,8 @@
 import { CONNECTION_AUTHORIZATION_CHANNEL, CONNECTION_SETUP_MESSAGES,
   type ConnectionAuthorizationCompletion } from '../../../../aurora/src/contracts/connection-setup'
-import { isPresentationURL } from '../../../../aurora/src/v2/contracts/presentation'
+import { createUUID } from '@/utils/create-uuid'
+import { DESKTOP_OAUTH_META_NAME, DESKTOP_OAUTH_PATH, getOAuthCompletionPath, isOAuthAuthorizationURL, OAUTH_ATTEMPT_TIMEOUT_MS } from '../../../../bridges/runtime/contracts/oauth-popup'
 
-const AUTHORIZATION_TIMEOUT_MS = 10 * 60_000
 const CLOSED_CHECK_INTERVAL_MS = 500
 
 type AuthorizationOutcome = ConnectionAuthorizationCompletion['result'] | 'closed'
@@ -14,8 +14,41 @@ export class ConnectionAuthorizationError extends Error {}
 
 export interface ConnectionAuthorizationPopup {
   returnURL: string
+  external?: boolean
   authorize: (url: string, signal: AbortSignal) => Promise<AuthorizationOutcome>
   dispose: () => void
+}
+
+function openSystemBrowserAuthorization(provider: string, id: string, returnURL: string): ConnectionAuthorizationPopup {
+  const cancellation = new AbortController()
+
+  return {
+    returnURL,
+    external: true,
+    async authorize(url, signal): Promise<AuthorizationOutcome> {
+      try {
+        const response = await fetch(DESKTOP_OAUTH_PATH, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id, provider, authorization_url: url }),
+          signal: AbortSignal.any([signal, cancellation.signal])
+        })
+        if (response.ok) {
+          const { outcome } = await response.json()
+          if (['connected', 'failed', 'closed'].includes(outcome)) {
+            return outcome
+          }
+        }
+      } catch {
+        signal.throwIfAborted()
+        if (cancellation.signal.aborted) {
+          return 'closed'
+        }
+      }
+      throw new ConnectionAuthorizationError(CONNECTION_SETUP_MESSAGES.actionError)
+    },
+    dispose: (): void => cancellation.abort()
+  }
 }
 
 /**
@@ -24,7 +57,14 @@ export interface ConnectionAuthorizationPopup {
  * Completion is only a refresh signal; the authenticated server owns status.
  */
 export function openConnectionAuthorization(provider: string): ConnectionAuthorizationPopup {
-  const id = crypto.randomUUID()
+  const id = createUUID()
+  const returnURL = new URL(getOAuthCompletionPath('v1'), window.location.origin)
+  returnURL.searchParams.set('popup_id', id)
+
+  if (document.querySelector(`meta[name="${DESKTOP_OAUTH_META_NAME}"]`)) {
+    return openSystemBrowserAuthorization(provider, id, returnURL.href)
+  }
+
   const popup = window.open('about:blank', '_blank', 'popup,width=560,height=720')
   if (!popup) {
     throw new ConnectionAuthorizationError(CONNECTION_SETUP_MESSAGES.popupBlocked)
@@ -60,7 +100,7 @@ export function openConnectionAuthorization(provider: string): ConnectionAuthori
       dispose(value.result)
     }
   }
-  const timeout = setTimeout(dispose, AUTHORIZATION_TIMEOUT_MS)
+  const timeout = setTimeout(dispose, OAUTH_ATTEMPT_TIMEOUT_MS)
   const closedCheck = setInterval(() => {
     // COOP can sever the window handle while authorization still has focus.
     // Treat it as a return only once the owner is back in the conversation.
@@ -68,15 +108,12 @@ export function openConnectionAuthorization(provider: string): ConnectionAuthori
       dispose()
     }
   }, CLOSED_CHECK_INTERVAL_MS)
-  const returnURL = new URL('/api/v1/connections/complete', window.location.origin)
-  returnURL.searchParams.set('popup_id', id)
-
   return {
     returnURL: returnURL.toString(),
     dispose,
     authorize: async (url, signal): Promise<AuthorizationOutcome> => {
       signal.throwIfAborted()
-      if (settled || !isPresentationURL(url)) {
+      if (settled || !isOAuthAuthorizationURL(url)) {
         dispose()
         throw new ConnectionAuthorizationError(CONNECTION_SETUP_MESSAGES.actionError)
       }

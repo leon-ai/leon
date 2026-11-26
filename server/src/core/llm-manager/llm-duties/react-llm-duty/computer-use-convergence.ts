@@ -42,7 +42,7 @@ const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
 const BROWSER_USE_FUNCTION_PREFIX = 'browser_use.playwright.'
 const BROWSER_CLI_FUNCTION_PREFIX = 'browser_use.browser-use.'
 const TARGET_AND_CAPTURE_FIELDS = new Set([
-  'target', 'pid', 'window_id', 'display_id', 'scope', 'x', 'y', 'capture_after', 'tab_id'
+  'target', 'pid', 'window_id', 'display_id', 'scope', 'x', 'y', 'capture_after', 'settle_ms', 'tab_id'
 ])
 const COMPUTER_USE_RETRY_ACTIONS = new Set(
   [...COMPUTER_USE_CAPTURE_ACTIONS, 'browser_act', 'browser_navigate', 'browser_evaluate']
@@ -111,7 +111,7 @@ function parseComputerUseExecutions(
   const input = parseJsonRecord(execution.requestedToolInput)
   const steps = expandComputerUseSequenceSteps(
     input?.['steps'] ?? (focusedSequence ? [] : undefined),
-    focusedSequence ? input?.['focus'] : undefined
+    focusedSequence ? asRecord(input?.['focus']) : undefined
   )
   if (!Array.isArray(steps)) return []
   const results = findNestedRecord(
@@ -125,12 +125,16 @@ function parseComputerUseExecutions(
     const result = Array.isArray(results) ? asRecord(results[index]) : null
     // A stopped batch did not execute the remaining requested steps.
     if (!proposed && typeof result?.['success'] !== 'boolean') return []
+    const guarded = typeof step['wait_for_window'] === 'string'
+    const dialog = guarded ? asRecord(result?.['resolved_target']) : null
+    // A newly opened dialog has no input identity until the tool resolves it.
+    if (guarded && !dialog) return []
     const action = parseComputerUseExecution({
       ...execution,
       status: proposed || result?.['success'] === true ? 'success' : 'error',
       function: `${COMPUTER_USE_PROVIDER_ID}.cua.${step['action']}`,
       requestedToolInput: JSON.stringify(
-        resolveComputerUseSequenceParameters(parameters, input?.['target'])
+        dialog ? { ...parameters, target: dialog } : resolveComputerUseSequenceParameters(parameters, input?.['target'])
       ),
       observation: JSON.stringify(result ?? {})
     })

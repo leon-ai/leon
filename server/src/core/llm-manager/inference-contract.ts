@@ -1,4 +1,4 @@
-// Shared category identifiers must remain usable without importing Core runtime types.
+// Shared category identifiers must remain usable without importing server runtime types.
 export enum LLMDuties {
   Inference = 'inference',
   SkillRouter = 'skill-router',

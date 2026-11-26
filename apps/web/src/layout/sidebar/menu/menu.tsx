@@ -1,32 +1,11 @@
-import { useEffect, useState } from 'react'
-
 import { MenuItem } from '@/layout/sidebar/menu-item'
+import { AppShortcutKey, APP_MODIFIER_LABEL, getAppShortcutAria, NEW_SESSION_REQUIRES_SHIFT } from '@/utils/keyboard-shortcuts'
 
 import './menu.sass'
 
-const DEFAULT_MODIFIER_KEY = 'Ctrl'
-const MACOS_PLATFORM_KEYWORD = 'mac'
-const NAVIGATOR_USER_AGENT_DATA_KEY = 'userAgentData'
-const MACOS_MODIFIER_KEY = {
-  iconName: 'command',
-  label: 'Command'
-}
-
-interface NavigatorUserAgentData {
-  platform: string
-}
-
-interface NavigatorWithUserAgentData extends Navigator {
-  userAgentData?: NavigatorUserAgentData
-}
-
-function getPlatform(): string | undefined {
-  if (NAVIGATOR_USER_AGENT_DATA_KEY in navigator) {
-    return (navigator as NavigatorWithUserAgentData).userAgentData?.platform
-  }
-
-  return undefined
-}
+const NEW_SESSION_KEYS = [APP_MODIFIER_LABEL, ...(NEW_SESSION_REQUIRES_SHIFT ? ['Shift'] : []), AppShortcutKey.NewSession.toUpperCase()]
+const NEW_SESSION_ARIA = getAppShortcutAria(AppShortcutKey.NewSession, NEW_SESSION_REQUIRES_SHIFT) +
+  (NEW_SESSION_REQUIRES_SHIFT ? '' : ` ${getAppShortcutAria(AppShortcutKey.NewSession, true)}`)
 
 interface MenuProps {
   collapsed?: boolean
@@ -39,28 +18,15 @@ export function Menu({
   onSearchSessions,
   onSearchIntent
 }: MenuProps) {
-  const [modifierKey, setModifierKey] = useState<string | typeof MACOS_MODIFIER_KEY>(
-    MACOS_MODIFIER_KEY
-  )
-
-  useEffect(() => {
-    const platform = getPlatform()
-
-    if (
-      platform !== undefined &&
-      !platform.toLowerCase().includes(MACOS_PLATFORM_KEYWORD)
-    ) {
-      setModifierKey(DEFAULT_MODIFIER_KEY)
-    }
-  }, [])
-
   return (
     <nav className="menu menu-fixed" aria-label="Main menu">
-      <MenuItem iconName="edit-box" label="New session" to="/" shortcutKeys={[modifierKey, 'Shift', 'O']} collapsed={collapsed} />
+      <MenuItem iconName="edit-box" label="New session" to="/" shortcutKeys={NEW_SESSION_KEYS}
+        ariaKeyShortcuts={NEW_SESSION_ARIA} collapsed={collapsed} />
       <MenuItem
         iconName="search"
         label="Search sessions"
-        shortcutKeys={[modifierKey, 'K']}
+        shortcutKeys={[APP_MODIFIER_LABEL, AppShortcutKey.SearchSessions.toUpperCase()]}
+        ariaKeyShortcuts={getAppShortcutAria(AppShortcutKey.SearchSessions)}
         collapsed={collapsed}
         onIntent={onSearchIntent}
         {...(onSearchSessions === undefined ? {} : { onClick: onSearchSessions })}

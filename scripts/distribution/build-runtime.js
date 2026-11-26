@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { create } from 'tar'
 import { copyRuntimeDependencies, runtimeDependencyLinks } from './dependencies.js'
 import { RUNTIME_MANIFEST, RUNTIME_SCHEMA_VERSION, RUNTIME_RELEASE_ASSET, runtimePlatform } from './runtime.js'
+import { DESKTOP_CORE_PROTOCOL_VERSION } from '../../bridges/runtime/contracts/distribution.js'
 
 const execute = promisify(execFile)
 const SOURCE_DIRECTORIES = ['bin', 'core', 'tools', 'skills', 'bridges', 'tcp_server', 'schemas']
@@ -64,7 +65,7 @@ export async function buildRuntime({ source = process.cwd(), output, home = proc
       await fs.copyFile(path.join(source, 'scripts', file), path.join(payload, 'scripts', file))
     }
     await fs.cp(path.join(source, 'bridges/runtime/contracts'), path.join(payload, 'bridges/runtime/contracts'), { recursive: true })
-    // Source workers keep their bridge-owned dependencies, apart from Core's.
+    // Source workers keep their bridge-owned dependencies, apart from the server's.
     await copyRuntimeDependencies(path.join(source, 'bridges/nodejs'), path.join(payload, 'bridges/nodejs/node_modules'))
     for (const name of ['node', 'pnpm', 'python', 'uv', 'jq']) {
       await fs.cp(path.join(home, 'bin', name), path.join(payload, 'runtime', name), { recursive: true, verbatimSymlinks: true })
@@ -74,8 +75,11 @@ export async function buildRuntime({ source = process.cwd(), output, home = proc
     await fs.cp(packages, path.join(payload, 'runtime/python-bridge/site-packages'), { recursive: true })
     // Restore links as junctions on Windows; extracting symlinks needs privileges.
     const links = await runtimeDependencyLinks(payload)
+    const revision = process.env.GITHUB_REPOSITORY === 'leon-ai/leon' && process.env.GITHUB_REF_TYPE === 'tag'
+      ? process.env.GITHUB_SHA : undefined
     await fs.writeFile(path.join(payload, RUNTIME_MANIFEST), JSON.stringify({ schemaVersion: RUNTIME_SCHEMA_VERSION,
-      version: manifest.version, platform, nodeVersion: versions.node, links }, null, 2))
+      version: manifest.version, platform, nodeVersion: versions.node, links, desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION,
+      ...(/^[a-f0-9]{40}$/.test(revision ?? '') ? { buildCommit: revision } : {}) }, null, 2))
     const name = `leon-core-${manifest.version}-${platform}.tar.gz`
     const archive = path.join(output, name)
     await create({ file: archive, cwd: payload, gzip: true, portable: true, filter: (_name, info) => !info.isSymbolicLink() },
@@ -86,7 +90,7 @@ export async function buildRuntime({ source = process.cwd(), output, home = proc
     }
     const asset = { platform, name, sha256: hash.digest('hex'), bytes: (await fs.stat(archive)).size }
     await fs.writeFile(path.join(output, RUNTIME_RELEASE_ASSET), JSON.stringify({ schemaVersion: RUNTIME_SCHEMA_VERSION,
-      version: manifest.version, assets: [asset] }, null, 2))
+      version: manifest.version, desktopProtocolVersion: DESKTOP_CORE_PROTOCOL_VERSION, assets: [asset] }, null, 2))
     return asset
   } finally {
     await fs.rm(staging, { recursive: true, force: true })

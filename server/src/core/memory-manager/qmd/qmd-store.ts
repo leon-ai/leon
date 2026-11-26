@@ -275,13 +275,8 @@ async function runQMDStoreEmbedInSubprocess(params: {
     payloadPath,
     JSON.stringify({
       dbPath: getQMDDbPath(params.indexName),
-      options:
-        typeof params.force === 'boolean'
-          ? {
-              force: params.force,
-              maxDurationMs: QMD_EMBED_MAX_DURATION_MS
-            }
-          : { maxDurationMs: QMD_EMBED_MAX_DURATION_MS }
+      force: params.force,
+      maxDurationMs: QMD_EMBED_MAX_DURATION_MS
     }),
     'utf8'
   )

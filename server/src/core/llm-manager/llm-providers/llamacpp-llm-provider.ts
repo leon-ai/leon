@@ -29,7 +29,8 @@ import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-
 import { recordInferenceUsage, getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'
-import { getTurnTimingContext, runTurnPhase, TurnPhase, TurnStage } from '@/core/llm-manager/turn-timing'
+import { getTurnTimingContext, recordPulseQueueSample, runTurnPhase, TurnPhase, TurnStage } from '@/core/llm-manager/turn-timing'
+import { getActivePulseStage } from '@/core/telemetry/pulse-measurements'
 
 const DEFAULT_LLAMACPP_BASE_URL = 'http://127.0.0.1:8080/v1'
 const LLAMACPP_READY_TIMEOUT_MS = 120_000
@@ -40,6 +41,7 @@ const LLAMACPP_METADATA_TIMEOUT_MS = 5_000
 const LLAMACPP_CONTEXT_RESERVE_TOKENS = 64
 const LLAMACPP_SPECULATION_TYPE = 'ngram-map-k'
 const LLAMA_SERVER_LOG_FILENAME = 'llama-server.log'
+let releasePulseInferenceSlot: (() => void) | undefined
 const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
   enable_thinking: false
 }
@@ -48,6 +50,7 @@ const LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
 }
 const BACKGROUND_INFERENCE_PURPOSES = new Set<InferencePurpose>([
   InferencePurpose.SessionTitle,
+  InferencePurpose.Pulse,
   InferencePurpose.PulsePlanning,
   InferencePurpose.PulseReaction
 ])
@@ -253,13 +256,29 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         ])
       : params.signal
     const startedAt = performance.now()
+    // Compare the slot owner at queue entry, before inference can change hands.
+    const pulseActive = releasePulseInferenceSlot !== undefined
+    const pulse = getActivePulseStage() !== undefined
     const release = await runTurnPhase(TurnPhase.Wait, () =>
       LlamaCPPLLMProvider.inferenceScheduler.acquire(
         priority,
         signal
       )
     )
-    LogHelper.debug(`Local inference queue | priority=${priority} | wait_ms=${Math.round(performance.now() - startedAt)}`)
+    const waitMs = Math.round(performance.now() - startedAt)
+    LogHelper.debug(`Local inference queue | priority=${priority} | wait_ms=${waitMs}`)
+    if (priority === LocalInferencePriority.Foreground) {
+      recordPulseQueueSample({ model: this.modelPath, waitMs, pulseActive })
+    }
+    if (pulse) {
+      releasePulseInferenceSlot = release
+      return () => {
+        if (releasePulseInferenceSlot === release) {
+          releasePulseInferenceSlot = undefined
+        }
+        release()
+      }
+    }
 
     return release
   }
