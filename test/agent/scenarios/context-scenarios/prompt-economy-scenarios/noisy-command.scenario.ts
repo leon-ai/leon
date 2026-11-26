@@ -21,7 +21,9 @@ const scenario: RealAgentScenario = {
       ].join('\n'))
 
       const turn = await runMaintainedTurn(context,
-        `Run \`${COMMAND}\` in the current directory using a single shell.executeCommand call, then report its final verification line. That's the only check I need.`,
+        `I've already reviewed \`${SCRIPT_NAME}\` and it's ready to run in the current directory. ` +
+        `Run \`${COMMAND}\` directly with one shell.executeCommand call. ` +
+        'Skip file discovery and report the final verification line.',
         workspace)
       assert.ok(turn.output.match(/\b\d+\b/g)?.includes(String(CHECKED_COUNT)), turn.output)
       assert.match(turn.output, /\b(?:pass(?:ed)?|success(?:ful(?:ly)?)?|succeeded|verified)\b/i)
