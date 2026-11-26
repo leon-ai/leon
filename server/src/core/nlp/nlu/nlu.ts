@@ -42,7 +42,7 @@ import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calli
 import { SlotFillingLLMDuty } from '@/core/llm-manager/llm-duties/slot-filling-llm-duty'
 import { prepareAgentTurn } from '@/core/turn-lifecycle/pre-turn'
 import { runTurnLifecycle } from '@/core/turn-lifecycle'
-import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
+import { runTurnPhase, TurnPhase } from '@/core/turn-lifecycle/observability/timing'
 import {
   RoutingMode,
   SkillFormat,
@@ -903,7 +903,7 @@ export default class NLU {
           ? (reactData['agentResponseTrace'] as AgentResponseTrace)
           : null
       if (output && !BRAIN.isMuted) {
-        await BRAIN.talk(
+        await runTurnPhase(TurnPhase.Delivery, () => BRAIN.talk(
           llmMetrics || agentResponseTrace
             ? {
                 text: String(output),
@@ -968,7 +968,7 @@ export default class NLU {
               }
             : String(output),
           true
-        )
+        ))
       }
 
       return reactResult

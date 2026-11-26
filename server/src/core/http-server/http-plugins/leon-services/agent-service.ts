@@ -7,10 +7,10 @@ import type { AgentResponseTrace } from '@/types'
 
 import { CONVERSATION_LOGGER } from '@/core'
 import { prepareAgentTurn } from '@/core/turn-lifecycle/pre-turn'
-import { runTurnLifecycle } from '@/core/turn-lifecycle'
-import { runWithTurnTiming, runTurnPhase, TurnPhase, setTurnTimingSession, getTurnTimings } from '@/core/llm-manager/turn-timing'
+import { runTurnLifecycle, runWithOwnerTurnTiming } from '@/core/turn-lifecycle'
+import { runTurnPhase, TurnPhase, setTurnTimingSession, getTurnTimings } from '@/core/turn-lifecycle/observability/timing'
 import { measureOtherProcessingDuration } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-metrics'
-import { isToolPreparationPhase } from '@/core/llm-manager/turn-timing-contract'
+import { isToolPreparationPhase } from '@/core/turn-lifecycle/observability/timing-contract'
 import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 import { prepareStoredOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
@@ -102,7 +102,7 @@ export async function runAgent(
 
   const turnId = input.request_id ?? randomUUID()
 
-  return runWithProfileContext({ profileName }, () => runWithTurnTiming(turnId, input.session_id ?? null, async () => {
+  return runWithProfileContext({ profileName }, () => runWithOwnerTurnTiming(turnId, input.session_id ?? null, async () => {
     const totalStartedAt = performance.now()
     await runTurnPhase(TurnPhase.Runtime, () => ensureActiveProfileRuntime())
     input.signal?.throwIfAborted()
@@ -338,13 +338,15 @@ export async function runAgent(
               CONVERSATION_REPOSITORY.updateToolPreparation(sessionId, messageId!, saved)
             }
           }
-          emit('metrics', { metrics })
-          emit('final_answer', {
-            message_id: messageId || '',
-            content: output,
-            response_trace: trace,
-            artifacts: turnArtifacts,
-            answer_parts: answerParts
+          runTurnPhase(TurnPhase.Delivery, () => {
+            emit('metrics', { metrics })
+            emit('final_answer', {
+              message_id: messageId || '',
+              content: output,
+              response_trace: trace,
+              artifacts: turnArtifacts,
+              answer_parts: answerParts
+            })
           })
         }
 
@@ -367,5 +369,5 @@ export async function runAgent(
       metrics: finalMetrics || data['llmMetrics'] || null,
       response_trace: finalTrace
     }
-  }))
+  }, input.signal))
 }

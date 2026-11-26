@@ -72,8 +72,8 @@ it('keeps suggestions offline and profile installations distinct from enablement
     const [toolkitId, toolId] = id.split('.') as [string, string]
     expect(core.TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)).toBeNull()
     await catalog.TOOL_CATALOG.act(id, 'enable')
-    const timing = await import('@/core/llm-manager/turn-timing')
-    const updates: import('@/core/llm-manager/turn-timing-contract').InferenceActivity[] = []
+    const timing = await import('@/core/turn-lifecycle/observability/timing')
+    const updates: import('@/core/turn-lifecycle/observability/timing-contract').InferenceActivity[] = []
     await timing.runWithTurnTiming('mcp-discovery', 'fixture-session', () =>
       timing.observeTurnActivities((activity) => updates.push(activity), () => core.TOOLKIT_REGISTRY.prepareToolkit(toolkitId, toolId)))
     expect(updates.map(({ goal, outcome }) => [goal, outcome])).toEqual([

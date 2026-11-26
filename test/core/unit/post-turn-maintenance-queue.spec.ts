@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PostTurnMaintenanceQueue from '@/core/turn-lifecycle/post-turn-maintenance-queue'
 import { LogHelper } from '@/helpers/log-helper'
-import { TurnStage } from '@/core/llm-manager/turn-timing'
+import { TurnStage } from '@/core/turn-lifecycle/observability/timing'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'

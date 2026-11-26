@@ -11,7 +11,7 @@ import { runWithConversationSession, recordTurnInference } from '@/core/session-
 import { trackInferenceUsage } from '@/core/llm-manager/llm-usage'
 import { appendInferenceUsage, readInferenceUsage, HISTORICAL_USAGE_FILENAME, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { recordInferenceAttempt, recordInferenceUsage, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
-import { runWithTurnTiming, TurnStage, runTurnPhase, TurnPhase, recordTurnInference as recordAttemptTiming, readTurnHistory } from '@/core/llm-manager/turn-timing'
+import { runWithTurnTiming, TurnStage, runTurnPhase, TurnPhase, recordTurnInference as recordAttemptTiming, readTurnHistory } from '@/core/turn-lifecycle/observability/timing'
 import { LLMProviders, LLMDuties } from '@/core/llm-manager/types'
 import { trackProviderResponseUsage } from '@/core/llm-manager/llm-usage/provider-response-usage'
 import { createInferenceMetadata, InferenceAuthMode, InferenceCredentialSource } from '@/core/llm-manager/inference-metadata'
@@ -114,7 +114,7 @@ describe('inference usage', () => {
     const profileName = 'insights-owner'
     const from = Date.now() - 2_000
     const { readUsageTurns, summarizeCompletedOwnerTurn, summarizeUsage } = await import('@/core/insights/usage')
-    const { onCompletedOwnerTurn, recordOwnerTurn } = await import('@/core/llm-manager/turn-timing')
+    const { onCompletedOwnerTurn, recordOwnerTurn } = await import('@/core/turn-lifecycle/observability/timing')
     const liveTurns: ReturnType<typeof summarizeCompletedOwnerTurn>[] = []
     const unsubscribe = onCompletedOwnerTurn((turn) => {
       liveTurns.push(summarizeCompletedOwnerTurn(turn))
@@ -151,7 +151,7 @@ describe('inference usage', () => {
   it('keeps capability and context reduction counts on the originating owner turn', async () => {
     const {
       onCompletedOwnerTurn, recordCapabilityUsage, recordForegroundContextReduction, recordOwnerTurn
-    } = await import('@/core/llm-manager/turn-timing')
+    } = await import('@/core/turn-lifecycle/observability/timing')
     const observed = vi.fn()
     const unsubscribe = onCompletedOwnerTurn(observed)
 
@@ -188,7 +188,7 @@ describe('inference usage', () => {
   it('keeps readable activity when a journal entry is damaged', async () => {
     const profileName = 'activity-history-owner'
     const { readUsageTurns, summarizeUsage } = await import('@/core/insights/usage')
-    const { recordOwnerTurn } = await import('@/core/llm-manager/turn-timing')
+    const { recordOwnerTurn } = await import('@/core/turn-lifecycle/observability/timing')
 
     await runWithProfileContext({ profileName }, async () => {
       const from = Date.now() - 1_000

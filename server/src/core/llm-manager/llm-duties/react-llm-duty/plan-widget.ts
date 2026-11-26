@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { SOCKET_SERVER, TOOLKIT_REGISTRY } from '@/core'
-import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
+import type { InferenceActivity } from '@/core/turn-lifecycle/observability/timing-contract'
 
 import type { TrackedPlanStep } from './agent-types'
 

@@ -7,8 +7,8 @@ import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { LogHelper } from '@/helpers/log-helper'
 import { LLMProviders, LLMDuties, type CompletionAttemptTiming } from '@/core/llm-manager/types'
 import { getTurnTimings, recordTurnInference, runOutsideTurnTiming, runTurnPhase,
-  runWithTurnTiming, setTurnPhaseGoal, setTurnTimingSession, TurnPhase, observeTurnActivities } from '@/core/llm-manager/turn-timing'
-import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
+  runWithTurnTiming, setTurnPhaseGoal, setTurnTimingSession, TurnPhase, observeTurnActivities } from '@/core/turn-lifecycle/observability/timing'
+import type { InferenceActivity } from '@/core/turn-lifecycle/observability/timing-contract'
 
 const fixture = vi.hoisted(() => ({ root: '' }))
 vi.mock('@/core/profile-runtime/profile-paths', async (importOriginal) => {

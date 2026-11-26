@@ -20,7 +20,7 @@ import type { UsageAccounting } from '@/core/llm-manager/llm-usage/usage-account
 import type { ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
 import type { TurnInference } from '@/core/llm-manager/inference-metadata'
 import type { CompletionAttemptTiming } from '@/core/llm-manager/types'
-import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
+import type { InferenceActivity } from '@/core/turn-lifecycle/observability/timing-contract'
 
 export type Languages = typeof LANG_CONFIGS
 export type LongLanguageCode = keyof Languages
@@ -202,7 +202,7 @@ export interface AgentResponseToolCall {
  */
 export interface AgentResponseTrace {
   answerStartedAt?: number
-  timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
+  timings?: import('@/core/turn-lifecycle/observability/timing').TurnTiming[]
   id?: string
   inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' | 'review' })[]
   progressMessages?: AgentProgressMessage[]

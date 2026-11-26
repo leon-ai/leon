@@ -18,8 +18,8 @@ import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-rep
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { buildOwnerDocument, normalizeOwnerProfile, writeOwnerProfile } from '@/core/context-manager/owner-profile'
-import { runTurnLifecycle } from '@/core/turn-lifecycle'
-import { runTurnPhase, TurnPhase, TurnStage, readTurnHistory, recordTurnInference, getTurnTimings } from '@/core/llm-manager/turn-timing'
+import { runTurnLifecycle, runWithOwnerTurnTiming } from '@/core/turn-lifecycle'
+import { onCompletedOwnerTurn, runTurnPhase, TurnPhase, TurnStage, readTurnHistory, recordTurnInference, getTurnTimings } from '@/core/turn-lifecycle/observability/timing'
 import { trackInferenceUsage } from '@/core/llm-manager/llm-usage'
 import { readInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { recordInferenceAttempt, recordInferenceUsage, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
@@ -599,6 +599,43 @@ it('does not schedule successful-turn maintenance when foreground execution abor
     expect(history.some((record) => record['kind'] === 'maintenance' && record['stage'] === TurnStage.PostTurn)).toBe(false)
     expect(history.some((record) => record['outcome'] === 'failed')).toBe(true)
   })
+})
+
+it('separates final replies from blockers and attributes preparation exceptions to their originating phase', async () => {
+  const profile = randomUUID()
+  await createProfile(profile)
+  const outcomes: unknown[] = []
+  const unsubscribe = onCompletedOwnerTurn(({ measurement: { outcome, terminal } }) => {
+    outcomes.push({ outcome, terminal })
+  })
+
+  try {
+    await runWithProfileContext({ profileName: profile }, async () => {
+      const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
+      for (const intent of ['answer', 'blocked', 'error', 'cancelled'] as const) {
+        await runTurnLifecycle({ sessionId, query: 'Hello' }, async () => ({
+          output: 'A user-facing reply', data: { finalIntent: intent }
+        }) as LLMDutyResult)
+      }
+
+      const failure = Object.assign(new Error('Private error text'), { status: 403 })
+      await expect(runWithOwnerTurnTiming(randomUUID(), sessionId, async () =>
+        runTurnPhase(TurnPhase.Runtime, () => runTurnPhase(TurnPhase.Attachments, () => {
+          throw failure
+        }))
+      )).rejects.toBe(failure)
+    })
+
+    expect(outcomes).toEqual([
+      { outcome: 'answered', terminal: undefined },
+      { outcome: 'blocked', terminal: { phase: TurnPhase.Execution, code: 'blocked' } },
+      { outcome: 'failed', terminal: { phase: TurnPhase.Execution, code: 'error_response' } },
+      { outcome: 'canceled', terminal: undefined },
+      { outcome: 'failed', terminal: { phase: TurnPhase.Attachments, code: 'authorization' } }
+    ])
+  } finally {
+    unsubscribe()
+  }
 })
 
 

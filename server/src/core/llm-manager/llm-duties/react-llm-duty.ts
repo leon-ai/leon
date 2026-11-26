@@ -145,9 +145,9 @@ import { AgentRunBudget } from './react-llm-duty/agent-run-budget'
 import {
   runTurnPhase, TurnPhase, setTurnPhaseGoal, observeTurnActivities, getTurnTimings,
   recordCapabilityUsage, recordForegroundContextReduction
-} from '../turn-timing'
+} from '../../turn-lifecycle/observability/timing'
 import { getActiveInferencePurpose } from '../llm-usage/usage-context'
-import { isToolPreparationPhase } from '../turn-timing-contract'
+import { isToolPreparationPhase } from '../../turn-lifecycle/observability/timing-contract'
 import { CATALOG_SEARCH_TOOL_NAME } from '@/core/tool-manager/catalog/agent-catalog'
 import { AURORA_LOADER_NAME, AURORA_PREVIEW_NAME, AURORA_PRESENT_NAME } from '@/core/aurora/agent-ui-contract'
 import {

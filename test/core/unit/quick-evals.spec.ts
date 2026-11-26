@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { TurnStage } from '@/core/llm-manager/turn-timing-contract'
+import { TurnStage } from '@/core/turn-lifecycle/observability/timing-contract'
 import type { InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { compareQuickEval, evaluateQuickEvalCase, summarizeQuickEvalUsage, type Evaluation } from '../../../scripts/ci/quick-evals'
 

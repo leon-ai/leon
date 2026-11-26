@@ -34,15 +34,18 @@ it.each([
       import { startProfileTelemetry } from './server/src/core/telemetry/profile-telemetry.ts'
       import { measurePulse, withPulseStage } from './server/src/core/telemetry/pulse-measurements.ts'
       import {
-        DAILY_REPORT_PATH, PulseFailureCode, PulseFailureScope, PulseStage, TELEMETRY_DAY_MS
+        DAILY_REPORT_PATH, PRESENCE_INTERVAL_MS, PulseFailureCode, PulseFailureScope, PulseStage, TELEMETRY_DAY_MS
       } from './server/src/core/telemetry/report-contract.ts'
       import { TELEMETRY_COLLECTOR_ORIGIN } from './server/src/constants.ts'
       import { getProfilePaths } from './server/src/core/profile-runtime/profile-paths.ts'
       import PulseManager from './server/src/core/pulse-manager/pulse-manager.ts'
       import { PulseDecision, PulseResultRepository } from './server/src/core/pulse-manager/pulse-result-repository.ts'
+      import PostTurnMaintenanceQueue from './server/src/core/turn-lifecycle/post-turn-maintenance-queue.ts'
       import { ConversationRepository } from './server/src/core/session-manager/conversation-repository.ts'
       import { runWithTurnClient } from './server/src/core/leon-interface/turn-client.ts'
-      import { recordOwnerTurn, runWithTurnTiming, TurnPhase, TurnStage } from './server/src/core/llm-manager/turn-timing.ts'
+      import {
+        recordOwnerTurn, recordTurnInference, runTurnPhase, runWithTurnTiming, TurnPhase, TurnStage
+      } from './server/src/core/turn-lifecycle/observability/timing.ts'
 
       const now = Date.UTC(2030, 0, 31, 12)
       Date.now = () => now
@@ -115,13 +118,15 @@ it.each([
           const event = JSON.parse(options.body)
           events.set(event.kind, event)
         }
-        if (reports.has('/v1/presence') && ['profile_started', 'pulse_metrics', 'turn_finished', 'session_activity']
+        if (reports.has('/v1/presence') && ['profile_started', 'pulse_metrics', 'turn_finished', 'session_activity', 'maintenance_metrics']
           .every((kind) => events.has(kind))) {
           delivery.resolve()
         }
         return Promise.resolve(new Response(null, { status: 204 }))
       }
 
+      const realSetTimeout = globalThis.setTimeout
+      globalThis.setTimeout = (callback, delay, ...args) => realSetTimeout(callback, delay === PRESENCE_INTERVAL_MS ? 20 : delay, ...args)
       const stop = startProfileTelemetry()
       measurePulse({ counter: 'discovery_checked', count: 1 })
       measurePulse({ counter: 'discovery_checked', count: 2 })
@@ -139,10 +144,28 @@ it.each([
       try {
         await pulse.tick('manual')
         await runWithTurnClient('mobile', 'ios', () => runWithTurnTiming('fixture-turn', 'fixture-session', async () => {
+          runTurnPhase(TurnPhase.Execution, () => runTurnPhase(TurnPhase.Review, () => {
+            recordTurnInference({
+              attemptId: 'fixture-failed-attempt', outcome: 'failed', failureKind: 'unavailable',
+              startedAt: now - 15, elapsedMs: 15, duty: 'react', provider: 'llamacpp', model: '/private/owner-model.gguf'
+            }, Object.assign(new Error('private provider response'), { status: 429 }))
+          }))
           recordOwnerTurn('answered')
         }))
+        const queue = new PostTurnMaintenanceQueue()
+        queue.enqueue('memory extraction', () => {
+          throw Object.assign(new Error('private maintenance error'), { code: 'ETIMEDOUT' })
+        })
+        await queue.whenIdle()
         if (${sendsReports}) {
-          await delivery.promise
+          const deadline = realSetTimeout(() => {
+            delivery.reject(new Error('Missing telemetry reports: ' + [...events.keys()].join(', ')))
+          }, 2_000)
+          try {
+            await delivery.promise
+          } finally {
+            clearTimeout(deadline)
+          }
           assert.deepEqual(reports, new Set(['/v1/presence', '/v2/event']))
           assert.deepEqual(events.get('pulse_metrics').counters, {
             discovery_checked: 3, discovery_failed: 2, followup_failed: 1, tick_failed: 1
@@ -157,6 +180,15 @@ it.each([
           assert.equal(events.get('pulse_metrics').profile, events.get('profile_started').report.profile)
           assert.deepEqual(events.get('turn_finished').client, { type: 'mobile', os: 'ios' })
           assert.equal(events.get('turn_finished').report.fleet.os, process.platform)
+          assert.equal(events.get('turn_finished').report.answered, 1)
+          assert.deepEqual(events.get('turn_finished').turnDiagnostics, [{
+            kind: 'attempt', phase: 'review', code: 'rate_limit', count: 1,
+            inference: { provider: 'llamacpp', model: 'other' }
+          }])
+          assert.deepEqual(events.get('maintenance_metrics').tasks, [{
+            stage: 'post-turn', task: 'memory extraction', outcome: 'failed', reason: 'timeout', count: 1
+          }])
+          assert.equal(JSON.stringify([...events.values()]).includes('private maintenance error'), false)
           assert.equal(events.get('profile_started').client, undefined)
           const sessionActivity = events.get('session_activity')
           assert.equal(sessionActivity.profile, events.get('profile_started').report.profile)

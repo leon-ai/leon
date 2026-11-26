@@ -1,4 +1,4 @@
-import { TurnPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import { TurnPhase } from '../../../../server/src/core/turn-lifecycle/observability/timing-contract'
 
 const WORKING_LABELS = [
   'Working...',

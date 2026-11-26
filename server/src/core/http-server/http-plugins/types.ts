@@ -83,7 +83,7 @@ export interface HTTPPluginPlanTransition extends HTTPPluginPlanStep {
 
 export interface HTTPPluginAgentTrace {
   answer_started_at?: number
-  timings?: import('@/core/llm-manager/turn-timing').TurnTiming[]
+  timings?: import('@/core/turn-lifecycle/observability/timing').TurnTiming[]
   inferences?: AgentResponseTrace['inferences']
   reasoning_summary?: string
   progress_messages?: {

@@ -21,6 +21,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
+import { recordTurnAttemptFailure, TurnPhase } from '@/core/turn-lifecycle/observability/timing'
 import { waitForRetry } from '@/core/llm-manager/llm-provider/llm-provider-errors'
 import {
   CompletionFailureKind,
@@ -2005,6 +2006,9 @@ async function reviewAgentCompletion(
 
           LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
           return { status, reason }
+        }
+        if (response) {
+          recordTurnAttemptFailure(TurnPhase.Review, 'review_invalid_response')
         }
         LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
       } catch (error) {

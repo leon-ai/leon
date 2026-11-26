@@ -9,7 +9,7 @@ import { TurnClientOS, TurnClientType } from '../../../../bridges/runtime/contra
 import { getLLMModelCatalogEntries } from '../llm-manager/llm-model-catalog'
 import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '../llm-manager/local-model-catalog'
 import { LLMProviders } from '../llm-manager/types'
-import { OWNER_TURN_FAILURE_CODES } from '../llm-manager/turn-timing-contract'
+import { OWNER_FAILURE_PHASES, OWNER_TURN_FAILURE_CODES, TURN_DIAGNOSTIC_CODES, TurnStage } from '../turn-lifecycle/observability/timing-contract'
 
 export const DAILY_REPORT_PATH = '/v1/daily'
 export const PRESENCE_REPORT_PATH = '/v1/presence'
@@ -28,6 +28,8 @@ export const TELEMETRY_RETRY_DAYS = 7
 export const TELEMETRY_MINUTE_MS = 60_000
 export const TELEMETRY_MAX_MODEL_BUCKETS = 100
 export const TELEMETRY_MAX_CAPABILITY_BUCKETS = 64
+export const TELEMETRY_MAX_TURN_FAILURES = 32
+export const TELEMETRY_MAX_MAINTENANCE_BUCKETS = 48
 export const OTHER_MODEL = 'other'
 export const OTHER_PROVIDER = 'other'
 export const PRESENCE_INTERVAL_MS = 5 * 60_000
@@ -67,6 +69,7 @@ export const dailyReportSchema = Type.Object({
   turns: count,
   answered: count,
   failed: count,
+  blocked: Type.Optional(count),
   canceled: count,
   clarifications: count,
   measuredTurns: count,
@@ -133,6 +136,15 @@ const capabilityUsage = Type.Union([
   }, { additionalProperties: false })
 ])
 export type CapabilityUsage = Static<typeof capabilityUsage>
+const turnDiagnosticSchema = Type.Object({
+  kind: Type.Union([Type.Literal('terminal'), Type.Literal('attempt')]),
+  phase: Type.Union(OWNER_FAILURE_PHASES.map((phase) => Type.Literal(phase))),
+  code: Type.Union(TURN_DIAGNOSTIC_CODES.map((code) => Type.Literal(code))),
+  count,
+  inference: Type.Optional(Type.Object(publicModelProperties, { additionalProperties: false }))
+}, { additionalProperties: false })
+export type TurnDiagnostic = Static<typeof turnDiagnosticSchema>
+
 const telemetryEventSchema = Type.Object({
   id: identifier,
   kind: Type.Union([Type.Literal('profile_started'), Type.Literal('turn_finished'), Type.Literal('skill_finished')]),
@@ -144,9 +156,42 @@ const telemetryEventSchema = Type.Object({
   }, { additionalProperties: false })),
   capabilities: Type.Optional(Type.Array(capabilityUsage, { maxItems: TELEMETRY_MAX_CAPABILITY_BUCKETS })),
   contextReduction: Type.Optional(Type.Object({ count, estimatedTokensReclaimed: count }, { additionalProperties: false })),
+  turnDiagnostics: Type.Optional(Type.Array(turnDiagnosticSchema, { maxItems: TELEMETRY_MAX_TURN_FAILURES })),
   report: dailyReportSchema
 }, { additionalProperties: false })
 export type TelemetryEventReport = Static<typeof telemetryEventSchema>
+
+export const MAINTENANCE_TASKS = [
+  'session title generation', 'FYI generation', 'agent history compaction', 'Pulse chat resolution',
+  'experience learning', 'turn memory observation', 'react self-model reflection', 'owner profile sync',
+  'memory extraction', 'temporary location backfill', 'other'
+] as const
+export const MAINTENANCE_REASONS = [
+  ...OWNER_TURN_FAILURE_CODES, 'rewrite-failed', 'verification-rejected', 'verification-failed',
+  'structured-extraction-failed', 'document-changed', 'history-compaction-failed', 'fyi-fallback'
+] as const
+const maintenanceRow = Type.Object({
+  stage: Type.Union([Type.Literal(TurnStage.PreTurn), Type.Literal(TurnStage.PostTurn)]),
+  task: Type.Union(MAINTENANCE_TASKS.map((task) => Type.Literal(task))),
+  outcome: Type.Union([Type.Literal('completed'), Type.Literal('rejected'), Type.Literal('failed')]),
+  reason: Type.Optional(Type.Union(MAINTENANCE_REASONS.map((reason) => Type.Literal(reason)))),
+  count
+}, { additionalProperties: false })
+export type MaintenanceMetric = Static<typeof maintenanceRow>
+const maintenanceSchema = Type.Object({
+  kind: Type.Literal('maintenance_metrics'), id: identifier, installation: identifier, profile: identifier, version,
+  at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }), os: serverOS,
+  tasks: Type.Array(maintenanceRow, { minItems: 1, maxItems: TELEMETRY_MAX_MAINTENANCE_BUCKETS })
+}, { additionalProperties: false })
+export type MaintenanceReport = Static<typeof maintenanceSchema>
+
+/**
+ * Accepts only preclassified, positive maintenance counts.
+ */
+export function isMaintenanceReport(value: unknown): value is MaintenanceReport {
+  return Value.Check(maintenanceSchema, value) &&
+    value.tasks.every((row) => row.count > 0 && (row.outcome === 'completed') === (row.reason === 'fyi-fallback'))
+}
 
 const sessionActivitySchema = Type.Object({
   kind: Type.Literal('session_activity'), id: identifier, installation: identifier, profile: identifier, version,
@@ -334,7 +379,21 @@ export function getIanaTimeZone(value: string): string | undefined {
  * Checks the shape and timezone of an event sent by the server.
  */
 export function isTelemetryEventReport(value: unknown): value is TelemetryEventReport {
-  return Value.Check(telemetryEventSchema, value) &&
+  if (!Value.Check(telemetryEventSchema, value)) {
+    return false
+  }
+  const { turnDiagnostics, report } = value
+  if (turnDiagnostics !== undefined) {
+    const terminal = turnDiagnostics.filter((row) => row.kind === 'terminal')
+    if (value.kind !== 'turn_finished' || terminal.length !== report.failed + (report.blocked ?? 0) ||
+      !turnDiagnostics.every((row) => row.kind === 'terminal'
+        ? row.count === 1 && row.inference === undefined && (row.code === 'blocked') === Boolean(report.blocked)
+        : row.count > 0 && row.code !== 'blocked' && (!row.inference || isPublicModelLabel(row.inference)))) {
+      return false
+    }
+  }
+
+  return ((report.blocked ?? 0) === 0 || value.kind === 'turn_finished' && turnDiagnostics !== undefined) &&
     (value.client === undefined || value.kind === 'turn_finished') &&
     getIanaTimeZone(value.timeZone) !== undefined
 }

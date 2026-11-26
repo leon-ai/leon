@@ -29,7 +29,7 @@ import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-
 import { recordInferenceUsage, getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'
-import { getTurnTimingContext, recordPulseQueueSample, runTurnPhase, TurnPhase, TurnStage } from '@/core/llm-manager/turn-timing'
+import { getTurnTimingContext, recordPulseQueueSample, runTurnPhase, TurnPhase, TurnStage } from '@/core/turn-lifecycle/observability/timing'
 import { getActivePulseStage } from '@/core/telemetry/pulse-measurements'
 
 const DEFAULT_LLAMACPP_BASE_URL = 'http://127.0.0.1:8080/v1'

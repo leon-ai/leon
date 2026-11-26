@@ -53,7 +53,7 @@ import {
 } from '@/core/llm-manager/types'
 import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { LogHelper } from '@/helpers/log-helper'
-import { getTurnTimingContext, recordTurnInference } from '../turn-timing'
+import { getTurnTimingContext, recordTurnInference } from '../../turn-lifecycle/observability/timing'
 import { recordInferenceAttempt, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
 import { describeProviderConnectionFailure, ProviderRequestActivity } from './provider-request-activity'
 
@@ -226,7 +226,7 @@ export async function runCompletionAttempt(
       LogHelper.debug(`LLM attempt ${details}`)
     }
 
-    recordTurnInference(timing)
+    recordTurnInference(timing, error, callerAbortSignal?.aborted === true)
     completionParams.onAttempt?.(timing)
   }
   // Attempt-level diagnosis can retry, but owner cancellation must survive it.

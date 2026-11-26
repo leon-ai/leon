@@ -9,8 +9,9 @@ import { isFyiEligible, type Fyi } from '@/core/fyi/fyi-contract'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import { LLM_PROVIDER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
-import { getTurnTimingContext, recordOwnerTurn, runWithTurnTiming, TurnStage } from '@/core/llm-manager/turn-timing'
-import type { OwnerTurnFailureCode } from '@/core/llm-manager/turn-timing-contract'
+import {
+  getTurnTimingContext, recordOwnerTurn, recordOwnerTurnError, runWithTurnTiming, TurnPhase, TurnStage
+} from '@/core/turn-lifecycle/observability/timing'
 import { schedulePostTurn } from './post-turn'
 
 interface AgentTurnContext {
@@ -23,22 +24,20 @@ interface AgentTurnContext {
   signal?: AbortSignal
 }
 
-function classifyFailure(error: unknown): OwnerTurnFailureCode {
-  const detail = error as { name?: string, code?: string, status?: number, statusCode?: number, response?: { status?: number } } | null
-  const status = detail?.status ?? detail?.statusCode ?? detail?.response?.status
-  if (status === 429) {
-    return 'rate_limit'
-  }
-  if (status === 401 || status === 403) {
-    return 'authorization'
-  }
-  if (status === 408 || status === 504 || detail?.name === 'TimeoutError' || detail?.code === 'ETIMEDOUT') {
-    return 'timeout'
-  }
-  if (detail?.code === 'ECONNREFUSED' || detail?.code === 'ECONNRESET' || detail?.code === 'ENOTFOUND') {
-    return 'connection'
-  }
-  return 'unknown'
+/**
+ * Covers an accepted owner turn from preparation through response publishing.
+ */
+export async function runWithOwnerTurnTiming<T>(
+  turnId: string, sessionId: string | null, execute: () => Promise<T>, signal?: AbortSignal
+): Promise<T> {
+  return runWithTurnTiming(turnId, sessionId, async () => {
+    try {
+      return await execute()
+    } catch (error) {
+      recordOwnerTurnError(error, signal)
+      throw error
+    }
+  })
 }
 
 /**
@@ -58,20 +57,23 @@ export async function runTurnLifecycle(
             CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(context.sessionId, context.query), TurnStage.PreTurn
           )
         }
-        let result: LLMDutyResult | null
-        try {
-          result = await executeAndDeliver()
-        } catch (error) {
-          const canceled = context.signal?.aborted || (error instanceof Error && error.name === 'AbortError')
-          recordOwnerTurn(canceled ? 'canceled' : 'failed', undefined, classifyFailure(error))
-          throw error
-        }
+        const result = await executeAndDeliver()
         const intent = result?.data?.['finalIntent']
-        recordOwnerTurn(
-          result?.output ? (intent === 'clarification' ? 'clarification' : 'answered') : 'failed',
-          result?.data?.['llmMetrics'],
-          result?.output ? undefined : 'no_output'
-        )
+        const metrics = result?.data?.['llmMetrics']
+        const output = result?.output as unknown
+        const hasOutput = typeof output === 'string' ? output.trim().length > 0 : Boolean(output)
+
+        if (intent === 'cancelled' || (!hasOutput && context.signal?.aborted)) {
+          recordOwnerTurn('canceled', metrics)
+        } else if (intent === 'blocked') {
+          recordOwnerTurn('blocked', metrics, undefined, { phase: TurnPhase.Execution, code: 'blocked' })
+        } else if (intent === 'error') {
+          recordOwnerTurn('failed', metrics, 'unknown', { phase: TurnPhase.Execution, code: 'error_response' })
+        } else if (!hasOutput) {
+          recordOwnerTurn('failed', metrics, 'no_output', { phase: TurnPhase.Execution, code: 'no_output' })
+        } else {
+          recordOwnerTurn(intent === 'clarification' ? 'clarification' : 'answered', metrics)
+        }
         const trace = result?.data?.['agentResponseTrace'] as AgentResponseTrace | undefined
         const responseId = context.responseId ?? trace?.id ?? (context.turnId ? `${context.turnId}:leon` : undefined)
         const answer: unknown = result?.output
@@ -83,15 +85,20 @@ export async function runTurnLifecycle(
             }
 
             let candidate: Fyi | null = null
+            let usedFallback = false
             try {
               candidate = await generateFyi(context.query, answer)
             } catch {
               // A footer failure must not reopen or invalidate an accepted answer.
               LogHelper.warning('FYI generation unavailable; using a queued mindset.')
+              usedFallback = true
             }
             const fyi = CONVERSATION_REPOSITORY.saveFyi(context.sessionId, responseId, answer, candidate)
             if (fyi) {
               context.onFyi?.(fyi, record.messageId ?? responseId)
+            }
+            if (usedFallback) {
+              return { outcome: 'completed', reason: 'fyi-fallback' }
             }
             return { outcome: fyi ? 'completed' : 'skipped' }
           }, TurnStage.PostTurn)
@@ -114,8 +121,13 @@ export async function runTurnLifecycle(
     )
 
   if (getTurnTimingContext()) {
-    return execute()
+    try {
+      return await execute()
+    } catch (error) {
+      recordOwnerTurnError(error, context.signal)
+      throw error
+    }
   }
 
-  return runWithTurnTiming(context.turnId ?? randomUUID(), context.sessionId, execute)
+  return runWithOwnerTurnTiming(context.turnId ?? randomUUID(), context.sessionId, execute, context.signal)
 }

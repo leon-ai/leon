@@ -10,7 +10,7 @@ import YAML from 'yaml'
 
 import type { AgentCompletionReviewDecision } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
 import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
-import { TurnStage } from '@/core/llm-manager/turn-timing-contract'
+import { TurnStage } from '@/core/turn-lifecycle/observability/timing-contract'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { runMaintainedTurn } from '../../test/agent/scenarios/scenario-fixture'
 import { stopScenarioProcesses, withAgentScenarioHome } from '../../test/agent/scenario-home'

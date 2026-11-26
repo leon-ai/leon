@@ -45,8 +45,8 @@ export async function runMaintainedTurn(
 ): Promise<RealScenarioTurn & { turnId: string }> {
   const { POST_TURN_MAINTENANCE_QUEUE } = await import('@/core')
   const { runTurnLifecycle } = await import('@/core/turn-lifecycle')
-  const { runTurnPhase } = await import('@/core/llm-manager/turn-timing')
-  const { TurnPhase } = await import('@/core/llm-manager/turn-timing-contract')
+  const { runTurnPhase } = await import('@/core/turn-lifecycle/observability/timing')
+  const { TurnPhase } = await import('@/core/turn-lifecycle/observability/timing-contract')
   const { CONVERSATION_SESSION_MANAGER } = await import('@/core/session-manager')
   const sessionId = existingSessionId ?? CONVERSATION_SESSION_MANAGER.createSession().id
   const turnId = randomUUID()

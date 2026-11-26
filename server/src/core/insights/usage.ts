@@ -1,7 +1,7 @@
 import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 import { readContextUsage } from '@/core/llm-manager/llm-usage/context-usage'
-import { readTurnHistory, TurnPhase, TurnStage, type CompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
-import { OWNER_TURN_FAILURE_CODES, type OwnerTurnFailureCode } from '@/core/llm-manager/turn-timing-contract'
+import { readTurnHistory, TurnPhase, TurnStage, type CompletedOwnerTurn } from '@/core/turn-lifecycle/observability/timing'
+import { OWNER_TURN_FAILURE_CODES, type OwnerTurnFailureCode } from '@/core/turn-lifecycle/observability/timing-contract'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 import { CONVERSATION_REPOSITORY } from '@/core/session-manager/conversation-repository'
@@ -259,6 +259,7 @@ export function summarizeUsage(turns: readonly ActivityTurn[]): UsageSummary {
   let fullyMeasuredTokens = 0
   let finishedTurns = 0
   let failedTurns = 0
+  let blockedTurns = 0
   let canceledTurns = 0
   let clarificationTurns = 0
   let tokenMeasuredTurns = 0
@@ -288,6 +289,7 @@ export function summarizeUsage(turns: readonly ActivityTurn[]): UsageSummary {
       firstOutputCount++
     }
     failedTurns += Number(turn.outcome === 'failed')
+    blockedTurns += Number(turn.outcome === 'blocked')
     canceledTurns += Number(turn.outcome === 'canceled')
     clarificationTurns += Number(turn.outcome === 'clarification')
     const tokens = turn.modelCalls > 0 && turn.meteredCalls === turn.modelCalls
@@ -310,7 +312,7 @@ export function summarizeUsage(turns: readonly ActivityTurn[]): UsageSummary {
   completeTokens.sort((a, b) => a - b)
   contextSamples.sort((a, b) => a - b)
   return {
-    ...totals, turns: turns.length, finishedTurns, failedTurns, canceledTurns, clarificationTurns,
+    ...totals, turns: turns.length, finishedTurns, failedTurns, blockedTurns, canceledTurns, clarificationTurns,
     tokenMeasuredTurns, measuredTurnTokens,
     fullyMeasuredTurns: completeTokens.length, fullyMeasuredTokens,
     medianTurnTokens: median(completeTokens), p95TurnTokens: percentile(completeTokens, 0.95),

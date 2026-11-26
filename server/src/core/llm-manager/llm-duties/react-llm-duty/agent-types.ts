@@ -3,7 +3,7 @@ import type { ToolCompletionReview, AgentResponseToolCall, SkillOrigin } from '@
 import type { AgentProgressMessage } from '@/core/llm-manager/agent-progress-contract'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import type { LeonClientInterfaceTokenPayload } from '@/core/leon-interface/types'
-import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
+import type { InferenceActivity } from '@/core/turn-lifecycle/observability/timing-contract'
 import type { AgentCompletionReviewDecision } from './agent-loop'
 export interface AgentSkillContext {
   origin?: SkillOrigin

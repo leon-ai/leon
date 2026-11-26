@@ -1,6 +1,7 @@
 // This metadata contract is shared with browser clients and must remain dependency-free.
 export const OWNER_TURN_FAILURE_CODES = ['timeout', 'connection', 'rate_limit', 'authorization', 'no_output', 'unknown'] as const
 export type OwnerTurnFailureCode = typeof OWNER_TURN_FAILURE_CODES[number]
+export type OwnerTurnOutcome = 'answered' | 'clarification' | 'blocked' | 'failed' | 'canceled'
 
 export enum TurnPhase {
   Turn = 'turn',
@@ -46,13 +47,35 @@ export enum TurnPhase {
   Validation = 'tool-validation',
   Worker = 'worker-execution',
   Owner = 'owner-message-persistence',
-  Persistence = 'response-persistence'
+  Persistence = 'response-persistence',
+  Delivery = 'response-publishing'
 }
 
 export enum TurnStage {
   PreTurn = 'pre-turn',
   AgentLoop = 'agent-loop',
   PostTurn = 'post-turn'
+}
+
+export const OWNER_FAILURE_PHASES = [
+  TurnPhase.Runtime, TurnPhase.Session, TurnPhase.Attachments, TurnPhase.Owner,
+  TurnPhase.History, TurnPhase.Catalog, TurnPhase.Context, TurnPhase.Duty, TurnPhase.Construction, TurnPhase.Provider,
+  TurnPhase.Execution, TurnPhase.Request, TurnPhase.Tool, TurnPhase.Validation, TurnPhase.Worker,
+  TurnPhase.Skill, TurnPhase.MCPConnection, TurnPhase.MCPDiscovery, TurnPhase.Compaction, TurnPhase.Answer,
+  TurnPhase.Review, TurnPhase.Persistence, TurnPhase.Delivery
+] as const
+export type OwnerFailurePhase = typeof OWNER_FAILURE_PHASES[number]
+export const TURN_DIAGNOSTIC_CODES = [
+  ...OWNER_TURN_FAILURE_CODES, 'blocked', 'error_response', 'context_limit', 'provider_unavailable', 'provider_error',
+  'tool_failed', 'tool_settings_missing', 'review_invalid_response'
+] as const
+export type TurnDiagnosticCode = typeof TURN_DIAGNOSTIC_CODES[number]
+
+/**
+ * Resolves failures to a known phase without using a tool, skill, or session name.
+ */
+export function getOwnerFailurePhase(phase: string): OwnerFailurePhase {
+  return OWNER_FAILURE_PHASES.find((value) => value === phase) ?? TurnPhase.Execution
 }
 
 export interface TurnTimingContext {
@@ -76,6 +99,7 @@ export interface TurnTiming {
   startedAt: number
   durationMs: number
   outcome: string
+  failureCode?: TurnDiagnosticCode
   duty?: string
   purpose?: string
   provider?: string
@@ -85,7 +109,7 @@ export interface TurnTiming {
   compactionCount?: number
   compactionDurationMs?: number
   usageId?: string
-  usage?: import('./llm-usage/usage-accounting').InferenceUsage
+  usage?: import('../../llm-manager/llm-usage/usage-accounting').InferenceUsage
 }
 
 // The event name remains compatible with saved clients; kind distinguishes

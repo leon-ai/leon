@@ -25,7 +25,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { CatalogDistribution, CatalogMaintenance } from '@/schemas/catalog-metadata-schemas'
-import { recordCapabilityUsage } from '@/core/llm-manager/turn-timing'
+import { recordCapabilityUsage } from '@/core/turn-lifecycle/observability/timing'
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
 import { AnswerQueue } from '@/core/brain/answer-queue'
 import { LogicActionSkillHandler } from '@/core/brain/logic-action-skill-handler'

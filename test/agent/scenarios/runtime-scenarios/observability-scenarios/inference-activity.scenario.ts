@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 import type { HTTPPluginAgentEvent } from '@/core/http-server/http-plugins/types'
-import type { InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
+import type { InferenceActivity } from '@/core/turn-lifecycle/observability/timing-contract'
 
 const scenario: RealAgentScenario = {
   toolResult(input) {
@@ -33,7 +33,7 @@ const scenario: RealAgentScenario = {
     const { CONVERSATION_SESSION_MANAGER } = await import('@/core/session-manager')
     const { CONVERSATION_REPOSITORY } = await import('@/core/session-manager/conversation-repository')
     const { POST_TURN_MAINTENANCE_QUEUE } = await import('@/core')
-    const { TurnPhase } = await import('@/core/llm-manager/turn-timing-contract')
+    const { TurnPhase } = await import('@/core/turn-lifecycle/observability/timing-contract')
     const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
     const requestId = randomUUID()
     const cursor = CONVERSATION_REPOSITORY.getReplayBounds().latest

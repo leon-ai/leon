@@ -36,7 +36,7 @@ import { OWNER_ATTACHMENT_MAX_IMAGE_BYTES, OWNER_ATTACHMENT_MAX_SPREADSHEET_BYTE
 import { prepareStoredOwnerAttachments } from '@/core/owner-attachments/stored-owner-attachments'
 import { prepareOwnerAttachments } from '@/core/owner-attachments/owner-attachments'
 import { presentAurora } from '@/core/aurora/answer-presentation'
-import { onCompletedOwnerTurn, type CompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
+import { onCompletedOwnerTurn, type CompletedOwnerTurn } from '@/core/turn-lifecycle/observability/timing'
 import { TURN_CLIENT_OS_HEADER, TURN_CLIENT_TYPE_HEADER } from '../../../bridges/runtime/contracts/turn-client'
 
 interface FixtureAnswer {

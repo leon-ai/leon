@@ -1,7 +1,7 @@
 import { FeedTurnStatus } from './feed'
 import type { FeedEntry, FeedToolCall, LeonFeedActivity, LeonFeedEntry, FeedModelProcessingActivity, FeedPlanActivity, FeedPlanStep, FeedCompactionActivity } from './feed'
 import type { ConversationMetrics, ConversationRecord, ConversationTool, ConversationTrace } from './conversation'
-import { TurnPhase, isToolPreparationPhase } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import { TurnPhase, isToolPreparationPhase } from '../../../../server/src/core/turn-lifecycle/observability/timing-contract'
 import { isFyiEligible } from '../../../../server/src/core/fyi/fyi-contract'
 import { getProcessingCategory } from './processing-categories'
 import { getActivityLabel, getProcessingLabel } from './activity-labels'

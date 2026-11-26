@@ -1,7 +1,7 @@
 import { FeedTurnStatus, type FeedEntry, type FeedModelProcessingActivity, type FeedToolCall, type LeonFeedActivity, type LeonFeedEntry } from '../../apps/web/src/data/feed'
 import { getProcessingCategory } from '../../apps/web/src/data/processing-categories'
 import { getProcessingLabel } from '../../apps/web/src/data/activity-labels'
-import { TurnPhase, isToolPreparationPhase } from '../../server/src/core/llm-manager/turn-timing-contract'
+import { TurnPhase, isToolPreparationPhase } from '../../server/src/core/turn-lifecycle/observability/timing-contract'
 import { MemoryActivityAction } from '../../server/src/core/llm-manager/memory-activity-contract'
 import { PreparationStatus } from '../../aurora/src/v2/contracts/preparation'
 

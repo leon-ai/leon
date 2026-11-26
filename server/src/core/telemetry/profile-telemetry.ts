@@ -9,21 +9,23 @@ import { LEON_HOME_PATH, LEON_PROFILES_PATH, isValidProfileName } from '@/leon-r
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { summarizeCompletedOwnerTurn, summarizeUsage } from '@/core/insights/usage'
-import { onCompletedOwnerTurn, onStandaloneSkill, type CompletedOwnerTurn } from '@/core/llm-manager/turn-timing'
-import type { OwnerTurnFailureCode } from '@/core/llm-manager/turn-timing-contract'
+import { onCompletedMaintenance, onCompletedOwnerTurn, onStandaloneSkill, type CompletedOwnerTurn } from '@/core/turn-lifecycle/observability/timing'
+import { TurnStage, type OwnerTurnFailureCode } from '@/core/turn-lifecycle/observability/timing-contract'
 import type { TelemetrySetting } from '@/core/insights/insights-contract'
 import { DateHelper } from '@/helpers/date-helper'
 import { FileHelper } from '@/helpers/file-helper'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { measurePulse, startPulseMeasurements, takePulseMeasurements } from './pulse-measurements'
 import { summarizeSessionActivity } from './session-activity'
+import { summarizeTurnDiagnostics } from './turn-diagnostics'
 import {
   DAILY_REPORT_PATH, getIanaTimeZone, getPublicModel, getSessionActivityId,
-  isPulseReport, isSessionActivityReport, isTelemetryEventReport, OTHER_MODEL, OTHER_PROVIDER,
+  isMaintenanceReport, isPulseReport, isSessionActivityReport, isTelemetryEventReport, OTHER_MODEL, OTHER_PROVIDER,
   LATENCY_BUCKETS_MS, PRESENCE_INTERVAL_MS, PRESENCE_REPORT_PATH, TELEMETRY_DAY_MS, TELEMETRY_EVENT_PATH,
-  TELEMETRY_MAX_MODEL_BUCKETS, TELEMETRY_MINUTE_MS, TELEMETRY_RETRY_DAYS, TELEMETRY_SCHEMA_VERSION,
+  MAINTENANCE_REASONS, MAINTENANCE_TASKS, TELEMETRY_MAX_MAINTENANCE_BUCKETS, TELEMETRY_MAX_MODEL_BUCKETS,
+  TELEMETRY_MINUTE_MS, TELEMETRY_RETRY_DAYS, TELEMETRY_SCHEMA_VERSION,
   PulseTimingMetric, type CapabilityUsage, type DailyReport, type FleetReport, type PresenceReport,
-  type PulseReport, type SessionActivityReport, type TelemetryEventReport
+  type MaintenanceMetric, type MaintenanceReport, type PulseReport, type SessionActivityReport, type TelemetryEventReport
 } from './report-contract'
 
 const REPORT_ENDPOINT = new URL(DAILY_REPORT_PATH, TELEMETRY_COLLECTOR_ORIGIN).href
@@ -40,11 +42,12 @@ const SERVER_OS = process.platform === 'linux' || process.platform === 'darwin' 
 const active = new Map<AbortController, string>()
 const changingSettings = new Map<string, Promise<void>>()
 const preparing = new Map<string, Promise<DeliveryState | undefined>>()
+const maintenanceBatches = new Map<string, Map<string, MaintenanceMetric>>()
 let presenceAbort: AbortController | undefined
 
 type Activity = ReturnType<typeof summarizeCompletedOwnerTurn>
 type ReportingInstallation = NonNullable<Awaited<ReturnType<typeof getReportingInstallation>>>
-type QueuedReport = TelemetryEventReport | PulseReport | SessionActivityReport
+type QueuedReport = TelemetryEventReport | PulseReport | SessionActivityReport | MaintenanceReport
 
 interface PendingEvent {
   profile: string
@@ -52,9 +55,11 @@ interface PendingEvent {
   activity?: Activity
   capabilities?: readonly CapabilityUsage[]
   contextReduction?: CompletedOwnerTurn['contextReduction']
+  turnDiagnostics?: TelemetryEventReport['turnDiagnostics']
   client?: TelemetryEventReport['client']
   skillEventId?: string
   pulse?: NonNullable<ReturnType<typeof takePulseMeasurements>>
+  maintenance?: MaintenanceMetric[]
   sessionActivity?: true
   retryAt: number
   event?: QueuedReport
@@ -168,6 +173,7 @@ export async function setTelemetrySetting(enabled: boolean, profile = getActiveP
       presenceAbort?.abort()
     }
     takePulseMeasurements(profile)
+    maintenanceBatches.delete(profile)
     await syncDeliveryState(profile, enabled, Date.now())
   })
 
@@ -300,6 +306,7 @@ function buildReport(
     version: versions.size > 1 ? 'mixed' : (versions.values().next().value ?? PACKAGE.version),
     turns: totals.turns, answered: totals.finishedTurns,
     failed: totals.failedTurns, canceled: totals.canceledTurns, clarifications: totals.clarificationTurns,
+    ...(totals.blockedTurns ? { blocked: totals.blockedTurns } : {}),
     measuredTurns: totals.tokenMeasuredTurns,
     measuredTurnTokens: totals.measuredTurnTokens, toolCalls: totals.toolCalls,
     toolDurationMs: Math.round(totals.toolDurationMs), modelDurationMs: Math.round(totals.modelDurationMs),
@@ -331,13 +338,22 @@ function getProfilePseudonym(state: DeliveryState, identity: ReportingInstallati
     .update(identity.installation).update(state.seed).digest('hex')
 }
 
-function buildEvent(job: PendingEvent, state: DeliveryState, identity: ReportingInstallation): TelemetryEventReport | PulseReport {
+function buildEvent(
+  job: PendingEvent, state: DeliveryState, identity: ReportingInstallation
+): TelemetryEventReport | PulseReport | MaintenanceReport {
   const { key, installation } = identity
   const pseudonym = getProfilePseudonym(state, identity)
   if (job.pulse) {
     return { kind: 'pulse_metrics', at: job.at, installation, profile: pseudonym, version: PACKAGE.version,
       id: createHmac('sha256', key).update('telemetry:pulse:').update(pseudonym).update(randomUUID()).digest('hex'),
       ...job.pulse, ...(job.pulse.failures?.length ? { os: SERVER_OS } : {}) }
+  }
+  if (job.maintenance) {
+    return {
+      kind: 'maintenance_metrics', at: job.at, installation, profile: pseudonym, version: PACKAGE.version, os: SERVER_OS,
+      id: createHmac('sha256', key).update('telemetry:maintenance:').update(pseudonym).update(randomUUID()).digest('hex'),
+      tasks: job.maintenance
+    }
   }
   const kind = job.skillEventId ? 'skill_finished' : job.activity ? 'turn_finished' : 'profile_started'
   const day = Math.floor(job.at / TELEMETRY_DAY_MS)
@@ -356,6 +372,7 @@ function buildEvent(job: PendingEvent, state: DeliveryState, identity: Reporting
     timeZone: getIanaTimeZone(zone) ?? getIanaTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone) ?? 'UTC',
     ...(job.capabilities?.length ? { capabilities: [...job.capabilities] } : {}),
     ...(job.contextReduction ? { contextReduction: job.contextReduction } : {}),
+    ...(job.turnDiagnostics ? { turnDiagnostics: job.turnDiagnostics } : {}),
     ...(job.client ? { client: job.client } : {}),
     report
   }
@@ -422,7 +439,8 @@ export function startProfileTelemetry(): (() => void) | undefined {
     }
 
     const valid = job.event.kind === 'session_activity' ? isSessionActivityReport(job.event) :
-      job.event.kind === 'pulse_metrics' ? isPulseReport(job.event) : isTelemetryEventReport(job.event)
+      job.event.kind === 'maintenance_metrics' ? isMaintenanceReport(job.event) :
+        job.event.kind === 'pulse_metrics' ? isPulseReport(job.event) : isTelemetryEventReport(job.event)
     if (!valid) {
       return true
     }
@@ -491,11 +509,36 @@ export function startProfileTelemetry(): (() => void) | undefined {
         enqueue({
           profile, at, activity, retryAt: 0,
           client: completed.measurement.client,
-          capabilities: completed.capabilities, contextReduction: completed.contextReduction
+          capabilities: completed.capabilities, contextReduction: completed.contextReduction,
+          turnDiagnostics: summarizeTurnDiagnostics(completed)
         })
       }
     } catch {
       // Reporting is best-effort and never owns the outcome of a turn.
+    }
+  })
+  const unsubscribeMaintenance = onCompletedMaintenance(({ profile, stage, task, outcome, reason, errorCode }) => {
+    try {
+      if (closed || (stage !== TurnStage.PreTurn && stage !== TurnStage.PostTurn) || !getTelemetrySetting(profile).enabled) {
+        return
+      }
+      if (outcome === 'skipped' || (outcome === 'completed' && reason !== 'fyi-fallback')) {
+        return
+      }
+
+      const label = MAINTENANCE_TASKS.find((entry) => entry === task) ?? 'other'
+      const publicReason = MAINTENANCE_REASONS.find((entry) => entry === reason) ?? errorCode
+      const key = JSON.stringify([stage, label, outcome, publicReason])
+      const batch = maintenanceBatches.get(profile) ?? new Map<string, MaintenanceMetric>()
+      const row = batch.get(key)
+      if (row) {
+        row.count++
+      } else if (batch.size < TELEMETRY_MAX_MAINTENANCE_BUCKETS) {
+        batch.set(key, { stage, task: label, outcome, count: 1, ...(publicReason ? { reason: publicReason } : {}) })
+      }
+      maintenanceBatches.set(profile, batch)
+    } catch {
+      // Telemetry never owns maintenance outcomes.
     }
   })
   const unsubscribeSkill = onStandaloneSkill((profile, entry) => {
@@ -531,6 +574,11 @@ export function startProfileTelemetry(): (() => void) | undefined {
                 enqueue({ profile: profile.name, at, pulse, retryAt: 0 })
               }
             }
+            const maintenance = maintenanceBatches.get(profile.name)
+            if (maintenance?.size && pending.length < MAXIMUM_PENDING_EVENTS) {
+              maintenanceBatches.delete(profile.name)
+              enqueue({ profile: profile.name, at, maintenance: [...maintenance.values()], retryAt: 0 })
+            }
             const day = Math.floor(at / TELEMETRY_DAY_MS)
             if (sessionActivityDays.get(profile.name) !== day && pending.length < MAXIMUM_PENDING_EVENTS) {
               sessionActivityDays.set(profile.name, day)
@@ -539,6 +587,7 @@ export function startProfileTelemetry(): (() => void) | undefined {
           } else {
             announced.delete(profile.name)
             takePulseMeasurements(profile.name)
+            maintenanceBatches.delete(profile.name)
           }
         } catch {
           continue
@@ -570,6 +619,8 @@ export function startProfileTelemetry(): (() => void) | undefined {
     stopPulseMeasurements()
     unsubscribe()
     unsubscribeSkill()
+    unsubscribeMaintenance()
+    maintenanceBatches.clear()
     pending.length = 0
     clearInterval(retryTimer)
     clearTimeout(presenceTimer)

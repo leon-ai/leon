@@ -10,7 +10,7 @@ import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import { normalizeOwnerProfileToolExecutions } from './turn-result'
 import type { PostTurnMaintenanceTaskPreparer } from './post-turn-maintenance-queue'
 import { MEMORY_EXTRACTION_MAX_BATCH_TURNS } from '@/constants'
-import { getTurnTimingContext } from '@/core/llm-manager/turn-timing'
+import { getTurnTimingContext } from '@/core/turn-lifecycle/observability/timing'
 
 export interface CompletedAgentTurn {
   onActivity?: (activity: AgentProgressMessage) => void

@@ -114,7 +114,8 @@ export function InsightsOverview({ usage, interval, provider, model }: {
       ]} />
       <InsightsChart title="Agent turn outcomes" labels={labels} kind="bar" stacked series={[
         curve('Answered', (s) => s.finishedTurns), curve('Clarification', (s) => s.clarificationTurns),
-        curve('Failed', (s) => s.failedTurns), curve('Canceled', (s) => s.canceledTurns)
+        curve('Blocked', (s) => s.blockedTurns ?? 0), curve('Failed', (s) => s.failedTurns),
+        curve('Canceled', (s) => s.canceledTurns)
       ]} />
       <InsightsChart title="Answer latency" labels={labels} unit=" s" series={[
         curve('Median', (s) => metricSeconds(s.medianAnswerMs)), curve('p95', (s) => metricSeconds(s.p95AnswerMs)),

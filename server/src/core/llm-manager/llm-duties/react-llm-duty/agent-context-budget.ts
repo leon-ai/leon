@@ -5,7 +5,7 @@ import type {
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
 import type { ContextTokenBreakdown } from '../../llm-usage/context-usage'
-import { runTurnPhase, TurnPhase } from '../../turn-timing'
+import { runTurnPhase, TurnPhase } from '../../../turn-lifecycle/observability/timing'
 import { AGENT_IMAGE_BATCH_MAX_BYTES, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'
 import {
   LOCAL_LLM_CONTEXT_WINDOW_TOKENS,

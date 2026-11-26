@@ -19,7 +19,7 @@ export async function withLearningBacklog(
   const { runWithConversationSession } = await import('@/core/session-manager/session-context')
   const { readInferenceUsage } = await import('@/core/llm-manager/llm-usage/usage-ledger')
   const { InferencePurpose } = await import('@/core/llm-manager/types')
-  const { TurnStage } = await import('@/core/llm-manager/turn-timing')
+  const { TurnStage } = await import('@/core/turn-lifecycle/observability/timing')
   const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
   const gate = Promise.withResolvers<void>()
   const turns: RealScenarioTurn[] = []

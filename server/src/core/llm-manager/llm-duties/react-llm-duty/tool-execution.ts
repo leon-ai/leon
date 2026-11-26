@@ -2,7 +2,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { recordCapabilityUsage, runTurnPhase, TurnPhase } from '../../turn-timing'
+import { recordCapabilityUsage, recordTurnAttemptFailure, runTurnPhase, TurnPhase } from '../../../turn-lifecycle/observability/timing'
+import { classifyTurnFailure } from '../../../turn-lifecycle/observability/failure'
 
 import {
   SOCKET_SERVER,
@@ -700,6 +701,10 @@ export async function runToolExecution(
   } catch (error) {
     didFinishToolCall = true
     const durationMs = Math.max(0, performance.now() - executionStartedAt)
+    if (!(retainedSignal ?? signal)?.aborted && !(error instanceof Error && error.name === 'AbortError')) {
+      const code = classifyTurnFailure(error)
+      recordTurnAttemptFailure(TurnPhase.Tool, code === 'unknown' ? 'tool_failed' : code)
+    }
     recordCapabilityUsage(TOOLKIT_REGISTRY.getToolTelemetryLabel(toolkitId, toolId, functionName, {
       calls: 1, failed: Number(!(retainedSignal ?? signal)?.aborted), durationMs: Math.round(durationMs)
     }))
@@ -774,6 +779,12 @@ export async function runToolExecution(
   const effectiveStatus = hasObservedToolFailure
     ? 'observed'
     : toolExecutionResult.status
+  const missingSettings = effectiveStatus !== 'success'
+    ? (toolOutput['missing_settings'] ?? nestedResult?.['missing_settings']) as string[] | undefined
+    : undefined
+  const settingsPath = effectiveStatus !== 'success'
+    ? (toolOutput['settings_path'] ?? nestedResult?.['settings_path']) as string | undefined
+    : undefined
   const effectiveMessage =
     (hasObservedToolFailure && (nestedResultError || toolOutputError)) ||
     toolExecutionResult.message
@@ -809,6 +820,9 @@ export async function runToolExecution(
   const displayedStatus = isStreamRunning
     ? 'running'
     : progressStream?.state === 'failed' ? 'error' : effectiveStatus
+  if (displayedStatus !== 'success' && displayedStatus !== 'running' && !progressStream?.canceled) {
+    recordTurnAttemptFailure(TurnPhase.Tool, missingSettings?.length ? 'tool_settings_missing' : 'tool_failed')
+  }
   recordCapabilityUsage(TOOLKIT_REGISTRY.getToolTelemetryLabel(toolkitId, toolId, functionName, {
     calls: 1,
     failed: Number(displayedStatus !== 'success' && displayedStatus !== 'running'),
@@ -930,25 +944,6 @@ export async function runToolExecution(
     }
   }
 
-  // Check for missing settings
-  const missingSettings =
-    effectiveStatus !== 'success'
-      ? ((toolOutput['missing_settings'] as
-          | string[]
-          | undefined) ??
-        (nestedResult?.['missing_settings'] as
-          | string[]
-          | undefined))
-      : undefined
-  const settingsPath =
-    effectiveStatus !== 'success'
-      ? ((toolOutput['settings_path'] as
-          | string
-          | undefined) ??
-        (nestedResult?.['settings_path'] as
-          | string
-          | undefined))
-      : undefined
   if (missingSettings && missingSettings.length > 0 && settingsPath) {
     const formattedPath = formatFilePath(settingsPath)
     return {

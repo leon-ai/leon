@@ -1,5 +1,5 @@
 import type { ConversationEvent, ConversationRecord, ConversationTrace, ConversationTool } from './conversation'
-import type { InferenceActivity } from '../../../../server/src/core/llm-manager/turn-timing-contract'
+import type { InferenceActivity } from '../../../../server/src/core/turn-lifecycle/observability/timing-contract'
 import type { AnswerPart } from '../../../../aurora/src/v2/contracts/answer'
 import { readMaskedPackageLogo } from '../../../../aurora/src/contracts/package-logo'
 

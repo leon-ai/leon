@@ -1,8 +1,9 @@
 import { LogHelper } from '@/helpers/log-helper'
 import { randomUUID } from 'node:crypto'
-import { getTurnTimingContext, recordMaintenanceEvent, runWithTurnTiming, TurnStage, type MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
+import { getTurnTimingContext, recordMaintenanceEvent, runWithTurnTiming, TurnStage, type MaintenanceTaskResult } from '@/core/turn-lifecycle/observability/timing'
 import { bindConversationSession, getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { classifyTurnFailure } from '@/core/turn-lifecycle/observability/failure'
 
 export type PostTurnMaintenanceTask = () => Promise<void | MaintenanceTaskResult> | void | MaintenanceTaskResult
 export type PostTurnMaintenanceTaskPreparer = () =>
@@ -131,7 +132,7 @@ export default class PostTurnMaintenanceQueue {
         await waitForDisplayPathToUnwind()
         await execute()
       } catch (error) {
-        await record('failed')
+        await recordMaintenanceEvent(context, profile, sessionId, 'failed', undefined, classifyTurnFailure(error))
         LogHelper.title(heading)
         LogHelper.warning(`Failed "${label}": ${String(error)}`)
       }

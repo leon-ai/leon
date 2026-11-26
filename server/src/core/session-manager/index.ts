@@ -8,7 +8,7 @@ import type { MessageLog } from '@/types'
 import type { LLMModelSettings } from '@/core/config-states/model-settings-state'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LogHelper } from '@/helpers/log-helper'
-import type { MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
+import type { MaintenanceTaskResult } from '@/core/turn-lifecycle/observability/timing'
 import {
   LLMDuties,
   InferencePurpose,

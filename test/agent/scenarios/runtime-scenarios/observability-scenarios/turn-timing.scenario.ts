@@ -6,7 +6,7 @@ import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario
 
 const scenario: RealAgentScenario = {
   async run({ profilePath, runTurn }) {
-    const { runWithTurnTiming } = await import('@/core/llm-manager/turn-timing')
+    const { runWithTurnTiming } = await import('@/core/turn-lifecycle/observability/timing')
     const { CONVERSATION_SESSION_MANAGER } = await import('@/core/session-manager')
     const sessionId = CONVERSATION_SESSION_MANAGER.createSession().id
     const turnId = randomUUID()

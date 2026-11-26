@@ -6,7 +6,7 @@ import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { InferenceMetadata } from '../inference-metadata'
 import type { InferenceUsage } from './usage-context'
 import type { UsageAccounting } from './usage-accounting'
-import type { TurnTimingContext, TurnStage } from '../turn-timing-contract'
+import type { TurnTimingContext, TurnStage } from '../../turn-lifecycle/observability/timing-contract'
 
 export const USAGE_DIRECTORY = 'usage'
 export const HISTORICAL_USAGE_FILENAME = 'history.jsonl'

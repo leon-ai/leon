@@ -13,7 +13,7 @@ import { CONFIG_MANAGER } from '@/config'
 import { LEON_PULSE_INTERVAL_MS } from '@/constants'
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
-import * as turnTiming from '@/core/llm-manager/turn-timing'
+import * as turnTiming from '@/core/turn-lifecycle/observability/timing'
 import type { LLMAnswerMetrics, MessageLog } from '@/types'
 import type { HTTPPluginAgentEvent } from '@/core/http-server/http-plugins/types'
 import {

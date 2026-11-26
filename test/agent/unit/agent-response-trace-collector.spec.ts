@@ -4,7 +4,7 @@ import { AgentResponseTraceCollector } from '@/core/llm-manager/llm-duties/react
 import { deserializeAgentTrace, serializeAgentTrace } from '@/core/http-server/http-plugins/leon-services/agent-trace-serializer'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'
-import * as turnTiming from '@/core/llm-manager/turn-timing'
+import * as turnTiming from '@/core/turn-lifecycle/observability/timing'
 
 describe('AgentResponseTraceCollector', () => {
   it('retains the current answer start through streaming and replay without retaining discarded drafts', () => {

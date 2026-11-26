@@ -2,7 +2,7 @@ import { resolveIconName } from '../../../apps/web/src/components/icon/icon-name
 import fs from 'node:fs/promises'
 import type { ElementHandle, Locator } from '@playwright/test'
 import type { ConversationEvent, ConversationRecord } from '../../../apps/web/src/data/conversation'
-import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
+import { TurnPhase } from '../../../server/src/core/turn-lifecycle/observability/timing-contract'
 import type { SessionStatus } from '../../../apps/web/src/data/sessions'
 import { setFixtureTheme, test, expect, SESSION_ID, SESSION_URL, toolContentsFixture, finishFiniteAnimations } from './fixtures'
 import { CODE_PREVIEW_LINES } from '../../../apps/web/src/components/code-view/code-highlight-types'

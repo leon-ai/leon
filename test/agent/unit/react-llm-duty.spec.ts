@@ -24,7 +24,7 @@ import { AgentSessionState, createEmptyHistoryCompactionProviderState, type Agen
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import type { MessageLog } from '@/types'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
-import { getTurnTimings, runWithTurnTiming, TurnPhase } from '@/core/llm-manager/turn-timing'
+import { getTurnTimings, runWithTurnTiming, TurnPhase } from '@/core/turn-lifecycle/observability/timing'
 import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import type {

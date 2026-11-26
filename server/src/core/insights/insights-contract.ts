@@ -1,4 +1,5 @@
 import type { ContextUsageMetrics } from '../llm-manager/llm-usage/context-usage'
+import type { OwnerTurnOutcome } from '../turn-lifecycle/observability/timing-contract'
 
 export const INSIGHTS_RANGES = [7, 14, 30, 90, 180, 365] as const
 export const INSIGHTS_INTERVALS = ['day', 'week', 'month'] as const
@@ -27,6 +28,7 @@ export interface UsageSummary extends UsageTotals {
   turns: number
   finishedTurns: number
   failedTurns: number
+  blockedTurns: number
   canceledTurns: number
   clarificationTurns: number
   tokenMeasuredTurns: number
@@ -52,7 +54,7 @@ export interface UsageSummary extends UsageTotals {
 export interface UsageTurnView extends UsageTotals {
   startedAt: number
   durationMs: number
-  outcome: 'answered' | 'clarification' | 'failed' | 'canceled'
+  outcome: OwnerTurnOutcome
   toolCalls: number
   toolDurationMs: number
   modelDurationMs: number

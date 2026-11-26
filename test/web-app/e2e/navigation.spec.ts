@@ -1,6 +1,6 @@
 import { resolveIconName } from '../../../apps/web/src/components/icon/icon-name'
 import type { Locator, Page, Route } from '@playwright/test'
-import { TurnPhase } from '../../../server/src/core/llm-manager/turn-timing-contract'
+import { TurnPhase } from '../../../server/src/core/turn-lifecycle/observability/timing-contract'
 import { FyiKind } from '../../../server/src/core/fyi/fyi-contract'
 import type { ConversationPage, ConversationTool } from '../../../apps/web/src/data/conversation'
 import { LogoMaskMode } from '../../../aurora/src/contracts/package-logo'

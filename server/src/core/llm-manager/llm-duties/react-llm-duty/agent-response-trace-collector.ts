@@ -6,7 +6,7 @@ import type {
 } from '@/types'
 
 import type { AgentRunProgressEvent } from './agent-types'
-import { getTurnTimings } from '../../turn-timing'
+import { getTurnTimings } from '../../../turn-lifecycle/observability/timing'
 
 /**
  * Accumulates live agent progress into the compact trace persisted with a turn.

@@ -1,6 +1,6 @@
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
 import type { ReactLLMDutyParams } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
-import { getTurnTimingContext, runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
+import { getTurnTimingContext, runTurnPhase, TurnPhase } from '@/core/turn-lifecycle/observability/timing'
 
 /**
  * Prepares the existing agent without moving execution-time inferences out of its loop.

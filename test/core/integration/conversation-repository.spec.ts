@@ -12,7 +12,7 @@ import { CONVERSATION_REPOSITORY, ConversationRepository } from '@/core/session-
 import { getInsightsUsage, UTC_DAY_MS } from '@/core/insights/usage'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import * as profilePaths from '@/core/profile-runtime/profile-paths'
-import { recordOwnerTurn, runTurnPhase, runWithTurnTiming, TurnPhase } from '@/core/llm-manager/turn-timing'
+import { recordOwnerTurn, runTurnPhase, runWithTurnTiming, TurnPhase } from '@/core/turn-lifecycle/observability/timing'
 import type { ConversationSession } from '@/core/session-manager'
 import type { MessageLog } from '@/types'
 import { MAXIMUM_ARCHIVE_PAGE_CHARACTERS, type ArchiveMessagePage } from '@@/bridges/runtime/contracts/conversation-archive'

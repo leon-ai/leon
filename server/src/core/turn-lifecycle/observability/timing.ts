@@ -9,23 +9,29 @@ import PACKAGE from '@@/package.json' with { type: 'json' }
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LogHelper } from '@/helpers/log-helper'
-import type { CompletionAttemptTiming } from './types'
-import { TurnPhase, TurnStage, isToolPreparationPhase, type TurnTiming, type TurnTimingContext, type InferenceActivity, OwnerTurnFailureCode  } from './turn-timing-contract'
-import { readContextUsage, type ContextUsageMetrics } from './llm-usage/context-usage'
-import type { InferenceUsage } from './llm-usage/usage-context'
-import type { InferenceUsageRecord } from './llm-usage/usage-ledger'
+import { CompletionFailureKind, type CompletionAttemptTiming } from '../../llm-manager/types'
+import {
+  TurnPhase, TurnStage, getOwnerFailurePhase, isToolPreparationPhase,
+  type TurnTiming, type TurnTimingContext, type InferenceActivity, type OwnerTurnFailureCode,
+  type OwnerTurnOutcome, type OwnerFailurePhase, type TurnDiagnosticCode
+} from './timing-contract'
+import { classifyTurnFailure } from './failure'
+import { readContextUsage, type ContextUsageMetrics } from '../../llm-manager/llm-usage/context-usage'
+import type { InferenceUsage } from '../../llm-manager/llm-usage/usage-context'
+import type { InferenceUsageRecord } from '../../llm-manager/llm-usage/usage-ledger'
 import { TELEMETRY_MAX_CAPABILITY_BUCKETS, type CapabilityUsage } from '@/core/telemetry/report-contract'
 import { getTurnClient } from '@/core/leon-interface/turn-client'
 import type { TurnClient } from '@@/bridges/runtime/contracts/turn-client'
 
-export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './turn-timing-contract'
+export { TurnPhase, TurnStage, type TurnTiming, type TurnTimingContext } from './timing-contract'
 
 interface OwnerTurnMeasurement {
   version: string
   client: TurnClient
-  outcome: 'answered' | 'clarification' | 'failed' | 'canceled'
+  outcome: OwnerTurnOutcome
   context?: ContextUsageMetrics
   failure?: OwnerTurnFailureCode
+  terminal?: { phase: OwnerFailurePhase, code: TurnDiagnosticCode }
 }
 
 export interface CompletedOwnerTurn {
@@ -37,6 +43,7 @@ export interface CompletedOwnerTurn {
   timings: readonly TurnTiming[]
   inferenceUsage: readonly ForegroundInferenceUsage[]
   capabilities: readonly CapabilityUsage[]
+  attemptFailures?: readonly { phase: OwnerFailurePhase, code: TurnDiagnosticCode, count: number }[]
   contextReduction: { count: number, estimatedTokensReclaimed: number }
   pulseQueue?: PulseQueueSample
 }
@@ -45,12 +52,26 @@ interface PulseQueueSample { model: string, waitMs: number, pulseActive: boolean
 type ForegroundInferenceUsage = Pick<InferenceUsageRecord, 'provider' | 'model' | 'outcome' | 'usage'>
 
 const MAXIMUM_TURN_TIMINGS = 10_000
+const MODEL_FAILURE_CODES: Record<CompletionFailureKind, TurnDiagnosticCode> = {
+  [CompletionFailureKind.Timeout]: 'timeout',
+  [CompletionFailureKind.Connection]: 'connection',
+  [CompletionFailureKind.Context]: 'context_limit',
+  [CompletionFailureKind.Unavailable]: 'provider_unavailable',
+  [CompletionFailureKind.Provider]: 'provider_error'
+}
 
 export interface MaintenanceTaskResult {
   outcome: 'completed' | 'skipped' | 'rejected' | 'failed'
   // Diagnostics contain fixed reason codes and counts, never model-returned facts.
   reason?: string
   issueCount?: number
+}
+
+interface CompletedMaintenanceTask extends MaintenanceTaskResult {
+  profile: string
+  stage: TurnStage
+  task: string
+  errorCode?: OwnerTurnFailureCode
 }
 
 interface TurnTimingScope extends TurnTimingContext {
@@ -63,6 +84,8 @@ interface TurnTimingScope extends TurnTimingContext {
     closed: boolean
     omitted: number
     ownerTurn?: OwnerTurnMeasurement
+    failedPhases?: WeakMap<object, OwnerFailurePhase>
+    attemptFailures?: Map<string, NonNullable<CompletedOwnerTurn['attemptFailures']>[number]>
     inferenceUsage?: ForegroundInferenceUsage[]
     capabilities?: Map<string, CapabilityUsage>
     contextReduction?: CompletedOwnerTurn['contextReduction']
@@ -74,6 +97,7 @@ const storage = new AsyncLocalStorage<TurnTimingScope | undefined>()
 const pendingWrites = new Map<string, Promise<void>>()
 const ownerTurnListeners = new Set<(turn: CompletedOwnerTurn) => void>()
 const standaloneSkillListeners = new Set<(profile: string, entry: CapabilityUsage) => void>()
+const maintenanceListeners = new Set<(task: CompletedMaintenanceTask) => void>()
 
 /**
  * Observes completed foreground owner turns without awaiting subscriber work.
@@ -92,6 +116,16 @@ export function onStandaloneSkill(listener: (profile: string, entry: CapabilityU
   standaloneSkillListeners.add(listener)
   return () => {
     standaloneSkillListeners.delete(listener)
+  }
+}
+
+/**
+ * Observes maintenance outcomes independently of the completed owner turn.
+ */
+export function onCompletedMaintenance(listener: (task: CompletedMaintenanceTask) => void): () => void {
+  maintenanceListeners.add(listener)
+  return () => {
+    maintenanceListeners.delete(listener)
   }
 }
 
@@ -236,14 +270,49 @@ export function setTurnTimingSession(sessionId: string): void {
 export function recordOwnerTurn(
   outcome: OwnerTurnMeasurement['outcome'],
   metrics?: unknown,
-  failure?: OwnerTurnFailureCode
+  failure?: OwnerTurnFailureCode,
+  terminal?: OwnerTurnMeasurement['terminal']
 ): void {
   const scope = storage.getStore()
   if (scope && !scope.state.closed) {
     const context = readContextUsage(metrics)
     scope.state.ownerTurn = { version: PACKAGE.version, client: getTurnClient(), outcome, ...(context ? { context } : {}),
-      ...(failure && outcome === 'failed' ? { failure } : {}) }
+      ...(failure && outcome === 'failed' ? { failure } : {}), ...(terminal ? { terminal } : {}) }
   }
+}
+
+/**
+ * Records an exception once and attributes it to its innermost measured phase.
+ */
+export function recordOwnerTurnError(error: unknown, signal?: AbortSignal): void {
+  const scope = storage.getStore()
+  if (!scope || scope.state.ownerTurn || scope.taskId) {
+    return
+  }
+  if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+    recordOwnerTurn('canceled')
+    return
+  }
+
+  const code = classifyTurnFailure(error)
+  const phase = error && typeof error === 'object' ? scope.state.failedPhases?.get(error) : undefined
+  recordOwnerTurn('failed', undefined, code, { phase: phase ?? TurnPhase.Execution, code })
+}
+
+/**
+ * Counts failed agent attempts independently of the final answer.
+ */
+export function recordTurnAttemptFailure(phase: OwnerFailurePhase, code: TurnDiagnosticCode): void {
+  const scope = storage.getStore()
+  if (!ownerTurnListeners.size || !scope || scope.state.closed || scope.taskId || scope.stage !== TurnStage.AgentLoop) {
+    return
+  }
+
+  const failures = scope.state.attemptFailures ??= new Map()
+  const key = `${phase}:${code}`
+  const entry = failures.get(key) ?? { phase, code, count: 0 }
+  entry.count++
+  failures.set(key, entry)
 }
 
 /**
@@ -280,6 +349,18 @@ export function runTurnPhase<T>(goal: TurnPhase, execute: () => T, details?: { s
     }
   }
 
+  const fail = (error: unknown): never => {
+    const phase = getOwnerFailurePhase(timing.goal)
+    if (!scope.state.closed && !scope.taskId && error && typeof error === 'object' && phase === timing.goal) {
+      const phases = scope.state.failedPhases ??= new WeakMap()
+      if (!phases.has(error)) {
+        phases.set(error, phase)
+      }
+    }
+    finish('failed')
+    throw error
+  }
+
   try {
     const result = storage.run({
       ...scope,
@@ -290,16 +371,12 @@ export function runTurnPhase<T>(goal: TurnPhase, execute: () => T, details?: { s
       return result.then((value) => {
         finish('completed')
         return value
-      }, (error: unknown) => {
-        finish('failed')
-        throw error
-      }) as T
+      }, fail) as T
     }
     finish('completed')
     return result
   } catch (error) {
-    finish('failed')
-    throw error
+    return fail(error)
   }
 }
 
@@ -327,7 +404,7 @@ export function setTurnPhaseGoal(goal: TurnPhase): void {
  * Retains metadata for every provider attempt, including retries and auxiliary duties.
  * Prompt text, error bodies and private reasoning never enter timing records.
  */
-export function recordTurnInference(timing: CompletionAttemptTiming): void {
+export function recordTurnInference(timing: CompletionAttemptTiming, error?: unknown, canceled = false): void {
   const scope = storage.getStore()
   if (!scope || scope.state.closed) {
     return
@@ -339,12 +416,18 @@ export function recordTurnInference(timing: CompletionAttemptTiming): void {
   const parent = scope.parentId ? scope.state.timings.get(scope.parentId) : undefined
   const outputTimes = [timing.firstReasoningTokenMs, timing.firstTokenMs, timing.firstToolInputMs]
     .filter((value): value is number => value !== undefined && Number.isFinite(value))
+  const code = error === undefined ? 'unknown' : classifyTurnFailure(error)
+  const failureCode = !canceled && timing.failureKind !== undefined && timing.outcome !== 'canceled' &&
+    (timing.outcome !== 'AbortError' || timing.failureKind === CompletionFailureKind.Timeout)
+    ? code === 'unknown' ? MODEL_FAILURE_CODES[timing.failureKind] : code
+    : undefined
   scope.state.timings.set(timing.attemptId, {
     stage: scope.stage,
     id: timing.attemptId, ...(scope.parentId ? { parentId: scope.parentId } : {}),
     kind: 'inference', goal: parent && parent.goal !== TurnPhase.Turn && parent.goal !== TurnPhase.PostTurn
       ? parent.goal : timing.usagePurpose ?? timing.duty,
     startedAt: timing.startedAt, durationMs: timing.elapsedMs, outcome: timing.outcome,
+    ...(failureCode ? { failureCode } : {}),
     duty: timing.duty, ...(timing.usagePurpose ? { purpose: timing.usagePurpose } : {}),
     provider: timing.provider, ...(timing.model ? { model: timing.model } : {}),
     ...(timing.firstCompactionMs === undefined ? {} : {
@@ -432,10 +515,18 @@ export async function recordMaintenanceEvent(
   profile: string,
   sessionId: string | null,
   outcome: 'queued' | 'running' | MaintenanceTaskResult['outcome'],
-  details?: Pick<MaintenanceTaskResult, 'reason' | 'issueCount'>
+  details?: Pick<MaintenanceTaskResult, 'reason' | 'issueCount'>,
+  errorCode?: OwnerTurnFailureCode
 ): Promise<void> {
   const startedAt = Date.now()
   const filename = path.join(getProfilePaths(profile).logs, 'turns', `${new Date(startedAt).toISOString().slice(0, 10)}.jsonl`)
+  if (outcome !== 'queued' && outcome !== 'running' && context.task) {
+    const task = { profile, stage: context.stage, task: context.task, outcome,
+      ...(details?.reason ? { reason: details.reason } : {}), ...(errorCode ? { errorCode } : {}) }
+    for (const listener of maintenanceListeners) {
+      queueMicrotask(() => listener(task))
+    }
+  }
   try {
     await appendTimingRecords(filename, `${JSON.stringify({
       ...context, profile, sessionId, kind: 'maintenance', outcome, startedAt,
@@ -559,6 +650,7 @@ export async function runWithTurnTiming<T>(
           durationMs: root.durationMs, measurement: owner, timings,
           inferenceUsage: scope.state.inferenceUsage ?? [],
           capabilities: [...(scope.state.capabilities?.values() ?? [])],
+          ...(scope.state.attemptFailures ? { attemptFailures: [...scope.state.attemptFailures.values()] } : {}),
           contextReduction: scope.state.contextReduction ?? { count: 0, estimatedTokensReclaimed: 0 },
           ...(scope.state.pulseQueue ? { pulseQueue: scope.state.pulseQueue } : {})
         }

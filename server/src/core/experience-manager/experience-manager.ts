@@ -22,7 +22,7 @@ import { StringHelper } from '@/helpers/string-helper'
 import type { OpenAITool } from '@/core/llm-manager/types'
 import { parseToolCallArguments } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-utils'
 import { parseProviderResponseData } from '@/core/llm-manager/llm-provider/llm-provider-response'
-import type { MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
+import type { MaintenanceTaskResult } from '@/core/turn-lifecycle/observability/timing'
 
 export const EXPERIENCE_PREFIX = 'experience:'
 export const EXPERIENCE_SEARCH_TOOL_NAME = 'search_experiences'

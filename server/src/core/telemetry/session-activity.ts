@@ -1,4 +1,4 @@
-import { TurnPhase, TurnStage, readTurnHistory } from '@/core/llm-manager/turn-timing'
+import { TurnPhase, TurnStage, readTurnHistory } from '@/core/turn-lifecycle/observability/timing'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ConversationRepository } from '@/core/session-manager/conversation-repository'
 

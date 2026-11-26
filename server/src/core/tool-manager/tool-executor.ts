@@ -8,7 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { RuntimeHelper } from '@/helpers/runtime-helper'
-import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
+import { runTurnPhase, TurnPhase } from '@/core/turn-lifecycle/observability/timing'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { GLOBAL_DATA_PATH, API_VERSION, TOOL_RESULT_INLINE_MAX_CHARS } from '@/constants'

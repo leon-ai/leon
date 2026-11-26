@@ -13,7 +13,7 @@ import type { PostTurnMaintenanceTask } from '@/core/turn-lifecycle/post-turn-ma
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import type { MessageLog } from '@/types'
-import { TurnPhase, type InferenceActivity } from '@/core/llm-manager/turn-timing-contract'
+import { TurnPhase, type InferenceActivity } from '@/core/turn-lifecycle/observability/timing-contract'
 
 import {
   AGENT_HISTORY_COMPACTION_MAX_TOKENS,

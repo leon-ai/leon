@@ -1,4 +1,4 @@
-import { runTurnPhase, TurnPhase, type MaintenanceTaskResult } from '@/core/llm-manager/turn-timing'
+import { runTurnPhase, TurnPhase, type MaintenanceTaskResult } from '@/core/turn-lifecycle/observability/timing'
 import fs from 'node:fs'
 import path from 'node:path'
 

@@ -12,7 +12,7 @@ import { createMCPFetch, getMCPURL } from './http'
 import { saveMCPCache } from './installations'
 import PACKAGE from '@@/package.json' with { type: 'json' }
 import { getConnectionCallbackURL } from '@/core/connections/connection-catalog'
-import { runTurnPhase, TurnPhase } from '@/core/llm-manager/turn-timing'
+import { runTurnPhase, TurnPhase } from '@/core/turn-lifecycle/observability/timing'
 
 const DISCOVERY_TIMEOUT_MS = 30_000
 const CALL_IDLE_TIMEOUT_MS = 60_000

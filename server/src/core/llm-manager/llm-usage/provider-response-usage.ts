@@ -7,7 +7,7 @@ import type { InferenceMetadata } from '../inference-metadata'
 import { InferencePurpose } from '../types'
 import { readProviderUsage, type InferenceUsage } from './usage-context'
 import { appendInferenceUsage } from './usage-ledger'
-import { getTurnTimingContext } from '../turn-timing'
+import { getTurnTimingContext } from '../../turn-lifecycle/observability/timing'
 import { ProviderRequestActivity, attachProviderFailureDiagnostics, getConnectionErrorCode } from '../llm-provider/provider-request-activity'
 
 const MAXIMUM_USAGE_EVENT_CHARS = 1_048_576

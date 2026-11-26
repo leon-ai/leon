@@ -6,7 +6,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { getActivePulseStage, measurePulse } from '@/core/telemetry/pulse-measurements'
 import { inferenceUsageStorage, type InferenceUsageContext } from './usage-context'
 import { appendInferenceUsage } from './usage-ledger'
-import { getTurnTimingContext, recordForegroundInferenceUsage, recordTurnInferenceUsage } from '../turn-timing'
+import { getTurnTimingContext, recordForegroundInferenceUsage, recordTurnInferenceUsage } from '../../turn-lifecycle/observability/timing'
 
 /**
  * Isolates each attempt's route and counters across parallel work and retries.
