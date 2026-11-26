@@ -41,10 +41,14 @@ const utcDay = Type.Integer({ minimum: 0, maximum: 100_000 })
 const histogram = Type.Array(count, { minItems: LATENCY_BUCKETS_MS.length + 1, maxItems: LATENCY_BUCKETS_MS.length + 1 })
 const version = Type.String({ pattern: '^(?:(?:unknown|mixed)|\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(?:-(?:alpha|beta|rc)(?:\\.\\d{1,5}){0,3})?)$' })
 const provider = Type.Enum(LLMProviders)
-const modelProperties = {
+const serverOS = Type.Union([Type.Literal('linux'), Type.Literal('darwin'), Type.Literal('win32'), Type.Literal('other')])
+const publicModelProperties = {
   provider: Type.Union([provider, Type.Literal(OTHER_PROVIDER)]),
   model: Type.String({ maxLength: 128 }),
-  quantization: Type.Optional(Type.Union(LOCAL_LLM_PRECISIONS.map(({ name }) => Type.Literal(name)))),
+  quantization: Type.Optional(Type.Union(LOCAL_LLM_PRECISIONS.map(({ name }) => Type.Literal(name))))
+}
+const modelProperties = {
+  ...publicModelProperties,
   calls: count,
   failedCalls: count,
   inputTokens: count,
@@ -77,7 +81,7 @@ export const dailyReportSchema = Type.Object({
   contextCount: count,
   models: Type.Array(Type.Object(modelProperties, { additionalProperties: false }), { maxItems: TELEMETRY_MAX_MODEL_BUCKETS }),
   fleet: Type.Optional(Type.Object({
-    os: Type.Union([Type.Literal('linux'), Type.Literal('darwin'), Type.Literal('win32'), Type.Literal('other')]),
+    os: serverOS,
     architecture: Type.Union([Type.Literal('arm64'), Type.Literal('x64'), Type.Literal('other')]),
     buildCommit: Type.Optional(Type.String({ pattern: '^[a-f0-9]{40}$' })),
     timezoneOffset: Type.Optional(Type.Integer({ minimum: -12, maximum: 14 })),
@@ -202,16 +206,76 @@ export type PulseCounter = (typeof PULSE_COUNTERS)[number]
 export enum PulseStage {
   Planning = 'planning', Research = 'research', Review = 'review', Feedback = 'feedback', Resolution = 'resolution'
 }
+export enum PulseFailureScope {
+  Tick = 'tick',
+  Discovery = 'discovery',
+  FollowUp = 'followup'
+}
+export enum PulseFailureCode {
+  Tick = 'tick_unexpected',
+  Agenda = 'tick_agenda_unavailable',
+  Evidence = 'tick_evidence_unavailable',
+  PlanningInference = 'planning_inference_incomplete',
+  PlanningDecision = 'planning_invalid_decision',
+  PlanningLead = 'planning_incomplete_lead',
+  ResearchDeadline = 'research_deadline',
+  ResearchProvider = 'research_model_request_failed',
+  ResearchNoAnswer = 'research_no_answer',
+  ResearchBlocked = 'research_blocked',
+  Research = 'research_unexpected',
+  ReviewDeadline = 'review_deadline',
+  ReviewUnavailable = 'review_unavailable',
+  ReviewInvalid = 'review_invalid_decision',
+  Storage = 'result_storage_failed',
+  Delivery = 'result_delivery_failed'
+}
+
+export const PULSE_FAILURE_DETAILS = {
+  [PulseFailureCode.Tick]: { phase: 'tick', message: 'Pulse tick failed.' },
+  [PulseFailureCode.Agenda]: { phase: 'agenda', message: 'Pulse could not load its follow-up agenda.' },
+  [PulseFailureCode.Evidence]: { phase: 'evidence', message: 'Pulse could not gather context for discovery.' },
+  [PulseFailureCode.PlanningInference]: { phase: 'planning', message: 'Pulse planning inference did not complete.' },
+  [PulseFailureCode.PlanningDecision]: { phase: 'planning', message: 'Pulse planner returned an invalid decision.' },
+  [PulseFailureCode.PlanningLead]: { phase: 'planning', message: 'Pulse planner returned an incomplete lead.' },
+  [PulseFailureCode.ResearchDeadline]: { phase: 'research', message: 'Research deadline reached' },
+  [PulseFailureCode.ResearchProvider]: { phase: 'research', message: 'Research model request failed' },
+  [PulseFailureCode.ResearchNoAnswer]: { phase: 'research', message: 'Research did not return a final answer' },
+  [PulseFailureCode.ResearchBlocked]: { phase: 'research', message: 'Research ended with a blocked response' },
+  [PulseFailureCode.Research]: { phase: 'research', message: 'Research could not finish' },
+  [PulseFailureCode.ReviewDeadline]: { phase: 'review', message: 'Finding review deadline reached' },
+  [PulseFailureCode.ReviewUnavailable]: { phase: 'review', message: 'Finding review could not finish' },
+  [PulseFailureCode.ReviewInvalid]: { phase: 'review', message: 'Finding review returned an invalid decision' },
+  [PulseFailureCode.Storage]: { phase: 'storage', message: 'Could not save the result' },
+  [PulseFailureCode.Delivery]: { phase: 'delivery', message: 'Could not deliver the finding' }
+} as const
+
+/**
+ * Associates a detailed outcome with the existing Pulse failure counter.
+ */
+export function getPulseFailureCounter(scope: PulseFailureScope): 'tick_failed' | 'discovery_failed' | 'followup_failed' {
+  return `${scope}_failed`
+}
+
 export enum PulseTimingMetric {
   FollowUpLateness = 'followup_lateness', Investigation = 'investigation',
   ForegroundQueue = 'foreground_queue', ForegroundOutput = 'foreground_output'
 }
 export const PULSE_TIMING_BUCKETS_MS = [50, 100, ...LATENCY_BUCKETS_MS, 300_000, 900_000, 1_800_000, 3_600_000, TELEMETRY_DAY_MS] as const
 export const TELEMETRY_MAX_PULSE_BUCKETS = 48
+const pulseFailureSchema = Type.Object({
+  scope: Type.Enum(PulseFailureScope),
+  code: Type.Enum(PulseFailureCode),
+  count,
+  inference: Type.Optional(Type.Object(publicModelProperties, { additionalProperties: false }))
+}, { additionalProperties: false })
+export type PulseFailure = Static<typeof pulseFailureSchema>
+
 const pulseReportSchema = Type.Object({
   kind: Type.Literal('pulse_metrics'), id: identifier, installation: identifier, profile: identifier, version,
   at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }),
+  os: Type.Optional(serverOS),
   counters: Type.Partial(Type.Object(Object.fromEntries(PULSE_COUNTERS.map((key) => [key, count])), { additionalProperties: false })),
+  failures: Type.Optional(Type.Array(pulseFailureSchema, { maxItems: TELEMETRY_MAX_PULSE_BUCKETS })),
   usage: Type.Array(Type.Object({ ...modelProperties, stage: Type.Enum(PulseStage), costMicros: count, costSamples: count },
     { additionalProperties: false }), { maxItems: TELEMETRY_MAX_PULSE_BUCKETS }),
   timings: Type.Array(Type.Object({
@@ -225,7 +289,28 @@ export type PulseReport = Static<typeof pulseReportSchema>
  * Accepts only counts, fixed Pulse categories, and public model dimensions.
  */
 export function isPulseReport(value: unknown): value is PulseReport {
-  return Value.Check(pulseReportSchema, value) && value.usage.every((row) =>
+  if (!Value.Check(pulseReportSchema, value)) {
+    return false
+  }
+
+  if (value.failures?.length && value.os === undefined) {
+    return false
+  }
+
+  const totals = new Map<PulseFailureScope, number>()
+  for (const { scope, code, count, inference } of value.failures ?? []) {
+    const { phase } = PULSE_FAILURE_DETAILS[code]
+    const tickFailure = phase === 'tick' || phase === 'agenda' || phase === 'evidence' || phase === 'planning'
+    const total = (totals.get(scope) ?? 0) + count
+    if (count === 0 || tickFailure !== (scope === PulseFailureScope.Tick) ||
+      (inference && (!isPublicModelLabel(inference) || (phase !== 'planning' && phase !== 'research' && phase !== 'review'))) ||
+      total > (value.counters[getPulseFailureCounter(scope)] ?? 0)) {
+      return false
+    }
+    totals.set(scope, total)
+  }
+
+  return value.usage.every((row) =>
     isPublicModelLabel(row) && row.calls > 0 && row.failedCalls <= row.calls && row.costSamples <= row.calls &&
     row.cacheReportedCalls <= row.calls && row.cachedInputTokens <= row.inputTokens) &&
     value.timings.every((row) => isPublicModelLabel(row) && row.buckets.some((count) => count > 0))
@@ -274,7 +359,7 @@ const knownModels = new Map<string, Set<string>>(
     value, new Set(getLLMModelCatalogEntries(value).map((entry) => entry.model))
   ])
 )
-type PublicModelLabel = Pick<DailyReport['models'][number], 'provider' | 'model' | 'quantization'>
+export type PublicModelLabel = Pick<DailyReport['models'][number], 'provider' | 'model' | 'quantization'>
 
 const localPublicNames = new Map<string, string>(LOCAL_LLM_MODELS.flatMap(({ id, name }) => [
   [id, name], [name, name]

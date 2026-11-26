@@ -30,11 +30,16 @@ it.each([
       import { setTimeout as delay } from 'node:timers/promises'
       import fs from 'node:fs/promises'
       import path from 'node:path'
+      import SQLite from 'better-sqlite3'
       import { startProfileTelemetry } from './server/src/core/telemetry/profile-telemetry.ts'
-      import { measurePulse } from './server/src/core/telemetry/pulse-measurements.ts'
-      import { DAILY_REPORT_PATH, PulseStage, TELEMETRY_DAY_MS } from './server/src/core/telemetry/report-contract.ts'
+      import { measurePulse, withPulseStage } from './server/src/core/telemetry/pulse-measurements.ts'
+      import {
+        DAILY_REPORT_PATH, PulseFailureCode, PulseFailureScope, PulseStage, TELEMETRY_DAY_MS
+      } from './server/src/core/telemetry/report-contract.ts'
       import { TELEMETRY_COLLECTOR_ORIGIN } from './server/src/constants.ts'
       import { getProfilePaths } from './server/src/core/profile-runtime/profile-paths.ts'
+      import PulseManager from './server/src/core/pulse-manager/pulse-manager.ts'
+      import { PulseDecision, PulseResultRepository } from './server/src/core/pulse-manager/pulse-result-repository.ts'
       import { ConversationRepository } from './server/src/core/session-manager/conversation-repository.ts'
       import { runWithTurnClient } from './server/src/core/leon-interface/turn-client.ts'
       import { recordOwnerTurn, runWithTurnTiming, TurnPhase, TurnStage } from './server/src/core/llm-manager/turn-timing.ts'
@@ -84,6 +89,22 @@ it.each([
         await fs.appendFile(path.join(journal, date + '.jsonl'), records.join('\\n') + '\\n')
       }
 
+      const pulseFolder = path.join(paths.context, 'private')
+      const outcomes = new PulseResultRepository(pulseFolder)
+      const lead = {
+        fingerprint: 'fixture-lead', intentKey: 'fixture', targetScope: 'fixture', summary: 'fixture',
+        why: 'fixture', turnPrompt: 'fixture', confidence: 1, sessionId: 'fixture-session'
+      }
+      outcomes.record({
+        id: 'old-quiet-result', matterId: lead.fingerprint, sessionId: lead.sessionId, summary: 'fixture',
+        reason: 'fixture', findingKey: null, decision: PulseDecision.Silent, output: null,
+        checkedAt: new Date(daysAgo(31)).toISOString()
+      }, lead, null)
+      const db = new SQLite(path.join(pulseFolder, 'pulse.sqlite'))
+      db.exec("CREATE TRIGGER fail_prune BEFORE DELETE ON results BEGIN SELECT RAISE(FAIL, 'private token in /private/owner.txt'); END")
+      db.close()
+      const pulse = new PulseManager()
+
       const reports = new Set()
       const events = new Map()
       const delivery = Promise.withResolvers()
@@ -104,17 +125,35 @@ it.each([
       const stop = startProfileTelemetry()
       measurePulse({ counter: 'discovery_checked', count: 1 })
       measurePulse({ counter: 'discovery_checked', count: 2 })
-      measurePulse({ stage: PulseStage.Research, usage: {
-        provider: 'llamacpp', model: '/private/owner-model.gguf', outcome: 'completed', usage: { inputTokens: 50, outputTokens: 10 }
-      } })
+      let inference
+      withPulseStage(PulseStage.Research, () => {
+        measurePulse({ stage: PulseStage.Research, usage: {
+          provider: 'llamacpp', model: '/private/owner-model.gguf', outcome: 'completed', usage: { inputTokens: 50, outputTokens: 10 }
+        } })
+      }, (label) => {
+        inference = label
+      })
+      for (const scope of [PulseFailureScope.Discovery, PulseFailureScope.Discovery, PulseFailureScope.FollowUp]) {
+        measurePulse({ failure: { code: PulseFailureCode.ResearchBlocked, scope, inference } })
+      }
       try {
+        await pulse.tick('manual')
         await runWithTurnClient('mobile', 'ios', () => runWithTurnTiming('fixture-turn', 'fixture-session', async () => {
           recordOwnerTurn('answered')
         }))
         if (${sendsReports}) {
           await delivery.promise
           assert.deepEqual(reports, new Set(['/v1/presence', '/v2/event']))
-          assert.deepEqual(events.get('pulse_metrics').counters, { discovery_checked: 3 })
+          assert.deepEqual(events.get('pulse_metrics').counters, {
+            discovery_checked: 3, discovery_failed: 2, followup_failed: 1, tick_failed: 1
+          })
+          assert.deepEqual(events.get('pulse_metrics').failures, [
+            { code: 'research_blocked', scope: 'discovery', count: 2, inference: { provider: 'llamacpp', model: 'other' } },
+            { code: 'research_blocked', scope: 'followup', count: 1, inference: { provider: 'llamacpp', model: 'other' } },
+            { code: 'tick_agenda_unavailable', scope: 'tick', count: 1 }
+          ])
+          assert.equal(events.get('pulse_metrics').os, process.platform)
+          assert.equal(JSON.stringify(events.get('pulse_metrics')).includes('/private/'), false)
           assert.equal(events.get('pulse_metrics').profile, events.get('profile_started').report.profile)
           assert.deepEqual(events.get('turn_finished').client, { type: 'mobile', os: 'ios' })
           assert.equal(events.get('turn_finished').report.fleet.os, process.platform)

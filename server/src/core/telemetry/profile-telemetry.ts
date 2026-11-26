@@ -35,6 +35,8 @@ const MAXIMUM_PENDING_EVENTS = 256
 const MAXIMUM_CONCURRENT_UPLOADS = 4
 const DELIVERY_STATE_FILE = 'telemetry-state.json'
 const INSTALLATION_KEY_FILE = path.join(LEON_HOME_PATH, '.telemetry-key.json')
+const SERVER_OS = process.platform === 'linux' || process.platform === 'darwin' || process.platform === 'win32'
+  ? process.platform : 'other'
 const active = new Map<AbortController, string>()
 const changingSettings = new Map<string, Promise<void>>()
 const preparing = new Map<string, Promise<DeliveryState | undefined>>()
@@ -248,11 +250,10 @@ function buildFleetReport(
     }
   }
 
-  const os = process.platform
   const architecture = process.arch
   const commit = process.env['LEON_PUBLIC_BUILD_COMMIT']
   return {
-    os: os === 'linux' || os === 'darwin' || os === 'win32' ? os : 'other',
+    os: SERVER_OS,
     architecture: architecture === 'x64' || architecture === 'arm64' ? architecture : 'other',
     ...(commit && /^[a-f0-9]{40}$/.test(commit) && report.version === process.env['npm_package_version'] ? { buildCommit: commit } : {}),
     turnLatency, firstOutputLatency, recoveredTurns,
@@ -335,7 +336,8 @@ function buildEvent(job: PendingEvent, state: DeliveryState, identity: Reporting
   const pseudonym = getProfilePseudonym(state, identity)
   if (job.pulse) {
     return { kind: 'pulse_metrics', at: job.at, installation, profile: pseudonym, version: PACKAGE.version,
-      id: createHmac('sha256', key).update('telemetry:pulse:').update(pseudonym).update(randomUUID()).digest('hex'), ...job.pulse }
+      id: createHmac('sha256', key).update('telemetry:pulse:').update(pseudonym).update(randomUUID()).digest('hex'),
+      ...job.pulse, ...(job.pulse.failures?.length ? { os: SERVER_OS } : {}) }
   }
   const kind = job.skillEventId ? 'skill_finished' : job.activity ? 'turn_finished' : 'profile_started'
   const day = Math.floor(job.at / TELEMETRY_DAY_MS)

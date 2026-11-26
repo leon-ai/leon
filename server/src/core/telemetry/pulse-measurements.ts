@@ -2,15 +2,16 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import type { InferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
-import { getPublicModel, OTHER_MODEL, OTHER_PROVIDER, PULSE_TIMING_BUCKETS_MS, TELEMETRY_MAX_PULSE_BUCKETS,
-  type PulseCounter, type PulseReport, type PulseStage, type PulseTimingMetric } from './report-contract'
+import { getPublicModel, getPulseFailureCounter, OTHER_MODEL, OTHER_PROVIDER, PULSE_TIMING_BUCKETS_MS, TELEMETRY_MAX_PULSE_BUCKETS,
+  type PublicModelLabel, type PulseCounter, type PulseFailure, type PulseReport, type PulseStage, type PulseTimingMetric } from './report-contract'
 
-type PulseBatch = Pick<PulseReport, 'counters' | 'usage' | 'timings'>
+type PulseBatch = Pick<PulseReport, 'counters' | 'failures' | 'usage' | 'timings'>
 interface PulseUsage { provider: string, model: string, outcome: string, usage: InferenceUsage }
 type Measurement = { counter: PulseCounter, count: number } | { stage: PulseStage, usage: PulseUsage } |
+  { failure: Omit<PulseFailure, 'count'> } |
   { metric: PulseTimingMetric, ms: number, pulseActive: boolean, provider?: string, model?: string }
 
-const stages = new AsyncLocalStorage<PulseStage>()
+const stages = new AsyncLocalStorage<{ stage: PulseStage, onModel?: (label: PublicModelLabel) => void }>()
 const batches = new Map<string, PulseBatch>()
 const MICROS_PER_DOLLAR = 1_000_000
 let shouldMeasure: ((profile: string) => boolean) | undefined
@@ -36,17 +37,17 @@ export function takePulseMeasurements(profile: string): PulseBatch | undefined {
 }
 
 /**
- * Attributes existing calls to their Pulse stage without changing inference parameters.
+ * Attributes existing calls to their Pulse stage and makes their public label available to failure reporting.
  */
-export function withPulseStage<T>(stage: PulseStage, execute: () => T): T {
-  return shouldMeasure ? stages.run(stage, execute) : execute()
+export function withPulseStage<T>(stage: PulseStage, execute: () => T, onModel?: (label: PublicModelLabel) => void): T {
+  return shouldMeasure ? stages.run({ stage, ...(onModel ? { onModel } : {}) }, execute) : execute()
 }
 
 /**
  * Returns whether an existing inference belongs to Pulse.
  */
 export function getActivePulseStage(): PulseStage | undefined {
-  return stages.getStore()
+  return stages.getStore()?.stage
 }
 
 /**
@@ -66,9 +67,24 @@ export function measurePulse(measurement: Measurement, profile?: string): void {
     const batch = batches.get(name) ?? { counters: {}, usage: [], timings: [] }
     if ('counter' in measurement) {
       batch.counters[measurement.counter] = (batch.counters[measurement.counter] ?? 0) + measurement.count
+    } else if ('failure' in measurement) {
+      const { code, scope, inference } = measurement.failure
+      const counter = getPulseFailureCounter(scope)
+      batch.counters[counter] = (batch.counters[counter] ?? 0) + 1
+
+      const failures = batch.failures ??= []
+      const existing = failures.find((row) => row.code === code && row.scope === scope &&
+        row.inference?.provider === inference?.provider && row.inference?.model === inference?.model &&
+        row.inference?.quantization === inference?.quantization)
+      if (existing) {
+        existing.count++
+      } else if (failures.length < TELEMETRY_MAX_PULSE_BUCKETS) {
+        failures.push({ code, scope, count: 1, ...(inference ? { inference } : {}) })
+      }
     } else if ('stage' in measurement) {
       const { stage, usage: entry } = measurement
       const label = getPublicModel(entry.provider, entry.model)
+      stages.getStore()?.onModel?.(label)
       const usage = batch.usage.find((row) => row.stage === stage && row.provider === label.provider &&
         row.model === label.model && row.quantization === label.quantization)
       if (!usage && batch.usage.length >= TELEMETRY_MAX_PULSE_BUCKETS) {

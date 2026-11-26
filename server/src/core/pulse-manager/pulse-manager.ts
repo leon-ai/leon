@@ -19,7 +19,10 @@ import { runWithConversationSession } from '@/core/session-manager/session-conte
 import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { collectArtifacts } from '@/core/artifacts/artifact-context'
 import { measurePulse, withPulseStage } from '@/core/telemetry/pulse-measurements'
-import { PulseStage, PulseTimingMetric } from '@/core/telemetry/report-contract'
+import {
+  PULSE_FAILURE_DETAILS, PulseFailureCode, PulseFailureScope, PulseStage, PulseTimingMetric,
+  type PublicModelLabel
+} from '@/core/telemetry/report-contract'
 import {
   PulseArchiveReason,
   PulseDecision,
@@ -44,16 +47,16 @@ type PulseMatterSource = 'memory' | 'context' | 'self_model'
 type PulseOwnerFeedback = 'accept' | 'decline' | null
 type PulseTickReason = 'scheduled' | 'follow_up' | 'manual'
 
-enum PulseFailureReason {
-  Deadline = 'Research deadline reached',
-  Provider = 'Research model request failed',
-  NoAnswer = 'Research did not return a final answer',
-  Blocked = 'Research ended with a blocked response',
-  Research = 'Research could not finish',
-  ReviewUnavailable = 'Finding review could not finish',
-  ReviewInvalid = 'Finding review returned an invalid decision',
-  Storage = 'Could not save the result',
-  Delivery = 'Could not deliver the finding'
+interface PulseFailureDetail {
+  code: PulseFailureCode
+  inference?: PublicModelLabel
+}
+
+// The public reason is fixed at the failure site. The original error remains in the local log.
+class PulseTickFailure extends Error {
+  public constructor(public readonly detail: PulseFailureDetail, cause?: unknown) {
+    super(PULSE_FAILURE_DETAILS[detail.code].message, { cause })
+  }
 }
 
 interface PulseMatter extends PulseMatterLead {
@@ -143,7 +146,7 @@ interface PulseResearchResult {
   output: string | null
   followUp: PulseFollowUp | null
   answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace' | 'artifacts'>
-  failureReason?: PulseFailureReason
+  failure?: PulseFailureDetail
 }
 
 const PULSE_MARKDOWN_FILENAME = 'PULSE.md'
@@ -557,9 +560,10 @@ export default class PulseManager {
       })
       .catch((error: unknown) => {
         this.followUpRetryAt = Date.now() + PULSE_FOLLOW_UP_RETRY_MS
-        measurePulse({ counter: 'tick_failed', count: 1 })
+        const detail = error instanceof PulseTickFailure ? error.detail : { code: PulseFailureCode.Tick }
+        measurePulse({ failure: { scope: PulseFailureScope.Tick, ...detail } })
         LogHelper.title('Pulse Manager')
-        LogHelper.warning(`Pulse tick failed: ${String(error)}`)
+        LogHelper.warning(`Pulse tick failed: ${String(error instanceof PulseTickFailure ? error.cause ?? error : error)}`)
       })
       .finally(() => {
         this.isTickPending = false
@@ -835,10 +839,16 @@ export default class PulseManager {
     }
 
     const now = Date.now()
-    this.results.prune(now)
 
     // Due checks already have verified grounding and take priority over discovery.
-    const openMatters = this.results.openMatters(now)
+    let openMatters: ReturnType<PulseResultRepository['openMatters']>
+    try {
+      this.results.prune(now)
+      openMatters = this.results.openMatters(now)
+    } catch (error) {
+      throw new PulseTickFailure({ code: PulseFailureCode.Agenda }, error)
+    }
+
     const due = openMatters.find((matter) => matter.checkAt <= now)
     if (!due && reason === 'follow_up') {
       this.persist()
@@ -909,7 +919,9 @@ export default class PulseManager {
       ? this.createMatter(due.lead, [], toIsoString(now))
       : this.selectNextMatter(state)
     if (!nextMatter) {
-      const evidence = await this.buildPulseEvidence(state, recentConversation)
+      const evidence = await this.buildPulseEvidence(state, recentConversation).catch((error: unknown) => {
+        throw new PulseTickFailure({ code: PulseFailureCode.Evidence }, error)
+      })
       const lead = await this.findResearchLead(evidence)
       state.lastGeneratedAt = new Date().toISOString()
       if (lead && !openMatters.some((matter) => matter.lead.fingerprint === lead.fingerprint)) {
@@ -1173,6 +1185,10 @@ export default class PulseManager {
       evidence.suppressionSection
     ].join('\n')
 
+    let inference: PublicModelLabel | undefined
+    const failed = (code: PulseFailureCode, cause?: unknown): PulseTickFailure => {
+      return new PulseTickFailure({ code, ...(inference ? { inference } : {}) }, cause)
+    }
     const result = await withPulseStage(PulseStage.Planning, () => runInference({
       usagePurpose: InferencePurpose.PulsePlanning,
       prompt,
@@ -1189,13 +1205,17 @@ export default class PulseManager {
       temperature: 0,
       maxTokens: PULSE_PLANNER_MAX_TOKENS,
       trackProviderErrors: false
-    }))
+    }), (label) => {
+      inference = label
+    }).catch((error: unknown) => {
+      throw failed(PulseFailureCode.PlanningInference, error)
+    })
     if (!result) {
-      throw new Error('Pulse planning inference did not complete.')
+      throw failed(PulseFailureCode.PlanningInference)
     }
     const payload = this.parseJsonObject(result.output) as PulsePlannerOutput | null
     if (!Array.isArray(payload?.items)) {
-      throw new Error('Pulse planner returned an invalid decision.')
+      throw failed(PulseFailureCode.PlanningDecision)
     }
     if (payload.items.length === 0) {
       return null
@@ -1206,7 +1226,7 @@ export default class PulseManager {
       ? this.normalizePlannedMatter(lead, new Date().toISOString())
       : null
     if (!matter) {
-      throw new Error('Pulse planner returned an incomplete lead.')
+      throw failed(PulseFailureCode.PlanningLead)
     }
 
     return matter
@@ -1334,7 +1354,7 @@ export default class PulseManager {
     this.persist()
 
     const startedAt = Date.now()
-    const source = scheduled ? 'followup' : 'discovery'
+    const source = scheduled ? PulseFailureScope.FollowUp : PulseFailureScope.Discovery
     measurePulse({ counter: `${source}_checked`, count: 1 })
     if (scheduled) {
       const ms = Math.max(0, startedAt - scheduled.checkAt)
@@ -1342,8 +1362,8 @@ export default class PulseManager {
       measurePulse({ metric: PulseTimingMetric.FollowUpLateness, ms, pulseActive: false })
     }
     let decision = PulseDecision.Failed
-    let failureReason: PulseFailureReason | undefined
-    let operation = PulseFailureReason.Research
+    let failure: PulseFailureDetail = { code: PulseFailureCode.Research }
+    let operation = PulseFailureCode.Research
     let suppressed = false
 
     try {
@@ -1355,7 +1375,7 @@ export default class PulseManager {
       )
       const { findingKey, output, answerMetadata, followUp } = research
       decision = research.decision
-      failureReason = research.failureReason
+      failure = research.failure ?? failure
       if (decision === PulseDecision.Notify && !CONVERSATION_SESSION_MANAGER.getSession(sessionId)) {
         decision = PulseDecision.Save
       }
@@ -1371,7 +1391,7 @@ export default class PulseManager {
         output,
         checkedAt: new Date().toISOString()
       }
-      operation = PulseFailureReason.Storage
+      operation = PulseFailureCode.Storage
       if (!this.results.record(result, matter, followUp, scheduled?.checkAt)) {
         decision = PulseDecision.Silent
         suppressed = true
@@ -1380,7 +1400,7 @@ export default class PulseManager {
 
       // Only delivery joins the session queue. Research never owns the owner's turn.
       if (decision === PulseDecision.Notify && output) {
-        operation = PulseFailureReason.Delivery
+        operation = PulseFailureCode.Delivery
         try {
           await CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, () =>
             this.surfacePulseMessage(state, matter, output, answerMetadata, true)
@@ -1393,7 +1413,7 @@ export default class PulseManager {
       }
     } catch (error: unknown) {
       decision = PulseDecision.Failed
-      failureReason = operation
+      failure = { code: operation }
       if (scheduled) {
         // A persistence failure can leave the check due even after research ends.
         this.followUpRetryAt = Date.now() + PULSE_FOLLOW_UP_RETRY_MS
@@ -1403,14 +1423,18 @@ export default class PulseManager {
     } finally {
       const outcome = suppressed ? 'duplicate' : decision === PulseDecision.Notify ? 'delivered' :
         decision === PulseDecision.Save ? 'saved' : decision === PulseDecision.Failed ? 'failed' : 'silent'
-      measurePulse({ counter: `${source}_${outcome}`, count: 1 })
+      if (outcome === 'failed') {
+        measurePulse({ failure: { scope: source, ...failure } })
+      } else {
+        measurePulse({ counter: `${source}_${outcome}`, count: 1 })
+      }
       measurePulse({ metric: PulseTimingMetric.Investigation, ms: Date.now() - startedAt, pulseActive: false })
       const completedAt = new Date().toISOString()
       matter.updatedAt = completedAt
       matter.completedAt = completedAt
       matter.status = decision === PulseDecision.Failed ? 'failed' : 'completed'
       if (decision === PulseDecision.Failed) {
-        matter.outcome = failureReason ?? PulseFailureReason.Research
+        matter.outcome = PULSE_FAILURE_DETAILS[failure.code].message
       }
       this.upsertSuppressionPolicy(state, matter, matter.status, completedAt)
       state.lastExecutionAt = completedAt
@@ -1438,10 +1462,15 @@ export default class PulseManager {
     const silence = {
       decision: PulseDecision.Silent, findingKey: null, output: null, followUp: null, answerMetadata: {}
     }
-    const fail = (failureReason: PulseFailureReason): PulseResearchResult => ({
-      ...silence, decision: PulseDecision.Failed, failureReason
+    let inference: PublicModelLabel | undefined
+    const observeModel = (label: PublicModelLabel): void => {
+      inference = label
+    }
+    const fail = (code: PulseFailureCode): PulseResearchResult => ({
+      ...silence, decision: PulseDecision.Failed, failure: { code, ...(inference ? { inference } : {}) }
     })
-    let operation = PulseFailureReason.Research
+    let operation = PulseFailureCode.Research
+    let deadlineFailure = PulseFailureCode.ResearchDeadline
     const deadlineAt = Math.min(Date.now() + PULSE_RESEARCH_TIMEOUT_MS, scheduled?.expiresAt ?? Infinity)
     const input = [
       `${PULSE_REACT_SENTINEL} Investigate a lead on my own initiative.`,
@@ -1472,7 +1501,7 @@ export default class PulseManager {
           await duty.init()
 
           return duty.execute()
-        }))
+        }), observeModel)
       )
 
       const output = typeof result?.output === 'string' ? result.output.trim() : ''
@@ -1485,16 +1514,16 @@ export default class PulseManager {
       }
       const remainingMs = deadlineAt - Date.now()
       if (remainingMs <= 0) {
-        return fail(PulseFailureReason.Deadline)
+        return fail(deadlineFailure)
       }
       if (data?.['finalIntent'] !== 'answer' || !output) {
         const attempt = getTurnTimings().findLast((timing) =>
           timing.kind === 'inference' && timing.purpose === InferencePurpose.Pulse && timing.outcome !== 'started'
         )
         if (attempt && attempt.outcome !== 'completed') {
-          return fail(PulseFailureReason.Provider)
+          return fail(PulseFailureCode.ResearchProvider)
         }
-        return fail(data?.['finalIntent'] === 'blocked' ? PulseFailureReason.Blocked : PulseFailureReason.NoAnswer)
+        return fail(data?.['finalIntent'] === 'blocked' ? PulseFailureCode.ResearchBlocked : PulseFailureCode.ResearchNoAnswer)
       }
       const evidence = executions
         .filter((record) => record.status === 'success' && PULSE_RESEARCH_TOOLS.has(record.function))
@@ -1508,7 +1537,9 @@ export default class PulseManager {
         return silence
       }
 
-      operation = PulseFailureReason.ReviewUnavailable
+      operation = PulseFailureCode.ReviewUnavailable
+      deadlineFailure = PulseFailureCode.ReviewDeadline
+      inference = undefined
       const review = await withPulseStage(PulseStage.Review, () => runInference({
         usagePurpose: InferencePurpose.PulsePlanning,
         prompt: JSON.stringify({
@@ -1530,12 +1561,12 @@ export default class PulseManager {
         timeout: remainingMs,
         maxRetries: 0,
         trackProviderErrors: false
-      }))
+      }), observeModel)
       if (Date.now() >= deadlineAt) {
-        return fail(PulseFailureReason.Deadline)
+        return fail(deadlineFailure)
       }
       if (!review) {
-        return fail(PulseFailureReason.ReviewUnavailable)
+        return fail(PulseFailureCode.ReviewUnavailable)
       }
       const payload = this.parseJsonObject(review.output)
       const decision = payload?.['decision']
@@ -1546,7 +1577,7 @@ export default class PulseManager {
         ? normalizeIntentToken(clipText(payload['finding_key'], 120), '')
         : ''
       if ((decision !== PulseDecision.Save && decision !== PulseDecision.Notify) || !findingKey) {
-        return fail(PulseFailureReason.ReviewInvalid)
+        return fail(PulseFailureCode.ReviewInvalid)
       }
 
       return {
@@ -1566,7 +1597,7 @@ export default class PulseManager {
       LogHelper.title('Pulse Manager')
       LogHelper.warning(`Pulse research failed: ${String(error)}`)
 
-      return fail(Date.now() >= deadlineAt ? PulseFailureReason.Deadline : operation)
+      return fail(Date.now() >= deadlineAt ? deadlineFailure : operation)
     }
   }
 
