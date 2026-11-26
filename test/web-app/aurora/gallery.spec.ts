@@ -12,6 +12,38 @@ const CONNECTIONS = [...fs.globSync('tools/*/*/tool.json')].flatMap((file) => {
 })
 
 for (const [theme, reducedMotion] of [['light', 'reduce'], ['dark', 'no-preference']] as const) {
+  test(`matches primary button and owner message borders when the accent changes (${theme})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/aurora.html')
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Apply light theme', exact: true }).click()
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    const primary = page.getByRole('region', { name: 'Buttons', exact: true })
+      .getByRole('button', { name: 'Continue', exact: true })
+    const feed = page.getByRole('region', { name: 'Feed preview', exact: true })
+    const ownerMessage = feed.locator('.owner-message')
+    let blueBorder = ''
+
+    for (const accent of ['blue', 'pink']) {
+      await page.locator('html').evaluate((root, value) => root.setAttribute('data-accent', value), accent)
+      const border = await primary.evaluate((button) => getComputedStyle(button, '::before').backgroundImage)
+      expect(border).toContain('linear-gradient')
+      if (accent === 'blue') {
+        blueBorder = border
+      } else {
+        expect(border).not.toBe(blueBorder)
+      }
+
+      await page.getByRole('button', { name: 'Feed', exact: true }).click()
+      await feed.getByRole('combobox', { name: 'Feed example', exact: true }).selectOption('completed-no-plan')
+      await expect(ownerMessage).toBeVisible()
+      await expect.poll(() => ownerMessage.evaluate((message) => getComputedStyle(message).backgroundImage))
+        .toContain(border)
+      await page.getByRole('button', { name: 'Components', exact: true }).click()
+    }
+  })
+
   test(`explores real feed activity states and complete turns without API requests (${theme}, ${reducedMotion})`, async ({ page }, testInfo) => {
     const unexpectedRequests: string[] = []
     const errors: string[] = []

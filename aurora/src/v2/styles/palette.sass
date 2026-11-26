@@ -1,6 +1,6 @@
 // One palette supplies workspace identities and owner-selected application accents.
 // Light variants retain enough contrast for small icons on light surfaces.
-// Button edges match the default blue's contrast against the fill in each theme.
+// Accent-filled surfaces use the default blue's border contrast in each theme.
 $palette: (
   ('blue', #1C75DB, #1C75DB, null, null),
   ('pink', #ED297A, #C62067, #F199BE, #841C48),
@@ -16,7 +16,7 @@ $palette: (
   ('lime', #A6BF65, #617C29, #76874A, #455622)
 )
 
-@each $name, $dark, $light, $dark-button-border, $light-button-border in $palette
+@each $name, $dark, $light, $dark-accent-border, $light-accent-border in $palette
   :root,
   [data-theme='dark']
     --color-palette-#{$name}: #{$dark}
@@ -35,12 +35,12 @@ $palette: (
     --color-primary-button-active: color-mix(in srgb, var(--color-accent) 85%, #000)
     --color-primary-button-disabled: color-mix(in srgb, var(--color-accent) 40%, transparent)
 
-    @if $dark-button-border
-      --gradient-primary-button-border: linear-gradient(to bottom, #{$dark-button-border}, transparent)
+    @if $dark-accent-border
+      --gradient-accent-border: linear-gradient(to bottom, #{$dark-accent-border}, transparent)
 
-  @if $light-button-border
+  @if $light-accent-border
     :root[data-theme='light'][data-accent='#{$name}']
-      --gradient-primary-button-border: linear-gradient(to bottom, #{$light-button-border}, transparent)
+      --gradient-accent-border: linear-gradient(to bottom, #{$light-accent-border}, transparent)
 
 [data-workspace-color='default']
   --workspace-color: var(--color-text)
