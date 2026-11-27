@@ -190,6 +190,13 @@ const DEFAULT_CONFIG: LeonConfig = {
             LLMProviders.Celeris
           ).apiKeyEnv
         }
+      },
+      atlascloud: {
+        api_key: {
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.AtlasCloud
+          ).apiKeyEnv
+        }
       }
     }
   }

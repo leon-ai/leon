@@ -318,6 +318,11 @@ describe('ConfigManager', () => {
             api_key: {
               env: 'LEON_CELERIS_API_KEY'
             }
+          },
+          atlascloud: {
+            api_key: {
+              env: 'LEON_ATLASCLOUD_API_KEY'
+            }
           }
         }
       },

@@ -25,7 +25,7 @@ const SCOPES = [
   'bridge/(python|nodejs)',
   'tool/[\\w-]+',
   'skill/[\\w-]+',
-  'provider/(llamacpp|sglang|openrouter|zai|deepseek|minimax|openai|anthropic|moonshotai|huggingface|cerebras|groq|celeris)'
+  'provider/(llamacpp|sglang|openrouter|zai|deepseek|minimax|openai|anthropic|moonshotai|huggingface|cerebras|groq|celeris|atlascloud)'
 ]
 
 const COMMIT_SUBJECT_PATTERN = new RegExp(

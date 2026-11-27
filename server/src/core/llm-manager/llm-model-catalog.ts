@@ -10,6 +10,7 @@ const SETUP_PROVIDER_ORDER = [
   LLMProviders.MoonshotAI,
   LLMProviders.MiniMax,
   LLMProviders.Celeris,
+  LLMProviders.AtlasCloud,
   LLMProviders.HuggingFace,
   LLMProviders.Groq,
   LLMProviders.Cerebras
@@ -219,6 +220,32 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
     reasoning: MAGNUS_REASONING,
     speed: AUTO_SPEED,
     inputMediaTypes: []
+  },
+
+  /**
+   * Atlas Cloud serves many upstream vendors behind one endpoint, and reasoning
+   * controls differ per model. Keep entries auto-only so Leon sends none.
+   *
+   * @see https://api.atlascloud.ai/v1/models
+   */
+  {
+    provider: LLMProviders.AtlasCloud,
+    model: 'deepseek-ai/deepseek-v4-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'deepseek-ai/deepseek-v4-flash',
+    recommended: true,
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
+  {
+    provider: LLMProviders.AtlasCloud,
+    model: 'deepseek-ai/deepseek-v4.1-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'deepseek-ai/deepseek-v4.1-flash',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: null
   },
 
   /**

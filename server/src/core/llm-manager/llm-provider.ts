@@ -53,7 +53,8 @@ const LLM_PROVIDERS_MAP = {
   [LLMProviders.MoonshotAI]: 'moonshotai-llm-provider',
   [LLMProviders.Cerebras]: 'cerebras-llm-provider',
   [LLMProviders.HuggingFace]: 'huggingface-llm-provider',
-  [LLMProviders.Celeris]: 'celeris-llm-provider'
+  [LLMProviders.Celeris]: 'celeris-llm-provider',
+  [LLMProviders.AtlasCloud]: 'atlascloud-llm-provider'
 }
 
 export default class LLMProvider {
