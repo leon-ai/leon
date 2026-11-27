@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "2.0.0-alpha.0.29",
+  "version": "2.0.0-alpha.0.30",
   "desktop": {
     "minimumServerVersion": "2.0.0-alpha.0.17"
   },

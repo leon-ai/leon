@@ -166,6 +166,13 @@ it.each([
       }
       try {
         await pulse.tick('manual')
+        const history = outcomes.readTickHistory(0, true)
+        assert.equal(history.total, 1)
+        assert.equal(history.investigated, 0)
+        assert.equal(history.outcomes.failed, 1)
+        assert.equal(history.ticks[0].events[0].code, PulseFailureCode.Agenda)
+        assert.ok(history.ticks[0].events[0].diagnosticId)
+        assert.ok(!JSON.stringify(history).includes('/private/owner.txt'))
         await runWithTurnClient('mobile', 'ios', () => runWithTurnTiming('fixture-turn', 'fixture-session', async () => {
           runTurnPhase(TurnPhase.Execution, () => runTurnPhase(TurnPhase.Review, () => {
             recordTurnInference({

@@ -5,9 +5,10 @@ import path from 'node:path'
 import SQLite from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { PULSE_INSIGHTS_RETENTION_DAYS, PulseTickOutcome, type PulseTick } from '@/core/insights/insights-contract'
 import {
-  MAX_OPEN_PULSE_MATTERS, PulseArchiveReason, PulseDecision, PulseResultRepository,
-  type PulseFollowUp, type PulseMatterLead
+  MAX_OPEN_PULSE_MATTERS, PULSE_STATE_FILENAME, PulseArchiveReason, PulseDecision, PulseResultRepository,
+  type PulseFollowUp, type PulseMatterLead, type PulseTickNote
 } from '@/core/pulse-manager/pulse-result-repository'
 
 const HOUR_MS = 60 * 60 * 1_000
@@ -131,5 +132,101 @@ describe('Pulse agenda', () => {
     } finally {
       db.close()
     }
+  })
+
+  it('paginates retained ticks without changing their totals or the next follow-up', () => {
+    const matter = lead('showcase', 0.9)
+    const next = followUp()
+    record(repository, matter, 'agenda-result', 'schedule', NOW, next)
+
+    const quiet: PulseTick = {
+      id: 'quiet', outcome: PulseTickOutcome.Quiet, investigated: true, trigger: 'scheduled',
+      startedAt: NOW - HOUR_MS, durationMs: 2_000, matter: matter.summary,
+      events: [{ at: NOW - HOUR_MS, phase: 'review', code: 'silent', detail: 'The schedule has not changed.' }]
+    }
+    const stale: PulseTick = {
+      ...quiet, id: 'older', startedAt: NOW - (PULSE_INSIGHTS_RETENTION_DAYS + 1) * 24 * HOUR_MS
+    }
+    repository.recordTick(stale)
+    repository.recordTick(quiet)
+    const idle = Array.from({ length: 30 }, (_, index): PulseTick => ({
+      ...quiet, id: `idle-${index}`, outcome: PulseTickOutcome.Idle, investigated: false,
+      startedAt: NOW - index * 1_000, matter: null,
+      events: [{ at: NOW - index * 1_000, phase: 'planning', code: 'no_lead', detail: 'No useful lead was due.' }]
+    }))
+    for (const tick of idle) {
+      repository.recordTick(tick)
+    }
+
+    const reopened = new PulseResultRepository(directory)
+    const first = reopened.readTickHistory(0, true, NOW)
+    const second = reopened.readTickHistory(1, true, NOW)
+    expect(first.pages).toBeGreaterThan(1)
+    expect(first).toMatchObject({
+      total: idle.length + 1, investigated: 1,
+      outcomes: { [PulseTickOutcome.Idle]: idle.length, [PulseTickOutcome.Quiet]: 1 },
+      nextFollowUp: { matter: matter.summary, ...next }
+    })
+    expect(second).toMatchObject({ total: first.total, investigated: 1, nextFollowUp: first.nextFollowUp })
+    expect([...first.ticks, ...second.ticks]).toEqual([...idle, quiet])
+  })
+
+  it('recovers earlier notes and results once while keeping existing audit entries authoritative', () => {
+    const matter = lead('showcase', 0.9)
+    const earlierAt = NOW - 2 * HOUR_MS
+    const modernAt = NOW - HOUR_MS
+    record(repository, matter, 'earlier-finding', 'schedule', earlierAt, null)
+    record(repository, matter, 'modern-check', null, modernAt, null)
+    const modern: PulseTick = {
+      id: 'modern', outcome: PulseTickOutcome.Quiet, investigated: true,
+      trigger: 'scheduled', startedAt: modernAt, durationMs: 2_000, matter: matter.summary,
+      events: [{ at: modernAt, phase: 'review', code: 'silent', detail: 'The schedule has not changed.' }]
+    }
+    repository.recordTick(modern)
+
+    const notes: PulseTickNote[] = [
+      { at: new Date(modernAt + 1_000).toISOString(), outcome: 'executed', note: 'silent: showcase', matterId: 'modern-check' },
+      { at: new Date(earlierAt + 1_000).toISOString(), outcome: 'executed', note: 'save: showcase', matterId: 'earlier-finding' },
+      { at: new Date(earlierAt - 1_000).toISOString(), outcome: 'queued', note: 'Checking the showcase.', matterId: 'earlier-finding' },
+      { at: new Date(earlierAt - HOUR_MS).toISOString(), outcome: 'skipped', note: 'The model was unavailable.', matterId: null }
+    ]
+    fs.writeFileSync(path.join(directory, PULSE_STATE_FILENAME), JSON.stringify({ recentTicks: notes }))
+    const existing = new SQLite(path.join(directory, 'pulse.sqlite'))
+    try {
+      // Existing Pulse databases can contain audit entries before the schema version is set.
+      existing.exec('PRAGMA user_version = 0')
+    } finally {
+      existing.close()
+    }
+
+    const history = new PulseResultRepository(directory).readTickHistory(0, true, NOW)
+    expect(history).toMatchObject({
+      total: 3, investigated: 2,
+      outcomes: { [PulseTickOutcome.Saved]: 1, [PulseTickOutcome.Quiet]: 1, [PulseTickOutcome.Skipped]: 1 },
+      ticks: [
+        modern,
+        { outcome: PulseTickOutcome.Saved, recovered: true, trigger: null, durationMs: null, events: [
+          { code: 'recorded_reason', detail: matter.why },
+          { code: 'recorded_result', detail: 'Verified schedule.' },
+          { code: 'recorded_note', detail: 'save: showcase' }
+        ] },
+        { outcome: PulseTickOutcome.Skipped, recovered: true, investigated: false,
+          events: [{ code: 'recorded_note', detail: 'The model was unavailable.' }] }
+      ]
+    })
+    expect(new PulseResultRepository(directory).readTickHistory(0, true, NOW)).toEqual(history)
+  })
+
+  it('recovers an earlier Pulse that ended before any investigation was saved', () => {
+    const note: PulseTickNote = {
+      at: new Date(NOW - HOUR_MS).toISOString(), outcome: 'idle',
+      note: 'No pulse matter selected (scheduled)', matterId: null
+    }
+    fs.writeFileSync(path.join(directory, PULSE_STATE_FILENAME), JSON.stringify({ recentTicks: [note] }))
+
+    expect(repository.readTickHistory(0, true, NOW)).toMatchObject({
+      total: 1, investigated: 0, outcomes: { [PulseTickOutcome.Idle]: 1 },
+      ticks: [{ outcome: PulseTickOutcome.Idle, recovered: true, events: [{ detail: note.note }] }]
+    })
   })
 })

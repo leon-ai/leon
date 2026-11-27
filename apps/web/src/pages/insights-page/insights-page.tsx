@@ -8,6 +8,7 @@ import { Tabs } from '../../../../../aurora/src/v2/components/tabs'
 import { INSIGHTS_RANGES, type InsightsInterval } from '../../../../../server/src/core/insights/insights-contract'
 
 import { InsightsOverview } from './insights-overview'
+import { InsightsPulse } from './insights-pulse'
 import { InsightsContextWindow, InsightsRepeatedFirstTurns } from './insights-turns'
 
 import './insights-page.sass'
@@ -19,7 +20,7 @@ const INTERVAL_LABELS = {
 } as const
 
 /**
- * Keeps the owner’s usage, context, repeated first turns and controlled evals in dedicated views.
+ * Keeps the owner’s usage, context, Pulse activity and evaluations in dedicated views.
  */
 export function Insights({ tab, selectTab }: { tab: InsightsTab, selectTab: (tab: InsightsTab) => void }) {
   const [days, setDays] = useState(30)
@@ -27,9 +28,10 @@ export function Insights({ tab, selectTab }: { tab: InsightsTab, selectTab: (tab
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
   const [contextPage, setContextPage] = useState(0)
+  const showUsage = tab !== 'evaluations' && tab !== 'pulse'
   const query = useInsightsUsage({
     days, provider, model, repeated: tab === 'repeated-queries', interval,
-    contextPage: tab === 'context-window' ? contextPage : undefined, enabled: tab !== 'evaluations'
+    contextPage: tab === 'context-window' ? contextPage : undefined, enabled: showUsage
   })
   const usage = query.data
   const models = (tab === 'context-window' ? usage?.contextModels : usage?.models) ?? []
@@ -37,7 +39,7 @@ export function Insights({ tab, selectTab }: { tab: InsightsTab, selectTab: (tab
   const modelNames = [...new Set(models.filter((row) => !provider || provider === row.provider).map((row) => row.model))]
 
   return <div className="insights-usage">
-    {tab !== 'evaluations' && <>
+    {showUsage && <>
       <div className="insights-filters">
         <label>Period
           <select value={days} onChange={(event) => {
@@ -98,6 +100,7 @@ export function Insights({ tab, selectTab }: { tab: InsightsTab, selectTab: (tab
         value: 'repeated-queries', label: 'Repeated first turns',
         content: usage && !query.isPlaceholderData && <InsightsRepeatedFirstTurns usage={usage} />
       },
+      { value: 'pulse', label: 'Pulse', content: <InsightsPulse /> },
       {
         value: 'evaluations', label: 'Evaluations',
         content: <Suspense fallback={<Loader size="md" label="Opening evaluations…" />}><InsightsEvaluations /></Suspense>

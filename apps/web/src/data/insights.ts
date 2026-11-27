@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutati
 
 import { useToast } from '@/components/toast'
 import type {
-  InsightsInterval, InsightsUsage, EvaluationHistoryView, EvaluationQuery, TelemetrySetting
+  InsightsInterval, InsightsUsage, EvaluationHistoryView, EvaluationQuery, PulseInsights, TelemetrySetting
 } from '../../../../server/src/core/insights/insights-contract'
 
 import { requestAPI } from './api'
@@ -48,6 +48,22 @@ export function useInsightsUsage(
     staleTime: INSIGHTS_STALE_MS,
     placeholderData: keepPreviousData,
     enabled: Boolean(profile) && enabled
+  })
+}
+
+/**
+ * Retrieves one page of recorded Pulse decisions for the active profile.
+ */
+export function useInsightsPulse(page: number): UseQueryResult<PulseInsights> {
+  const profile = useProfile()
+
+  return useQuery({
+    queryKey: ['insights-pulse', profile, page],
+    queryFn: ({ signal }) => requestAPI<PulseInsights>(`${INSIGHTS_ENDPOINT}/pulse?page=${page}`, {
+      signal, headers: { [PROFILE_HEADER]: profile }
+    }),
+    enabled: Boolean(profile),
+    staleTime: INSIGHTS_STALE_MS
   })
 }
 

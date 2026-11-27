@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationLogger } from '@/conversation-logger'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import Brain from '@/core/brain/brain'
+import { PulseTickOutcome } from '@/core/insights/insights-contract'
 import PulseManager from '@/core/pulse-manager/pulse-manager'
 import { PulseDecision, PulseResultRepository } from '@/core/pulse-manager/pulse-result-repository'
 import { CONFIG_MANAGER } from '@/config'
@@ -255,6 +256,19 @@ describe('conversation trace persistence', () => {
     expect(results.recentFindings(lead.fingerprint).map(({ findingKey }) => findingKey))
       .toEqual(['agenda_published', 'agenda_announced'])
     expect(results.openMatters(Date.now())).toEqual([])
+    expect(results.readTickHistory(0, true)).toMatchObject({
+      total: 2, investigated: 1, nextFollowUp: null,
+      outcomes: { [PulseTickOutcome.Skipped]: 1, [PulseTickOutcome.Saved]: 1 },
+      ticks: [
+        { outcome: PulseTickOutcome.Saved, trigger: 'follow_up', events: expect.arrayContaining([
+          expect.objectContaining({ code: 'follow_up_due', detail: lead.turnPrompt }),
+          expect.objectContaining({ code: 'finding_saved' })
+        ]) },
+        { outcome: PulseTickOutcome.Skipped, trigger: 'follow_up', events: [
+          expect.objectContaining({ code: 'provider_unavailable' })
+        ] }
+      ]
+    })
   })
 
   it('persists distinct turn routes without credentials and keeps older attribution unknown', async () => {

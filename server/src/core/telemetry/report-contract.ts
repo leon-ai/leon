@@ -281,7 +281,7 @@ export enum PulseFailureCode {
 }
 
 export const PULSE_FAILURE_DETAILS = {
-  [PulseFailureCode.Tick]: { phase: 'tick', message: 'Pulse tick failed.' },
+  [PulseFailureCode.Tick]: { phase: 'tick', message: 'Pulse failed.' },
   [PulseFailureCode.Agenda]: { phase: 'agenda', message: 'Pulse could not load its follow-up agenda.' },
   [PulseFailureCode.Evidence]: { phase: 'evidence', message: 'Pulse could not gather context for discovery.' },
   [PulseFailureCode.PlanningInference]: { phase: 'planning', message: 'Pulse planning inference did not complete.' },

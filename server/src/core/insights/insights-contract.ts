@@ -5,6 +5,54 @@ export const INSIGHTS_RANGES = [7, 14, 30, 90, 180, 365] as const
 export const INSIGHTS_INTERVALS = ['day', 'week', 'month'] as const
 export type InsightsInterval = typeof INSIGHTS_INTERVALS[number]
 
+export const PULSE_INSIGHTS_RETENTION_DAYS = 30
+
+export enum PulseTickOutcome {
+  Idle = 'idle',
+  Skipped = 'skipped',
+  Quiet = 'quiet',
+  Duplicate = 'duplicate',
+  Saved = 'saved',
+  Shared = 'shared',
+  Failed = 'failed',
+  Unknown = 'unknown'
+}
+
+export type PulseTickTrigger = 'scheduled' | 'follow_up' | 'manual'
+
+export interface PulseTickEvent {
+  at: number
+  phase: 'tick' | 'agenda' | 'evidence' | 'planning' | 'research' | 'review' | 'storage' | 'delivery'
+  code: string
+  detail: string
+  diagnosticId?: string
+  toolCalls?: number
+  tools?: { name: string, status: string }[]
+}
+
+export interface PulseTick {
+  id: string
+  startedAt: number
+  durationMs: number | null
+  trigger: PulseTickTrigger | null
+  outcome: PulseTickOutcome
+  investigated: boolean
+  matter: string | null
+  events: PulseTickEvent[]
+  recovered?: true
+}
+
+export interface PulseInsights {
+  enabled: boolean
+  page: number
+  pages: number
+  total: number
+  investigated: number
+  outcomes: Partial<Record<PulseTickOutcome, number>>
+  ticks: PulseTick[]
+  nextFollowUp: { matter: string, question: string, checkAt: number, expiresAt: number } | null
+}
+
 export interface UsageTotals {
   modelCalls: number
   failedModelCalls: number

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 
+import { CONFIG_MANAGER } from '@/config'
 import { getInsightsUsage } from '@/core/insights/usage'
 import { INSIGHTS_INTERVALS, INSIGHTS_RANGES, EVALUATION_SOURCES,
   type InsightsInterval, type EvaluationQuery } from '@/core/insights/insights-contract'
@@ -8,6 +9,7 @@ import { authenticateProfileCredential, readProfileCredentialFromHeaders } from 
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { readEvaluationHistory } from '@/core/insights/evaluation-index'
 import { projectEvaluationHistory } from '@/core/insights/evaluation-view'
+import { getPulseResultRepository } from '@/core/pulse-manager/pulse-result-repository'
 import type { APIOptions } from '@/core/http-server/http-server'
 
 const LOCAL_ADDRESSES = new Set(['::1', '127.0.0.1', '::ffff:127.0.0.1'])
@@ -66,6 +68,20 @@ export const insightsPlugin: FastifyPluginAsync<APIOptions> = async (fastify, op
   fastify.get(`${root}/telemetry`, async (_request, reply) => {
     reply.header('cache-control', 'no-store')
     return getTelemetrySetting()
+  })
+
+  fastify.get<{ Querystring: { page?: number } }>(`${root}/pulse`, {
+    schema: {
+      querystring: {
+        type: 'object', additionalProperties: false,
+        properties: { page: { type: 'integer', minimum: 0, maximum: 100_000 } }
+      }
+    }
+  }, async (request, reply) => {
+    reply.header('cache-control', 'private, no-store')
+    return getPulseResultRepository().readTickHistory(
+      request.query.page ?? 0, CONFIG_MANAGER.getConfig().runtime.pulse_enabled
+    )
   })
 
   fastify.put<{ Body: { enabled: boolean } }>(`${root}/telemetry`, {

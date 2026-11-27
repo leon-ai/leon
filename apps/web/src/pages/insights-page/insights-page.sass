@@ -126,5 +126,45 @@
     margin-top: var(--space-sm)
     overflow-wrap: anywhere
 
+  .insights-pulse-breakdown
+    display: flex
+    flex-wrap: wrap
+    gap: var(--space-sm) var(--space-lg)
+    margin: 0
+    color: var(--color-text-secondary)
+    font-size: var(--font-size-sm)
+
+    div
+      display: flex
+      gap: var(--space-xs)
+
+    dd
+      margin: 0
+      color: var(--color-text)
+      font-variant-numeric: tabular-nums
+
+  .insights-pulse-tick
+    border-bottom: 1px solid var(--color-border-secondary)
+    overflow-wrap: anywhere
+
+    > summary
+      padding-block: var(--space-sm)
+
+      small
+        display: block
+
+  .insights-pulse-events
+    display: grid
+    gap: var(--space-sm)
+
+    p
+      margin: 0
+
+  .insights-pulse-raw
+    padding: var(--space-sm)
+    border-radius: var(--border-radius-md)
+    background: var(--color-surface-elevated)
+    white-space: pre-wrap
+
   h3
     margin: 0

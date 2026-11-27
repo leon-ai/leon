@@ -1,6 +1,7 @@
 import { test, expect, SESSION_URL } from './fixtures'
 import type { ToolCatalogEntry } from '../../../server/src/core/tool-manager/tool-source'
-import type { EvaluationRun, EvaluationQuery } from '../../../server/src/core/insights/insights-contract'
+import { PulseTickOutcome, type EvaluationRun, type EvaluationQuery, type PulseInsights, type PulseTick }
+  from '../../../server/src/core/insights/insights-contract'
 import { projectEvaluationHistory } from '../../../server/src/core/insights/evaluation-view'
 import { SETTINGS_SECTIONS } from '../../../apps/web/src/data/settings-sections'
 import { CONNECTION_PREVIEWS, connectionPreviewView } from '../../fixtures/connections'
@@ -459,6 +460,68 @@ test('compares measured turns and controlled evaluations while sharing is off', 
   expect(nextChartBounds!.y).toBeGreaterThan(chartBounds!.y)
 
   expect(sharing).toBe(false)
+})
+
+test('inspects current and earlier Pulse activity across history pages', async ({ page, ui }) => {
+  const startedAt = Date.UTC(2028, 0, 15, 8)
+  const shared: PulseTick = {
+    id: 'shared', startedAt, trigger: 'scheduled', durationMs: 2_000, outcome: PulseTickOutcome.Shared,
+    investigated: true, matter: 'Showcase proposals',
+    events: [
+      { at: startedAt, phase: 'planning', code: 'lead_selected', detail: 'I was waiting for proposals to open.' },
+      { at: startedAt, phase: 'research', code: 'tool_calls', detail: 'Checked the organizer’s page.',
+        toolCalls: 1, tools: [{ name: 'search_web.crawlberg.fetchUrl', status: 'success' }] },
+      { at: startedAt, phase: 'delivery', code: 'finding_shared', detail: 'Shared the finding in the conversation.' }
+    ]
+  }
+  const saved: PulseTick = {
+    ...shared, id: 'saved', outcome: PulseTickOutcome.Saved, matter: 'Proposal requirements',
+    events: [{ at: startedAt, phase: 'storage', code: 'finding_saved', detail: 'Saved a draft for later.' }]
+  }
+  const skipped: PulseTick = {
+    ...shared, id: 'skipped', outcome: PulseTickOutcome.Skipped, investigated: false, matter: null,
+    trigger: null, durationMs: null, recovered: true,
+    events: [{ at: startedAt, phase: 'tick', code: 'recorded_note', detail: 'Skipped during our conversation.' }]
+  }
+  const nextFollowUp = {
+    matter: 'Showcase proposals', question: 'Check when the demo schedule is published.',
+    checkAt: startedAt + 3_600_000, expiresAt: startedAt + 7_200_000
+  }
+
+  await page.route('**/api/v1/insights/pulse?**', (route) => {
+    expect(route.request().headers()['x-leon-insights-profile']).toBe(ui.profile)
+    const index = Number(new URL(route.request().url()).searchParams.get('page'))
+    const response: PulseInsights = {
+      page: index, pages: 2, enabled: true, total: 21, investigated: 2, nextFollowUp,
+      outcomes: { [PulseTickOutcome.Shared]: 1, [PulseTickOutcome.Saved]: 1, [PulseTickOutcome.Skipped]: 19 },
+      ticks: index === 0 ? [
+        shared, saved, ...Array.from({ length: 18 }, (_, tick) => ({ ...skipped, id: `skipped-${tick}` }))
+      ] : [skipped]
+    }
+
+    return route.fulfill({ json: response })
+  })
+  await page.goto('insights/pulse')
+  const dialog = page.getByRole('dialog', { name: 'Insights', exact: true })
+  await expect(dialog.getByRole('tab', { name: 'Pulse', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(dialog.getByText('Pulses', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: 'Pulse history' })).toBeVisible()
+  await expect(dialog.getByText('1 saved · 1 shared')).toBeVisible()
+  await expect(dialog.getByText(nextFollowUp.question)).toBeVisible()
+  await expect(dialog.getByText(shared.events[0]!.detail, { exact: true })).toBeHidden()
+  await dialog.locator('summary').filter({ hasText: 'Shared · Showcase proposals' }).press('Enter')
+  await expect(dialog.getByText(shared.events[0]!.detail, { exact: true })).toBeVisible()
+  await expect(dialog.getByText('search_web.crawlberg.fetchUrl', { exact: true })).toBeVisible()
+  await dialog.getByText('Raw events', { exact: true }).filter({ visible: true }).click()
+  await expect(dialog.getByText(/"code": "finding_shared"/)).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'Older', exact: true }).click()
+  await expect(dialog.getByText('Page 2 of 2')).toBeVisible()
+  await expect(dialog.getByText('1 saved · 1 shared')).toBeVisible()
+  await expect(dialog.getByText('Shared · Showcase proposals')).toHaveCount(0)
+  await expect(dialog.getByText(/Earlier record/)).toBeVisible()
+  await dialog.locator('summary').filter({ hasText: 'Skipped' }).click()
+  await expect(dialog.getByText('Skipped during our conversation.', { exact: true })).toBeVisible()
 })
 
 test('keeps the dialog trigger tooltip closed until a fresh hover or keyboard focus', async ({ page, ui }) => {

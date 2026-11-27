@@ -2,6 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import SQLite, { type Database } from 'better-sqlite3'
+import {
+  PULSE_INSIGHTS_RETENTION_DAYS, PulseTickOutcome, type PulseInsights, type PulseTick, type PulseTickEvent
+} from '@/core/insights/insights-contract'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { PROFILE_RUNTIME_MANAGER } from '@/core/profile-runtime/profile-runtime-manager'
 import { measurePulse } from '@/core/telemetry/pulse-measurements'
 
 export enum PulseDecision {
@@ -10,6 +15,12 @@ export enum PulseDecision {
   Notify = 'notify',
   Failed = 'failed',
   ResolvedInChat = 'resolved_in_chat'
+}
+
+export enum PulseResultDisposition {
+  Recorded,
+  Duplicate,
+  StaleFollowUp
 }
 
 export interface PulseResult {
@@ -22,6 +33,13 @@ export interface PulseResult {
   findingKey: string | null
   output: string | null
   checkedAt: string
+}
+
+export interface PulseTickNote {
+  at: string
+  outcome: 'idle' | 'queued' | 'executed' | 'skipped' | 'failed'
+  note: string
+  matterId: string | null
 }
 
 export interface PulseMatterLead {
@@ -61,7 +79,53 @@ export enum PulseArchiveReason {
 const RECENT_FINDINGS_LIMIT = 5
 const RECENT_ARCHIVED_MATTERS_LIMIT = 12
 export const MAX_OPEN_PULSE_MATTERS = 6
-const SILENT_RESULT_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000
+const DAY_MS = 86_400_000
+const SILENT_RESULT_RETENTION_MS = 30 * DAY_MS
+const TICK_RETENTION_MS = PULSE_INSIGHTS_RETENTION_DAYS * DAY_MS
+const TICK_PAGE_SIZE = 20
+const PULSE_DATABASE_VERSION = 1
+const MAX_RECOVERED_RESULT_CHARS = 1_200
+export const PULSE_STATE_FILENAME = '.leon-pulse-state.json'
+
+const RESULT_OUTCOMES: Partial<Record<PulseDecision, PulseTickOutcome>> = {
+  [PulseDecision.Silent]: PulseTickOutcome.Quiet,
+  [PulseDecision.Save]: PulseTickOutcome.Saved,
+  [PulseDecision.Notify]: PulseTickOutcome.Shared,
+  [PulseDecision.Failed]: PulseTickOutcome.Failed
+}
+
+function readPulseNotes(filename: string): PulseTickNote[] {
+  try {
+    const { recentTicks } = JSON.parse(fs.readFileSync(filename, 'utf8')) as { recentTicks?: unknown }
+    if (!Array.isArray(recentTicks)) {
+      return []
+    }
+
+    return recentTicks.filter((note): note is PulseTickNote =>
+      note && typeof note.at === 'string' && typeof note.note === 'string' &&
+      (note.matterId === null || typeof note.matterId === 'string') &&
+      (note.outcome === 'idle' || note.outcome === 'executed' || note.outcome === 'skipped' || note.outcome === 'failed')
+    )
+  } catch {
+    return []
+  }
+}
+
+function noteOutcome(note: PulseTickNote): PulseTickOutcome {
+  switch (note.outcome) {
+    case 'idle':
+      return PulseTickOutcome.Idle
+    case 'skipped':
+      return PulseTickOutcome.Skipped
+    case 'failed':
+      return PulseTickOutcome.Failed
+    case 'executed':
+      // Completed queue notes prefix the matter title with the research decision.
+      return RESULT_OUTCOMES[note.note.split(':', 1)[0] as PulseDecision] ?? PulseTickOutcome.Unknown
+    default:
+      return PulseTickOutcome.Unknown
+  }
+}
 
 /**
  * Keeps each research result under its matter, independently of the current queue.
@@ -69,9 +133,57 @@ const SILENT_RESULT_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000
 export class PulseResultRepository {
   private db: Database | undefined
   private readonly databasePath: string
+  private readonly statePath: string
 
-  public constructor(private readonly directory: string) {
+  public constructor(public readonly directory: string) {
     this.databasePath = path.join(directory, 'pulse.sqlite')
+    this.statePath = path.join(directory, PULSE_STATE_FILENAME)
+  }
+
+  /**
+   * Retains one bounded decision trail for each finished tick, including ticks without a matter.
+   */
+  public recordTick(tick: PulseTick): void {
+    const db = this.database(tick.startedAt)
+    db.transaction(() => {
+      this.insertTick(db, tick)
+      db.prepare('DELETE FROM ticks WHERE started_at < ?').run(tick.startedAt - TICK_RETENTION_MS)
+    })()
+  }
+
+  /**
+   * Counts the same retained history that the owner can inspect, independently of usage sharing.
+   */
+  public readTickHistory(requestedPage: number, enabled: boolean, now = Date.now()): PulseInsights {
+    const db = this.existingDatabase(now) ?? (fs.existsSync(this.statePath) ? this.database(now) : undefined)
+    const since = now - TICK_RETENTION_MS
+    const totals = db?.prepare(`
+      SELECT outcome, COUNT(*) AS total, SUM(investigated) AS investigated
+      FROM ticks WHERE started_at >= ? GROUP BY outcome
+    `).all(since) as { outcome: PulseTickOutcome, total: number, investigated: number }[] | undefined
+    const outcomes: PulseInsights['outcomes'] = {}
+    let total = 0
+    let investigated = 0
+    for (const row of totals ?? []) {
+      outcomes[row.outcome] = row.total
+      total += row.total
+      investigated += row.investigated
+    }
+
+    const pages = Math.ceil(total / TICK_PAGE_SIZE)
+    const page = Math.min(requestedPage, Math.max(0, pages - 1))
+    const rows = db?.prepare(`
+      SELECT tick FROM ticks WHERE started_at >= ? ORDER BY started_at DESC, id DESC
+      LIMIT ? OFFSET ?
+    `).all(since, TICK_PAGE_SIZE, page * TICK_PAGE_SIZE) as { tick: string }[] | undefined
+    const next = enabled ? this.openMatters(now)[0] : undefined
+    const nextFollowUp = next ? {
+      matter: next.lead.summary, question: next.lead.turnPrompt,
+      checkAt: next.checkAt, expiresAt: next.expiresAt
+    } : null
+
+    return { enabled, page, pages, total, investigated, outcomes, nextFollowUp,
+      ticks: rows?.map(({ tick }) => JSON.parse(tick) as PulseTick) ?? [] }
   }
 
   /**
@@ -82,13 +194,13 @@ export class PulseResultRepository {
     lead: PulseMatterLead,
     followUp: PulseFollowUp | null,
     scheduledCheckAt?: number
-  ): boolean {
+  ): PulseResultDisposition {
     const db = this.database()
-    const { recorded, newFinding, agenda, expired } = db.transaction(() => {
+    const { recorded, newFinding, agenda, expired, stale } = db.transaction(() => {
       if (scheduledCheckAt !== undefined && !db.prepare(`
         SELECT 1 FROM matters WHERE id = ? AND check_at = ? AND archive_reason IS NULL
       `).get(result.matterId, scheduledCheckAt)) {
-        return { recorded: false, newFinding: false }
+        return { recorded: false, newFinding: false, stale: true }
       }
 
       const knownFinding = result.findingKey && db.prepare(`
@@ -142,7 +254,11 @@ export class PulseResultRepository {
     if (expired) {
       measurePulse({ counter: 'expired', count: 1 })
     }
-    return recorded
+    if (stale) {
+      return PulseResultDisposition.StaleFollowUp
+    }
+
+    return recorded ? PulseResultDisposition.Recorded : PulseResultDisposition.Duplicate
   }
 
   /**
@@ -284,9 +400,9 @@ export class PulseResultRepository {
     return { scheduled: archiveReason === null, displaced }
   }
 
-  public saveUndelivered(id: string): void {
-    this.database().prepare('UPDATE results SET decision = ? WHERE id = ? AND decision = ?')
-      .run(PulseDecision.Save, id, PulseDecision.Notify)
+  public saveUndelivered(id: string): boolean {
+    return this.database().prepare('UPDATE results SET decision = ? WHERE id = ? AND decision = ?')
+      .run(PulseDecision.Save, id, PulseDecision.Notify).changes === 1
   }
 
   public recentFindings(matterId: string): Array<Pick<PulseResult, 'decision' | 'findingKey' | 'output'>> {
@@ -299,11 +415,86 @@ export class PulseResultRepository {
     `).all(matterId, RECENT_FINDINGS_LIMIT) as Array<Pick<PulseResult, 'decision' | 'findingKey' | 'output'>>
   }
 
-  private existingDatabase(): Database | undefined {
-    return this.db || (fs.existsSync(this.databasePath) ? this.database() : undefined)
+  private insertTick(db: Database, tick: PulseTick): void {
+    db.prepare(`
+      INSERT INTO ticks (id, started_at, outcome, investigated, tick)
+      VALUES (@id, @startedAt, @outcome, @investigated, @tick)
+    `).run({ ...tick, investigated: Number(tick.investigated), tick: JSON.stringify(tick) })
   }
 
-  private database(): Database {
+  private restoreTickHistory(db: Database, now: number): void {
+    db.transaction(() => {
+      const version = db.prepare('PRAGMA user_version').get() as { user_version: number }
+      if (version.user_version >= PULSE_DATABASE_VERSION) {
+        return
+      }
+
+      // A completed research note describes the same run as its SQLite result.
+      const first = db.prepare('SELECT MIN(started_at) AS at FROM ticks').get() as { at: number | null }
+      const before = first.at ?? now
+      const since = now - TICK_RETENTION_MS
+      const notes = readPulseNotes(this.statePath).filter(({ at }) => {
+        const date = Date.parse(at)
+        return date >= since && date < before
+      })
+      const notesByRun = new Map(notes.flatMap((note) => note.matterId && note.outcome !== 'skipped'
+        ? [[note.matterId, note] as const]
+        : []))
+      const matched = new Set<PulseTickNote>()
+      const results = db.prepare(`
+        SELECT id, summary, reason, decision, output, checked_at AS checkedAt
+        FROM results WHERE checked_at >= ? AND checked_at < ? AND decision != ?
+      `).all(new Date(since).toISOString(), new Date(before).toISOString(), PulseDecision.ResolvedInChat) as
+        Pick<PulseResult, 'id' | 'summary' | 'reason' | 'decision' | 'output' | 'checkedAt'>[]
+
+      for (const result of results) {
+        const outcome = RESULT_OUTCOMES[result.decision]
+        if (!outcome) {
+          continue
+        }
+
+        const note = notesByRun.get(result.id)
+        const at = Date.parse(result.checkedAt)
+        const events: PulseTickEvent[] = []
+        if (result.reason) {
+          events.push({ at, phase: 'planning', code: 'recorded_reason', detail: result.reason })
+        }
+        if (result.output) {
+          events.push({ at, phase: 'research', code: 'recorded_result', detail: result.output.slice(0, MAX_RECOVERED_RESULT_CHARS) })
+        }
+        if (note) {
+          matched.add(note)
+          events.push({ at: Date.parse(note.at), phase: 'tick', code: 'recorded_note', detail: note.note })
+        }
+
+        this.insertTick(db, {
+          id: `earlier:result:${result.id}`, startedAt: at, durationMs: null, trigger: null,
+          outcome, investigated: true, matter: result.summary, events, recovered: true
+        })
+      }
+
+      for (const [index, note] of notes.entries()) {
+        if (matched.has(note)) {
+          continue
+        }
+
+        const at = Date.parse(note.at)
+        this.insertTick(db, {
+          id: `earlier:note:${at}:${index}`, startedAt: at, durationMs: null, trigger: null,
+          outcome: noteOutcome(note), investigated: note.outcome === 'executed' || note.outcome === 'failed',
+          matter: null, events: [{ at, phase: 'tick', code: 'recorded_note', detail: note.note }],
+          recovered: true
+        })
+      }
+      db.exec(`PRAGMA user_version = ${PULSE_DATABASE_VERSION}`)
+    }).immediate()
+  }
+
+  private existingDatabase(historyBefore?: number): Database | undefined {
+    return this.db || (fs.existsSync(this.databasePath) ? this.database(historyBefore) : undefined)
+  }
+
+  private database(historyBefore = Date.now()): Database {
     if (!this.db) {
       fs.mkdirSync(this.directory, { recursive: true, mode: 0o700 })
       const db = new SQLite(this.databasePath)
@@ -338,13 +529,31 @@ export class PulseResultRepository {
           ON matters (check_at) WHERE archive_reason IS NULL;
         CREATE INDEX IF NOT EXISTS archived_matters_by_age
           ON matters (updated_at DESC) WHERE archive_reason IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS ticks (
+          id TEXT PRIMARY KEY,
+          started_at INTEGER NOT NULL,
+          outcome TEXT NOT NULL,
+          investigated INTEGER NOT NULL,
+          tick TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ticks_by_start ON ticks (started_at DESC, id DESC);
       `)
       if (!db.prepare('SELECT 1 FROM pragma_table_info(\'results\') WHERE name = \'source_message_id\'').get()) {
         db.exec('ALTER TABLE results ADD COLUMN source_message_id TEXT')
       }
+      this.restoreTickHistory(db, historyBefore)
       this.db = db
     }
 
     return this.db
   }
+}
+
+/**
+ * Gives the scheduler and Insights the same profile-owned history without starting inference.
+ */
+export function getPulseResultRepository(): PulseResultRepository {
+  return PROFILE_RUNTIME_MANAGER.getService('pulse-results', () =>
+    new PulseResultRepository(path.join(getProfilePaths().context, 'private'))
+  )
 }
