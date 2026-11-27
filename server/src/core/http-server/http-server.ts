@@ -163,15 +163,29 @@ export default class HTTPServer {
     LogHelper.info(`Routing mode: ${routingMode}`)
     LogHelper.info(`${llmDisplay.heading}: ${llmDisplay.value}`)
     LogHelper.info(`Mood: ${PERSONA.mood.type}`)
-    LogHelper.info(
-      `GPU: ${(await SystemHelper.getGPUDeviceNames())[0] || 'unknown'}`
-    )
-    LogHelper.info(
-      `Graphics compute API: ${await SystemHelper.getGraphicsComputeAPI()}`
-    )
-    LogHelper.info(`Total VRAM: ${await SystemHelper.getTotalVRAM()} GB`)
 
     await this.bootstrap()
+
+    // Native hardware inspection can load GPU libraries before it returns.
+    // The client only needs the HTTP listener to check server readiness.
+    void this.logHardwareInformation().catch((error: Error) => {
+      LogHelper.warning(`Could not log hardware information: ${error.message}`)
+    })
+  }
+
+  /**
+   * Reports the hardware snapshot without delaying HTTP startup.
+   */
+  private async logHardwareInformation(): Promise<void> {
+    const [devices, api, vram] = await Promise.all([
+      SystemHelper.getGPUDeviceNames(),
+      SystemHelper.getGraphicsComputeAPI(),
+      SystemHelper.getTotalVRAM()
+    ])
+
+    LogHelper.info(`GPU: ${devices[0] || 'unknown'}`)
+    LogHelper.info(`Graphics compute API: ${api}`)
+    LogHelper.info(`Total VRAM: ${vram} GB`)
   }
 
   /**
