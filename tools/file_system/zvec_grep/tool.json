@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "$schema": "../../../schemas/tool-schemas/tool.json",
   "tool_id": "zvec_grep",
   "toolkit_id": "file_system",
@@ -14,7 +14,7 @@
     "search": {
       "read_only": true,
       "description": "Retrieve ranked passages from attached local folders. Omit paths to search Leon's codebase. Creates or incrementally refreshes a persistent local search index, including additions, changes and deletions, before searching.",
-      "progressive_guidance": "Use the active workspace's folder resource locations as paths. Resource devices identify where the folders live; route execution through the corresponding Satellite when needed. Search each relevant folder, then read cited current files with file.read to verify exact facts. Results have independent per-folder rankings and are not an exhaustive inventory. Use ripgrep for exhaustive exact matches. Indexes store derived data under each source's .zvec-grep directory; original files are not edited. Local embeddings need no external account; first use can download the configured model. Links and Notion content require their connected tools. Report unavailable sources rather than treating them as having no matches. Never request remote embeddings, rebuild existing indexes or install agent integrations through shell as a search workaround.",
+      "progressive_guidance": "Use the active workspace's folder resource locations as paths. Resource devices identify where the folders live; route execution through the corresponding Satellite when needed. Search each relevant folder, then read cited current files with file.read to verify exact facts. Results have independent per-folder rankings and are not an exhaustive inventory. Use ripgrep for exhaustive exact matches or a bounded local search when indexing skips a source that overlaps remote storage. Indexes store derived data under each source's .zvec-grep directory; original files are not edited. Local embeddings need no external account; first use can download the configured model. Links and Notion content require their connected tools. Report unavailable sources rather than treating them as having no matches. Never request remote embeddings, rebuild existing indexes or install agent integrations through shell as a search workaround.",
       "timeout": { "idleMs": 120000, "totalMs": 900000 },
       "parameters": {
         "type": "object",

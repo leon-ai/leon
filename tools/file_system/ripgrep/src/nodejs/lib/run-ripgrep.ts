@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 const MAX_OUTPUT_BYTES = 128 * 1_024 * 1_024
 const MAX_RECORD_BYTES = 8 * 1_024 * 1_024
 const MAX_ERROR_BYTES = 16 * 1_024
+const MACOS_DATALESS_ERROR = /\(os error 11\)$/u
 
 /**
  * Stream records without a shell. The SDK command helper does not expose exit
@@ -14,13 +15,15 @@ export async function runRipgrep(
   timeoutMs: number,
   separator: number,
   consume: (record: Buffer) => boolean | Promise<boolean>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  cwd?: string
 ): Promise<{ truncated: boolean, reason: string | null }> {
   if (signal?.aborted) {
     throw new Error('ripgrep execution canceled')
   }
 
   const child = spawn(binary, args, {
+    cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
     windowsHide: true
@@ -91,9 +94,16 @@ export async function runRipgrep(
     if (outcome.error) {
       throw new Error(`Cannot run ripgrep binary ${binary}: ${outcome.error.message}`)
     }
-    // Never present a read error or invalid regex as an empty, complete search.
+    // The macOS launcher forbids downloads. Preserve partial matches when the
+    // only error was the OS declining to materialize files or directories.
     if (outcome.code !== null && outcome.code !== 0 && outcome.code !== 1) {
-      throw new Error(`ripgrep exited with code ${outcome.code}: ${stderr.toString('utf8').trim()}`)
+      const diagnostic = stderr.toString('utf8').trim()
+      if (process.platform === 'darwin' && outcome.code === 2 && diagnostic &&
+        stderr.length < MAX_ERROR_BYTES && diagnostic.split('\n').every((line) => MACOS_DATALESS_ERROR.test(line))) {
+        reason ??= 'onlineOnlyEntriesSkipped'
+      } else {
+        throw new Error(`ripgrep exited with code ${outcome.code}: ${diagnostic}`)
+      }
     }
     if (!reason && outcome.signal) {
       throw new Error(`ripgrep terminated by ${outcome.signal}`)

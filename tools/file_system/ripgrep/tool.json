@@ -3,7 +3,7 @@
   "tool_id": "ripgrep",
   "toolkit_id": "file_system",
   "name": "ripgrep",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Fast, bounded, read-only local content search and file discovery with ripgrep. Prefer over shell rg/grep/find for filesystem search.",
   "icon_name": "file-search-line",
   "distribution": "built-in",
@@ -159,5 +159,5 @@
     "win-amd64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
     "win-arm64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-pc-windows-msvc.zip"
   },
-  "progressive_guidance": "Uses Leon-managed upstream rg. Searches are read-only and shell-free, skip recursive symlinks, and respect hidden/ignore rules unless requested otherwise. Include globs override ignore rules. Literal content matching is the default; set regex for Rust regex syntax. Filename discovery ignores case by default. Uses automatic threading without sorting. File and match inventories stream to session storage; files/matches contain only a small inline preview. preview.truncated means more saved records are available through system_utilities.tool_executions.read with the same .result.files/.result.matches jq paths; do not rescan for counts or groups. A storage/record limit or timeout sets truncated=true and summary.complete=false; counts are exact only when complete. Text uses {text} or base64 {bytes} for non-UTF-8 data."
+  "progressive_guidance": "Uses Leon-managed upstream rg. Searches are read-only and shell-free, skip recursive symlinks, and respect hidden/ignore rules unless requested otherwise. Report skipped cloud or remote paths as partial search coverage. Include globs override ignore rules. Literal content matching is the default; set regex for Rust regex syntax. Filename discovery ignores case by default. Uses automatic threading without sorting. File and match inventories stream to session storage; files/matches contain only a small inline preview. preview.truncated means more saved records are available through system_utilities.tool_executions.read with the same .result.files/.result.matches jq paths; do not rescan for counts or groups. A storage/record limit or timeout sets truncated=true and summary.complete=false; counts are exact only when complete. Text uses {text} or base64 {bytes} for non-UTF-8 data."
 }

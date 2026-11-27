@@ -8,6 +8,8 @@ import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { terminateProcessTree } from '@sdk/utils/process'
 import { CODEBASE_PATH, PROFILE_TOOLS_PATH } from '@bridge/constants'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { getRemoteSearchRoots, localSearchCommand, localSearchScope } from '@@/bridges/runtime/nodejs/local-search'
 
 const require = createRequire(import.meta.url)
 const DEFAULT_SETTINGS = { embedding: 'local/potion-code-16m-v2' }
@@ -68,14 +70,24 @@ export default class ZvecGrepTool extends Tool {
     }
     const sources: SourceResult[] = []
     const seen = new Set<string>()
+    const remoteRoots = await getRemoteSearchRoots(this.executionContext?.signal)
     for (const source of paths) {
       this.executionContext?.signal?.throwIfAborted()
       try {
-        const root = await fs.realpath(source)
+        if (localSearchScope([path.resolve(source)], remoteRoots, false).excluded.length) {
+          throw new Error('Workspace indexing skipped this source because it overlaps remote or cloud storage.')
+        }
+
+        // The macOS launcher enters the source only after disabling downloads.
+        const root = process.platform === 'darwin' ? path.resolve(source) : await fs.realpath(source)
         if (seen.has(root)) {
           continue
         }
-        if (!(await fs.stat(root)).isDirectory()) {
+        if (localSearchScope([root], remoteRoots, false).excluded.length) {
+          throw new Error('Workspace indexing skipped this source because it overlaps remote or cloud storage.')
+        }
+
+        if (process.platform !== 'darwin' && !(await fs.stat(root)).isDirectory()) {
           throw new Error('This resource is not a folder.')
         }
         seen.add(root)
@@ -102,8 +114,10 @@ export default class ZvecGrepTool extends Tool {
     signal?.throwIfAborted()
     const executable = path.join(path.dirname(require.resolve('@zvec/zvec-grep/package.json')), 'bin', 'zg.exe')
     const home = path.join(PROFILE_TOOLS_PATH, this.toolkit, this.toolName, 'runtime')
-    const child = spawn(executable, [...args, '--mode', 'direct', '--home', home], {
-      cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true
+    const command = localSearchCommand(executable, [...args, '--mode', 'direct', '--home', home],
+      () => RuntimeHelper.getPythonBinPath(), { cwd })
+    const child = spawn(command.binary, command.args, {
+      cwd: command.cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true
     })
     let stdout = ''
     let stderr = ''

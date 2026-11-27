@@ -7,6 +7,8 @@ import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { FileHelper } from '@/helpers/file-helper'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { getRemoteSearchRoots, localSearchCommand, localSearchScope } from '@@/bridges/runtime/nodejs/local-search'
 
 import { runRipgrep } from './lib/run-ripgrep'
 
@@ -59,11 +61,20 @@ interface SearchResult {
   files?: TextData[]
   count?: number
   paths: string[]
+  skippedPaths?: string[]
   truncated: boolean
   reason: string | null
   summary: { returnedRecords: number, complete: boolean }
   preview?: { returnedRecords: number, truncated: boolean }
   retainedOutput?: { path: string }
+}
+
+interface PreparedSearch {
+  args: string[]
+  paths: string[]
+  localPaths: string[]
+  skippedPaths: string[]
+  cwd?: string
 }
 
 /**
@@ -121,10 +132,10 @@ export default class RipgrepTool extends Tool {
     if (!options.regex) {
       args.push('--fixed-strings')
     }
-    args.push('--regexp', pattern, '--', ...prepared.paths)
+    args.push('--regexp', pattern, '--', ...prepared.localPaths)
 
     if (mode === SearchResultMode.Count) {
-      const outcome = await this.run(args, separator, (record) => {
+      const outcome = await this.run(args, separator, prepared, (record) => {
         const fileCount = Number(record.toString('ascii'))
         if (!Number.isSafeInteger(fileCount) || fileCount < 0 || !Number.isSafeInteger(count + fileCount)) {
           throw new Error('Invalid ripgrep count record')
@@ -136,6 +147,7 @@ export default class RipgrepTool extends Tool {
       return {
         count,
         paths: prepared.paths,
+        ...(prepared.skippedPaths.length ? { skippedPaths: prepared.skippedPaths } : {}),
         summary: { returnedRecords: count, complete: !outcome.truncated },
         ...outcome
       }
@@ -144,7 +156,7 @@ export default class RipgrepTool extends Tool {
     return this.collect(
       args,
       separator,
-      prepared.paths,
+      prepared,
       mode === SearchResultMode.Files ? 'files' : 'matches',
       (record) => {
         if (mode === SearchResultMode.Files) {
@@ -164,9 +176,9 @@ export default class RipgrepTool extends Tool {
   async listFiles(paths: string[], options: FileOptions = {}): Promise<SearchResult> {
     const prepared = await this.prepare(paths, options, options?.ignoreCase ?? true)
     return this.collect(
-      [...prepared.args, '--files', '--null', '--', ...prepared.paths],
+      [...prepared.args, '--files', '--null', '--', ...prepared.localPaths],
       0,
-      prepared.paths,
+      prepared,
       'files',
       (record) => this.filename(record)
     )
@@ -178,7 +190,7 @@ export default class RipgrepTool extends Tool {
   private async collect(
     args: string[],
     separator: number,
-    paths: string[],
+    prepared: PreparedSearch,
     field: 'files' | 'matches',
     decode: (record: Buffer) => TextData | MatchData | null
   ): Promise<SearchResult> {
@@ -208,7 +220,7 @@ export default class RipgrepTool extends Tool {
 
     try {
       await file.writeFile(`{"result":{"${field}":[`)
-      const outcome = await this.run(args, separator, async (record) => {
+      const outcome = await this.run(args, separator, prepared, async (record) => {
         const value = decode(record)
 
         if (value === null) {
@@ -250,7 +262,8 @@ export default class RipgrepTool extends Tool {
       this.executionContext?.signal?.throwIfAborted()
 
       const metadata = {
-        paths,
+        paths: prepared.paths,
+        ...(prepared.skippedPaths.length ? { skippedPaths: prepared.skippedPaths } : {}),
         summary: { returnedRecords: records, complete: !outcome.truncated },
         ...outcome
       }
@@ -280,10 +293,7 @@ export default class RipgrepTool extends Tool {
     }
   }
 
-  private async prepare(paths: string[], options: FileOptions, insensitiveGlobs: boolean): Promise<{
-    args: string[]
-    paths: string[]
-  }> {
+  private async prepare(paths: string[], options: FileOptions, insensitiveGlobs: boolean): Promise<PreparedSearch> {
     if (!Array.isArray(paths) || paths.length === 0 || paths.length > MAX_PATHS) {
       throw new Error(`Provide 1 to ${MAX_PATHS} file or directory paths`)
     }
@@ -296,17 +306,12 @@ export default class RipgrepTool extends Tool {
       }
     }
 
-    const resolved = await Promise.all(paths.map(async (input) => {
+    const resolved = paths.map((input) => {
       if (typeof input !== 'string' || !input || input.includes('\0')) {
         throw new Error('Paths must be non-empty strings without NUL bytes')
       }
-      const absolute = path.resolve(FileHelper.expandHomeAlias(input))
-      const stat = await fs.stat(absolute)
-      if (!stat.isDirectory() && !stat.isFile()) {
-        throw new Error(`Not a regular file or directory: ${absolute}`)
-      }
-      return absolute
-    }))
+      return path.resolve(FileHelper.expandHomeAlias(input))
+    })
 
     // Disable ambient configuration, including arbitrary preprocessors.
     const args = ['--no-config', '--color', 'never', '--threads', String(THREADS)]
@@ -328,17 +333,46 @@ export default class RipgrepTool extends Tool {
       }
     }
 
-    return { args, paths: resolved }
+    const remoteRoots = await getRemoteSearchRoots(this.executionContext?.signal)
+    // Root-specific user globs must keep their original working-directory semantics.
+    const canExcludeDescendants = !options.globs?.some((glob) => glob.includes('/') || glob.includes('\\'))
+    const initialScope = localSearchScope(resolved, remoteRoots, canExcludeDescendants)
+    // On macOS even a metadata lookup can materialize intermediate folders.
+    const canonical = process.platform === 'darwin' ? initialScope.paths : await Promise.all(initialScope.paths.map(async (source) => {
+      const actual = remoteRoots.length ? await fs.realpath(source) : source
+      const stat = await fs.stat(actual)
+      if (!stat.isDirectory() && !stat.isFile()) {
+        throw new Error(`Not a regular file or directory: ${source}`)
+      }
+      return actual
+    }))
+    const scope = localSearchScope(canonical, remoteRoots, canExcludeDescendants)
+    for (const glob of scope.globs) {
+      args.push(insensitiveGlobs || process.platform === 'win32' ? '--iglob' : '--glob', glob)
+    }
+
+    return {
+      args,
+      paths: resolved,
+      localPaths: scope.paths,
+      skippedPaths: [...new Set([...initialScope.excluded, ...scope.excluded])],
+      ...(scope.cwd ? { cwd: scope.cwd } : {})
+    }
   }
 
   private async run(
     args: string[],
     separator: number,
+    prepared: PreparedSearch,
     consume: (record: Buffer) => boolean | Promise<boolean>
   ): Promise<{
     truncated: boolean
     reason: string | null
   }> {
+    if (!prepared.localPaths.length) {
+      return { truncated: true, reason: 'remotePathsSkipped' }
+    }
+
     const binary = await this.getBinaryPath('rg')
     const group = `${this.toolkit}_${this.toolName}_${Date.now()}`
     await this.report('bridges.tools.executing_command', {
@@ -346,11 +380,17 @@ export default class RipgrepTool extends Tool {
     }, group)
 
     const started = Date.now()
-    const outcome = await runRipgrep(binary, args, SEARCH_TIMEOUT_MS, separator, consume, this.executionContext?.signal)
+    const command = localSearchCommand(binary, args, () => RuntimeHelper.getPythonBinPath(), {
+      paths: prepared.localPaths, cwd: prepared.cwd
+    })
+    const outcome = await runRipgrep(command.binary, command.args, SEARCH_TIMEOUT_MS, separator, consume,
+      this.executionContext?.signal, command.cwd)
     await this.report('bridges.tools.command_completed', {
       command: 'rg', execution_time: `${Date.now() - started}ms`
     }, group)
 
-    return outcome
+    return prepared.skippedPaths.length && !outcome.truncated
+      ? { truncated: true, reason: 'remotePathsSkipped' }
+      : outcome
   }
 }
