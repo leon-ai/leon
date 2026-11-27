@@ -13,7 +13,9 @@ export function summarizeTurnDiagnostics(turn: CompletedOwnerTurn): TurnDiagnost
     diagnostics.set('terminal', {
       kind: 'terminal', count: 1,
       phase: terminal?.phase ?? TurnPhase.Execution,
-      code: terminal?.code ?? (outcome === 'blocked' ? 'blocked' : turn.measurement.failure ?? 'unknown')
+      code: terminal?.code ?? (outcome === 'blocked' ? 'blocked' : turn.measurement.failure ?? 'unknown'),
+      ...(terminal?.inference ? { inference: terminal.inference } : {}),
+      ...(terminal?.diagnosticId ? { diagnosticId: terminal.diagnosticId } : {})
     })
   }
 

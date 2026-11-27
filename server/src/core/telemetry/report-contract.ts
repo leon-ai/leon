@@ -9,7 +9,9 @@ import { TurnClientOS, TurnClientType } from '../../../../bridges/runtime/contra
 import { getLLMModelCatalogEntries } from '../llm-manager/llm-model-catalog'
 import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '../llm-manager/local-model-catalog'
 import { LLMProviders } from '../llm-manager/types'
-import { OWNER_FAILURE_PHASES, OWNER_TURN_FAILURE_CODES, TURN_DIAGNOSTIC_CODES, TurnStage } from '../turn-lifecycle/observability/timing-contract'
+import {
+  INFERENCE_FAILURE_CODES, OWNER_FAILURE_PHASES, OWNER_TURN_FAILURE_CODES, TURN_DIAGNOSTIC_CODES, TurnPhase, TurnStage
+} from '../turn-lifecycle/observability/timing-contract'
 
 export const DAILY_REPORT_PATH = '/v1/daily'
 export const PRESENCE_REPORT_PATH = '/v1/presence'
@@ -37,6 +39,8 @@ export const LATENCY_BUCKETS_MS = [250, 500, 1_000, 2_000, 5_000, 10_000, 20_000
 export const INSTALLATION_MILESTONES = ['setup', 'first_query', 'ten_queries', 'first_answer', 'returning', 'day_7', 'day_30'] as const
 
 const identifier = Type.String({ pattern: '^[a-f0-9]{64}$' })
+const diagnosticId = Type.String({ pattern: '^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$' })
+const buildCommit = Type.String({ pattern: '^[a-f0-9]{40}$' })
 const count = Type.Integer({ minimum: 0, maximum: 1_000_000_000_000 })
 const total = Type.Number({ minimum: 0, maximum: 1_000_000_000_000 })
 const utcDay = Type.Integer({ minimum: 0, maximum: 100_000 })
@@ -86,7 +90,7 @@ export const dailyReportSchema = Type.Object({
   fleet: Type.Optional(Type.Object({
     os: serverOS,
     architecture: Type.Union([Type.Literal('arm64'), Type.Literal('x64'), Type.Literal('other')]),
-    buildCommit: Type.Optional(Type.String({ pattern: '^[a-f0-9]{40}$' })),
+    buildCommit: Type.Optional(buildCommit),
     timezoneOffset: Type.Optional(Type.Integer({ minimum: -12, maximum: 14 })),
     turnLatency: histogram,
     firstOutputLatency: histogram,
@@ -141,6 +145,7 @@ const turnDiagnosticSchema = Type.Object({
   phase: Type.Union(OWNER_FAILURE_PHASES.map((phase) => Type.Literal(phase))),
   code: Type.Union(TURN_DIAGNOSTIC_CODES.map((code) => Type.Literal(code))),
   count,
+  diagnosticId: Type.Optional(diagnosticId),
   inference: Type.Optional(Type.Object(publicModelProperties, { additionalProperties: false }))
 }, { additionalProperties: false })
 export type TurnDiagnostic = Static<typeof turnDiagnosticSchema>
@@ -240,7 +245,7 @@ export function isSessionActivityReport(value: unknown): value is SessionActivit
 }
 
 export const PULSE_COUNTERS = [
-  'idle', 'active_conversation', 'cooldown', 'provider_unavailable', 'tick_failed',
+  'idle', 'active_conversation', 'cooldown', 'provider_unavailable', 'tick_finished', 'tick_failed',
   'discovery_checked', 'followup_checked', 'followup_on_time', 'followup_late',
   'discovery_silent', 'followup_silent', 'discovery_duplicate', 'followup_duplicate',
   'discovery_saved', 'followup_saved', 'discovery_delivered', 'followup_delivered',
@@ -311,6 +316,8 @@ const pulseFailureSchema = Type.Object({
   scope: Type.Enum(PulseFailureScope),
   code: Type.Enum(PulseFailureCode),
   count,
+  diagnosticId: Type.Optional(diagnosticId),
+  causeCode: Type.Optional(Type.Union(INFERENCE_FAILURE_CODES.map((code) => Type.Literal(code)))),
   inference: Type.Optional(Type.Object(publicModelProperties, { additionalProperties: false }))
 }, { additionalProperties: false })
 export type PulseFailure = Static<typeof pulseFailureSchema>
@@ -319,6 +326,7 @@ const pulseReportSchema = Type.Object({
   kind: Type.Literal('pulse_metrics'), id: identifier, installation: identifier, profile: identifier, version,
   at: Type.Integer({ minimum: 0, maximum: 100_000 * TELEMETRY_DAY_MS }),
   os: Type.Optional(serverOS),
+  buildCommit: Type.Optional(buildCommit),
   counters: Type.Partial(Type.Object(Object.fromEntries(PULSE_COUNTERS.map((key) => [key, count])), { additionalProperties: false })),
   failures: Type.Optional(Type.Array(pulseFailureSchema, { maxItems: TELEMETRY_MAX_PULSE_BUCKETS })),
   usage: Type.Array(Type.Object({ ...modelProperties, stage: Type.Enum(PulseStage), costMicros: count, costSamples: count },
@@ -343,11 +351,12 @@ export function isPulseReport(value: unknown): value is PulseReport {
   }
 
   const totals = new Map<PulseFailureScope, number>()
-  for (const { scope, code, count, inference } of value.failures ?? []) {
+  for (const { scope, code, count, inference, causeCode } of value.failures ?? []) {
     const { phase } = PULSE_FAILURE_DETAILS[code]
     const tickFailure = phase === 'tick' || phase === 'agenda' || phase === 'evidence' || phase === 'planning'
     const total = (totals.get(scope) ?? 0) + count
     if (count === 0 || tickFailure !== (scope === PulseFailureScope.Tick) ||
+      (causeCode !== undefined && code !== PulseFailureCode.PlanningInference) ||
       (inference && (!isPublicModelLabel(inference) || (phase !== 'planning' && phase !== 'research' && phase !== 'review'))) ||
       total > (value.counters[getPulseFailureCounter(scope)] ?? 0)) {
       return false
@@ -386,9 +395,10 @@ export function isTelemetryEventReport(value: unknown): value is TelemetryEventR
   if (turnDiagnostics !== undefined) {
     const terminal = turnDiagnostics.filter((row) => row.kind === 'terminal')
     if (value.kind !== 'turn_finished' || terminal.length !== report.failed + (report.blocked ?? 0) ||
-      !turnDiagnostics.every((row) => row.kind === 'terminal'
-        ? row.count === 1 && row.inference === undefined && (row.code === 'blocked') === Boolean(report.blocked)
-        : row.count > 0 && row.code !== 'blocked' && (!row.inference || isPublicModelLabel(row.inference)))) {
+      !turnDiagnostics.every((row) => (!row.inference || isPublicModelLabel(row.inference)) && (row.kind === 'terminal'
+        ? row.count === 1 && (!row.inference || row.phase === TurnPhase.Provider) &&
+          (row.code === 'blocked') === Boolean(report.blocked)
+        : row.count > 0 && row.code !== 'blocked' && row.diagnosticId === undefined))) {
       return false
     }
   }

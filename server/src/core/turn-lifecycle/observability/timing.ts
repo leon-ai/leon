@@ -15,11 +15,11 @@ import {
   type TurnTiming, type TurnTimingContext, type InferenceActivity, type OwnerTurnFailureCode,
   type OwnerTurnOutcome, type OwnerFailurePhase, type TurnDiagnosticCode
 } from './timing-contract'
-import { classifyTurnFailure } from './failure'
+import { classifyInferenceFailure, classifyTurnFailure, InferenceDiagnosticError, logFailureDiagnostic } from './failure'
 import { readContextUsage, type ContextUsageMetrics } from '../../llm-manager/llm-usage/context-usage'
 import type { InferenceUsage } from '../../llm-manager/llm-usage/usage-context'
 import type { InferenceUsageRecord } from '../../llm-manager/llm-usage/usage-ledger'
-import { TELEMETRY_MAX_CAPABILITY_BUCKETS, type CapabilityUsage } from '@/core/telemetry/report-contract'
+import { TELEMETRY_MAX_CAPABILITY_BUCKETS, type CapabilityUsage, type TurnDiagnostic } from '@/core/telemetry/report-contract'
 import { getTurnClient } from '@/core/leon-interface/turn-client'
 import type { TurnClient } from '@@/bridges/runtime/contracts/turn-client'
 
@@ -31,7 +31,7 @@ interface OwnerTurnMeasurement {
   outcome: OwnerTurnOutcome
   context?: ContextUsageMetrics
   failure?: OwnerTurnFailureCode
-  terminal?: { phase: OwnerFailurePhase, code: TurnDiagnosticCode }
+  terminal?: Omit<TurnDiagnostic, 'kind' | 'count'>
 }
 
 export interface CompletedOwnerTurn {
@@ -52,13 +52,6 @@ interface PulseQueueSample { model: string, waitMs: number, pulseActive: boolean
 type ForegroundInferenceUsage = Pick<InferenceUsageRecord, 'provider' | 'model' | 'outcome' | 'usage'>
 
 const MAXIMUM_TURN_TIMINGS = 10_000
-const MODEL_FAILURE_CODES: Record<CompletionFailureKind, TurnDiagnosticCode> = {
-  [CompletionFailureKind.Timeout]: 'timeout',
-  [CompletionFailureKind.Connection]: 'connection',
-  [CompletionFailureKind.Context]: 'context_limit',
-  [CompletionFailureKind.Unavailable]: 'provider_unavailable',
-  [CompletionFailureKind.Provider]: 'provider_error'
-}
 
 export interface MaintenanceTaskResult {
   outcome: 'completed' | 'skipped' | 'rejected' | 'failed'
@@ -276,6 +269,10 @@ export function recordOwnerTurn(
   const scope = storage.getStore()
   if (scope && !scope.state.closed) {
     const context = readContextUsage(metrics)
+    if (outcome === 'failed' && terminal && !terminal.diagnosticId) {
+      terminal = { ...terminal, diagnosticId: randomUUID() }
+      logFailureDiagnostic(`Turn diagnostic ${terminal.diagnosticId}: ${terminal.phase}/${terminal.code}`)
+    }
     scope.state.ownerTurn = { version: PACKAGE.version, client: getTurnClient(), outcome, ...(context ? { context } : {}),
       ...(failure && outcome === 'failed' ? { failure } : {}), ...(terminal ? { terminal } : {}) }
   }
@@ -294,9 +291,18 @@ export function recordOwnerTurnError(error: unknown, signal?: AbortSignal): void
     return
   }
 
-  const code = classifyTurnFailure(error)
-  const phase = error && typeof error === 'object' ? scope.state.failedPhases?.get(error) : undefined
-  recordOwnerTurn('failed', undefined, code, { phase: phase ?? TurnPhase.Execution, code })
+  const diagnosticId = randomUUID()
+  const providerError = error instanceof InferenceDiagnosticError ? error : undefined
+  const failure = classifyTurnFailure(providerError?.cause ?? error)
+  const phase = (error && typeof error === 'object' ? scope.state.failedPhases?.get(error) : undefined) ?? TurnPhase.Execution
+  const inference = providerError?.inference
+  const code = providerError?.diagnosticCode ?? failure
+
+  logFailureDiagnostic(`Turn diagnostic ${diagnosticId} (${phase}/${code}): ${String(providerError?.cause ?? error)}`)
+  recordOwnerTurn('failed', undefined, failure, {
+    phase, code, diagnosticId,
+    ...(inference && phase === TurnPhase.Provider ? { inference } : {})
+  })
 }
 
 /**
@@ -416,10 +422,9 @@ export function recordTurnInference(timing: CompletionAttemptTiming, error?: unk
   const parent = scope.parentId ? scope.state.timings.get(scope.parentId) : undefined
   const outputTimes = [timing.firstReasoningTokenMs, timing.firstTokenMs, timing.firstToolInputMs]
     .filter((value): value is number => value !== undefined && Number.isFinite(value))
-  const code = error === undefined ? 'unknown' : classifyTurnFailure(error)
-  const failureCode = !canceled && timing.failureKind !== undefined && timing.outcome !== 'canceled' &&
+  const failureCode = !canceled && timing.outcome !== 'canceled' &&
     (timing.outcome !== 'AbortError' || timing.failureKind === CompletionFailureKind.Timeout)
-    ? code === 'unknown' ? MODEL_FAILURE_CODES[timing.failureKind] : code
+    ? timing.diagnosticCode ?? classifyInferenceFailure(error, timing.failureKind, timing.connectionErrorCode)
     : undefined
   scope.state.timings.set(timing.attemptId, {
     stage: scope.stage,

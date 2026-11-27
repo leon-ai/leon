@@ -4,7 +4,9 @@ import { SERVER_CORE_PATH } from '@/constants'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
 import { runTurnPhase, TurnPhase } from '../turn-lifecycle/observability/timing'
+import { classifyInferenceFailure, InferenceDiagnosticError } from '../turn-lifecycle/observability/failure'
 import { LOCAL_SERVER_PROVIDERS } from '@/core/llm-manager/llm-provider/llm-provider-constants'
+import { getConnectionErrorCode } from '@/core/llm-manager/llm-provider/provider-request-activity'
 import { prepareCompletionRequest } from '@/core/llm-manager/llm-provider/llm-provider-request'
 import { cleanUpResult } from '@/core/llm-manager/llm-provider/llm-provider-response'
 import {
@@ -24,6 +26,7 @@ import {
 } from '@/core/llm-manager/types'
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getPublicModel } from '@/core/telemetry/report-contract'
 import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 import { trackInferenceUsage } from '@/core/llm-manager/llm-usage'
 import { getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
@@ -386,7 +389,7 @@ export default class LLMProvider {
       : modelState.getWorkflowProvider()
 
     if (!providerName) {
-      throw new Error(LLM_PROVIDER_NOT_READY_MESSAGE)
+      throw new InferenceDiagnosticError(LLM_PROVIDER_NOT_READY_MESSAGE, 'provider_unavailable')
     }
 
     return providerName
@@ -445,12 +448,26 @@ export default class LLMProvider {
       return cachedProvider
     }
 
-    const provider = await this.createProvider(target)
+    try {
+      const provider = await this.createProvider(target)
 
-    await provider.boot?.()
-    this.sessionLLMProviders.set(cacheKey, provider)
+      await provider.boot?.()
+      this.sessionLLMProviders.set(cacheKey, provider)
 
-    return provider
+      return provider
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error
+      }
+
+      const code = classifyInferenceFailure(error, undefined, getConnectionErrorCode(error))
+      const message = error instanceof Error ? error.message : String(error)
+
+      throw new InferenceDiagnosticError(message, code ?? 'provider_startup', {
+        cause: error,
+        ...(target.provider ? { inference: getPublicModel(target.provider, target.model) } : {})
+      })
+    }
   }
 
   private getUnavailableProviderMessage(target: ResolvedLLMTarget): string {
@@ -528,8 +545,10 @@ export default class LLMProvider {
   ): Promise<CompletionResult | null> {
     completionParams.cancellationSignal?.throwIfAborted()
     completionParams.dutyType = completionParams.dutyType ?? null
-    const providerName = this.getProviderNameForDuty(completionParams.dutyType)
-    const provider = await this.resolveProviderForDuty(completionParams.dutyType)
+    const { providerName, provider } = await runTurnPhase(TurnPhase.Provider, async () => ({
+      providerName: this.getProviderNameForDuty(completionParams.dutyType),
+      provider: await this.resolveDutyProvider(completionParams.dutyType)
+    }))
     completionParams.cancellationSignal?.throwIfAborted()
     const trackProviderErrors = completionParams.trackProviderErrors !== false
     if (trackProviderErrors) {

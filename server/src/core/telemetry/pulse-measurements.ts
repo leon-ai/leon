@@ -68,18 +68,19 @@ export function measurePulse(measurement: Measurement, profile?: string): void {
     if ('counter' in measurement) {
       batch.counters[measurement.counter] = (batch.counters[measurement.counter] ?? 0) + measurement.count
     } else if ('failure' in measurement) {
-      const { code, scope, inference } = measurement.failure
+      const { code, scope, inference, causeCode } = measurement.failure
       const counter = getPulseFailureCounter(scope)
       batch.counters[counter] = (batch.counters[counter] ?? 0) + 1
 
       const failures = batch.failures ??= []
-      const existing = failures.find((row) => row.code === code && row.scope === scope &&
+      const existing = failures.find((row) => row.code === code && row.scope === scope && row.causeCode === causeCode &&
         row.inference?.provider === inference?.provider && row.inference?.model === inference?.model &&
         row.inference?.quantization === inference?.quantization)
       if (existing) {
         existing.count++
       } else if (failures.length < TELEMETRY_MAX_PULSE_BUCKETS) {
-        failures.push({ code, scope, count: 1, ...(inference ? { inference } : {}) })
+        // Keep one local log reference per group even when a batch contains repeated failures.
+        failures.push({ ...measurement.failure, count: 1 })
       }
     } else if ('stage' in measurement) {
       const { stage, usage: entry } = measurement

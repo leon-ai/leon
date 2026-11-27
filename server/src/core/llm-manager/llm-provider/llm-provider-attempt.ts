@@ -40,6 +40,7 @@ import type {
 } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   LLMProviders,
+  CompletionFailureKind,
   ProviderRetryReason,
   type CompletionParams,
   type CompletionStreamEvent,
@@ -54,6 +55,7 @@ import {
 import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { LogHelper } from '@/helpers/log-helper'
 import { getTurnTimingContext, recordTurnInference } from '../../turn-lifecycle/observability/timing'
+import { classifyInferenceFailure, InferenceDiagnosticError } from '../../turn-lifecycle/observability/failure'
 import { recordInferenceAttempt, recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
 import { describeProviderConnectionFailure, ProviderRequestActivity } from './provider-request-activity'
 
@@ -134,6 +136,13 @@ export async function runCompletionAttempt(
   )
   const logAttempt = (outcome: string, error?: unknown): void => {
     const failed = outcome !== 'started' && outcome !== 'completed'
+    const failureKind = error ? getCompletionFailureKind(error) : undefined
+    const connectionErrorCode = getConnectionErrorCode(error)
+    const diagnosticCode = outcome === 'canceled' || callerAbortSignal?.aborted ||
+      (outcome === 'AbortError' && failureKind !== CompletionFailureKind.Timeout)
+      ? undefined
+      : classifyInferenceFailure(error, failureKind, connectionErrorCode)
+
     if (outcome !== 'started') {
       recordInferenceUsageOutcome(outcome)
     }
@@ -154,10 +163,9 @@ export async function runCompletionAttempt(
       serviceTier: completionParams.serviceTier,
       transport,
       outcome,
-      ...(error ? {
-        failureKind: getCompletionFailureKind(error)
-      } : {}),
-      connectionErrorCode: getConnectionErrorCode(error),
+      ...(failureKind !== undefined ? { failureKind } : {}),
+      ...(diagnosticCode ? { diagnosticCode } : {}),
+      connectionErrorCode,
       connectionRetryAttempt: completionParams.connectionRetryAttempt,
       failureSummary: error instanceof Error
         ? (error as Error & { failureSummary?: string }).failureSummary
@@ -625,7 +633,7 @@ export async function runCompletionAttempt(
 
     LogHelper.title('LLM Provider')
     LogHelper.error(
-      `Error to complete prompt: ${formatPromptErrorForLog(e)}`
+      `Error to complete prompt (${attemptId}): ${formatPromptErrorForLog(e)}`
     )
     LogHelper.timeEnd(measureExecutionTimeLabel)
 
@@ -863,7 +871,7 @@ export async function runCompletionAttempt(
     logAttempt('failed', e)
     completionParams.cancellationSignal?.throwIfAborted()
     LogHelper.title('LLM Provider')
-    LogHelper.error(`Failed to normalize completion result: ${String(e)}`)
+    LogHelper.error(`Failed to normalize completion result (${attemptId}): ${String(e)}`)
     LogHelper.timeEnd(measureExecutionTimeLabel)
 
     return null
@@ -884,8 +892,6 @@ export async function runCompletionAttempt(
   if (!activity.snapshot().providerCompleted) {
     activity.observe({ type: 'finish', requestAccepted: true, providerCompleted: true })
   }
-  logAttempt('completed')
-
   // Guard against silent empty provider responses which otherwise trigger
   // an unnecessary planning fallback and double latency.
   const isSuspiciousEmptyRemoteResult =
@@ -897,6 +903,7 @@ export async function runCompletionAttempt(
     usedOutputTokens === 0
 
   if (isSuspiciousEmptyRemoteResult) {
+    logAttempt('failed', new InferenceDiagnosticError('Provider returned an empty completion', 'empty_response'))
     const remainingRetries = completionParams.maxRetries ?? 0
     const providerPayloadSnippet =
       remoteRawData !== null
@@ -905,7 +912,7 @@ export async function runCompletionAttempt(
 
     LogHelper.title('LLM Provider')
     LogHelper.warning(
-      `Received empty completion payload (no text/tool_calls/tokens) from "${providerName}".${providerPayloadSnippet ? ` Payload: ${providerPayloadSnippet}` : ''}`
+      `Received empty completion payload (${attemptId}) from "${providerName}".${providerPayloadSnippet ? ` Payload: ${providerPayloadSnippet}` : ''}`
     )
 
     if (remainingRetries > 0) {
@@ -929,6 +936,7 @@ export async function runCompletionAttempt(
     return null
   }
 
+  logAttempt('completed')
   LogHelper.title('LLM Provider')
   LogHelper.timeEnd(measureExecutionTimeLabel)
 

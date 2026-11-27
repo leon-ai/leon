@@ -9,6 +9,7 @@ import type { ExecutionRecord, ReactLLMDutyParams } from '@/core/llm-manager/llm
 import { LEON_PULSE_INTERVAL_MS } from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
+import { InferenceDiagnosticError, logFailureDiagnostic } from '@/core/turn-lifecycle/observability/failure'
 import { InferencePurpose } from '@/core/llm-manager/types'
 import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getTurnTimings, runOutsideTurnTiming, runWithTurnTiming, TurnStage } from '@/core/turn-lifecycle/observability/timing'
@@ -20,8 +21,8 @@ import { WEB_SESSION_RUNTIME } from '@/core/session-manager/web-session-runtime'
 import { collectArtifacts } from '@/core/artifacts/artifact-context'
 import { measurePulse, withPulseStage } from '@/core/telemetry/pulse-measurements'
 import {
-  PULSE_FAILURE_DETAILS, PulseFailureCode, PulseFailureScope, PulseStage, PulseTimingMetric,
-  type PublicModelLabel
+  getPublicModel, PULSE_FAILURE_DETAILS, PulseFailureCode, PulseFailureScope, PulseStage, PulseTimingMetric,
+  type PublicModelLabel, type PulseFailure
 } from '@/core/telemetry/report-contract'
 import {
   PulseArchiveReason,
@@ -47,10 +48,7 @@ type PulseMatterSource = 'memory' | 'context' | 'self_model'
 type PulseOwnerFeedback = 'accept' | 'decline' | null
 type PulseTickReason = 'scheduled' | 'follow_up' | 'manual'
 
-interface PulseFailureDetail {
-  code: PulseFailureCode
-  inference?: PublicModelLabel
-}
+type PulseFailureDetail = Omit<PulseFailure, 'count' | 'scope'>
 
 // The public reason is fixed at the failure site. The original error remains in the local log.
 class PulseTickFailure extends Error {
@@ -561,11 +559,15 @@ export default class PulseManager {
       .catch((error: unknown) => {
         this.followUpRetryAt = Date.now() + PULSE_FOLLOW_UP_RETRY_MS
         const detail = error instanceof PulseTickFailure ? error.detail : { code: PulseFailureCode.Tick }
-        measurePulse({ failure: { scope: PulseFailureScope.Tick, ...detail } })
+        const diagnosticId = detail.diagnosticId ?? randomUUID()
+        const cause = error instanceof PulseTickFailure ? error.cause ?? error : error
+
+        measurePulse({ failure: { scope: PulseFailureScope.Tick, ...detail, diagnosticId } })
         LogHelper.title('Pulse Manager')
-        LogHelper.warning(`Pulse tick failed: ${String(error instanceof PulseTickFailure ? error.cause ?? error : error)}`)
+        logFailureDiagnostic(`Pulse tick failed (${diagnosticId}, ${detail.causeCode ?? detail.code}): ${String(cause)}`)
       })
       .finally(() => {
+        measurePulse({ counter: 'tick_finished', count: 1 })
         this.isTickPending = false
         this.scheduleNextTick()
       })
@@ -1185,9 +1187,18 @@ export default class PulseManager {
       evidence.suppressionSection
     ].join('\n')
 
-    let inference: PublicModelLabel | undefined
+    let inference: PulseFailureDetail['inference']
+    let attemptFailure: Pick<PulseFailureDetail, 'causeCode' | 'diagnosticId'> | undefined
     const failed = (code: PulseFailureCode, cause?: unknown): PulseTickFailure => {
-      return new PulseTickFailure({ code, ...(inference ? { inference } : {}) }, cause)
+      if (cause instanceof InferenceDiagnosticError) {
+        inference = cause.inference ?? inference
+        attemptFailure = { causeCode: cause.diagnosticCode }
+      }
+
+      return new PulseTickFailure({
+        code, ...(inference ? { inference } : {}),
+        ...(code === PulseFailureCode.PlanningInference ? attemptFailure : {})
+      }, cause)
     }
     const result = await withPulseStage(PulseStage.Planning, () => runInference({
       usagePurpose: InferencePurpose.PulsePlanning,
@@ -1204,13 +1215,27 @@ export default class PulseManager {
       ].join('\n'),
       temperature: 0,
       maxTokens: PULSE_PLANNER_MAX_TOKENS,
-      trackProviderErrors: false
+      trackProviderErrors: false,
+      onAttempt: (attempt) => {
+        if (attempt.outcome === 'started') {
+          return
+        }
+
+        inference = getPublicModel(attempt.provider, attempt.model ?? '')
+        attemptFailure = attempt.diagnosticCode
+          ? { causeCode: attempt.diagnosticCode, diagnosticId: attempt.attemptId }
+          : undefined
+      }
     }), (label) => {
       inference = label
     }).catch((error: unknown) => {
       throw failed(PulseFailureCode.PlanningInference, error)
     })
     if (!result) {
+      throw failed(PulseFailureCode.PlanningInference)
+    }
+    if (!result.output.trim()) {
+      attemptFailure = { causeCode: 'empty_response' }
       throw failed(PulseFailureCode.PlanningInference)
     }
     const payload = this.parseJsonObject(result.output) as PulsePlannerOutput | null

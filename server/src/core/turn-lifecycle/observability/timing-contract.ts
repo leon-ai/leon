@@ -65,9 +65,17 @@ export const OWNER_FAILURE_PHASES = [
   TurnPhase.Review, TurnPhase.Persistence, TurnPhase.Delivery
 ] as const
 export type OwnerFailurePhase = typeof OWNER_FAILURE_PHASES[number]
+export const INFERENCE_FAILURE_CODES = [
+  'timeout', 'connection', 'connection_refused', 'rate_limit', 'authorization',
+  'context_limit', 'provider_unavailable', 'provider_startup', 'model_load',
+  'empty_response', 'provider_error'
+] as const
+export type InferenceFailureCode = typeof INFERENCE_FAILURE_CODES[number]
+
 export const TURN_DIAGNOSTIC_CODES = [
   ...OWNER_TURN_FAILURE_CODES, 'blocked', 'error_response', 'context_limit', 'provider_unavailable', 'provider_error',
-  'tool_failed', 'tool_settings_missing', 'review_invalid_response'
+  'tool_failed', 'tool_settings_missing', 'review_invalid_response',
+  'connection_refused', 'provider_startup', 'model_load', 'empty_response'
 ] as const
 export type TurnDiagnosticCode = typeof TURN_DIAGNOSTIC_CODES[number]
 

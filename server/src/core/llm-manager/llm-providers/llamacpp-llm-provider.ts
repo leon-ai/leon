@@ -30,6 +30,7 @@ import { recordInferenceUsage, getActiveInferencePurpose } from '@/core/llm-mana
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { LocalInferenceScheduler, LocalInferencePriority } from '@/core/llm-manager/local-inference-scheduler'
 import { getTurnTimingContext, recordPulseQueueSample, runTurnPhase, TurnPhase, TurnStage } from '@/core/turn-lifecycle/observability/timing'
+import { InferenceDiagnosticError } from '@/core/turn-lifecycle/observability/failure'
 import { getActivePulseStage } from '@/core/telemetry/pulse-measurements'
 
 const DEFAULT_LLAMACPP_BASE_URL = 'http://127.0.0.1:8080/v1'
@@ -872,8 +873,9 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     }
 
     if (!fs.existsSync(modelPath)) {
-      throw new Error(
-        `Cannot find llama.cpp model at "${modelPath}".`
+      throw new InferenceDiagnosticError(
+        `Cannot find llama.cpp model at "${modelPath}".`,
+        'model_load'
       )
     }
 

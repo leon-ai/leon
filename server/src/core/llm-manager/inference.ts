@@ -1,5 +1,5 @@
 import { LLM_PROVIDER } from '@/core'
-import { LLMDuties, type InferencePurpose } from '@/core/llm-manager/types'
+import { LLMDuties, type CompletionAttemptTiming, type InferencePurpose } from '@/core/llm-manager/types'
 
 export interface InferenceOptions {
   prompt: string
@@ -14,6 +14,7 @@ export interface InferenceOptions {
   trackProviderErrors?: boolean
   timeout?: number
   maxRetries?: number
+  onAttempt?: (timing: CompletionAttemptTiming) => void
 }
 
 export interface InferenceResult {
@@ -50,6 +51,7 @@ export async function runInference(
     ...(options.reasoningMode !== undefined
       ? { reasoningMode: options.reasoningMode }
       : {}),
+    ...(options.onAttempt ? { onAttempt: options.onAttempt } : {}),
     ...(options.trackProviderErrors !== undefined
       ? { trackProviderErrors: options.trackProviderErrors }
       : {})

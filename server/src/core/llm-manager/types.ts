@@ -4,6 +4,7 @@ import type {
 
 import type { MessageLog } from '@/types'
 import type { SharedV4ProviderOptions } from '@ai-sdk/provider'
+import type { InferenceFailureCode } from '../turn-lifecycle/observability/timing-contract'
 
 import { LLMDuties, type InferencePurpose } from './inference-contract'
 
@@ -329,6 +330,7 @@ export interface CompletionAttemptTiming extends ProviderActivitySnapshot {
   transport: 'http' | 'websocket' | 'local'
   outcome: string
   failureKind?: CompletionFailureKind | undefined
+  diagnosticCode?: InferenceFailureCode | undefined
   promptCache?: PromptCacheObservation | undefined
   inferenceTimeoutMs: number
   streamIdleTimeoutMs: number

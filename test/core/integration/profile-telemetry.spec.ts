@@ -13,8 +13,9 @@ const REPORTER_TIMEOUT_MS = 10_000
 it.each([
   { environment: 'CI', ci: 'true', enabled: true, sendsReports: false },
   { environment: 'an owner installation with sharing disabled', ci: 'false', enabled: false, sendsReports: false },
-  { environment: 'an owner installation with sharing enabled', ci: 'false', enabled: true, sendsReports: true }
-])('applies the sharing preference in $environment', async ({ ci, enabled, sendsReports }) => {
+  { environment: 'an owner installation with sharing enabled', ci: 'false', enabled: true, sendsReports: true },
+  { environment: 'an owner installation using a legacy collector', ci: 'false', enabled: true, sendsReports: true, legacy: true }
+])('applies the sharing preference in $environment', async ({ ci, enabled, sendsReports, legacy = false }) => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-telemetry-'))
   const profile = path.join(home, 'profiles', PROFILE)
 
@@ -27,6 +28,7 @@ it.each([
     // requests to exercise the reporter without writing to the fleet.
     await execute(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', `
       import assert from 'node:assert/strict'
+      import { randomUUID } from 'node:crypto'
       import { setTimeout as delay } from 'node:timers/promises'
       import fs from 'node:fs/promises'
       import path from 'node:path'
@@ -34,7 +36,7 @@ it.each([
       import { startProfileTelemetry } from './server/src/core/telemetry/profile-telemetry.ts'
       import { measurePulse, withPulseStage } from './server/src/core/telemetry/pulse-measurements.ts'
       import {
-        DAILY_REPORT_PATH, PRESENCE_INTERVAL_MS, PulseFailureCode, PulseFailureScope, PulseStage, TELEMETRY_DAY_MS
+        DAILY_REPORT_PATH, getPublicModel, PRESENCE_INTERVAL_MS, PulseFailureCode, PulseFailureScope, PulseStage, TELEMETRY_DAY_MS
       } from './server/src/core/telemetry/report-contract.ts'
       import { TELEMETRY_COLLECTOR_ORIGIN } from './server/src/constants.ts'
       import { getProfilePaths } from './server/src/core/profile-runtime/profile-paths.ts'
@@ -43,8 +45,10 @@ it.each([
       import PostTurnMaintenanceQueue from './server/src/core/turn-lifecycle/post-turn-maintenance-queue.ts'
       import { ConversationRepository } from './server/src/core/session-manager/conversation-repository.ts'
       import { runWithTurnClient } from './server/src/core/leon-interface/turn-client.ts'
+      import { InferenceDiagnosticError } from './server/src/core/turn-lifecycle/observability/failure.ts'
+      import { LogHelper } from './server/src/helpers/log-helper.ts'
       import {
-        recordOwnerTurn, recordTurnInference, runTurnPhase, runWithTurnTiming, TurnPhase, TurnStage
+        recordOwnerTurn, recordOwnerTurnError, recordTurnInference, runTurnPhase, runWithTurnTiming, TurnPhase, TurnStage
       } from './server/src/core/turn-lifecycle/observability/timing.ts'
 
       const now = Date.UTC(2030, 0, 31, 12)
@@ -110,15 +114,26 @@ it.each([
 
       const reports = new Set()
       const events = new Map()
+      const rejected = new Set()
+      let failedTurn
       const delivery = Promise.withResolvers()
       globalThis.fetch = (url, options) => {
         const pathname = new URL(url).pathname
         reports.add(pathname)
         if (pathname === '/v2/event') {
           const event = JSON.parse(options.body)
-          events.set(event.kind, event)
+          if (${legacy} && (event.counters?.tick_finished !== undefined ||
+            event.turnDiagnostics?.some(({ diagnosticId }) => diagnosticId))) {
+            rejected.add(event.id)
+            return Promise.resolve(new Response(null, { status: 400 }))
+          }
+          if (event.kind === 'turn_finished' && event.report.failed) {
+            failedTurn = event
+          } else {
+            events.set(event.kind, event)
+          }
         }
-        if (reports.has('/v1/presence') && ['profile_started', 'pulse_metrics', 'turn_finished', 'session_activity', 'maintenance_metrics']
+        if (failedTurn && reports.has('/v1/presence') && ['profile_started', 'pulse_metrics', 'turn_finished', 'session_activity', 'maintenance_metrics']
           .every((kind) => events.has(kind))) {
           delivery.resolve()
         }
@@ -141,6 +156,14 @@ it.each([
       for (const scope of [PulseFailureScope.Discovery, PulseFailureScope.Discovery, PulseFailureScope.FollowUp]) {
         measurePulse({ failure: { code: PulseFailureCode.ResearchBlocked, scope, inference } })
       }
+      const example = randomUUID()
+      for (const diagnosticId of [example, randomUUID()]) {
+        measurePulse({ failure: {
+          code: PulseFailureCode.PlanningInference, scope: PulseFailureScope.Tick, inference,
+          diagnosticId, causeCode: 'connection_refused'
+        } })
+        measurePulse({ counter: 'tick_finished', count: 1 })
+      }
       try {
         await pulse.tick('manual')
         await runWithTurnClient('mobile', 'ios', () => runWithTurnTiming('fixture-turn', 'fixture-session', async () => {
@@ -152,6 +175,17 @@ it.each([
           }))
           recordOwnerTurn('answered')
         }))
+        await runWithTurnTiming('failed-turn', 'fixture-session', async () => {
+          try {
+            await runTurnPhase(TurnPhase.Provider, async () => {
+              throw new InferenceDiagnosticError('private boot error at /private/model.gguf', 'model_load', {
+                inference: getPublicModel('llamacpp', '/private/owner-model.gguf')
+              })
+            })
+          } catch (error) {
+            recordOwnerTurnError(error)
+          }
+        })
         const queue = new PostTurnMaintenanceQueue()
         queue.enqueue('memory extraction', () => {
           throw Object.assign(new Error('private maintenance error'), { code: 'ETIMEDOUT' })
@@ -168,13 +202,35 @@ it.each([
           }
           assert.deepEqual(reports, new Set(['/v1/presence', '/v2/event']))
           assert.deepEqual(events.get('pulse_metrics').counters, {
-            discovery_checked: 3, discovery_failed: 2, followup_failed: 1, tick_failed: 1
+            discovery_checked: 3, discovery_failed: 2, followup_failed: 1, tick_failed: 3,
+            ...(${legacy} ? {} : { tick_finished: 3 })
           })
-          assert.deepEqual(events.get('pulse_metrics').failures, [
+          const pulseFailures = events.get('pulse_metrics').failures
+          const agenda = pulseFailures.find(({ code }) => code === 'tick_agenda_unavailable')
+          assert.deepEqual(pulseFailures.filter(({ code }) => code !== 'tick_agenda_unavailable'), [
             { code: 'research_blocked', scope: 'discovery', count: 2, inference: { provider: 'llamacpp', model: 'other' } },
             { code: 'research_blocked', scope: 'followup', count: 1, inference: { provider: 'llamacpp', model: 'other' } },
-            { code: 'tick_agenda_unavailable', scope: 'tick', count: 1 }
+            {
+              code: 'planning_inference_incomplete', scope: 'tick', count: 2, inference: { provider: 'llamacpp', model: 'other' },
+              ...(${legacy} ? {} : { diagnosticId: example, causeCode: 'connection_refused' })
+            }
           ])
+          assert.equal(agenda.count, 1)
+          assert.equal(failedTurn.report.failed, 1)
+          const [failure] = failedTurn.turnDiagnostics
+          assert.equal(failure.phase, 'provider-resolution')
+          assert.equal(failure.code, ${legacy} ? 'provider_error' : 'model_load')
+          assert.equal(JSON.stringify(failedTurn).includes('/private/'), false)
+          if (${legacy}) {
+            assert.ok(rejected.has(failedTurn.id) && rejected.has(events.get('pulse_metrics').id))
+            assert.equal(failure.diagnosticId, undefined)
+            assert.equal(agenda.diagnosticId, undefined)
+          } else {
+            assert.deepEqual(failure.inference, { provider: 'llamacpp', model: 'other' })
+            const log = await fs.readFile(LogHelper.ERRORS_FILE_PATH, 'utf8')
+            assert.ok(log.split('\\n').some((line) => line.includes(failure.diagnosticId) && line.includes('private boot error')))
+            assert.ok(log.split('\\n').some((line) => line.includes(agenda.diagnosticId) && line.includes('private token')))
+          }
           assert.equal(events.get('pulse_metrics').os, process.platform)
           assert.equal(JSON.stringify(events.get('pulse_metrics')).includes('/private/'), false)
           assert.equal(events.get('pulse_metrics').profile, events.get('profile_started').report.profile)

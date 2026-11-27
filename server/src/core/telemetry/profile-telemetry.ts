@@ -99,7 +99,10 @@ async function readDeliveryState(profile: string): Promise<DeliveryState | undef
 }
 
 async function sendReport(
-  endpoint: string, report: QueuedReport | PresenceReport, signal: AbortSignal
+  endpoint: string,
+  report: QueuedReport | PresenceReport,
+  signal: AbortSignal,
+  fallback?: () => QueuedReport | undefined
 ): Promise<boolean> {
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -110,7 +113,55 @@ async function sendReport(
   })
 
   await response.body?.cancel()
+  if (response.status === 400) {
+    const legacy = fallback?.()
+    if (legacy) {
+      return sendReport(endpoint, legacy, signal)
+    }
+  }
+
   return response.ok
+}
+
+/**
+ * Keeps outcome totals deliverable while collectors learn the optional diagnostics.
+ */
+function legacyFailureReport(report: QueuedReport): QueuedReport | undefined {
+  if (report.kind === 'pulse_metrics') {
+    const { tick_finished: tickFinished, ...counters } = report.counters
+    if (tickFinished === undefined && !report.buildCommit &&
+      !report.failures?.some(({ causeCode, diagnosticId }) => causeCode || diagnosticId)) {
+      return undefined
+    }
+
+    const legacy = {
+      ...report, counters,
+      ...(report.failures ? {
+        failures: report.failures.map(({ code, count, inference, scope }) => ({
+          code, count, scope, ...(inference ? { inference } : {})
+        }))
+      } : {})
+    }
+
+    delete legacy.buildCommit
+    return legacy
+  }
+  if (report.kind !== 'turn_finished' || !report.turnDiagnostics) {
+    return undefined
+  }
+
+  let changed = false
+  const turnDiagnostics = report.turnDiagnostics.map((diagnostic) => {
+    const { code, diagnosticId, inference, ...base } = diagnostic
+    const legacyCode = code === 'connection_refused' ? 'connection' : code === 'empty_response' ? 'no_output' :
+      code === 'provider_startup' || code === 'model_load' ? 'provider_error' : code
+    const legacyInference = base.kind === 'attempt' ? inference : undefined
+    changed ||= legacyCode !== code || diagnosticId !== undefined || legacyInference !== inference
+
+    return { ...base, code: legacyCode, ...(legacyInference ? { inference: legacyInference } : {}) }
+  })
+
+  return changed ? { ...report, turnDiagnostics } : undefined
 }
 
 async function syncDeliveryState(
@@ -221,6 +272,15 @@ async function getReportingInstallation(): Promise<{ key: string, installation: 
   }
 }
 
+/**
+ * Attributes telemetry to the published manifest for the running version.
+ */
+function getPublicBuildCommit(version: string): string | undefined {
+  const commit = process.env['LEON_PUBLIC_BUILD_COMMIT']
+
+  return commit && /^[a-f0-9]{40}$/.test(commit) && version === process.env['npm_package_version'] ? commit : undefined
+}
+
 function buildFleetReport(
   report: DailyReport, activity: Activity[], birthDate?: number
 ): FleetReport {
@@ -257,11 +317,11 @@ function buildFleetReport(
   }
 
   const architecture = process.arch
-  const commit = process.env['LEON_PUBLIC_BUILD_COMMIT']
+  const buildCommit = getPublicBuildCommit(report.version)
   return {
     os: SERVER_OS,
     architecture: architecture === 'x64' || architecture === 'arm64' ? architecture : 'other',
-    ...(commit && /^[a-f0-9]{40}$/.test(commit) && report.version === process.env['npm_package_version'] ? { buildCommit: commit } : {}),
+    ...(buildCommit ? { buildCommit } : {}),
     turnLatency, firstOutputLatency, recoveredTurns,
     activation: {
       ...(recentSetup ? { setupDay: birthDay } : {}),
@@ -344,9 +404,12 @@ function buildEvent(
   const { key, installation } = identity
   const pseudonym = getProfilePseudonym(state, identity)
   if (job.pulse) {
+    const buildCommit = job.pulse.failures?.length ? getPublicBuildCommit(PACKAGE.version) : undefined
+
     return { kind: 'pulse_metrics', at: job.at, installation, profile: pseudonym, version: PACKAGE.version,
       id: createHmac('sha256', key).update('telemetry:pulse:').update(pseudonym).update(randomUUID()).digest('hex'),
-      ...job.pulse, ...(job.pulse.failures?.length ? { os: SERVER_OS } : {}) }
+      ...job.pulse, ...(job.pulse.failures?.length ? { os: SERVER_OS } : {}),
+      ...(buildCommit ? { buildCommit } : {}) }
   }
   if (job.maintenance) {
     return {
@@ -445,7 +508,9 @@ export function startProfileTelemetry(): (() => void) | undefined {
       return true
     }
     controller.signal.throwIfAborted()
-    return sendReport(EVENT_ENDPOINT, job.event, controller.signal)
+    const event = job.event
+
+    return sendReport(EVENT_ENDPOINT, event, controller.signal, () => legacyFailureReport(event))
   }
 
   const drain = (): void => {
