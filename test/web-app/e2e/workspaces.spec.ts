@@ -114,6 +114,22 @@ for (const { theme, motion, width } of [
   { theme: 'dark', motion: 'no-preference', width: 1_512 },
   { theme: 'light', motion: 'reduce', width: 1_100 }
 ] as const) {
+  test(`shows disabled Inbox and Files entries in the sidebar (${theme})`, async ({ page, ui }) => {
+    void ui
+    await page.setViewportSize({ width, height: 982 })
+    await page.goto('./')
+    await setFixtureTheme(page, theme)
+
+    const mainMenu = page.getByRole('navigation', { name: 'Main menu', exact: true })
+    const upcomingItems = mainMenu.getByRole('button', { name: /^(Inbox|Files) Soon$/ })
+
+    await expect(upcomingItems).toHaveText([/^Inbox\s*Soon$/, /^Files\s*Soon$/])
+    for (const item of await upcomingItems.all()) {
+      await expect(item).toBeDisabled()
+      await expect(item.getByText('Soon', { exact: true })).toBeVisible()
+    }
+  })
+
   test(`creates contextual workspaces, groups conversations and keeps standalone sessions (${theme})`, async ({ page, ui }, testInfo) => {
     await page.setViewportSize({ width, height: 982 })
     await page.emulateMedia({ reducedMotion: motion })
@@ -142,7 +158,6 @@ for (const { theme, motion, width } of [
     expect(Math.abs(positions.cloudY - positions.logoY)).toBeLessThanOrEqual(1)
     expect(Math.abs(positions.cloudY - positions.labelY)).toBeLessThanOrEqual(1)
     expect(positions.labelLeft).toBeGreaterThan(positions.cloudRight)
-    await expect(sidebar.getByRole('button', { name: 'Inbox', exact: true })).toBeVisible()
     await expect(sidebar.getByRole('link', { name: 'Docs', exact: true })).toHaveCount(0)
     await expect(sidebar.getByRole('button', { name: 'Mute sounds', exact: true })).toHaveCount(0)
     const closeColor = await sidebar.getByRole('button', { name: 'Close sidebar', exact: true }).evaluate((element) => getComputedStyle(element).color)

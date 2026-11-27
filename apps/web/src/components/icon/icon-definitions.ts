@@ -39,6 +39,7 @@ export const SOFT_ICON_NAMES: ReadonlySet<string> = new Set([
   'folder-open',
   'corner-left-up',
   'inbox-2',
+  'archive-2',
   'alert',
   'computer',
   'cursor',
@@ -97,8 +98,13 @@ export const COMMON_ICONS = {
     'M7 11h13c1.1 0 2 0.9 1.5 2L20 18c-.3 1.1-.9 2-2 2H5c-1.1 0-1.8-.9-1.5-2L5 13c.3-1.1.9-2 2-2Z'),
   'folder-add': paths('M3 17V6a2 2 0 0 1 2-2h4c1 0 1.5 2 3 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3',
     { d: 'M8 13h8m-4-4v8', part: 'folder-plus' }),
+  // Inset the inner strokes so their round caps meet the sides without bulging at the joins.
   'inbox-2': paths('M3 13 5 5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Z',
-    { d: 'M3 13h5a4 4 0 0 0 8 0h5', part: 'inbox-tray' }),
+    { d: 'M3.75 13H7.5c1.75 0 1.5 3.5 4.5 3.5s2.75-3.5 4.5-3.5h3.75', part: 'inbox-tray' }),
+  'archive-2': paths(
+    'M3 8l1.45-2.9Q5 4 6.25 4h11.5q1.25 0 1.8 1.1L21 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z',
+    'M3.75 8h16.5M10 12h4'
+  ),
   'multi-image': paths('M4 8h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z',
     'M7 8V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3',
     'm3 18 8.5-5 5.5 5', circle(7, 12, 1)),

@@ -1,3 +1,4 @@
+import { Status } from '@/components/status'
 import { MenuItem } from '@/layout/sidebar/menu-item'
 import { AppShortcutKey, APP_MODIFIER_LABEL, getAppShortcutAria, NEW_SESSION_REQUIRES_SHIFT } from '@/utils/keyboard-shortcuts'
 
@@ -11,6 +12,10 @@ interface MenuProps {
   collapsed?: boolean
   onSearchSessions?: () => void
   onSearchIntent?: () => void
+}
+
+function SoonStatus() {
+  return <Status variant="secondary" label="Soon" />
 }
 
 export function Menu({
@@ -31,7 +36,20 @@ export function Menu({
         onIntent={onSearchIntent}
         {...(onSearchSessions === undefined ? {} : { onClick: onSearchSessions })}
       />
-      <MenuItem iconName="inbox-2" label="Inbox" collapsed={collapsed} />
+      <MenuItem
+        iconName="inbox-2"
+        label="Inbox"
+        disabled
+        status={SoonStatus}
+        collapsed={collapsed}
+      />
+      <MenuItem
+        iconName="archive-2"
+        label="Files"
+        disabled
+        status={SoonStatus}
+        collapsed={collapsed}
+      />
     </nav>
   )
 }
