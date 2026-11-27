@@ -51,6 +51,17 @@ const MAXIMUM_QUERY_HISTORY_CHARACTERS = 128 * 1_024
 const SESSION_SEARCH_EXCERPT_TOKENS = 16
 const SESSION_SEARCH_EXCERPT_LEADING_CHARACTERS = 24
 const FYI_VISION_ROTATION_KEY = 'fyi_vision_rotation'
+const RECENT_FILE_MESSAGE_LIMIT = 64
+const FILE_REFERENCE_LIMIT = 12
+// Recent file recall uses results that identify an opened or saved file.
+// Other paths can point to scratch files, and attachments have their own lookup.
+const RECENT_FILE_USE_FUNCTIONS = [
+  'file_system.file.read',
+  'file_system.file.write',
+  'file_system.file.append',
+  'file_system.file.patch',
+  'file_system.file.saveArtifact'
+]
 const UI_MESSAGE_FILTER = `(visible = 1 OR trace_id IS NOT NULL
   OR json_type(summary, '$.agentResponseTrace') = 'object'
   OR json_array_length(summary, '$.artifacts') > 0
@@ -101,6 +112,15 @@ interface SessionCursor {
 
 interface SessionPage extends ConversationPage<ConversationSession> {
   searchMatches?: Record<string, SessionSearchMatch>
+}
+
+export interface SessionFileReference extends Record<string, unknown> {
+  sessionId: string
+  sessionTitle: string
+  usedAt: number
+  filename?: string
+  artifactId?: string
+  path?: string
 }
 
 interface ArchiveCursor {
@@ -274,6 +294,66 @@ export class ConversationRepository {
       .get(sessionId)
 
     return row ? JSON.parse(String(row['payload'])) as ConversationSession : null
+  }
+
+  /**
+   * Recover a bounded set of attachments and successful file uses from saved
+   * conversations. Project only references so file contents never enter lookup.
+   */
+  public findFileReferences(
+    filename: string | null,
+    workspaceId: string | null
+  ): SessionFileReference[] {
+    const attachments = this.db.prepare(`
+      SELECT s.id AS sessionId, s.title AS sessionTitle,
+        json_extract(artifact.value, '$.id') AS artifactId,
+        json_extract(artifact.value, '$.filename') AS filename,
+        max(m.sent_at) AS usedAt
+      FROM conversation_messages AS m
+      JOIN conversation_sessions AS s ON s.id = m.session_id
+      JOIN json_each(m.summary, '$.artifacts') AS artifact
+      WHERE json_type(artifact.value, '$.id') = 'text'
+        AND json_type(artifact.value, '$.filename') = 'text'
+        AND (
+          (@filename IS NOT NULL AND json_extract(artifact.value, '$.filename') = @filename COLLATE NOCASE)
+          OR (@filename IS NULL AND json_extract(s.payload, '$.workspaceId') IS @workspaceId)
+        )
+      GROUP BY s.id, artifactId
+      ORDER BY (json_extract(s.payload, '$.workspaceId') IS @workspaceId) DESC, max(m.sent_at) DESC
+      LIMIT ${FILE_REFERENCE_LIMIT}
+    `).all({ filename, workspaceId }) as SessionFileReference[]
+
+    if (filename !== null) {
+      return attachments
+    }
+
+    const files = this.db.prepare(`
+      WITH recent AS MATERIALIZED (
+        SELECT s.id, s.title, m.payload, m.sent_at
+        FROM conversation_messages AS m
+        JOIN conversation_sessions AS s ON s.id = m.session_id
+        WHERE json_extract(s.payload, '$.workspaceId') IS @workspaceId
+          AND m.trace_id IS NOT NULL
+        ORDER BY m.sent_at DESC, m.sequence DESC
+        LIMIT ${RECENT_FILE_MESSAGE_LIMIT}
+      ),
+      candidates AS (
+        SELECT recent.id AS sessionId, recent.title AS sessionTitle, recent.sent_at AS usedAt,
+          coalesce(json_extract(call.value, '$.output.result.data.path'),
+            json_extract(call.value, '$.output.result.path')) AS path
+        FROM recent, json_each(recent.payload, '$.agentResponseTrace.toolCalls') AS call
+        WHERE json_extract(call.value, '$.name') IN (SELECT value FROM json_each(@functions))
+          AND json_extract(call.value, '$.status') = 'success'
+          AND json_extract(call.value, '$.output.result.success') IS NOT 0
+      )
+      SELECT sessionId, sessionTitle, max(usedAt) AS usedAt, path FROM candidates
+      WHERE typeof(path) = 'text'
+      GROUP BY path
+      ORDER BY usedAt DESC
+      LIMIT ${FILE_REFERENCE_LIMIT}
+    `).all({ workspaceId, functions: JSON.stringify(RECENT_FILE_USE_FUNCTIONS) }) as SessionFileReference[]
+
+    return [...attachments, ...files].sort((left, right) => right.usedAt - left.usedAt)
   }
 
   /**

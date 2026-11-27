@@ -1180,8 +1180,11 @@ export class ReActLLMDuty extends LLMDuty {
    * without repetition, and the latest snapshot is restored after compaction.
    */
   private async buildAgentGrounding(caller: LLMCaller, query: string): Promise<Record<string, unknown>> {
+    const profilePaths = getProfilePaths()
     const grounding: Record<string, unknown> = {
       workspace_context: getWorkspaceGrounding(CONVERSATION_SESSION_MANAGER.getCurrentSessionId()),
+      active_profile_path: profilePaths.root,
+      saved_files_path: profilePaths.files,
       local_workspace: [
         `Default local working directory: ${process.cwd()}`,
         'Resolve relative task paths here unless the owner establishes another workspace. For Satellite, inspect that device\'s working directory first.'

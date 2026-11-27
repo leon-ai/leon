@@ -122,6 +122,16 @@ export default class SessionsTool extends Tool {
   }
 
   /**
+   * Finds a named chat attachment or recent file references in the current workspace.
+   */
+  public async findFiles(filename?: string): Promise<unknown> {
+    return this.requestLeon('/sessions/files/find', {
+      filename,
+      currentSessionId: this.executionContext?.conversationSessionId
+    })
+  }
+
+  /**
    * Recover a bounded page of the selected archived message without repeating search.
    */
   public async readMessage(

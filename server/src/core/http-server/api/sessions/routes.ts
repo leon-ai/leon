@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync, FastifySchema } from 'fastify'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { Type } from '@sinclair/typebox'
 import type { Static } from '@sinclair/typebox'
 
@@ -18,8 +20,19 @@ import { TOOL_EXECUTION_MANAGER, ToolExecutionState } from '@/core/tool-manager/
 import { PreparationStatus } from '@@/aurora/src/v2/contracts/preparation'
 import { TOOLKIT_REGISTRY } from '@/core'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
+import { readArtifact } from '@/core/artifacts/artifact-store'
+import { CORE_DEVICE_SELECTION } from '@@/bridges/runtime/contracts/device-execution'
+import { WorkspaceResourceKind } from '@@/bridges/runtime/contracts/workspace'
 
 const SESSION_ID_PARAM_NAME = 'session_id'
+const MAX_FILE_MATCHES = 3
+
+function containsFile(folder: string, entry: string): boolean {
+  const relative = path.relative(folder, entry)
+
+  return relative !== '' && relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+}
 
 /**
  * Projects current display metadata and retained worker state without modifying
@@ -107,6 +120,10 @@ const archiveSearchBodySchema = Type.Object({
   currentSessionId: Type.Optional(Type.String()),
   workspaceId: Type.Optional(Type.String({ format: 'uuid' }))
 }, { additionalProperties: false })
+const archiveFileSearchBodySchema = Type.Object({
+  filename: Type.Optional(Type.String({ minLength: 1, maxLength: 255 })),
+  currentSessionId: Type.Optional(Type.String())
+}, { additionalProperties: false })
 const archiveReadQuerySchema = Type.Object({
   offset: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER - 1 })),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAXIMUM_ARCHIVE_PAGE_CHARACTERS }))
@@ -165,6 +182,57 @@ export const sessionsRoutes: FastifyPluginAsync<APIOptions> = async (
   fastify,
   options
 ) => {
+  fastify.post<{ Body: Static<typeof archiveFileSearchBodySchema> }>(
+    `/api/${options.apiVersion}/sessions/files/find`,
+    { schema: { body: archiveFileSearchBodySchema } },
+    async (request, reply) => {
+      const { filename, currentSessionId } = request.body
+      const session = currentSessionId ? CONVERSATION_REPOSITORY.readSession(currentSessionId) : null
+      const workspaceId = session?.workspaceId ?? null
+      const workspace = workspaceId ? CONVERSATION_REPOSITORY.workspaces.get(workspaceId) : null
+      const candidates = CONVERSATION_REPOSITORY.findFileReferences(filename ?? null, workspaceId)
+      const folders = [
+        getProfilePaths().files,
+        ...workspace?.resources.filter((resource) => resource.kind === WorkspaceResourceKind.Folder &&
+          (!resource.device || resource.device === CORE_DEVICE_SELECTION))
+          .map((resource) => resource.location) ?? []
+      ]
+      const canonicalFolders = filename === undefined
+        ? await Promise.all(folders.map((folder) => fs.realpath(folder).catch(() => folder)))
+        : []
+      const matches = []
+      const seen = new Set<string>()
+      for (const candidate of candidates) {
+        if (matches.length >= MAX_FILE_MATCHES) {
+          break
+        }
+
+        if (candidate.artifactId) {
+          const result = await readArtifact(candidate.sessionId, candidate.artifactId).catch(() => null)
+          if (result && !seen.has(result.path)) {
+            seen.add(result.path)
+            matches.push({ ...candidate, path: result.path, url: result.artifact.url })
+          }
+        } else if (candidate.path && path.isAbsolute(candidate.path) &&
+          [...folders, ...canonicalFolders].some((folder) => containsFile(folder, candidate.path!))) {
+          // Resolve the existing target before returning a path from old history.
+          const resolved = await fs.realpath(candidate.path).catch(() => null)
+          if (!resolved || seen.has(resolved)) {
+            continue
+          }
+
+          if (canonicalFolders.some((folder) => containsFile(folder, resolved)) &&
+            (await fs.stat(resolved).catch(() => null))?.isFile()) {
+            seen.add(resolved)
+            matches.push({ ...candidate, path: resolved, filename: path.basename(resolved) })
+          }
+        }
+      }
+
+      return reply.send({ success: true, data: { matches } })
+    }
+  )
+
   fastify.post<{ Body: Static<typeof archiveSearchBodySchema> }>(
     `/api/${options.apiVersion}/sessions/search`,
     { schema: { body: archiveSearchBodySchema } },

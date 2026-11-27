@@ -8,6 +8,7 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 export interface ProfilePaths {
   name: string
   root: string
+  files: string
   config: string
   dotEnv: string
   context: string
@@ -38,6 +39,7 @@ export function getProfilePaths(
   return {
     name,
     root,
+    files: path.join(root, 'files'),
     config: path.join(root, 'config.yml'),
     dotEnv: path.join(root, '.env'),
     context: path.join(root, 'context'),

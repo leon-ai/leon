@@ -133,6 +133,15 @@ export default class FileTool extends Tool {
   }
 
   /**
+   * Saves a registered chat attachment as an editable file on the Leon server.
+   */
+  public async saveArtifact(sessionId: string, artifactId: string, destination?: string): Promise<unknown> {
+    const endpoint = `/artifacts/${encodeURIComponent(sessionId)}/${encodeURIComponent(artifactId)}/save`
+
+    return this.requestLeon(endpoint, destination === undefined ? {} : { path: destination })
+  }
+
+  /**
    * Extract PDF pages once and reuse their text across subsequent reads.
    */
   public async readPdf(targetPath: string, options: PDFReadOptions = {}): Promise<Record<string, unknown>> {

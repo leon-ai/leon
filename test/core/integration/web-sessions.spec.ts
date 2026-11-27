@@ -324,6 +324,27 @@ describe('web conversation runtime', () => {
     expect(separate.json().attachment.session_id).toBe(other)
   })
 
+  it('saves attachment bytes to an explicit destination without replacing an existing file', async () => {
+    const sessionId = await create()
+    const content = await fs.readFile('test/fixtures/artifacts/field-notes.docx')
+    const mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    const uploaded = await upload(sessionId, 'handoff.docx', mimeType, content)
+    expect(uploaded.statusCode).toBe(201)
+    const id = uploaded.json().attachment.id
+    const endpoint = `/api/v1/artifacts/${sessionId}/${id}/save`
+    const destination = path.join(fixture.root, 'editable.docx')
+
+    const saved = await request('POST', endpoint, { path: destination })
+    expect(saved.statusCode).toBe(200)
+    expect(saved.json().data).toEqual({ path: destination, bytesWritten: content.length })
+    expect(await fs.readFile(destination)).toEqual(content)
+
+    await fs.writeFile(destination, 'Owner edits')
+    expect((await request('POST', endpoint, { path: destination })).statusCode).toBe(409)
+    expect(await fs.readFile(destination, 'utf8')).toBe('Owner edits')
+    expect((await request('POST', endpoint, { path: 'relative.docx' })).statusCode).toBe(400)
+  })
+
   it('streams owner uploads into immutable session storage and delivers supported media to the selected model', async () => {
     const sessionId = await create()
     await runWithProfileContext({ profileName: profile }, () =>

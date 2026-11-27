@@ -3,7 +3,7 @@
   "tool_id": "sessions",
   "toolkit_id": "structured_knowledge",
   "name": "Sessions",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Discover prior conversations and supplied documents, then read selected archived source text.",
   "icon_name": "chat-history-line",
   "distribution": "built-in",
@@ -66,6 +66,18 @@
             },
             "additionalProperties": false
           }
+        },
+        "additionalProperties": false
+      }
+    },
+    "findFiles": {
+      "description": "Find a chat attachment by exact filename or recover a few recent files from the current workspace.",
+      "progressive_guidance": "Pass filename for an earlier attachment; omit it for a recent file whose name is unknown. Results contain references without file contents.",
+      "read_only": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": { "type": "string", "minLength": 1, "maxLength": 255 }
         },
         "additionalProperties": false
       }

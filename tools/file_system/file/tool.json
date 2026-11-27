@@ -4,7 +4,7 @@
   "toolkit_id": "file_system",
   "concurrency": "serial",
   "name": "File",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Download files with measured progress, read PDF text and visuals, prepare searchable document batches, OCR images, and read, write, append or patch local text files.",
   "icon_name": "file-text-line",
   "distribution": "built-in",
@@ -160,7 +160,7 @@
     "read": {
       "read_only": true,
       "description": "Read a local text file. Rejects likely binary files. Use startLine/endLine, head, tail, or maxChars to limit output when needed.",
-      "progressive_guidance": "Use allowMissing=true for destination checks; exists=false means no file to preserve. Use 1-based inclusive startLine/endLine around search line_number results instead of guessing character offsets. Keep text pages at 20000 characters or less for inline observations; larger explicit reads may require retained-result retrieval. Follow nextOffsetChars for coverage; batch known independent unread ranges. Reuse inspected text. repositoryInstructions supplies applicable AGENTS.md files in root-to-directory order; follow them before editing. A contentReference reuses complete unchanged text from an earlier visible tool result. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
+      "progressive_guidance": "Use allowMissing=true for candidate paths and destination checks; exists=false means the file is absent. Use 1-based inclusive startLine/endLine around search line_number results instead of guessing character offsets. Keep text pages at 20000 characters or less for inline observations; larger explicit reads may require retained-result retrieval. Follow nextOffsetChars for coverage; batch known independent unread ranges. Reuse inspected text. repositoryInstructions supplies applicable AGENTS.md files in root-to-directory order; follow them before editing. A contentReference reuses complete unchanged text from an earlier visible tool result. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -310,7 +310,7 @@
     },
     "write": {
       "description": "Create or fully replace a local text file; overwrite=true saves original bytes in a unique adjacent backup.",
-      "progressive_guidance": "Verify the returned backupPath against backupContentHash. Full replacement rejects symbolic and hard-link aliases.",
+      "progressive_guidance": "Use createParents=true when saving a new file in saved_files_path. Verify the returned backupPath against backupContentHash. Full replacement rejects symbolic and hard-link aliases.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -369,8 +369,22 @@
         "additionalProperties": false
       }
     },
+    "saveArtifact": {
+      "description": "Save the bytes of a registered chat attachment as an editable file on the Leon server.",
+      "progressive_guidance": "Use when the owner wants to keep a generated file independently of its chat. Omit path to save under the active profile's files folder with the attachment's filename. Existing files are preserved.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string", "minLength": 1 },
+          "artifactId": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1, "description": "Optional absolute destination on the Leon server." }
+        },
+        "required": ["sessionId", "artifactId"],
+        "additionalProperties": false
+      }
+    },
     "attach": {
-      "description": "Attach a completed file to the conversation for preview and download. Use after writing or rendering a deliverable.",
+      "description": "Attach a snapshot of a completed file to the conversation for preview and download.",
       "parameters": {
         "type": "object",
         "properties": {

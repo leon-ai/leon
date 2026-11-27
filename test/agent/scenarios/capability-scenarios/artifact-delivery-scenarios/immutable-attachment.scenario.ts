@@ -24,7 +24,17 @@ const scenario: RealAgentScenario = {
       assert.equal(await fs.readFile(saved.path, 'utf8'), content)
       await assert.rejects(readArtifact('other-conversation', artifact.id))
 
-      return { turn, artifact }
+      const copy = await context.runTurn('Save the handoff.txt attachment from our earlier chat as an editable file so I can keep it.')
+      assert.equal(copy.finalIntent, 'answer', copy.output)
+      assert.equal(copy.historyBeforeTurn, 0)
+      assert.equal(await fs.readFile(path.join(context.profilePath, 'files', 'handoff.txt'), 'utf8'), content)
+
+      const { CONVERSATION_SESSION_MANAGER } = await import('@/core/session-manager')
+      CONVERSATION_SESSION_MANAGER.deleteSession(turn.sessionId)
+      assert.equal(await fs.readFile(path.join(context.profilePath, 'files', 'handoff.txt'), 'utf8'), content)
+      await assert.rejects(readArtifact(turn.sessionId, artifact.id))
+
+      return { turn, artifact, copy }
     })
   }
 }

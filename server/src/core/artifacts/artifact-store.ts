@@ -6,6 +6,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
 import { isPortableArtifactFilename, type Artifact } from './artifact-types'
 
@@ -187,5 +188,40 @@ export async function readArtifact(
   return {
     artifact,
     path: path.join(root, 'content', component(artifact.filename))
+  }
+}
+
+/**
+ * Saves an editable copy of a registered attachment without replacing a file
+ * that already occupies the destination.
+ */
+export async function saveArtifactFile(
+  sessionId: string,
+  id: string,
+  destination?: string
+): Promise<{ path: string, bytesWritten: number }> {
+  if (destination !== undefined && !path.isAbsolute(destination)) {
+    throw new Error('Provide an absolute destination on the Leon server.')
+  }
+
+  const source = await readArtifact(sessionId, id)
+  const target = destination ?? path.join(getProfilePaths().files, source.artifact.filename)
+  const directory = path.dirname(target)
+
+  if (destination === undefined) {
+    await fs.mkdir(directory, { recursive: true })
+  }
+
+  // Stage beside the destination so publication is exclusive on the same filesystem.
+  const staging = await fs.mkdtemp(path.join(directory, '.leon-save-'))
+  const temporary = path.join(staging, 'content')
+
+  try {
+    await fs.copyFile(source.path, temporary)
+    await fs.link(temporary, target)
+
+    return { path: target, bytesWritten: source.artifact.size_bytes }
+  } finally {
+    await fs.rm(staging, { recursive: true, force: true })
   }
 }

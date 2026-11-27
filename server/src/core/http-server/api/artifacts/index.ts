@@ -4,7 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
 
 import type { APIOptions } from '@/core/http-server/http-server'
-import { readArtifact } from '@/core/artifacts/artifact-store'
+import { readArtifact, saveArtifactFile } from '@/core/artifacts/artifact-store'
 import { getArtifactDownloadFilename } from '@/core/artifacts/artifact-types'
 
 const BYTE_RANGE_PATTERN = /^bytes=(\d*)-(\d*)$/
@@ -30,6 +30,28 @@ export const artifactsPlugin: FastifyPluginAsync<APIOptions> = async (
   options
 ) => {
   await fastify.register(uploadArtifacts, options)
+
+  fastify.post<{
+    Params: { sessionId: string, id: string }
+    Body: { path?: string }
+  }>(`/api/${options.apiVersion}/artifacts/:sessionId/:id/save`, {
+    schema: {
+      body: Type.Object({ path: Type.Optional(Type.String({ minLength: 1 })) }, { additionalProperties: false })
+    }
+  }, async (request, reply) => {
+    try {
+      const data = await saveArtifactFile(request.params.sessionId, request.params.id, request.body.path)
+
+      return reply.send({ success: true, data })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        return reply.code(409).send({ success: false, message: 'The destination already exists. Choose an unused filename.' })
+      }
+
+      return reply.code(400).send({ success: false, message: error instanceof Error ? error.message : String(error) })
+    }
+  })
+
   fastify.get<{
     Params: { sessionId: string, id: string }
     Querystring: { download?: boolean }
