@@ -4,11 +4,26 @@ Leon has **one product version and release notes** for the server, web and Deskt
 
 Preview installs receive eligible prereleases and stable releases; stable installs receive stable releases only. Before the announcement, increment `2.0.0-alpha.0`, `.0.1`, `.0.2`, etc.; reserve `2.0.0-alpha.1` for the announcement. Every changed distribution needs a higher SemVer version; `+dev` does not increase precedence.
 
-1. Bump `package.json` appropriately and author `release.json`: title, summary, highlights and changes under `new`, `improvements`, `fixes`, `removed`.
-2. Run `pnpm release`. It checks published releases/remote tags, creates missing release-note scaffolding or updates a stale metadata version, then stops for review when needed. It never bumps `package.json` or commits.
-3. Commit and push the reviewed version, notes and code. Run `pnpm release` again from the clean, pushed branch to create/push the immutable tag and trigger CI. `pnpm release --dry-run` checks without writes. Optional `GH_TOKEN`/`GITHUB_TOKEN` authenticates discovery; no maintainer token ships to owners.
+## Prepare a version
+
+Write `release.json` once per version alongside the bump in `package.json`. Review the full batch and its commit messages before pushing to `develop`. If the batch changes after drafting, revise the affected notes.
+
+- Use a plain-English title and a short summary. Use `highlights` for the most important owner benefits and `changes` for details under `new`, `improvements`, `fixes`, and `removed`.
+- Group commits that deliver the same outcome. Explain what owners can do, what gets easier, or what problem was fixed. Include technical details when they help owners tell whether a change applies to them. Back up claims about speed or quality with evidence.
+- Use Markdown in highlight bodies for details such as tables.
 
 Set `desktop.minimumServerVersion` in `release.json` to the oldest server version supported by Desktop in the release's major version. The Desktop build embeds this value for startup and update checks. Carry it forward across releases and raise it when Desktop requires a newer server capability.
+
+Pushing to `develop` records the batch and its release notes for review. Run the publishing steps when ready to request a release.
+
+**Planned release media.** While drafting, keep screenshots and clips in a local folder outside the checkout, organized by version. The planned publishing flow attaches them to the GitHub release draft, and the update dialog displays those assets before installation.
+
+## Publish a version
+
+1. Commit and push the reviewed version, notes and code.
+2. Run `pnpm release` from the clean, pushed branch to check published releases and remote tags, then create and push the immutable tag that triggers CI. If it prepares missing release-note scaffolding or updates a stale metadata version, review the notes, commit and push them, then run it again. The command leaves the `package.json` bump and commits to the maintainer.
+
+Use `pnpm release --dry-run` for a read-only check before tagging. Optional `GH_TOKEN` or `GITHUB_TOKEN` authenticates discovery.
 
 [Release CI](../../.github/workflows/release.yml) gates publication on build/lint/tests, Desktop builds, cold installs, [Quick Evals](../../.github/workflows/quick-evals.yml), and source/archive OTA checks with profile preservation, restart and live inference. Server archives and Desktop builds require native verification for `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`. Windows ARM64 remains unverified; macOS Intel is excluded. Without a predecessor, gates record a bootstrap baseline, not a proven public upgrade.
 

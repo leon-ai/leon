@@ -30,6 +30,7 @@ These are community expectations for agents, not license conditions. The unchang
 - Preserve unrelated changes and profile isolation. Reuse profile/path/runtime utilities; avoid hardcoded owner paths, runtime versions or shared owner state. Normalize both paths before comparison; test Windows separators and relative segments.
 - Extend TypeBox schemas by composing raw properties before `Type.Strict` strips optional markers; verify omitted optional fields remain valid.
 - Suggest a commit message matching `scripts/commit-msg.js`; commit only when asked.
+- Prefer a short commit body to help maintainers write release notes. Leave a blank line after the subject, then use one or two sentences to explain why the change matters and what it improves. For dependency updates, describe the effect in Leon when it is known. The subject can stand on its own for straightforward changes.
 - Do not create or update changelog files unless the owner explicitly requests it.
 
 ## Releases, publishing and distribution
