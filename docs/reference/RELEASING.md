@@ -10,6 +10,8 @@ Start each change from `develop` on its own topic branch. Name it `<type>/<short
 
 Merge reviewed changes into `develop` as they are ready. Use `develop` for daily source builds so contributors can try the combined changes while the next release batch takes shape.
 
+The web app displays the canonical version for builds from `develop`, detached checkouts and source archives. Builds from other named branches append `+dev.<short-sha>` to the sidebar label so contributors can identify the commit. Rebuild the web app after switching branches to refresh the label.
+
 The release maintainer selects the batch and prepares one product version bump and one set of release notes. Keeping `package.json` and `release.json` in the same release preparation change gives contributors a single version and summary for the batch.
 
 ## Prepare a version

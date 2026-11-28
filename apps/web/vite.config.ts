@@ -10,8 +10,10 @@ import YAML from 'yaml'
 import { PROFILE_CONFIG_PATH } from '../../server/src/leon-roots.ts'
 import type { ModelProvider } from './src/data/model-catalog.ts'
 import { auroraSandbox } from './vite/aurora-sandbox.ts'
+import { readDevelopmentVersionSuffix } from './vite/development-version.ts'
 
 const WEB_APP_DEV_SERVER_PORT = 5_173
+const PROJECT_ROOT = fileURLToPath(new URL('../../', import.meta.url))
 const HIGHLIGHTS_WASM_MODULE_ID = '\0leon:highlights-wasm'
 const require = createRequire(import.meta.url)
 const highlightsPackageURL = pathToFileURL(require.resolve('@pierre/highlights/package.json'))
@@ -107,7 +109,8 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
     root: 'apps/web',
     base: leonServer ? '/' : '/web-app/',
     define: {
-      LEON_MODEL_PROVIDERS: JSON.stringify(await readModelProviders())
+      LEON_MODEL_PROVIDERS: JSON.stringify(await readModelProviders()),
+      LEON_BUILD_VERSION_SUFFIX: JSON.stringify(readDevelopmentVersionSuffix(PROJECT_ROOT))
     },
     resolve: {
       alias: [

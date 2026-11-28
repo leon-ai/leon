@@ -74,15 +74,21 @@
     display: flex
     flex: 1 1 auto
     align-items: center
+    justify-content: center
     min-width: 0
-    padding-left: var(--space-sm)
+    padding-inline: var(--space-xs)
+    container-type: inline-size
     color: var(--color-text-tertiary)
-    font-size: var(--font-size-sm)
-    line-height: var(--line-height-sm)
-    white-space: nowrap
     opacity: 1
     overflow: hidden
     transition: opacity var(--transition-duration-main) var(--transition-timing-main), padding var(--transition-duration-sidebar) var(--transition-timing-sidebar)
+
+  .sidebar-footer-version
+    min-width: 0
+    font-size: clamp(var(--font-size-xs), 12cqi, var(--font-size-sm))
+    line-height: clamp(var(--line-height-xs), 15cqi, var(--line-height-sm))
+    text-align: center
+    overflow-wrap: anywhere
 
   .sidebar-footer-mood
     position: relative
@@ -154,7 +160,7 @@
     opacity: 0
 
   .sidebar-footer-status-label
-    padding-left: 0
+    padding-inline: 0
     opacity: 0
 
 @media (prefers-reduced-motion: reduce)
