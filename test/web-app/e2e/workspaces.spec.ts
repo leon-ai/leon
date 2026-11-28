@@ -1,9 +1,14 @@
+import { fileURLToPath } from 'node:url'
+
+import { readDevelopmentVersionSuffix } from '../../../apps/web/vite/development-version'
 import { WorkspaceResourceKind } from '../../../bridges/runtime/contracts/workspace'
 import PACKAGE from '../../../package.json' with { type: 'json' }
 
 import type { Page, Route } from '@playwright/test'
 
 import { test, expect, SESSION_ID, SESSION_URL, finishFiniteAnimations, setFixtureTheme, expectTrailingSelection } from './fixtures'
+
+const SIDEBAR_VERSION = PACKAGE.version + readDevelopmentVersionSuffix(fileURLToPath(new URL('../../../', import.meta.url)))
 
 async function mockFolders(page: Page): Promise<void> {
   const home = '/home/owner/'
@@ -21,6 +26,32 @@ async function mockFolders(page: Page): Promise<void> {
       entries: (names ?? []).map((name) => ({ name, type: 'folder', absolutePath: `${directory}${name}/` })) } })
   })
 }
+
+test('keeps the full sidebar version readable in less space', async ({ page, ui }) => {
+  void ui
+  await page.goto('./')
+
+  const sidebar = page.locator('.sidebar')
+  const version = sidebar.locator('.sidebar-footer-version')
+  await expect(version).toBeVisible()
+  await expect(version).toHaveText(SIDEBAR_VERSION)
+  await expect(version).toHaveCSS('font-size', '14px')
+
+  await sidebar.evaluate((element) => element.style.setProperty('--sidebar-width', '232px'))
+  await expect(version).toHaveCSS('font-size', '12px')
+  await expect.poll(() => version.evaluate((element) => {
+    const bounds = element.parentElement!.getBoundingClientRect()
+    const range = document.createRange()
+    range.selectNodeContents(element)
+
+    const lines = [...range.getClientRects()]
+
+    return lines.length > 0 && lines.every((rect) =>
+      rect.left >= bounds.left && rect.right <= bounds.right &&
+      rect.top >= bounds.top && rect.bottom <= bounds.bottom
+    )
+  })).toBe(true)
+})
 
 for (const motion of ['normal', 'reduced', 'zero duration'] as const) {
   test(`closes workspace editors through the shared dialog lifecycle (${motion})`, async ({ page, ui }) => {
@@ -137,7 +168,7 @@ for (const { theme, motion, width } of [
     await mockFolders(page)
     await page.goto('./')
     const sidebar = page.locator('.sidebar')
-    await expect(sidebar.locator('.sidebar-footer-status-label')).toHaveText(PACKAGE.version)
+    await expect(sidebar.locator('.sidebar-footer-status-label')).toHaveText(SIDEBAR_VERSION)
     const update = sidebar.getByRole('button', { name: 'New update available!', exact: true })
     await expect(update).toHaveText('New')
     await update.hover()

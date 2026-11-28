@@ -3,7 +3,7 @@ import type { CSSProperties, MouseEvent  } from 'react'
 import { Link } from '@tanstack/react-router'
 
 import { Tooltip } from '@/components/tooltip'
-import { getPublicAssetPath, LEON_VERSION } from '@/config'
+import { getPublicAssetPath, LEON_VERSION, LEON_VERSION_SUFFIX } from '@/config'
 import { useAmbientConditions } from '@/data/ambient-conditions'
 import { AppShortcutKey, getAppShortcutAria } from '@/utils/keyboard-shortcuts'
 
@@ -77,7 +77,10 @@ export function SidebarFooter({
           </Link>
         </Tooltip>
         <span className="sidebar-footer-status-label">
-          {LEON_VERSION}
+          <span className="sidebar-footer-version">
+            {LEON_VERSION}
+            {LEON_VERSION_SUFFIX && <><wbr />{LEON_VERSION_SUFFIX}</>}
+          </span>
         </span>
         <div className="sidebar-footer-mood">
           <Tooltip message={moodLabel} position="right">
