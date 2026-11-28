@@ -166,7 +166,7 @@ https://github.com/user-attachments/assets/90d0880a-7e87-4063-a5bb-09d400da6bc0
 
 一个能认识网名背后那些人的地方。尊重彼此的时间和想法。即使还没想好怎么做，也愿意过来坐坐、聊聊。
 
-现在就可以**[加入我们的 Discord](https://discord.gg/MNQqqKg)**，认识大家，看看项目最近在做什么。
+现在就可以 **[加入我们的 Discord](https://discord.gg/MNQqqKg)**，认识大家，看看项目最近在做什么。
 
 如果你也想参与构建 Leon，欢迎填写 **[Leon AI 贡献意向表](https://forms.gle/6PCG2D5rYo1q8tKMA)**。在准备 alpha 版本的这段时间里，这能帮助我了解你，也安排好接下来的事情。
 
@@ -179,6 +179,15 @@ https://github.com/user-attachments/assets/90d0880a-7e87-4063-a5bb-09d400da6bc0
 ## 给中国朋友们的一点问候
 
 大家好 👋 我是 Louis，一个住在深圳的法国人。很开心能通过 Leon 认识你们。欢迎来聊聊、分享想法，或者一起做点有意思的东西。希望这里也能让你们感到自在，就像和朋友在一起一样。
+
+## 与时间同行
+
+早在这一轮 AI 浪潮到来之前，我就开始开发 Leon 了。我们今天还在做 Leon，理由和我当初开始时一样：喜欢做这件事，也想做出一个大家在未来很多年里都能信赖的个人助手。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/star-history-dark.svg">
+  <img alt="Leon 在 GitHub 上的星标数变化" src="./.github/assets/star-history-light.svg">
+</picture>
 
 ## 关注进展
 

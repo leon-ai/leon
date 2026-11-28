@@ -181,6 +181,15 @@ Really looking forward to seeing what we make together.
 
 大家好 👋 我是 Louis，一个住在深圳的法国人。很开心能通过 Leon 认识你们。欢迎来聊聊、分享想法，或者一起做点有意思的东西。希望这里也能让你们感到自在，就像和朋友在一起一样。
 
+## A lifelong project
+
+I started building Leon long before this new wave of AI. What keeps us building today is what got me started: a love of the work and the desire to make a personal assistant people can count on for years.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/star-history-dark.svg">
+  <img alt="GitHub star history for Leon" src="./.github/assets/star-history-light.svg">
+</picture>
+
 ## Follow along
 
 I share progress most regularly on **[X / @grenlouis](https://x.com/grenlouis)**. You can also follow along through the links below.

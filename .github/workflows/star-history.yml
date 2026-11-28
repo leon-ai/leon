@@ -1,0 +1,85 @@
+name: Star history
+
+on:
+  schedule:
+    - cron: '0 21 * * 5' # Saturday at 05:00 Beijing time (UTC+8)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: readme-star-history
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.repository == 'leon-ai/leon' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generate light and dark charts
+        uses: leereilly/star-chart@e7fa78bdf8f78da6c3feeb3a97b528fd97d62727 # v0.3
+        with:
+          output: generated-star-history/star-history.svg
+          style: neon-glow-stream
+          dual_theme: 'true'
+          period: all
+          columns: '180'
+          height: '300'
+          title: GitHub star history
+          axis_font_size: '13'
+          show_total: 'false'
+          show_change: 'false'
+          show_legend: 'false'
+          background_mode: transparent
+          level_4_color: '#1C75DB'
+          animation: none
+          logo: 'false'
+      - name: Apply README chart styling
+        run: node scripts/ci/style-star-history.js generated-star-history
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: readme-star-history
+          path: |
+            generated-star-history/star-history-light.svg
+            generated-star-history/star-history-dark.svg
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    # Keep the write token off the runner that executes the chart generator.
+    needs: generate
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: readme-star-history
+          path: ${{ runner.temp }}/readme-star-history
+          skip-decompress: 'true'
+      - name: Validate and install chart assets
+        run: python3 scripts/ci/install-star-history.py "$RUNNER_TEMP/readme-star-history" .github/assets
+      - name: Commit changed charts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git add -- .github/assets/star-history-light.svg .github/assets/star-history-dark.svg
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'docs: refresh star history chart'
+          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          export GIT_AUTH_HEADER="AUTHORIZATION: basic $auth"
+          git --config-env=http.https://github.com/.extraheader=GIT_AUTH_HEADER push origin "HEAD:$GITHUB_REF"

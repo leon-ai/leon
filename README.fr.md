@@ -181,6 +181,15 @@ J’ai vraiment hâte de voir ce qu’on va créer ensemble.
 
 Je suis français moi aussi, même si je vis aujourd’hui à Shenzhen. Ça me ferait vraiment plaisir de continuer à développer Leon avec vous. Faisons grandir ensemble un assistant IA personnel à la pointe, avec du savoir-faire, de la passion et cette petite fierté de se dire « oui, on l’a fait ! ». Un beau projet open source français, ouvert à tout le monde. Cocorico 🐓
 
+## Le projet d'une vie
+
+J’ai commencé à développer Leon bien avant cette nouvelle vague d’IA. Ce qui nous motive aujourd’hui, c’est ce qui m’a donné envie de commencer : le plaisir de construire et l’envie de créer un assistant personnel sur lequel on pourra compter pendant des années.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/star-history-dark.svg">
+  <img alt="Historique des étoiles GitHub de Leon" src="./.github/assets/star-history-light.svg">
+</picture>
+
 ## Suivre l’aventure
 
 Je partage les avancées surtout sur **[X / @grenlouis](https://x.com/grenlouis)**. Vous pouvez aussi suivre l’aventure avec les liens ci-dessous.
