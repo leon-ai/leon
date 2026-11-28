@@ -18,6 +18,9 @@
         "web_search_complete": [
           "✅ Web search complete for \"{{ query }}\"\n\n{{ content }}\n\n📚 {{ citations_count }} sources found"
         ],
+        "web_search_no_results": [
+          "I couldn't find any sources for \"{{ query }}\"."
+        ],
         "x_search_complete": [
           "✅ X/Twitter search complete for \"{{ query }}\"\n\n{{ content }}\n\n📚 {{ citations_count }} sources found"
         ],
@@ -28,7 +31,7 @@
           "✅ Deep research complete on \"{{ query }}\"\n\n{{ content }}\n\n📚 {{ citations_count }} sources analyzed"
         ],
         "provider_not_supported": [
-          "Search provider \"{{ provider }}\" is not supported. Please use 'grok'."
+          "I can't use the search provider \"{{ provider }}\". Choose Keenable or Grok."
         ],
         "search_error": ["❌ Search error: {{ error }}"]
       }

@@ -3,7 +3,6 @@ import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import GrokTool from '@tools/search_web/grok'
 import OpenRouterTool from '@tools/communication/openrouter'
 import ChatterboxONNXTool from '@tools/music_audio/chatterbox_onnx'
 import FfmpegTool from '@tools/video_streaming/ffmpeg'
@@ -26,6 +25,10 @@ interface PodcastSegment {
 interface PodcastScript {
   title: string
   segments: PodcastSegment[]
+}
+
+interface ResearchOutput extends Record<string, unknown> {
+  result?: { content?: string }
 }
 
 export const run: ActionFunction = async function (
@@ -67,25 +70,34 @@ export const run: ActionFunction = async function (
       data: { topic }
     })
 
-    const grok = await ToolManager.initTool(GrokTool)
+    const research = await ToolManager.executeTool<ResearchOutput>({
+      toolkitId: 'search_web',
+      toolId: 'grok',
+      functionName: 'deepResearch',
+      parsedInput: {
+        topic,
+        focusAreas: [
+          'Recent developments and trends',
+          'Key facts and statistics',
+          'Expert opinions',
+          'Interesting angles and perspectives'
+        ]
+      }
+    })
 
-    const researchResult = await grok.deepResearch(topic, [
-      'Recent developments and trends',
-      'Key facts and statistics',
-      'Expert opinions',
-      'Interesting angles and perspectives'
-    ])
-
-    if (!researchResult.success || !researchResult.data) {
+    if (research.status !== 'success') {
       leon.answer({
         key: 'error',
-        data: { error: researchResult.error || 'Research failed' }
+        data: {
+          error: research.data.tool_id
+            ? research.message
+            : 'Install or enable Grok in Tools to use podcast research.'
+        }
       })
       return
     }
 
-    // Responses API uses "output" array with the final text in content helper
-    const researchContent = researchResult.content
+    const researchContent = research.data.output.result?.content
 
     if (!researchContent) {
       leon.answer({

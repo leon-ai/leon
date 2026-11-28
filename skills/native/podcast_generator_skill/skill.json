@@ -3,7 +3,7 @@
   "name": "Podcast Generator",
   "icon_name": "mic-2-line",
   "bridge": "nodejs",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generate podcast conversations between two people on any topic with research.",
   "distribution": "built-in",
   "maintenance": "official",
