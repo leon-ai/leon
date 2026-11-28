@@ -218,38 +218,6 @@ export const NVIDIA_NVSHMEM_VERSION = NVIDIA_VERSIONS.nvshmem
 export const NVIDIA_NVJITLINK_VERSION = NVIDIA_VERSIONS.nvjitlink
 
 /**
- * CMake paths and versions.
- * Used as a common layer across tools.
- */
-export const CMAKE_PATH = path.join(BIN_PATH, 'cmake')
-export const CMAKE_VERSIONS_PATH = path.join(
-  CODEBASE_BIN_PATH,
-  'cmake',
-  'versions.json'
-)
-export const CMAKE_INSTALL_PATH = path.join(CMAKE_PATH, 'cmake')
-export const CMAKE_MANIFEST_PATH = path.join(CMAKE_INSTALL_PATH, 'manifest.json')
-const CMAKE_VERSIONS = JSON.parse(fs.readFileSync(CMAKE_VERSIONS_PATH, 'utf8'))
-export const CMAKE_VERSION = CMAKE_VERSIONS.cmake
-export const CMAKE_BIN_PATH = path.join(CMAKE_INSTALL_PATH, 'bin', 'cmake')
-
-/**
- * Ninja paths and versions.
- * Used as a common layer across tools.
- */
-export const NINJA_PATH = path.join(BIN_PATH, 'ninja')
-export const NINJA_VERSIONS_PATH = path.join(
-  CODEBASE_BIN_PATH,
-  'ninja',
-  'versions.json'
-)
-export const NINJA_INSTALL_PATH = path.join(NINJA_PATH, 'ninja')
-export const NINJA_MANIFEST_PATH = path.join(NINJA_INSTALL_PATH, 'manifest.json')
-const NINJA_VERSIONS = JSON.parse(fs.readFileSync(NINJA_VERSIONS_PATH, 'utf8'))
-export const NINJA_VERSION = NINJA_VERSIONS.ninja
-export const NINJA_BIN_PATH = path.join(NINJA_INSTALL_PATH, 'ninja')
-
-/**
  * Portable runtime paths and versions.
  * Used as a common layer across skills, bridges and setup scripts.
  */

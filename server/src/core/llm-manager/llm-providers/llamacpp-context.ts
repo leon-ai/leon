@@ -39,6 +39,10 @@ const MINIMUM_DEVICE_RESERVE_MIB = MIB_PER_GIB
 const MAXIMUM_PROMPT_CACHE_MIB = 8 * MIB_PER_GIB
 const CONTEXT_ALIGNMENT = 256
 const ESTIMATION_TIMEOUT_MS = 30_000
+const DEVICE_LIST_TIMEOUT_MS = 10_000
+const DEVICE_LIST_HEADER = 'Available devices:'
+const DEVICE_LINE = /^(\S+): .+$/
+const DEVICE_FREE_MEMORY = /\((?:\d+(?:\.\d+)?) MiB, (\d+(?:\.\d+)?) MiB free\)$/
 const FIT_ARGUMENTS = new Set(['-c', '-ngl', '-ts', '-ot'])
 const EXECUTION_LABELS = {
   [LlamaCPPExecutionMode.GPU]: 'GPU',
@@ -57,29 +61,77 @@ export class LlamaCPPCapacityError extends Error {}
 export class LlamaCPPBackendError extends Error {}
 
 /**
+ * Resolve a managed installation. The current prebuilt takes precedence over
+ * older layouts after setup publishes its manifest.
+ */
+export function readLlamaCPPInstallation(): {
+  version: string
+  runtimeDirectory: string
+} | null {
+  const binary = SystemHelper.isWindows() ? 'llama-server.exe' : 'llama-server'
+  const manifests = [
+    [LLAMACPP_BUILD_MANIFEST_PATH, LLAMACPP_BUILD_PATH],
+    [LLAMACPP_SOURCE_MANIFEST_PATH, LLAMACPP_SOURCE_PATH],
+    [LLAMACPP_ROOT_MANIFEST_PATH, LLAMACPP_PATH]
+  ] as const
+
+  for (const [manifestPath, root] of manifests) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+      if (typeof manifest.runtimePath !== 'string' || !manifest.runtimePath.trim()) {
+        continue
+      }
+      const runtimeDirectory = path.join(root, manifest.runtimePath)
+      if (fs.existsSync(path.join(runtimeDirectory, binary))) {
+        return { version: manifest.version, runtimeDirectory }
+      }
+    } catch {
+      // An older installation can still supply the runtime.
+    }
+  }
+
+  return null
+}
+
+/**
  * Resolve the installed native runtime identically in setup and inference.
  */
 export function getLlamaCPPServerBinaryPath(): string {
   const binary = SystemHelper.isWindows() ? 'llama-server.exe' : 'llama-server'
-  const manifests = [
-    [LLAMACPP_SOURCE_MANIFEST_PATH, LLAMACPP_SOURCE_PATH],
-    [LLAMACPP_BUILD_MANIFEST_PATH, LLAMACPP_BUILD_PATH],
-    [LLAMACPP_ROOT_MANIFEST_PATH, LLAMACPP_PATH]
-  ]
-
-  for (const [manifestPath, root] of manifests) {
-    try {
-      const manifest = JSON.parse(fs.readFileSync(manifestPath!, 'utf8'))
-      if (typeof manifest.runtimePath === 'string' && manifest.runtimePath) {
-        return path.join(root!, manifest.runtimePath, binary)
-      }
-    } catch {
-      // A missing manifest may belong to an installation method not in use.
-    }
+  const installation = readLlamaCPPInstallation()
+  if (installation) {
+    return path.join(installation.runtimeDirectory, binary)
   }
 
   const source = path.join(LLAMACPP_SOURCE_BUILD_PATH, binary)
   return fs.existsSync(source) ? source : path.join(LLAMACPP_BUILD_PATH, binary)
+}
+
+/**
+ * Read actual devices from a native binary, excluding backend startup logs.
+ */
+export async function listLlamaCPPDevices(binary: string): Promise<{
+  id: string
+  freeMiB: number | null
+}[]> {
+  const output = await RuntimeHelper.runBinary(binary, ['--list-devices'], {
+    timeoutMs: DEVICE_LIST_TIMEOUT_MS
+  })
+  const lines = output.split('\n').map((line) => line.trim())
+  const header = lines.indexOf(DEVICE_LIST_HEADER)
+  if (header < 0) {
+    return []
+  }
+
+  return lines.slice(header + 1).flatMap((line) => {
+    const id = line.match(DEVICE_LINE)?.[1]
+    if (!id) {
+      return []
+    }
+    const freeMemory = line.match(DEVICE_FREE_MEMORY)?.[1]
+
+    return [{ id, freeMiB: freeMemory === undefined ? null : Number(freeMemory) }]
+  })
 }
 
 /**

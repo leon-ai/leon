@@ -27,6 +27,8 @@ const MACOS_RECLAIMABLE_VM_STAT_PAGE_NAMES = [
 ]
 const MINIMUM_LOCAL_LLM_VRAM_GB = 6
 const MINIMUM_LOCAL_LLM_RAM_GB = 8
+const NVIDIA_DRIVER_PROBE_TIMEOUT_MS = 3_000
+const MIB_PER_GIB = 1_024
 
 enum OSNames {
   Windows = 'Windows',
@@ -401,6 +403,39 @@ export class SystemHelper {
   }
 
   /**
+   * Find NVIDIA devices through the driver, independently of the CUDA toolkit.
+   */
+  public static async getNvidiaGPUInfo(): Promise<{
+    names: string[]
+    totalVRAM: number
+  } | null> {
+    try {
+      const output = await RuntimeHelper.runBinary('nvidia-smi', [
+        '--query-gpu=memory.total,name', '--format=csv,noheader,nounits'
+      ], { timeoutMs: NVIDIA_DRIVER_PROBE_TIMEOUT_MS })
+      const devices = output.split('\n').flatMap((line) => {
+        const separator = line.indexOf(',')
+        if (separator < 0) {
+          return []
+        }
+        const name = line.slice(separator + 1).trim()
+        if (!name) {
+          return []
+        }
+        const memory = Number(line.slice(0, separator))
+        return [{ name, memory: Number.isFinite(memory) ? memory / MIB_PER_GIB : 0 }]
+      })
+
+      return devices.length > 0 ? {
+        names: devices.map(({ name }) => name),
+        totalVRAM: devices.reduce((total, { memory }) => total + memory, 0)
+      } : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
    * Get the amount of used VRAM (in GB) on the machine
    * @example getUsedVRAM() // 6.04
    */
@@ -428,9 +463,9 @@ export class SystemHelper {
    * Check if the machine can support a local LLM based on VRAM or system RAM
    * @example canSupportLocalLLM() // true
    */
-  public static async canSupportLocalLLM(llama?: Llama): Promise<boolean> {
+  public static async canSupportLocalLLM(totalVRAM?: number): Promise<boolean> {
     return (
-      (await this.getTotalVRAM(llama)) >= MINIMUM_LOCAL_LLM_VRAM_GB ||
+      (totalVRAM ?? await this.getTotalVRAM()) >= MINIMUM_LOCAL_LLM_VRAM_GB ||
       this.getTotalRAM() >= MINIMUM_LOCAL_LLM_RAM_GB
     )
   }

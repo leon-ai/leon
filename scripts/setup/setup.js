@@ -25,8 +25,6 @@ import setupJQ from './setup-jq'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
 import setupToolsDependencies from './setup-tools-dependencies'
 import setupTCPServerEnv from './setup-tcp-server-env'
-import setupCMake from './setup-cmake'
-import setupNinja from './setup-ninja'
 import setupLlamaCPP from './setup-llama-cpp'
 import setupLLMFit from './setup-llmfit'
 import setupLocalLLM from './setup-local-llm'
@@ -300,16 +298,13 @@ async function syncLLMSetupChoice(preferences) {
       SetupUI.section('Local AI')
 
       if (preferences.setupLocalAI) {
-        currentStep = 'setupCMake'
-        await setupCMake()
-        currentStep = 'setupNinja'
-        await setupNinja()
         currentStep = 'setupLlamaCPP'
-        await setupLlamaCPP(localAICapability)
-        currentStep = 'setupLLMFit'
-        await setupLLMFit()
-        currentStep = 'setupLocalLLM'
-        await setupLocalLLM(localAICapability, localAISetupState)
+        if (await setupLlamaCPP(localAICapability)) {
+          currentStep = 'setupLLMFit'
+          await setupLLMFit()
+          currentStep = 'setupLocalLLM'
+          await setupLocalLLM(localAICapability, localAISetupState)
+        }
       } else if (localAICapability?.canInstallLocalAI) {
         SetupUI.info('I will skip local AI for now. You can add it later.')
       } else {
@@ -326,7 +321,7 @@ async function syncLLMSetupChoice(preferences) {
     } else {
       // Skip hardware-specific setup in CI where local AI and voice stacks are not needed.
       SetupUI.info(
-        'Skipping CMake, Ninja, llama.cpp, local LLM, QMD models, NVIDIA, and PyTorch setups because it is running in CI'
+        'Skipping llama.cpp, local LLM, QMD models, NVIDIA, and PyTorch setups because it is running in CI'
       )
     }
 

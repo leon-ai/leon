@@ -1,159 +1,108 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { execa } from 'execa'
-
 import { CPUArchitectures } from '@/types'
 import {
   LLAMACPP_BUILD_MANIFEST_PATH,
-  CMAKE_BIN_PATH,
   LLAMACPP_BUILD_PATH,
-  LLAMACPP_ROOT_MANIFEST_PATH,
-  NINJA_BIN_PATH,
-  LLAMACPP_SOURCE_BUILD_PATH,
-  LLAMACPP_SOURCE_MANIFEST_PATH,
-  LLAMACPP_SOURCE_PATH,
   LLAMACPP_PATH,
   LLAMACPP_RELEASE_VERSION
 } from '@/constants'
+import {
+  listLlamaCPPDevices,
+  readLlamaCPPInstallation
+} from '@/core/llm-manager/llm-providers/llamacpp-context'
 import { FileHelper } from '@/helpers/file-helper'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 
+import inspectLocalAICapability from './local-ai-capability'
 import { createSetupStatus } from './setup-status'
 import { SetupUI } from './setup-ui'
 
-/**
- * Download and set up llama.cpp
- * 1. Resolve the release version from versions.json
- * 2. Build from source on Linux + CUDA when required
- * 3. Otherwise download the matching prebuilt archive
- * 4. Keep the final binaries in their stable runtime directory
- */
+const BINARY_NAMES = ['llama-server', 'llama-fit-params']
+const HEALTH_CHECK_TIMEOUT_MS = 10_000
+const STAGING_PREFIX = '.install-'
+const BUNDLE_PREFIX = 'bundle-'
+const RELEASE_BASE_URL = `https://github.com/ggml-org/llama.cpp/releases/download/${LLAMACPP_RELEASE_VERSION}`
+const LINUX_CUDA_VERSIONS = {
+  [CPUArchitectures.X64]: '12.8',
+  [CPUArchitectures.ARM64]: '13.5'
+}
 
-const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
-const { cpuArchitecture: CPU_ARCH } = SystemHelper.getInformation()
-const LLAMACPP_BUILD_TARGETS = ['llama-server', 'llama-fit-params']
-const LLAMACPP_BINARY_NAMES = LLAMACPP_BUILD_TARGETS.map((target) =>
-  SystemHelper.isWindows() ? `${target}.exe` : target
-)
-const LLAMA_SERVER_BINARY_NAME = LLAMACPP_BINARY_NAMES[0]
-const LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX = 'bin-win-cuda-12.4-x64.zip'
-const LLAMACPP_DEVICE_LIST_HEADER = 'Available devices:'
-const LLAMACPP_HEALTH_CHECK_TIMEOUT_MS = 10_000
-const LLAMACPP_SOURCE_DOWNLOAD_MAX_ATTEMPTS = 2
-const LLAMACPP_SOURCE_ARCHIVE_SETTLE_DELAY_MS = 500
-const LLAMACPP_SOURCE_ARCHIVE_SETTLE_POLL_DELAY_MS = 250
-const LLAMACPP_SOURCE_ARCHIVE_SETTLE_MAX_POLLS = 6
-const LLAMACPP_RELEASE_BASE_URL = `https://github.com/ggml-org/llama.cpp/releases/download/${LLAMACPP_RELEASE_VERSION}`
-const LLAMACPP_SOURCE_URL = `https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMACPP_RELEASE_VERSION}.tar.gz`
+function binaryName(name) {
+  return SystemHelper.isWindows() ? `${name}.exe` : name
+}
 
-function readManifest() {
-  const manifestEntries = [
-    {
-      manifestPath: LLAMACPP_SOURCE_MANIFEST_PATH,
-      runtimeBasePath: LLAMACPP_SOURCE_PATH
-    },
-    {
-      manifestPath: LLAMACPP_BUILD_MANIFEST_PATH,
-      runtimeBasePath: LLAMACPP_BUILD_PATH
-    },
-    // Keep compatibility with the previous root-level manifest layout.
-    {
-      manifestPath: LLAMACPP_ROOT_MANIFEST_PATH,
-      runtimeBasePath: LLAMACPP_PATH
-    }
-  ]
+function prebuilt(suffix, backend) {
+  return {
+    asset: `llama-${LLAMACPP_RELEASE_VERSION}-${suffix}`,
+    backend
+  }
+}
 
-  for (const manifestEntry of manifestEntries) {
-    if (!fs.existsSync(manifestEntry.manifestPath)) {
-      continue
-    }
+function getPrebuilts(hasGPU, graphicsComputeAPI) {
+  const { cpuArchitecture } = SystemHelper.getInformation()
+  const arm64 = cpuArchitecture === CPUArchitectures.ARM64
 
-    try {
-      const manifest = JSON.parse(
-        fs.readFileSync(manifestEntry.manifestPath, 'utf8')
-      )
-      const runtimeDirectoryPath =
-        typeof manifest.runtimePath === 'string' && manifest.runtimePath.trim()
-          ? path.join(manifestEntry.runtimeBasePath, manifest.runtimePath)
-          : null
-
-      return {
-        manifest,
-        runtimeDirectoryPath
-      }
-    } catch {
-      return null
-    }
+  if (SystemHelper.isMacOS()) {
+    return [prebuilt(`bin-macos-${arm64 ? 'arm64' : 'x64'}.tar.gz`)]
   }
 
-  return null
-}
+  if (SystemHelper.isWindows()) {
+    if (hasGPU && graphicsComputeAPI === 'cuda') {
+      const suffix = 'bin-win-cuda-12.4-x64.zip'
 
-async function removePath(targetPath) {
-  await fs.promises.rm(targetPath, { recursive: true, force: true })
-}
+      return [{
+        ...prebuilt(suffix, 'cuda'),
+        cudaRuntimeAsset: `cudart-llama-${suffix}`
+      }]
+    }
+    if (hasGPU && graphicsComputeAPI === 'vulkan') {
+      return [prebuilt('bin-win-vulkan-x64.zip', 'vulkan')]
+    }
 
-function wait(delayMs) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, delayMs)
-  })
-}
+    return [prebuilt('bin-win-cpu-x64.zip')]
+  }
 
-function isMoveFallbackError(error) {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    MOVE_FALLBACK_ERROR_CODES.has(error.code)
+  if (SystemHelper.isLinux() && (arm64 || cpuArchitecture === CPUArchitectures.X64)) {
+    if (!hasGPU) {
+      return arm64 ? [] : [prebuilt('bin-ubuntu-x64.tar.gz')]
+    }
+
+    const arch = arm64 ? 'arm64' : 'x64'
+    const vulkan = prebuilt(`bin-ubuntu-vulkan-${arch}.tar.gz`, 'vulkan')
+    if (graphicsComputeAPI !== 'cuda') {
+      return [vulkan]
+    }
+
+    const cuda = prebuilt(`bin-ubuntu-cuda-${LINUX_CUDA_VERSIONS[cpuArchitecture]}-${arch}.tar.gz`, 'cuda')
+
+    return [{ ...cuda, cudaRuntimeAsset: `cudart-${cuda.asset}` }, vulkan]
+  }
+
+  throw new Error(
+    `Unsupported llama.cpp prebuilt platform: ${SystemHelper.getInformation().type} ${cpuArchitecture}`
   )
 }
 
-async function movePath(sourcePath, destinationPath) {
-  await removePath(destinationPath)
-
-  try {
-    await fs.promises.rename(sourcePath, destinationPath)
-  } catch (error) {
-    if (!isMoveFallbackError(error)) {
-      throw error
-    }
-
-    await fs.promises.cp(sourcePath, destinationPath, {
-      recursive: true,
-      force: true
-    })
-    await removePath(sourcePath)
-  }
-}
-
-function getBinaryPath(directoryPath) {
-  return path.join(directoryPath, LLAMA_SERVER_BINARY_NAME)
-}
-
-async function isExistingInstallationHealthy(runtimeDirectoryPath, hasGPU) {
-  if (!runtimeDirectoryPath) {
+async function isInstallationHealthy(directory, hasGPU, backend) {
+  if (!directory) {
     return false
   }
 
   try {
-    // Dynamically loaded GPU backends can fail while --version still succeeds.
-    // Both inference and context fitting must expose a device on GPU machines.
-    for (const binaryName of LLAMACPP_BINARY_NAMES) {
-      const { stdout } = await execa(
-        path.join(runtimeDirectoryPath, binaryName),
-        [hasGPU ? '--list-devices' : '--version'],
-        { timeout: LLAMACPP_HEALTH_CHECK_TIMEOUT_MS }
-      )
-
+    // Both executables must load the selected backend before it can be used
+    // for fitting and inference.
+    for (const name of BINARY_NAMES) {
+      const binary = path.join(directory, binaryName(name))
       if (hasGPU) {
-        // Only native device rows count; backend-loading logs are not devices.
-        const lines = stdout.split('\n').map((line) => line.trim())
-        const headerIndex = lines.indexOf(LLAMACPP_DEVICE_LIST_HEADER)
-        if (headerIndex < 0 || !lines.slice(headerIndex + 1).some((line) =>
-          line.includes(': ')
-        )) {
+        const devices = await listLlamaCPPDevices(binary)
+        if (!devices.some(({ id }) => !backend || id.toLowerCase().startsWith(backend))) {
           return false
         }
+      } else {
+        await RuntimeHelper.runBinary(binary, ['--version'], { timeoutMs: HEALTH_CHECK_TIMEOUT_MS })
       }
     }
 
@@ -163,325 +112,97 @@ async function isExistingInstallationHealthy(runtimeDirectoryPath, hasGPU) {
   }
 }
 
-async function findDirectoryContainingBinary(rootPath, binaryName) {
-  const entries = await fs.promises.readdir(rootPath, { withFileTypes: true })
+async function findBinaryDirectory(directory) {
+  const entries = await fs.promises.readdir(directory, { withFileTypes: true })
+  if (entries.some((entry) => entry.isFile() && entry.name === binaryName(BINARY_NAMES[0]))) {
+    return directory
+  }
 
   for (const entry of entries) {
-    const entryPath = path.join(rootPath, entry.name)
-
     if (entry.isDirectory()) {
-      const maybeBinDir = await findDirectoryContainingBinary(
-        entryPath,
-        binaryName
-      )
-
-      if (maybeBinDir) {
-        return maybeBinDir
+      const found = await findBinaryDirectory(path.join(directory, entry.name))
+      if (found) {
+        return found
       }
-    } else if (entry.isFile() && entry.name === binaryName) {
-      return path.dirname(entryPath)
     }
   }
 
   return null
 }
 
-async function cleanInstallDirectory() {
-  await fs.promises.mkdir(LLAMACPP_PATH, { recursive: true })
-
-  const entries = await fs.promises.readdir(LLAMACPP_PATH, {
-    withFileTypes: true
+async function downloadArchive(asset, staging, target, status, options) {
+  const archive = path.join(staging, asset)
+  status.pause()
+  await FileHelper.downloadFile(`${RELEASE_BASE_URL}/${asset}`, archive, {
+    cliProgress: true,
+    parallelStreams: 3,
+    skipExisting: false
   })
-
-  await Promise.all(
-    entries
-      .filter((entry) => entry.name !== 'versions.json')
-      .map((entry) => removePath(path.join(LLAMACPP_PATH, entry.name)))
-  )
+  status.text = 'Installing llama.cpp...'
+  status.start()
+  await FileHelper.extractArchive(archive, target, options)
 }
 
-async function writeManifest(
-  manifestPath,
-  runtimeBasePath,
-  runtimeDirectoryPath,
-  extraData = {}
-) {
-  await fs.promises.mkdir(path.dirname(manifestPath), { recursive: true })
-
-  await FileHelper.createManifestFile(
-    manifestPath,
-    'llama.cpp',
-    LLAMACPP_RELEASE_VERSION,
-    {
-      runtimePath: path.relative(runtimeBasePath, runtimeDirectoryPath),
-      os: SystemHelper.getInformation().type,
-      architecture: SystemHelper.getInformation().cpuArchitecture,
-      ...extraData
-    }
-  )
-}
-
-async function pruneSourceTree() {
-  const buildDirectoryPath = path.join(LLAMACPP_SOURCE_PATH, 'build')
-  const temporaryRetainedPath = await fs.promises.mkdtemp(
-    path.join(LLAMACPP_PATH, 'llama-cpp-build-bin-')
-  )
-  const retainedBuildBinPath = path.join(temporaryRetainedPath, 'bin')
-
-  await movePath(LLAMACPP_SOURCE_BUILD_PATH, retainedBuildBinPath)
-  await removePath(LLAMACPP_SOURCE_PATH)
-  await fs.promises.mkdir(buildDirectoryPath, { recursive: true })
-  await movePath(retainedBuildBinPath, LLAMACPP_SOURCE_BUILD_PATH)
-  await removePath(temporaryRetainedPath)
-}
-
-async function waitForArchiveToSettle(archivePath) {
-  // Give the download layer a short margin, then wait until the archive size
-  // stops changing before extracting it.
-  await wait(LLAMACPP_SOURCE_ARCHIVE_SETTLE_DELAY_MS)
-
-  let previousSize = -1
-
-  for (let poll = 0; poll < LLAMACPP_SOURCE_ARCHIVE_SETTLE_MAX_POLLS; poll += 1) {
-    const currentSize = (await fs.promises.stat(archivePath)).size
-
-    if (currentSize > 0 && currentSize === previousSize) {
-      return
-    }
-
-    previousSize = currentSize
-    await wait(LLAMACPP_SOURCE_ARCHIVE_SETTLE_POLL_DELAY_MS)
-  }
-}
-
-async function downloadAndExtractSourceArchive(sourceArchivePath) {
-  for (
-    let attempt = 1;
-    attempt <= LLAMACPP_SOURCE_DOWNLOAD_MAX_ATTEMPTS;
-    attempt += 1
-  ) {
-    await Promise.all([
-      removePath(sourceArchivePath),
-      removePath(LLAMACPP_SOURCE_PATH)
-    ])
-
-    await FileHelper.downloadFile(LLAMACPP_SOURCE_URL, sourceArchivePath, {
-      cliProgress: true,
-      // Keep the source archive download conservative to avoid corrupted
-      // segmented downloads before extraction.
-      parallelStreams: 1,
-      skipExisting: false
-    })
-
-    await waitForArchiveToSettle(sourceArchivePath)
-
-    try {
-      await FileHelper.extractArchive(sourceArchivePath, LLAMACPP_SOURCE_PATH, {
-        stripComponents: 1
-      })
-
-      return
-    } catch (error) {
-      if (attempt === LLAMACPP_SOURCE_DOWNLOAD_MAX_ATTEMPTS) {
-        throw error
-      }
-
-      await wait(LLAMACPP_SOURCE_ARCHIVE_SETTLE_POLL_DELAY_MS)
-    }
-  }
-}
-
-function getLinuxVulkanAssetName() {
-  return `llama-${LLAMACPP_RELEASE_VERSION}-bin-ubuntu-vulkan-x64.tar.gz`
-}
-
-function getLinuxCPUAssetName() {
-  return `llama-${LLAMACPP_RELEASE_VERSION}-bin-ubuntu-x64.tar.gz`
-}
-
-function getWindowsCPUAssetName() {
-  return `llama-${LLAMACPP_RELEASE_VERSION}-bin-win-cpu-x64.zip`
-}
-
-function getPrebuiltAssetName(graphicsComputeAPI, hasGPU) {
-  if (SystemHelper.isMacOS()) {
-    return CPU_ARCH === CPUArchitectures.ARM64
-      ? `llama-${LLAMACPP_RELEASE_VERSION}-bin-macos-arm64.tar.gz`
-      : `llama-${LLAMACPP_RELEASE_VERSION}-bin-macos-x64.tar.gz`
-  }
-
-  if (SystemHelper.isWindows()) {
-    if (hasGPU && graphicsComputeAPI === 'cuda') {
-      return `llama-${LLAMACPP_RELEASE_VERSION}-${LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX}`
-    }
-
-    if (hasGPU && graphicsComputeAPI === 'vulkan') {
-      return `llama-${LLAMACPP_RELEASE_VERSION}-bin-win-vulkan-x64.zip`
-    }
-
-    return getWindowsCPUAssetName()
-  }
-
-  if (SystemHelper.isLinux() && CPU_ARCH === CPUArchitectures.X64) {
-    return hasGPU && graphicsComputeAPI === 'vulkan'
-      ? getLinuxVulkanAssetName()
-      : getLinuxCPUAssetName()
-  }
-
-  throw new Error(
-    `Unsupported llama.cpp prebuilt platform: ${SystemHelper.getInformation().type} ${CPU_ARCH}`
-  )
-}
-
-async function installPrebuilt(assetName, status, hasGPU, extraData = {}) {
-  const archivePath = path.join(LLAMACPP_PATH, assetName)
-  // Upstream packages CUDA DLLs separately, under the same release as the build.
-  const cudaRuntimeAssetName = assetName ===
-    `llama-${LLAMACPP_RELEASE_VERSION}-${LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX}`
-    ? `cudart-llama-${LLAMACPP_WINDOWS_CUDA_ASSET_SUFFIX}`
-    : null
-  const cudaRuntimeArchivePath = cudaRuntimeAssetName
-    ? path.join(LLAMACPP_PATH, cudaRuntimeAssetName)
-    : null
+async function installPrebuilt(candidate, status, hasGPU, previousDirectory) {
+  await fs.promises.mkdir(LLAMACPP_BUILD_PATH, { recursive: true })
+  const staging = await fs.promises.mkdtemp(path.join(LLAMACPP_PATH, STAGING_PREFIX))
+  const extracted = path.join(staging, 'runtime')
+  const bundle = path.join(LLAMACPP_BUILD_PATH,
+    `${BUNDLE_PREFIX}${path.basename(staging).slice(STAGING_PREFIX.length)}`)
+  let published = false
 
   try {
-    await cleanInstallDirectory()
-    status.pause()
-
-    await FileHelper.downloadFile(
-      `${LLAMACPP_RELEASE_BASE_URL}/${assetName}`,
-      archivePath,
-      {
-        cliProgress: true,
-        parallelStreams: 3,
-        skipExisting: false
-      }
-    )
-    status.text = 'Installing llama.cpp...'
-    status.start()
-
-    await FileHelper.extractArchive(archivePath, LLAMACPP_BUILD_PATH)
-
-    // Use the directory that actually contains llama-server so we do not rely
-    // on a fixed archive layout across upstream release assets.
-    const binaryDirectoryPath = await findDirectoryContainingBinary(
-      LLAMACPP_BUILD_PATH,
-      LLAMA_SERVER_BINARY_NAME
-    )
-
-    if (!binaryDirectoryPath) {
-      throw new Error(
-        `Cannot find ${LLAMA_SERVER_BINARY_NAME} in extracted llama.cpp archive`
-      )
+    await downloadArchive(candidate.asset, staging, extracted, status)
+    const directory = await findBinaryDirectory(extracted)
+    if (!directory) {
+      throw new Error(`Cannot find ${binaryName(BINARY_NAMES[0])} in the llama.cpp archive.`)
     }
 
-    if (cudaRuntimeArchivePath) {
-      status.pause()
-      await FileHelper.downloadFile(
-        `${LLAMACPP_RELEASE_BASE_URL}/${cudaRuntimeAssetName}`,
-        cudaRuntimeArchivePath,
-        { cliProgress: true, parallelStreams: 3, skipExisting: false }
-      )
-      status.text = 'Installing llama.cpp CUDA runtime...'
-      status.start()
-      await FileHelper.extractArchive(cudaRuntimeArchivePath, binaryDirectoryPath)
+    if (candidate.cudaRuntimeAsset) {
+      // The Linux runtime tarball wraps its libraries in a top-level directory.
+      const options = SystemHelper.isLinux() ? { stripComponents: 1 } : undefined
+      await downloadArchive(candidate.cudaRuntimeAsset, staging, directory, status, options)
     }
 
-    if (!await isExistingInstallationHealthy(binaryDirectoryPath, hasGPU)) {
+    if (!await isInstallationHealthy(directory, hasGPU, candidate.backend)) {
       throw new Error(hasGPU
-        ? 'I cannot use the detected GPU with my llama.cpp runtime. Check its runtime libraries and graphics driver.'
+        ? `I cannot use the detected GPU with my ${candidate.backend ?? 'llama.cpp'} runtime. Check its runtime libraries and graphics driver.`
         : 'I cannot start my llama.cpp runtime. Check its runtime libraries.')
     }
 
-    await writeManifest(
-      LLAMACPP_BUILD_MANIFEST_PATH,
-      LLAMACPP_BUILD_PATH,
-      binaryDirectoryPath,
-      {
-        installType: 'prebuilt',
-        ...extraData
-      }
-    )
-    status.succeed(`llama.cpp ${LLAMACPP_RELEASE_VERSION} ready`)
+    // Publish the pointer only once the complete bundle can run. A failed
+    // replacement leaves the previous manifest and binaries available.
+    const manifest = path.join(staging, 'manifest.json')
+    const installedDirectory = path.join(bundle, path.relative(extracted, directory))
+    const { type, cpuArchitecture } = SystemHelper.getInformation()
+    await FileHelper.createManifestFile(manifest, 'llama.cpp', LLAMACPP_RELEASE_VERSION, {
+      runtimePath: path.relative(LLAMACPP_BUILD_PATH, installedDirectory),
+      os: type,
+      architecture: cpuArchitecture,
+      installType: 'prebuilt',
+      backend: candidate.backend
+    })
+    await fs.promises.rename(extracted, bundle)
+    await fs.promises.rename(manifest, LLAMACPP_BUILD_MANIFEST_PATH)
+    published = true
   } finally {
-    await removePath(archivePath)
-    if (cudaRuntimeArchivePath) {
-      await removePath(cudaRuntimeArchivePath)
+    await fs.promises.rm(staging, { recursive: true, force: true })
+    if (!published) {
+      await fs.promises.rm(bundle, { recursive: true, force: true })
     }
   }
-}
 
-async function buildFromSource(status) {
-  const sourceArchivePath = path.join(
-    LLAMACPP_PATH,
-    `llama.cpp-${LLAMACPP_RELEASE_VERSION}.tar.gz`
-  )
-
-  try {
-    await cleanInstallDirectory()
-
-    status.pause()
-    await downloadAndExtractSourceArchive(sourceArchivePath)
-    status.text = 'Building llama.cpp from source...'
-    status.start()
-
-    // Always use Leon-managed CMake for the source build.
-    await execa(
-      CMAKE_BIN_PATH,
-      [
-        '-B',
-        'build',
-        '-G',
-        'Ninja',
-        `-DCMAKE_MAKE_PROGRAM=${NINJA_BIN_PATH}`,
-        '-DGGML_CUDA=ON',
-        '-DLLAMA_BUILD_TOOLS=ON',
-        '-DLLAMA_BUILD_SERVER=ON',
-        '-DLLAMA_BUILD_TESTS=OFF',
-        '-DLLAMA_BUILD_EXAMPLES=OFF',
-        '-DCMAKE_BUILD_TYPE=Release',
-        '-DCMAKE_CUDA_ARCHITECTURES=native'
-      ],
-      {
-        cwd: LLAMACPP_SOURCE_PATH
-      }
-    )
-    await execa(
-      CMAKE_BIN_PATH,
-      ['--build', 'build', '--target', ...LLAMACPP_BUILD_TARGETS, '-j'],
-      {
-        cwd: LLAMACPP_SOURCE_PATH
-      }
-    )
-
-    if (
-      !fs.existsSync(getBinaryPath(LLAMACPP_SOURCE_BUILD_PATH))
-    ) {
-      throw new Error(
-        `Cannot find ${LLAMA_SERVER_BINARY_NAME} after building llama.cpp`
-      )
+  if (previousDirectory) {
+    const previousBundle = path.relative(LLAMACPP_BUILD_PATH, previousDirectory).split(path.sep)[0]
+    if (previousBundle.startsWith(BUNDLE_PREFIX)) {
+      // Windows can keep a superseded executable locked until its process exits.
+      await fs.promises.rm(path.join(LLAMACPP_BUILD_PATH, previousBundle), {
+        recursive: true, force: true
+      }).catch(() => {})
     }
-
-    // Retain only the runtime payload after a successful source build.
-    await pruneSourceTree()
-
-    if (!await isExistingInstallationHealthy(LLAMACPP_SOURCE_BUILD_PATH, true)) {
-      throw new Error('I cannot use my CUDA llama.cpp build. Check the CUDA runtime libraries and graphics driver.')
-    }
-
-    await writeManifest(
-      LLAMACPP_SOURCE_MANIFEST_PATH,
-      LLAMACPP_SOURCE_PATH,
-      LLAMACPP_SOURCE_BUILD_PATH,
-      {
-        installType: 'source'
-      }
-    )
-
-    status.succeed(`llama.cpp ${LLAMACPP_RELEASE_VERSION} ready`)
-  } finally {
-    await removePath(sourceArchivePath)
   }
+
+  status.succeed(`llama.cpp ${LLAMACPP_RELEASE_VERSION} ready`)
 }
 
 /**
@@ -489,78 +210,45 @@ async function buildFromSource(status) {
  */
 export default async function setupLlamaCPP(localAICapability = null) {
   const status = createSetupStatus('Setting up llama.cpp...').start()
-  const { hasGPU, graphicsComputeAPI } = localAICapability ?? {
-    hasGPU: await SystemHelper.hasGPU(),
-    graphicsComputeAPI: await SystemHelper.getGraphicsComputeAPI()
+  const { hasGPU, graphicsComputeAPI } = localAICapability ?? await inspectLocalAICapability()
+  const existing = readLlamaCPPInstallation()
+  const candidates = getPrebuilts(hasGPU, graphicsComputeAPI)
+  const isLinux = SystemHelper.isLinux()
+  const requireGPU = hasGPU || candidates.length === 0
+  let failure
+
+  for (const candidate of candidates) {
+    if (existing?.version === LLAMACPP_RELEASE_VERSION &&
+        await isInstallationHealthy(existing.runtimeDirectory, requireGPU, candidate.backend)) {
+      status.succeed(`llama.cpp: ${LLAMACPP_RELEASE_VERSION}`)
+
+      return true
+    }
+
+    try {
+      await installPrebuilt(candidate, status, requireGPU, existing?.runtimeDirectory)
+
+      return true
+    } catch (error) {
+      if (!isLinux) {
+        throw error
+      }
+
+      failure = error
+      if (candidate.backend === 'cuda') {
+        status.pause()
+        SetupUI.warning(`I could not set up CUDA. I will try Vulkan. ${error.message}`)
+      }
+    }
   }
 
-  const existingInstallation = readManifest()
-  const manifest = existingInstallation?.manifest
-  const runtimeDirectoryPath = existingInstallation?.runtimeDirectoryPath || null
-
-  if (
-    manifest?.version === LLAMACPP_RELEASE_VERSION &&
-    (await isExistingInstallationHealthy(runtimeDirectoryPath, hasGPU))
-  ) {
-    status.succeed(`llama.cpp: ${LLAMACPP_RELEASE_VERSION}`)
+  if (await isInstallationHealthy(existing?.runtimeDirectory, requireGPU)) {
+    status.succeed('I will keep my working llama.cpp installation.')
 
     return true
   }
 
-  if (
-    manifest?.version === LLAMACPP_RELEASE_VERSION &&
-    runtimeDirectoryPath &&
-    fs.existsSync(getBinaryPath(runtimeDirectoryPath))
-  ) {
-    status.pause()
-    SetupUI.warning('I cannot use my current llama.cpp installation. I will reinstall it with its required runtime libraries.')
-  }
+  status.fail(failure?.message ?? 'I need a working GPU runtime to set up local AI on this machine.')
 
-  if (SystemHelper.isLinux() && CPU_ARCH === CPUArchitectures.ARM64) {
-    // Linux ARM64 only supports the local setup when a CUDA build is possible.
-    if (!(hasGPU && graphicsComputeAPI === 'cuda')) {
-      status.succeed(
-        'Linux ARM64 local LLM support requires a CUDA GPU. Skipping llama.cpp setup.'
-      )
-
-      return false
-    }
-
-    try {
-      await buildFromSource(status)
-
-      return true
-    } catch {
-      if (status.isSpinning) {
-        status.fail('Failed to build llama.cpp from source')
-      }
-
-      return false
-    }
-  }
-
-  if (SystemHelper.isLinux() && hasGPU && graphicsComputeAPI === 'cuda') {
-    try {
-      await buildFromSource(status)
-
-      return true
-    } catch {
-      SetupUI.warning(
-        'I could not build llama.cpp from source, so I will use the Vulkan binaries instead.'
-      )
-      await installPrebuilt(getLinuxVulkanAssetName(), status, hasGPU, {
-        fallbackFromSourceBuild: true
-      })
-
-      return true
-    }
-  }
-
-  await installPrebuilt(
-    getPrebuiltAssetName(graphicsComputeAPI, hasGPU),
-    status,
-    hasGPU
-  )
-
-  return true
+  return false
 }

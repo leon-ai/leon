@@ -22,8 +22,6 @@ const RELEASE_REPOSITORIES = new Set([
   'leon-ai/leon',
   'AlexsJones/llmfit',
   'jqlang/jq',
-  'Kitware/CMake',
-  'ninja-build/ninja',
   'ggml-org/llama.cpp'
 ])
 const releaseRequests = new Map()
