@@ -69,7 +69,7 @@ export const run: ActionFunction = async function (
       'whisper-1') as string
     const elevenlabsModel = ((await settings.get(
       'elevenlabs_transcription_model'
-    )) || 'scribe_v1') as string
+    )) || 'scribe_v2') as string
     const elevenlabsDiarize = ((await settings.get(
       'elevenlabs_transcription_diarize'
     )) ?? true) as boolean

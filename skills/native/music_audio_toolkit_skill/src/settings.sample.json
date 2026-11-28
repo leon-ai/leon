@@ -4,7 +4,7 @@
   "faster_whisper_cpu_threads": 4,
   "qwen3_asr_device": "auto",
   "openai_transcription_model": "gpt-4o-transcribe-diarize",
-  "elevenlabs_transcription_model": "scribe_v1",
+  "elevenlabs_transcription_model": "scribe_v2",
   "elevenlabs_transcription_diarize": true,
   "elevenlabs_dubbing_source_lang": "auto",
   "elevenlabs_dubbing_num_speakers": 0,
