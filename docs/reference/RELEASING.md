@@ -8,9 +8,14 @@ Preview installs receive eligible prereleases and stable releases; stable instal
 
 Write `release.json` once per version alongside the bump in `package.json`. Review the full batch and its commit messages before pushing to `develop`. If the batch changes after drafting, revise the affected notes.
 
-- Use a plain-English title and a short summary. Use `highlights` for the most important owner benefits and `changes` for details under `new`, `improvements`, `fixes`, and `removed`.
-- Group commits that deliver the same outcome. Explain what owners can do, what gets easier, or what problem was fixed. Include technical details when they help owners tell whether a change applies to them. Back up claims about speed or quality with evidence.
-- Use Markdown in highlight bodies for details such as tables.
+- Write the title, summary, and highlights around what gets better for owners. Use plain English and group commits by outcome.
+- Start each `changes` entry with a brief, bold sentence that begins with a past-tense verb. Follow it with why the change matters and the details owners need.
+
+  > **Added a web search fallback.** If your model’s search is unavailable or returns no useful results, I can look for public sources with Keenable.
+
+- Check the previous version before calling a capability new.
+- Name the package or runtime, exact version, and owner benefit. Check upstream notes and Leon’s code. Back speed or quality claims with evidence.
+- Name the prebuilt binaries, supported platforms and architectures, and matching runtime versions. Use a Markdown table when those versions differ by platform.
 
 Set `desktop.minimumServerVersion` in `release.json` to the oldest server version supported by Desktop in the release's major version. The Desktop build embeds this value for startup and update checks. Carry it forward across releases and raise it when Desktop requires a newer server capability.
 

@@ -4,33 +4,40 @@
   "desktop": {
     "minimumServerVersion": "2.0.0-alpha.0.17"
   },
-  "title": "Web search without a key and easier local AI setup",
-  "summary": "I can search the public web without asking you to set up an API key. I also make it easier to get started with local AI and follow what I’m doing in the activity feed.",
+  "title": "Fewer search dead ends and easier local AI setup on Linux",
+  "summary": "I can keep looking for sources when your model’s search comes up short. On supported Linux systems, I can set up local AI without compiling llama.cpp.",
   "highlights": [
     {
-      "title": "Web search out of the box",
-      "body": "If your model can’t search the web on its own, I can use Keenable to find public sources for you."
+      "title": "Find sources when your model comes up short",
+      "body": "I search public sources with Keenable when your model’s search is unavailable or comes up short."
     },
     {
-      "title": "Easier local AI setup",
-      "body": "I use the graphics memory your computer has available to help choose a model that fits. Inkling 2 Mini replaces Qwen 27B as an option for new local setups. On supported Linux systems with an NVIDIA graphics card, I can download ready-to-run software and skip the build step."
+      "title": "Get local AI running without compiling",
+      "body": "On supported Linux systems with NVIDIA graphics, I install prebuilt llama.cpp `b12823` and the matching CUDA runtime (`cudart`). Setup skips the local build and tries Vulkan if CUDA fails.\n\n| Linux architecture | CUDA build and matching `cudart` |\n| --- | --- |\n| x64 | CUDA 12.8 |\n| ARM64 | CUDA 13.5 |"
     }
   ],
   "changes": {
     "new": [
-      "I can look for pages published within a date range or read a saved public copy when I have trouble opening the original."
+      "**Added date filters and indexed page reads.** With Keenable, I can find sources from a specific period or read an indexed copy of a public page."
     ],
     "improvements": [
-      "I show new steps in the activity feed as they happen, with gentle animations that respect your reduced-motion setting.",
-      "I keep Grok available if you’ve already set it up. You can also add it when you want it for web or social search.",
-      "My FYI notes and READMEs explain why Leon builds its own agent loop and what it means to build personal AI for the long term. The READMEs also show how the project has grown through its GitHub star history.",
-      "Leon’s configuration and manifest fields are explained directly in editors that support them."
+      "**Improved local model selection.** I use free GPU memory from llama.cpp when available to choose a model that fits. `llmfit` 1.1.21 skips the Microsoft Basic Render Driver when detecting Vulkan GPUs.",
+      "**Replaced Qwen3.8 27B with Inkling 2 Mini for new local setups.** Its mixture-of-experts design aims for faster replies by activating only part of the model per token. I check whether Unsloth’s GGUF weights fit before downloading them.",
+      "**Made the activity feed easier to follow.** Connecting lines appear before labels so you can see which actions belong together. The animation respects your reduced-motion setting.",
+      "**Made Grok optional.** You can add it for web and social search. Profiles with a Grok API key keep access.",
+      "**Shared more about Leon’s long-term vision.** My FYI notes and READMEs explain why I have my own agent loop. A weekly GitHub star chart shows how the project has grown.",
+      "**Documented settings and tool results.** Editors can show what configuration and manifest fields control. The computer-use tool documents the fields it returns."
     ],
     "fixes": [
-      "You can copy larger images at full resolution. If an image is too large to copy, I point you to the original download.",
-      "When you ask for a range of lines in a file, I stop after reading the lines you requested.",
-      "I have better safeguards against excessive memory use when streaming OpenAI replies and handling real-time connections."
+      "**Improved large-image copying.** Copy tall screenshots at full resolution, or download the original when an image exceeds the clipboard limit.",
+      "**Fixed file reads for line ranges.** I skip extra page requests once I’ve returned the lines you asked for.",
+      "**Fixed a CUDA error on long inputs.** llama.cpp `b12823` fixes a GPU launch failure that affected certain operations on inputs over 65,535 tokens.",
+      "**Fixed OpenAI replies that contain several large images.** `@ai-sdk/openai` 4.0.125 raises the Responses HTTP limit from 64 MiB to 512 MiB per event so those replies can finish.",
+      "**Separated image previews from final results.** AI SDK `ai` 7.0.183 keeps previews out of completed tool results. The provider interface moves to `@ai-sdk/provider` 4.0.39.",
+      "**Fixed WebSocket memory exhaustion.** `ws` 8.23.0 closes a vulnerability in OpenAI and Socket.IO connections that could bring down the Leon server."
     ],
-    "removed": []
+    "removed": [
+      "**Removed local llama.cpp builds.** Managed setup skips CMake and Ninja installs. New managed local AI setups on Linux ARM64 require a supported GPU."
+    ]
   }
 }
