@@ -17,6 +17,7 @@ import {
   getLlamaCPPHostMemoryBudget,
   getLlamaCPPModelArguments,
   getLlamaCPPServerBinaryPath,
+  listLlamaCPPDevices,
   resolveLlamaCPPContextPlan,
   LlamaCPPExecutionMode,
   LlamaCPPBackendError,
@@ -238,7 +239,17 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
   const { hostBudgetMiB, unifiedMemory } = getLlamaCPPHostMemoryBudget(settings?.memory_reserve_mib)
   const availableGiB = hostBudgetMiB / MIB_PER_GIB
   const hasGPU = capability?.hasGPU ?? await SystemHelper.hasGPU()
-  const availableVRAM = hasGPU ? await SystemHelper.getFreeVRAM() : 0
+  const binary = getLlamaCPPServerBinaryPath()
+  // The runtime selected by setup owns the live memory budget. The general
+  // hardware probe may use a different backend on the same GPU.
+  let availableVRAM = 0
+  if (hasGPU) {
+    const devices = await listLlamaCPPDevices(binary).catch(() => [])
+    const memory = devices.map(({ freeMiB }) => freeMiB).filter((freeMiB) => freeMiB !== null)
+    availableVRAM = memory.length > 0
+      ? memory.reduce((total, freeMiB) => total + freeMiB, 0) / MIB_PER_GIB
+      : await SystemHelper.getFreeVRAM()
+  }
   if (hasGPU && availableVRAM <= 0) {
     throw new LlamaCPPCapacityError('I could not find available GPU memory for local AI.')
   }
@@ -301,7 +312,6 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
   }
 
   await fs.promises.mkdir(TMP_PATH, { recursive: true })
-  const binary = getLlamaCPPServerBinaryPath()
   const { readGgufFileInfo } = await import('node-llama-cpp')
   const directory = await fs.promises.mkdtemp(path.join(TMP_PATH, 'local-llm-plan-'))
   const plans = []

@@ -13,7 +13,7 @@ const fixture = await vi.hoisted(async () => {
   const os = await import('node:os')
   return {
     root: await fs.mkdtemp(path.join(os.tmpdir(), 'leon-model-selection-')),
-    run: vi.fn(), get: vi.fn(), read: vi.fn(), fit: vi.fn(),
+    run: vi.fn(), get: vi.fn(), read: vi.fn(), fit: vi.fn(), devices: vi.fn(),
     budget: { hostBudgetMiB: 12_000, cacheMiB: 1_000, unifiedMemory: true },
     settings: {} as { context_size?: number, kv_cache_type?: 'q4_0' | 'q8_0' }
   }
@@ -44,6 +44,7 @@ vi.mock('@/core/llm-manager/llm-providers/llamacpp-context', () => ({
   LlamaCPPExecutionMode: { GPU: 'gpu', CPUOffload: 'cpu_offload', CPUOnly: 'cpu_only' },
   getLlamaCPPHostMemoryBudget: (): object => fixture.budget,
   getLlamaCPPServerBinaryPath: (): string => '/fixture/llama-server',
+  listLlamaCPPDevices: fixture.devices,
   getLlamaCPPModelArguments: (model: string, cacheType: string): string[] => [
     '--model', model, '--cache-type-k', cacheType, '--cache-type-v', cacheType
   ],
@@ -54,6 +55,7 @@ beforeEach(() => {
   fixture.budget.hostBudgetMiB = 12_000
   fixture.budget.unifiedMemory = true
   fixture.settings = {}
+  fixture.devices.mockReset().mockResolvedValue([])
   fixture.get.mockReset().mockImplementation(async (url: string, options?: { responseType?: string }) =>
     options?.responseType === 'arraybuffer' ? { data: Buffer.from('GGUF') } : { data: {
     sha: 'pinned-revision',
@@ -139,9 +141,10 @@ describe('local model selection', () => {
     expect(await fs.readdir(path.join(fixture.root, 'tmp'))).toEqual([])
   })
 
-  it('keeps discrete GPU capacity separate from the host memory budget', async () => {
+  it('uses the installed runtime’s free GPU memory separately from host memory', async () => {
     fixture.budget.unifiedMemory = false
     fixture.budget.hostBudgetMiB = 1
+    fixture.devices.mockResolvedValue([{ id: 'CUDA0', freeMiB: 8_192 }])
     const getMetadata = fixture.get.getMockImplementation()!
     fixture.get.mockImplementation(async (url: string, options?: { responseType?: string }) => {
       const result = await getMetadata(url, options)
@@ -157,7 +160,7 @@ describe('local model selection', () => {
     })
     await expect(selectLocalLLM()).resolves.toHaveProperty('precision')
     const args = fixture.run.mock.calls[0]![1] as string[]
-    expect(args[args.indexOf('--memory') + 1]).toBe('12G')
+    expect(args[args.indexOf('--memory') + 1]).toBe('8G')
   })
 
   it('does not silently downgrade after an incomplete metadata inspection', async () => {
