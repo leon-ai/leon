@@ -66,8 +66,16 @@ const toolFunctionSchemaObject = Type.Strict(
       })),
       timeout: Type.Optional(
         Type.Object({
-          idleMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_TIMEOUT_MS })),
-          totalMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_TIMEOUT_MS }))
+          idleMs: Type.Optional(Type.Integer({
+            minimum: 1,
+            maximum: MAX_TOOL_TIMEOUT_MS,
+            description: 'Maximum milliseconds the call may go without output or advancing progress.'
+          })),
+          totalMs: Type.Optional(Type.Integer({
+            minimum: 1,
+            maximum: MAX_TOOL_TIMEOUT_MS,
+            description: 'Maximum elapsed milliseconds for the call, even while it is making progress.'
+          }))
         }, {
           additionalProperties: false,
           minProperties: 1,
@@ -125,46 +133,94 @@ const toolFunctionSchemaObject = Type.Strict(
 )
 
 const toolOAuthSchemaObject = Type.Object({
-  authorization_url: Type.String({ format: 'uri' }),
-  token_url: Type.String({ format: 'uri' }),
-  scopes: Type.Array(Type.String()),
-  uses_pkce: Type.Optional(Type.Boolean()),
+  authorization_url: Type.String({
+    format: 'uri',
+    description: 'Provider endpoint where the owner signs in and grants access.'
+  }),
+  token_url: Type.String({
+    format: 'uri',
+    description: 'Provider endpoint for exchanging the authorization code and refreshing tokens.'
+  }),
+  scopes: Type.Array(Type.String(), {
+    description: 'OAuth permissions Leon requests from the provider when connecting the account.'
+  }),
+  uses_pkce: Type.Optional(Type.Boolean({
+    description: 'Whether to bind the authorization request and code exchange using an S256 PKCE challenge.'
+  })),
   token_auth: Type.Union([
     Type.Literal('basic'),
     Type.Literal('body'),
     Type.Literal('none')
-  ]),
-  token_format: Type.Union([Type.Literal('json'), Type.Literal('form')]),
+  ], {
+    description: 'Token endpoint client authentication. Use HTTP Basic, send credentials in the request body, or send only the client ID for a public client.'
+  }),
+  token_format: Type.Union([Type.Literal('json'), Type.Literal('form')], {
+    description: 'Encoding of the token request body, either JSON or URL-encoded form data.'
+  }),
   authorization_parameters: Type.Optional(
-    Type.Record(Type.String(), Type.String())
+    Type.Record(Type.String(), Type.String(), {
+      description: 'Extra provider-specific query parameters for the authorization request.'
+    })
   ),
-  token_parameters: Type.Optional(Type.Record(Type.String(), Type.String())),
-  supports_refresh: Type.Boolean()
+  token_parameters: Type.Optional(
+    Type.Record(Type.String(), Type.String(), {
+      description: 'Extra provider-specific body fields for token exchange and refresh requests.'
+    })
+  ),
+  supports_refresh: Type.Boolean({
+    description: 'Whether Leon can use a stored refresh token to request a new access token.'
+  })
 })
 
 const toolConnectionMethodSchemaObject = Type.Object({
-  name: Type.String({ minLength: 1 }),
-  description: Type.String({ minLength: 1 }),
-  setup_url: Type.String({ format: 'uri' }),
-  // Optional provider guidance and copyable application values for first-time setup.
+  name: Type.String({
+    minLength: 1,
+    description: 'Display name of this connection method.'
+  }),
+  description: Type.String({
+    minLength: 1,
+    description: 'Owner-facing explanation of what this connection method does.'
+  }),
+  setup_url: Type.String({
+    format: 'uri',
+    description: 'Provider page where the owner can issue credentials or register an application.'
+  }),
   setup: Type.Optional(
     Type.Object({
-      instructions: Type.Array(Type.String({ minLength: 1 })),
-      values: Type.Record(Type.String(), Type.String())
+      instructions: Type.Array(Type.String({ minLength: 1 }), {
+        description: 'Ordered steps the owner follows to configure the provider.'
+      }),
+      values: Type.Record(Type.String(), Type.String(), {
+        description: 'Labeled values the owner can copy into the provider setup form.'
+      })
+    }, {
+      description: 'Guidance and copyable application details shown during connection setup.'
     })
   ),
-  // Null defaults use the same mandatory-setting convention as settings.sample.json.
-  settings: Type.Record(Type.String(), Type.Union([Type.Null(), Type.String()]))
+  settings: Type.Record(Type.String(), Type.Union([Type.Null(), Type.String()]), {
+    description: 'Connection setup fields and their defaults. A null default means the owner must supply a value, as in settings.sample.json.'
+  })
 })
 
 export const toolConnectionSchemaObject = Type.Object({
-  required_settings: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
+  required_settings: Type.Array(Type.String({ minLength: 1 }), {
+    minItems: 1,
+    description: 'Credential keys that must be present in the saved connection before the tool can run.'
+  }),
   methods: Type.Object({
-    api_key: Type.Optional(toolConnectionMethodSchemaObject),
+    api_key: Type.Optional(Type.Object(toolConnectionMethodSchemaObject.properties, {
+      description: 'Setup for credentials the owner supplies directly, such as an API key.'
+    })),
     oauth: Type.Optional(
-      Type.Composite([toolConnectionMethodSchemaObject, toolOAuthSchemaObject])
+      Type.Composite([toolConnectionMethodSchemaObject, toolOAuthSchemaObject], {
+        description: 'Setup and protocol settings for connecting an account through OAuth.'
+      })
     )
+  }, {
+    description: 'Connection methods the owner can choose from when setting up the tool.'
   })
+}, {
+  description: 'Account connection requirements and setup methods for this tool.'
 })
 
 export type ToolConnectionSchema = Static<typeof toolConnectionSchemaObject>
@@ -184,7 +240,11 @@ const toolManifestObject = Type.Object(
     }),
     previous_tool_ids: Type.Optional(Type.Array(
       Type.String({ minLength: 1, maxLength: 128, pattern: '^[a-z0-9][a-z0-9_-]*$' }),
-      { maxItems: 32, uniqueItems: true }
+      {
+        maxItems: 32,
+        uniqueItems: true,
+        description: 'Former tool IDs recognized as aliases so existing installations and authorizations keep working after a rename.'
+      }
     )),
     toolkit_id: Type.String({
       minLength: 1,
@@ -241,7 +301,10 @@ const toolManifestObject = Type.Object(
             description: 'Download URL for the platform-specific binary.'
           }),
           Type.Object({
-            url: Type.String({ minLength: 1 }),
+            url: Type.String({
+              minLength: 1,
+              description: 'Download URL for the platform-specific binary or archive.'
+            }),
             executable: Type.Optional(Type.String({
               minLength: 1,
               description: 'Relative archive entrypoint. Preserves the entire extracted bundle.'
@@ -279,12 +342,28 @@ const toolManifestObject = Type.Object(
     ),
     connection: Type.Optional(toolConnectionSchemaObject),
     source: Type.Optional(Type.Object({
-      type: Type.Literal('mcp'),
-      transport: Type.Literal('http'),
-      url: Type.String({ format: 'uri' }),
-      clientId: Type.Optional(Type.String({ minLength: 1 })),
-      clientMetadataUrl: Type.Optional(Type.String({ format: 'uri' }))
-    }, { additionalProperties: false })),
+      type: Type.Literal('mcp', {
+        description: 'Identifies a Model Context Protocol server as the source of the tool functions.'
+      }),
+      transport: Type.Literal('http', {
+        description: 'Transport Leon uses to communicate with the remote MCP server.'
+      }),
+      url: Type.String({
+        format: 'uri',
+        description: 'MCP HTTP endpoint used to connect and discover callable functions.'
+      }),
+      clientId: Type.Optional(Type.String({
+        minLength: 1,
+        description: 'Pre-registered OAuth client ID Leon can use to authorize this MCP connection.'
+      })),
+      clientMetadataUrl: Type.Optional(Type.String({
+        format: 'uri',
+        description: 'HTTPS URL of an OAuth client metadata document for authorization servers that support it.'
+      }))
+    }, {
+      additionalProperties: false,
+      description: 'Remote MCP server definition. Leon discovers its functions after profile installation, so the manifest declares an empty functions map.'
+    })),
     functions: Type.Record(
       Type.String({
         minLength: 1,

@@ -3,7 +3,7 @@
   "tool_id": "cua",
   "toolkit_id": "computer_use",
   "name": "Cua Driver",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "execution_target": "device",
   "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
   "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens. Application menu-bar entries may appear in a window tree but are outside that window; use invoke_menu with an exact observed menu path rather than clicking their window tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse act for predictable inputs on one observed target and verify its final state. Put the only pixel click in focus; steps use semantic controls or keys. Every input shares the explicit target: kind=window with pid/window_id or kind=desktop with display_id. A new pixel target needs a new call grounded in the returned observation.",
@@ -104,6 +104,7 @@
             "additionalProperties": true,
             "properties": {
               "windows": {
+                "description": "Native windows matching the requested filters.",
                 "items": {
                   "additionalProperties": true,
                   "properties": {
@@ -431,19 +432,23 @@
             "additionalProperties": true,
             "properties": {
               "elapsed_ms": {
+                "description": "Milliseconds spent sampling and evaluating the requested predicates.",
                 "format": "uint64",
                 "minimum": 0,
                 "type": "integer"
               },
               "predicates": {
+                "description": "Individual verification results in the order the predicates were supplied.",
                 "items": {
                   "properties": {
                     "index": {
+                      "description": "Zero-based position of the predicate in the request.",
                       "format": "uint64",
                       "minimum": 0,
                       "type": "integer"
                     },
                     "observed_json": {
+                      "description": "JSON-encoded observed value, when available.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -454,6 +459,7 @@
                       ]
                     },
                     "status": {
+                      "description": "Whether this predicate was satisfied, unsatisfied, or could not be determined.",
                       "enum": [
                         "satisfied",
                         "unsatisfied",
@@ -462,6 +468,7 @@
                       "type": "string"
                     },
                     "unknown_reason": {
+                      "description": "Reason the driver could not determine this predicate, when applicable.",
                       "anyOf": [
                         {
                           "enum": [
@@ -492,14 +499,17 @@
                 "type": "array"
               },
               "samples": {
+                "description": "Number of observation samples collected.",
                 "format": "uint64",
                 "minimum": 0,
                 "type": "integer"
               },
               "stable": {
+                "description": "Whether the requested number of consecutive satisfied samples was reached.",
                 "type": "boolean"
               },
               "status": {
+                "description": "Combined verification status for all requested predicates.",
                 "enum": [
                   "satisfied",
                   "unsatisfied",
@@ -564,9 +574,11 @@
             "additionalProperties": true,
             "properties": {
               "display": {
+                "description": "Display selected for the desktop capture.",
                 "type": "string"
               },
               "platform": {
+                "description": "Operating system of the device that captured the desktop.",
                 "enum": [
                   "macos",
                   "linux",
@@ -575,24 +587,31 @@
                 "type": "string"
               },
               "scale_factor": {
+                "description": "Display scale relating logical screen dimensions to screenshot pixels.",
                 "type": "number"
               },
               "screen_height": {
+                "description": "Captured screen height in screen coordinate units.",
                 "type": "integer"
               },
               "screen_width": {
+                "description": "Captured screen width in screen coordinate units.",
                 "type": "integer"
               },
               "screenshot_file_path": {
+                "description": "Local path of the saved screenshot, when the driver returns one.",
                 "type": "string"
               },
               "screenshot_height": {
+                "description": "Captured image height in pixels.",
                 "type": "integer"
               },
               "screenshot_mime_type": {
+                "description": "Media type of the captured PNG screenshot.",
                 "const": "image/png"
               },
               "screenshot_width": {
+                "description": "Captured image width in pixels.",
                 "type": "integer"
               }
             },
@@ -800,9 +819,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -811,6 +832,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -829,6 +851,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -839,9 +862,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -852,6 +877,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -871,10 +897,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -893,6 +921,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -1042,9 +1071,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -1053,6 +1084,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -1071,6 +1103,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -1081,9 +1114,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -1094,6 +1129,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -1113,10 +1149,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -1135,6 +1173,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -1297,9 +1336,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -1308,6 +1349,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -1326,6 +1368,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -1336,9 +1379,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -1349,6 +1394,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -1368,10 +1414,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -1390,6 +1438,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -1542,9 +1591,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -1553,6 +1604,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -1571,6 +1623,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -1581,9 +1634,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -1594,6 +1649,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -1613,10 +1669,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -1635,6 +1693,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -1793,9 +1852,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -1804,6 +1865,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -1822,6 +1884,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -1832,9 +1895,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -1845,6 +1910,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -1864,10 +1930,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -1886,6 +1954,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -2027,9 +2096,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -2038,6 +2109,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -2056,6 +2128,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -2066,9 +2139,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -2079,6 +2154,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -2098,10 +2174,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -2120,6 +2198,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -2260,9 +2339,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -2271,6 +2352,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -2289,6 +2371,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -2299,9 +2382,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -2312,6 +2397,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -2331,10 +2417,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -2353,6 +2441,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -2929,9 +3018,11 @@
             "additionalProperties": false,
             "properties": {
               "delivery": {
+                "description": "Driver report on how the input was dispatched, when available.",
                 "additionalProperties": false,
                 "properties": {
                   "delivered_count": {
+                    "description": "Number of input units delivered, when the driver can count them.",
                     "format": "uint32",
                     "minimum": 0,
                     "type": [
@@ -2940,6 +3031,7 @@
                     ]
                   },
                   "mode": {
+                    "description": "Input delivery mode actually used by the driver.",
                     "enum": [
                       "background",
                       "foreground",
@@ -2958,6 +3050,7 @@
                 ]
               },
               "effect": {
+                "description": "Driver assessment of the resulting interface state based on available evidence.",
                 "enum": [
                   "confirmed",
                   "partial",
@@ -2968,9 +3061,11 @@
                 "type": "string"
               },
               "escalation": {
+                "description": "Alternative route suggested when the current route is unavailable or its effect is uncertain.",
                 "additionalProperties": false,
                 "properties": {
                   "reason": {
+                    "description": "Reason the driver suggested a different route.",
                     "enum": [
                       "route_unavailable",
                       "delivery_failed",
@@ -2981,6 +3076,7 @@
                     "type": "string"
                   },
                   "target": {
+                    "description": "Type of interaction route the driver suggests trying next.",
                     "enum": [
                       "pixel",
                       "foreground",
@@ -3000,10 +3096,12 @@
                 ]
               },
               "evidence": {
+                "description": "Observations used to assess the effect of the action, when available.",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
+                      "description": "Kind of observation, such as reading back a value or detecting a window change.",
                       "enum": [
                         "value_readback",
                         "window_change"
@@ -3022,6 +3120,7 @@
                 ]
               },
               "route": {
+                "description": "Mechanism the driver selected to perform the action.",
                 "enum": [
                   "accessibility",
                   "synthetic_events",
@@ -3127,15 +3226,19 @@
             "additionalProperties": true,
             "properties": {
               "content_redacted_from_telemetry": {
+                "description": "Whether clipboard contents are omitted from driver telemetry.",
                 "type": "boolean"
               },
               "privacy_sensitive": {
+                "description": "Whether the result is marked as containing or referring to private clipboard data.",
                 "type": "boolean"
               },
               "supported": {
+                "description": "Whether the current platform supports this clipboard operation.",
                 "type": "boolean"
               },
               "text": {
+                "description": "Plain text from the clipboard when requested and available.",
                 "anyOf": [
                   {
                     "type": "string"
@@ -3146,6 +3249,7 @@
                 ]
               },
               "types": {
+                "description": "Clipboard data formats reported after the operation.",
                 "items": {
                   "type": "string"
                 },
@@ -3213,21 +3317,26 @@
             "additionalProperties": true,
             "properties": {
               "content_redacted_from_telemetry": {
+                "description": "Whether clipboard contents are omitted from driver telemetry.",
                 "type": "boolean"
               },
               "privacy_sensitive": {
+                "description": "Whether the result is marked as containing or referring to private clipboard data.",
                 "type": "boolean"
               },
               "supported": {
+                "description": "Whether the current platform supports this clipboard operation.",
                 "type": "boolean"
               },
               "types": {
+                "description": "Clipboard data formats reported after the operation.",
                 "items": {
                   "type": "string"
                 },
                 "type": "array"
               },
               "written_type": {
+                "description": "Clipboard data format written by the operation.",
                 "type": "string"
               }
             },

@@ -8,9 +8,19 @@ import {
 
 export const toolkitSchemaObject = Type.Strict(
   Type.Object({
-    $schema: Type.String({ minLength: 1 }),
-    name: Type.String({ minLength: 1 }),
-    description: Type.String({ minLength: 8, maxLength: 256 }),
+    $schema: Type.String({
+      minLength: 1,
+      description: 'Path or URL to the JSON Schema used by editors for this toolkit manifest.'
+    }),
+    name: Type.String({
+      minLength: 1,
+      description: 'Display name for the group of related tools.'
+    }),
+    description: Type.String({
+      minLength: 8,
+      maxLength: 256,
+      description: 'Summary of the capabilities the toolkit groups together.'
+    }),
     progressive_guidance: Type.Optional(
       Type.String({
         minLength: 8,
@@ -29,9 +39,14 @@ export const toolkitSchemaObject = Type.Strict(
       Type.String({
         minLength: 1,
         pattern: '^[A-Z0-9_]+\\.md$'
-      })
+      }),
+      {
+        description: 'Names of context files Leon can summarize for the agent when it loads this toolkit.'
+      }
     ),
-    tools: Type.Array(Type.String({ minLength: 1 }))
+    tools: Type.Array(Type.String({ minLength: 1 }), {
+      description: 'Tool IDs to load from this toolkit, matching their tool directory names.'
+    })
   })
 )
 

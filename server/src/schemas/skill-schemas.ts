@@ -9,6 +9,12 @@ import { SkillFormat } from '@/types'
 
 const SKILL_ACTION_ANSWERS_DESCRIPTION =
   'Answers are the responses that Leon can give to the owners. They can be simple strings or objects with speech and text properties to differentiate between spoken and written responses.'
+const ACTION_PARAMETER_DESCRIPTION =
+  'Explanation of what the parameter means, supplied to the model when it selects action arguments.'
+const SKILL_ACTION_TYPE_DESCRIPTION =
+  'Whether the action runs skill code (logic) or replies directly from its configured answers (dialog).'
+const SKILL_DATA_TYPE_DESCRIPTION =
+  'Whether the expected input is an extracted entity or the full utterance.'
 
 const actionParametersType = Type.Recursive((self) =>
   Type.Union([
@@ -19,31 +25,44 @@ const actionParametersType = Type.Recursive((self) =>
     Type.Array(self), // Recursive for arrays
     Type.Literal('custom'), // Enums via literals
     Type.Object({
-      type: Type.Literal('object'),
-      properties: Type.Record(Type.String(), self),
+      type: Type.Literal('object', {
+        description: 'Declares an action parameter with named child fields.'
+      }),
+      properties: Type.Record(Type.String(), self, {
+        description: 'Definitions of child fields keyed by property name.'
+      }),
       description: Type.Optional(
         Type.String({
           minLength: 8,
-          maxLength: 128
+          maxLength: 128,
+          description: ACTION_PARAMETER_DESCRIPTION
         })
       )
     }),
     Type.Object({
-      type: Type.Literal('string'),
-      enum: Type.Optional(Type.Array(Type.String())),
+      type: Type.Literal('string', {
+        description: 'Declares an action parameter that accepts text.'
+      }),
+      enum: Type.Optional(Type.Array(Type.String(), {
+        description: 'Allowed text values for this parameter.'
+      })),
       description: Type.Optional(
         Type.String({
           minLength: 8,
-          maxLength: 128
+          maxLength: 128,
+          description: ACTION_PARAMETER_DESCRIPTION
         })
       )
     }),
     Type.Object({
-      type: Type.Literal('number'),
+      type: Type.Literal('number', {
+        description: 'Declares an action parameter that accepts a numeric value.'
+      }),
       description: Type.Optional(
         Type.String({
           minLength: 8,
-          maxLength: 128
+          maxLength: 128,
+          description: ACTION_PARAMETER_DESCRIPTION
         })
       )
     })
@@ -71,8 +90,10 @@ const answerTypes = Type.Union(
   [
     Type.String(),
     Type.Object({
-      speech: Type.String(),
-      text: Type.Optional(Type.String())
+      speech: Type.String({ description: 'Spoken form of the reply.' }),
+      text: Type.Optional(Type.String({
+        description: 'Written form of the reply. Speech supplies the display text when this is omitted.'
+      }))
     })
   ],
   {
@@ -85,12 +106,15 @@ const skillCustomEnumEntityType = Type.Object(
       description:
         'Enum: define a bag of words and synonyms that should match your new entity.'
     }),
-    name: Type.String(),
+    name: Type.String({ description: 'Name under which the action receives the matched entity.' }),
     options: Type.Record(
       Type.String({ minLength: 1 }),
       Type.Object({
-        synonyms: Type.Array(Type.String({ minLength: 1 }))
-      })
+        synonyms: Type.Array(Type.String({ minLength: 1 }), {
+          description: 'Words or phrases that resolve to this canonical option.'
+        })
+      }),
+      { description: 'Recognizable values and synonyms keyed by canonical option name.' }
     )
   },
   {
@@ -102,8 +126,14 @@ const skillCustomRegexEntityType = Type.Object(
     type: Type.Literal('regex', {
       description: 'Regex: you can create an entity based on a regex.'
     }),
-    name: Type.String({ minLength: 1 }),
-    regex: Type.String({ minLength: 1 })
+    name: Type.String({
+      minLength: 1,
+      description: 'Name under which the action receives the matched entity.'
+    }),
+    regex: Type.String({
+      minLength: 1,
+      description: 'Regular expression used to match text in the utterance.'
+    })
   },
   {
     additionalProperties: false
@@ -115,7 +145,10 @@ const skillCustomTrimEntityType = Type.Object(
       description:
         'Trim: you can pick up a data from an utterance by clearly defining conditions (e.g: pick up what is after the last "with" word of the utterance).'
     }),
-    name: Type.String({ minLength: 1 }),
+    name: Type.String({
+      minLength: 1,
+      description: 'Name under which the action receives the extracted entity.'
+    }),
     conditions: Type.Array(
       Type.Object(
         {
@@ -127,24 +160,31 @@ const skillCustomTrimEntityType = Type.Object(
             Type.Literal('before'),
             Type.Literal('before_first'),
             Type.Literal('before_last')
-          ]),
+          ], {
+            description: 'Where to extract text relative to the boundary phrases, including which occurrence to use.'
+          }),
           from: Type.Optional(
             Type.Union([
               Type.Array(Type.String({ minLength: 1 })),
               Type.String({ minLength: 1 })
-            ])
+            ], {
+              description: 'Starting boundary phrase or alternatives used by after and between rules.'
+            })
           ),
           to: Type.Optional(
             Type.Union([
               Type.Array(Type.String({ minLength: 1 })),
               Type.String({ minLength: 1 })
-            ])
+            ], {
+              description: 'Ending boundary phrase or alternatives used by before and between rules.'
+            })
           )
         },
         {
           additionalProperties: false
         }
-      )
+      ),
+      { description: 'Boundary rules used to extract the entity text from an utterance.' }
     )
   },
   { additionalProperties: false }
@@ -181,7 +221,8 @@ export const skillLocaleConfigObject = Type.Strict(
         Type.Union([Type.String(), Type.Array(Type.String())], {
           description:
             'Widget contents are used to define the content of the widgets that will be displayed in the UI.'
-        })
+        }),
+        { description: 'Localized text or lists of strings keyed by widget content name.' }
       )
     ),
     actions: Type.Record(
@@ -193,7 +234,9 @@ export const skillLocaleConfigObject = Type.Strict(
               description: SKILL_ACTION_ANSWERS_DESCRIPTION
             }),
             Type.Array(answerTypes)
-          ])
+          ], {
+            description: 'Localized replies for the action, supplied as variants or grouped by answer key.'
+          })
         ),
         missing_param_follow_ups: Type.Optional(
           Type.Record(
@@ -201,7 +244,8 @@ export const skillLocaleConfigObject = Type.Strict(
             Type.Array(Type.String(), {
               description:
                 'Missing parameter follow-ups are used to ask the owner for more information when a required parameter is missing. They are used to be customized and to guide the owner to provide the necessary information to complete the action.'
-            })
+            }),
+            { description: 'Localized follow-up questions keyed by missing action parameter.' }
           )
         ),
         // TODO: core rewrite
@@ -212,13 +256,16 @@ export const skillLocaleConfigObject = Type.Strict(
               'Suggestions are a simple way to suggest owners what can be answered next.'
           })
         )
-      })
+      }),
+      { description: 'Localized replies, follow-up questions and suggestions keyed by action name.' }
     )
   })
 )
 export const skillSchemaObject = Type.Strict(
   Type.Object({
-    format: Type.Optional(Type.Literal(SkillFormat.LeonNative)),
+    format: Type.Optional(Type.Literal(SkillFormat.LeonNative, {
+      description: 'Identifies a Leon-native skill with declared actions and an optional bridge.'
+    })),
     name: Type.String({ minLength: 1, description: 'The name of the skill.' }),
     icon_name: Type.String({
       minLength: 1,
@@ -246,7 +293,7 @@ export const skillSchemaObject = Type.Strict(
       Type.String(),
       Type.Object(
         {
-          type: Type.Union(skillActionTypes),
+          type: Type.Union(skillActionTypes, { description: SKILL_ACTION_TYPE_DESCRIPTION }),
           description: Type.String({
             minLength: 12,
             maxLength: 156,
@@ -271,7 +318,8 @@ export const skillSchemaObject = Type.Strict(
                 minLength: 1,
                 description:
                   'By default, all parameters are required, but you can define optional parameters that can be used to pass data to the action code. They are not mandatory and can be omitted.'
-              })
+              }),
+              { description: 'Names of action parameters that may be omitted.' }
             )
           )
         },
@@ -292,19 +340,21 @@ export const skillSchemaObject = Type.Strict(
 )
 export const skillConfigSchemaObject = Type.Strict(
   Type.Object({
-    variables: Type.Optional(Type.Record(Type.String(), Type.String())),
+    variables: Type.Optional(Type.Record(Type.String(), Type.String(), {
+      description: 'Named values available for substitution in the skill configuration.'
+    })),
     actions: Type.Record(
       Type.String(),
       Type.Object(
         {
-          type: Type.Union(skillActionTypes),
+          type: Type.Union(skillActionTypes, { description: SKILL_ACTION_TYPE_DESCRIPTION }),
           loop: Type.Optional(
             Type.Object(
               {
                 expected_item: Type.Object(
                   {
-                    type: Type.Union(skillDataTypes),
-                    name: Type.String()
+                    type: Type.Union(skillDataTypes, { description: SKILL_DATA_TYPE_DESCRIPTION }),
+                    name: Type.String({ description: 'Name of the input the repeating action expects.' })
                   },
                   {
                     description:
@@ -325,14 +375,20 @@ export const skillConfigSchemaObject = Type.Strict(
                 entities: Type.Array(
                   Type.Object(
                     {
-                      entity: Type.String(),
-                      resolution: Type.Array(Type.String())
+                      entity: Type.String({ description: 'Name of the entity accepted by the HTTP action.' }),
+                      resolution: Type.Array(Type.String(), {
+                        description: 'Fields available for the resolved entity value in the HTTP request.'
+                      })
                     },
                     { additionalProperties: false }
-                  )
+                  ),
+                  { description: 'Entities the caller can supply when invoking this action over HTTP.' }
                 )
               },
-              { additionalProperties: false }
+              {
+                additionalProperties: false,
+                description: 'Entity inputs exposed by this action through the HTTP API.'
+              }
             )
           ),
           utterance_samples: Type.Optional(
@@ -341,8 +397,12 @@ export const skillConfigSchemaObject = Type.Strict(
                 'Utterance samples are used by the NLU (Natural Language Understanding) to train the skill. They are examples of what Leon owners can say to trigger the skill action.'
             })
           ),
-          answers: Type.Optional(Type.Array(answerTypes)),
-          unknown_answers: Type.Optional(Type.Array(answerTypes)),
+          answers: Type.Optional(Type.Array(answerTypes, {
+            description: 'Reply variants for this action.'
+          })),
+          unknown_answers: Type.Optional(Type.Array(answerTypes, {
+            description: 'Fallback replies when Leon cannot understand the expected input for this action.'
+          })),
           suggestions: Type.Optional(
             Type.Array(Type.String(), {
               description:
@@ -353,15 +413,20 @@ export const skillConfigSchemaObject = Type.Strict(
             Type.Array(
               Type.Object(
                 {
-                  name: Type.String(),
+                  name: Type.String({ description: 'Name under which the action receives the collected value.' }),
                   item: Type.Object(
                     {
-                      type: Type.Union(skillDataTypes),
-                      name: Type.String()
+                      type: Type.Union(skillDataTypes, { description: SKILL_DATA_TYPE_DESCRIPTION }),
+                      name: Type.String({ description: 'Name of the input that fills the slot.' })
                     },
-                    { additionalProperties: false }
+                    {
+                      additionalProperties: false,
+                      description: 'Input expected before the slot is considered filled.'
+                    }
                   ),
-                  questions: Type.Array(Type.String()),
+                  questions: Type.Array(Type.String(), {
+                    description: 'Question variants Leon can ask to collect the missing slot value.'
+                  }),
                   suggestions: Type.Optional(
                     Type.Array(Type.String(), {
                       description:
@@ -381,7 +446,9 @@ export const skillConfigSchemaObject = Type.Strict(
               }
             )
           ),
-          entities: Type.Optional(Type.Union(skillCustomEntityTypes)),
+          entities: Type.Optional(Type.Union(skillCustomEntityTypes, {
+            description: 'Custom entities recognized for this action, defined by trim rules, regular expressions or enum options.'
+          })),
           next_action: Type.Optional(
             Type.String({
               description:
@@ -390,16 +457,22 @@ export const skillConfigSchemaObject = Type.Strict(
           )
         },
         { additionalProperties: false }
-      )
+      ),
+      { description: 'Action definitions keyed by action name.' }
     ),
-    answers: Type.Optional(Type.Record(Type.String(), Type.Array(answerTypes))),
+    answers: Type.Optional(Type.Record(Type.String(), Type.Array(answerTypes), {
+      description: 'Reusable reply variants keyed by answer name across the skill.'
+    })),
     widget_contents: Type.Optional(
       Type.Record(
         Type.String(),
-        Type.Union([Type.String(), Type.Array(Type.String())])
+        Type.Union([Type.String(), Type.Array(Type.String())]),
+        { description: 'Localized text or lists of strings keyed by widget content name.' }
       )
     ),
-    entities: Type.Optional(Type.Record(Type.String(), Type.String()))
+    entities: Type.Optional(Type.Record(Type.String(), Type.String(), {
+      description: 'Shared entity references keyed by the name used in this skill.'
+    }))
   })
 )
 
