@@ -6,7 +6,9 @@ Preview installs receive eligible prereleases and stable releases; stable instal
 
 ## Work in parallel
 
-Start each change from `develop` on its own topic branch. Name it `<type>/<short-kebab-case-description>`, for example `fix/session-search`. Use the same remote branch when continuing the change on another computer. Merge ready changes into `develop`.
+Start each change from `develop` on its own topic branch. Name it `<type>/<short-kebab-case-description>`, for example `fix/session-search`. Use the same remote branch when continuing the change on another computer.
+
+Merge reviewed changes into `develop` as they are ready. Use `develop` for daily source builds so contributors can try the combined changes while the next release batch takes shape.
 
 The release maintainer selects the batch and prepares one product version bump and one set of release notes. Keeping `package.json` and `release.json` in the same release preparation change gives contributors a single version and summary for the batch.
 
@@ -25,7 +27,7 @@ Review the full batch and its commit messages before pushing the version and not
 
 Set `desktop.minimumServerVersion` in `release.json` to the oldest server version supported by Desktop in the release's major version. The Desktop build embeds this value for startup and update checks. Carry it forward across releases and raise it when Desktop requires a newer server capability.
 
-During parallel development, create and push `release/<version>` from the reviewed commit on `origin/develop`, for example `release/2.1.0`. The release branch keeps the candidate available for verification and tagging while new changes land on `develop`.
+When the batch is ready to freeze, create and push `release/<version>` from the reviewed commit on `origin/develop`, for example `release/2.1.0`. The release branch holds the candidate for verification and tagging while new changes land on `develop`.
 
 **Planned release media.** While drafting, keep screenshots and clips in a local folder outside the checkout, organized by version. The planned publishing flow attaches them to the GitHub release draft, and the update dialog displays those assets before installation.
 
