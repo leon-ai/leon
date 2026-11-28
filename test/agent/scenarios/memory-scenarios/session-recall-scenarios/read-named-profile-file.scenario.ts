@@ -31,6 +31,23 @@ const scenario: RealAgentScenario = {
       assert.equal(turn.historyBeforeTurn, 0)
       assert.equal(turn.executionHistory[0]?.function, 'file_system.file.read')
       assert.equal(turn.executionHistory[0]?.status, 'success')
+      const reads = turn.toolCalls.filter((call) =>
+        call.toolkitId === 'file_system' && call.toolId === 'file' && call.functionName === 'read'
+      )
+      assert.equal(reads.length, 1)
+      const read = JSON.parse(reads[0]?.toolOutput || '{}') as {
+        data?: { output?: { result?: { data?: {
+          content: string
+          truncated: boolean
+          nextOffsetChars: number | null
+        } } } }
+      }
+      const data = read.data?.output?.result?.data
+      assert.ok(data)
+      assert.deepEqual(data.content.trimEnd().split(/\r?\n/), FIRST_LINES)
+      assert.equal(data.truncated, false)
+      assert.equal(data.nextOffsetChars, null)
+
       for (const line of FIRST_LINES) {
         assert.ok(turn.output.includes(line), turn.output)
       }

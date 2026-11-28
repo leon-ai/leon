@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { mock } from 'node:test'
 
 import SQLite from 'better-sqlite3'
 
@@ -43,6 +44,8 @@ const scenario: RealAgentScenario = {
     const { CONFIG_MANAGER } = await import('@/config')
     const { TOOL_EXECUTOR } = await import('@/core')
     const { default: PulseManager } = await import('@/core/pulse-manager/pulse-manager')
+    const { getPulseResultRepository } = await import('@/core/pulse-manager/pulse-result-repository')
+    const { PulseTickOutcome } = await import('@/core/insights/insights-contract')
     const { CONVERSATION_SESSION_MANAGER } = await import('@/core/session-manager')
     const { CONVERSATION_REPOSITORY } = await import('@/core/session-manager/conversation-repository')
     await CONFIG_MANAGER.setValue(['runtime', 'pulse_enabled'], true)
@@ -67,8 +70,23 @@ const scenario: RealAgentScenario = {
       return executeTool(input)
     }
 
-    const run = new PulseManager().tick('manual')
+    const pulse = new PulseManager()
+    const tick = pulse.tick.bind(pulse)
+    const scheduled = mock.method(pulse, 'tick', (reason: Parameters<typeof tick>[0]) => {
+      // Use the real clock for model requests and the foreground turn.
+      mock.timers.reset()
+
+      return tick(reason)
+    })
+
     try {
+      mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() })
+      pulse.start()
+      assert.equal(scheduled.mock.callCount(), 0, 'Pulse should wait for its scheduled wake-up.')
+      mock.timers.runAll()
+
+      const run = scheduled.mock.calls[0]?.result
+      assert.ok(run, 'Pulse should wake up without an owner turn.')
       await Promise.race([
         reachedSource.promise,
         run.then(() => {
@@ -79,8 +97,10 @@ const scenario: RealAgentScenario = {
       assert.equal(ownerTurn.finalIntent, 'answer', ownerTurn.output)
       assert.match(ownerTurn.output, /owner turn completed/i)
     } finally {
+      mock.timers.reset()
       releaseSource.resolve()
-      await run
+      await scheduled.mock.calls[0]?.result
+      scheduled.mock.restore()
       TOOL_EXECUTOR.executeTool = executeTool
     }
 
@@ -93,8 +113,14 @@ const scenario: RealAgentScenario = {
     assert.match(alert, /proposals?.*(open|accept)|open.*proposals?/is)
     assert.match(alert, /missing place/i)
 
+    const privatePath = path.join(context.profilePath, 'context', 'private')
+    const scheduledTick = getPulseResultRepository().readTickHistory(0, true).ticks[0]
+    assert.equal(scheduledTick?.trigger, 'scheduled')
+    assert.equal(scheduledTick?.outcome, PulseTickOutcome.Shared)
+    assert.equal(scheduledTick?.investigated, true)
+
     // Advance past the tick cooldown without changing what the organizer announced.
-    const statePath = path.join(context.profilePath, 'context', 'private', '.leon-pulse-state.json')
+    const statePath = path.join(privatePath, '.leon-pulse-state.json')
     const state = JSON.parse(await fs.readFile(statePath, 'utf8'))
     state.lastExecutionAt = null
     state.suppressionPolicies = []
@@ -117,7 +143,7 @@ const scenario: RealAgentScenario = {
     await new PulseManager().tick('manual')
     assert.deepEqual(pulseMessages(), [alert])
 
-    const db = new SQLite(path.join(path.dirname(statePath), 'pulse.sqlite'), { readonly: true })
+    const db = new SQLite(path.join(privatePath, 'pulse.sqlite'), { readonly: true })
     try {
       const results = db.prepare('SELECT matter_id, decision FROM results ORDER BY checked_at')
         .all() as Array<{ matter_id: string, decision: string }>

@@ -349,8 +349,7 @@ export default class FileTool extends Tool {
     const maxChars = this.clampNumber(options.maxChars, 1, MAX_CHARS, DEFAULT_MAX_CHARS)
     const returnedContent = selectedContent.slice(0, maxChars)
     const nextOffsetChars = offsetChars + returnedContent.length
-    const truncated =
-      returnedContent.length < selectedContent.length || nextOffsetChars < totalChars
+    const truncated = returnedContent.length < selectedContent.length
     const repositoryInstructions = await this.readRepositoryInstructions(resolvedPath)
 
     return {

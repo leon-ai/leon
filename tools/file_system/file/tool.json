@@ -4,7 +4,7 @@
   "toolkit_id": "file_system",
   "concurrency": "serial",
   "name": "File",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Download files with measured progress, read PDF text and visuals, prepare searchable document batches, OCR images, and read, write, append or patch local text files.",
   "icon_name": "file-text-line",
   "distribution": "built-in",
@@ -159,8 +159,8 @@
     },
     "read": {
       "read_only": true,
-      "description": "Read a local text file. Rejects likely binary files. Use startLine/endLine, head, tail, or maxChars to limit output when needed.",
-      "progressive_guidance": "Use allowMissing=true for candidate paths and destination checks; exists=false means the file is absent. Use 1-based inclusive startLine/endLine around search line_number results instead of guessing character offsets. Keep text pages at 20000 characters or less for inline observations; larger explicit reads may require retained-result retrieval. Follow nextOffsetChars for coverage; batch known independent unread ranges. Reuse inspected text. repositoryInstructions supplies applicable AGENTS.md files in root-to-directory order; follow them before editing. A contentReference reuses complete unchanged text from an earlier visible tool result. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
+      "description": "Read all or part of a local text file. Rejects likely binary files.",
+      "progressive_guidance": "Use head/tail for line counts and startLine/endLine for known line numbers. Split capped line ranges and stop when the requested range is complete. Use nextOffsetChars for full-file paging. Keep inline pages within 20000 characters. Larger reads may need retained results. Use allowMissing for candidate paths and destination checks. Batch independent unread ranges and reuse inspected text. contentReference points to complete unchanged text from an earlier visible result. Follow repositoryInstructions (AGENTS.md, root-to-directory) before editing. Pass contentHash (full file bytes) to patch as expectedContentHash.",
       "parameters": {
         "type": "object",
         "properties": {
