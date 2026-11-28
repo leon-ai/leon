@@ -110,6 +110,7 @@ These are community expectations for agents, not license conditions. The unchang
 
 ## Comments and documentation
 
+- When changing the root `README.md`, review `README.fr.md` and `README.zh-CN.md` and carry over applicable changes in the same commit.
 - Leon's user-facing messages use first person (“I”, “me”, “my”); preserve branding, technical identifiers and neutral descriptive/accessibility labels.
 - Explain lasting behavior, requirements and rationale for contributors unfamiliar with the task, including why code/configuration exists and serves Leon. Keep change history, upgrade narratives, incidental versions and temporary debugging context in commits, PR descriptions or migration notes. Rewrite or omit comments/documentation that only explain the introducing change.
 

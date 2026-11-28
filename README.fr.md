@@ -88,7 +88,7 @@ pnpm start
 
 Il y a déjà pas mal de choses à faire avec Leon. Essayez de lui confier quelque chose pour lequel vous avez vraiment besoin d’un coup de main, et faites-vous votre propre idée.
 
-Aurora est la bibliothèque de composants de Leon, conçue avec soin pour apporter des graphiques interactifs, des formulaires et des réponses visuelles à vos conversations.
+Aurora est la bibliothèque de composants de Leon. Elle permet d’afficher des graphiques interactifs, des formulaires et des réponses visuelles directement dans vos conversations.
 
 Vibes fait entrer un peu du monde extérieur dans l’application, avec des ambiances qui suivent les saisons, le moment de la journée et la météo.
 
@@ -96,7 +96,7 @@ J’ai simplement demandé à Leon « Montre comment rechercher des sessions en 
 
 https://github.com/user-attachments/assets/90d0880a-7e87-4063-a5bb-09d400da6bc0
 
-Quelques aperçus du travail en cours, avec des exemples de conversations et de configuration. Cliquez sur une capture pour la voir de plus près.
+Voici quelques captures du projet en cours de développement, avec des exemples de conversations et d’écrans de configuration. Cliquez sur une image pour l’agrandir.
 
 | La nouvelle application web et Vibes | Planification et exécution des tâches |
 | --- | --- |
@@ -112,13 +112,13 @@ Quelques aperçus du travail en cours, avec des exemples de conversations et de 
 
 ## Pensé pour l’IA personnelle
 
-Un bon modèle compte. Tout ce qu’il y a autour aussi. Leon a sa propre boucle d’agent continue, une exécution des outils dans des workers isolés, une gestion progressive du contexte et une mémoire à plusieurs niveaux. Voici quelques-uns des choix qui se cachent derrière.
+Un bon modèle compte. Tout ce qui l’entoure aussi. Leon a sa propre boucle d’agent continue, exécute ses outils dans des workers isolés, gère son contexte de façon progressive et s’appuie sur une mémoire à plusieurs niveaux. Voici quelques-uns des choix techniques derrière Leon.
 
-- **Charger ce qui aide pour la tâche en cours.** Le contexte et les instructions des outils arrivent progressivement, jusqu’à la fonction dont Leon a besoin. Les sorties volumineuses restent dans des fichiers de résultat, et les échanges plus anciens sont compactés quand c’est nécessaire pour garder un contexte de travail pertinent.
-- **Donner une vraie place aux outils.** Les outils déclarent leurs fonctions, leurs paramètres, leurs dépendances et leurs binaires. Leur préparation et leur exécution suivent des chemins définis dans le code, pour que Leon puisse réutiliser une capacité déjà prête la prochaine fois qu’il en a besoin.
+- **Charger ce qui est utile à la tâche en cours.** Leon charge progressivement le contexte et les instructions des outils, jusqu’à la fonction dont il a besoin. Les résultats volumineux sont conservés dans des fichiers séparés, et les échanges anciens sont condensés au besoin pour garder un contexte de travail pertinent.
+- **Donner une vraie place aux outils.** Les outils déclarent leurs fonctions, leurs paramètres, leurs dépendances et leurs binaires. Les étapes de préparation et d’exécution sont définies dans le code, ce qui permet à Leon de réutiliser un outil déjà prêt dès qu’il en a besoin.
 - **Garder des workflows prévisibles.** Les skills natifs suivent des actions explicites. Les skills d’agent guident la boucle d’agent dans des tâches plus souples. Les deux utilisent le même système d’outils.
 - **Se souvenir de ce qui est utile.** Leon conserve du contexte temporaire, des faits et préférences durables, des résumés quotidiens et une mémoire des échanges récents, le tout isolé par profil. Il retrouve les informations pertinentes au besoin et peut consulter les conversations d’origine pour vérifier un détail exact.
-- **Agir, observer et se reprendre.** La boucle d’agent s’appuie sur les résultats des outils pour décider de la suite, vérifie les résultats et peut se remettre d’un échec. Les appels d’outils indépendants peuvent s’exécuter en parallèle dans des workers isolés.
+- **Agir, observer et corriger le tir.** Leon vérifie les résultats de ses actions et s’appuie sur les retours des outils pour décider de la suite dans sa boucle d’agent, y compris quand une action échoue. Les appels d’outils indépendants peuvent s’exécuter en parallèle dans des workers isolés.
 
 ### Comprendre le projet actuel
 
@@ -129,23 +129,29 @@ Pendant que la nouvelle documentation prend forme, ces fichiers de contexte gén
 
 ## L’IA personnelle à l’épreuve des faits
 
-Nous construisons Leon pour faire avancer l’état de l’art de l’IA personnelle. Dans nos comparaisons publiées, Leon obtient les meilleurs scores globaux sur les tâches sélectionnées de WildClawBench et PinchBench.
+Nous développons Leon pour repousser les limites de l’IA personnelle. Dans les comparatifs que nous avons publiés, Leon obtient les meilleurs scores globaux sur les tâches retenues de WildClawBench et PinchBench.
 
-Vous pouvez explorer les résultats sur les différentes dimensions, ainsi que les méthodes et leurs limites, sur **[benchmarks.getleon.ai](https://benchmarks.getleon.ai/)**.
+Vous trouverez le détail des résultats, la méthode d’évaluation et ses limites sur **[benchmarks.getleon.ai](https://benchmarks.getleon.ai/)**.
 
 ## Philosophie
 
-J’adore construire de l’IA personnelle. J’y ai passé des années, et j’ai encore tellement de choses à essayer. En même temps, je veux qu’on prenne plaisir à le faire. Qu’on comprenne ce qu’on construit. Qu’on ait aussi une vie en dehors de nos écrans.
+J’adore travailler sur l’IA personnelle. J’y ai consacré des années et j’ai encore tellement de choses à essayer. J’ai envie qu’on prenne plaisir à développer Leon, qu’on comprenne ce qu’on fait et qu’on garde aussi du temps pour la vie en dehors des écrans.
 
-Il y a déjà assez de bruit autour de l’IA. Vous devriez pouvoir ouvrir Leon, vous sentir chez vous, et avancer à votre rythme. C’est ce que je veux pour la 2.0. Quelque chose de chaleureux, de cosy, et fait avec soin.
+Il y a déjà assez de bruit autour de l’IA. Je veux que vous puissiez ouvrir Leon, vous sentir chez vous et avancer à votre rythme. C’est ce que je veux pour la 2.0. Une appli chaleureuse, accueillante et soignée.
 
-- **Le savoir-faire humain compte toujours.** On utilise l’IA pour nous aider à construire, à apprendre et à améliorer la qualité de notre travail. On prend aussi le temps de comprendre, de décider et de vérifier le résultat. Je veux qu’on soit fiers de ce qu’on apporte à Leon. Même avec l’aide de l’IA et des agents de code, je veux qu’on garde ces petits moments où l’on se dit « oui, je l’ai fait ! ».
+J’ai commencé à développer Leon en 2017 parce que j’aimais l’IA personnelle et que je voulais voir jusqu’où elle pouvait aller. Aujourd’hui, c’est facile de reprendre la boucle d’agent de quelqu’un d’autre, d’y ajouter une surcouche et de clamer sur Internet qu’on a créé le meilleur assistant. Développer notre propre boucle, c’est se demander ce que Leon doit retenir, comment il doit utiliser ses outils et quoi faire quand ça tourne mal. Et ce sont là quelques exemples parmi bien d’autres.
+
+Plus on creuse, plus les questions s’enchaînent, et parfois ça devient carrément philosophique. Qu’est-ce que ça veut dire, pour un assistant, de vous connaître ? Quand doit-il prendre l’initiative ? Quand vaut-il mieux qu’il s’efface ? Avec notre propre boucle, on peut repenser le fonctionnement de Leon jusque dans les moindres détails. Avec une surcouche, on doit composer avec les choix de ceux qui ont développé la boucle. Pouvoir faire ces choix nous-mêmes, c’est une des choses que j’aime le plus dans le développement de Leon.
+
+L’engouement finit par retomber. Les doctorats se terminent, les financements s’épuisent et le prochain objectif trimestriel arrive vite. À mon avis, les projets qui dureront sont ceux que portent des gens un peu obsédés par ce qu’ils font, qui croient en leur projet et se soucient vraiment des personnes à qui il s’adresse. C’est dans cet esprit que je veux faire grandir Leon.
+
+- **Le savoir-faire humain compte toujours.** L’IA nous aide à développer Leon, à apprendre et à améliorer notre travail. On prend aussi le temps de comprendre, de décider et de vérifier le résultat. Je veux qu’on soit fiers de ce qu’on apporte à Leon. Même avec l’aide de l’IA et des agents de code, je veux qu’on garde ces petits moments où l’on se dit « oui, je l’ai fait ! ».
 
 - **Votre IA personnelle devrait vous appartenir.** Un assistant qui vous connaît bien va garder des choses importantes pour vous. C’est une responsabilité. Leon est open source, peut tourner sur votre propre machine, et prend en charge des modèles locaux ou distants. C’est vous qui choisissez les modèles et les services auxquels vous le connectez.
 
-- **L’open source, c’est aussi des gens.** Partager du code en fait partie. Tout comme aider quelqu’un à démarrer, écouter les retours, expliquer une décision et apprendre les uns des autres. C’est ce genre de projet que je veux pour Leon.
+- **L’open source, c’est aussi des gens.** Partager du code en fait partie. Tout comme aider quelqu’un à démarrer, écouter les retours, expliquer une décision et apprendre les uns des autres. C’est cet esprit que j’aimerais cultiver dans le projet.
 
-- **On a le temps de faire les choses avec soin.** J’ai envie que Leon vous aide à faire de la place pour vos idées, votre créativité et les gens autour de vous. Il en va de même pour notre façon de le construire. Une amélioration réfléchie, une bonne conversation, un correctif utile. Ces choses-là comptent.
+- **On a le temps de faire les choses avec soin.** J’ai envie que Leon vous aide à faire de la place pour vos idées, votre créativité et les gens autour de vous. C’est aussi l’esprit dans lequel on développe Leon. Une amélioration réfléchie, une bonne conversation, un correctif utile. Ces choses-là comptent.
 
 J’en parle davantage dans [Avant Leon AI 2.0, j’ai envie de vous dire ceci](https://blog.getleon.ai/before-leon-ai-2-0-i-want-to-say-this/).
 
@@ -157,13 +163,13 @@ Pendant longtemps, j’ai limité les contributions parce que je réécrivais Le
 
 **Plus de 100 personnes ont déjà manifesté leur envie de contribuer activement à Leon AI.** Ça me touche beaucoup.
 
-Après la première alpha de la 2.0, on réunira cette communauté pour améliorer Leon ensemble. On échangera des idées, on organisera des appels, on construira des choses utiles et on s’entraidera. J’ai envie que chacun se sente à l’aise pour poser des questions et partager ce qu’il aime faire.
+Après la première alpha de la 2.0, on réunira cette communauté pour améliorer Leon ensemble. On échangera des idées, on se retrouvera en appel, on créera des choses utiles et on s’entraidera. J’ai envie que chacun se sente à l’aise pour poser des questions et partager ce qu’il aime faire.
 
 Un endroit où l’on connaît les gens derrière les pseudos. Où l’on respecte le temps et les opinions de chacun. Où il fait bon passer un moment, même quand on cherche encore comment s’y prendre.
 
 Vous pouvez déjà **[rejoindre notre Discord](https://discord.gg/MNQqqKg)** pour nous rencontrer et suivre ce qui se passe.
 
-Et si vous avez envie de participer à la construction de Leon, remplissez le **[formulaire d’intérêt pour contribuer à Leon AI](https://forms.gle/6PCG2D5rYo1q8tKMA)**. Ça m’aide à mieux vous connaître et à organiser la suite pendant qu’on prépare l’alpha.
+Si vous avez envie de contribuer au projet, dites-le-moi en remplissant ce **[formulaire](https://forms.gle/6PCG2D5rYo1q8tKMA)**. Ça m’aide à mieux vous connaître et à organiser la suite pendant qu’on prépare l’alpha.
 
 Vous pouvez aider avec le code, les tests, la documentation, le design, la traduction, des vidéos ou l’accueil des nouveaux. Pas besoin d’être développeur pour apporter quelque chose de précieux.
 
@@ -173,7 +179,7 @@ J’ai vraiment hâte de voir ce qu’on va créer ensemble.
 
 ## Cocorico !
 
-Je suis français moi aussi, même si je vis aujourd’hui à Shenzhen. Ça me ferait vraiment plaisir de construire la suite de Leon avec vous. Faisons grandir ensemble un assistant IA personnel à la pointe, avec du savoir-faire, de la passion, et cette petite fierté de se dire « oui, on l’a fait ! ». Un beau projet open source français, ouvert à tout le monde. Cocorico 🐓
+Je suis français moi aussi, même si je vis aujourd’hui à Shenzhen. Ça me ferait vraiment plaisir de continuer à développer Leon avec vous. Faisons grandir ensemble un assistant IA personnel à la pointe, avec du savoir-faire, de la passion et cette petite fierté de se dire « oui, on l’a fait ! ». Un beau projet open source français, ouvert à tout le monde. Cocorico 🐓
 
 ## Suivre l’aventure
 
@@ -193,7 +199,7 @@ Pour en savoir plus sur les débuts du projet, vous pouvez lire [l’histoire de
 
 ## Soutenir Leon
 
-Si vous souhaitez soutenir le temps et le soin apportés à ce projet, vous pouvez [sponsoriser Leon](http://sponsor.getleon.ai).
+Si vous souhaitez nous aider à consacrer du temps à ce projet, vous pouvez [soutenir Leon financièrement](http://sponsor.getleon.ai).
 
 Leon est partagé sous [licence MIT](./LICENSE.md).
 

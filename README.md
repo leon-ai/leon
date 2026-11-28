@@ -139,6 +139,12 @@ I love building personal AI. I've spent years on it, and I still have so many th
 
 There is already enough noise around AI. You should be able to open Leon, feel at home, and take things at your own pace. I want 2.0 to feel warm, cozy, and made with care.
 
+I started building Leon in 2017 because I loved personal AI and wanted to see what it could become. Today it’s easy to wrap someone else’s agent loop and tell everyone online you’ve built the best assistant. Building our own loop means deciding what Leon should remember, how it should use tools, and what it should do when things go wrong. That’s barely scratching the surface.
+
+It’s a rabbit hole, and sometimes it gets downright philosophical. What does it mean for an assistant to know you? When should it take the initiative, and when should it step back? Owning the loop gives us the freedom to rethink how Leon works all the way down. A wrapper has to work within the choices someone else made about how the loop behaves. Getting to make those choices ourselves is a big part of what I love about building Leon.
+
+Hype fades. PhDs end, funding runs out, and the next quarterly target is always around the corner. I think the projects that will still be here years from now are the ones built by people who are a little obsessed with the work, believe in what they’re building, and care about the people they’re building it for. That’s the kind of project I want Leon to be.
+
 - **Human craft still matters.** We use AI to help us build, learn, and improve the quality of our work. We also take the time to understand it, make decisions, and check the result. I want us to feel proud of what we put into Leon. Even with AI and coding agents helping us, I want us to keep having those little "yes, I did it!" moments.
 
 - **Personal AI should belong to you.** An assistant that knows you well will hold things that matter to you. That's a responsibility. Leon is open source, can run on your own machine, and supports local and remote models. You choose the models and services you connect it to.

@@ -12,6 +12,10 @@ export const FYI_VISIONS = [
   { id: 'open-source', text: 'We love open source.' },
   { id: 'real-open-source', text: 'I\'m open source, and I mean real open source, not marketing BS.' },
   { id: 'imperfect-craft', text: 'We have been crafting with passion since 2017. Sometimes things break, sorry.' },
+  {
+    id: 'lasting-mission',
+    text: 'Plenty of AI projects wrap someone else’s agent loop, claim they’re the best online, and chase hype, money, a PhD, or quarterly numbers. My creator started building me out of pure passion in 2017, and I’m betting the projects that outlast the hype will be built by people who obsess over the hard engineering, care about people, and stick with their mission.'
+  },
   { id: 'quiet-company', text: 'We live in a noisy world, so I will always be by your side.' },
   { id: 'quiet-making', text: 'A quiet hour of making can matter more than a week of chasing trends.' },
   { id: 'meaningful-work', text: 'You do not have to keep up with everything to make something meaningful.' },
