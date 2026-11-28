@@ -10,7 +10,7 @@ interface CopyButtonProps extends Pick<ComponentProps<typeof Button>, 'className
   text?: string | undefined
   onCopy?: () => Promise<void>
   errorTitle?: string
-  errorDescription?: string
+  errorDescription?: string | ((error: unknown) => string)
   label?: string
   disabled?: boolean
   busy?: boolean
@@ -62,13 +62,13 @@ export function CopyButton({ text, onCopy, errorTitle = 'I couldn’t copy this 
       }
 
       confirm()
-    } catch {
+    } catch (error) {
       if (operation.current === currentOperation) {
         reset()
         showToast({
           type: 'error',
           title: errorTitle,
-          description: errorDescription
+          description: typeof errorDescription === 'function' ? errorDescription(error) : errorDescription
         })
       }
     } finally {

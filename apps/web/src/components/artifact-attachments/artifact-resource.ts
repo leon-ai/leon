@@ -8,6 +8,11 @@ const TEXT_MIME_TYPES = new Set([
 ])
 
 /**
+ * Identifies an artifact that exceeds the size budget for an action.
+ */
+export class ArtifactSizeError extends Error {}
+
+/**
  * Classifies explicit text formats without interpreting arbitrary binary files.
  */
 export function isTextArtifact(item: Pick<ArtifactItem, 'mimeType'>): boolean {
@@ -39,7 +44,7 @@ export async function readArtifactResource(item: ArtifactItem, limit: number, si
   }
   if (!excerpt && Number(response.headers.get('Content-Length')) > limit) {
     await response.body.cancel()
-    throw new Error('This file is too large. Use Download instead.')
+    throw new ArtifactSizeError('This file is too large. Use Download instead.')
   }
   const reader = response.body.getReader()
   const chunks: BlobPart[] = []
@@ -55,7 +60,7 @@ export async function readArtifactResource(item: ArtifactItem, limit: number, si
       const remaining = limit - size
       if (value.byteLength > remaining) {
         if (!excerpt) {
-          throw new Error('This file is too large. Use Download instead.')
+          throw new ArtifactSizeError('This file is too large. Use Download instead.')
         }
         chunks.push(value.slice(0, remaining))
         truncated = true

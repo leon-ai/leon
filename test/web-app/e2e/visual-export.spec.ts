@@ -47,6 +47,87 @@ async function lastImage(page: Page): Promise<{
   })
 }
 
+test('copies tall artifact images at full resolution and explains copy failures', async ({ page, ui }) => {
+  const width = 1_200
+  const height = 12_000
+  const [screenshot, oversized] = await page.evaluate(({ width, height }) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')!
+    context.fillStyle = '#f4e8d8'
+    context.fillRect(0, 0, width, height)
+
+    // A detailed section raises the encoded PNG size even when the JPEG is small.
+    const detail = context.createImageData(width, 3_600)
+    let seed = 7
+    for (let index = 0; index < detail.data.length; index += 4) {
+      seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0
+      detail.data[index] = seed >>> 24
+      detail.data[index + 1] = (seed >>> 16) & 255
+      detail.data[index + 2] = (seed >>> 8) & 255
+      detail.data[index + 3] = 255
+    }
+    context.putImageData(detail, 0, 0)
+    const jpeg = canvas.toDataURL('image/jpeg', 0.9).split(',')[1]!
+    canvas.width = 1
+    canvas.height = 17_000
+
+    return [jpeg, canvas.toDataURL('image/png').split(',')[1]!]
+  }, { width, height })
+
+  const files = [
+    { filename: 'Tall screenshot.jpg', mimeType: 'image/jpeg', bytes: screenshot },
+    { filename: 'Oversized image.png', mimeType: 'image/png', bytes: oversized }
+  ]
+  const answer = ui.history.get(SESSION_ID)!.at(-1)!
+  answer.artifacts = await Promise.all(files.map(async ({ filename, mimeType, bytes }, index) => {
+    const id = `image-${index}`
+    const url = `/api/v1/artifacts/${SESSION_ID}/${id}`
+    const body = Buffer.from(bytes!, 'base64')
+
+    await page.route(`**${url}`, (route) => route.fulfill({ body, contentType: mimeType }))
+
+    return { id, session_id: SESSION_ID, filename, mime_type: mimeType, url,
+      size_bytes: body.length, created_at: Date.now(), source: 'fixture' }
+  }))
+
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto(SESSION_URL)
+  const screenshotCard = page.getByRole('figure').filter({ hasText: 'Tall screenshot.jpg' })
+  const oversizedCard = page.getByRole('figure').filter({ hasText: 'Oversized image.png' })
+  const screenshotCopy = screenshotCard.getByRole('button', { name: 'Copy image', exact: true })
+
+  await screenshotCard.hover()
+  await screenshotCopy.click()
+  await expect(screenshotCard.getByRole('button', { name: 'Copied', exact: true })).toBeVisible()
+  const copied = await page.evaluate(async () => {
+    const [item] = await navigator.clipboard.read()
+    const blob = await item!.getType('image/png')
+    const image = await createImageBitmap(blob)
+    const dimensions = { width: image.width, height: image.height }
+    image.close()
+
+    return { ...dimensions, size: blob.size }
+  })
+  expect(copied).toMatchObject({ width, height })
+  expect(copied.size).toBeGreaterThan(8_388_608)
+
+  await oversizedCard.hover()
+  await oversizedCard.getByRole('button', { name: 'Copy image', exact: true }).click()
+  await expect(page.getByText('This image is too large to copy. Use Download to get the full-resolution image.', { exact: true })).toBeVisible()
+  await expect(oversizedCard.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('href', `${answer.artifacts[1]!.url}?download=true`)
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      write: (): Promise<void> => Promise.reject(new DOMException('Denied', 'NotAllowedError'))
+    } })
+  })
+  await screenshotCard.hover()
+  await screenshotCopy.click()
+  await expect(page.getByText('The browser blocked access to the clipboard. Try again or use Download instead.', { exact: true })).toBeVisible()
+})
+
 test('exports complete Markdown tables and diagrams locally on demand', async ({ page, ui }, testInfo) => {
   await page.setViewportSize({ width: 560, height: 982 })
   await installClipboardProbe(page)

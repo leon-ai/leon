@@ -1,12 +1,23 @@
-import { MAXIMUM_IMAGE_EDGE, MAXIMUM_IMAGE_PIXELS } from './image-contract'
+import { fitsImageDimensions, type ImageDimensionLimits } from './image-contract'
+
+/**
+ * Identifies a canvas allocation rejected by the image dimensions budget.
+ */
+export class ImageDimensionsError extends Error {}
 
 /**
  * Encodes decoded artwork as a bounded PNG, releasing canvas memory afterwards.
  */
-export async function rasterizeImage(image: HTMLImageElement, width: number, height: number): Promise<Blob> {
-  if (!width || !height || width > MAXIMUM_IMAGE_EDGE || height > MAXIMUM_IMAGE_EDGE || width * height > MAXIMUM_IMAGE_PIXELS) {
-    throw new Error('This image is too large to copy. Use Download instead.')
+export async function rasterizeImage(
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  limits?: ImageDimensionLimits
+): Promise<Blob> {
+  if (!fitsImageDimensions(width, height, limits)) {
+    throw new ImageDimensionsError('This image is too large to rasterize.')
   }
+
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
