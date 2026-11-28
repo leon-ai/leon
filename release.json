@@ -1,34 +1,35 @@
 {
   "schemaVersion": 1,
-  "version": "2.0.0-alpha.0.30",
+  "version": "2.0.0-alpha.0.31",
   "desktop": {
     "minimumServerVersion": "2.0.0-alpha.0.17"
   },
-  "title": "A new era begins",
-  "summary": "A new web app, shared context for related conversations, and server updates you can review and install when you choose.",
+  "title": "Web search without a key and easier local AI setup",
+  "summary": "I can search the public web without asking you to set up an API key. I also make it easier to get started with local AI and follow what I’m doing in the activity feed.",
   "highlights": [
     {
-      "title": "A workspace for each project",
-      "body": "Group conversations with a shared brief and resource references while keeping their histories separate."
+      "title": "Web search out of the box",
+      "body": "If your model can’t search the web on its own, I can use Keenable to find public sources for you."
     },
     {
-      "title": "Updates on your terms",
-      "body": "Read release notes before updating my server, follow installation progress, and keep your profiles separate from application code."
+      "title": "Easier local AI setup",
+      "body": "I use the graphics memory your computer has available to help choose a model that fits. Inkling 2 Mini replaces Qwen 27B as an option for new local setups. On supported Linux systems with an NVIDIA graphics card, I can download ready-to-run software and skip the build step."
     }
   ],
   "changes": {
     "new": [
-      "Browse conversations and project workspaces in the new web app.",
-      "Review and install published server releases from the update dialog.",
-      "Explore activity and usage in your profile."
+      "I can look for pages published within a date range or read a saved public copy when I have trouble opening the original."
     ],
     "improvements": [
-      "Stage verified server archives before restarting the server.",
-      "Show measured download progress and profile preparation details during updates.",
-      "Keep accepted server updates running when the browser page closes."
+      "I show new steps in the activity feed as they happen, with gentle animations that respect your reduced-motion setting.",
+      "I keep Grok available if you’ve already set it up. You can also add it when you want it for web or social search.",
+      "My FYI notes and READMEs explain why Leon builds its own agent loop and what it means to build personal AI for the long term. The READMEs also show how the project has grown through its GitHub star history.",
+      "Leon’s configuration and manifest fields are explained directly in editors that support them."
     ],
     "fixes": [
-      "Preserve the working runtime when a replacement download or extraction fails."
+      "You can copy larger images at full resolution. If an image is too large to copy, I point you to the original download.",
+      "When you ask for a range of lines in a file, I stop after reading the lines you requested.",
+      "I have better safeguards against excessive memory use when streaming OpenAI replies and handling real-time connections."
     ],
     "removed": []
   }
