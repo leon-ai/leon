@@ -18,6 +18,7 @@ export function WorkingMessage({ phaseId, label, iconName, startedAt, ariaLabel 
   return (
     <ProcessGroup
       active
+      animationId={phaseId}
       startedAt={startedAt}
       animateWhileActive
       activeLabel={label ?? getActivityLabel(phaseId)}

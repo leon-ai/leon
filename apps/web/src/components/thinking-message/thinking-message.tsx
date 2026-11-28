@@ -1,10 +1,8 @@
-import { clsx } from 'clsx'
 import { useState } from 'react'
 import { useConversationDetails } from '@/data/conversation-details'
 
 import { DurationFormat, formatToolDuration } from '@/utils/format-tool-duration'
 import { ProcessGroup } from '@/components/process-group'
-import { useAnimateOnce } from '@/components/streaming-text'
 import { MarkdownContent } from '@/components/markdown-content'
 import { ThoughtIcon } from '@/components/thought-icon'
 import { WorkingMessage } from '@/components/working-message'
@@ -27,7 +25,6 @@ export function ThinkingMessage({
   isActive,
   startedAt
 }: ThinkingMessageProps) {
-  const shouldAnimateHeading = useAnimateOnce(`${animationId}:heading`)
   const [detailsOpen, setDetailsOpen] = useState(isActive)
   // Live reasoning arrives through events; its optimistic response may not exist on disk yet.
   const disclosure = useConversationDetails(!isActive && detailsOpen && details.length === 0)
@@ -40,11 +37,10 @@ export function ThinkingMessage({
   }
 
   return (
-    <div className={clsx('thinking-message', {
-      'thinking-message-animate': shouldAnimateHeading
-    })}>
+    <div className="thinking-message">
       <ProcessGroup
         active={isActive}
+        animationId={animationId}
         startedAt={startedAt}
         activeLabel="Thinking..."
         animateWhileActive

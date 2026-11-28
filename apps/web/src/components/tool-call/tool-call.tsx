@@ -14,11 +14,13 @@ import { getToolOutputFormat, getToolOutputProgress, toToolContent, toToolDispla
 import { getToolChanges, hasToolChanges } from '@/utils/tool-changes'
 import { prefetchToolDiff, ToolChanges, ToolOutput } from './tool-output'
 import { useOpenToolDetails } from '@/components/activity-details/activity-details-provider'
+import { useActivityNodeEntrance } from '@/hooks/use-activity-node-entrance'
 
 import './tool-call.sass'
 
 interface ToolCallProps {
   toolCall: FeedToolCall
+  animateEntrance?: boolean
   measureRef?: Ref<HTMLElement>
   rowIndex?: number
   style?: CSSProperties
@@ -56,7 +58,8 @@ function formatFunctionName(functionName: string): string {
 /**
  * Shows a tool invocation, its execution state, and expandable input and output.
  */
-export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProps) {
+export function ToolCall({ toolCall, animateEntrance = true, measureRef, rowIndex, style }: ToolCallProps) {
+  const shouldAnimate = useActivityNodeEntrance(`tool-call:${toolCall.id}`, animateEntrance)
   const [isExpanded, setIsExpanded] = useState(false)
   const disclosure = useToolCallContents(toolCall.id, isExpanded)
   const liveOutput = useMemo(() => toToolContent(toolCall.output), [toolCall.output])
@@ -89,7 +92,9 @@ export function ToolCall({ toolCall, measureRef, rowIndex, style }: ToolCallProp
   const openDetails = useOpenToolDetails(toolCall, technicalTitle)
 
   return (
-    <section ref={measureRef} data-index={rowIndex} style={style} className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
+    <section ref={measureRef} data-index={rowIndex} style={style} className={clsx('tool-call', `tool-call-${toolCall.status}`, {
+      'activity-node-enter': shouldAnimate
+    })}>
       <div className="tool-call-heading" onClick={forwardTimestampClickToDisclosure}>
         <button
           type="button"

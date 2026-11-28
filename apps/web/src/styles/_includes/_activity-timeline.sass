@@ -1,3 +1,6 @@
+$sibling-link: ':where(:not(:last-child):not(.leon-message-summary):not(:has(+ .leon-message-summary)))'
+$entrance-duration: calc(var(--transition-duration-main) * 1.5)
+
 @mixin connector
   position: absolute
   left: calc(var(--timeline-marker-size) / 2)
@@ -24,7 +27,7 @@
   > *
     position: relative
 
-  > :where(:not(:last-child):not(.leon-message-summary):not(:has(+ .leon-message-summary)))::after
+  > #{$sibling-link}::after
     @include connector
     top: max(calc(var(--timeline-marker-offset) + var(--timeline-marker-size) + var(--timeline-connector-gap)), calc(100% - var(--timeline-marker-offset) + var(--timeline-connector-gap)))
     bottom: calc((var(--activity-node-gap) + var(--timeline-marker-offset) - var(--timeline-connector-gap)) * -1)
@@ -57,3 +60,68 @@
     @include connector
     top: calc(var(--task-list-item-marker-offset) + var(--timeline-marker-size) + var(--timeline-connector-gap))
     height: calc(100% - var(--task-list-item-marker-offset) - var(--timeline-marker-size) + var(--activity-node-gap) + var(--timeline-first-marker-offset) - var(--timeline-connector-gap) * 2)
+
+@mixin draw-link
+  transform-origin: top
+  animation: activity-link-draw $entrance-duration var(--transition-timing-main)
+
+@mixin reveal-node
+  // Only fade the row face. Its connectors and nested rows time their own entrances.
+  &.leon-message-summary,
+  > .process-group-heading > .process-group-trigger,
+  > .process-group > .process-group-heading > .process-group-trigger,
+  > .tool-call-heading,
+  > .task-list-item-marker,
+  > .task-list-item-content > :is(.task-list-item-heading, .task-list-item-trigger) > .task-list-item-label
+    animation: activity-node-fade $entrance-duration ease-out var(--activity-node-fade-delay, 0s) backwards
+
+$entering-group: '> .process-group.activity-node-enter'
+$entering-node: ':is(.activity-node-enter, :has(#{$entering-group}))'
+$timeline-parent: ':is(.activity-timeline-parent, .task-list-item-content)'
+$open-body: '.collapse-open > .collapse-content > .collapse-body'
+$revealing-body: '.activity-disclosure-reveal#{$open-body}'
+$first-node: ':is(:first-child:not([data-index]), [data-index="0"])'
+
+@media (prefers-reduced-motion: no-preference)
+  // A line belongs to the previous row, but its arrival follows the incoming row.
+  .activity-timeline > #{$sibling-link}:has(+ .activity-node-enter, + * #{$entering-group})::after,
+  #{$revealing-body} > .activity-timeline:not(.tool-call-list-virtual) > #{$sibling-link}::after
+    @include draw-link
+
+  #{$timeline-parent}:has(> #{$open-body} > .activity-timeline > #{$first-node}.activity-node-enter),
+  #{$timeline-parent}:has(> #{$open-body} > .activity-timeline > #{$first-node} #{$entering-group}),
+  #{$timeline-parent}:has(> #{$open-body} > .tool-call-list-virtual.activity-node-enter),
+  #{$timeline-parent}:has(> #{$revealing-body} > .activity-timeline)
+    > .process-group-heading::before,
+    > .task-list-item-trigger::before
+      @include draw-link
+
+  :where(#{$entering-node}, #{$revealing-body} > :is(.leon-message-activities, .task-list, .tool-call-list:not(.tool-call-list-virtual)) > *)
+    @include reveal-node
+
+  // Delay only rows linked to a preceding marker or the disclosure heading.
+  :where(.leon-message, .leon-message-activities, .task-list, .tool-call-list) > *
+    --activity-node-fade-delay: 0s
+
+  .activity-timeline > :not(.leon-message-summary) + :not(.leon-message-summary),
+  #{$timeline-parent} > #{$open-body} > .activity-timeline > #{$first-node}
+    --activity-node-fade-delay: #{$entrance-duration}
+
+  // An open virtual list fades as a group so changing the scroll range stays static.
+  .tool-call-list-virtual.activity-node-enter,
+  #{$revealing-body} > .tool-call-list-virtual
+    animation: activity-node-fade $entrance-duration ease-out $entrance-duration backwards
+
+@keyframes activity-link-draw
+  from
+    transform: scaleY(0)
+
+  to
+    transform: scaleY(1)
+
+@keyframes activity-node-fade
+  from
+    opacity: 0
+
+  to
+    opacity: 1

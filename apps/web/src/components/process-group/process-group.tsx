@@ -13,12 +13,14 @@ import { clsx } from 'clsx'
 import { Collapse } from '@/components/collapse'
 import { ActivityWave } from '@/components/activity-wave'
 import { ActivityTimestamp, forwardTimestampClickToDisclosure } from '@/components/activity-timestamp'
+import { useActivityNodeEntrance } from '@/hooks/use-activity-node-entrance'
 
 import './process-group.sass'
 
 interface ProcessGroupProps {
   active: boolean
   activeLabel: string
+  animationId: string
   animateWhileActive?: boolean
   ariaLabel: string
   children?: ReactNode
@@ -45,6 +47,7 @@ export function useProcessGroupNestedDisclosureDefault(): boolean {
 export function ProcessGroup({
   active,
   activeLabel,
+  animationId,
   animateWhileActive = false,
   ariaLabel,
   children,
@@ -56,8 +59,10 @@ export function ProcessGroup({
   startedAt
 }: ProcessGroupProps) {
   const contentId = useId()
+  const shouldAnimate = useActivityNodeEntrance(animationId)
   const previousDefaultExpanded = useRef(defaultExpanded)
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const [revealOnOpen, setRevealOnOpen] = useState(false)
   const [expandNestedByDefault, setExpandNestedByDefault] = useState(defaultExpanded)
 
   useEffect(() => {
@@ -67,6 +72,7 @@ export function ProcessGroup({
 
     // Ongoing child work can keep the group open under its completed heading.
     setIsExpanded(defaultExpanded)
+    setRevealOnOpen(false)
     setExpandNestedByDefault(defaultExpanded)
     previousDefaultExpanded.current = defaultExpanded
   }, [defaultExpanded])
@@ -77,6 +83,7 @@ export function ProcessGroup({
       setExpandNestedByDefault(false)
     }
 
+    setRevealOnOpen(!isExpanded)
     setIsExpanded(!isExpanded)
     onExpandedChange?.(!isExpanded)
   }
@@ -102,7 +109,8 @@ export function ProcessGroup({
     >
       <section
         className={clsx('process-group', className, {
-          'process-group-active': active
+          'process-group-active': active,
+          'activity-node-enter': shouldAnimate
         })}
         aria-label={ariaLabel}
       >
@@ -126,7 +134,9 @@ export function ProcessGroup({
         {children !== undefined && (
           <Collapse
             id={contentId}
-            className="process-group-content"
+            className={clsx('process-group-content', {
+              'activity-disclosure-reveal': revealOnOpen
+            })}
             isOpen={isExpanded}
           >
             {children}

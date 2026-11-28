@@ -91,8 +91,9 @@ export function FeedAnimationProvider({
  * Claims a one-time feed animation while preserving that claim across
  * virtualized unmounts.
  */
-export function useAnimateOnce(animationId: string): boolean {
+export function useAnimateOnce(animationId: string, enabled = true): boolean {
   const registry = useContext(FeedAnimationContext)
+  const isHistorical = registry?.historicalIds.some((id) => animationId.startsWith(id)) ?? false
   const stateRef = useRef({
     animationId,
     shouldAnimate: !(registry?.startedAnimationIds.has(animationId) ?? false)
@@ -106,11 +107,12 @@ export function useAnimateOnce(animationId: string): boolean {
   }
 
   useLayoutEffect(() => {
-    registry?.startedAnimationIds.add(animationId)
-  }, [animationId, registry])
+    if (!isHistorical) {
+      registry?.startedAnimationIds.add(animationId)
+    }
+  }, [animationId, isHistorical, registry])
 
-  return stateRef.current.shouldAnimate &&
-    !(registry?.historicalIds.some((id) => animationId.startsWith(id)) ?? false)
+  return enabled && stateRef.current.shouldAnimate && !isHistorical
 }
 
 /**

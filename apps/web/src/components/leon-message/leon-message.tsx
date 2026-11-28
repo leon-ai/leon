@@ -1,7 +1,7 @@
 import { Icon } from '@/components/icon'
 import { MemoryDetails } from '@/components/activity-details/memory-details'
 import { clsx } from 'clsx'
-import { lazy, memo, Suspense } from 'react'
+import { lazy, memo, Suspense, type ReactNode } from 'react'
 import { Loader } from '@/components/loader'
 
 import type {
@@ -17,7 +17,6 @@ import { BonusResponse } from '@/components/bonus-response'
 import { FinalAnswer } from '@/components/final-answer'
 import { SkillDetails } from '@/components/activity-details/skill-details'
 import { ProcessGroup } from '@/components/process-group'
-import { useAnimateOnce } from '@/components/streaming-text'
 import { MarkdownContent } from '@/components/markdown-content'
 import { TaskList } from '@/components/task-list'
 import { ThinkingMessage } from '@/components/thinking-message'
@@ -27,6 +26,7 @@ import { WorkingMessage } from '@/components/working-message'
 import { ActivityTimestamp } from '@/components/activity-timestamp'
 import { isDesktopClient } from '@/data/turn-client'
 import { ComputerUsePermission } from '@/components/desktop-setup/computer-use-permission'
+import { useActivityNodeEntrance } from '@/hooks/use-activity-node-entrance'
 
 import './leon-message.sass'
 
@@ -62,8 +62,6 @@ function getToolGroupDuration(toolCalls: FeedToolCall[]): number | undefined {
 }
 
 function ExecutionActivity({ activity }: ExecutionActivityProps) {
-  const shouldAnimate = useAnimateOnce(`${activity.id}:execution`)
-
   if (activity.type === 'plan') {
     const planDuration = formatToolDuration(activity.durationMs, DurationFormat.Compact)
     const planIsActive = activity.steps.some((step) =>
@@ -71,11 +69,10 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
     )
 
     return (
-      <div className={clsx('leon-message-execution', {
-        'leon-message-execution-animate': shouldAnimate
-      })}>
+      <div className="leon-message-execution">
         <ProcessGroup
           active={planIsActive}
+          animationId={activity.id}
           defaultExpanded={planIsActive || hasActiveActivityPreparation(activity)}
           activeLabel="Executing plan..."
           ariaLabel="Leon’s execution plan"
@@ -84,7 +81,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
             ? `Completed plan${planDuration ? ` for ${planDuration}` : ''}` : 'Execution plan'}
           indicator={<Icon name="map-2-line" />}
         >
-          <TaskList steps={activity.steps} renderActivity={renderActivity} />
+          <TaskList planId={activity.id} steps={activity.steps} renderActivity={renderActivity} />
         </ProcessGroup>
       </div>
     )
@@ -101,11 +98,10 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   const duration = formatToolDuration(getToolGroupDuration(activity.toolCalls), DurationFormat.Compact)
 
   return (
-    <div className={clsx('leon-message-execution', {
-      'leon-message-execution-animate': shouldAnimate
-    })}>
+    <div className="leon-message-execution">
       <ProcessGroup
         active={toolsAreActive}
+        animationId={activity.id}
         animateWhileActive={!hasVisibleToolCalls}
         activeLabel={toolsAreRunning ? 'Using tools...' : 'Preparing tool calls...'}
         ariaLabel="Leon’s tool usage"
@@ -123,6 +119,16 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   )
 }
 
+function ActivitySummary({ animationId, children }: { animationId: string, children: ReactNode }) {
+  const shouldAnimate = useActivityNodeEntrance(animationId)
+
+  return (
+    <div className={clsx('leon-message-summary', { 'activity-node-enter': shouldAnimate })}>
+      {children}
+    </div>
+  )
+}
+
 function renderActivity(activity: LeonFeedActivity) {
   if (activity.type === 'compaction') {
     const duration = formatToolDuration(activity.durationMs, DurationFormat.Compact)
@@ -132,6 +138,7 @@ function renderActivity(activity: LeonFeedActivity) {
       <ProcessGroup
         key={activity.id}
         active={activity.status === 'in_progress'}
+        animationId={activity.id}
         animateWhileActive
         activeLabel="Compacting history..."
         ariaLabel="History compaction"
@@ -175,6 +182,7 @@ function renderActivity(activity: LeonFeedActivity) {
         <ProcessGroup
           key={activity.id}
           active={false}
+          animationId={activity.id}
           activeLabel="Processing..."
           ariaLabel={request.isRuntime ? 'Leon’s tool preparation' : 'Leon’s inference'}
           completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
@@ -188,6 +196,7 @@ function renderActivity(activity: LeonFeedActivity) {
       <ProcessGroup
         key={activity.id}
         active={false}
+        animationId={activity.id}
         activeLabel="Processing..."
         ariaLabel="Leon’s processing"
         className="activity-timeline-parent"
@@ -200,6 +209,7 @@ function renderActivity(activity: LeonFeedActivity) {
               <ProcessGroup
                 key={request.id}
                 active={false}
+                animationId={request.id}
                 activeLabel="Processing..."
                 ariaLabel={request.isRuntime ? 'Leon’s tool preparation' : 'Leon’s inference'}
                 completedLabel={`${request.label} ${formatToolDuration(request.durationMs, DurationFormat.Precise)}`}
@@ -217,6 +227,7 @@ function renderActivity(activity: LeonFeedActivity) {
       <ProcessGroup
         key={activity.id}
         active={false}
+        animationId={activity.id}
         activeLabel="Processing..."
         ariaLabel="Leon’s other processing"
         completedLabel={`Other processing for ${formatToolDuration(activity.durationMs, DurationFormat.Compact)}`}
@@ -230,6 +241,7 @@ function renderActivity(activity: LeonFeedActivity) {
       <ProcessGroup
         key={activity.id}
         active={false}
+        animationId={activity.id}
         activeLabel="Retrying..."
         ariaLabel="Leon’s retries"
         startedAt={activity.startedAt}
@@ -247,6 +259,7 @@ function renderActivity(activity: LeonFeedActivity) {
       <ProcessGroup
         key={activity.id}
         active={false}
+        animationId={activity.id}
         activeLabel={isReview ? 'Reviewing...' : 'Generating answer...'}
         ariaLabel={isReview ? 'Leon’s review' : 'Leon’s answer generation'}
         startedAt={activity.startedAt}
@@ -271,9 +284,9 @@ function renderActivity(activity: LeonFeedActivity) {
 
   if (activity.type === 'preparation') {
     return (
-      <div key={activity.id} className="leon-message-summary">
+      <ActivitySummary key={activity.id} animationId={activity.id}>
         <ToolPreparation key={activity.preparation.executionId} preparation={activity.preparation} />
-      </div>
+      </ActivitySummary>
     )
   }
 
@@ -285,6 +298,7 @@ function renderActivity(activity: LeonFeedActivity) {
         <ProcessGroup
           key={activity.id}
           active={false}
+          animationId={activity.id}
           activeLabel={label}
           completedLabel={label}
           ariaLabel="Leon’s activity"
@@ -301,7 +315,7 @@ function renderActivity(activity: LeonFeedActivity) {
       )
     }
     return (
-      <div key={activity.id} className="leon-message-summary">
+      <ActivitySummary key={activity.id} animationId={activity.id}>
         <MarkdownContent
           animationId={activity.id}
           startDelay={420}
@@ -310,7 +324,7 @@ function renderActivity(activity: LeonFeedActivity) {
         />
         {' '}
         <ActivityTimestamp timestamp={activity.startedAt} />
-      </div>
+      </ActivitySummary>
     )
   }
 
@@ -344,6 +358,7 @@ export const LeonMessage = memo(function LeonMessage({ entry }: LeonMessageProps
       {entry.status === FeedTurnStatus.Completed && !entry.isMaintenance && !entry.continues && (activities.length > 0 || entry.hasTurnWork) ? (
         <ProcessGroup
           active={false}
+          animationId={`${entry.id}:completed-work`}
           defaultExpanded={entry.activities.some(hasActiveActivityPreparation)}
           activeLabel="Working..."
           ariaLabel="Leon’s completed work"

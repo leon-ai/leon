@@ -1545,8 +1545,36 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     const plan = page.getByRole('region', { name: 'Leon’s execution plan', exact: true })
     await plan.getByRole('button', { name: 'Completed plan for 3s', exact: true }).click()
     await expect(plan.locator('.task-list-item')).toHaveCount(2)
+    const expectLinkedEntrance = async (parent: Locator, childSelector: string): Promise<void> => {
+      const entrance = await parent.evaluate((heading, selector) => {
+        const child = heading.parentElement!.querySelector(selector)!
+        const lineStyle = getComputedStyle(heading, '::before')
+        const childStyle = getComputedStyle(child)
+
+        return {
+          line: lineStyle.animationName,
+          fade: childStyle.animationName,
+          drawsBeforeFade: lineStyle.animationDuration === childStyle.animationDelay,
+          fadeDuration: childStyle.animationDuration
+        }
+      }, childSelector)
+
+      if (reducedMotion === 'reduce') {
+        expect(entrance.line).toBe('none')
+        expect(entrance.fade).toBe('none')
+      } else {
+        expect(entrance.line).toBe('activity-link-draw')
+        expect(entrance.fade).toBe('activity-node-fade')
+        expect(entrance.drawsBeforeFade).toBe(true)
+        expect(Number.parseFloat(entrance.fadeDuration)).toBeGreaterThan(0)
+      }
+    }
+    await expectLinkedEntrance(plan.locator(':scope > .process-group-heading'), '.task-list-item-label')
     await plan.getByRole('button', { name: first.label, exact: true }).click()
-    await plan.getByRole('button', { name: 'Used 2 tools for 200ms', exact: true }).click()
+    await expectLinkedEntrance(plan.getByRole('button', { name: first.label, exact: true }), '.process-group-trigger')
+    const toolGroup = plan.getByRole('region', { name: 'Leon’s tool usage', exact: true })
+    await toolGroup.getByRole('button', { name: 'Used 2 tools for 200ms', exact: true }).click()
+    await expectLinkedEntrance(toolGroup.locator(':scope > .process-group-heading'), '.tool-call-heading')
     const thought = plan.getByRole('region', { name: 'Leon’s thinking', exact: true })
     await thought.getByRole('button').locator('.activity-wave-content .process-group-title').click()
     await expect(thought.locator('.thinking-message-details p')).toHaveCount(2)
@@ -1649,10 +1677,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     expect(collapsed.startGap).toBeCloseTo(4, 0)
     await plan.getByRole('button', { name: first.label, exact: true }).click()
     await expect(thought).toHaveCount(0)
-    // Nested content can unmount before the enclosing row finishes shrinking.
-    await expect.poll(() => plan.locator('.task-list-item').first().evaluate((element) =>
-      element.getBoundingClientRect().height - element.querySelector('.task-list-item-trigger')!.getBoundingClientRect().height
-    )).toBeLessThanOrEqual(1)
+    await finishFiniteAnimations(plan)
     const collapsedStep = await plan.locator('.task-list-item').first().evaluate((element) => {
       const bounds = element.getBoundingClientRect()
       const line = getComputedStyle(element, '::after')
@@ -1704,6 +1729,18 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await emit('inference_activity', { activity: { ...request, outcome: 'completed', durationMs: 50 } }, 70)
     await expect(plans.first().getByRole('region', { name: 'Leon’s thinking', exact: true })).toBeVisible()
     await expect(plans.first().getByRole('region', { name: 'Leon’s inference', exact: true })).toContainText('Prepared tool calls in 50ms')
+    const siblingEntrance = await plans.first().locator('.thinking-message').evaluate((thought) => {
+      const label = thought.nextElementSibling!.querySelector('.process-group-trigger')!
+      const link = getComputedStyle(thought, '::after')
+      const fade = getComputedStyle(label)
+
+      return { link: link.animationName, fade: fade.animationName, drawsBeforeFade: link.animationDuration === fade.animationDelay }
+    })
+    expect(siblingEntrance).toEqual({
+      link: reducedMotion === 'reduce' ? 'none' : 'activity-link-draw',
+      fade: reducedMotion === 'reduce' ? 'none' : 'activity-node-fade',
+      drawsBeforeFade: true
+    })
     await page.locator('.leon-message').last().evaluate(async (element) => {
       await Promise.allSettled(element.getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
@@ -1970,7 +2007,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await expect(review.locator('.activity-wave-active')).toHaveCount(0)
   })
 
-  test(`hands off one visible status to tools and thinking without delayed tool entrances (${reducedMotion})`, async ({ page, ui }) => {
+  test(`hands off one status to tools and thinking with gentle activity entrances (${reducedMotion})`, async ({ page, ui }) => {
     await page.emulateMedia({ reducedMotion })
     await page.goto(SESSION_URL)
     let sequence = 0
@@ -1991,13 +2028,26 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await emit('turn_status', { status: 'accepted' })
     await emit('inference_activity', { activity: request })
     await expect(waiting).toBeVisible()
+    await expect(waiting.locator('.process-group-trigger')).toHaveCSS('animation-name',
+      reducedMotion === 'reduce' ? 'none' : 'activity-node-fade')
     await expect(waiting.locator('.process-group-indicator, svg')).toHaveCount(0)
     await emit('tool_call', { tool_call: { ...tool, status: 'preparing' } })
     const execution = page.locator('.leon-message-execution').last()
-    await expect(execution.getByRole('button', { name: 'Preparing tool calls...', exact: true })).toBeVisible()
-    await expect(execution).toHaveCSS('animation-delay', '0s')
-    await expect(execution).toHaveCSS('animation-name',
-      reducedMotion === 'reduce' ? 'none' : 'leon-message-execution-enter')
+    const toolHeading = execution.getByRole('button', { name: 'Preparing tool calls...', exact: true })
+    await expect(toolHeading).toBeVisible()
+    await expect(toolHeading).toHaveCSS('animation-delay', '0s')
+    await expect(toolHeading).toHaveCSS('animation-name',
+      reducedMotion === 'reduce' ? 'none' : 'activity-node-fade')
+    const callHeading = execution.locator('.tool-call-heading')
+    await expect(callHeading).toHaveCSS('animation-name',
+      reducedMotion === 'reduce' ? 'none' : 'activity-node-fade')
+    const link = await execution.locator('.process-group-heading').evaluate((heading) => {
+      const style = getComputedStyle(heading, '::before')
+
+      return { animation: style.animationName, duration: style.animationDuration }
+    })
+    expect(link.animation).toBe(reducedMotion === 'reduce' ? 'none' : 'activity-link-draw')
+    await expect(callHeading).toHaveCSS('animation-delay', link.duration)
     await expect(inference).toHaveCount(0)
     await expect(waiting).toHaveCount(0)
     await emit('inference_activity', { activity: { ...request, outcome: 'completed', durationMs: 100 } })
