@@ -154,7 +154,7 @@ Types define which kind of changes you made to the project.
 
 Scopes identify the subsystem that owns the behavior, not the directory containing the code. Choose the primary subsystem rather than listing every touched area. Omit the scope for genuinely cross-cutting changes; do not use catch-all scopes such as `server` or `core`.
 
-Use the scope names listed below, including spaces in multiword names such as `messaging app` and `built-in command`. Application scopes use `app/<platform>`; currently only `app/web` is supported. Namespaced tool and skill suffixes retain the component's actual identifier, including hyphens and underscores.
+Use the scope names listed below, including spaces in multiword names such as `messaging app` and `built-in command`. Application scopes use `app/<component>`. Namespaced tool and skill suffixes retain the component's actual identifier, including hyphens and underscores.
 
 | Scope | Responsibility |
 | ----- | -------------- |
@@ -169,7 +169,8 @@ Use the scope names listed below, including spaces in multiword names such as `m
 | api | HTTP and Socket.IO interfaces. |
 | voice | Speech input/output orchestration. |
 | controlled | Deterministic skill/action execution. |
-| app/web | Web client. |
+| app/client | Shared Leon interface, routing and client state across browsers and the desktop app. |
+| app/desktop | Electron host, native integration, packaging and updates. |
 | scripts | Repository automation, setup and release scripts. |
 | aurora | Shared UI components. |
 | messaging app | Messaging clients and integrations. |
@@ -194,7 +195,7 @@ git commit -m "fix(runtime): isolate profile startup state"
 git commit -m "feat(tools): retain large execution results"
 git commit -m "fix(provider/openai): preserve cache identity"
 git commit -m "docs(skill/coding): clarify verification steps"
-git commit -m "style(app/web): simplify chat layout"
+git commit -m "style(app/client): simplify chat layout"
 git commit -m "refactor: share dependency-free runtime contracts"
 ```
 
