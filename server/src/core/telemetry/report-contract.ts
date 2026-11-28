@@ -434,8 +434,8 @@ const localPublicNames = new Map<string, string>(LOCAL_LLM_MODELS.flatMap(({ id,
   [id, name], [name, name]
 ]))
 const localGGUFLabels = new Map<string, Pick<PublicModelLabel, 'model' | 'quantization'>>(
-  LOCAL_LLM_MODELS.flatMap(({ name, filePrefix }) => LOCAL_LLM_PRECISIONS.map(({ name: quantization }) => [
-    `${filePrefix}-${quantization}.gguf`.toLowerCase(), { model: name, quantization }
+  LOCAL_LLM_MODELS.flatMap(({ name, precisions }) => precisions.map(({ name: quantization }) => [
+    `${name}-${quantization}.gguf`.toLowerCase(), { model: name, quantization }
   ]))
 )
 const MANAGED_GGUF_CHECKSUM = /-[a-f0-9]{64}(?=\.gguf$)/i
@@ -473,5 +473,6 @@ export function isPublicModelLabel(label: PublicModelLabel): boolean {
   const canonical = getPublicModel(label.provider, label.model)
   return label.provider === canonical.provider && label.model === canonical.model &&
     (label.quantization === undefined ||
-      (label.provider === LLMProviders.LlamaCPP && localPublicNames.has(label.model)))
+      (label.provider === LLMProviders.LlamaCPP &&
+        localGGUFLabels.has(`${label.model}-${label.quantization}.gguf`.toLowerCase())))
 }

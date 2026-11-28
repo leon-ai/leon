@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { selectLocalLLM, rankLocalLLMPlans } from '@@/scripts/setup/local-llm-selection'
-import { LOCAL_LLM_MODELS, LOCAL_LLM_PRECISIONS } from '@/core/llm-manager/local-model-catalog'
+import { LOCAL_LLM_MODELS } from '@/core/llm-manager/local-model-catalog'
 import { LlamaCPPBackendError, LlamaCPPCapacityError, LlamaCPPExecutionMode } from '@/core/llm-manager/llm-providers/llamacpp-context'
 
 const fixture = await vi.hoisted(async () => {
@@ -57,12 +57,17 @@ beforeEach(() => {
   fixture.get.mockReset().mockImplementation(async (url: string, options?: { responseType?: string }) =>
     options?.responseType === 'arraybuffer' ? { data: Buffer.from('GGUF') } : { data: {
     sha: 'pinned-revision',
-    siblings: LOCAL_LLM_MODELS.flatMap((model) => LOCAL_LLM_PRECISIONS.map((precision) => ({
-      rfilename: `${model.filePrefix}-${precision.name}.gguf`,
-      size: url.includes(model.repository) || url.includes(model.fullPrecisionRepository ?? model.repository)
-        ? 1_024 : 0,
+    siblings: LOCAL_LLM_MODELS.filter((model) => url.includes(model.repository)).flatMap((model) =>
+      model.precisions.map((precision) => ({
+        rfilename: path.posix.join(model.remoteDirectory ?? '',
+          `${model.name}-${precision.name}${model.remoteExtension ?? '.gguf'}`),
+        size: 1_024,
+        lfs: { sha256: 'a'.repeat(64) }
+      }))).concat({
+      rfilename: 'Inkling-2-Mini-UD-Q4_K_XL.gguf',
+      size: 1_024,
       lfs: { sha256: 'a'.repeat(64) }
-    })))
+    })
     } })
   fixture.run.mockReset().mockImplementation(async (_binary: string, args: string[]) => JSON.stringify(
     args.includes('diff') ? { models: LOCAL_LLM_MODELS.map((model) => ({
@@ -96,20 +101,21 @@ describe('local model selection', () => {
   })
 
   it('rejects weights exceeding current available memory before fetching their headers', async () => {
-    fixture.get.mockResolvedValue({ data: {
-      sha: 'pinned-revision', siblings: LOCAL_LLM_MODELS.flatMap((model) =>
-        LOCAL_LLM_PRECISIONS.map((precision) => ({
-          rfilename: `${model.filePrefix}-${precision.name}.gguf`,
-          size: 20_000 * 1_024 * 1_024, lfs: { sha256: 'a'.repeat(64) }
-        })))
-    } })
+    const getMetadata = fixture.get.getMockImplementation()!
+    fixture.get.mockImplementation(async (url: string) => {
+      const result = await getMetadata(url)
+      for (const file of result.data.siblings) {
+        file.size = 20_000 * 1_024 * 1_024
+      }
+      return result
+    })
     await expect(selectLocalLLM()).rejects.toThrow('currently available memory')
     expect(fixture.read).not.toHaveBeenCalled()
   })
 
   it('uses another fitting model when native allocation rejects a candidate', async () => {
     fixture.fit.mockImplementation(async (_binary: string, args: string[]) => {
-      if (args.some((arg) => arg.includes('Qwen3.8'))) {
+      if (args.some((arg) => arg.includes('Inkling-2-Mini'))) {
         throw new LlamaCPPCapacityError('No available device memory')
       }
       return {
@@ -124,7 +130,7 @@ describe('local model selection', () => {
   it('skips models with insufficient native context without treating their metadata as broken', async () => {
     fixture.read.mockImplementation(async (file: string) => ({
       metadata: { general: { architecture: 'fixture' }, fixture: {
-        context_length: file.includes('Qwen3.8') ? 65_536 : 262_144
+        context_length: file.includes('Inkling-2-Mini') ? 65_536 : 262_144
       } },
       infoEndOffset: 4
     }))
@@ -179,6 +185,63 @@ describe('local model selection', () => {
       { ...base, precision: 'Q8_0', contextPlan: { ...base.contextPlan, contextTokens: 131_072 } }
     ])
     expect(ranked[0].precision).toBe('Q6_K')
+  })
+
+  it('balances the installed Inkling quant against its fitted context using mainline weights', async () => {
+    const fit = fixture.fit.getMockImplementation()!
+    fixture.read.mockResolvedValue({
+      metadata: { general: { architecture: 'fixture' }, fixture: { context_length: 1_048_576 } },
+      infoEndOffset: 4
+    })
+    fixture.fit.mockImplementation(async (binary: string, args: string[]) => {
+      const result = { ...await fit(binary, args) }
+      const file = args[args.indexOf('--model') + 1]!
+      if (file.endsWith('UD-Q8_K_XL.gguf')) {
+        result.contextTokens = 131_072
+      }
+      if (file.endsWith('UD-Q4_K_XL.gguf')) {
+        result.contextTokens = 524_288
+      }
+      return result
+    })
+
+    const selected = await selectLocalLLM()
+
+    expect(selected).toMatchObject({
+      precision: 'UD-Q4_K_XL',
+      fileName: 'Inkling-2-Mini-UD-Q4_K_XL.gguf',
+      downloadURL: expect.stringMatching(/\/Mainline_Support\/Inkling-2-Mini-UD-Q4_K_XL\.gguf_file$/),
+      contextPlan: { contextTokens: 524_288 }
+    })
+    expect(fixture.run.mock.calls.some(([, args]) =>
+      args.includes('plan') && args.includes('524288') && args.includes('Q4_K_M'))).toBe(true)
+  })
+
+  it('skips published weights below Q4 even when llmfit recommends a lower baseline', async () => {
+    const lowerQuant = 'Mainline_Support/Inkling-2-Mini-UD-Q3_K_XL.gguf_file'
+    const get = fixture.get.getMockImplementation()!
+    fixture.get.mockImplementation(async (url: string, options?: { responseType?: string }) => {
+      const result = await get(url, options)
+      if (options?.responseType !== 'arraybuffer' && url.includes('/unsloth/')) {
+        result.data.siblings.push({
+          rfilename: lowerQuant, size: 512, lfs: { sha256: 'b'.repeat(64) }
+        })
+      }
+      return result
+    })
+    const run = fixture.run.getMockImplementation()!
+    fixture.run.mockImplementation(async (binary: string, args: string[]) => {
+      const result = JSON.parse(await run(binary, args))
+      if (args.includes('diff')) {
+        for (const model of result.models) {
+          model.best_quant = 'Q3_K_M'
+        }
+      }
+      return JSON.stringify(result)
+    })
+
+    await selectLocalLLM()
+    expect(fixture.get.mock.calls.some(([url]) => url.endsWith(lowerQuant))).toBe(false)
   })
 
   it('estimates the native execution path at its fitted context with the same hardware budget', async () => {

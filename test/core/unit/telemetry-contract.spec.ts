@@ -5,20 +5,21 @@ import { getPublicModel, isPublicModelLabel } from '@/core/telemetry/report-cont
 
 it('reports public local model names and quantization without sending GGUF filenames or directories', () => {
   const provider = LLMProviders.LlamaCPP
-  const model = 'Qwen3.8-27B'
+  const model = 'Inkling-2-Mini'
   const checksum = 'a'.repeat(64)
 
-  expect(getPublicModel(provider, '/home/owner/models/Qwen3.8-27B-Q4_K_M.gguf')).toEqual({
-    provider, model, quantization: 'Q4_K_M'
+  expect(getPublicModel(provider, '/home/owner/models/Inkling-2-Mini-UD-Q4_K_XL.gguf')).toEqual({
+    provider, model, quantization: 'UD-Q4_K_XL'
   })
-  expect(getPublicModel(provider, `C:\\Users\\owner\\models\\Qwen3.8-27B-BF16-${checksum}.gguf`)).toEqual({
-    provider, model, quantization: 'BF16'
+  expect(getPublicModel(provider, `C:\\Users\\owner\\models\\Inkling-2-Mini-UD-Q8_K_XL-${checksum}.gguf`)).toEqual({
+    provider, model, quantization: 'UD-Q8_K_XL'
   })
-  expect(getPublicModel(LLMProviders.SGLang, 'Qwen/Qwen3.8-27B')).toEqual({
+  expect(getPublicModel(LLMProviders.SGLang, 'thinkingmachines/Inkling-2-Mini')).toEqual({
     provider: LLMProviders.SGLang, model
   })
-  expect(isPublicModelLabel({ provider, model, quantization: 'BF16' })).toBe(true)
-  expect(isPublicModelLabel({ provider, model: 'Qwen3.8-27B-Q4_K_M.gguf' })).toBe(false)
+  expect(isPublicModelLabel({ provider, model, quantization: 'UD-Q8_K_XL' })).toBe(true)
+  expect(isPublicModelLabel({ provider, model, quantization: 'BF16' })).toBe(false)
+  expect(isPublicModelLabel({ provider, model: 'Inkling-2-Mini-UD-Q4_K_XL.gguf' })).toBe(false)
 })
 
 it('keeps private files and aliases out of model labels', () => {
@@ -26,8 +27,8 @@ it('keeps private files and aliases out of model labels', () => {
   const other = { provider, model: 'other' }
 
   expect(getPublicModel(provider, 'C:\\Users\\owner\\My Private Model-Q4_K_M.gguf')).toEqual(other)
-  expect(getPublicModel(provider, 'Qwen3.8-27B-Q4_K_M-owner.gguf')).toEqual(other)
-  expect(getPublicModel(provider, 'Qwen3.8-27B-Q4_K_M.gguf.bak')).toEqual(other)
+  expect(getPublicModel(provider, 'Inkling-2-Mini-UD-Q4_K_XL-owner.gguf')).toEqual(other)
+  expect(getPublicModel(provider, 'Inkling-2-Mini-UD-Q4_K_XL.gguf.bak')).toEqual(other)
   expect(isPublicModelLabel({ provider, model: 'other', quantization: 'Q4_K_M' })).toBe(false)
-  expect(isPublicModelLabel({ provider: LLMProviders.SGLang, model: 'Qwen3.8-27B', quantization: 'Q4_K_M' })).toBe(false)
+  expect(isPublicModelLabel({ provider: LLMProviders.SGLang, model: 'Inkling-2-Mini', quantization: 'UD-Q4_K_XL' })).toBe(false)
 })

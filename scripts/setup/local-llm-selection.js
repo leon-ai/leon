@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 
 import axios from 'axios'
 
@@ -30,11 +31,16 @@ const INSPECTION_TIMEOUT_MS = 60_000
 const METADATA_TIMEOUT_MS = 30_000
 const GGUF_HEADER_PREFIX_BYTES = 16 * BYTES_PER_MIB
 const MODEL_URL = 'https://huggingface.co'
+// Count every Inkling layer execution and weight read in llmfit's decode
+// estimate. llama.cpp fits memory from the actual shared weights and KV layout.
+const LLMFIT_MODELS_PATH = fileURLToPath(new URL('./llmfit/local-llmfit-models.json', import.meta.url))
 const ROI_WEIGHTS = { quality: 0.7, speed: 0.1, context: 0.15, headroom: 0.05 }
 // Decode estimates are a usability filter, not a benchmark: once replies are
 // interactive, additional speed should not dominate model capability.
 const MINIMUM_INTERACTIVE_TPS = 10
 const TARGET_INTERACTIVE_TPS = 20
+// llmfit may score a lower quant as its baseline on constrained hosts. Only
+// the model's managed precision ladder can supply installation candidates.
 const CATALOG_QUANT_PENALTIES = new Map([
   ...LOCAL_LLM_PRECISIONS.map(({ name, qualityPenalty }) => [name, qualityPenalty]),
   ['mlx-8bit', 0], ['mlx-4bit', 4], ['Q3_K_M', 8], ['Q2_K', 12]
@@ -49,7 +55,10 @@ async function runLLMFit(args) {
     SystemHelper.isWindows() ? 'llmfit.exe' : 'llmfit')
   const output = await RuntimeHelper.runBinary(binary,
     ['--no-dashboard', '--no-cluster', ...args, '--json'],
-    { timeoutMs: INSPECTION_TIMEOUT_MS })
+    {
+      timeoutMs: INSPECTION_TIMEOUT_MS,
+      env: { ...process.env, LLMFIT_CUSTOM_MODELS: LLMFIT_MODELS_PATH }
+    })
 
   return JSON.parse(output)
 }
@@ -185,7 +194,7 @@ async function inspectCandidate(candidate, directory, binary, settings, readGguf
   const estimate = await runLLMFit([
     ...hardware.arguments,
     'plan', candidate.modelId, '--context', String(contextPlan.contextTokens),
-    '--quant', candidate.precision, '--kv-quant', kvCacheType
+    '--quant', candidate.llmfitQuantization, '--kv-quant', kvCacheType
   ])
   let speedEstimate = estimate.run_paths?.find((entry) =>
     entry.path === contextPlan.executionMode && entry.feasible)
@@ -242,7 +251,6 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
     '--max-context', String(MINIMUM_LOCAL_CONTEXT_TOKENS),
     'diff', ...LOCAL_LLM_MODELS.map((model) => model.id)
   ])
-  const repositories = new Map()
   const candidates = []
   const weightBudgetMiB = hostBudgetMiB + (unifiedMemory ? 0 : availableVRAM * MIB_PER_GIB)
 
@@ -256,17 +264,20 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
       throw new Error(`Unsupported llmfit precision: ${recommendation.best_quant}.`)
     }
 
-    for (const precision of LOCAL_LLM_PRECISIONS) {
-      const repository = precision.name === 'BF16'
-        ? model.fullPrecisionRepository || model.repository
-        : model.repository
-      if (!repositories.has(repository)) {
-        repositories.set(repository, await readRepository(repository))
+    const metadata = await readRepository(model.repository)
+    const referenceQuality = model.referenceQuality ??
+      recommendation.score_components.quality + baselinePenalty
+
+    for (const precision of model.precisions) {
+      const stem = `${model.name}-${precision.name}`
+      const fileName = `${stem}.gguf`
+      const remotePath = path.posix.join(model.remoteDirectory ?? '',
+        `${stem}${model.remoteExtension ?? '.gguf'}`)
+      const file = metadata.siblings.find((entry) => entry.rfilename === remotePath)
+      if (!file) {
+        continue
       }
-      const metadata = repositories.get(repository)
-      const fileName = `${model.filePrefix}-${precision.name}.gguf`
-      const file = metadata.siblings.find((entry) => entry.rfilename === fileName)
-      const sizeBytes = file?.size
+      const sizeBytes = file.size
       // Reject impossible weights before spending network traffic on headers.
       if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 ||
           sizeBytes > weightBudgetMiB * BYTES_PER_MIB) {
@@ -278,13 +289,13 @@ export async function planLocalLLMs(onProgress = () => {}, capability) {
       }
 
       candidates.push({
-        modelId: model.id, name: model.name, repository,
+        modelId: model.id, name: model.name, repository: model.repository,
         isMoE: recommendation.model.is_moe === true,
         revision: metadata.sha, precision: precision.name,
-        quality: Math.min(100, recommendation.score_components.quality +
-          baselinePenalty - precision.qualityPenalty),
+        llmfitQuantization: precision.llmfitQuantization ?? precision.name,
+        quality: Math.min(100, referenceQuality - precision.qualityPenalty),
         fileName, sizeBytes, checksum,
-        downloadURL: `${MODEL_URL}/${repository}/resolve/${metadata.sha}/${fileName}`
+        downloadURL: `${MODEL_URL}/${model.repository}/resolve/${metadata.sha}/${remotePath}`
       })
     }
   }

@@ -1,0 +1,30 @@
+[
+  {
+    "name": "thinkingmachines/Inkling-2-Mini",
+    "provider": "thinkingmachines",
+    "parameter_count": "26.4B",
+    "parameters_raw": 26400000000,
+    "min_ram_gb": 16.7,
+    "recommended_ram_gb": 24,
+    "min_vram_gb": 16.7,
+    "quantization": "Q4_K_M",
+    "format": "gguf",
+    "context_length": 1048576,
+    "use_case": "General-purpose text generation and tool use",
+    "capabilities": ["tool_use"],
+    "architecture": "inkling2_loop",
+    "release_date": "2026-11-20",
+    "num_hidden_layers": 48,
+    "num_attention_heads": 24,
+    "num_key_value_heads": 8,
+    "head_dim": 128,
+    "hidden_size": 2304,
+    "vocab_size": 201024,
+    "moe_intermediate_size": 1152,
+    "is_moe": true,
+    "num_experts": 128,
+    "active_experts": 8,
+    "active_parameters": 5400000000,
+    "license": "apache-2.0"
+  }
+]
