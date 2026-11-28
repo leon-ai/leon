@@ -4,9 +4,15 @@ Leon has **one product version and release notes** for the server, web and Deskt
 
 Preview installs receive eligible prereleases and stable releases; stable installs receive stable releases only. Before the announcement, increment `2.0.0-alpha.0`, `.0.1`, `.0.2`, etc.; reserve `2.0.0-alpha.1` for the announcement. Every changed distribution needs a higher SemVer version; `+dev` does not increase precedence.
 
+## Work in parallel
+
+Start each change from `develop` on its own topic branch. Name it `<type>/<short-kebab-case-description>`, for example `fix/session-search`. Use the same remote branch when continuing the change on another computer. Merge ready changes into `develop`.
+
+The release maintainer selects the batch and prepares one product version bump and one set of release notes. Keeping `package.json` and `release.json` in the same release preparation change gives contributors a single version and summary for the batch.
+
 ## Prepare a version
 
-Write `release.json` once per version alongside the bump in `package.json`. Review the full batch and its commit messages before pushing to `develop`. If the batch changes after drafting, revise the affected notes.
+Review the full batch and its commit messages before pushing the version and notes to `develop`. Update the notes whenever the batch changes.
 
 - Write the title, summary, and highlights around what gets better for owners. Use plain English and group commits by outcome.
 - Start each `changes` entry with a brief, bold sentence that begins with a past-tense verb. Follow it with why the change matters and the details owners need.
@@ -19,13 +25,13 @@ Write `release.json` once per version alongside the bump in `package.json`. Revi
 
 Set `desktop.minimumServerVersion` in `release.json` to the oldest server version supported by Desktop in the release's major version. The Desktop build embeds this value for startup and update checks. Carry it forward across releases and raise it when Desktop requires a newer server capability.
 
-Pushing to `develop` records the batch and its release notes for review. Run the publishing steps when ready to request a release.
+During parallel development, create and push `release/<version>` from the reviewed commit on `origin/develop`, for example `release/2.1.0`. The release branch keeps the candidate available for verification and tagging while new changes land on `develop`.
 
 **Planned release media.** While drafting, keep screenshots and clips in a local folder outside the checkout, organized by version. The planned publishing flow attaches them to the GitHub release draft, and the update dialog displays those assets before installation.
 
 ## Publish a version
 
-1. Commit and push the reviewed version, notes and code.
+1. Check out the branch for the reviewed release candidate. Its local and remote tips must point to the same commit.
 2. Run `pnpm release` from the clean, pushed branch to check published releases and remote tags, then create and push the immutable tag that triggers CI. If it prepares missing release-note scaffolding or updates a stale metadata version, review the notes, commit and push them, then run it again. The command leaves the `package.json` bump and commits to the maintainer.
 
 Use `pnpm release --dry-run` for a read-only check before tagging. Optional `GH_TOKEN` or `GITHUB_TOKEN` authenticates discovery.
