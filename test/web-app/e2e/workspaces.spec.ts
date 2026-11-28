@@ -379,7 +379,7 @@ test('plays only live turn completion and keeps routine actions, replay and mute
   expect(await count()).toBe(2)
 })
 
-test('matches workspace row geometry and keeps collapsed unread results', async ({ page, ui }) => {
+test('matches workspace row geometry and keeps unread Pulse results visible when collapsed', async ({ page, ui }) => {
   await page.addInitScript(() => localStorage.setItem('leon.web-app.accent', 'violet'))
   const workspaceId = '10000000-0000-4000-8000-000000000000'
   ui.workspaces.push({ id: workspaceId, name: 'Hearthlight', brief: 'Cozy films', color: 'amber', resources: [], createdAt: 1, updatedAt: 1 })
@@ -397,7 +397,7 @@ test('matches workspace row geometry and keeps collapsed unread results', async 
   await expect(page.getByRole('menuitem')).toHaveText(['Edit', 'Pin', 'Delete'])
   await page.keyboard.press('Escape')
   await ui.emit([{ sequence: 5, type: 'turn_status', session_id: other.id, turn_id: 'film', response_id: 'answer', created_at: 1,
-    data: { status: 'completed', workspace_id: workspaceId } }])
+    data: { status: 'completed', origin: 'pulse', workspace_id: workspaceId } }])
   await page.getByRole('textbox', { name: 'Message Leon' }).focus()
   await page.getByRole('textbox', { name: 'Message Leon' }).hover()
   await expect(row.getByLabel('Unread results')).toBeVisible()
@@ -408,6 +408,7 @@ test('matches workspace row geometry and keeps collapsed unread results', async 
   await expand.click()
   const child = page.locator(`a[data-session-id="${other.id}"]`)
   await expect(child).toBeVisible()
+  await expect(child).toHaveAccessibleName('Test session 1, Unread response')
   const flat = page.locator(`a[data-session-id="${SESSION_ID}"]`)
   const unselected = page.locator(`a[data-session-id="${ui.sessions[2]!.id}"]`)
   await unselected.hover()
@@ -445,6 +446,7 @@ test('matches workspace row geometry and keeps collapsed unread results', async 
   await child.click()
   await expect(page.locator('.session-page-workspace')).toHaveCount(0)
   await expect(page.locator('.workspace-selector')).toHaveCount(0)
+  await expect(child).toHaveAccessibleName('Test session 1')
   await expect(row.getByLabel('Unread results')).toHaveCount(0)
   await expect(flat).toBeVisible()
 })

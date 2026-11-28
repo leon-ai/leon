@@ -405,7 +405,11 @@ export default class Brain {
                   turn_id: messageId,
                   response_id: messageId,
                   type: 'turn_status',
-                  data: { status: 'completed', origin: 'pulse' }
+                  data: {
+                    status: 'completed',
+                    origin: 'pulse',
+                    workspace_id: CONVERSATION_REPOSITORY.readSession(sessionId)?.workspaceId ?? null
+                  }
                 })
               }
             }

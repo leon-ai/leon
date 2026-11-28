@@ -85,12 +85,12 @@ export function markSessionRead(profile: string, sessionId: string): void {
 }
 
 /**
- * Records only successful owner-turn completions. A durable sequence frontier
- * prevents replay from restoring a dot that the owner already cleared.
+ * Records completed replies and delivered Pulse findings. The stored event
+ * sequence prevents replay from restoring a dot that the owner already cleared.
  */
 export function recordSessionCompletion(profile: string, viewedSessionId: string | undefined, event: ConversationEvent): void {
   if (!profile || event.type !== 'turn_status' || event.data['status'] !== 'completed' ||
-    event.data['origin'] === 'pulse' || event.data['consumed'] === true ||
+    event.data['consumed'] === true ||
     !event.session_id || !Number.isSafeInteger(event.sequence) || event.sequence <= 0) {
     return
   }
