@@ -8,8 +8,8 @@ import SQLite from 'better-sqlite3'
 
 import type { RealAgentScenario } from '../../../e2e/run-agent-provider-scenario'
 
-const SOURCE_URL = 'https://example.org/community/showcase'
-const OWNER_GOAL = 'I would like to demo my open-source neighborhood map at the Cedar Community Showcase. I want to show how a resident can add a missing place to the map. Once proposals open at https://example.org/community/showcase, I will need a five-minute outline with that example.'
+const SOURCE_URL = 'https://cedarcommunityshowcase.org/proposals'
+const OWNER_GOAL = `I want to demo how residents add a missing place to my open-source neighborhood map at the Cedar Community Showcase. When proposals open at ${SOURCE_URL}, I need a five-minute outline.`
 const ANNOUNCEMENT = [
   '# Cedar Community Showcase',
   'The organizer has opened demo proposals for the upcoming showcase.',
@@ -23,19 +23,31 @@ const scenario: RealAgentScenario = {
       return undefined
     }
 
-    const matchesSource = input.toolId === 'crawlberg' &&
+    const isSearch = input.toolId === 'hosted' && input.functionName === 'searchWeb'
+    const isAnnouncement = input.toolId === 'crawlberg' &&
       input.functionName === 'fetchUrl' && input.parsedInput?.['url'] === SOURCE_URL
+    const execution = {
+      tool_id: input.toolId, toolkit_id: input.toolkitId, function_name: input.functionName ?? null,
+      input: input.toolInput ?? null, parsed_input: input.parsedInput ?? null
+    }
+
+    if (!isSearch && !isAnnouncement) {
+      return { status: 'error', message: 'Page unavailable.', data: { ...execution, output: {} } }
+    }
+
+    const source = isAnnouncement
+      ? { url: SOURCE_URL, markdown: ANNOUNCEMENT }
+      : {
+          content: 'The Cedar Community Showcase organizer posts demo proposals on its official proposals page.',
+          sources: [{ url: SOURCE_URL, title: 'Cedar Community Showcase demo proposals' }]
+        }
 
     return {
       status: 'success',
       message: 'Research source retrieved.',
       data: {
-        tool_id: input.toolId, toolkit_id: input.toolkitId, function_name: input.functionName ?? null,
-        input: input.toolInput ?? null, parsed_input: input.parsedInput ?? null,
-        output: { result: { success: true, data: {
-          url: SOURCE_URL,
-          markdown: matchesSource ? ANNOUNCEMENT : 'Read the organizer’s full announcement at ' + SOURCE_URL
-        } } }
+        ...execution,
+        output: { result: { success: true, data: source } }
       }
     }
   },

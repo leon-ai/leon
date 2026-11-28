@@ -1263,9 +1263,11 @@ export default class PulseManager {
         'Prefer a due obligation, a fresh signal, or a concrete reason an older goal could be actionable now. Rotate among promising leads.',
         'Treat conversation titles as pointers: the agent must check what the owner actually said. A passing mention alone is weak evidence.',
         'Use earlier decisions, outcomes and feedback. Leave waiting, declined, stale, duplicated, or speculative work alone.',
-        'Return {"items":[],"why":"short owner-facing reason"} when no lead justifies investigation. Otherwise return {"items":[{"intent_key":"stable_snake_case","target_scope":"stable_subject","summary":"brief matter title","why":"short first-person reason for checking","turn_prompt":"specific question to investigate and a useful possible result","confidence":0.8,"sources":["memory"],"session_id":null}]}.',
+        `Background research can use only these tools: ${[...PULSE_RESEARCH_TOOLS].join(', ')}.`,
+        'Select a lead only when these tools can reach evidence that answers a useful part of the owner’s question. Skip leads that require unavailable sources or capabilities.',
+        'Return {"items":[],"why":"short owner-facing reason"} when no lead justifies investigation. Otherwise return {"items":[{"intent_key":"stable_snake_case","target_scope":"stable_subject","summary":"brief matter title","why":"short first-person reason for checking","turn_prompt":"specific question, reachable source, and useful possible result","confidence":0.8,"sources":["memory"],"session_id":null}]}.',
         'Key the matter by the owner goal and subject. Reuse intent_key and target_scope across findings or next steps, including for an archived matter when there is a materially new reason to investigate. Sources may be memory, context, or self_model. Supply session_id only when a supplied conversation is the origin.',
-        'The threshold is whether a bounded read-only investigation is useful. A later decision determines whether to notify.'
+        'A later decision determines whether to notify.'
       ].join('\n'),
       temperature: 0,
       maxTokens: PULSE_PLANNER_MAX_TOKENS,
